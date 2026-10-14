@@ -36,7 +36,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] **2e. Smoke live** (branch `m2-2e`, detail di [`docs/reviews/REVIEW_2E.md`](docs/reviews/REVIEW_2E.md)): run 1 FAILED_BUDGET ($0.0225, estimasi node palsu terlalu kecil, pengaman bekerja); setelah patch, run 2 **DONE, skor 1.0, $0.0097**, ledger konsisten. Bukti di `verification/smoke-2e/`
 - [x] **2e. `llm_token_estimates`** terpisah dari angka M1: orchestrator 12.000, worker 12.000 (titik awal dari ledger run 1; node terbesar di run 2 memakai 5.239)
 - [x] **2e. `tool_choice`:** Sonnet 5.5, Opus 5.5, Fable 5.1 menolak tool paksa (400), jadi `orchestrator.force_tool: false`
-- [ ] **2e. Smoke dengan `--sandbox docker`** (workers dengan RunPython), kalau GPT memintanya sebelum 2e ditutup
+- [x] **2e. Review GPT PR #5:** prompt dan tool worker mengikuti allowlist dan sandbox (P2), `submission_invalid` berisi alasan validator; smoke Docker terarah `--sandbox docker --python-only`: **DONE, skor 1.0, $0.0119**, 7 eksekusi RunPython exit 0, `read_data` 0 kali (`verification/smoke-2e/smoke_2e_3`). 13 mutasi tertangkap
 
 ## 4. Butuh GPT (audit)
 
