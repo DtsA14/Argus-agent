@@ -42,7 +42,8 @@ def ledger_totals(events_path):
 
 
 def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
-             crash_at=None, resume=False, echo=False):
+             crash_at=None, resume=False, echo=False, models=None):
+    """models: optional {role: chat model} injected instead of building from config (tests)."""
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         # A stale checkpoint or memo would silently leak old results into the new run.
@@ -58,7 +59,7 @@ def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
     config = {"configurable": {"thread_id": run_id}, "recursion_limit": steps}
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
-        graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at)
+        graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)

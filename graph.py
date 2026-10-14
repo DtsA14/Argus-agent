@@ -6,7 +6,10 @@ from harness.budget import Budget, iteration_cost, iteration_usd, next_iteration
 from harness.guard import guard
 from harness.memo import Memo
 from nodes.evaluator import make_evaluator
-from nodes.orchestrator import make_fan_out, make_orchestrator
+from harness.llm import LLMCaller
+from models.registry import ConfigError
+from nodes.contract import SALES_REPORT
+from nodes.orchestrator import make_fan_out, make_llm_orchestrator, make_orchestrator
 from nodes.synthesize import make_synthesize
 from nodes.worker import make_worker
 from state import State
@@ -17,7 +20,24 @@ def route_after_eval(state):
     return END if state["status"] != "RUNNING" else "orchestrator"
 
 
-def build_graph(cfg, run_dir, log, checkpointer, crash_at=None):
+def make_orchestrator_node(cfg, log, budget, est, usd_est, models=None):
+    """impl.orchestrator: 'fake' (deterministic demo plan) or 'llm' (model plans via SubmitPlan)."""
+    impl = (cfg.get("impl") or {}).get("orchestrator", "fake")
+    if impl == "fake":
+        return make_orchestrator(log, usd=usd_est["orchestrator"])
+    if impl != "llm":
+        raise ConfigError(f"impl.orchestrator must be 'fake' or 'llm', got {impl!r}")
+    ocfg = cfg.get("orchestrator") or {}
+    caller = LLMCaller(cfg, "orchestrator", log, model=(models or {}).get("orchestrator"))
+    return make_llm_orchestrator(
+        caller, SALES_REPORT, max_workers=budget.max_workers, log=log,
+        tokens=est["orchestrator"], usd=usd_est["orchestrator"],
+        attempts=int(ocfg.get("plan_attempts", 3)),
+        tool_choice="SubmitPlan" if ocfg.get("force_tool", True) else None,
+    )
+
+
+def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
     budget = Budget.from_cfg(cfg["budget"])
     est = cfg["token_estimates"]
     iter_tokens = iteration_cost(est, budget.max_workers)
@@ -46,7 +66,8 @@ def build_graph(cfg, run_dir, log, checkpointer, crash_at=None):
     worker_gate = ToolGate("worker", cfg["tools"]["worker"], log)
 
     g = StateGraph(State)
-    g.add_node("orchestrator", guard("orchestrator", make_orchestrator(log, usd=usd_est["orchestrator"]),
+    orchestrator = make_orchestrator_node(cfg, log, budget, est, usd_est, models)
+    g.add_node("orchestrator", guard("orchestrator", orchestrator,
                                      admit=admit_iteration, estimate=est["orchestrator"],
                                      usd_estimate=usd_est["orchestrator"], **common))
     g.add_node("worker", guard("worker", make_worker(worker_gate, usd=usd_est["worker"]),
@@ -57,7 +78,7 @@ def build_graph(cfg, run_dir, log, checkpointer, crash_at=None):
                                   estimate=est["evaluator"], usd_estimate=usd_est["evaluator"], **common))
 
     g.add_edge(START, "orchestrator")
-    g.add_conditional_edges("orchestrator", make_fan_out(budget.max_workers, log), ["worker"])
+    g.add_conditional_edges("orchestrator", make_fan_out(budget.max_workers, log), ["worker", END])
     g.add_edge("worker", "synthesize")
     g.add_edge("synthesize", "evaluator")
     g.add_conditional_edges("evaluator", route_after_eval, {"orchestrator": "orchestrator", END: END})

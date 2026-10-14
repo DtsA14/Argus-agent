@@ -70,7 +70,7 @@ def test_node_over_its_usd_estimate_is_a_hard_error(tmp_path):
 
 def test_plan_wider_than_max_workers_is_rejected(tmp_path):
     fan_out = make_fan_out(2, EventLog(tmp_path / "e.jsonl"))
-    state = {"spec": {"tasks": [{"id": i} for i in "abc"], "fix_ids": []},
+    state = {"status": "RUNNING", "spec": {"tasks": [{"id": i, "output": "top3"} for i in "abc"]},
              "iteration": 0, "scenario": "pass", "run_id": "t"}
     with pytest.raises(PlanRejected):
         fan_out(state)

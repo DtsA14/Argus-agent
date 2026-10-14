@@ -33,31 +33,31 @@ def run_checks(report_path, truth):
 
     p = Path(report_path)
     if not p.exists():
-        add("report_exists", "REPORT", False, "laporan.md missing")
+        add("report_exists", "report", False, "laporan.md missing")
         return checks
-    add("report_exists", "REPORT", True)
+    add("report_exists", "report", True)
     text = p.read_text(encoding="utf-8")
 
     top = _pairs(_section(text, "Top 3 Produk"))
     want_top = dict(truth["top3"])
     got_names = [n for n, _ in top]
-    add("top3_names", "T2", got_names == [n for n, _ in truth["top3"]],
+    add("top3_names", "top3", got_names == [n for n, _ in truth["top3"]],
         f"report={got_names} expected={[n for n, _ in truth['top3']]}")
     wrong = [f"{n}: report {v}, recomputed {want_top[n]}" for n, v in top if n in want_top and v != want_top[n]]
-    add("top3_amounts", "T2", not wrong and len(top) == 3, "; ".join(wrong))
+    add("top3_amounts", "top3", not wrong and len(top) == 3, "; ".join(wrong))
 
     got_trend = dict(_pairs(_section(text, "Tren Bulanan")))
     want_trend = dict(truth["trend"])
     missing = sorted(set(want_trend) - set(got_trend))
-    add("trend_months", "T3", not missing, f"missing months: {missing}")
+    add("trend_months", "trend", not missing, f"missing months: {missing}")
     extra = sorted(set(got_trend) - set(want_trend))
-    add("trend_no_extra_months", "T3", not extra, f"months not in the data: {extra}")
+    add("trend_no_extra_months", "trend", not extra, f"months not in the data: {extra}")
     wrong_t = [f"{m}: report {v}, recomputed {want_trend[m]}" for m, v in got_trend.items()
                if m in want_trend and v != want_trend[m]]
-    add("trend_amounts", "T3", not wrong_t, "; ".join(wrong_t))
+    add("trend_amounts", "trend", not wrong_t, "; ".join(wrong_t))
 
     recs = [l for l in _section(text, "Rekomendasi") if re.match(r"^\d+\. ", l)]
-    add("recs_rubric", "REPORT",
+    add("recs_rubric", "report",
         len(recs) >= 2 and all(re.search(r"\d", r) for r in recs[:2]),
         "stand-in for the LLM rubric (milestone 3)", kind="rubric-stub")
     return checks
