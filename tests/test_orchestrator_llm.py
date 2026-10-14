@@ -61,12 +61,22 @@ def kinds(evs, kind):
 # ---- happy path ----------------------------------------------------------------------
 
 def test_valid_plan_runs_to_done_with_the_models_own_task_ids(tmp_path):
-    r, model, evs = run(tmp_path, [plan_call(GOOD)])
+    cfg = cfg_llm()
+    cfg["orchestrator"]["force_tool"] = True
+    r, model, evs = run(tmp_path, [plan_call(GOOD)], cfg=cfg)
     assert r["status"] == "DONE" and r["iteration"] == 1
     assert len(model.calls) == 1
     assert model.tool_choice == "SubmitPlan" and model.bound_tools == [SubmitPlan]
     workers = sorted(e["task"] for e in evs if e["event"] == "node_end" and e["node"] == "worker")
     assert workers == ["calc_top", "calc_trend", "check"]
+
+
+def test_default_config_does_not_force_the_tool(tmp_path):
+    # claude-sonnet-5-5 (the default orchestrator) rejects a forced tool_choice with HTTP 400.
+    assert load_config()["orchestrator"]["force_tool"] is False
+    r, model, _ = run(tmp_path, [plan_call(GOOD)])
+    assert r["status"] == "DONE"
+    assert model.tool_choice is None and model.bound_tools == [SubmitPlan]
 
 
 def test_revision_receives_the_evaluators_failed_checks(tmp_path):
