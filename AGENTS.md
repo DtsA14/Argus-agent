@@ -23,6 +23,9 @@ the current plan in `docs/MILESTONE2_PLAN.md`, review briefs in `docs/reviews/`.
 - A node result committed to the memo (`result_committed`) must never be recomputed or re-bought.
   Work with side effects must be safe to run twice for the same `(node, task, iteration[, step])`.
 - Checkpoints use `durability="sync"`. Flag any change back to the default.
+- In agent loops, every model reply and tool result is committed before the loop moves on. Step memo
+  keys must carry the step's input identity (and a tool step its parent LLM step and tool version).
+- A node run's reservation starts from what the ledger says it already spent (`reservation_from_ledger`).
 
 ### Plans and tools
 - Orchestrator plans are validated by the harness (`nodes/plan.py`), not trusted from the model.

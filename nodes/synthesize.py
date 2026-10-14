@@ -18,10 +18,10 @@ def make_synthesize(gate, report_path, log):
     def synthesize(state):
         # Only this iteration's results, looked up by contract output name (task ids are the planner's choice).
         iteration = state.get("iteration", 0)
-        by_output = {r["output"]: r["value"] for r in (state.get("results") or {}).values()
+        by_output = {r["output"]: r.get("value") for r in (state.get("results") or {}).values()
                      if r.get("iteration") == iteration}
-        top3 = by_output.get("top3", [])
-        trend = by_output.get("trend", [])
+        top3 = by_output.get("top3") or []        # a failed worker submits no value
+        trend = by_output.get("trend") or []
 
         lines = ["# Laporan Penjualan", "", "## Top 3 Produk"]
         lines += [f"- {n}: {v}" for n, v in top3]

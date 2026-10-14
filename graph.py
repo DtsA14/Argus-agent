@@ -4,11 +4,13 @@ from langgraph.graph import END, START, StateGraph
 
 from harness.budget import Budget, iteration_cost, iteration_usd, next_iteration_blocker, node_usd_estimates
 from harness.guard import guard
+from harness.crash import Crasher
 from harness.memo import Memo
 from nodes.evaluator import make_evaluator
 from harness.llm import LLMCaller
 from models.registry import ConfigError
 from nodes.contract import SALES_REPORT
+from nodes.llm_worker import make_llm_worker
 from nodes.orchestrator import make_fan_out, make_llm_orchestrator, make_orchestrator
 from nodes.synthesize import make_synthesize
 from nodes.worker import make_worker
@@ -20,7 +22,7 @@ def route_after_eval(state):
     return END if state["status"] != "RUNNING" else "orchestrator"
 
 
-def make_orchestrator_node(cfg, log, budget, est, usd_est, models=None):
+def make_orchestrator_node(cfg, log, budget, est, usd_est, models=None, crasher=None):
     """impl.orchestrator: 'fake' (deterministic demo plan) or 'llm' (model plans via SubmitPlan)."""
     impl = (cfg.get("impl") or {}).get("orchestrator", "fake")
     if impl == "fake":
@@ -34,7 +36,20 @@ def make_orchestrator_node(cfg, log, budget, est, usd_est, models=None):
         tokens=est["orchestrator"], usd=usd_est["orchestrator"],
         attempts=int(ocfg.get("plan_attempts", 3)),
         tool_choice="SubmitPlan" if ocfg.get("force_tool", True) else None,
+        crasher=crasher,
     )
+
+
+def make_worker_node(cfg, log, gate, memo, est, usd_est, models=None, crasher=None):
+    """impl.worker: 'fake' (deterministic, computes outputs directly) or 'llm' (tool-calling loop)."""
+    impl = (cfg.get("impl") or {}).get("worker", "fake")
+    if impl == "fake":
+        return make_worker(gate, usd=usd_est["worker"])
+    if impl != "llm":
+        raise ConfigError(f"impl.worker must be 'fake' or 'llm', got {impl!r}")
+    caller = LLMCaller(cfg, "worker", log, model=(models or {}).get("worker"))
+    return make_llm_worker(caller, SALES_REPORT, gate, memo, log, tokens=est["worker"], usd=usd_est["worker"],
+                           max_steps=int(cfg["roles"]["worker"].get("max_steps", 6)), crasher=crasher)
 
 
 def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
@@ -66,11 +81,13 @@ def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
     worker_gate = ToolGate("worker", cfg["tools"]["worker"], log)
 
     g = StateGraph(State)
-    orchestrator = make_orchestrator_node(cfg, log, budget, est, usd_est, models)
+    crasher = Crasher(crash_at, str(run_dir / ".crashed"), log)
+    orchestrator = make_orchestrator_node(cfg, log, budget, est, usd_est, models, crasher)
+    worker = make_worker_node(cfg, log, worker_gate, memo, est, usd_est, models, crasher)
     g.add_node("orchestrator", guard("orchestrator", orchestrator,
                                      admit=admit_iteration, estimate=est["orchestrator"],
                                      usd_estimate=usd_est["orchestrator"], **common))
-    g.add_node("worker", guard("worker", make_worker(worker_gate, usd=usd_est["worker"]),
+    g.add_node("worker", guard("worker", worker,
                                estimate=est["worker"], usd_estimate=usd_est["worker"], **common))
     g.add_node("synthesize", guard("synthesize", make_synthesize(orch_gate, report_path, log),
                                    estimate=est["synthesize"], usd_estimate=usd_est["synthesize"], **common))

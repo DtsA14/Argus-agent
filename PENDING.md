@@ -12,8 +12,7 @@ Terakhir diperbarui: 2026-10-14.
 Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
 - [x] **2b. Orchestrator LLM** di branch `m2-2b`, **menunggu review 2a sebelum merge ke `main`** (detail di bagian Selesai)
-- [ ] **2c. Worker loop tool-calling** dengan `max_steps`, tool call cacat dikembalikan sebagai error
-- [ ] **2c. Memo per langkah worker** `(node, task, iteration, step)`, **termasuk hasil tool**, persisten dan atomik + tes crash di tengah loop
+- [x] **2c** di branch `m2-2c`, PR #2, menunggu review GPT (detail di bagian Selesai)
 - [ ] **2d. Path jail** untuk semua tool file (`../`, path absolut, symlink keluar) + `write_file` atomic (temp lalu rename)
 - [ ] **2d. Kode sandbox Docker** (`run_python`) dengan `--cap-drop ALL`, `no-new-privileges`, image di-pin ke digest. Tesnya **tidak dihitung lulus** kalau di-skip; dijalankan penuh di VM
 
@@ -41,7 +40,8 @@ Urutan disarankan, karena saling bergantung.
 - [ ] Sign-off M1 dari log `verify.sh` hasil VM OCI
 - [x] Audit 2a (wrapper LLM): "perlu patch kecil", sudah dipatch
 - [x] Audit 2b: "layak lanjut setelah patch kecil" (P2 tool call asing), sudah dipatch
-- [ ] Merge PR #1 (`m2-2b` → `main`) setelah Atha setuju
+- [x] PR #1 (2b) di-merge ke `main` (`d9f3e78`)
+- [ ] Audit 2c (PR #2): DoD GPT, terutama nol panggilan ulang untuk langkah ter-commit
 - [ ] Audit setelah 2e (run live di OCI)
 
 ## 5. Nanti
@@ -77,3 +77,6 @@ Urutan disarankan, karena saling bergantung.
 - [x] **2b (branch `m2-2b`):** orchestrator LLM lewat tool `SubmitPlan` (dipaksa dengan `tool_choice`), divalidasi harness: skema, ID unik dan valid, ≤ `max_workers`, setiap output wajib tepat sekali. Rencana tidak valid dikembalikan ke model dengan error persisnya (maks 3 panggilan), lalu `FAILED_PLAN`. Error model permanen → `FAILED_LLM`; reservasi habis → `FAILED_BUDGET`; semuanya berhenti rapi tanpa menjalankan worker
 - [x] **2b:** kontrak output (`nodes/contract.py`): worker, synthesize, dan evaluator membaca hasil per **nama output + iterasi**, jadi ID task bebas dipilih planner dan hasil basi iterasi lama tidak terbawa
 - [x] **2b:** provider `fake` berbasis file (posisi skrip disimpan) untuk tes crash-resume lintas proses dan demo offline; flag `--impl`, `--config`; 35 tes + 9 mutasi tertangkap
+- [x] **2c (branch `m2-2c`):** worker loop tool-calling (`ReadData`, `SubmitResult` divalidasi terhadap skema output kontrak), batas `max_steps`; memo per langkah untuk balasan model dan hasil tool, di-commit sebelum lanjut, kuncinya memuat identitas input (pesan, model, skema tool; tool juga langkah LLM induknya + versi tool)
+- [x] **2c:** reservasi node dipulihkan dari ledger setelah crash (worker dan orchestrator), sehingga batas per node berlaku lintas proses; sebelumnya node bisa memakai sampai 2× estimasinya
+- [x] **2c:** model palsu dengan skrip per task (worker paralel), event log tahan baris terpotong; 22 tes, 8 mutasi tertangkap, termasuk bug kunci tool yang ditemukan tesnya sendiri

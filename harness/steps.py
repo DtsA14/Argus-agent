@@ -1,0 +1,75 @@
+"""Per-step memo for agent loops, and node reservations that survive a crash.
+
+Step keys carry the identity of the step's input, so a memo entry is reused only for exactly the
+same input. Replaying committed steps rebuilds the same messages, so later keys match too; any
+change to the instruction, feedback, model, tools or tool version changes the hash and the old
+entry is simply never looked up.
+
+  LLM step : ("llm",  node, task, iteration, step, sha256(messages, tool schemas, model))
+  tool step: ("tool", node, task, iteration, step, tool_call_id, sha256(name, args, LLM step key), tool version)
+
+A tool step is tied to the LLM step that requested it (its key carries the input hash), so a tool
+result is never reused under a different input, even when name, arguments and call id coincide.
+
+The memo prevents re-calls; the ledger stays the source of truth for spend. reservation_from_ledger()
+starts a node run's reservation with everything that (node, task, iteration) already spent in
+earlier processes, including calls cut off by a crash at their worst case, so a node can never spend
+its estimate twice across a crash, and replays from the memo cost nothing extra.
+"""
+import hashlib
+import json
+
+from langchain_core.messages import AIMessage
+
+from .llm import Reservation, _text, _tool_schema_text, reconcile_ledger
+
+
+def _sha(obj):
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
+
+
+def llm_step_key(node, task, iteration, step, messages, tools, model_ref):
+    identity = {
+        "messages": [(type(m).__name__, _text(m)) for m in messages],
+        "tools": [_tool_schema_text(t) for t in (tools or [])],
+        "model": str(model_ref),
+    }
+    return json.dumps(["llm", node, task, iteration, step, _sha(identity)])
+
+
+def tool_step_key(node, task, iteration, step, tool_call_id, name, args, version, parent):
+    """parent: the key of the LLM step whose reply contained this tool call."""
+    return json.dumps(["tool", node, task, iteration, step, tool_call_id, _sha([name, args, parent]), version])
+
+
+def message_to_json(msg):
+    return {
+        "content": msg.content,
+        "tool_calls": [{"name": c["name"], "args": c["args"], "id": c["id"]} for c in (msg.tool_calls or [])],
+        "usage_metadata": dict(msg.usage_metadata) if getattr(msg, "usage_metadata", None) else None,
+    }
+
+
+def message_from_json(d):
+    kw = {"content": d["content"]}
+    if d.get("tool_calls"):
+        kw["tool_calls"] = d["tool_calls"]
+    if d.get("usage_metadata"):
+        kw["usage_metadata"] = d["usage_metadata"]
+    return AIMessage(**kw)
+
+
+def reservation_from_ledger(log, *, tokens, usd, node, task, iteration):
+    """A fresh reservation for one node run, already charged with what this same node run spent in
+    earlier processes (all attempts, plus calls cut off by a crash at worst case)."""
+    mine = [e for e in log.read()
+            if e.get("event") in ("llm_call_started", "llm_call") and e.get("status") != "refused"
+            and e.get("node") == node and e.get("task") == task and e.get("iteration") == iteration]
+    res = Reservation(tokens=tokens, usd=usd)
+    if mine:
+        _, totals = reconcile_ledger(mine)
+        res.charge(totals["tokens"], totals["usd_nano"])
+        log.emit("reservation_restored", node=node, task=task, iteration=iteration,
+                 calls=totals["calls"], unknown_after_crash=totals["unknown_after_crash"],
+                 tokens=totals["tokens"], usd_nano=totals["usd_nano"])
+    return res

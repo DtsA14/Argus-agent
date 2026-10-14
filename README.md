@@ -63,11 +63,20 @@ its result is saved. What the harness guarantees (tested, including 50 parallel-
    that finished in the short window before its commit. `tokens_spent` in `result.json` (sum of
    `body_done` events) shows that real extra spend; `tokens_used` stays the accounted figure.
 
+Inside an agent loop (LLM worker, phase 2c) the same holds **per step**: each model reply and each
+tool result is committed to the memo before the loop moves on, keyed by the step's input identity
+(messages so far, tool schemas, model; tool steps also by their requesting LLM step and the tool's
+version). On resume, committed steps are replayed with zero model calls and zero tool runs, and a
+changed instruction, feedback, model or tool version never reuses an old entry. A node run's
+reservation is restored from the ledger after a crash, so its limit holds across processes.
+
 Consequence for real tools: anything with side effects (files, messages, payments) must be safe to
 run twice for the same `(node, task, iteration)`, e.g. write to a temp file and rename.
 
 Simulate crashes yourself: `python main.py --crash-at worker`, or `--crash-at worker@after_commit`,
 then the same command with `--resume`. A fresh run refuses an existing `--run-id`.
+Inside nodes: `orchestrator@after_llm`, `worker@after_llm` (reply not yet committed),
+`worker@llm_committed`, `worker@tool_committed`.
 
 ## Node implementations
 

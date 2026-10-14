@@ -93,6 +93,7 @@ roles:
     model: "anthropic:claude-haiku-5-5"
     max_output_tokens: 2048
     timeout_s: 60
+    max_steps: 6           # model calls per worker run (impl.worker: llm)
   evaluator:
     # Not called in milestone 2 (evaluator stays programmatic until M3).
     # PLACEHOLDER: this OpenAI model id is not verified against OpenAI's catalog.

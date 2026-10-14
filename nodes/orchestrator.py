@@ -3,7 +3,8 @@ from langgraph.graph import END
 from langgraph.types import Send
 
 from harness.errors import LLMCallFailed, PlanRejected, ReservationExhausted
-from harness.llm import Reservation
+from harness.crash import Crasher
+from harness.steps import reservation_from_ledger
 
 from .plan import SubmitPlan, system_prompt, user_prompt, validate_plan
 
@@ -39,15 +40,19 @@ def make_orchestrator(log, usd=0.0):
 
 # ---- LLM planner ---------------------------------------------------------------------
 
-def make_llm_orchestrator(caller, contract, *, max_workers, log, tokens, usd, attempts=3, tool_choice="SubmitPlan"):
+def make_llm_orchestrator(caller, contract, *, max_workers, log, tokens, usd, attempts=3, tool_choice="SubmitPlan",
+                          crasher=None):
     """Asks the model for a plan via the SubmitPlan tool, validates it, and on rejection returns the exact
     errors to the model, at most `attempts` calls in total. Every call is paid from one node reservation
-    of (tokens, usd), the node's estimate, so the node can never report more than it reserved."""
+    of (tokens, usd), the node's estimate, so the node can never report more than it reserved. The
+    reservation starts with what this node run already spent before a crash (from the ledger), so the
+    limit holds across processes too."""
+    crasher = crasher or Crasher()
     sys_msg = SystemMessage(system_prompt(contract, max_workers))
 
     def orchestrator(state):
-        res = Reservation(tokens=tokens, usd=usd)
         iteration = state.get("iteration", 0)
+        res = reservation_from_ledger(log, tokens=tokens, usd=usd, node="orchestrator", task=None, iteration=iteration)
         prev = state.get("spec")
         failures = [{"output": f["task"], "check": f["id"], "detail": f["detail"]}
                     for f in (state.get("verdict") or {}).get("failures", [])]
@@ -66,6 +71,7 @@ def make_llm_orchestrator(caller, contract, *, max_workers, log, tokens, usd, at
                 return stop("FAILED_BUDGET", f"node_reservation: {e}")
             except LLMCallFailed as e:
                 return stop("FAILED_LLM", str(e))
+            crasher.point("orchestrator@after_llm", node="orchestrator", iteration=iteration)
 
             calls = list(getattr(msg, "tool_calls", None) or [])
             plan_calls = [c for c in calls if c.get("name") == "SubmitPlan"]
