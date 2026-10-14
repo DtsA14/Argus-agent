@@ -64,6 +64,14 @@ Urutan disarankan, karena saling bergantung.
 - [ ] Eval set 10-20 task: bandingkan single-agent vs multi-agent, dan model kandidat worker (Haiku 5.5 vs DeepSeek V4.1 Flash) berdasarkan biaya per task yang lulus
 - [ ] Deploy harness sebagai service di OCI (systemd)
 
+**Proyek masa depan: Argus sebagai agen pembuat serba guna** (disimpan 2026-10-15, belum dikerjakan)
+- [ ] Spesifikasi arsitektur draf (dari diskusi Atha + GPT): [`docs/FUTURE_ARCHITECTURE.md`](docs/FUTURE_ARCHITECTURE.md).
+  Isinya 7 ADR (registry tool + policy, workflow bertipe, memori berlapis, eksekusi durable, artifact store, quality
+  gate, keamanan dan approval), roadmap M3–M9 (M6 = agen repo-ke-PR), dan kriteria MVP M6.
+  **Bukan deskripsi kode yang ada.** Roadmap-nya berbeda dengan daftar M4+ di atas, jadi harus diselaraskan dulu.
+  Dimulai hanya setelah M3 selesai dan Atha memintanya. Langkah pertamanya *reality check* repo dan rencana, tanpa kode
+  sebelum direview.
+
 **Diterima sebagai batasan untuk sekarang**
 - `max_seconds` masih soft limit (jumlah waktu node, dicek antar iterasi)
 
