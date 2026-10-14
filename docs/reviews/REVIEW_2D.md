@@ -71,3 +71,5 @@ Syarat terakhir sebelum merge, dijalankan di commit `2e165d5` tanpa `ARGUS_SANDB
 - **Python harness:** 3.12.3 (Python sistem Ubuntu 24.04; log x86 memakai 3.13.16)
 
 Dengan ini, tiga batasan di atas yang belum teruji sudah tertutup: cgroup v2, ARM, dan image resmi. Tidak ada perubahan kode, tes, atau config. `.sandbox_image` tetap di-ignore git. Setelah run, tidak ada container `argus.sandbox=1` yang tertinggal. VM ini juga menjalankan layanan lain, dan semuanya tetap aktif selama dan setelah run.
+
+**Keputusan GPT (2026-10-14):** hasil verifikasi sandbox di VM ARM64 disetujui (403 lulus, 0 tes sandbox di-skip, image dipin ke digest, crash stress `CRASH_REPEATS=5 CRASH_STRESS=50`). **PR #3 layak di-merge.** Saran non-blocker, dikerjakan di PR terpisah: `verify.sh` mencatat `git rev-parse HEAD` dan `git status --porcelain` supaya log langsung menunjuk commit yang diverifikasi.
