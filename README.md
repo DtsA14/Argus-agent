@@ -93,13 +93,23 @@ See `tests/test_orchestrator_llm.py` for complete plans. `--config other.yaml` r
 ## Tools, path jail and sandbox
 
 - **File tools** go through `tools/fs.py` (`PathJail`): paths are relative to an allowed root; absolute
-  paths, `..` escapes, NUL bytes and symlinks pointing outside are refused; the final component is
-  opened with `O_NOFOLLOW`; writes are atomic (temp, fsync, `os.replace`) and safe to repeat.
-  The report is written inside the run directory only.
+  paths, `..` above the root and NUL bytes are refused. No symlink is followed anywhere below the
+  root: each directory is opened with `openat(O_DIRECTORY|O_NOFOLLOW)` relative to its already-opened
+  parent and the file relative to its directory's descriptor, so swapping a parent directory for a
+  symlink mid-operation cannot redirect it outside. Only regular files are read. Writes are atomic
+  (temp, fsync, `renameat`, fsync of the directory) and safe to repeat. The report is written inside
+  the run directory only.
+- **Path jail threat model:** holds against any path from the model and against a concurrent local
+  process modifying directories *inside* the root (e.g. sandboxed code writing in its workspace).
+  Not covered: an attacker who can change the root path or anything above it (trusted configuration).
 - **`RunPython`** (LLM workers) runs in Docker (`tools/sandbox.py`): no network, read-only root fs,
   user nobody, no capabilities (bounding set empty), `no-new-privileges`, memory/CPU/pids limits,
   only `/workspace/<task>` writable, data read-only, wall-clock timeout that kills and removes the
-  container, capped output. There is **no unsandboxed fallback**. Enable with `sandbox.kind: docker`.
+  container. There is **no unsandboxed fallback**. Enable with `sandbox.kind: docker`.
+- **Output is bounded on the host:** stdout and stderr are drained in chunks; the harness keeps at most
+  `max_output_bytes` per stream and discards the rest (it never stops reading, so the code cannot
+  block on a full pipe). Past `kill_after_output_bytes` in total the container is killed early.
+  Container logging is off (`--log-driver none`), so output is never copied to the host disk either.
 - The image must be **pinned** (`name@sha256:...` or an image id). On a machine with registry access:
   `bash scripts/pin_sandbox_image.sh` (writes `.sandbox_image`). Without registry access:
   `bash scripts/build_local_sandbox_image.sh` (builds one from the local python3 with `docker import`).

@@ -13,7 +13,7 @@ Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
 - [x] **2b. Orchestrator LLM** di branch `m2-2b`, **menunggu review 2a sebelum merge ke `main`** (detail di bagian Selesai)
 - [x] **2c** di branch `m2-2c`, PR #2, menunggu review GPT (detail di bagian Selesai)
-- [x] **2d** di branch `m2-2d`, PR #3, menunggu review GPT (detail di bagian Selesai)
+- [x] **2d** di branch `m2-2d`, PR #3, patch audit P1/P2 selesai, menunggu review ulang GPT + verifikasi VM (detail di bagian Selesai)
 
 ## 2. Keputusan (sudah diambil 2026-10-14)
 
@@ -42,7 +42,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] Audit 2b: "layak lanjut setelah patch kecil" (P2 tool call asing), sudah dipatch
 - [x] PR #1 (2b) di-merge ke `main` (`d9f3e78`)
 - [x] Audit 2c (PR #2): "tahan merge untuk patch P2" (submit bercampur tool lain), sudah dipatch
-- [ ] Audit 2d (PR #3): path jail + sandbox
+- [x] Audit 2d (PR #3): "tahan merge untuk patch P1" (output dibuffer penuh di harness) + P2 (race direktori induk), sudah dipatch; merge menunggu review ulang + `verify.sh` di VM OCI ARM
 - [ ] Audit setelah 2e (run live di OCI)
 
 ## 5. Nanti
@@ -83,4 +83,5 @@ Urutan disarankan, karena saling bergantung.
 - [x] **2c:** model palsu dengan skrip per task (worker paralel), event log tahan baris terpotong; 22 tes, 8 mutasi tertangkap, termasuk bug kunci tool yang ditemukan tesnya sendiri
 - [x] **2d (branch `m2-2d`):** path jail untuk semua tool file (`..`, absolut, NUL, symlink keluar, TOCTOU lewat `O_NOFOLLOW`), `write_file` atomik dan aman diulang; laporan ditulis lewat jail. Menutup temuan audit M1 (`../escaped.txt`)
 - [x] **2d:** sandbox Docker untuk `RunPython` (tanpa jaringan, rootfs read-only, nobody, tanpa capability, no-new-privileges, batas memori/CPU/pids, timeout yang membunuh dan menghapus container, output dibatasi, image wajib pinned, tanpa fallback); versi image masuk kunci memo
+- [x] **Patch audit 2d:** output sandbox dibaca terbatas (harness 1213 MB → 13 MB RSS untuk 400 MB output), kill awal pada banjir output, `--log-driver none` (output tidak lagi disalin ke disk host); path jail via `openat`/`dir_fd` tanpa symlink di level mana pun, tahan race direktori induk (dibuktikan dengan race lintas proses). 12 mutasi tertangkap
 - [x] **2d:** 36 tes, sebagian besar di container sungguhan (image lokal via `docker import`, karena Docker Hub diblokir di lingkungan Claude); 13 mutasi flag/jail tertangkap setelah 3 tes yang lulus karena alasan salah diperbaiki; `verify.sh` gagal bila tes sandbox di-skip

@@ -30,3 +30,22 @@ Bukti: `verification/verify-20261014T103740Z-x86_64.log`: 388 lulus, **0 tes san
 ## Pertanyaan untuk reviewer
 - Apakah perlu seccomp profile khusus (sekarang default Docker), atau cukup untuk M2?
 - `RunPython` mengembalikan stdout/stderr apa adanya ke model (dipotong 64 KB). Perlu filter tambahan?
+
+## Tanggapan atas audit 2d (GPT, 2026-10-14)
+
+Bukti setelah patch: `verification/verify-20261014T110744Z-x86_64.log`: 402 lulus, **0 tes sandbox di-skip**.
+
+| Temuan | Status |
+|---|---|
+| P1: `max_output_bytes` hanya membatasi output yang dikembalikan, bukan memori harness | **Terbukti.** Peak RSS proses harness saat kode mencetak 0 / 200 / 400 MB: 12 / 613 / 1213 MB (≈3× ukuran output). **Diperbaiki:** `Popen` + dua thread pembaca yang menguras pipe sampai EOF per 64 KB, menyimpan maks `max_output_bytes` per stream dan membuang sisanya (tidak pernah berhenti membaca, jadi kode tidak macet di pipe penuh). Stdin dikirim dari thread sendiri. Setelah patch: 13 / 13 / 13 MB. Tambahan: lewat `kill_after_output_bytes` (16 MB) container dibunuh lebih awal, tidak menunggu timeout; hasil memuat `stdout_bytes`/`stderr_bytes` (jumlah yang benar-benar dicetak) dan `output_limit_exceeded`. 7 tes baru: 256 MB stdout terkuras habis (exit 0) dengan pertumbuhan RSS < 32 MB, kode tetap jalan setelah 8 MB output (file penanda + stderr), stderr juga dibatasi, output tanpa akhir dibunuh < 10 dtk dan container terhapus, timeout tetap membunuh + menghapus setelah output besar, UTF-8 rusak tidak bikin crash |
+| P2: race direktori induk pada path jail | **Terbukti** dengan tes race sungguhan (proses lain menukar `sub/` ↔ symlink keluar): jail lama menulis file temp **di luar root** di 3/3 run. **Diperbaiki** dengan `openat`: root dibuka, setiap komponen direktori dibuka `O_DIRECTORY\|O_NOFOLLOW` relatif ke descriptor induknya (mkdir juga via `dir_fd`), file temp dan `renameat` relatif ke descriptor direktori, lalu fsync direktori. `..` diselesaikan secara leksikal dan tidak boleh naik di atas root. Tes: hook race di 3 titik (sebelum walk → ditolak; setelah walk / sebelum rename → mendarat di direktori yang sudah dibuka, tidak di luar), versi baca, dan race nyata lintas proses (≥3000 tulis, kedua hasil terjadi, nol file di luar; 15/15 run bersih). Threat model ditulis di `tools/fs.py` dan README |
+
+**Perubahan perilaku (lebih ketat):** symlink di dalam root sekarang juga ditolak (sebelumnya diizinkan bila tetap di dalam root), karena target symlink tidak bisa dicek tanpa race. Tes lama diganti `test_symlinks_are_refused_even_when_they_stay_inside_the_root`. Baca juga menolak FIFO/device/direktori (FIFO sebelumnya bisa membuat baca macet).
+
+**Temuan tambahan saat menguji P1:** driver log default Docker (`json-file`) menyalin **seluruh** output container ke disk host (`/var/lib/docker/containers/...`), terlepas dari cara harness membaca pipe. Satu run mutasi (kill dimatikan) meninggalkan container yang terus mencetak dan **menghabiskan disk sandbox Claude** (~30 GB). Diperbaiki dengan `--log-driver none` (output tetap sampai lewat attach) + label `argus.sandbox=1`; tes memeriksa `HostConfig.LogConfig.Type` container yang sedang jalan. Pembersihan setelah kill juga diulang sekali, untuk kasus container baru dibuat setelah percobaan kill pertama.
+
+**Mutasi:** 12 dijalankan, 12 tertangkap. Sandbox: buffer tak terbatas (tersembunyi, field hasil tetap benar → tertangkap tes RSS), berhenti membaca di batas, tanpa kill awal, tanpa kill/hapus saat timeout, decode strict, `--log-driver json-file`. Jail: walk mengikuti symlink, tulis via path string setelah walk (gaya lama), baca via path string, `..` di atas root diabaikan, tanpa cek file reguler, tanpa cek symlink saat replace.
+
+**Seccomp:** mengikuti saran, tidak ada profile custom di M2; README tidak mengklaim isolasi kernel penuh.
+
+**Masih terbuka sebelum 2d dinyatakan selesai:** `verify.sh` di VM OCI ARM dengan image `python:3.13-slim` yang dipin ke digest (butuh Atha).

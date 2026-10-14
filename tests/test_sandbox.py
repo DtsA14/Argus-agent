@@ -8,6 +8,8 @@ ARGUS_SANDBOX_OPTIONAL=1: a skipped sandbox test does not count as passing.
 import copy
 import json
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -171,6 +173,113 @@ def test_timeout_kills_and_removes_the_container(cfg, tmp_path):
 def test_output_is_capped(cfg, tmp_path):
     r = run(cfg, "print('x' * 100000)", tmp_path)
     assert r["truncated"] and len(r["stdout"].encode()) <= 4096
+    assert r["stdout_bytes"] == 100001
+
+
+# ---- output is bounded in the HOST process, not only in what is returned (audit 2d, P1) ------------
+# Before the fix, subprocess.run(capture_output=True) held all output in harness memory and only then
+# cut it: 400 MB printed in the container cost the harness 1.2 GB of RSS.
+
+FLOOD = "import sys\nb = b'x' * (1 << 20)\nfor _ in range({mb}): sys.stdout.buffer.write(b)\n"
+
+RSS_PROBE = """
+import json, os, resource, sys, tempfile
+sys.path.insert(0, os.getcwd())
+from tools import sandbox as sb
+cfg = json.loads(sys.argv[1]); code = sys.argv[2]
+base = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+r = sb.run_python(code, workdir=tempfile.mkdtemp(), data_dir=tempfile.mkdtemp(), cfg=cfg)
+peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+r.pop("stdout"); r.pop("stderr")
+print(json.dumps({"growth_kb": peak - base, **r}))
+"""
+
+
+def harness_rss(cfg, code):
+    """Run the sandbox from a fresh Python process and report how much that process's peak RSS grew."""
+    p = subprocess.run([sys.executable, "-c", RSS_PROBE, json.dumps(cfg), code],
+                       capture_output=True, text=True, timeout=120, cwd=Path(__file__).resolve().parents[1])
+    assert p.returncode == 0, p.stderr
+    return json.loads(p.stdout)
+
+
+def test_huge_output_is_drained_without_growing_harness_memory(cfg):
+    # 256 MB to stdout, early kill disabled: the reader must drain all of it (no deadlock, exit 0)
+    # while the harness keeps only max_output_bytes.
+    r = harness_rss({**cfg, "kill_after_output_bytes": 1 << 40, "timeout_s": 60}, FLOOD.format(mb=256))
+    assert r["exit_code"] == 0 and not r["timed_out"] and not r["output_limit_exceeded"]
+    assert r["stdout_bytes"] == 256 << 20 and r["truncated"]
+    assert r["growth_kb"] < 32 * 1024, r                 # was ~3x the output (768 MB) before the fix
+
+
+def test_output_past_the_limit_is_drained_so_the_code_keeps_running(cfg, tmp_path):
+    # If the reader stopped at the limit, the pipe would fill, the write would block, and the code
+    # would never reach the lines after it: it would end only by timeout.
+    r = run(cfg, "import sys\nsys.stdout.write('x' * (8 << 20)); sys.stdout.flush()\n"
+                 "open('/workspace/after.txt', 'w').write('ok')\nsys.stderr.write('done')",
+            tmp_path, kill_after_output_bytes=1 << 40)
+    assert r["exit_code"] == 0 and not r["timed_out"]
+    assert (tmp_path / "ws" / "after.txt").read_text() == "ok"
+    assert r["stderr"] == "done" and r["stdout_bytes"] == 8 << 20
+
+
+def test_stderr_is_bounded_too(cfg):
+    r = harness_rss({**cfg, "kill_after_output_bytes": 1 << 40},
+                    "import sys\nb = b'e' * (1 << 20)\nfor _ in range(128): sys.stderr.buffer.write(b)\n")
+    assert r["exit_code"] == 0 and r["stderr_bytes"] == 128 << 20 and r["truncated"]
+    assert r["growth_kb"] < 32 * 1024, r
+
+
+def test_endless_output_kills_the_container_early_and_removes_it(cfg, tmp_path):
+    t = time.monotonic()
+    r = run(cfg, "while True: print('x' * 1000)", tmp_path, kill_after_output_bytes=1 << 20, timeout_s=20)
+    assert time.monotonic() - t < 10                     # killed for flooding, not at the 20 s timeout
+    assert r["output_limit_exceeded"] and not r["timed_out"] and not r["killed"]
+    assert r["truncated"] and len(r["stdout"].encode()) <= 4096
+    assert container_gone(tmp_path)
+
+
+def test_timeout_still_kills_and_removes_after_large_output(cfg, tmp_path):
+    r = run(cfg, "import sys, time\nsys.stdout.write('x' * (4 << 20)); sys.stdout.flush()\ntime.sleep(60)",
+            tmp_path, timeout_s=3, kill_after_output_bytes=1 << 40)
+    assert r["timed_out"] and r["exit_code"] is None and r["truncated"]
+    assert r["stdout_bytes"] == 4 << 20 and len(r["stdout"].encode()) <= 4096
+    assert container_gone(tmp_path)
+
+
+def test_container_output_is_not_logged_to_the_host_disk(cfg, tmp_path):
+    # Found while testing P1: the default json-file log driver writes all output to /var/lib/docker on
+    # the host, unbounded, regardless of how the harness reads the pipes (a flooding container filled
+    # the disk during a mutation run). Check the running container's real log config.
+    import threading
+    box = {}
+    t = threading.Thread(target=lambda: box.update(r=run(cfg, "import time\nprint('hi', flush=True)\n"
+                                                              "time.sleep(4)", tmp_path)))
+    t.start()
+    ids = ""
+    for _ in range(60):
+        ids = subprocess.run(["docker", "ps", "-q", "--filter", "label=argus.sandbox=1"],
+                             capture_output=True, text=True).stdout.split()
+        if ids:
+            break
+        time.sleep(0.1)
+    log_type = subprocess.run(["docker", "inspect", "--format", "{{.HostConfig.LogConfig.Type}}", ids[0]],
+                              capture_output=True, text=True).stdout.strip()
+    t.join()
+    assert log_type == "none"
+    assert box["r"]["exit_code"] == 0 and box["r"]["stdout"] == "hi\n"   # attach still delivers output
+
+
+def test_invalid_utf8_output_does_not_crash_the_harness(cfg, tmp_path):
+    r = run(cfg, "import sys\nsys.stdout.buffer.write(b'ok \\xff\\xfe end')", tmp_path)
+    assert r["exit_code"] == 0 and r["stdout"].startswith("ok ") and r["stdout"].endswith(" end")
+
+
+def container_gone(tmp_path):
+    name = [json.loads(l) for l in (tmp_path / "e.jsonl").read_text().splitlines()][-1]["container"]
+    left = subprocess.run(["docker", "ps", "-a", "--filter", f"name={name}", "--format", "{{.Names}}"],
+                          capture_output=True, text=True).stdout.strip()
+    return left == ""
 
 
 # ---- no unsandboxed fallback, pinned images only ---------------------------------------------------
