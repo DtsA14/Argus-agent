@@ -116,6 +116,44 @@ def test_unknown_tool_and_no_tool_call_are_answered_and_cost_a_step(tmp_path):
     assert "Unknown tool 'Shell'" in calls[2]["messages"][-1].content
 
 
+MIXED = {
+    "valid submit + unknown tool": [{"name": "SubmitResult", "args": {"value": VALUES["T2"]}, "id": "s"},
+                                    {"name": "Shell", "args": {}, "id": "x"}],
+    "valid submit + ReadData": [{"name": "SubmitResult", "args": {"value": VALUES["T2"]}, "id": "s"},
+                                {"name": "ReadData", "args": {}, "id": "r"}],
+    "two submits, different values": [{"name": "SubmitResult", "args": {"value": VALUES["T2"]}, "id": "s1"},
+                                      {"name": "SubmitResult", "args": {"value": [["A", 3], ["B", 2], ["C", 1]]},
+                                       "id": "s2"}],
+    "two identical valid submits": [{"name": "SubmitResult", "args": {"value": VALUES["T2"]}, "id": "s1"},
+                                    {"name": "SubmitResult", "args": {"value": VALUES["T2"]}, "id": "s2"}],
+}
+
+
+@pytest.mark.parametrize("case", sorted(MIXED))
+def test_submission_mixed_with_other_tool_calls_is_rejected(tmp_path, case):
+    """GPT audit 2c (P2): a SubmitResult must be the only tool call in its reply."""
+    fn, model, log = _worker(tmp_path, {"T2": [read_call(), reply("", tool_calls=MIXED[case]),
+                                               submit_call(VALUES["T2"], id="final")]})
+    out = fn(P)
+    assert out["results"]["T2"]["value"] == VALUES["T2"] and "error" not in out["results"]["T2"]
+    assert len(model.calls) == 3                               # rejected, then a clean submission
+    assert _tool_runs(log) == 1                                # only the first ReadData ran; nothing in the mix
+    answers = [m for m in model.calls[2]["messages"] if isinstance(m, ToolMessage)][-len(MIXED[case]):]
+    assert [m.tool_call_id for m in answers] == [c["id"] for c in MIXED[case]]
+    assert all("must be the only tool call" in m.content for m in answers)
+    (rej,) = [e for e in log.read() if e["event"] == "submission_rejected"]
+    assert rej["step"] == 1
+
+
+def test_mixed_submissions_every_time_end_in_max_steps(tmp_path):
+    fn, model, log = _worker(tmp_path, {"T2": [reply("", tool_calls=MIXED["valid submit + ReadData"])] * 3},
+                             max_steps=3)
+    out = fn(P)
+    assert out["results"]["T2"]["value"] is None
+    assert out["results"]["T2"]["error"].startswith("max_steps")
+    assert _tool_runs(log) == 0
+
+
 def test_max_steps_ends_the_worker_with_a_reason(tmp_path):
     cfg = cfg_llm(max_iterations=1)
     cfg["roles"]["worker"]["max_steps"] = 2
@@ -155,7 +193,7 @@ def test_output_validator():
 
 # ---- the step memo, in process --------------------------------------------------------------------
 
-def _worker(tmp_path, script, tokens=20_000, model_ref=None):
+def _worker(tmp_path, script, tokens=20_000, model_ref=None, max_steps=6):
     cfg = cfg_llm()
     if model_ref:
         cfg["roles"]["worker"]["model"] = model_ref
@@ -164,7 +202,7 @@ def _worker(tmp_path, script, tokens=20_000, model_ref=None):
     caller = LLMCaller(cfg, "worker", log, model=model)
     gate = ToolGate("worker", ["read_data"], log)
     fn = make_llm_worker(caller, SALES_REPORT, gate, Memo(tmp_path / "memo.sqlite"), log,
-                         tokens=tokens, usd=1.0)
+                         tokens=tokens, usd=1.0, max_steps=max_steps)
     return fn, model, log
 
 

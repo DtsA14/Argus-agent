@@ -41,7 +41,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] Audit 2a (wrapper LLM): "perlu patch kecil", sudah dipatch
 - [x] Audit 2b: "layak lanjut setelah patch kecil" (P2 tool call asing), sudah dipatch
 - [x] PR #1 (2b) di-merge ke `main` (`d9f3e78`)
-- [ ] Audit 2c (PR #2): DoD GPT, terutama nol panggilan ulang untuk langkah ter-commit
+- [x] Audit 2c (PR #2): "tahan merge untuk patch P2" (submit bercampur tool lain), sudah dipatch
 - [ ] Audit setelah 2e (run live di OCI)
 
 ## 5. Nanti

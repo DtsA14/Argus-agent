@@ -116,6 +116,16 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
             if not calls:
                 messages.append(HumanMessage("Use the tools: ReadData to get the data, SubmitResult to finish."))
                 continue
+            names = [c.get("name") for c in calls]
+            if "SubmitResult" in names and len(calls) != 1:
+                # Strict contract (GPT audit 2c): a submission must be the reply's only tool call. A mix
+                # (or two submissions) is ambiguous, so nothing in this reply is executed or accepted.
+                log.emit("submission_rejected", step=step, tools=names, **meta)
+                reason = (f"Rejected: SubmitResult must be the only tool call in its reply; this reply had "
+                          f"{len(calls)} tool calls {names}. Nothing in it was executed. Call SubmitResult alone.")
+                messages += [ToolMessage(reason, tool_call_id=c.get("id") or f"call_{step}_{i}")
+                             for i, c in enumerate(calls)]
+                continue
             submitted = None
             for c in calls:
                 tkey = tool_step_key("worker", tid, it, step, c.get("id"), c.get("name"), c.get("args"),

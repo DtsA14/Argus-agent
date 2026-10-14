@@ -117,7 +117,11 @@ class FileScriptedChatModel(ScriptedChatModel):
         pos = int(pos_file.read_text()) if pos_file.exists() else 0
         if pos >= len(items):
             raise AssertionError(f"fake script {self.path} [{key}] exhausted after {pos} calls")
-        pos_file.write_text(str(pos + 1))
+        # Atomic: a crash (os._exit from another worker thread) must never leave an empty position file.
+        import os
+        tmp = pos_file.with_name(pos_file.name + ".tmp")
+        tmp.write_text(str(pos + 1))
+        os.replace(tmp, pos_file)
         return item_from_json(items[pos])
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):

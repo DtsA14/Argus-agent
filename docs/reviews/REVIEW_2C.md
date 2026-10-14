@@ -33,3 +33,17 @@ balasan tidak di-commit, memo tool tidak dibaca, commit tool setelah lanjut, log
 ## Pertanyaan untuk reviewer
 - Orchestrator tidak di-memo per percobaan (biaya ulang setelah crash di tengah planning terhitung dan dibatasi, tapi dibayar). Perlu di-memo juga?
 - `validate_output` hanya mengecek bentuk; kebenaran tetap tugas evaluator. Setuju dengan pembagian ini?
+
+## Tanggapan atas audit 2c (GPT, 2026-10-14)
+
+| Temuan | Status |
+|---|---|
+| P2: worker menerima `SubmitResult` valid walau balasan berisi tool call lain, atau dua `SubmitResult` | **Terbukti** untuk tiga bentuk: submit + tool asing, submit + `ReadData` (ReadData ikut dijalankan), dan dua submit dengan **nilai berbeda** (yang pertama dipilih diam-diam). **Diperbaiki:** `SubmitResult` harus satu-satunya tool call di balasannya; kalau tidak, seluruh balasan ditolak tanpa menjalankan apa pun, setiap tool call dijawab `ToolMessage`, dan loop lanjut. 5 tes regresi (4 bentuk campuran + campuran terus-menerus berakhir `max_steps`). Mutasi: aturan dihapus → 5 gagal; hanya menangkap submit ganda → 3 gagal |
+
+**Temuan saat verifikasi patch (alat tes, bukan harness):** satu dari lima pengulangan
+`test_crash_before_commit_redoes_one_call_and_counts_it` gagal (`verification/verify-20261014T101533Z-x86_64.log`).
+Penyebab: `os._exit` mengenai thread worker lain yang sedang menulis file posisi skrip model palsu
+(`write_text` mengosongkan file dulu), sehingga file tersisa kosong dan model palsu crash saat resume.
+Harness bereaksi benar (worker gagal dengan alasan tercatat, run berhenti `FAILED_STAGNANT`). Diperbaiki
+dengan penulisan atomik (temp lalu `os.replace`); 120 run crash berturut-turut bersih setelahnya.
+Log yang gagal dibiarkan di `verification/` sebagai bukti.
