@@ -1,0 +1,97 @@
+== verify.sh 2026-10-14T06:39:58Z
+host: Linux 6.18.44-fc-v114 x86_64
+python: Python 3.13.16
+CRASH_REPEATS=5 CRASH_STRESS=50
+== pip freeze
+aiosqlite==0.22.1
+annotated-types==0.8.0
+anthropic==1.13.0
+anyio==4.15.1
+certifi==2026.7.22
+charset-normalizer==3.5.2
+distro==1.9.0
+docstring_parser==0.18.0
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.13.1
+httpx==0.28.1
+httpx2==2.13.1
+idna==3.20
+iniconfig==2.3.1
+jiter==0.17.0
+jsonpatch==1.35
+jsonpointer==3.2.1
+langchain-anthropic==1.7.6
+langchain-core==1.6.10
+langchain-deepseek==1.1.1
+langchain-openai==1.7.1
+langchain-protocol==0.0.19
+langgraph==1.2.15
+langgraph-checkpoint==4.3.0
+langgraph-checkpoint-sqlite==3.1.2
+langgraph-prebuilt==1.1.0
+langgraph-sdk==0.4.7
+langsmith==0.14.8
+openai==3.30.0
+orjson==3.13.0
+ormsgpack==1.12.2
+packaging==26.3
+pluggy==1.6.0
+pydantic==2.14.1
+pydantic_core==2.50.1
+Pygments==2.21.0
+pytest==9.1.1
+PyYAML==6.0.3
+regex==2026.9.29
+requests==2.34.2
+requests-toolbelt==1.0.0
+sniffio==1.3.1
+sqlite-vec==0.1.9
+tenacity==9.2.1
+tiktoken==0.14.0
+truststore==0.10.5
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uuid_utils==0.17.1
+websockets==16.1.1
+xxhash==4.0.1
+zstandard==0.25.0
+== source sha256
+478443f8fbb4ff2883ee61bc8fc703818cc729b740e5d714ba4b315cb6e96bfa  ./config.yaml
+5a1abb38b4b4db0840ece6e00eab5e6d86ef158f883d232ccf7a8146a910722f  ./conftest.py
+98d29d042ca5a76bde0ddf28501eee211f6ae400674bacb5c50ec713ef70ef02  ./data/penjualan.csv
+fe174209e8e51ee35f896a9b2cfd0bdcfeed0b706901eb1f1bca79204ba07047  ./dataset.py
+2ad03497a05e5ff58c63803a1f399268fcfbd8c87a6d4890fd52ecf7542ea89f  ./graph.py
+8385cfc78e99a3494ca338c68be26a258923a474abf57144590efc914cd392c8  ./harness/__init__.py
+1a577a63389ed66c25dc1f01c39a6ee3d896bd256aa6835d6a21363d7f89ebec  ./harness/budget.py
+7bca8b987c52f4e8939b5b674ae0bca69f39978c991c0ff67c58db4e0b3c5730  ./harness/errors.py
+f8b3b4780ed3a472bcf22c50cd1380b04a1f7986910dcbe22265feba95dd82e2  ./harness/events.py
+8150e6f4d344b77e2d79fa938b24d91014b49494680f0abf32a90bd7012f1215  ./harness/guard.py
+ce75b46fdda00220556653a1ff44a799c50af6a3638639e612fd6bc34ea74822  ./harness/memo.py
+abf3843c7eb6df388950fd1f1e1c175879a718fd4775a014d226df343fd4022e  ./harness/progress.py
+09075781445b33fb38f46252a85e3428129ae118205d688f32062d7a45ec3fcc  ./main.py
+191e004f6ddc3f3cd0440b51019f503f26d73011a08dc45b546e27bc74c85037  ./models/__init__.py
+7eff3bb8411e292b8dff639c3da915b39a4c4cdb320554ce37b14ea1d566ff73  ./models/pricing.py
+c2e447164db1ab06aeb24db88952e46a26046e68eef0c6a1ea5869455393114a  ./models/registry.py
+ffc91d592d635dee170bc426eeb64bd6aa7801ae1a5050d81814cd518f3fea92  ./nodes/__init__.py
+4f0083c2bb27f7bc92fadd46926fce18c7318688918a2328bc98ae0f5bc22b82  ./nodes/evaluator.py
+b4a6e792a4b533e7794b4cdbce5916ff0c8f545053ddae23e313d6946083e3b9  ./nodes/orchestrator.py
+8f2abf85946016ea5342731560e111c1592dd06d6a93f072726f8bcc7d696841  ./nodes/synthesize.py
+d2d8b0018b14d4b82ed9a6c6d16c326b28750ccee6ef4aa6f7ac9daf77169691  ./nodes/worker.py
+7c0a529936f7068649a4dbad46be353daaa79db1c5fcc42c7a71e30b74f1f102  ./requirements.txt
+e95ffaa90a863666c04e25cdce31204a3e0721512a1a138f53ad40a392742042  ./runner.py
+675fcdd42b63618c5177ee78335a219b5633b576a4a8a60b8e56cc5b25b68755  ./scripts/smoke_models.py
+d30e1abc7930c913277f970073f3c62b7b15022e2cd1ccb506fce5ed252a9170  ./scripts/verify.sh
+5581e02a0400f65ef5d70338b198508fe5e7c034c5e6efcd08801524a598c8b2  ./state.py
+0e24ad4af9f1a230a91c9249f5fbc20abb2901f0d05f7ab6a96e29d18d3bdbe4  ./tests/test_audit_gaps.py
+7ad34e0f0a4a82794aa60babb6c1e3e88d61edff9e97038bef62857425870bf5  ./tests/test_milestone1.py
+9d79131525a1d1e397ae3611d89f6f6fcd56f69d6b224a702e06ad1b962cecbc  ./tests/test_models.py
+5531a8bd9ba0955fdb7a4b7005bbb206e646dbcae06f0de77a6a0ce95d5c877f  ./tools/__init__.py
+50b16a7f383e40ca5306615eb751377fc474975480997d0474d9902c3a1cebc5  ./tools/registry.py
+== pytest
+........................................................................ [ 41%]
+........................................................................ [ 83%]
+............................                                             [100%]
+172 passed in 157.22s (0:02:37)
+RESULT: PASS

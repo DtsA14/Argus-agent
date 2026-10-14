@@ -1,0 +1,130 @@
+== verify.sh 2026-10-14T06:16:12Z
+host: Linux 6.18.44-fc-v114 x86_64
+python: Python 3.13.16
+CRASH_REPEATS=5
+== pip freeze
+aiosqlite==0.22.1
+annotated-types==0.8.0
+anthropic==1.13.0
+anyio==4.15.1
+certifi==2026.7.22
+charset-normalizer==3.5.2
+distro==1.9.0
+docstring_parser==0.18.0
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.13.1
+httpx==0.28.1
+httpx2==2.13.1
+idna==3.20
+iniconfig==2.3.1
+jiter==0.17.0
+jsonpatch==1.35
+jsonpointer==3.2.1
+langchain-anthropic==1.7.6
+langchain-core==1.6.10
+langchain-deepseek==1.1.1
+langchain-openai==1.7.1
+langchain-protocol==0.0.19
+langgraph==1.2.15
+langgraph-checkpoint==4.3.0
+langgraph-checkpoint-sqlite==3.1.2
+langgraph-prebuilt==1.1.0
+langgraph-sdk==0.4.7
+langsmith==0.14.8
+openai==3.30.0
+orjson==3.13.0
+ormsgpack==1.12.2
+packaging==26.3
+pluggy==1.6.0
+pydantic==2.14.1
+pydantic_core==2.50.1
+Pygments==2.21.0
+pytest==9.1.1
+PyYAML==6.0.3
+regex==2026.9.29
+requests==2.34.2
+requests-toolbelt==1.0.0
+sniffio==1.3.1
+sqlite-vec==0.1.9
+tenacity==9.2.1
+tiktoken==0.14.0
+truststore==0.10.5
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uuid_utils==0.17.1
+websockets==16.1.1
+xxhash==4.0.1
+zstandard==0.25.0
+== source sha256
+478443f8fbb4ff2883ee61bc8fc703818cc729b740e5d714ba4b315cb6e96bfa  ./config.yaml
+5a1abb38b4b4db0840ece6e00eab5e6d86ef158f883d232ccf7a8146a910722f  ./conftest.py
+98d29d042ca5a76bde0ddf28501eee211f6ae400674bacb5c50ec713ef70ef02  ./data/penjualan.csv
+fe174209e8e51ee35f896a9b2cfd0bdcfeed0b706901eb1f1bca79204ba07047  ./dataset.py
+5e2a0c315d44fc307adbc659bb80d08bd3a52b17594af2e8b8fc34f22c0718e8  ./graph.py
+8385cfc78e99a3494ca338c68be26a258923a474abf57144590efc914cd392c8  ./harness/__init__.py
+1a577a63389ed66c25dc1f01c39a6ee3d896bd256aa6835d6a21363d7f89ebec  ./harness/budget.py
+7bca8b987c52f4e8939b5b674ae0bca69f39978c991c0ff67c58db4e0b3c5730  ./harness/errors.py
+f8b3b4780ed3a472bcf22c50cd1380b04a1f7986910dcbe22265feba95dd82e2  ./harness/events.py
+ef5aebd5bcdf991e2471c2cebb712e64f89dd6f26c8b2b0b66eb866d362f6727  ./harness/guard.py
+abf3843c7eb6df388950fd1f1e1c175879a718fd4775a014d226df343fd4022e  ./harness/progress.py
+4c4bdb6d886a47e717e82bd4e03b58f32e58967a0f1550bef974c382af745237  ./main.py
+191e004f6ddc3f3cd0440b51019f503f26d73011a08dc45b546e27bc74c85037  ./models/__init__.py
+7eff3bb8411e292b8dff639c3da915b39a4c4cdb320554ce37b14ea1d566ff73  ./models/pricing.py
+c2e447164db1ab06aeb24db88952e46a26046e68eef0c6a1ea5869455393114a  ./models/registry.py
+ffc91d592d635dee170bc426eeb64bd6aa7801ae1a5050d81814cd518f3fea92  ./nodes/__init__.py
+4f0083c2bb27f7bc92fadd46926fce18c7318688918a2328bc98ae0f5bc22b82  ./nodes/evaluator.py
+b4a6e792a4b533e7794b4cdbce5916ff0c8f545053ddae23e313d6946083e3b9  ./nodes/orchestrator.py
+8f2abf85946016ea5342731560e111c1592dd06d6a93f072726f8bcc7d696841  ./nodes/synthesize.py
+d2d8b0018b14d4b82ed9a6c6d16c326b28750ccee6ef4aa6f7ac9daf77169691  ./nodes/worker.py
+7c0a529936f7068649a4dbad46be353daaa79db1c5fcc42c7a71e30b74f1f102  ./requirements.txt
+6d436940f225f3f08bf4e54f698cd6b97bf80758e6e82195783830575e421c6f  ./runner.py
+675fcdd42b63618c5177ee78335a219b5633b576a4a8a60b8e56cc5b25b68755  ./scripts/smoke_models.py
+69b45ee1fc8a27f1e0dbc2a3f9d65d56da94077c42241f0349b146c1fa0ce8f2  ./scripts/verify.sh
+5581e02a0400f65ef5d70338b198508fe5e7c034c5e6efcd08801524a598c8b2  ./state.py
+052b4cb57872c79820ef9d43a0b0f0c0c27ad54a3568cb38666b3e19206697a1  ./tests/test_audit_gaps.py
+d7f36d205346c2308a38953f0b7871306988aafae6e12866179b37787affe50b  ./tests/test_milestone1.py
+9d79131525a1d1e397ae3611d89f6f6fcd56f69d6b224a702e06ad1b962cecbc  ./tests/test_models.py
+5531a8bd9ba0955fdb7a4b7005bbb206e646dbcae06f0de77a6a0ce95d5c877f  ./tools/__init__.py
+50b16a7f383e40ca5306615eb751377fc474975480997d0474d9902c3a1cebc5  ./tools/registry.py
+== pytest
+.......................................................................F [ 73%]
+..........................                                               [100%]
+=================================== FAILURES ===================================
+_______________ test_crash_then_resume_from_checkpoint[worker-2] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-11/test_crash_then_resume_from_ch7')
+crash_at = 'worker', repeat = 2
+
+    @pytest.mark.parametrize("repeat", range(CRASH_REPEATS))
+    @pytest.mark.parametrize("crash_at", ["orchestrator", "worker", "synthesize", "evaluator"])
+    def test_crash_then_resume_from_checkpoint(tmp_path, crash_at, repeat):
+        """Kill the real process before a node, restart it, and require the same outcome as an uninterrupted run."""
+        base = [sys.executable, "main.py", "--scenario", "fail_then_pass", "--run-id", "rc",
+                "--runs-dir", str(tmp_path), "--quiet"]
+        r1 = subprocess.run(base + ["--crash-at", crash_at], cwd=ROOT, capture_output=True, text=True)
+        assert r1.returncode == 42, r1.stderr
+        assert not (tmp_path / "rc" / "result.json").exists()  # it really died mid-run
+        r2 = subprocess.run(base + ["--resume"], cwd=ROOT, capture_output=True, text=True)
+        assert r2.returncode == 0, r2.stderr
+    
+        result = json.loads((tmp_path / "rc" / "result.json").read_text())
+        # identical to an uninterrupted fail_then_pass run, so nothing was counted twice
+        assert result["status"] == "DONE" and result["iteration"] == 2 and result["tokens_used"] == 23_000
+    
+        evs = events(tmp_path, "rc")
+        names = [e["event"] for e in evs]
+        assert "crash_simulated" in names and "resume" in names
+        # every node run (node, task, iteration) completed exactly once: no re-execution after resume
+        done = Counter((e["node"], e.get("task"), e.get("iteration")) for e in evs if e["event"] == "node_end")
+>       assert all(n == 1 for n in done.values()), done
+E       AssertionError: Counter({('worker', 'T2', 0): 2, ('orchestrator', None, 0): 1, ('worker', 'T1', 0): 1, ('worker', 'T3', 0): 1, ('synth...', 'T1', 1): 1, ('worker', 'T3', 1): 1, ('worker', 'T2', 1): 1, ('synthesize', None, 1): 1, ('evaluator', None, 1): 1})
+E       assert False
+E        +  where False = all(<generator object test_crash_then_resume_from_checkpoint.<locals>.<genexpr> at 0x7f3c4c7482b0>)
+
+tests/test_milestone1.py:113: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_milestone1.py::test_crash_then_resume_from_checkpoint[worker-2]
+1 failed, 97 passed in 38.26s
+RESULT: FAIL (pytest exit 1)

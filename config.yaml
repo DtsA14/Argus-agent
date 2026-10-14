@@ -1,0 +1,84 @@
+budget:
+  max_iterations: 5
+  max_tokens: 200000     # hard limit: an iteration only starts if its worst-case cost fits
+  max_seconds: 600       # soft limit: summed node time, checked between iterations
+  stagnation_rounds: 2   # stop if the evaluator score has not improved for N rounds
+  max_workers: 3         # an orchestrator plan with more parallel tasks is rejected
+
+# Worst-case tokens per node call. Used to reserve budget before an iteration starts;
+# a node that reports more than its estimate is a harness error (EstimateExceeded).
+# With real LLMs, set each call's max_tokens so input + output stays under these.
+token_estimates:
+  orchestrator: 3000
+  worker: 2000
+  synthesize: 1000
+  evaluator: 1500
+
+retry:
+  attempts: 3
+  base_delay: 0.05       # seconds, doubles each attempt
+
+# Tool allowlist per role (enforced by the harness, not by prompts)
+tools:
+  orchestrator: [write_file]
+  worker: [read_data]
+  evaluator: []
+
+# ---------------------------------------------------------------------------
+# LLM providers. Adding a provider = adding an entry here.
+# kind: anthropic | openai | deepseek | openai_compatible (any OpenAI-style API, no code needed)
+# API keys are read from the environment variable named in api_key_env; never put keys in this file.
+# ---------------------------------------------------------------------------
+providers:
+  anthropic:
+    kind: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+  openai:
+    kind: openai
+    api_key_env: OPENAI_API_KEY
+  deepseek:
+    kind: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+  # Example: uncomment to add another provider without touching any code
+  # together:
+  #   kind: openai_compatible
+  #   api_key_env: TOGETHER_API_KEY
+  #   base_url: https://api.together.xyz/v1
+
+# ---------------------------------------------------------------------------
+# Roles: which model plays which role. Swap a model by editing "model" below,
+# or per run:  python main.py --model worker=deepseek:deepseek-flash
+# params are passed straight to the provider's chat class (max_tokens, temperature, ...).
+# ---------------------------------------------------------------------------
+roles:
+  orchestrator:
+    model: "anthropic:claude-sonnet-5-5"
+    params: {max_tokens: 4096}
+  worker:
+    model: "anthropic:claude-haiku-5-5"
+    params: {max_tokens: 4096}
+  evaluator:
+    # PLACEHOLDER: this OpenAI model id is not verified against OpenAI's catalog.
+    # Run `python scripts/smoke_models.py --list --grep gpt` with your key and pick a real id.
+    model: "openai:gpt-5.6-sol"
+    params: {max_tokens: 2048}
+
+# ---------------------------------------------------------------------------
+# Price catalog, USD per 1M tokens, from public pages checked mid-Oct 2026. Verify before relying on them.
+# A missing entry (e.g. OpenAI below) means cost is reported as "n/a" instead of a guess.
+# cache_read is the discounted rate for cached input tokens; without it cached tokens are billed as normal input.
+# ---------------------------------------------------------------------------
+prices:
+  "anthropic:claude-haiku-5-5":  {input: 0.10, output: 0.50, cache_read: 0.01}
+  "anthropic:claude-sonnet-5-5": {input: 2.00, output: 10.00}
+  "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00}
+  "deepseek:deepseek-flash":     {input: 0.15, output: 0.60, cache_read: 0.003, peak_multiplier: 2}
+  "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
+
+# DeepSeek charges double during these UTC windows on weekdays (Chinese public holidays are off-peak;
+# that exception is not modelled here). 01-04 and 06-10 UTC = 08-11 and 13-17 WIB.
+peak_windows:
+  deepseek:
+    utc_hours: [[1, 4], [6, 10]]
+    weekdays_only: true

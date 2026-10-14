@@ -1,0 +1,12 @@
+# Pinned to the versions the test suite was verified with (Python 3.13, 2026-10-14).
+langgraph==1.2.15
+langgraph-checkpoint==4.3.0
+langgraph-checkpoint-sqlite==3.1.2
+langchain-core==1.6.10
+langchain-anthropic==1.7.6
+langchain-openai==1.7.1
+langchain-deepseek==1.1.1
+anthropic==1.13.0
+openai==3.30.0
+PyYAML==6.0.3
+pytest==9.1.1
