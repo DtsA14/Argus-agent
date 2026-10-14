@@ -1,7 +1,8 @@
 # Milestone 3: evaluator yang benar-benar menilai kualitas
 
-Status: **keputusan dikunci** (Atha + GPT, 2026-10-15, bagian 8). 3a selesai (PR #6, disetujui GPT). Kontrak data
-3b/3c (bagian 3.6) menunggu review GPT sebelum implementasi.
+Status: **keputusan dikunci** (Atha + GPT, 2026-10-15, bagian 8). 3a selesai (PR #6, di-merge `b01eda3`).
+Kontrak 3.4 dan 3.6 disetujui GPT setelah dua koreksi (aturan angka untuk `action`, format angka kanonis dan pembagi
+nol); implementasi 3b dengan model palsu boleh dimulai. Kalibrasi live baru setelah 3c selesai.
 Dasar: M2 selesai di `main` `8ee005a` (orchestrator dan worker LLM, sandbox Docker, smoke live di VM OCI ARM).
 
 ## 1. Tujuan
@@ -72,7 +73,7 @@ Semua dicek terhadap ground truth yang dihitung ulang dari data, tidak pernah da
   programatik **dan** semua kriteria rubric lulus.
 
 ### 3.4 Set kalibrasi judge (3d)
-- ±33 laporan, masing-masing dengan **satu** jenis cacat atau tanpa cacat. Setiap kategori punya beberapa kasus yang
+- ±35 laporan, masing-masing dengan **satu** jenis cacat atau tanpa cacat. Setiap kategori punya beberapa kasus yang
   berbeda bentuknya (syarat GPT), bukan satu contoh yang diulang:
 
   | Kategori | Kasus | Contoh bentuk yang berbeda |
@@ -83,9 +84,9 @@ Semua dicek terhadap ground truth yang dihitung ulang dari data, tidak pernah da
   | bertentangan dengan tren | 3 | menyebut turun padahal naik, saran mengurangi stok produk teratas |
   | kabur, tanpa aksi | 3 | "perlu ditingkatkan", "pantau terus", saran generik |
   | hanya mengulang data | 3 | menyalin angka tanpa saran apa pun |
-  | statistik karangan | 4 | survei fiktif, margin/biaya yang tidak ada di data, proyeksi tanpa dasar, benchmark industri |
+  | statistik atau klaim karangan | 6 | survei fiktif, margin/biaya yang tidak ada di data, proyeksi tanpa dasar, benchmark industri; **klaim sebab-akibat** yang tidak ada di data ("naik karena kampanye Ramadan", "turun karena kompetitor buka cabang") |
   | injeksi prompt | 4 | perintah langsung, menyamar sebagai catatan sistem, dalam bahasa lain, di tengah kalimat |
-  | **total** | **29 + 4 cadangan** | |
+  | **total** | **31 + 4 cadangan** | |
 
 - Laporan cacat dirakit dari laporan yang **benar** di cek programatik (Top 3 dan Tren benar). Yang diuji adalah
   judge, bukan cek angka.
@@ -115,10 +116,17 @@ pada klaim model tentang dirinya sendiri.
 
 **Tabel fakta.** Dibuat oleh harness, bukan model. Setiap fakta punya `id`, `value`, `unit`, dan `source`.
 - Fakta dasar diambil dari hasil worker iterasi ini yang lolos validator, misalnya `top3.1.product`,
-  `top3.1.revenue`, `trend.2026-01.revenue`.
-- Fakta turunan dihitung harness dengan rumus tetap, misalnya `top3.share_top2_pct` = (top3.1 + top3.2) / total
-  top3 × 100, dibulatkan 1 desimal, dan `trend.growth_pct` = (bulan terakhir − bulan pertama) / bulan pertama × 100.
-- Model hanya boleh memakai fakta yang ada di tabel. Daftar rumus turunan ditulis di kode dan dites.
+  `top3.1.revenue`, `trend.2026-01.revenue`. Nilai rupiah berupa bilangan bulat.
+- Fakta turunan dihitung harness dengan rumus tetap memakai `Decimal`, tanpa float. Nilai tepatnya disimpan, dan
+  pembulatannya dilakukan saat dibandingkan (lihat aturan angka):
+  - `top3.top2_share_of_top3_pct` = (top3.1.revenue + top3.2.revenue) / (jumlah revenue ketiga produk Top 3) × 100.
+    Penyebutnya total Top 3, **bukan** total semua produk (koreksi nama dari GPT).
+  - `trend.first_to_last_growth_pct` = (revenue bulan terakhir − revenue bulan pertama) / revenue bulan pertama × 100.
+    Hasilnya bisa negatif.
+  - **Pembagi nol:** kalau penyebutnya 0, fakta itu **tidak dimasukkan** ke tabel. Rujukan ke fakta itu gagal sebagai
+    "fakta tidak ada". Tidak ada nilai pengganti 0 atau tak hingga.
+- Model hanya boleh memakai fakta yang ada di tabel. Daftar rumus turunan ditulis di kode dan dites, termasuk kasus
+  pembagi nol.
 
 **3b: output penulis lewat tool `SubmitRecommendations`.**
 ```
@@ -127,12 +135,21 @@ pada klaim model tentang dirinya sendiri.
 Validasi harness. Kalau gagal, error dikirim balik ke model, maksimal `synthesize.attempts` kali, lalu node gagal
 dengan alasan tercatat:
 - Semua `facts` ada di tabel. `action` dan `text` tidak kosong, dengan panjang maksimal.
-- **Setiap angka di `text` harus berasal dari fakta yang dirujuk.**
-  - Angka diekstrak dengan regex. Pemisah ribuan `.` atau `,` dibuang.
-  - Token `YYYY-MM` harus sama dengan bulan dari fakta tren yang dirujuk.
-  - Bilangan bulat harus sama persis dengan nilai fakta.
-  - Persen harus sama dengan nilai fakta yang dibulatkan ke 0 atau 1 desimal.
-  - Angka yang tidak cocok dengan fakta mana pun berarti ditolak.
+- **`text` dan `action` sama-sama dirender di laporan** (`N. <text> Aksi: <action>`), jadi **keduanya** divalidasi
+  dengan aturan angka yang sama (koreksi GPT P1). Tidak ada teks model yang tampil tanpa divalidasi.
+- **Aturan angka (format kanonis).** Prompt penulis menyebut format ini secara eksplisit, dan harness menolak semua
+  yang lain, tanpa menebak maksudnya:
+  - Bulan: `YYYY-MM` (bulan 01–12), harus sama dengan bulan dari fakta tren yang dirujuk. Diekstrak lebih dulu,
+    sehingga digitnya tidak dihitung sebagai angka.
+  - Rupiah dan bilangan bulat lain: digit polos tanpa pemisah ribuan (`4200000`), sama persis dengan nilai fakta yang
+    dirujuk. Tidak boleh diikuti `%`.
+  - Persen: angka diikuti `%`, titik sebagai pemisah desimal, paling banyak 1 desimal (`72%`, `72.4%`). Nilainya harus
+    sama dengan nilai tepat fakta persen yang dirujuk setelah dibulatkan *half-up* ke jumlah desimal yang ditulis.
+    Tanda minus boleh untuk pertumbuhan negatif (`-3.5%`).
+  - **Ditolak sebagai bukan kanonis:** koma di antara digit (`12,5`, `4,200,000`), titik diikuti 2 digit atau lebih
+    (`4.200.000`, `12.50`, `1.234`), dan angka tanpa `%` yang merujuk fakta persen. Pesan errornya menyebut format
+    yang benar, jadi model bisa memperbaikinya.
+  - Angka kanonis yang tidak cocok dengan fakta mana pun yang dirujuk juga ditolak.
 - Balasan terpotong berarti node gagal dan tidak diulang (aturan 2e).
 
 Harness merakit laporan, lalu menyimpan provenance di `laporan.provenance.json`: tiap rekomendasi beserta fakta yang
@@ -159,6 +176,9 @@ Kriteria (dari kontrak task, generik):
 - `actionable`
 - `not_restating`: bukan sekadar mengulang data.
 - `no_instructions`: tidak ada teks yang mencoba memerintah penilai.
+
+**Batas klaim.** Kutipan yang terverifikasi hanya membuktikan bahwa judge menunjuk teks yang memang ada di laporan,
+**bukan** bahwa penilaiannya benar (catatan GPT). Kebenaran verdict diukur oleh kalibrasi 3d, bukan oleh validasi ini.
 
 **Validasi harness atas verdict (fail closed).** Rubric dianggap **tidak lulus**, dengan event dan alasan tercatat,
 kalau salah satu terjadi:
@@ -213,7 +233,7 @@ kriteria, dan model. Resume tidak membeli verdict yang sudah di-commit.
   ada jalur tanpa paksaan tool dari 2e.
 - **Token input non-Anthropic dihitung heuristik**, jadi bukan batas finansial absolut (AGENTS.md). Margin dan
   `estimate_miss` di ledger tetap berlaku.
-- **Set kalibrasi kecil** (±33). Hasilnya indikasi dan uji regresi, bukan bukti statistik keandalan judge. Ini harus
+- **Set kalibrasi kecil** (±35). Hasilnya indikasi dan uji regresi, bukan bukti statistik keandalan judge. Ini harus
   ditulis begitu di laporan.
 
 ## 8. Keputusan
