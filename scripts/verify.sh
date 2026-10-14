@@ -2,7 +2,8 @@
 # Reproducible milestone check: fresh virtualenv, pinned dependencies, full test suite,
 # crash-resume repeated CRASH_REPEATS times per crash point (before the node and right after
 # its result is committed), plus CRASH_STRESS parallel-worker crashes. The full output is saved under
-# verification/ as evidence, with the environment and a hash of every source file.
+# verification/ as evidence, with the commit, whether the working tree was clean, the environment and a
+# hash of every source file.
 #
 # Sandbox tests run in a real Docker container and need a pinned image: ARGUS_SANDBOX_IMAGE, or the
 # file .sandbox_image written by scripts/pin_sandbox_image.sh. If they are skipped, the result is FAIL:
@@ -24,6 +25,7 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
 {
   echo "== verify.sh $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "host: $(uname -srm)"
+  bash scripts/provenance.sh "$LOG"
   rm -rf "$VENV"
   python3 -m venv "$VENV"
   "$VENV/bin/pip" install -q --upgrade pip
