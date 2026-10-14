@@ -6,57 +6,109 @@ from harness.budget import next_iteration_blocker
 from harness.progress import decide_status, update_progress
 
 LINE = re.compile(r"^- (.+?): (\d+)$")
+REC = re.compile(r"^(\d+)\. (.+)$")
+TITLE = "# Laporan Penjualan"
+SECTIONS = ("Top 3 Produk", "Tren Bulanan", "Rekomendasi")
+MAX_RECS = 5
 EVAL_TOKENS = 1500  # fake usage; a real evaluator reports the LLM's usage
 
 
-def _section(text, title):
-    out, active = [], False
+def _split(text):
+    """(lines before the first section, [(title, lines), ...] in report order)."""
+    pre, sections, current = [], [], None
     for line in text.splitlines():
         if line.startswith("## "):
-            active = line[3:].strip() == title
-            continue
-        if active:
-            out.append(line)
-    return out
+            current = (line[3:].strip(), [])
+            sections.append(current)
+        else:
+            (current[1] if current else pre).append(line)
+    return pre, sections
 
 
-def _pairs(lines):
-    return [(m.group(1), int(m.group(2))) for l in lines if (m := LINE.match(l))]
+def _body(sections, title):
+    """Non-blank lines of the first section with this title (a repeated section fails `sections`)."""
+    return next(([l for l in lines if l.strip()] for t, lines in sections if t == title), [])
+
+
+def _parse(lines, pattern):
+    """(parsed matches, lines that do not match). A line in the wrong format is never silently skipped."""
+    good, bad = [], []
+    for l in lines:
+        m = pattern.match(l)
+        (good if m else bad).append(m or l)
+    return good, bad
+
+
+def _dupes(items):
+    return sorted({x for x in items if items.count(x) > 1})
+
+
+def _show(lines, n=3):
+    return "; ".join(repr(l[:60]) for l in lines[:n]) + (f" (+{len(lines) - n} more)" if len(lines) > n else "")
 
 
 def run_checks(report_path, truth):
-    """Programmatic checks against ground truth recomputed from the data, never the agent's own 'done'."""
+    """Programmatic checks against ground truth recomputed from the data, never the agent's own 'done'.
+    Every check names the output (task) it concerns, so the orchestrator revises the right worker."""
     checks = []
 
     def add(cid, task, ok, detail="", kind="code"):
-        checks.append({"id": cid, "task": task, "ok": bool(ok), "detail": detail, "kind": kind})
+        checks.append({"id": cid, "task": task, "ok": bool(ok), "detail": "" if ok else detail, "kind": kind})
 
     p = Path(report_path)
     if not p.exists():
         add("report_exists", "report", False, "laporan.md missing")
         return checks
     add("report_exists", "report", True)
-    text = p.read_text(encoding="utf-8")
+    pre, sections = _split(p.read_text(encoding="utf-8"))
 
-    top = _pairs(_section(text, "Top 3 Produk"))
-    want_top = dict(truth["top3"])
-    got_names = [n for n, _ in top]
-    add("top3_names", "top3", got_names == [n for n, _ in truth["top3"]],
-        f"report={got_names} expected={[n for n, _ in truth['top3']]}")
+    # ---- structure: each required section exactly once, nothing else ----
+    titles = [t for t, _ in sections]
+    problems = []
+    if [l for l in pre if l.strip()] != [TITLE]:
+        problems.append(f"before the first section expected only {TITLE!r}, got {_show([l for l in pre if l.strip()])}")
+    problems += [f"missing section {s!r}" for s in SECTIONS if s not in titles]
+    problems += [f"section {s!r} appears {titles.count(s)} times" for s in _dupes(titles)]
+    problems += [f"unknown section {t!r}" for t in titles if t not in SECTIONS]
+    add("sections", "report", not problems, "; ".join(problems))
+
+    # ---- Top 3 Produk ----
+    top_m, top_bad = _parse(_body(sections, "Top 3 Produk"), LINE)
+    top = [(m.group(1), int(m.group(2))) for m in top_m]
+    names, amounts = [n for n, _ in top], [v for _, v in top]
+    want_names, want_top = [n for n, _ in truth["top3"]], dict(truth["top3"])
+    add("top3_format", "top3", not top_bad, f"lines not in the form '- <product>: <integer>': {_show(top_bad)}")
+    add("top3_count", "top3", len(top) == 3, f"{len(top)} products listed, expected 3")
+    add("top3_no_duplicates", "top3", not _dupes(names), f"listed more than once: {_dupes(names)}")
+    unknown = [n for n in names if n not in truth["products"]]
+    add("top3_known_products", "top3", not unknown, f"products not in the data: {unknown}")
+    add("top3_order", "top3", amounts == sorted(amounts, reverse=True), f"not highest first: {amounts}")
+    add("top3_names", "top3", names == want_names, f"report={names} expected={want_names}")
     wrong = [f"{n}: report {v}, recomputed {want_top[n]}" for n, v in top if n in want_top and v != want_top[n]]
-    add("top3_amounts", "top3", not wrong and len(top) == 3, "; ".join(wrong))
+    add("top3_amounts", "top3", not wrong, "; ".join(wrong))
 
-    got_trend = dict(_pairs(_section(text, "Tren Bulanan")))
-    want_trend = dict(truth["trend"])
-    missing = sorted(set(want_trend) - set(got_trend))
+    # ---- Tren Bulanan (a list, not a dict: a repeated month must not collapse into one) ----
+    tr_m, tr_bad = _parse(_body(sections, "Tren Bulanan"), LINE)
+    trend = [(m.group(1), int(m.group(2))) for m in tr_m]
+    months, want_trend = [m for m, _ in trend], dict(truth["trend"])
+    add("trend_format", "trend", not tr_bad, f"lines not in the form '- <YYYY-MM>: <integer>': {_show(tr_bad)}")
+    add("trend_no_duplicates", "trend", not _dupes(months), f"months listed more than once: {_dupes(months)}")
+    add("trend_order", "trend", months == sorted(months), f"not oldest first: {months}")
+    missing = sorted(set(want_trend) - set(months))
     add("trend_months", "trend", not missing, f"missing months: {missing}")
-    extra = sorted(set(got_trend) - set(want_trend))
+    extra = sorted(set(months) - set(want_trend))
     add("trend_no_extra_months", "trend", not extra, f"months not in the data: {extra}")
-    wrong_t = [f"{m}: report {v}, recomputed {want_trend[m]}" for m, v in got_trend.items()
-               if m in want_trend and v != want_trend[m]]
+    wrong_t = [f"{m}: report {v}, recomputed {want_trend[m]}" for m, v in trend if m in want_trend and v != want_trend[m]]
     add("trend_amounts", "trend", not wrong_t, "; ".join(wrong_t))
 
-    recs = [l for l in _section(text, "Rekomendasi") if re.match(r"^\d+\. ", l)]
+    # ---- Rekomendasi ----
+    rec_m, rec_bad = _parse(_body(sections, "Rekomendasi"), REC)
+    numbers, recs = [int(m.group(1)) for m in rec_m], [m.group(2).strip() for m in rec_m]
+    add("recs_format", "report", not rec_bad and numbers == list(range(1, len(numbers) + 1)),
+        f"expected items numbered 1., 2., ... with nothing else; numbers {numbers}, other lines {_show(rec_bad)}")
+    add("recs_count", "report", 2 <= len(recs) <= MAX_RECS, f"{len(recs)} recommendations, expected 2 to {MAX_RECS}")
+    norm = [" ".join(r.lower().split()) for r in recs]
+    add("recs_no_duplicates", "report", not _dupes(norm), f"repeated recommendations: {_dupes(norm)}")
     add("recs_rubric", "report",
         len(recs) >= 2 and all(re.search(r"\d", r) for r in recs[:2]),
         "stand-in for the LLM rubric (milestone 3)", kind="rubric-stub")

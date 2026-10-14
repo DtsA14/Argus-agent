@@ -32,4 +32,4 @@ def truth(rows=None):
     rows = rows or load_rows()
     top3 = sorted(product_totals(rows).items(), key=lambda kv: (-kv[1], kv[0]))[:3]
     trend = sorted(monthly_totals(rows).items())
-    return {"top3": top3, "trend": trend}
+    return {"top3": top3, "trend": trend, "products": sorted(product_totals(rows))}
