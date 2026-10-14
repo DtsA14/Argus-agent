@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from harness.crash import Crasher
 from harness.errors import LLMCallFailed, ReservationExhausted
+from harness.llm import is_truncated
 from harness.steps import (llm_step_key, message_from_json, message_to_json, reservation_from_ledger,
                            tool_step_key)
 
@@ -42,15 +43,45 @@ class RunPython(BaseModel):
 TOOLS = [ReadData, SubmitResult]
 
 
-def system_prompt():
-    return """You are a worker agent. You receive one task and must finish it with tools.
+def offered_tools(allowed, sandbox):
+    """The tools the model is shown: only what the role's allowlist permits, and RunPython only with a
+    sandbox. SubmitResult is how a worker finishes, not a gated tool, so it is always offered."""
+    return ([ReadData] if "read_data" in allowed else []) + [SubmitResult] + \
+        ([RunPython] if sandbox and "run_python" in allowed else [])
 
-Tools:
-- ReadData: returns the sales data rows. Call it before computing anything.
-- SubmitResult: submit the final value. The harness checks its format; if it is rejected you get
-  the errors and can submit again.
 
-Compute exactly; never estimate or round revenue. Submit only the value asked for, in the exact format."""
+def system_prompt(tools=TOOLS):
+    """Describes exactly the tools offered, so the model is never told about one it cannot call or left
+    unaware of one it can (GPT review 2e: RunPython was offered but not described)."""
+    names = {t.__name__ for t in tools}
+    lines = ["You are a worker agent. You receive one task and must finish it with tools.", "", "Tools:"]
+    if "ReadData" in names:
+        lines.append("- ReadData: returns the sales data rows as JSON.")
+    if "RunPython" in names:
+        lines.append("- RunPython: runs a Python 3 program in an isolated sandbox without network and returns its "
+                     "stdout and stderr. The sales CSV is at /data/penjualan.csv (read-only); /workspace is "
+                     "writable. Print every value you need.")
+    lines.append("- SubmitResult: submit the final value. The harness checks its format; if it is rejected you "
+                 "get the errors and can submit again.")
+    sources = [n for n in ("ReadData", "RunPython") if n in names]
+    lines.append("")
+    if sources:
+        lines.append(f"Get the data with {' or '.join(sources)} before computing anything.")
+    if "RunPython" in names:
+        lines.append("Do the arithmetic in RunPython so every number is exact.")
+    lines.append("Compute exactly; never estimate or round revenue. Submit only the value asked for, in the exact format.")
+    return "\n".join(lines)
+
+
+def nudge(tools):
+    """What to say after a reply without tool calls: only the tools offered (GPT re-review 2e: the old fixed
+    text named ReadData, which --python-only deliberately does not offer)."""
+    names = {t.__name__ for t in tools}
+    hints = [("ReadData", "ReadData to get the data"),
+             ("RunPython", "RunPython to compute in the sandbox" if "ReadData" in names
+              else "RunPython to read and compute the data in the sandbox"),
+             ("SubmitResult", "SubmitResult to finish")]
+    return "Use the tools: " + ", ".join(text for name, text in hints if name in names) + "."
 
 
 def task_prompt(task, contract):
@@ -69,8 +100,8 @@ def task_prompt(task, contract):
 def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps=6, crasher=None, sandbox=None):
     """sandbox: None, or {"cfg": sandbox config, "workspace": dir, "data_dir": dir} to offer RunPython."""
     crasher = crasher or Crasher()
-    sys_msg = SystemMessage(system_prompt())
-    tools = list(TOOLS) + ([RunPython] if sandbox else [])
+    tools = offered_tools(gate.allowed, sandbox)
+    sys_msg = SystemMessage(system_prompt(tools))
     run_python_version = None
     if sandbox:
         from tools.sandbox import tool_version
@@ -83,7 +114,7 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
         """Execute one tool call. Returns a JSON-able record: content for the model, and whether a
         valid result was submitted."""
         name, args = call.get("name"), call.get("args") or {}
-        if name == "ReadData":
+        if name == "ReadData" and ReadData in tools:   # a tool not offered is answered as unknown below
             rows = gate.call("read_data")
             return {"content": json.dumps(rows, ensure_ascii=False), "accepted": False}
         if name == "SubmitResult":
@@ -93,7 +124,7 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
             if errors:
                 return {"content": "Rejected:\n- " + "\n- ".join(errors), "accepted": False, "errors": errors}
             return {"content": "Accepted.", "accepted": True, "value": args["value"]}
-        if name == "RunPython" and sandbox:
+        if name == "RunPython" and RunPython in tools:
             from tools.sandbox import SandboxUnavailable
             code = args.get("code")
             if not isinstance(code, str) or not code.strip():
@@ -139,9 +170,16 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
                 crasher.point("worker@llm_committed", step=step, **meta)
             messages.append(msg)
 
+            if is_truncated(msg):
+                # Tool arguments may be cut off: nothing in this reply is run or accepted. Also on replay,
+                # since the memo keeps the flag. No retry: the next step would have less room, not more.
+                log.emit("reply_truncated", step=step, tools=[c.get("name") for c in msg.tool_calls or []], **meta)
+                return finish(error=f"output_truncated: the step {step} reply hit max_tokens; "
+                                    f"its tool calls were not run")
+
             calls = list(msg.tool_calls or [])
             if not calls:
-                messages.append(HumanMessage("Use the tools: ReadData to get the data, SubmitResult to finish."))
+                messages.append(HumanMessage(nudge(tools)))
                 continue
             names = [c.get("name") for c in calls]
             if "SubmitResult" in names and len(calls) != 1:
@@ -164,6 +202,10 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
                     record = run_tool(c, output, meta)
                     memo.put(tkey, record)                                  # committed before moving on
                     log.emit("step_committed", kind="tool", step=step, tool=c.get("name"), **meta)
+                    if c.get("name") == "SubmitResult" and not record.get("accepted"):
+                        # Why the extra step was needed: the validator's messages, bounded (max 10 x 200 chars).
+                        reasons = record.get("errors") or [record["content"]]
+                        log.emit("submission_invalid", step=step, errors=[str(r)[:200] for r in reasons[:10]], **meta)
                     crasher.point("worker@tool_committed", step=step, **meta)
                 messages.append(ToolMessage(record["content"], tool_call_id=c.get("id") or f"call_{step}"))
                 if record.get("accepted") and submitted is None:

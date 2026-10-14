@@ -71,11 +71,15 @@ class ScriptedChatModel(BaseChatModel):
         return [c for c in self.calls if c["key"] == key]
 
 
-def reply(text="ok", *, input_tokens=100, output_tokens=20, cache_read=0, tool_calls=None, usage=True):
-    """Build a scripted AIMessage with provider-style usage metadata."""
+def reply(text="ok", *, input_tokens=100, output_tokens=20, cache_read=0, tool_calls=None, usage=True,
+          stop_reason=None):
+    """Build a scripted AIMessage with provider-style usage metadata. stop_reason="max_tokens" makes a
+    reply that the provider cut off (Anthropic style)."""
     kw = {"content": text}
     if tool_calls:
         kw["tool_calls"] = tool_calls
+    if stop_reason:
+        kw["response_metadata"] = {"stop_reason": stop_reason}
     if usage:
         kw["usage_metadata"] = {
             "input_tokens": input_tokens,
@@ -93,7 +97,7 @@ def item_from_json(d):
     usage = d.get("usage", {"input_tokens": 100, "output_tokens": 20})
     return reply(d.get("content", ""), input_tokens=usage.get("input_tokens", 0),
                  output_tokens=usage.get("output_tokens", 0), cache_read=usage.get("cache_read", 0),
-                 tool_calls=d.get("tool_calls"), usage=bool(usage))
+                 tool_calls=d.get("tool_calls"), usage=bool(usage), stop_reason=d.get("stop_reason"))
 
 
 def pos_path(path, key):

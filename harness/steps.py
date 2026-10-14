@@ -21,7 +21,7 @@ import json
 
 from langchain_core.messages import AIMessage
 
-from .llm import Reservation, _text, _tool_schema_text, reconcile_ledger
+from .llm import Reservation, _text, _tool_schema_text, is_truncated, reconcile_ledger
 
 
 def _sha(obj):
@@ -47,6 +47,7 @@ def message_to_json(msg):
         "content": msg.content,
         "tool_calls": [{"name": c["name"], "args": c["args"], "id": c["id"]} for c in (msg.tool_calls or [])],
         "usage_metadata": dict(msg.usage_metadata) if getattr(msg, "usage_metadata", None) else None,
+        "truncated": is_truncated(msg),  # a replayed cut-off reply must stay cut off
     }
 
 
@@ -56,6 +57,8 @@ def message_from_json(d):
         kw["tool_calls"] = d["tool_calls"]
     if d.get("usage_metadata"):
         kw["usage_metadata"] = d["usage_metadata"]
+    if d.get("truncated"):
+        kw["response_metadata"] = {"truncated": True}
     return AIMessage(**kw)
 
 

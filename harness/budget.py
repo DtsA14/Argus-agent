@@ -22,6 +22,19 @@ class Budget:
         return cls(**d)
 
 
+def effective_estimates(cfg):
+    """Worst-case tokens per node run as the harness uses them everywhere: node reservations, the
+    iteration's token reservation and the USD estimates. A node running a real model (impl: llm) takes
+    its figure from llm_token_estimates when one is given; every other node keeps token_estimates, so
+    the deterministic M1 figures are untouched."""
+    est = dict(cfg["token_estimates"])
+    impl = cfg.get("impl") or {}
+    for node, tokens in (cfg.get("llm_token_estimates") or {}).items():
+        if impl.get(node) == "llm":
+            est[node] = int(tokens)
+    return est
+
+
 def iteration_cost(estimates, max_workers):
     """Worst-case tokens of one full iteration: orchestrator + all workers + synthesize + evaluator."""
     return (
@@ -35,7 +48,7 @@ def iteration_cost(estimates, max_workers):
 def node_usd_estimates(cfg):
     """Worst-case USD per node run: its token estimate, all billed at the dearer of the role model's
     input/output rate, times the peak multiplier. Nodes not listed in `node_roles` make no model calls."""
-    est = cfg["token_estimates"]
+    est = effective_estimates(cfg)
     out = {node: 0.0 for node in est}
     for node, role in (cfg.get("node_roles") or {}).items():
         ref = ModelRef.parse(cfg["roles"][role]["model"])

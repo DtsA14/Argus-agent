@@ -1,0 +1,16 @@
+{
+  "status": "FAILED_BUDGET",
+  "stop_reason": "node_reservation: orchestrator: 2377 input tokens + 64 output do not fit (left: 0 tokens, $0.016760)",
+  "iteration": 1,
+  "tokens_used": 10295,
+  "scenario": "pass",
+  "elapsed_s": 24.615,
+  "run_id": "smoke_2e_1",
+  "tokens_spent": 10295,
+  "usd_used": 0.0224793,
+  "usd_billed": 0.0224793,
+  "usd_complete": true,
+  "llm_calls": 5,
+  "llm_calls_unknown": 0,
+  "budget_violations": 0
+}

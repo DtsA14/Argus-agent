@@ -42,8 +42,9 @@ def ledger_totals(events_path):
 
 
 def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
-             crash_at=None, resume=False, echo=False, models=None):
-    """models: optional {role: chat model} injected instead of building from config (tests)."""
+             crash_at=None, resume=False, echo=False, models=None, max_concurrency=None):
+    """models: optional {role: chat model} injected instead of building from config (tests).
+    max_concurrency: at most this many nodes of one superstep run at once (1 = workers run one at a time)."""
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         # A stale checkpoint or memo would silently leak old results into the new run.
@@ -57,6 +58,8 @@ def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
     # stopping cleanly on the budget.
     steps = 4 * int(cfg["budget"]["max_iterations"]) + 10
     config = {"configurable": {"thread_id": run_id}, "recursion_limit": steps}
+    if max_concurrency is not None:
+        config["max_concurrency"] = int(max_concurrency)
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)

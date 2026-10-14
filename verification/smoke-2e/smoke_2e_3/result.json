@@ -1,0 +1,16 @@
+{
+  "status": "DONE",
+  "stop_reason": "",
+  "iteration": 1,
+  "tokens_used": 22872,
+  "scenario": "pass",
+  "elapsed_s": 27.543,
+  "run_id": "smoke_2e_3",
+  "tokens_spent": 22872,
+  "usd_used": 0.011908499999999999,
+  "usd_billed": 0.0119085,
+  "usd_complete": true,
+  "llm_calls": 10,
+  "llm_calls_unknown": 0,
+  "budget_violations": 0
+}

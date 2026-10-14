@@ -99,6 +99,14 @@ class Reservation:
             self.violated = True
 
 
+def is_truncated(msg):
+    """True when the provider stopped the reply at max_tokens: its text or tool arguments may be cut
+    off, so nothing in it may be executed or accepted. Anthropic: stop_reason "max_tokens"; OpenAI and
+    DeepSeek: finish_reason "length"; a reply replayed from the memo carries "truncated"."""
+    md = getattr(msg, "response_metadata", None) or {}
+    return md.get("stop_reason") == "max_tokens" or md.get("finish_reason") == "length" or md.get("truncated") is True
+
+
 def is_transient(exc):
     if isinstance(exc, TransientError):
         return True
@@ -340,12 +348,15 @@ class LLMCaller:
                 tok, nano, charged = worst_tokens, worst_nano, "worst_case_no_usage"
             else:
                 tok, nano, charged = tin + tout, to_nano(self._usd(tin, tout, cached)), "actual"
+            truncated = is_truncated(msg)
             try:
                 emit("llm_call", call_id=call_id, status="ok", attempt=attempt, est_input=est_in, max_tokens=cap,
                      input_tokens=tin, output_tokens=tout, cache_read=cached, tokens=tok,
-                     usd_nano=nano, usd=_usd(nano), charged=charged, latency_s=latency)
+                     usd_nano=nano, usd=_usd(nano), charged=charged, latency_s=latency, truncated=truncated)
             finally:
                 reservation.charge(tok, nano)
+            if truncated:
+                emit("output_truncated", call_id=call_id, max_tokens=cap, output_tokens=tout)
             if tin > est_in:
                 emit("estimate_miss", call_id=call_id, est_input=est_in, input_tokens=tin, exact_counter=self.exact)
             if reservation.violated:

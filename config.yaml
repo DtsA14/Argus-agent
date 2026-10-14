@@ -15,7 +15,10 @@ impl:
 
 orchestrator:
   plan_attempts: 3       # model calls allowed to produce a valid plan (1 + 2 retries with the errors)
-  force_tool: true       # require the SubmitPlan tool call (tool_choice); turn off if a provider rejects it
+  # Require the SubmitPlan tool call via tool_choice. Off: claude-sonnet-5-5, claude-opus-5-5 and
+  # claude-fable-5-1 reject a forced tool_choice with HTTP 400. Unforced, a reply without exactly one
+  # SubmitPlan call is returned to the model as an invalid plan (counts against plan_attempts).
+  force_tool: false
 
 # Which nodes call which role's model. Nodes not listed make no model calls (cost 0 USD).
 node_roles:
@@ -42,6 +45,15 @@ token_estimates:
   worker: 2000
   synthesize: 1000
   evaluator: 1500
+
+# Worst-case tokens for a node that runs a real model (impl: llm); replaces token_estimates for that node
+# in node reservations, the iteration reservation and the USD estimates alike. Starting point from the
+# first 2e smoke ledger: the worker's second step alone needed ~1,650 input tokens (2,000 was too small),
+# and a revised plan used 2,095 input and was cut off at 905 output tokens (3,000 was too small).
+# With 3 workers: 12,000 + 3 x 12,000 + 1,000 + 1,500 = 50,500 tokens per iteration.
+llm_token_estimates:
+  orchestrator: 12000
+  worker: 12000
 
 retry:
   attempts: 3
@@ -107,10 +119,13 @@ roles:
 # A missing entry (e.g. OpenAI below) means cost is reported as "n/a" instead of a guess.
 # cache_read is the discounted rate for cached input tokens; without it cached tokens are billed as normal input.
 # ---------------------------------------------------------------------------
+# Anthropic input/output and Sonnet/Opus cache_read re-checked 2026-10-14 against Anthropic's model table.
+# Haiku 5.5 bills $0.50/$2.50 for prompts over 100K tokens; that tier is not modelled, which is safe only
+# while every node's token estimate stays far below 100K (a reservation then cannot fit such a prompt).
 prices:
   "anthropic:claude-haiku-5-5":  {input: 0.10, output: 0.50, cache_read: 0.01}
-  "anthropic:claude-sonnet-5-5": {input: 2.00, output: 10.00}
-  "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00}
+  "anthropic:claude-sonnet-5-5": {input: 2.00, output: 10.00, cache_read: 0.20}
+  "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00, cache_read: 0.20}
   "deepseek:deepseek-flash":     {input: 0.15, output: 0.60, cache_read: 0.003, peak_multiplier: 2}
   "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
   "fake:scripted":               {input: 1.00, output: 5.00}   # made-up price so tests exercise USD limits
@@ -121,6 +136,12 @@ peak_windows:
   deepseek:
     utc_hours: [[1, 4], [6, 10]]
     weekdays_only: true
+
+# Live smoke run: scripts/smoke_live.py, only with ARGUS_LIVE=1. Real money, so: one run, never retried,
+# budget.max_usd lowered to max_usd if it is higher, workers one at a time.
+smoke:
+  max_usd: 0.50
+  max_concurrency: 1
 
 # Code execution for LLM workers (RunPython). kind: docker | none. With none, workers get no RunPython.
 # The image must be pinned (name@sha256:... or sha256:<image id>); scripts/pin_sandbox_image.sh does it

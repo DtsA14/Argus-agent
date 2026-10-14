@@ -49,6 +49,7 @@ def good_script():
 def cfg_llm(**budget):
     cfg = copy.deepcopy(load_config())
     cfg["impl"]["worker"] = "llm"
+    cfg.pop("llm_token_estimates", None)   # these tests size the LLM node through token_estimates
     cfg["roles"]["worker"]["model"] = "fake:scripted"
     cfg["token_estimates"]["worker"] = 20_000
     cfg["llm"]["base_delay"] = 0
@@ -103,6 +104,82 @@ def test_invalid_submission_is_rejected_with_errors_and_retried(tmp_path, bad, e
     assert len(calls) == 3
     rejection = calls[2]["messages"][-1]
     assert isinstance(rejection, ToolMessage) and error in rejection.content
+    # GPT review 2e: why the extra step was needed is visible in the event log, bounded
+    (invalid,) = [e for e in evs if e["event"] == "submission_invalid"]
+    assert invalid["task"] == "T2" and invalid["step"] == 1
+    assert any(error in m for m in invalid["errors"]) and all(len(m) <= 200 for m in invalid["errors"])
+
+
+def test_rejection_reasons_in_the_event_log_are_bounded(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm_worker, "validate_output", lambda name, value: [f"{i}:" + "x" * 500 for i in range(15)])
+    fn, _, log = _worker(tmp_path, {"T2": [read_call(), submit_call(VALUES["T2"])]}, max_steps=2)
+    fn(P)
+    (invalid,) = [e for e in log.read() if e["event"] == "submission_invalid"]
+    assert len(invalid["errors"]) == 10 and all(len(m) == 200 for m in invalid["errors"])
+
+
+# ---- the tools offered and the prompt follow the allowlist and the sandbox (GPT review 2e, P2) ----
+
+SANDBOX_CFG = {**load_config()["sandbox"], "kind": "docker", "image": "sha256:" + "a" * 64}
+
+
+def _offer(tmp_path, allowed, sandbox, script):
+    log = EventLog(tmp_path / "e.jsonl")
+    model = ScriptedChatModel(script=script)
+    caller = LLMCaller(cfg_llm(), "worker", log, model=model)
+    box = {"cfg": SANDBOX_CFG, "workspace": str(tmp_path / "ws"), "data_dir": str(dataset.CSV_PATH.parent)} \
+        if sandbox else None
+    fn = make_llm_worker(caller, SALES_REPORT, ToolGate("worker", allowed, log), Memo(tmp_path / "memo.sqlite"),
+                         log, tokens=20_000, usd=1.0, sandbox=box)
+    out = fn(P)["results"]["T2"]
+    names = [t.__name__ for t in model.bound_tools]
+    return out, names, model.calls[0]["messages"][0].content, model, log
+
+
+def test_without_sandbox_runpython_is_neither_offered_nor_described(tmp_path):
+    out, names, prompt, _, _ = _offer(tmp_path, ["read_data", "run_python"], False,
+                                      {"T2": [read_call(), submit_call(VALUES["T2"])]})
+    assert out["value"] == VALUES["T2"]
+    assert names == ["ReadData", "SubmitResult"]
+    assert "ReadData" in prompt and "RunPython" not in prompt and "/data/penjualan.csv" not in prompt
+
+
+def test_with_sandbox_runpython_is_offered_and_described(tmp_path):
+    out, names, prompt, _, _ = _offer(tmp_path, ["read_data", "run_python"], True,
+                                      {"T2": [read_call(), submit_call(VALUES["T2"])]})
+    assert out["value"] == VALUES["T2"]
+    assert names == ["ReadData", "SubmitResult", "RunPython"]
+    assert "RunPython" in prompt and "/data/penjualan.csv" in prompt and "ReadData" in prompt
+
+
+@pytest.mark.parametrize("allowed, sandbox, expected", [
+    (["read_data", "run_python"], False,
+     "Use the tools: ReadData to get the data, SubmitResult to finish."),
+    (["read_data", "run_python"], True,
+     "Use the tools: ReadData to get the data, RunPython to compute in the sandbox, SubmitResult to finish."),
+    (["run_python"], True,
+     "Use the tools: RunPython to read and compute the data in the sandbox, SubmitResult to finish."),
+])
+def test_nudge_after_a_reply_without_tools_names_only_the_offered_tools(tmp_path, allowed, sandbox, expected):
+    # GPT re-review 2e: the nudge was fixed text naming ReadData, which --python-only does not offer.
+    out, names, _, model, _ = _offer(tmp_path, allowed, sandbox,
+                                     {"T2": [reply("let me think"), submit_call(VALUES["T2"])]})
+    assert out["value"] == VALUES["T2"]
+    nudge = model.calls[1]["messages"][-1]
+    assert isinstance(nudge, HumanMessage) and nudge.content == expected
+    for tool in ("ReadData", "RunPython"):
+        assert (tool in nudge.content) == (tool in names)
+
+
+def test_python_only_offers_and_describes_no_readdata_and_answers_it_as_unknown(tmp_path):
+    out, names, prompt, model, log = _offer(tmp_path, ["run_python"], True,
+                                            {"T2": [read_call(), submit_call(VALUES["T2"])]})
+    assert names == ["SubmitResult", "RunPython"]
+    assert "ReadData" not in prompt and "RunPython" in prompt
+    assert out["value"] == VALUES["T2"]                         # the run went on: no PermissionDenied crash
+    answer = model.calls[1]["messages"][-1]
+    assert isinstance(answer, ToolMessage) and "Unknown tool 'ReadData'" in answer.content
+    assert not any(e["event"] in ("tool_call", "tool_denied") for e in log.read())   # data never read
 
 
 def test_unknown_tool_and_no_tool_call_are_answered_and_cost_a_step(tmp_path):
@@ -249,6 +326,67 @@ def test_changed_model_does_not_reuse_the_memo(tmp_path):
                              model_ref="anthropic:claude-haiku-5-5")
     fn2(P)
     assert len(model2.calls) == 2
+
+
+# ---- replies cut off at max_tokens (2e smoke: a revised plan stopped at exactly its 905-token cap) ----
+
+def cut_submit(value, id="s0"):
+    """A SubmitResult whose value would pass validation, in a reply the provider cut off."""
+    return reply("", input_tokens=900, output_tokens=1058, stop_reason="max_tokens",
+                 tool_calls=[{"name": "SubmitResult", "args": {"value": value}, "id": id}])
+
+
+def test_truncated_reply_is_neither_run_nor_accepted_nor_retried(tmp_path):
+    fn, model, log = _worker(tmp_path, {"T2": [read_call(), cut_submit(VALUES["T2"]), submit_call(VALUES["T2"])]})
+    out = fn(P)["results"]["T2"]
+    assert out["value"] is None and out["error"].startswith("output_truncated")
+    assert len(model.calls) == 2                               # no further step after the cut-off reply
+    evs = log.read()
+    assert [e["tools"] for e in evs if e["event"] == "reply_truncated"] == [["SubmitResult"]]
+    assert not any(e["event"] == "worker_submitted" for e in evs)
+    assert not any(e["event"] == "step_committed" and e["kind"] == "tool" and e["step"] == 1 for e in evs)
+    (cut,) = [e for e in evs if e["event"] == "llm_call" and e.get("truncated")]
+    assert cut["step"] == 1 and any(e["event"] == "output_truncated" for e in evs)
+
+
+def test_truncated_reply_stays_unaccepted_when_replayed_after_a_crash(tmp_path):
+    fn, model, log = _worker(tmp_path, {"T2": [read_call(), cut_submit(VALUES["T2"])]})
+    fn(P)
+    again = fn(P)["results"]["T2"]                             # same node run, e.g. after a crash
+    assert again["value"] is None and again["error"].startswith("output_truncated")
+    assert len(model.calls) == 2                               # both steps came from the memo
+    replayed = [e for e in log.read() if e["event"] == "step_replayed" and e["kind"] == "llm"]
+    assert [e["step"] for e in replayed] == [0, 1]
+
+
+def test_llm_estimates_size_the_llm_worker_and_the_iteration(tmp_path):
+    from harness.budget import effective_estimates, iteration_cost, iteration_usd, node_usd_estimates
+    cfg = copy.deepcopy(load_config())
+    assert effective_estimates(cfg) == cfg["token_estimates"]  # fake nodes: the M1 figures, untouched
+    assert iteration_cost(effective_estimates(cfg), 3) == 11_500
+    cfg["impl"].update(orchestrator="llm", worker="llm")
+    est = effective_estimates(cfg)
+    assert est["orchestrator"] == est["worker"] == 12_000 and est["synthesize"] == 1_000
+    assert iteration_cost(est, 3) == 50_500
+    usd = node_usd_estimates(cfg)                              # the USD worst case uses the same tokens
+    assert usd["orchestrator"] == pytest.approx(12_000 * 10.00 / 1e6)   # sonnet-5-5, dearer rate
+    assert usd["worker"] == pytest.approx(12_000 * 0.50 / 1e6)          # haiku-5-5
+    assert iteration_usd(usd, 3) == pytest.approx(0.138)
+
+
+def test_llm_worker_gets_its_llm_estimate_as_reservation(tmp_path):
+    # Step 1 alone needs ~2,700 tokens: refused under the 2,000 fake-worker estimate, fine under 12,000.
+    big = reply("", input_tokens=1700, output_tokens=1000,
+                tool_calls=[{"name": "SubmitResult", "args": {"value": VALUES["T2"]}, "id": "s1"}])
+    script = {t: [read_call(), submit_call(v)] for t, v in VALUES.items()}
+    script["T2"] = [read_call(), big]
+    cfg = copy.deepcopy(load_config())
+    cfg["impl"]["worker"] = "llm"
+    cfg["roles"]["worker"]["model"] = "fake:scripted"
+    cfg["llm"]["base_delay"] = 0
+    r, _, evs = run(tmp_path, script, cfg=cfg)
+    assert r["status"] == "DONE", [e for e in evs if e["event"] in ("worker_failed", "llm_call")]
+    assert not any(e["event"] == "llm_call" and e["status"] == "refused" for e in evs)
 
 
 class ProcessDied(BaseException):
