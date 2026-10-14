@@ -5,8 +5,9 @@ import yaml
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from graph import build_graph
-from harness.errors import BudgetExceeded
+from harness.errors import BudgetExceeded, EstimateExceeded
 from harness.events import EventLog
+from harness.llm import reconcile_ledger
 from models.registry import role_warnings
 
 ROOT = Path(__file__).parent
@@ -31,14 +32,13 @@ def actual_spend(events_path):
     return total
 
 
-def ledger_usd(events_path):
-    """USD of every model call attempt recorded by harness/llm.py."""
-    total = 0.0
-    for line in Path(events_path).read_text(encoding="utf-8").splitlines():
-        e = json.loads(line)
-        if e["event"] == "llm_call":
-            total += e.get("usd", 0.0) or 0.0
-    return round(total, 8)
+def read_events(events_path):
+    return [json.loads(l) for l in Path(events_path).read_text(encoding="utf-8").splitlines()]
+
+
+def ledger_totals(events_path):
+    """Reconciled model spend: every attempt, plus calls cut off by a crash at their worst case."""
+    return reconcile_ledger(read_events(events_path))[1]
 
 
 def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
@@ -84,6 +84,12 @@ def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
         except BudgetExceeded as e:
             final = {**dict(graph.get_state(config).values),
                      "status": "FAILED_BUDGET", "stop_reason": e.reason}
+        except EstimateExceeded as e:
+            # A node spent more than it reserved (e.g. a provider billed more input than estimated).
+            # The money is already spent: stop cleanly and report it; usd_billed holds the real figure.
+            log.emit("budget_violation", source="node", error=str(e))
+            final = {**dict(graph.get_state(config).values),
+                     "status": "FAILED_BUDGET", "stop_reason": f"budget_violation: {e}"}
         except Exception as e:
             log.emit("run_error", error=repr(e))
             raise
@@ -96,8 +102,13 @@ def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
     result["tokens_spent"] = actual_spend(run_dir / "events.jsonl")
     # usd_used: accounted USD in state; usd_billed: sum of every model call attempt in the ledger
     # (llm_call events), including failed attempts and work redone after a crash.
-    result["usd_used"] = round(final.get("usd_used", 0.0) or 0.0, 8)
-    result["usd_billed"] = ledger_usd(run_dir / "events.jsonl")
+    result["usd_used"] = final.get("usd_used", 0.0) or 0.0
+    totals = ledger_totals(run_dir / "events.jsonl")
+    result["usd_billed"] = totals["usd"]                 # full precision, reconciled
+    result["usd_complete"] = totals["usd_complete"]       # False if an unpriced model was used
+    result["llm_calls"] = totals["calls"]
+    result["llm_calls_unknown"] = totals["unknown_after_crash"]
+    result["budget_violations"] = sum(e["event"] == "budget_violation" for e in read_events(run_dir / "events.jsonl"))
     (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     log.emit("run_end", **result)
     return result

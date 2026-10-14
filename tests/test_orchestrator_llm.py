@@ -228,3 +228,21 @@ def test_crash_resume_never_pays_for_a_committed_plan_twice(tmp_path, crash_at):
     assert int((tmp_path / "script.json.pos").read_text()) == 2  # the model was called exactly twice
     committed = Counter((e["node"], e.get("task"), e.get("iteration")) for e in evs if e["event"] == "result_committed")
     assert all(n == 1 for n in committed.values())
+
+
+# ---- every model call goes through harness/llm.py ---------------------------------------------
+
+def test_no_code_outside_the_wrapper_calls_a_model_directly():
+    """Nodes and the harness may reach a provider only through LLMCaller. A direct .invoke() on a chat
+    model, or building one with build_chat_model, anywhere else would bypass budget and ledger."""
+    import re
+    allowed = {ROOT / "harness" / "llm.py", ROOT / "models" / "registry.py"}
+    offenders = []
+    for path in sorted((ROOT / "nodes").glob("*.py")) + sorted((ROOT / "harness").glob("*.py")) + [ROOT / "graph.py"]:
+        if path in allowed:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for pattern in (r"\.invoke\(", r"\.ainvoke\(", r"\.stream\(", r"\.batch\(", r"build_chat_model\("):
+            for m in re.finditer(pattern, text):
+                offenders.append(f"{path.relative_to(ROOT)}:{text[:m.start()].count(chr(10)) + 1} {pattern}")
+    assert offenders == [], offenders
