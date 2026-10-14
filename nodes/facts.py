@@ -62,6 +62,11 @@ def check_numbers(text, facts, refs):
     errors = []
     referenced = [facts[r] for r in refs if r in facts]
     months = {f["month"] for f in referenced if "month" in f}
+    # GPT review 3b: a product name may contain digits ("Model 3", "iPhone 15"). Digits inside the exact name of a
+    # referenced product fact are backed by that fact, so the name is masked out first (longest first, so a longer
+    # name is never half-masked by a shorter one). Unreferenced, partial or re-cased names are not masked.
+    for name in sorted((f["value"] for f in referenced if f["unit"] == "product"), key=len, reverse=True):
+        text = text.replace(name, " ")
     for m in MONTH_TOKEN.finditer(text):
         token, month = m.group(0), int(m.group(2))
         if not 1 <= month <= 12:

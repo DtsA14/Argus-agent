@@ -96,6 +96,39 @@ def test_anything_else_is_rejected_with_a_reason(text, error):
     assert errors and any(error in e for e in errors), errors
 
 
+# GPT review 3b: product names that contain digits.
+DIGIT_TOP3 = [["iPhone 15", 4200000], ["Model 3", 3100000], ["Galaxy S24", 2800000]]
+DIGIT_FACTS = build_facts(DIGIT_TOP3, TREND)
+NAMES = ["top3.1.product", "top3.2.product", "top3.top2_share_of_top3_pct"]
+DIGIT_SHARE = round_half_up(DIGIT_FACTS["top3.top2_share_of_top3_pct"]["value"], 1)
+
+
+def test_digits_inside_a_referenced_product_name_are_backed_by_that_fact():
+    assert check_numbers(f"iPhone 15 and Model 3 bring {DIGIT_SHARE}% of the leaders' revenue.", DIGIT_FACTS, NAMES) == []
+    assert check_numbers("Bundle iPhone 15 with Model 3.", DIGIT_FACTS, NAMES) == []
+    recs = template_recommendations(DIGIT_TOP3, TREND)               # the template writer, same rules
+    assert validate_recommendations({"recommendations": recs}, DIGIT_FACTS) == (recs, [])
+    # one name inside another: the longer is masked first, or "2024" would be left over
+    nested = build_facts([["Model 3", 5], ["Model 3 2024", 4], ["X", 1]], [])
+    assert check_numbers("Model 3 2024 trails Model 3.", nested, ["top3.1.product", "top3.2.product"]) == []
+
+
+@pytest.mark.parametrize("text, refs, bad", [
+    ("Model 3 sold 4 more units.", NAMES, "4"),                          # an unrelated number is still checked
+    ("Galaxy S24 is third.", NAMES, "24"),                               # a product name that is not referenced
+    ("Model 30 is next.", NAMES, "0"),                                   # not the exact name
+    ("model 3 leads.", NAMES, "3"),                                      # re-cased: not the exact name
+    ("iPhone 15 Pro leads.", ["top3.1.product"], None),                  # longer text around an exact name: fine
+    ("iPhone 15 and iPhone 16.", ["top3.1.product"], "16"),
+])
+def test_only_exact_referenced_names_are_masked(text, refs, bad):
+    errors = check_numbers(text, DIGIT_FACTS, refs)
+    if bad is None:
+        assert errors == []
+    else:
+        assert errors and any(e.startswith(bad) or f"'{bad}'" in e for e in errors), errors
+
+
 def test_numbers_in_the_action_are_checked_too():
     # GPT review P1: action is rendered, so it is validated like text.
     recs = good_recs()
