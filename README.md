@@ -90,6 +90,38 @@ Try the LLM orchestrator offline with the scripted `fake` provider:
 where `script.json` is a list of replies, e.g. `[{"tool_calls": [{"name": "SubmitPlan", "args": {...}, "id": "p1"}]}]`.
 See `tests/test_orchestrator_llm.py` for complete plans. `--config other.yaml` runs with another config file.
 
+## Tools, path jail and sandbox
+
+- **File tools** go through `tools/fs.py` (`PathJail`): paths are relative to an allowed root; absolute
+  paths, `..` above the root and NUL bytes are refused. No symlink is followed anywhere below the
+  root: each directory is opened with `openat(O_DIRECTORY|O_NOFOLLOW)` relative to its already-opened
+  parent and the file relative to its directory's descriptor, so swapping a parent directory for a
+  symlink mid-operation cannot redirect it outside. Only regular files are read. Writes are atomic
+  (temp, fsync, `renameat`, fsync of the directory) and safe to repeat. The report is written inside
+  the run directory only.
+- **Path jail threat model:** holds against any path from the model and against a concurrent local
+  process modifying directories *inside* the root (e.g. sandboxed code writing in its workspace).
+  Not covered: an attacker who can change the root path or anything above it (trusted configuration).
+- **`RunPython`** (LLM workers) runs in Docker (`tools/sandbox.py`): no network, read-only root fs,
+  user nobody, no capabilities (bounding set empty), `no-new-privileges`, memory/CPU/pids limits,
+  only `/workspace/<task>` writable, data read-only, wall-clock timeout that kills and removes the
+  container. There is **no unsandboxed fallback**. Enable with `sandbox.kind: docker`.
+- **Output is bounded on the host:** stdout and stderr are drained in chunks; the harness keeps at most
+  `max_output_bytes` per stream and discards the rest (it never stops reading, so the code cannot
+  block on a full pipe). Past `kill_after_output_bytes` in total the container is killed early.
+  Container logging is off (`--log-driver none`), so output is never copied to the host disk either.
+- **Cleanup is bounded:** after a timeout or output flood, kill/remove/waits share one
+  `cleanup_timeout_s` budget, so a hung Docker daemon cannot stretch a call much past
+  `timeout_s + cleanup_timeout_s`. Removal is confirmed with `docker ps`; if it cannot be confirmed the
+  result has `cleanup_failed: true` and a `sandbox_cleanup_failed` event names the container.
+- The image must be **pinned** (`name@sha256:...` or an image id). On a machine with registry access:
+  `bash scripts/pin_sandbox_image.sh` (writes `.sandbox_image`). Without registry access:
+  `bash scripts/build_local_sandbox_image.sh` (builds one from the local python3 with `docker import`).
+  The pinned image is part of the RunPython tool version, so a new image never reuses memo results.
+- `tests/test_sandbox.py` checks each flag's effect from inside a real container (mounts, CapBnd,
+  cgroup limits, OOM kill, fork bomb, timeout cleanup). Skipped sandbox tests make `verify.sh` FAIL
+  unless `ARGUS_SANDBOX_OPTIONAL=1`.
+
 ## Providers and models
 
 Everything lives in `config.yaml` (`providers`, `roles`, `prices`).

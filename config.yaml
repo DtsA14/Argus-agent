@@ -50,7 +50,7 @@ retry:
 # Tool allowlist per role (enforced by the harness, not by prompts)
 tools:
   orchestrator: [write_file]
-  worker: [read_data]
+  worker: [read_data, run_python]
   evaluator: []
 
 # ---------------------------------------------------------------------------
@@ -121,3 +121,19 @@ peak_windows:
   deepseek:
     utc_hours: [[1, 4], [6, 10]]
     weekdays_only: true
+
+# Code execution for LLM workers (RunPython). kind: docker | none. With none, workers get no RunPython.
+# The image must be pinned (name@sha256:... or sha256:<image id>); scripts/pin_sandbox_image.sh does it
+# on the VM. ARGUS_SANDBOX_IMAGE overrides `image`. There is never an unsandboxed fallback.
+sandbox:
+  kind: none
+  image: null
+  memory: 512m           # hard limit, swap disabled; exceeding it kills the code (exit 137)
+  cpus: "1"
+  pids: 128
+  tmpfs_size: 64m
+  timeout_s: 60          # wall clock; the container is killed and removed on timeout
+  max_output_bytes: 65536            # kept per stream; the rest is drained and discarded (never buffered)
+  kill_after_output_bytes: 16777216  # total output after which the container is killed early
+  cleanup_timeout_s: 15              # total budget for kill/remove after a timeout; failure is logged
+  allow_unpinned: false

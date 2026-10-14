@@ -2,6 +2,7 @@ from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
+from dataset import CSV_PATH
 from harness.budget import Budget, iteration_cost, iteration_usd, next_iteration_blocker, node_usd_estimates
 from harness.guard import guard
 from harness.crash import Crasher
@@ -40,7 +41,7 @@ def make_orchestrator_node(cfg, log, budget, est, usd_est, models=None, crasher=
     )
 
 
-def make_worker_node(cfg, log, gate, memo, est, usd_est, models=None, crasher=None):
+def make_worker_node(cfg, log, gate, memo, est, usd_est, models=None, crasher=None, run_dir="."):
     """impl.worker: 'fake' (deterministic, computes outputs directly) or 'llm' (tool-calling loop)."""
     impl = (cfg.get("impl") or {}).get("worker", "fake")
     if impl == "fake":
@@ -48,8 +49,17 @@ def make_worker_node(cfg, log, gate, memo, est, usd_est, models=None, crasher=No
     if impl != "llm":
         raise ConfigError(f"impl.worker must be 'fake' or 'llm', got {impl!r}")
     caller = LLMCaller(cfg, "worker", log, model=(models or {}).get("worker"))
+    sandbox = None
+    scfg = cfg.get("sandbox") or {}
+    if scfg.get("kind", "none") == "docker":
+        from tools import sandbox as sb
+        ok, reason = sb.status(scfg)
+        if not ok:   # fail fast: never start a run whose workers would have no sandbox
+            raise ConfigError(f"sandbox.kind is docker but the sandbox is not usable: {reason}")
+        sandbox = {"cfg": scfg, "workspace": str(Path(run_dir) / "workspace"), "data_dir": str(CSV_PATH.parent)}
     return make_llm_worker(caller, SALES_REPORT, gate, memo, log, tokens=est["worker"], usd=usd_est["worker"],
-                           max_steps=int(cfg["roles"]["worker"].get("max_steps", 6)), crasher=crasher)
+                           max_steps=int(cfg["roles"]["worker"].get("max_steps", 6)), crasher=crasher,
+                           sandbox=sandbox)
 
 
 def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
@@ -83,13 +93,13 @@ def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
     g = StateGraph(State)
     crasher = Crasher(crash_at, str(run_dir / ".crashed"), log)
     orchestrator = make_orchestrator_node(cfg, log, budget, est, usd_est, models, crasher)
-    worker = make_worker_node(cfg, log, worker_gate, memo, est, usd_est, models, crasher)
+    worker = make_worker_node(cfg, log, worker_gate, memo, est, usd_est, models, crasher, run_dir)
     g.add_node("orchestrator", guard("orchestrator", orchestrator,
                                      admit=admit_iteration, estimate=est["orchestrator"],
                                      usd_estimate=usd_est["orchestrator"], **common))
     g.add_node("worker", guard("worker", worker,
                                estimate=est["worker"], usd_estimate=usd_est["worker"], **common))
-    g.add_node("synthesize", guard("synthesize", make_synthesize(orch_gate, report_path, log),
+    g.add_node("synthesize", guard("synthesize", make_synthesize(orch_gate, str(run_dir), log),
                                    estimate=est["synthesize"], usd_estimate=usd_est["synthesize"], **common))
     g.add_node("evaluator", guard("evaluator", make_evaluator(report_path, budget, log, iter_tokens, iter_usd),
                                   estimate=est["evaluator"], usd_estimate=usd_est["evaluator"], **common))

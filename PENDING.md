@@ -13,8 +13,8 @@ Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
 - [x] **2b. Orchestrator LLM** di branch `m2-2b`, **menunggu review 2a sebelum merge ke `main`** (detail di bagian Selesai)
 - [x] **2c** di branch `m2-2c`, PR #2, menunggu review GPT (detail di bagian Selesai)
-- [ ] **2d. Path jail** untuk semua tool file (`../`, path absolut, symlink keluar) + `write_file` atomic (temp lalu rename)
-- [ ] **2d. Kode sandbox Docker** (`run_python`) dengan `--cap-drop ALL`, `no-new-privileges`, image di-pin ke digest. Tesnya **tidak dihitung lulus** kalau di-skip; dijalankan penuh di VM
+- [x] **2d** di branch `m2-2d`, PR #3: `verify.sh` lulus di VM OCI ARM (`verification/verify-20261014T142108Z-aarch64.log`), **GPT: layak merge**. Merge menunggu Atha (detail di bagian Selesai)
+- [ ] **`verify.sh` mencatat commit** (saran GPT, PR terpisah setelah PR #3, bukan blocker): tulis `git rev-parse HEAD` dan `git status --porcelain` ke log, supaya log langsung menunjuk commit yang diverifikasi dan menunjukkan apakah working tree bersih
 
 ## 2. Keputusan (sudah diambil 2026-10-14)
 
@@ -27,8 +27,9 @@ Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
 Urutan disarankan, karena saling bergantung.
 
-- [ ] **Jalankan verifikasi M1 di VM:** `git clone` repo → `bash scripts/verify.sh` → kirim baris `RESULT:` (butuh token GitHub read-only, lihat README)
-- [ ] **Pasang Docker di VM** (setelah keputusan di bagian 2), lalu cek `docker run --rm python:3.13-slim python -V`
+- [x] **Jalankan verifikasi M1 di VM:** tercakup oleh run 2d di VM (`verify.sh` menjalankan seluruh suite, termasuk tes M1); repo sekarang publik, jadi clone tidak butuh token
+- [x] **Pasang Docker di VM**, lalu `bash scripts/pin_sandbox_image.sh` (Docker 29.1.3, cgroup v2; `python:3.13-slim` dipin ke `sha256:70729b46…`)
+- [x] **Jalankan `bash scripts/verify.sh` di VM** (ARM, image resmi): `RESULT: PASS`, 403 lulus, 0 tes sandbox di-skip (`verification/verify-20261014T142108Z-aarch64.log`)
 - [ ] **Set API key di VM** sebagai env var: `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`. Jangan di file repo
 - [ ] **Cek ID model:** `python scripts/smoke_models.py --list --grep gpt`, lalu `python scripts/smoke_models.py`. Kirim hasilnya
 - [ ] **2e. Smoke live:** satu run nyata task CSV di VM, dibatasi `max_usd` (setelah 2a-2d selesai)
@@ -42,6 +43,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] Audit 2b: "layak lanjut setelah patch kecil" (P2 tool call asing), sudah dipatch
 - [x] PR #1 (2b) di-merge ke `main` (`d9f3e78`)
 - [x] Audit 2c (PR #2): "tahan merge untuk patch P2" (submit bercampur tool lain), sudah dipatch
+- [x] Audit 2d (PR #3): "tahan merge untuk patch P1" (output dibuffer penuh di harness) + P2 (race direktori induk), sudah dipatch; review ulang GPT: tertutup; `verify.sh` di VM OCI ARM lulus (`verify-20261014T142108Z-aarch64.log`); **GPT menyetujui hasil verifikasi ARM64, PR #3 layak di-merge**
 - [ ] Audit setelah 2e (run live di OCI)
 
 ## 5. Nanti
@@ -80,3 +82,8 @@ Urutan disarankan, karena saling bergantung.
 - [x] **2c (branch `m2-2c`):** worker loop tool-calling (`ReadData`, `SubmitResult` divalidasi terhadap skema output kontrak), batas `max_steps`; memo per langkah untuk balasan model dan hasil tool, di-commit sebelum lanjut, kuncinya memuat identitas input (pesan, model, skema tool; tool juga langkah LLM induknya + versi tool)
 - [x] **2c:** reservasi node dipulihkan dari ledger setelah crash (worker dan orchestrator), sehingga batas per node berlaku lintas proses; sebelumnya node bisa memakai sampai 2× estimasinya
 - [x] **2c:** model palsu dengan skrip per task (worker paralel), event log tahan baris terpotong; 22 tes, 8 mutasi tertangkap, termasuk bug kunci tool yang ditemukan tesnya sendiri
+- [x] **2d (branch `m2-2d`):** path jail untuk semua tool file (`..`, absolut, NUL, symlink keluar, TOCTOU lewat `O_NOFOLLOW`), `write_file` atomik dan aman diulang; laporan ditulis lewat jail. Menutup temuan audit M1 (`../escaped.txt`)
+- [x] **2d:** sandbox Docker untuk `RunPython` (tanpa jaringan, rootfs read-only, nobody, tanpa capability, no-new-privileges, batas memori/CPU/pids, timeout yang membunuh dan menghapus container, output dibatasi, image wajib pinned, tanpa fallback); versi image masuk kunci memo
+- [x] **Hardening cleanup sandbox (saran review ulang GPT):** satu anggaran `cleanup_timeout_s`, penghapusan dikonfirmasi, `cleanup_failed` + event bila gagal. 4 mutasi tertangkap
+- [x] **Patch audit 2d:** output sandbox dibaca terbatas (harness 1213 MB → 13 MB RSS untuk 400 MB output), kill awal pada banjir output, `--log-driver none` (output tidak lagi disalin ke disk host); path jail via `openat`/`dir_fd` tanpa symlink di level mana pun, tahan race direktori induk (dibuktikan dengan race lintas proses). 12 mutasi tertangkap
+- [x] **2d:** 36 tes, sebagian besar di container sungguhan (image lokal via `docker import`, karena Docker Hub diblokir di lingkungan Claude); 13 mutasi flag/jail tertangkap setelah 3 tes yang lulus karena alasan salah diperbaiki; `verify.sh` gagal bila tes sandbox di-skip

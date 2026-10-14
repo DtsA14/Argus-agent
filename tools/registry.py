@@ -1,25 +1,25 @@
-from pathlib import Path
-
 from dataset import load_rows
 from harness.errors import PermissionDenied
+
+from .fs import PathJail
 
 
 def read_data():
     return load_rows()
 
 
-def write_file(path, text):
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text, encoding="utf-8")
-    return str(p)
+def write_file(root, rel, text):
+    """Write `text` to `rel` inside `root` only (path jail, atomic, safe to repeat)."""
+    return PathJail(root).write_text(rel, text)
 
 
-def run_shell(cmd):
-    raise NotImplementedError("sandboxed shell arrives in milestone 2")
+def run_python(code, *, workdir, data_dir, sandbox_cfg, log=None, meta=None):
+    """Run Python in the Docker sandbox. There is no unsandboxed fallback."""
+    from .sandbox import run_python as _run
+    return _run(code, workdir=workdir, data_dir=data_dir, cfg=sandbox_cfg, log=log, meta=meta)
 
 
-TOOLS = {"read_data": read_data, "write_file": write_file, "run_shell": run_shell}
+TOOLS = {"read_data": read_data, "write_file": write_file, "run_python": run_python}
 
 
 class ToolGate:
