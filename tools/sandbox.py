@@ -43,6 +43,7 @@ DEFAULTS = {
     "timeout_s": 60,
     "max_output_bytes": 65536,          # kept per stream; the rest is drained and discarded, never buffered
     "kill_after_output_bytes": 16 << 20,  # total output after which the container is killed early
+    "cleanup_timeout_s": 15,            # total time allowed for kill/remove/join after the run ends
     "allow_unpinned": False,
 }
 
@@ -161,12 +162,29 @@ def _decode(data, truncated):
     return text
 
 
-def _remove(s, name):
+def _left(deadline):
+    return max(0.0, deadline - time.monotonic())
+
+
+def _docker(s, args, deadline):
+    """One docker CLI call bounded by the shared cleanup deadline. None if it failed or ran out of time."""
+    if _left(deadline) <= 0:
+        return None
+    try:
+        return subprocess.run([s["docker"], *args], capture_output=True, text=True, timeout=_left(deadline))
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _remove(s, name, deadline):
     for cmd in (["kill", name], ["rm", "-f", name]):
-        try:
-            subprocess.run([s["docker"], *cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        _docker(s, cmd, deadline)
+
+
+def _container_gone(s, name, deadline):
+    """True only when docker positively reports no container with this name (a hung daemon is not 'gone')."""
+    r = _docker(s, ["ps", "-a", "-q", "--filter", f"name=^{name}$"], deadline)
+    return r is not None and r.returncode == 0 and not r.stdout.strip()
 
 
 def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
@@ -176,7 +194,12 @@ def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
     stdout_bytes, stderr_bytes}. Output is read with a bounded reader: the host keeps at most
     max_output_bytes per stream and drains and discards the rest (stdout_bytes / stderr_bytes report
     how much was produced). If the code produces more than kill_after_output_bytes in total, the
-    container is killed early instead of burning its whole timeout."""
+    container is killed early instead of burning its whole timeout.
+
+    After a timeout or output flood, cleanup (kill, remove, waiting for the CLI and the readers) shares
+    one budget of cleanup_timeout_s, so a hung Docker daemon cannot stretch the call much past
+    timeout_s + cleanup_timeout_s. If removal cannot be confirmed in that budget the result carries
+    cleanup_failed=True and a sandbox_cleanup_failed event is logged with the container name."""
     s = settings(cfg)
     ok, reason = status(cfg)
     if not ok:
@@ -214,16 +237,26 @@ def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
         if time.monotonic() >= deadline:
             timed_out = True
             break
+    cleanup_deadline = time.monotonic() + float(s["cleanup_timeout_s"])
+    cleanup_failed = False
     if timed_out or output_limit:
-        _remove(s, name)
+        _remove(s, name, cleanup_deadline)
         try:
-            proc.wait(timeout=30)
+            proc.wait(timeout=_left(cleanup_deadline))
         except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-        _remove(s, name)       # again, in case the container was only created after the first attempt
+            proc.kill()        # the docker CLI process only; its pipes close, so the readers finish
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        _remove(s, name, cleanup_deadline)   # again, in case the container was only created after the first attempt
+        cleanup_failed = not _container_gone(s, name, cleanup_deadline)
     for t in (feeder, *readers):
-        t.join(timeout=30)
+        t.join(timeout=_left(cleanup_deadline))
+    if cleanup_failed and log is not None:
+        log.emit("sandbox_cleanup_failed", container=name, timed_out=timed_out,
+                 output_limit_exceeded=output_limit, cleanup_timeout_s=float(s["cleanup_timeout_s"]),
+                 **(meta or {}))
 
     exit_code = None if timed_out else proc.returncode
     out, err = readers
@@ -231,9 +264,9 @@ def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
               "stdout": _decode(out.kept, out.truncated), "stderr": _decode(err.kept, err.truncated),
               "timed_out": timed_out, "truncated": out.truncated or err.truncated,
               "killed": exit_code == 137 and not output_limit, "output_limit_exceeded": output_limit,
-              "stdout_bytes": out.total, "stderr_bytes": err.total}
+              "stdout_bytes": out.total, "stderr_bytes": err.total, "cleanup_failed": cleanup_failed}
     if log is not None:
         log.emit("sandbox_run", container=name, exit_code=exit_code, timed_out=timed_out,
                  killed=result["killed"], truncated=result["truncated"], output_limit_exceeded=output_limit,
-                 stdout_bytes=out.total, stderr_bytes=err.total, **(meta or {}))
+                 stdout_bytes=out.total, stderr_bytes=err.total, cleanup_failed=cleanup_failed, **(meta or {}))
     return result

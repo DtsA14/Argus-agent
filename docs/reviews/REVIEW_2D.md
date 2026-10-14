@@ -49,3 +49,11 @@ Bukti setelah patch: `verification/verify-20261014T110744Z-x86_64.log`: 402 lulu
 **Seccomp:** mengikuti saran, tidak ada profile custom di M2; README tidak mengklaim isolasi kernel penuh.
 
 **Masih terbuka sebelum 2d dinyatakan selesai:** `verify.sh` di VM OCI ARM dengan image `python:3.13-slim` yang dipin ke digest (butuh Atha).
+
+## Tanggapan atas review ulang (GPT, 2026-10-14): hardening cleanup
+
+| Saran | Status |
+|---|---|
+| Cleanup (`docker kill`, `docker rm -f`, masing-masing timeout 30 dtk, plus tunggu proses dan reader) bisa memperpanjang operasi jauh melewati `timeout_s` bila daemon macet | **Dikerjakan.** Semua langkah cleanup berbagi satu anggaran `cleanup_timeout_s` (default 15 dtk). Penghapusan dikonfirmasi dengan `docker ps`; daemon yang tidak menjawab **tidak** dianggap berhasil. Bila tidak terkonfirmasi: `cleanup_failed: true` di hasil dan event `sandbox_run`, plus event `sandbox_cleanup_failed` berisi nama container. Tes: docker palsu yang menjalankan `run` sungguhan tapi macet pada `kill`/`rm`/`ps`; dengan `timeout_s=2`, `cleanup_timeout_s=3` panggilan selesai < 9 dtk dan kegagalan dilaporkan. Tes timeout normal kini juga memeriksa `cleanup_failed is False`. Mutasi: 4 dijalankan, 4 tertangkap (timeout 30 dtk per panggilan seperti dulu, kegagalan tidak dilaporkan, daemon macet dianggap "sudah hilang", event tidak ditulis) |
+
+Bukti setelah hardening: `verification/verify-20261014T113842Z-x86_64.log`: 403 lulus, **0 tes sandbox di-skip**. Secara code review GPT menyatakan PR #3 layak di-merge **setelah** `verify.sh` lulus di VM OCI ARM.

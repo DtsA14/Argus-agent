@@ -110,6 +110,10 @@ See `tests/test_orchestrator_llm.py` for complete plans. `--config other.yaml` r
   `max_output_bytes` per stream and discards the rest (it never stops reading, so the code cannot
   block on a full pipe). Past `kill_after_output_bytes` in total the container is killed early.
   Container logging is off (`--log-driver none`), so output is never copied to the host disk either.
+- **Cleanup is bounded:** after a timeout or output flood, kill/remove/waits share one
+  `cleanup_timeout_s` budget, so a hung Docker daemon cannot stretch a call much past
+  `timeout_s + cleanup_timeout_s`. Removal is confirmed with `docker ps`; if it cannot be confirmed the
+  result has `cleanup_failed: true` and a `sandbox_cleanup_failed` event names the container.
 - The image must be **pinned** (`name@sha256:...` or an image id). On a machine with registry access:
   `bash scripts/pin_sandbox_image.sh` (writes `.sandbox_image`). Without registry access:
   `bash scripts/build_local_sandbox_image.sh` (builds one from the local python3 with `docker import`).

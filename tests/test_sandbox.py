@@ -168,6 +168,40 @@ def test_timeout_kills_and_removes_the_container(cfg, tmp_path):
     left = subprocess.run(["docker", "ps", "-a", "--filter", f"name={name}", "--format", "{{.Names}}"],
                           capture_output=True, text=True).stdout.strip()
     assert left == ""
+    assert r["cleanup_failed"] is False
+
+
+HUNG_DOCKER = """#!/bin/bash
+# Real docker for run / image inspect; a daemon that never answers for kill, rm and ps.
+case "$1" in
+  kill|rm|ps) exec sleep 300 ;;
+  *) exec docker "$@" ;;
+esac
+"""
+
+
+def test_cleanup_is_bounded_and_reported_when_the_daemon_hangs(cfg, tmp_path):
+    # GPT review of the 2d patch: kill / rm each had their own 30 s timeout plus unbounded waits, so a
+    # hung daemon could stretch one call far past timeout_s. Cleanup now shares one cleanup_timeout_s
+    # budget, and a container whose removal is not confirmed is reported, not silently assumed gone.
+    fake = tmp_path / "docker"
+    fake.write_text(HUNG_DOCKER)
+    fake.chmod(0o755)
+    t = time.monotonic()
+    r = run(cfg, "import time\nprint('start', flush=True)\ntime.sleep(300)", tmp_path,
+            docker=str(fake), timeout_s=2, cleanup_timeout_s=3)
+    elapsed = time.monotonic() - t
+    events = [json.loads(l) for l in (tmp_path / "e.jsonl").read_text().splitlines()]
+    failed = [e for e in events if e["event"] == "sandbox_cleanup_failed"]
+    try:
+        assert elapsed < 2 + 3 + 4, elapsed            # timeout + cleanup budget + slack, not 2 + 60+
+        assert r["timed_out"] and r["cleanup_failed"] is True
+        assert failed and failed[0]["container"].startswith("argus-")
+        assert events[-1]["cleanup_failed"] is True    # also on the sandbox_run event
+    finally:
+        subprocess.run(["docker", "rm", "-f", *subprocess.run(
+            ["docker", "ps", "-aq", "--filter", "label=argus.sandbox=1"],
+            capture_output=True, text=True).stdout.split()], capture_output=True)
 
 
 def test_output_is_capped(cfg, tmp_path):

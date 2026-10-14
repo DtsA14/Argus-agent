@@ -135,4 +135,5 @@ sandbox:
   timeout_s: 60          # wall clock; the container is killed and removed on timeout
   max_output_bytes: 65536            # kept per stream; the rest is drained and discarded (never buffered)
   kill_after_output_bytes: 16777216  # total output after which the container is killed early
+  cleanup_timeout_s: 15              # total budget for kill/remove after a timeout; failure is logged
   allow_unpinned: false
