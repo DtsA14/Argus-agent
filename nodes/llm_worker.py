@@ -5,6 +5,7 @@ On resume, committed steps are replayed from the memo: no model call, no tool ex
 The node's reservation starts with what this node run already spent before a crash (ledger).
 """
 import json
+from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -19,7 +20,7 @@ from .contract import validate_output
 
 # Bump a tool's version when its behaviour or output format changes: memo entries of the old
 # version are then never reused.
-TOOL_VERSIONS = {"ReadData": "1", "SubmitResult": "1"}
+TOOL_VERSIONS = {"ReadData": "1", "SubmitResult": "1"}   # RunPython: "1:<pinned image>", set per worker
 
 
 class ReadData(BaseModel):
@@ -30,6 +31,12 @@ class SubmitResult(BaseModel):
     """Submit your final output. Call this once, when the value is complete and in the exact format required."""
     value: Any = Field(description="The output value, exactly in the format described in the task.")
     notes: str = Field(default="", description="Optional: one sentence on how it was computed.")
+
+
+class RunPython(BaseModel):
+    """Run Python 3 code in an isolated sandbox and return its stdout/stderr. The sales CSV is at
+    /data/penjualan.csv (read-only). /workspace is writable. There is no network. Print what you need."""
+    code: str = Field(description="Complete Python 3 program. Print the results you need to stdout.")
 
 
 TOOLS = [ReadData, SubmitResult]
@@ -59,11 +66,20 @@ def task_prompt(task, contract):
     return "\n".join(parts)
 
 
-def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps=6, crasher=None):
+def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps=6, crasher=None, sandbox=None):
+    """sandbox: None, or {"cfg": sandbox config, "workspace": dir, "data_dir": dir} to offer RunPython."""
     crasher = crasher or Crasher()
     sys_msg = SystemMessage(system_prompt())
+    tools = list(TOOLS) + ([RunPython] if sandbox else [])
+    run_python_version = None
+    if sandbox:
+        from tools.sandbox import tool_version
+        run_python_version = tool_version(sandbox["cfg"])
 
-    def run_tool(call, output_name):
+    def version_of(name):   # looked up live, so a bumped TOOL_VERSIONS entry takes effect immediately
+        return run_python_version if name == "RunPython" and sandbox else TOOL_VERSIONS.get(name, "unknown")
+
+    def run_tool(call, output_name, meta):
         """Execute one tool call. Returns a JSON-able record: content for the model, and whether a
         valid result was submitted."""
         name, args = call.get("name"), call.get("args") or {}
@@ -77,7 +93,18 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
             if errors:
                 return {"content": "Rejected:\n- " + "\n- ".join(errors), "accepted": False, "errors": errors}
             return {"content": "Accepted.", "accepted": True, "value": args["value"]}
-        return {"content": f"Unknown tool {name!r}. Available: {[t.__name__ for t in TOOLS]}.", "accepted": False}
+        if name == "RunPython" and sandbox:
+            from tools.sandbox import SandboxUnavailable
+            code = args.get("code")
+            if not isinstance(code, str) or not code.strip():
+                return {"content": "Rejected: RunPython needs non-empty 'code'.", "accepted": False}
+            try:
+                r = gate.call("run_python", code, workdir=Path(sandbox["workspace"]) / meta["task"],
+                              data_dir=sandbox["data_dir"], sandbox_cfg=sandbox["cfg"], log=log, meta=meta)
+            except SandboxUnavailable as e:
+                return {"content": f"Sandbox unavailable, code was not run: {e}", "accepted": False}
+            return {"content": json.dumps(r, ensure_ascii=False), "accepted": False}
+        return {"content": f"Unknown tool {name!r}. Available: {[t.__name__ for t in tools]}.", "accepted": False}
 
     def worker(p):
         task, it = p["task"], p["iteration"]
@@ -94,14 +121,14 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
 
         messages = [sys_msg, HumanMessage(task_prompt(task, contract))]
         for step in range(max_steps):
-            key = llm_step_key("worker", tid, it, step, messages, TOOLS, caller.ref)
+            key = llm_step_key("worker", tid, it, step, messages, tools, caller.ref)
             cached = memo.get(key)
             if cached is not None:
                 msg = message_from_json(cached)
                 log.emit("step_replayed", kind="llm", step=step, **meta)
             else:
                 try:
-                    msg = caller.call(messages, res, tools=TOOLS, meta={**meta, "step": step})
+                    msg = caller.call(messages, res, tools=tools, meta={**meta, "step": step})
                 except ReservationExhausted as e:
                     return finish(error=f"node_reservation: {e}")
                 except LLMCallFailed as e:
@@ -129,12 +156,12 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
             submitted = None
             for c in calls:
                 tkey = tool_step_key("worker", tid, it, step, c.get("id"), c.get("name"), c.get("args"),
-                                     TOOL_VERSIONS.get(c.get("name"), "unknown"), parent=key)
+                                     version_of(c.get("name")), parent=key)
                 record = memo.get(tkey)
                 if record is not None:
                     log.emit("step_replayed", kind="tool", step=step, tool=c.get("name"), **meta)
                 else:
-                    record = run_tool(c, output)
+                    record = run_tool(c, output, meta)
                     memo.put(tkey, record)                                  # committed before moving on
                     log.emit("step_committed", kind="tool", step=step, tool=c.get("name"), **meta)
                     crasher.point("worker@tool_committed", step=step, **meta)

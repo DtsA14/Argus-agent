@@ -12,7 +12,7 @@ def _recommendations(top3, trend):
     return recs
 
 
-def make_synthesize(gate, report_path, log):
+def make_synthesize(gate, run_dir, log, report_name="laporan.md"):
     """Orchestrator role: merge worker results into laporan.md (fake template in milestone 1)."""
 
     def synthesize(state):
@@ -30,7 +30,7 @@ def make_synthesize(gate, report_path, log):
         lines += ["", "## Rekomendasi"]
         lines += [f"{i}. {r}" for i, r in enumerate(_recommendations(top3, trend), 1)]
 
-        gate.call("write_file", report_path, "\n".join(lines) + "\n")
+        gate.call("write_file", run_dir, report_name, "\n".join(lines) + "\n")   # jailed to the run dir
         return {"tokens_used": 1000}
 
     return synthesize

@@ -4,13 +4,13 @@ Carried from the milestone 1 audits (GPT review, 2026-10-14). Each item names th
 
 ## Milestone 2 (real workers, tools, sandbox), blocking
 
-- **Per-request token cap for real LLMs.** `EstimateExceeded` is detected after a call returns, so the money is
+- **[Ditutup di 2a]** **Per-request token cap for real LLMs.** `EstimateExceeded` is detected after a call returns, so the money is
   already spent. Before any real provider call:
   - set the request's `max_tokens` (output) from the node's remaining reservation;
   - measure input tokens before sending (or cap the prompt) so input + output stays within the estimate;
   - count usage of every attempt, including failed attempts and retries, not only the returned result.
     Today `guard` only adds `tokens_used` from the successful attempt.
-- **File access is not a sandbox yet.** `ToolGate` limits tool names per role, but `tools/registry.write_file()`
+- **[Ditutup di 2d]** **File access is not a sandbox yet.** `ToolGate` limits tool names per role, but `tools/registry.write_file()`
   accepts any path (verified: `../escaped.txt` writes outside the run directory). Resolve the path, then require it
   to stay inside an allowed root (the run directory); reject symlinks that point outside. Same rule for any read tool.
 

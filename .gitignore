@@ -5,3 +5,5 @@ runs/
 *.sqlite
 .env
 .env.*
+.sandbox_image
+.verify-pytest.out
