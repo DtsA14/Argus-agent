@@ -57,7 +57,10 @@ CASES = {
     "trend line in another format": (report(trend=["- 2026-01: 1,650,000"] + TREND[1:]),
                                      {"trend_format", "trend_months"}),
     "month missing": (report(trend=TREND[:2] + TREND[3:]), {"trend_months"}),
-    "month not in the data": (report(trend=TREND + ["- 2026-13: 999999"]), {"trend_no_extra_months"}),
+    "month not in the data": (report(trend=TREND + ["- 2027-01: 999999"]), {"trend_no_extra_months"}),
+    "month that does not exist": (report(trend=TREND + ["- 2026-13: 999999"]), {"trend_format"}),
+    "month not written as YYYY-MM": (report(trend=["- Jan 2026: " + str(T["trend"][0][1])] + TREND[1:]),
+                                     {"trend_format", "trend_months"}),
     "month amount wrong": (report(trend=[TREND[0].replace(str(T["trend"][0][1]), "1")] + TREND[1:]),
                            {"trend_amounts"}),
     # Rekomendasi

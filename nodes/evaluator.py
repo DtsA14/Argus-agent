@@ -6,6 +6,7 @@ from harness.budget import next_iteration_blocker
 from harness.progress import decide_status, update_progress
 
 LINE = re.compile(r"^- (.+?): (\d+)$")
+MONTH_LINE = re.compile(r"^- (\d{4}-(?:0[1-9]|1[0-2])): (\d+)$")   # a real YYYY-MM month
 REC = re.compile(r"^(\d+)\. (.+)$")
 TITLE = "# Laporan Penjualan"
 SECTIONS = ("Top 3 Produk", "Tren Bulanan", "Rekomendasi")
@@ -88,7 +89,7 @@ def run_checks(report_path, truth):
     add("top3_amounts", "top3", not wrong, "; ".join(wrong))
 
     # ---- Tren Bulanan (a list, not a dict: a repeated month must not collapse into one) ----
-    tr_m, tr_bad = _parse(_body(sections, "Tren Bulanan"), LINE)
+    tr_m, tr_bad = _parse(_body(sections, "Tren Bulanan"), MONTH_LINE)
     trend = [(m.group(1), int(m.group(2))) for m in tr_m]
     months, want_trend = [m for m, _ in trend], dict(truth["trend"])
     add("trend_format", "trend", not tr_bad, f"lines not in the form '- <YYYY-MM>: <integer>': {_show(tr_bad)}")

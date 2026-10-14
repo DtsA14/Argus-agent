@@ -190,7 +190,7 @@ def test_evaluator_accepts_a_correct_report(tmp_path):
 
 def test_evaluator_rejects_months_that_are_not_in_the_data(tmp_path):
     from nodes.evaluator import run_checks
-    p, t = _report(tmp_path, extra_trend=["- 2026-13: 999999"])
+    p, t = _report(tmp_path, extra_trend=["- 2027-01: 999999"])   # a real month, absent from the data
     assert [c["id"] for c in run_checks(p, t) if not c["ok"]] == ["trend_no_extra_months"]
 
 
