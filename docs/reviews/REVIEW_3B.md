@@ -81,3 +81,19 @@ Perbaikan: `_text` di `harness/llm.py` sekarang memakai `sort_keys`. Tes regresi
 - `recs_grounded` membuktikan angka berdasar, bukan bahwa rekomendasinya bagus. Itu tugas judge (3c).
 - Aturan "tidak ada digit selain fakta" sengaja ketat. Model harus menulis "three", bukan "top 3". Kalau ini terlalu
   sering memicu percobaan ulang di run live, akan terlihat di event `recs_invalid`.
+
+## Tanggapan atas review GPT (2026-10-15)
+
+Bukti: `verification/verify-20261014T190351Z-aarch64.log` (commit `bed88ea`, working tree bersih, **531 lulus, 0 tes
+sandbox di-skip**).
+
+| Temuan | Status |
+|---|---|
+| P2: nama produk yang mengandung angka (`Model 3`, `iPhone 15`) membuat rekomendasi yang valid ditolak, baik dari penulis model maupun template | **Diperbaiki.** `check_numbers` me-*mask* nama **persis** dari fakta produk yang **dirujuk** sebelum memeriksa digit, mulai dari nama terpanjang. Nama yang tidak dirujuk, sebagian (`Model 30`), atau beda huruf besar-kecil (`model 3`) tidak di-mask, jadi digitnya tetap dicek. Angka lain di kalimat yang sama juga tetap dicek |
+
+Tes: kasus positif (nama berangka, penulis template dengan produk seperti itu, satu nama di dalam nama lain:
+`Model 3` dan `Model 3 2024`) dan kasus negatif (angka tak terkait, produk yang tidak dirujuk, nama sebagian, beda
+huruf besar-kecil, nama lain di kalimat yang sama).
+
+Mutasi: 4 dijalankan, 4 tertangkap. Yang dimutasi: tanpa masking, semua produk di-mask (bukan hanya yang dirujuk),
+masking tidak peka huruf besar-kecil, nama terpendek di-mask lebih dulu.
