@@ -120,7 +120,24 @@ Semua dicek terhadap ground truth yang dihitung ulang dari data, tidak pernah da
   `estimate_miss` di ledger tetap berlaku.
 - **Set kalibrasi kecil** (±20). Hasilnya indikasi, bukan statistik. Ini harus ditulis begitu di laporan.
 
-## 8. Keputusan yang butuh jawaban Atha
+## 8. Keputusan
+
+**Status 2026-10-15:** Atha memilih **DeepSeek** sebagai judge (key sudah ada di VM). Usulan lain (2–5) dipakai
+sementara sampai GPT atau Atha bilang lain.
+
+Hasil pengecekan:
+- **ID model:** `smoke_models.py --list` menemukan `deepseek-flash` dan `deepseek-v4-pro`.
+- **Harga:** di config cocok dengan halaman resmi DeepSeek (dicek 2026-10-15).
+  - `deepseek-v4-pro`: $0.66 input, $0.022 cache hit, $1.98 output per 1M token.
+  - `deepseek-flash`: $0.15 / $0.003 / $0.60 per 1M token.
+  - Jam sibuk ×2 (01–04 dan 06–10 UTC, Senin–Jumat), sudah dimodelkan. Gate budget memakai tarif jam sibuk sebagai worst
+    case. Pengecualian hari libur Tiongkok tidak dimodelkan, jadi perhitungannya selalu konservatif.
+- **Chat dan tool call:** `smoke_models.py --model evaluator=deepseek:deepseek-v4-pro` lulus untuk ketiga role
+  (DeepSeek ±$0.00008).
+- **Catatan desain judge:** mode thinking DeepSeek aktif secara default. Judge memakai tool tanpa paksaan
+  (`tool_choice` auto) dan aturan output terpotong dari 2e.
+
+Daftar keputusan:
 1. **Provider judge** (harus beda dari penulis laporan Anthropic):
    - **DeepSeek** (usul: `deepseek-v4-pro`). Harga sudah ada di config, murah, butuh `DEEPSEEK_API_KEY`.
      Catatan: harga ganda di jam sibuk (sudah dimodelkan).
