@@ -73,6 +73,17 @@ def system_prompt(tools=TOOLS):
     return "\n".join(lines)
 
 
+def nudge(tools):
+    """What to say after a reply without tool calls: only the tools offered (GPT re-review 2e: the old fixed
+    text named ReadData, which --python-only deliberately does not offer)."""
+    names = {t.__name__ for t in tools}
+    hints = [("ReadData", "ReadData to get the data"),
+             ("RunPython", "RunPython to compute in the sandbox" if "ReadData" in names
+              else "RunPython to read and compute the data in the sandbox"),
+             ("SubmitResult", "SubmitResult to finish")]
+    return "Use the tools: " + ", ".join(text for name, text in hints if name in names) + "."
+
+
 def task_prompt(task, contract):
     out = contract["outputs"][task["output"]]
     parts = [
@@ -168,7 +179,7 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
 
             calls = list(msg.tool_calls or [])
             if not calls:
-                messages.append(HumanMessage("Use the tools: ReadData to get the data, SubmitResult to finish."))
+                messages.append(HumanMessage(nudge(tools)))
                 continue
             names = [c.get("name") for c in calls]
             if "SubmitResult" in names and len(calls) != 1:

@@ -152,6 +152,25 @@ def test_with_sandbox_runpython_is_offered_and_described(tmp_path):
     assert "RunPython" in prompt and "/data/penjualan.csv" in prompt and "ReadData" in prompt
 
 
+@pytest.mark.parametrize("allowed, sandbox, expected", [
+    (["read_data", "run_python"], False,
+     "Use the tools: ReadData to get the data, SubmitResult to finish."),
+    (["read_data", "run_python"], True,
+     "Use the tools: ReadData to get the data, RunPython to compute in the sandbox, SubmitResult to finish."),
+    (["run_python"], True,
+     "Use the tools: RunPython to read and compute the data in the sandbox, SubmitResult to finish."),
+])
+def test_nudge_after_a_reply_without_tools_names_only_the_offered_tools(tmp_path, allowed, sandbox, expected):
+    # GPT re-review 2e: the nudge was fixed text naming ReadData, which --python-only does not offer.
+    out, names, _, model, _ = _offer(tmp_path, allowed, sandbox,
+                                     {"T2": [reply("let me think"), submit_call(VALUES["T2"])]})
+    assert out["value"] == VALUES["T2"]
+    nudge = model.calls[1]["messages"][-1]
+    assert isinstance(nudge, HumanMessage) and nudge.content == expected
+    for tool in ("ReadData", "RunPython"):
+        assert (tool in nudge.content) == (tool in names)
+
+
 def test_python_only_offers_and_describes_no_readdata_and_answers_it_as_unknown(tmp_path):
     out, names, prompt, model, log = _offer(tmp_path, ["run_python"], True,
                                             {"T2": [read_call(), submit_call(VALUES["T2"])]})
