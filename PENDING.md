@@ -3,7 +3,7 @@
 Daftar kerja Argus, dipisah menurut **siapa yang bisa mengerjakan dan kapan**.
 Detail desain ada di [`docs/MILESTONE2_PLAN.md`](docs/MILESTONE2_PLAN.md), detail temuan audit di [`BACKLOG.md`](BACKLOG.md).
 
-Terakhir diperbarui: 2026-10-14.
+Terakhir diperbarui: 2026-10-15.
 
 ---
 
@@ -47,11 +47,12 @@ Urutan disarankan, karena saling bergantung.
 - [x] PR #1 (2b) di-merge ke `main` (`d9f3e78`)
 - [x] Audit 2c (PR #2): "tahan merge untuk patch P2" (submit bercampur tool lain), sudah dipatch
 - [x] Audit 2d (PR #3): "tahan merge untuk patch P1" (output dibuffer penuh di harness) + P2 (race direktori induk), sudah dipatch; review ulang GPT: tertutup; `verify.sh` di VM OCI ARM lulus (`verify-20261014T142108Z-aarch64.log`); **GPT menyetujui, PR #3 di-merge** (`288fc31`)
-- [ ] Audit setelah 2e (run live di OCI): brief di [`docs/reviews/REVIEW_2E.md`](docs/reviews/REVIEW_2E.md)
+- [x] Audit setelah 2e (run live di OCI): GPT approve setelah dua putaran patch; PR #4 (`56f9eec`) dan PR #5 (`8ee005a`) di-merge. **M2 selesai**
+- [ ] Review rencana M3: [`docs/MILESTONE3_PLAN.md`](docs/MILESTONE3_PLAN.md)
 
 ## 5. Nanti
 
-**Milestone 3: evaluator**
+**Milestone 3: evaluator** (rencana: [`docs/MILESTONE3_PLAN.md`](docs/MILESTONE3_PLAN.md), menunggu keputusan Atha di bagian 8)
 - [ ] Rubric LLM menggantikan stub `recs_rubric`; evaluator pakai provider berbeda dari worker
 - [ ] Acceptance criteria untuk task umum (bukan cuma CSV demo)
 - [ ] Cek evaluator tambahan: baris duplikat, urutan salah, produk atau bagian ekstra
