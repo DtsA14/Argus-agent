@@ -4,7 +4,8 @@ from harness.errors import TransientError
 _seen = set()  # (run_id, task, iteration) already failed once in the "flaky" scenario
 
 
-def make_worker(gate):
+def make_worker(gate, usd=0.0):
+    """Fake worker (M1). Reports its worst-case usage (tokens and USD) so budgets are exercised for real."""
     def worker(p):
         tid = p["task"]["id"]
 
@@ -39,6 +40,6 @@ def make_worker(gate):
         else:
             raise ValueError(f"unknown task {tid}")
 
-        return {"results": {tid: out}, "tokens_used": 2000}
+        return {"results": {tid: out}, "tokens_used": 2000, "usd_used": usd}
 
     return worker

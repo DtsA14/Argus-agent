@@ -4,6 +4,25 @@ budget:
   max_seconds: 600       # soft limit: summed node time, checked between iterations
   stagnation_rounds: 2   # stop if the evaluator score has not improved for N rounds
   max_workers: 3         # an orchestrator plan with more parallel tasks is rejected
+  max_usd: 0.50          # hard limit, reserved like tokens: an iteration starts only if its worst case fits
+  allow_unpriced: false  # refuse models that have no entry in 'prices' (their cost could not be capped)
+
+# Which nodes call which role's model. Nodes not listed make no model calls (cost 0 USD).
+node_roles:
+  orchestrator: orchestrator
+  worker: worker
+
+# The LLM wrapper (harness/llm.py). Each request's max_tokens is derived from what is left of the
+# node's reservation; a request that cannot fit min_output_tokens is refused before it is sent.
+llm:
+  attempts: 3                       # transient errors (429, 5xx, timeouts) are retried, others are not
+  base_delay: 1.0                   # seconds; exponential with jitter, Retry-After wins when present
+  min_output_tokens: 64
+  input_margin: 1.2                 # safety factor on heuristic input counts (Anthropic counts exactly)
+  failed_attempt_charge: worst_case # a failed attempt is charged input + max_tokens, since it may be billed
+
+logging:
+  prompts: hashed        # hashed | full. "full" also needs ARGUS_DEV=1 and is meant for synthetic data only
 
 # Worst-case tokens per node call. Used to reserve budget before an iteration starts;
 # a node that reports more than its estimate is a harness error (EstimateExceeded).
@@ -49,20 +68,25 @@ providers:
 # ---------------------------------------------------------------------------
 # Roles: which model plays which role. Swap a model by editing "model" below,
 # or per run:  python main.py --model worker=deepseek:deepseek-flash
-# params are passed straight to the provider's chat class (max_tokens, temperature, ...).
+# max_output_tokens: upper bound per request (the wrapper may set it lower to stay in budget).
+# timeout_s: per-request timeout. params: passed straight to the provider's chat class (temperature, ...).
 # ---------------------------------------------------------------------------
 roles:
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
-    params: {max_tokens: 4096}
+    max_output_tokens: 2048
+    timeout_s: 60
   worker:
     model: "anthropic:claude-haiku-5-5"
-    params: {max_tokens: 4096}
+    max_output_tokens: 2048
+    timeout_s: 60
   evaluator:
+    # Not called in milestone 2 (evaluator stays programmatic until M3).
     # PLACEHOLDER: this OpenAI model id is not verified against OpenAI's catalog.
     # Run `python scripts/smoke_models.py --list --grep gpt` with your key and pick a real id.
     model: "openai:gpt-5.6-sol"
-    params: {max_tokens: 2048}
+    max_output_tokens: 2048
+    timeout_s: 60
 
 # ---------------------------------------------------------------------------
 # Price catalog, USD per 1M tokens, from public pages checked mid-Oct 2026. Verify before relying on them.

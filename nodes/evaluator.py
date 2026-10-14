@@ -63,7 +63,7 @@ def run_checks(report_path, truth):
     return checks
 
 
-def make_evaluator(report_path, budget, log, iteration_tokens):
+def make_evaluator(report_path, budget, log, iteration_tokens, iteration_usd=0.0):
     def evaluator(state):
         checks = run_checks(report_path, dataset.truth())
         failures = [{"id": c["id"], "task": c["task"], "detail": c["detail"]} for c in checks if not c["ok"]]
@@ -77,6 +77,8 @@ def make_evaluator(report_path, budget, log, iteration_tokens):
             tokens_used=state.get("tokens_used", 0) + EVAL_TOKENS,
             elapsed_s=state.get("elapsed_s", 0.0),
             iteration_tokens=iteration_tokens,
+            usd_used=state.get("usd_used", 0.0),
+            iteration_usd=iteration_usd,
         )
         status, stop_reason = decide_status(
             passed=not failures, budget_blocker=blocker,

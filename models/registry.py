@@ -141,7 +141,13 @@ def build_chat_model(cfg, role):
     builder = BUILDERS.get(pcfg.get("kind"))
     if builder is None:
         raise ConfigError(f"provider {ref.provider!r} has unknown kind {pcfg.get('kind')!r}; known: {sorted(BUILDERS)}")
-    return builder(ref, pcfg, dict(rcfg.get("params", {})))
+    params = dict(rcfg.get("params", {}))
+    # The provider SDKs retry on their own by default (Anthropic: 2, OpenAI client: 2). Those hidden
+    # attempts would be billed outside our ledger, so they are switched off; harness/llm.py retries instead.
+    params["max_retries"] = 0
+    if "timeout_s" in rcfg:
+        params.setdefault("timeout", rcfg["timeout_s"])
+    return builder(ref, pcfg, params)
 
 
 def list_models(cfg, provider):

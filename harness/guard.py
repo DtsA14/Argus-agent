@@ -14,7 +14,8 @@ def _meta(state):
     return meta
 
 
-def guard(name, fn, *, log, retry, admit=None, estimate=None, memo=None, crash_at=None, crash_marker=None):
+def guard(name, fn, *, log, retry, admit=None, estimate=None, usd_estimate=None, memo=None,
+          crash_at=None, crash_marker=None):
     """Wrap a graph node with the harness.
 
     Order of a node run:
@@ -76,6 +77,10 @@ def guard(name, fn, *, log, retry, admit=None, estimate=None, memo=None, crash_a
         if estimate is not None and used > estimate:
             log.emit("estimate_overrun", node=name, tokens=used, estimate=estimate, **meta)
             raise EstimateExceeded(f"{name} reported {used} tokens, estimate is {estimate}")
+        usd = out.get("usd_used", 0.0) or 0.0
+        if usd_estimate is not None and usd > usd_estimate + 1e-12:
+            log.emit("estimate_overrun", node=name, usd=usd, usd_estimate=usd_estimate, **meta)
+            raise EstimateExceeded(f"{name} reported ${usd:.6f}, estimate is ${usd_estimate:.6f}")
         log.emit("body_done", node=name, tokens=used, **meta)
 
         if memo is not None:

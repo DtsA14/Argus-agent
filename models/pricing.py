@@ -11,6 +11,11 @@ def is_peak(window, now):
     return any(start <= now.hour < end for start, end in window["utc_hours"])
 
 
+def multiplier(price, window, now=None):
+    now = now or datetime.now(timezone.utc)
+    return price.get("peak_multiplier", 1) if (price and is_peak(window, now)) else 1
+
+
 def cost_usd(price, *, input_tokens, output_tokens, cache_read_tokens=0, window=None, now=None):
     """USD cost of one call, or None when the price is unknown (never guess)."""
     if not price or price.get("input") is None or price.get("output") is None:

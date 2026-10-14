@@ -16,7 +16,7 @@ CRITERIA = [
 ]
 
 
-def make_orchestrator(log):
+def make_orchestrator(log, usd=0.0):
     def orchestrator(state):
         verdict = state.get("verdict") or {}
         fix_ids = sorted(
@@ -29,7 +29,7 @@ def make_orchestrator(log):
         else:
             spec = {**spec, "revision": spec["revision"] + 1, "fix_ids": fix_ids}
             log.emit("spec_revised", revision=spec["revision"], fix_ids=fix_ids)
-        return {"spec": spec, "tokens_used": 3000, "status": "RUNNING"}
+        return {"spec": spec, "tokens_used": 3000, "usd_used": usd, "status": "RUNNING"}
 
     return orchestrator
 

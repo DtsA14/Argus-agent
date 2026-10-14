@@ -17,6 +17,7 @@ class State(TypedDict, total=False):
     best_score: float
     stale_rounds: int
     tokens_used: Annotated[int, operator.add]
+    usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
     status: str            # RUNNING | DONE | FAILED_BUDGET | FAILED_STAGNANT
     stop_reason: str

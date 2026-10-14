@@ -91,7 +91,8 @@ def test_new_provider_kind_can_be_registered(keys):
         cfg = load_config()
         cfg["providers"]["mine"] = {"kind": "echo"}
         cfg["roles"]["worker"] = {"model": "mine:m1", "params": {"max_tokens": 5}}
-        assert build_chat_model(cfg, "worker") == ("echo", "m1", {"max_tokens": 5})
+        # max_retries=0 is always injected: SDK-internal retries would be billed outside the ledger
+        assert build_chat_model(cfg, "worker") == ("echo", "m1", {"max_tokens": 5, "max_retries": 0})
     finally:
         BUILDERS.pop("echo")
 

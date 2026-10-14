@@ -20,6 +20,14 @@ Reproducible check from scratch (fresh venv, pinned versions, full suite):
   orchestrator + `max_workers` workers + synthesize + evaluator) fits in what is left, so
   `tokens_used <= max_tokens` always. A node reporting more than its estimate raises
   `EstimateExceeded`; a plan wider than `max_workers` raises `PlanRejected`.
+- **USD (hard):** same reservation rule with `budget.max_usd`; each node's worst case is its token
+  estimate at the dearer of its model's input/output rate (times the peak multiplier). Models without a
+  price are refused unless `budget.allow_unpriced: true`.
+- **Per request (harness/llm.py):** every model call goes through `LLMCaller`. It counts input tokens
+  (exact for Anthropic, heuristic with margin otherwise), sets `max_tokens` to what is left of the node's
+  reservation in tokens and USD, and refuses before sending when that is below `llm.min_output_tokens`.
+  Every attempt, including failed and refused ones, is an `llm_call` event; failed attempts are charged
+  at worst case. SDK-internal retries are disabled so no attempt escapes the ledger.
 - **Iterations (hard):** checked before each iteration.
 - **Time (soft):** `max_seconds` is the sum of node run times (parallel workers add up),
   checked between iterations only. It does not interrupt a running node.

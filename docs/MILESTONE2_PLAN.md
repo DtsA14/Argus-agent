@@ -1,7 +1,20 @@
 # Milestone 2: worker LLM nyata, tools, sandbox
 
-Status: **draft untuk review** (Atha + GPT). Belum ada kode M2 yang ditulis.
+Status: **disetujui** (Atha + GPT, 2026-10-14). Fase 2a selesai, lihat [`PENDING.md`](../PENDING.md).
 Dasar: milestone 1 di commit `b972529` (harness, budget, crash-resume, layer provider).
+
+## 0. Keputusan yang sudah diambil
+
+| # | Keputusan | Tambahan dari review GPT |
+|---|---|---|
+| 1 | Budget USD **ya**, `max_usd: 0.50` per run | Hard gate per request: estimasi biaya maksimum input + output harus muat, kalau tidak ditolak sebelum dikirim. Budget token M1 tetap berlaku bersamaan |
+| 2 | Docker di VM OCI **boleh** | Tambah `--cap-drop ALL` dan `--security-opt no-new-privileges`; image di-pin ke **digest**; batas memori/CPU dan mount diverifikasi benar-benar aktif di OCI; socket Docker tidak diekspos ke jaringan |
+| 3 | Log prompt **hashed** (default) | Mode `full` hanya untuk development dengan data sintetis, butuh `ARGUS_DEV=1` |
+| 4 | Smoke live maksimal **$0.50/run** | Satu run **serial** (bukan 3 worker paralel); jangan otomatis diulang kalau budget habis; hanya pakai ID model yang terverifikasi dan punya harga di config |
+
+Tambahan desain dari GPT: **memo per langkah harus persisten dan atomik, termasuk hasil tool.** Hasil
+tool yang berhasil di-commit sebelum worker lanjut; replay setelah crash tidak boleh memanggil model
+atau menjalankan ulang tool yang sudah selesai. Tes sandbox yang di-skip **tidak dihitung lulus**.
 
 ## 1. Tujuan
 
@@ -76,11 +89,16 @@ Satu-satunya pintu ke provider. Node tidak boleh memanggil model langsung.
 **Path jail:** `Path.resolve()` lalu `is_relative_to(root)`. Symlink yang mengarah keluar ditolak.
 Berlaku untuk semua tool file, dan menutup temuan audit (`../escaped.txt`).
 
-**`run_python` di Docker:** `--network none`, `--read-only`, `--user 65534`, `--memory 512m`,
-`--cpus 1`, `--pids-limit 128`, `workspace/` di-mount read-write, data di-mount read-only,
-timeout wall-clock 60 detik, output dipotong maksimal 64 KB. Image `python:3.13-slim` (multi-arch,
-jalan di ARM OCI). **Tidak ada fallback tanpa sandbox**: kalau Docker tidak tersedia, tool ini
-menolak jalan. Mode `sandbox: none` hanya untuk tes dengan model palsu.
+**`run_python` di Docker:** `--network none`, `--read-only`, `--user 65534`, `--cap-drop ALL`,
+`--security-opt no-new-privileges`, `--memory 512m`, `--cpus 1`, `--pids-limit 128`, `workspace/`
+di-mount read-write, data di-mount read-only, timeout wall-clock 60 detik, output dipotong maksimal
+64 KB. Image `python:3.13-slim` (multi-arch, jalan di ARM OCI) **di-pin ke digest** untuk run yang
+reproducible. **Tidak ada fallback tanpa sandbox**: kalau Docker tidak tersedia, tool ini menolak
+jalan. Mode `sandbox: none` hanya untuk tes dengan model palsu.
+
+**Memo per langkah juga mencakup hasil tool:** setiap tool call yang berhasil di-commit dengan kunci
+`(node, task, iteration, step, tool_call_id)` sebelum hasilnya dikembalikan ke model. Replay setelah
+crash memakai hasil yang tersimpan, jadi tool tidak dijalankan ulang.
 
 ### 3.5 Konfigurasi baru (`config.yaml`)
 

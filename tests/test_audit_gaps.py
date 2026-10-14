@@ -60,6 +60,14 @@ def test_node_over_its_estimate_is_a_hard_error(tmp_path):
     assert events(tmp_path / "e.jsonl")[-1]["event"] == "estimate_overrun"
 
 
+def test_node_over_its_usd_estimate_is_a_hard_error(tmp_path):
+    log = EventLog(tmp_path / "e.jsonl")
+    node = guard("worker", lambda s: {"tokens_used": 1, "usd_used": 0.0011}, log=log,
+                 retry={"attempts": 1, "base_delay": 0}, estimate=2000, usd_estimate=0.001)
+    with pytest.raises(EstimateExceeded):
+        node({})
+
+
 def test_plan_wider_than_max_workers_is_rejected(tmp_path):
     fan_out = make_fan_out(2, EventLog(tmp_path / "e.jsonl"))
     state = {"spec": {"tasks": [{"id": i} for i in "abc"], "fix_ids": []},
@@ -105,6 +113,11 @@ def test_update_progress_transitions(scores, expected):
 def test_decide_status_priority(passed, blocker, stale, expected):
     assert decide_status(passed=passed, budget_blocker=blocker,
                          stale_rounds=stale, stagnation_rounds=2) == expected
+
+
+def test_many_iterations_stop_on_budget_not_on_recursion_limit(tmp_path):
+    r = run(tmp_path, "never_pass", max_iterations=30, stagnation_rounds=99, max_tokens=10**9, max_usd=100)
+    assert r["status"] == "FAILED_BUDGET" and r["stop_reason"] == "max_iterations" and r["iteration"] == 30
 
 
 def test_stagnation_rounds_setting_is_respected(tmp_path):

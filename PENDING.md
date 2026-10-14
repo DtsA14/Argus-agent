@@ -11,24 +11,18 @@ Terakhir diperbarui: 2026-10-14.
 
 Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
-- [ ] **2a. Wrapper LLM** (`harness/llm.py`): reservasi token sebelum kirim, `max_tokens` dari sisa reservasi, klasifikasi error transient vs permanen, timeout per role
-- [ ] **2a. Budget USD** (`budget.max_usd`), tolak model tanpa harga kecuali `allow_unpriced`
-- [ ] **2a. Ledger per percobaan** (event `llm_call`), termasuk percobaan gagal dan retry
-- [ ] **2a. Model palsu terskrip** (subclass `GenericFakeChatModel` + `bind_tools`) untuk semua tes
 - [ ] **2b. Orchestrator LLM** dengan output terstruktur + validasi rencana (skema, jumlah task ≤ `max_workers`, ID unik), retry maksimal 2x lalu `plan_invalid`
 - [ ] **2c. Worker loop tool-calling** dengan `max_steps`, tool call cacat dikembalikan sebagai error
-- [ ] **2c. Memo per langkah worker** `(node, task, iteration, step)` + tes crash di tengah loop
+- [ ] **2c. Memo per langkah worker** `(node, task, iteration, step)`, **termasuk hasil tool**, persisten dan atomik + tes crash di tengah loop
 - [ ] **2d. Path jail** untuk semua tool file (`../`, path absolut, symlink keluar) + `write_file` atomic (temp lalu rename)
-- [ ] **2d. Kode sandbox Docker** (`run_python`). Tesnya otomatis di-skip di sini karena Docker Hub diblokir, lalu dijalankan penuh di VM
+- [ ] **2d. Kode sandbox Docker** (`run_python`) dengan `--cap-drop ALL`, `no-new-privileges`, image di-pin ke digest. Tesnya **tidak dihitung lulus** kalau di-skip; dijalankan penuh di VM
 
-Default sementara dipakai sampai Atha memutuskan (lihat bagian 2): `max_usd: 0.50`, log prompt `hashed`.
+## 2. Keputusan (sudah diambil 2026-10-14)
 
-## 2. Butuh keputusan Atha (tidak memblokir pengerjaan bagian 1)
-
-- [ ] Tambah budget USD? Default `max_usd: 0.50` per run
-- [ ] Boleh pasang Docker di VM OCI? Kalau tidak, alternatifnya bubblewrap (isolasi lebih lemah)
-- [ ] Log prompt: `hashed` (aman untuk data klien) atau `full` (lebih mudah debug)?
-- [ ] Batas belanja smoke test live: $0.50 per run cukup?
+- [x] Budget USD: ya, `max_usd: 0.50`, hard gate per request
+- [x] Docker di VM OCI: boleh, dengan hardening tambahan dari GPT
+- [x] Log prompt: `hashed`; `full` hanya dengan `ARGUS_DEV=1` dan data sintetis
+- [x] Smoke live: maksimal $0.50, satu run serial, tidak diulang otomatis
 
 ## 3. Butuh Atha di PC atau VM
 
@@ -43,7 +37,7 @@ Urutan disarankan, karena saling bergantung.
 ## 4. Butuh GPT (audit)
 
 - [ ] Sign-off M1 dari log `verify.sh` hasil VM OCI
-- [ ] Audit setelah 2b (wrapper LLM + orchestrator)
+- [ ] Audit setelah 2b (wrapper LLM + orchestrator). Wrapper 2a sudah bisa direview sekarang
 - [ ] Audit setelah 2e (run live di OCI)
 
 ## 5. Nanti
@@ -72,3 +66,6 @@ Urutan disarankan, karena saling bergantung.
 - [x] Layer provider Anthropic / OpenAI / DeepSeek, ganti model per role lewat config atau `--model`
 - [x] `verify.sh` dengan dependensi dipatok dan log bukti di `verification/`
 - [x] Repo `DtsA14/argus-agent` + rencana M2
+- [x] **2a:** wrapper LLM (`harness/llm.py`): reservasi token+USD per request, tolak sebelum kirim, cap output dikirim ke provider, ledger per percobaan (gagal di-charge worst case), retry transient + `Retry-After`, prompt di-hash, retry tersembunyi SDK dimatikan
+- [x] **2a:** budget USD tingkat run dengan reservasi per iterasi; `recursion_limit` mengikuti `max_iterations` (sebelumnya crash di atas ~14 iterasi)
+- [x] **2a:** model palsu terskrip (`models/fake.py`), 78 tes wrapper + 6 mutasi tertangkap
