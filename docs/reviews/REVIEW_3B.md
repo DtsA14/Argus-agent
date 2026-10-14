@@ -114,3 +114,18 @@ Tes:
 
 Mutasi: 4 dijalankan, 4 tertangkap. Yang dimutasi: `replace` biasa tanpa batas, batas hanya di belakang nama, batas
 hanya di depan nama, nama terpendek lebih dulu.
+
+## Pemeriksaan konsistensi branch (2026-10-15, permintaan GPT)
+
+GPT melihat `nodes/facts.py` di `m3-3b` tanpa loop masking. Diperiksa langsung, tidak ada inkonsistensi:
+- Head PR #7 di GitHub = `origin/m3-3b` = lokal = `dd3745b`. `4de0318` ada di history branch itu.
+- Setelah `4de0318` hanya dua file yang berubah: `docs/reviews/REVIEW_3B.md` dan satu log. Tidak ada kode, tes, config,
+  atau script yang berubah.
+- `nodes/facts.py` yang diambil lewat API GitHub (`contents/nodes/facts.py?ref=m3-3b`) memuat masking dengan batas
+  token di baris 69–70.
+- `verify.sh` dijalankan ulang tepat di `dd3745b`: `verification/verify-20261014T192706Z-aarch64.log` mencatat
+  `commit: dd3745b…`, working tree bersih, **534 lulus, 0 tes sandbox di-skip**. Hash SHA-256 `nodes/facts.py` di log
+  (`11687c61…`) sama dengan `git show dd3745b:nodes/facts.py | sha256sum`.
+
+Commit yang menambahkan log ini sendiri hanya berisi log dan catatan ini. Sebuah commit tidak bisa memuat log yang
+mencatat SHA-nya sendiri. `git diff dd3745b <head>` menunjukkan hanya dua file itu yang berubah.
