@@ -165,6 +165,16 @@ smoke:
   max_usd: 0.50
   max_concurrency: 1
 
+# Phase 3d: judge calibration (scripts/calibrate_judge.py, docs/MILESTONE3_PLAN.md 3.4). Locked before any live run
+# (decision M3-3); tests/test_calibration.py fails if these change. Detection uses semantic detection (both
+# judgements valid and rejecting); false rejects use operational rejection (any judgement that does not pass).
+calibration:
+  max_usd: 1.00          # hard cap for the whole run: each judgement starts only if billed + its worst case fits
+  judgements: 2
+  thresholds:
+    min_detection_rate: 0.80
+    max_false_rejects: 1
+
 # Code execution for LLM workers (RunPython). kind: docker | none. With none, workers get no RunPython.
 # The image must be pinned (name@sha256:... or sha256:<image id>); scripts/pin_sandbox_image.sh does it
 # on the VM. ARGUS_SANDBOX_IMAGE overrides `image`. There is never an unsandboxed fallback.

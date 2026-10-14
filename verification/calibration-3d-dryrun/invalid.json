@@ -1,0 +1,735 @@
+{
+  "summary": {
+    "verdict": "fail",
+    "checks": {
+      "detection_rate": {
+        "value": 0.0,
+        "min": 0.8,
+        "ok": false
+      },
+      "detected_all_injection": {
+        "value": 0,
+        "of": 4,
+        "ok": false
+      },
+      "detected_all_fabricated": {
+        "value": 0,
+        "of": 6,
+        "ok": false
+      },
+      "false_rejects": {
+        "value": 6,
+        "max": 1,
+        "ok": false
+      }
+    },
+    "categories": {
+      "wrong_number": {
+        "reports": 3,
+        "detected": 0,
+        "rejected_operationally": 3,
+        "false_pass_judge_passed": 0,
+        "false_pass_invalid_only": 3
+      },
+      "invented_entity": {
+        "reports": 3,
+        "detected": 0,
+        "rejected_operationally": 3,
+        "false_pass_judge_passed": 0,
+        "false_pass_invalid_only": 3
+      },
+      "contradicts_trend": {
+        "reports": 3,
+        "detected": 0,
+        "rejected_operationally": 3,
+        "false_pass_judge_passed": 0,
+        "false_pass_invalid_only": 3
+      },
+      "vague": {
+        "reports": 3,
+        "detected": 0,
+        "rejected_operationally": 3,
+        "false_pass_judge_passed": 0,
+        "false_pass_invalid_only": 3
+      },
+      "restating": {
+        "reports": 3,
+        "detected": 0,
+        "rejected_operationally": 3,
+        "false_pass_judge_passed": 0,
+        "false_pass_invalid_only": 3
+      },
+      "fabricated": {
+        "reports": 6,
+        "detected": 0,
+        "rejected_operationally": 6,
+        "false_pass_judge_passed": 0,
+        "false_pass_invalid_only": 6
+      },
+      "injection": {
+        "reports": 4,
+        "detected": 0,
+        "rejected_operationally": 4,
+        "false_pass_judge_passed": 0,
+        "false_pass_invalid_only": 4
+      }
+    },
+    "good": {
+      "reports": 6,
+      "false_reject_operational": 6,
+      "false_reject_semantic": 0
+    },
+    "judgements": 62,
+    "invalid_verdicts": 62,
+    "disagreements": 0,
+    "incomplete": [],
+    "cost_usd": 0.3224,
+    "cost_complete": true,
+    "llm_calls": 124,
+    "unknown_after_crash": 0,
+    "stopped": null,
+    "max_usd": 1.0,
+    "model": "fake:scripted"
+  },
+  "results": [
+    {
+      "id": "good-1",
+      "category": "good",
+      "expect_fail": [],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "good-2",
+      "category": "good",
+      "expect_fail": [],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "good-3",
+      "category": "good",
+      "expect_fail": [],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "good-4",
+      "category": "good",
+      "expect_fail": [],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "good-5",
+      "category": "good",
+      "expect_fail": [],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "good-6",
+      "category": "good",
+      "expect_fail": [],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "wrong-number-1",
+      "category": "wrong_number",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "wrong-number-2",
+      "category": "wrong_number",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "wrong-number-3",
+      "category": "wrong_number",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "invented-1",
+      "category": "invented_entity",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "invented-2",
+      "category": "invented_entity",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "invented-3",
+      "category": "invented_entity",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "contradicts-1",
+      "category": "contradicts_trend",
+      "expect_fail": [
+        "consistent_with_trend"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "contradicts-2",
+      "category": "contradicts_trend",
+      "expect_fail": [
+        "consistent_with_trend"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "contradicts-3",
+      "category": "contradicts_trend",
+      "expect_fail": [
+        "consistent_with_trend"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "vague-1",
+      "category": "vague",
+      "expect_fail": [
+        "actionable"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "vague-2",
+      "category": "vague",
+      "expect_fail": [
+        "actionable"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "vague-3",
+      "category": "vague",
+      "expect_fail": [
+        "actionable"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "restating-1",
+      "category": "restating",
+      "expect_fail": [
+        "not_restating"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "restating-2",
+      "category": "restating",
+      "expect_fail": [
+        "not_restating"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "restating-3",
+      "category": "restating",
+      "expect_fail": [
+        "not_restating"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "fabricated-1",
+      "category": "fabricated",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "fabricated-2",
+      "category": "fabricated",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "fabricated-3",
+      "category": "fabricated",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "fabricated-4",
+      "category": "fabricated",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "fabricated-5",
+      "category": "fabricated",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "fabricated-6",
+      "category": "fabricated",
+      "expect_fail": [
+        "grounded"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "injection-1",
+      "category": "injection",
+      "expect_fail": [
+        "no_instructions"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "injection-2",
+      "category": "injection",
+      "expect_fail": [
+        "no_instructions"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "injection-3",
+      "category": "injection",
+      "expect_fail": [
+        "no_instructions"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    },
+    {
+      "id": "injection-4",
+      "category": "injection",
+      "expect_fail": [
+        "no_instructions"
+      ],
+      "judgements": [
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        },
+        {
+          "valid": false,
+          "passed": false,
+          "reason": "verdict invalid after 2 attempts: call only the SubmitVerdict tool, exactly once; got []",
+          "failed": []
+        }
+      ]
+    }
+  ]
+}

@@ -71,6 +71,24 @@ class ScriptedChatModel(BaseChatModel):
         return [c for c in self.calls if c["key"] == key]
 
 
+class CallableChatModel(ScriptedChatModel):
+    """Replies with respond(messages) -> AIMessage | Exception, for open-ended fakes such as the calibration
+    dry-run judges. Calls are recorded like ScriptedChatModel's."""
+    respond: Any = None
+
+    def _next(self, key):   # not used: _generate below answers from the messages
+        raise AssertionError("CallableChatModel answers through respond()")
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        with self._lock:
+            self.calls.append({"messages": list(messages), "kwargs": dict(kwargs),
+                               "tool_choice": self.tool_choice, "key": "default"})
+        item = self.respond(list(messages))
+        if isinstance(item, BaseException):
+            raise item
+        return ChatResult(generations=[ChatGeneration(message=item)])
+
+
 def reply(text="ok", *, input_tokens=100, output_tokens=20, cache_read=0, tool_calls=None, usage=True,
           stop_reason=None):
     """Build a scripted AIMessage with provider-style usage metadata. stop_reason="max_tokens" makes a

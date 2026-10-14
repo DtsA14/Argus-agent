@@ -105,16 +105,18 @@ def judge_prompt(report_text, facts):
 
 
 def make_judge(caller, memo, log, *, criteria, tokens, usd, attempts=2, crasher=None):
-    """judge(report_text, facts, iteration) -> {valid, passed, criteria, reason, tokens_used, usd_used}.
+    """judge(report_text, facts, iteration, task=None) -> {valid, passed, criteria, reason, tokens_used, usd_used}.
+    task: None in the evaluator; the calibration runner gives each report its own, so every judgement has its own
+    reservation and memo keys.
     Each reply is committed to the memo before it is used; its key carries the report, the facts, the criteria
     and the model (all in the messages), so a changed report is judged again and a resume never re-buys."""
     crasher = crasher or Crasher()
     tools = [SubmitVerdict]
     sys_msg = SystemMessage(judge_system(criteria))
 
-    def judge(report_text, facts, iteration):
-        meta = {"node": "evaluator", "iteration": iteration}
-        res = reservation_from_ledger(log, tokens=tokens, usd=usd, node="evaluator", task=None, iteration=iteration)
+    def judge(report_text, facts, iteration, task=None):
+        meta = {"node": "evaluator", "iteration": iteration, **({"task": task} if task is not None else {})}
+        res = reservation_from_ledger(log, tokens=tokens, usd=usd, node="evaluator", task=task, iteration=iteration)
 
         def result(valid, verdict, reason):
             passed = bool(valid and all(v["pass"] for v in verdict.values()))
@@ -126,7 +128,7 @@ def make_judge(caller, memo, log, *, criteria, tokens, usd, attempts=2, crasher=
         messages = [sys_msg, HumanMessage(judge_prompt(report_text, facts))]
         errors = []
         for attempt in range(attempts):
-            key = llm_step_key("evaluator", None, iteration, attempt, messages, tools, caller.ref)
+            key = llm_step_key("evaluator", task, iteration, attempt, messages, tools, caller.ref)
             cached = memo.get(key)
             if cached is not None:
                 msg = message_from_json(cached)

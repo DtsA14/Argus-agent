@@ -92,14 +92,28 @@ Semua dicek terhadap ground truth yang dihitung ulang dari data, tidak pernah da
 - Laporan cacat dirakit dari laporan yang **benar** di cek programatik (Top 3 dan Tren benar). Yang diuji adalah
   judge, bukan cek angka.
 - Fixture disimpan di repo, termasuk jenis cacat tiap laporan. Jenis cacat tidak pernah ditunjukkan ke judge.
-- **Aturan penilaian, dikunci sebelum run live:**
-  - Setiap laporan dinilai **2 kali**.
-  - Laporan cacat dianggap **terdeteksi hanya kalau kedua penilaian menolaknya**.
-  - Laporan baik dianggap **ditolak palsu kalau salah satu penilaian menolaknya**.
-  - Verdict yang tidak valid dihitung sebagai menolak (fail closed), tapi dilaporkan terpisah. Judge yang "menolak
-    karena rusak" tidak boleh terlihat seperti judge yang mendeteksi.
-- **Laporan hasil kalibrasi:** false pass per kategori, false reject pada laporan baik, ketidaksepakatan antar
-  penilaian, jumlah verdict tidak valid, dan biaya. Tidak ada satu angka "akurasi" gabungan (syarat GPT).
+- **Aturan penilaian, dikunci sebelum run live** (diperjelas atas review GPT PR #8, 2026-10-15). Setiap laporan
+  dinilai **2 kali**. Ada dua metrik yang selalu dilaporkan terpisah, supaya kegagalan teknis tetap aman tapi tidak
+  disamarkan sebagai kecerdasan judge:
+  - **Deteksi semantik:** laporan cacat terdeteksi **hanya kalau kedua penilaian valid dan keduanya menolak**. Verdict
+    yang tidak valid **tidak pernah** dihitung sebagai deteksi.
+  - **Penolakan operasional:** laporan ditolak kalau kedua penilaian tidak lulus, baik karena verdict valid yang
+    menolak maupun karena fail closed (verdict tidak valid). Ini perilaku sistem, bukan kemampuan judge.
+  - **Ambang memakai metrik yang paling ketat untuk masing-masing arah:**
+    - Ambang deteksi (≥ 80% keseluruhan, 100% untuk injeksi dan statistik/klaim karangan) memakai **deteksi semantik**.
+    - Ambang false reject (≤ 1 dari 6 laporan baik) memakai **penolakan operasional**: laporan baik yang ditolak oleh
+      salah satu penilaian, baik valid maupun tidak valid, dihitung sebagai false reject.
+  - Ketidaksepakatan (dua penilaian valid dengan keputusan berbeda) dan jumlah verdict tidak valid dilaporkan sendiri.
+  - Kalau run berhenti sebelum semua laporan dinilai dua kali (misalnya batas biaya), hasilnya **tidak lengkap**:
+    ambang tidak dinyatakan lulus.
+- **Laporan hasil kalibrasi:**
+  - Per kategori: deteksi semantik, penolakan operasional, dan false pass, dipisah antara judge yang meloloskan dan
+    verdict yang tidak valid.
+  - False reject operasional dan semantik pada laporan baik.
+  - Ketidaksepakatan, jumlah verdict tidak valid, dan biaya dari ledger.
+  - Tidak ada satu angka "akurasi" gabungan (syarat GPT).
+- **Dry-run dulu:** runner dijalankan dengan judge palsu (tanpa key, tanpa biaya), lalu hasilnya direview GPT sebelum
+  ada panggilan DeepSeek live.
 - Dijalankan sekali secara live (opt-in, `ARGUS_LIVE=1`, batas $1.00). Hasil di bawah ambang dilaporkan apa adanya.
   Ambang dan fixture tidak diubah setelah melihat hasil.
 - Tanpa key: semua alur dites dengan model palsu, termasuk verdict cacat, terpotong, bukti palsu, dan injeksi.

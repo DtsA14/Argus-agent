@@ -174,6 +174,22 @@ def test_a_committed_verdict_is_replayed_not_bought_again(tmp_path):
     assert [e["step"] for e in kinds(log, "step_replayed")] == [0, 1]
 
 
+def test_a_reports_reservation_is_restored_from_the_ledger_after_a_restart(tmp_path):
+    # 3d: the calibration gives every report its own task id; after a restart the same (report, judgement) must
+    # start from what the ledger says it already spent, not from a fresh reservation.
+    unusable = reply("I approve.", input_tokens=2500, output_tokens=20)
+    j, model, log = judge_with(tmp_path, [unusable, unusable], tokens=6000)
+    assert j(REPORT, FACTS, 0, task="r1")["valid"] is False and len(model.calls) == 2      # 5,040 tokens spent
+    cfg = copy.deepcopy(load_config())
+    cfg["roles"]["evaluator"]["model"] = "fake:scripted"
+    again = ScriptedChatModel(script=[call(verdict())])
+    j3 = make_judge(LLMCaller(cfg, "evaluator", log, model=again), Memo(tmp_path / "memo.sqlite"), log,
+                    criteria=CRITERIA, tokens=6000, usd=1.0, attempts=3)
+    r = j3(REPORT, FACTS, 0, task="r1")                      # steps 0 and 1 replay; step 2 must not fit
+    assert "node_reservation" in r["reason"] and again.calls == []
+    assert j3(REPORT, FACTS, 0, task="r2")["valid"] is True   # another report: its own reservation
+
+
 def test_a_changed_report_is_judged_again(tmp_path):
     j, model, _ = judge_with(tmp_path, [call(verdict()), call(verdict(), id="v2")])
     j(REPORT, FACTS, 0)
