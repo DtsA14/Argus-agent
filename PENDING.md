@@ -37,6 +37,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] **2e. `llm_token_estimates`** terpisah dari angka M1: orchestrator 12.000, worker 12.000 (titik awal dari ledger run 1; node terbesar di run 2 memakai 5.239)
 - [x] **2e. `tool_choice`:** Sonnet 5.5, Opus 5.5, Fable 5.1 menolak tool paksa (400), jadi `orchestrator.force_tool: false`
 - [x] **2e. Review GPT PR #5:** prompt dan tool worker mengikuti allowlist dan sandbox (P2), `submission_invalid` berisi alasan validator; smoke Docker terarah `--sandbox docker --python-only`: **DONE, skor 1.0, $0.0119**, 7 eksekusi RunPython exit 0, `read_data` 0 kali (`verification/smoke-2e/smoke_2e_3`). 13 mutasi tertangkap
+- [x] **2e. Review ulang GPT PR #5:** pesan dorongan worker disusun dari tool yang ditawarkan (sebelumnya menyebut ReadData di mode python-only). 3 mutasi tertangkap; `verify.sh` di VM 451 lulus, 0 skip (`verify-20261014T174627Z-aarch64.log`)
 
 ## 4. Butuh GPT (audit)
 

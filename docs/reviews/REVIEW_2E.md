@@ -124,3 +124,22 @@ Total biaya live 2e: ±$0.044 (tiga run ditambah smoke model).
 ### Catatan kecil
 - Event `sandbox_run` belum membawa nomor langkah (`step`), karena meta yang diteruskan ke sandbox hanya berisi node,
   task, dan iterasi. Urutannya tetap bisa dibaca dari `step_committed`. Bisa ditambahkan kalau diperlukan.
+
+## Tanggapan atas review ulang GPT (2026-10-15)
+
+Bukti: `verification/verify-20261014T174627Z-aarch64.log` (commit `e17ba03`, working tree bersih, **451 lulus, 0 tes
+sandbox di-skip**).
+
+| Temuan | Status |
+|---|---|
+| P2 kecil: pesan setelah balasan tanpa tool call masih menyebut ReadData secara hardcoded | **Diperbaiki.** `nudge(tools)` menyusun pesan dari tool yang ditawarkan. Hasilnya: tanpa sandbox teksnya sama seperti sebelumnya; dengan sandbox ditambah RunPython; dengan python-only hanya RunPython ("read and compute the data in the sandbox") dan SubmitResult. Tes untuk ketiga mode juga memeriksa bahwa pesan menyebut ReadData atau RunPython **jika dan hanya jika** tool itu ditawarkan. Mutasi: 3 dijalankan, 3 tertangkap (teks hardcoded lama, RunPython tidak pernah disebut, ReadData selalu disebut) |
+
+Setelah dicek ulang, tidak ada lagi teks untuk model yang menyebut nama tool secara tetap: system prompt, pesan dorongan,
+dan jawaban "Unknown tool" semuanya diturunkan dari daftar tool yang ditawarkan. Prompt orchestrator tidak menyebut tool
+worker.
+
+Tidak ada smoke live baru untuk patch ini: perubahannya hanya pada teks dorongan, yang tidak muncul di `smoke_2e_3`
+(semua balasan di sana memakai tool).
+
+Batasan dari GPT dicatat: skor evaluator 1.0 hanya membuktikan hasil lolos evaluator programmatic yang sekarang. Itu
+belum membuktikan evaluator bisa mendeteksi kesalahan analisis secara independen, dan itu pekerjaan M3.
