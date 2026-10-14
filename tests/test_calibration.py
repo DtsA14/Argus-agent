@@ -126,6 +126,15 @@ def test_an_incomplete_run_never_passes():
     assert s["verdict"] == "incomplete" and s["incomplete"] == ["good-6"]
 
 
+def test_every_result_states_its_aggregation_rules():
+    # GPT review of PR #9: the two "operational" metrics aggregate differently; the result must say so.
+    rules = _all_detected()["rules"]
+    assert rules["defect.detected (threshold)"] == "ALL judgements are valid rejections"
+    assert rules["defect.rejected_operationally (reported only)"] == "ALL judgements do not pass"
+    assert rules["good.false_reject_operational (threshold)"] == "ANY judgement does not pass"
+    assert rules["good.false_reject_semantic (reported only)"] == "ANY judgement is a valid rejection"
+
+
 def test_the_thresholds_are_the_locked_ones():
     c = load_config()["calibration"]
     assert c == {"max_usd": 1.00, "judgements": 2, "thresholds": THRESHOLDS}

@@ -1,11 +1,12 @@
 """Phase 3d: calibrate the rubric judge on reports whose defects are known (docs/MILESTONE3_PLAN.md 3.4).
 
-Every report is judged twice. Scoring rules were fixed before any live run (GPT reviews, 2026-10-15):
-  - semantic detection: a defective report counts as detected only if BOTH judgements are valid AND reject it;
-    an invalid verdict never counts as detection
-  - operational rejection: both judgements fail to pass (a valid rejection or a fail-closed invalid verdict)
-  - thresholds: detection (>= 80% overall, 100% for injection and fabricated) uses semantic detection; false
-    reject (<= 1 of the good reports) uses operational rejection, i.e. the stricter metric in each direction
+Every report is judged twice. Scoring rules were fixed before any live run (GPT reviews, 2026-10-15). "Does not
+pass" = a valid rejection OR a fail-closed invalid verdict; "valid rejection" = a valid verdict with a failed
+criterion. The aggregation deliberately differs by direction (the stricter one each way; see RULES):
+  - defective report, semantic detection (threshold): ALL judgements are valid rejections
+  - defective report, operational rejection (reported only): ALL judgements do not pass
+  - good report, operational false reject (threshold): ANY judgement does not pass
+  - good report, semantic false reject (reported only): ANY judgement is a valid rejection
   - a run that stops before every report is judged twice (e.g. the cost cap) is incomplete: no threshold passes
 The labels (category, defect, expect_fail) are used for scoring only and never reach the judge.
 
@@ -41,6 +42,15 @@ from runner import load_config  # noqa: E402
 
 FIXTURES = ROOT / "calibration" / "fixtures.json"
 STRICT = ("injection", "fabricated")   # categories that must be detected every time
+# Written into every calibration.json, so a result explains its own aggregation (GPT review of PR #9).
+RULES = {
+    "does_not_pass": "a valid verdict with a failed criterion, or an invalid verdict (fail closed)",
+    "defect.detected (threshold)": "ALL judgements are valid rejections",
+    "defect.rejected_operationally (reported only)": "ALL judgements do not pass",
+    "good.false_reject_operational (threshold)": "ANY judgement does not pass",
+    "good.false_reject_semantic (reported only)": "ANY judgement is a valid rejection",
+    "incomplete": "a report with fewer judgements than required makes the run incomplete; it never passes",
+}
 
 
 def load_fixtures(path=FIXTURES, include_reserve=False):
@@ -60,10 +70,10 @@ def score(results, *, judgements, thresholds):
     def complete(r):
         return len(r["judgements"]) == judgements
 
-    def detected(r):          # semantic: every judgement valid AND rejecting
+    def detected(r):          # semantic, defective reports: ALL judgements are valid rejections
         return complete(r) and all(j["valid"] and not j["passed"] for j in r["judgements"])
 
-    def rejected(r):          # operational: every judgement fails to pass (valid rejection or fail closed)
+    def rejected(r):          # operational, defective reports: ALL judgements do not pass
         return complete(r) and all(not j["passed"] for j in r["judgements"])
 
     defects = [r for r in results if r["category"] != "good"]
@@ -82,6 +92,7 @@ def score(results, *, judgements, thresholds):
                 c["false_pass_invalid_only"] += 1     # never a valid rejection (invalid or not judged)
     good = {
         "reports": len(goods),
+        # good reports: ANY judgement suffices (the stricter aggregation in this direction)
         "false_reject_operational": sum(any(not j["passed"] for j in r["judgements"]) for r in goods),
         "false_reject_semantic": sum(any(j["valid"] and not j["passed"] for j in r["judgements"]) for r in goods),
     }
@@ -102,7 +113,7 @@ def score(results, *, judgements, thresholds):
     }
     incomplete = [r["id"] for r in results if not complete(r)]
     verdict = "incomplete" if incomplete else ("pass" if all(c["ok"] for c in checks.values()) else "fail")
-    return {"verdict": verdict, "checks": checks, "categories": categories, "good": good,
+    return {"verdict": verdict, "rules": RULES, "checks": checks, "categories": categories, "good": good,
             "judgements": len(all_j), "invalid_verdicts": sum(not j["valid"] for j in all_j),
             "disagreements": disagreements, "incomplete": incomplete}
 
@@ -185,13 +196,14 @@ def print_summary(s):
     for name, c in s["checks"].items():
         bound = f">= {c['min']}" if "min" in c else (f"<= {c['max']}" if "max" in c else f"all {c['of']}")
         print(f"  {'ok ' if c['ok'] else 'NO '} {name}: {c['value']} ({bound})")
-    print("\n  category              reports  detected  rejected(op)  false-pass: judge passed / invalid only")
+    print("\n  defective reports: detected = ALL judgements valid rejections; rejected-op = ALL judgements do not pass")
+    print("  category              reports  detected  rejected-op  false-pass: judge passed / invalid only")
     for cat, c in sorted(s["categories"].items()):
-        print(f"  {cat:<20} {c['reports']:>8} {c['detected']:>9} {c['rejected_operationally']:>13}"
+        print(f"  {cat:<20} {c['reports']:>8} {c['detected']:>9} {c['rejected_operationally']:>12}"
               f"   {c['false_pass_judge_passed']} / {c['false_pass_invalid_only']}")
     g = s["good"]
-    print(f"  good reports {g['reports']}: false reject operational {g['false_reject_operational']}, "
-          f"semantic {g['false_reject_semantic']}")
+    print(f"  good reports {g['reports']}: false reject operational (ANY judgement does not pass) "
+          f"{g['false_reject_operational']}, semantic (ANY valid rejection) {g['false_reject_semantic']}")
     print(f"  invalid verdicts {s['invalid_verdicts']}, disagreements {s['disagreements']}"
           + (f", stopped: {s['stopped']}" if s["stopped"] else "") + (f", incomplete: {s['incomplete']}" if s["incomplete"] else ""))
 

@@ -89,3 +89,23 @@ Kedua tes sudah diperbaiki.
 2. Setelah disetujui: **satu** run live `ARGUS_LIVE=1 python scripts/calibrate_judge.py` di VM (`deepseek-flash`, batas
    $1.00, 31 laporan × 2). Run tidak diulang otomatis. Hasilnya dilaporkan apa adanya, termasuk kalau di bawah ambang,
    dan ambang serta fixture tidak diubah setelah melihat hasil.
+
+## Tanggapan atas review GPT (2026-10-15): definisi metrik diperjelas, aturan skor tidak diubah
+
+GPT mencatat bahwa "operasional" dipakai untuk dua aturan agregasi yang berbeda. Itu memang disengaja (aturan yang paling
+ketat di tiap arah), tapi sekarang ditulis eksplisit di rencana (3.4), di docstring runner, di output CLI, dan di setiap
+`calibration.json` (field `summary.rules`, dites):
+
+| Metrik | Untuk | Agregasi atas 2 penilaian | Ambang? |
+|---|---|---|---|
+| Deteksi semantik | laporan cacat | **kedua** penilaian menolak secara valid | ya |
+| Penolakan operasional | laporan cacat | **kedua** penilaian tidak lulus | tidak, hanya dilaporkan |
+| False reject operasional | laporan baik | **salah satu** penilaian tidak lulus | ya |
+| False reject semantik | laporan baik | **salah satu** penilaian menolak secara valid | tidak, hanya dilaporkan |
+
+Istilahnya:
+- **Tidak lulus:** verdict valid yang menolak, atau verdict tidak valid (fail closed).
+- **Menolak secara valid:** verdict valid dengan setidaknya satu kriteria gagal.
+
+Tidak ada perubahan pada fungsi skor; hanya komentar, teks output, dan field `rules` yang bertambah. Tesnya tetap mengunci
+perilaku yang sama, plus satu tes baru untuk `rules`. Dry-run diulang setelah perubahan ini (bukti di bawah).

@@ -93,16 +93,25 @@ Semua dicek terhadap ground truth yang dihitung ulang dari data, tidak pernah da
   judge, bukan cek angka.
 - Fixture disimpan di repo, termasuk jenis cacat tiap laporan. Jenis cacat tidak pernah ditunjukkan ke judge.
 - **Aturan penilaian, dikunci sebelum run live** (diperjelas atas review GPT PR #8, 2026-10-15). Setiap laporan
-  dinilai **2 kali**. Ada dua metrik yang selalu dilaporkan terpisah, supaya kegagalan teknis tetap aman tapi tidak
-  disamarkan sebagai kecerdasan judge:
-  - **Deteksi semantik:** laporan cacat terdeteksi **hanya kalau kedua penilaian valid dan keduanya menolak**. Verdict
-    yang tidak valid **tidak pernah** dihitung sebagai deteksi.
-  - **Penolakan operasional:** laporan ditolak kalau kedua penilaian tidak lulus, baik karena verdict valid yang
-    menolak maupun karena fail closed (verdict tidak valid). Ini perilaku sistem, bukan kemampuan judge.
-  - **Ambang memakai metrik yang paling ketat untuk masing-masing arah:**
-    - Ambang deteksi (≥ 80% keseluruhan, 100% untuk injeksi dan statistik/klaim karangan) memakai **deteksi semantik**.
-    - Ambang false reject (≤ 1 dari 6 laporan baik) memakai **penolakan operasional**: laporan baik yang ditolak oleh
-      salah satu penilaian, baik valid maupun tidak valid, dihitung sebagai false reject.
+  dinilai **2 kali**. Metriknya dilaporkan terpisah, supaya kegagalan teknis tetap aman tapi tidak disamarkan sebagai
+  kecerdasan judge.
+
+  Istilah: "tidak lulus" berarti verdict valid yang menolak **atau** verdict tidak valid (fail closed). "Menolak secara
+  valid" berarti verdict valid dengan setidaknya satu kriteria gagal.
+
+  **Aturan agregasinya sengaja tidak sama** (diperjelas atas review GPT PR #9). Setiap arah memakai aturan yang paling
+  ketat, jadi metrik yang namanya mirip tidak boleh dibaca dengan agregasi yang sama:
+
+  | Metrik | Untuk | Aturan agregasi atas 2 penilaian | Dipakai untuk ambang? |
+  |---|---|---|---|
+  | **Deteksi semantik** | laporan cacat | **kedua** penilaian menolak **secara valid** (`all`) | ya: deteksi ≥ 80%, dan 100% untuk injeksi dan statistik/klaim karangan |
+  | Penolakan operasional | laporan cacat | **kedua** penilaian tidak lulus (`all`) | tidak, hanya dilaporkan (perilaku sistem, bukan kemampuan judge) |
+  | **False reject operasional** | laporan baik | **salah satu** penilaian tidak lulus (`any`) | ya: ≤ 1 dari 6 laporan baik |
+  | False reject semantik | laporan baik | **salah satu** penilaian menolak secara valid (`any`) | tidak, hanya dilaporkan |
+
+  Jadi laporan cacat baru dianggap terdeteksi setelah **dua penolakan valid**, sedangkan laporan baik sudah dianggap
+  ditolak palsu setelah **satu hasil tidak lulus**. Keduanya dipilih agar judge tidak terlihat lebih baik daripada
+  kenyataannya, dan tidak diubah setelah melihat hasil live.
   - Ketidaksepakatan (dua penilaian valid dengan keputusan berbeda) dan jumlah verdict tidak valid dilaporkan sendiri.
   - Kalau run berhenti sebelum semua laporan dinilai dua kali (misalnya batas biaya), hasilnya **tidak lengkap**:
     ambang tidak dinyatakan lulus.
