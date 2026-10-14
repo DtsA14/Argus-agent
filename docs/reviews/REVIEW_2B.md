@@ -39,3 +39,11 @@ Keputusan desain yang minta dinilai:
 Risiko yang kami sadari:
 - Estimasi token orchestrator 3000 (dibuat untuk node palsu) hanya muat ~2 percobaan LLM; akan disetel dari ledger di 2e.
 - `tool_choice` yang dipaksa belum diuji ke provider nyata (DeepSeek mode thinking mungkin menolak); ada saklar `force_tool: false`.
+
+## Tanggapan atas audit 2b (GPT, 2026-10-14)
+
+| Temuan | Status |
+|---|---|
+| P2: rencana diterima walau balasan model berisi tool call lain selain `SubmitPlan` | **Terbukti** (direproduksi: run `DONE`, 3 worker jalan). **Diperbaiki:** balasan harus tepat satu tool call dan itu `SubmitPlan`; selain itu ditolak dengan pesan yang menyebut tool asingnya, setiap tool call dijawab `ToolMessage`, dan tidak ada worker sebelum rencana valid. 4 tes regresi; mengembalikan cek lama membuat 4 tes gagal |
+
+Bukti verifikasi terbaru ada di `verification/` (log dengan timestamp paling akhir).

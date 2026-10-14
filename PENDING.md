@@ -40,7 +40,8 @@ Urutan disarankan, karena saling bergantung.
 
 - [ ] Sign-off M1 dari log `verify.sh` hasil VM OCI
 - [x] Audit 2a (wrapper LLM): "perlu patch kecil", sudah dipatch
-- [ ] Konfirmasi GPT atas patch 2a, lalu audit 2b (validasi rencana orchestrator, semua panggilan model lewat wrapper)
+- [x] Audit 2b: "layak lanjut setelah patch kecil" (P2 tool call asing), sudah dipatch
+- [ ] Merge PR #1 (`m2-2b` → `main`) setelah Atha setuju
 - [ ] Audit setelah 2e (run live di OCI)
 
 ## 5. Nanti

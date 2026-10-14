@@ -69,8 +69,11 @@ def make_llm_orchestrator(caller, contract, *, max_workers, log, tokens, usd, at
 
             calls = list(getattr(msg, "tool_calls", None) or [])
             plan_calls = [c for c in calls if c.get("name") == "SubmitPlan"]
-            if len(plan_calls) != 1:
-                errors = [f"call the SubmitPlan tool exactly once (got {len(plan_calls)} SubmitPlan calls)"]
+            if len(calls) != 1 or len(plan_calls) != 1:
+                # Strict contract: the reply must be exactly one SubmitPlan call and nothing else.
+                others = sorted({c.get("name") or "?" for c in calls} - {"SubmitPlan"})
+                errors = [f"call only the SubmitPlan tool, exactly once: got {len(calls)} tool call(s), "
+                          f"{len(plan_calls)} of them SubmitPlan" + (f"; unexpected tools: {others}" if others else "")]
                 plan = None
             else:
                 plan, errors = validate_plan(plan_calls[0].get("args") or {}, contract, max_workers)

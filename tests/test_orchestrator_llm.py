@@ -142,6 +142,34 @@ def test_two_plan_calls_in_one_turn_are_rejected_and_both_answered(tmp_path):
     assert answered == ["a", "b"]
 
 
+@pytest.mark.parametrize("extra", [
+    [{"name": "UnexpectedTool", "args": {"x": 1}, "id": "b"}],
+    [{"name": "run_python", "args": {"code": "import os"}, "id": "b"}],
+    [{"name": "UnexpectedTool", "args": {}, "id": "b"}, {"name": "Other", "args": {}, "id": "c"}],
+])
+def test_valid_plan_with_extra_tool_calls_is_rejected(tmp_path, extra):
+    """GPT audit 2b (P2): one valid SubmitPlan plus any other tool call must not be accepted."""
+    mixed = reply("", tool_calls=[{"name": "SubmitPlan", "args": GOOD, "id": "a"}] + extra)
+    r, model, evs = run(tmp_path, [mixed, plan_call(GOOD, id="good")])
+    (invalid,) = kinds(evs, "plan_invalid")
+    assert "unexpected tools" in invalid["errors"][0]
+    # every tool call in the rejected turn gets an answer, and no worker ran before the valid plan
+    answered = [m.tool_call_id for m in model.calls[1]["messages"] if isinstance(m, ToolMessage)]
+    assert answered == ["a"] + [c["id"] for c in extra]
+    first_worker = next(i for i, e in enumerate(evs) if e["event"] == "node_start" and e["node"] == "worker")
+    accepted = next(i for i, e in enumerate(evs) if e["event"] == "spec_created")
+    assert accepted < first_worker and evs.index(invalid) < accepted
+    assert r["status"] == "DONE" and len(model.calls) == 2
+
+
+def test_extra_tool_calls_every_time_ends_as_failed_plan(tmp_path):
+    mixed = reply("", tool_calls=[{"name": "SubmitPlan", "args": GOOD, "id": "a"},
+                                  {"name": "UnexpectedTool", "args": {}, "id": "b"}])
+    r, _, evs = run(tmp_path, [mixed] * 3)
+    assert r["status"] == "FAILED_PLAN"
+    assert not [e for e in evs if e["event"] == "node_start" and e["node"] == "worker"]
+
+
 def test_gives_up_after_plan_attempts_and_no_worker_runs(tmp_path):
     bad = {"tasks": [task("a", "top3")]}
     r, model, evs = run(tmp_path, [plan_call(bad)] * 3)
