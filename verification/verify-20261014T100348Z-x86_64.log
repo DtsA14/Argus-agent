@@ -1,0 +1,110 @@
+== verify.sh 2026-10-14T10:03:48Z
+host: Linux 6.18.44-fc-v114 x86_64
+python: Python 3.13.16
+CRASH_REPEATS=5 CRASH_STRESS=50
+== pip freeze
+aiosqlite==0.22.1
+annotated-types==0.8.0
+anthropic==1.13.0
+anyio==4.15.1
+certifi==2026.7.22
+charset-normalizer==3.5.2
+distro==1.9.0
+docstring_parser==0.18.0
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.13.1
+httpx==0.28.1
+httpx2==2.13.1
+idna==3.20
+iniconfig==2.3.1
+jiter==0.17.0
+jsonpatch==1.35
+jsonpointer==3.2.1
+langchain-anthropic==1.7.6
+langchain-core==1.6.10
+langchain-deepseek==1.1.1
+langchain-openai==1.7.1
+langchain-protocol==0.0.19
+langgraph==1.2.15
+langgraph-checkpoint==4.3.0
+langgraph-checkpoint-sqlite==3.1.2
+langgraph-prebuilt==1.1.0
+langgraph-sdk==0.4.7
+langsmith==0.14.8
+openai==3.30.0
+orjson==3.13.0
+ormsgpack==1.12.2
+packaging==26.3
+pluggy==1.6.0
+pydantic==2.14.1
+pydantic_core==2.50.1
+Pygments==2.21.0
+pytest==9.1.1
+PyYAML==6.0.3
+regex==2026.9.29
+requests==2.34.2
+requests-toolbelt==1.0.0
+sniffio==1.3.1
+sqlite-vec==0.1.9
+tenacity==9.2.1
+tiktoken==0.14.0
+truststore==0.10.5
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uuid_utils==0.17.1
+websockets==16.1.1
+xxhash==4.0.1
+zstandard==0.25.0
+== source sha256
+e9c854a68e818c0fedf776ffb3234823a579e95a1a4e067838baea8f701dba92  ./config.yaml
+5a1abb38b4b4db0840ece6e00eab5e6d86ef158f883d232ccf7a8146a910722f  ./conftest.py
+98d29d042ca5a76bde0ddf28501eee211f6ae400674bacb5c50ec713ef70ef02  ./data/penjualan.csv
+fe174209e8e51ee35f896a9b2cfd0bdcfeed0b706901eb1f1bca79204ba07047  ./dataset.py
+6675ce347eba4597059b3847dbb84ce2fb441e3c88e6fd7dd97a26178c09e7cb  ./graph.py
+8385cfc78e99a3494ca338c68be26a258923a474abf57144590efc914cd392c8  ./harness/__init__.py
+7fcb5ab1737b2327adac6ad7ad8eda94e1ba3a6c8ce6c3838b41ce717b43c6f9  ./harness/budget.py
+0e2f28cc06a3c24f053f5093cca834b805d3e67e5b7980bc55d8a644e5636474  ./harness/crash.py
+cea8e8917c0833aa6093d04916c034460927b9d2f48d04173edcd4b89109865d  ./harness/errors.py
+680f1dfd41e820e54201de9b9fdb8b3533376b64a9b79f3246e266f18d787cd0  ./harness/events.py
+74137177c74eca839f9a1a93b03b5c744bdedb3c9083c10e39a69be3937249ce  ./harness/guard.py
+9ce2cd282f413eb7decf3db4d1aaa97fcdf7cb056b75ad4f818e1fd7813364da  ./harness/llm.py
+ce75b46fdda00220556653a1ff44a799c50af6a3638639e612fd6bc34ea74822  ./harness/memo.py
+abf3843c7eb6df388950fd1f1e1c175879a718fd4775a014d226df343fd4022e  ./harness/progress.py
+fa4b79ff54b1b4e4630b91bedeb3f4dd5597af4f9d0b4d9e6babb524514e183b  ./harness/steps.py
+d8ef7ab9f6d421c92cab5c3d7ecfe219a86eb2bf90eda804352722d39da79ead  ./main.py
+191e004f6ddc3f3cd0440b51019f503f26d73011a08dc45b546e27bc74c85037  ./models/__init__.py
+802023ee69cd1a875fbf30d6cf29ed7c5ebd2e992672ae4aaa630e2a92234f3b  ./models/fake.py
+901fa4b6db9fb40e5ef7520a0fde927ced8f2cfd76df0666fbbe8dec6626d0ed  ./models/pricing.py
+f051de32438e230314aade940dd3218a8e2ccd7074acf49b110ca6c105e1d113  ./models/registry.py
+ffc91d592d635dee170bc426eeb64bd6aa7801ae1a5050d81814cd518f3fea92  ./nodes/__init__.py
+243d2a349bf91b82a7bf6a56d11af9a1cd82b5c44c34d4dc14cd49c8c0ec901c  ./nodes/contract.py
+3a20629cc0c5832b6b4ba9d54f8c23502d4b5c1d9ca66513415aab13645c6711  ./nodes/evaluator.py
+4bd4ee3d43ca3a94345586b481b70ca7a1c4bbfd7a6db66e0f89371eb4c50d01  ./nodes/llm_worker.py
+8a67d39e797a1952101d7e0538f30762315f72ae7c84c334c1f4a34342788af5  ./nodes/orchestrator.py
+41c8b5cf39e8909437b067909d946b183407ee9b04f734866013005ca71590fc  ./nodes/plan.py
+aa45a852fc7ef5f042581de20a23cd41784299e768a0b39c11dde5d605e9aca3  ./nodes/synthesize.py
+45dc05a7d0d9adf534babd3bbd9ceaaee472e8f4f1ad71235b51dc8f1087187b  ./nodes/worker.py
+7c0a529936f7068649a4dbad46be353daaa79db1c5fcc42c7a71e30b74f1f102  ./requirements.txt
+5bd4a5bf787e3fef8e7cce82827955ccde3dcb51dcb56aa1d0222f9851953f64  ./runner.py
+675fcdd42b63618c5177ee78335a219b5633b576a4a8a60b8e56cc5b25b68755  ./scripts/smoke_models.py
+d30e1abc7930c913277f970073f3c62b7b15022e2cd1ccb506fce5ed252a9170  ./scripts/verify.sh
+d4a8a94231e71f1a84374c89229d142acff1ad16686a0fd6d2d936d4bd55734e  ./state.py
+2f19d53463a33a350f7ecea344aaf9f0de39b523786dbb09ea3cf1553da9677b  ./tests/test_audit_gaps.py
+7943aad961c05987fef17d8df6e336e0995dfd51ea0b00161bf6a5785ec3140b  ./tests/test_llm_audit_2a.py
+67f851665815129758feedb211e26e4d5486dc165e3166e37c7b1854e165f789  ./tests/test_llm_wrapper.py
+0080de6f4012fd7f1bbfaa582c08fe0c61effb6ce20af06627e2b3e724d6b6e0  ./tests/test_milestone1.py
+9aa161d4ed381789cc6b3c1ddfabc4762c72ab74f5589c5e958c7dde9311231e  ./tests/test_models.py
+539f119bb665284d53f526b6c299abc0d15946dad9883dd0c874cccd3cbda6bc  ./tests/test_orchestrator_llm.py
+10351858ac67e028aed154b12802228af31f710da02d4b5a271c4fea61a0a8e3  ./tests/test_worker_llm.py
+5531a8bd9ba0955fdb7a4b7005bbb206e646dbcae06f0de77a6a0ce95d5c877f  ./tools/__init__.py
+50b16a7f383e40ca5306615eb751377fc474975480997d0474d9902c3a1cebc5  ./tools/registry.py
+== pytest
+........................................................................ [ 20%]
+........................................................................ [ 41%]
+........................................................................ [ 62%]
+........................................................................ [ 82%]
+...........................................................              [100%]
+347 passed in 198.14s (0:03:18)
+RESULT: PASS
