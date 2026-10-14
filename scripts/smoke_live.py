@@ -72,7 +72,7 @@ def ledger(events):
             continue
         rows.append({k: e.get(k) for k in ("node", "task", "iteration", "step", "attempt", "model", "status",
                                            "input_tokens", "output_tokens", "cache_read", "tokens", "usd",
-                                           "charged", "latency_s", "error")})
+                                           "charged", "truncated", "latency_s", "error")})
     return rows
 
 
@@ -88,7 +88,8 @@ def summarize(result, run_dir):
         "plans": [{k: e.get(k) for k in ("event", "revision", "attempt", "tasks", "outputs", "errors")}
                   for e in events if e["event"] in ("spec_created", "spec_revised", "plan_invalid")],
         "warnings": [e for e in events if e["event"] in ("config_warning", "estimate_miss", "budget_violation",
-                                                          "orchestrator_stop", "run_error")],
+                                                          "output_truncated", "plan_truncated", "reply_truncated",
+                                                          "worker_failed", "orchestrator_stop", "run_error")],
         "report": str(report) if report.exists() else None,
         "events": str(run_dir / "events.jsonl"),
     }
@@ -108,7 +109,7 @@ def print_summary(s, cfg):
             (f" step {c['step']}" if c.get("step") is not None else "")
         print(f"  {where:<28} it {c['iteration']} #{c['attempt']} {c['status']:<15} "
               f"in {c['input_tokens']} out {c['output_tokens']} ${c['usd'] or 0:.6f} {c['charged'] or ''}"
-              + (f"  {c['error']}" if c.get("error") else ""))
+              + (" TRUNCATED" if c.get("truncated") else "") + (f"  {c['error']}" if c.get("error") else ""))
     for w in s["warnings"]:
         print(f"  ! {w['event']}: {w.get('message') or w.get('reason') or w.get('error') or ''}")
     print(f"\nreport: {s['report'] or '(not written)'}\nevents: {s['events']}")

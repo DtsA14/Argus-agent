@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from harness.crash import Crasher
 from harness.errors import LLMCallFailed, ReservationExhausted
+from harness.llm import is_truncated
 from harness.steps import (llm_step_key, message_from_json, message_to_json, reservation_from_ledger,
                            tool_step_key)
 
@@ -138,6 +139,13 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
                 log.emit("step_committed", kind="llm", step=step, **meta)
                 crasher.point("worker@llm_committed", step=step, **meta)
             messages.append(msg)
+
+            if is_truncated(msg):
+                # Tool arguments may be cut off: nothing in this reply is run or accepted. Also on replay,
+                # since the memo keeps the flag. No retry: the next step would have less room, not more.
+                log.emit("reply_truncated", step=step, tools=[c.get("name") for c in msg.tool_calls or []], **meta)
+                return finish(error=f"output_truncated: the step {step} reply hit max_tokens; "
+                                    f"its tool calls were not run")
 
             calls = list(msg.tool_calls or [])
             if not calls:

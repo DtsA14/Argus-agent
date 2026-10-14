@@ -3,7 +3,8 @@ from pathlib import Path
 from langgraph.graph import END, START, StateGraph
 
 from dataset import CSV_PATH
-from harness.budget import Budget, iteration_cost, iteration_usd, next_iteration_blocker, node_usd_estimates
+from harness.budget import (Budget, effective_estimates, iteration_cost, iteration_usd, next_iteration_blocker,
+                            node_usd_estimates)
 from harness.guard import guard
 from harness.crash import Crasher
 from harness.memo import Memo
@@ -64,7 +65,7 @@ def make_worker_node(cfg, log, gate, memo, est, usd_est, models=None, crasher=No
 
 def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
     budget = Budget.from_cfg(cfg["budget"])
-    est = cfg["token_estimates"]
+    est = effective_estimates(cfg)   # llm_token_estimates for nodes with impl: llm
     iter_tokens = iteration_cost(est, budget.max_workers)
     usd_est = node_usd_estimates(cfg)
     iter_usd = iteration_usd(usd_est, budget.max_workers)

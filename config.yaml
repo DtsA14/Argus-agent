@@ -46,6 +46,15 @@ token_estimates:
   synthesize: 1000
   evaluator: 1500
 
+# Worst-case tokens for a node that runs a real model (impl: llm); replaces token_estimates for that node
+# in node reservations, the iteration reservation and the USD estimates alike. Starting point from the
+# first 2e smoke ledger: the worker's second step alone needed ~1,650 input tokens (2,000 was too small),
+# and a revised plan used 2,095 input and was cut off at 905 output tokens (3,000 was too small).
+# With 3 workers: 12,000 + 3 x 12,000 + 1,000 + 1,500 = 50,500 tokens per iteration.
+llm_token_estimates:
+  orchestrator: 12000
+  worker: 12000
+
 retry:
   attempts: 3
   base_delay: 0.05       # seconds, doubles each attempt

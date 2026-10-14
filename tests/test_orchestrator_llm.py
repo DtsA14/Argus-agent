@@ -39,6 +39,7 @@ def plan_call(args, id="call_1"):
 def cfg_llm(**budget):
     cfg = copy.deepcopy(load_config())
     cfg["impl"]["orchestrator"] = "llm"
+    cfg.pop("llm_token_estimates", None)   # these tests size the LLM node through token_estimates
     cfg["roles"]["orchestrator"]["model"] = "fake:scripted"
     cfg["token_estimates"]["orchestrator"] = 12_000   # a real planner needs room for retries
     cfg["llm"]["base_delay"] = 0
@@ -69,6 +70,34 @@ def test_valid_plan_runs_to_done_with_the_models_own_task_ids(tmp_path):
     assert model.tool_choice == "SubmitPlan" and model.bound_tools == [SubmitPlan]
     workers = sorted(e["task"] for e in evs if e["event"] == "node_end" and e["node"] == "worker")
     assert workers == ["calc_top", "calc_trend", "check"]
+
+
+def test_truncated_plan_is_never_accepted_and_not_retried(tmp_path):
+    # 2e smoke: a revised plan stopped at exactly its 905-token cap. Here the cut-off plan is even valid.
+    cut = reply("", input_tokens=2095, output_tokens=905, stop_reason="max_tokens",
+                tool_calls=[{"name": "SubmitPlan", "args": GOOD, "id": "c1"}])
+    r, model, evs = run(tmp_path, [cut, plan_call(GOOD)])
+    assert r["status"] == "FAILED_PLAN" and r["stop_reason"].startswith("output_truncated")
+    assert len(model.calls) == 1
+    assert not kinds(evs, "spec_created") and not kinds(evs, "plan_invalid")
+    assert not [e for e in evs if e["event"] == "node_start" and e["node"] == "worker"]
+    assert [e["truncated"] for e in kinds(evs, "llm_call")] == [True]
+    assert len(kinds(evs, "output_truncated")) == 1 and len(kinds(evs, "plan_truncated")) == 1
+
+
+@pytest.mark.parametrize("metadata, cut", [
+    ({"stop_reason": "max_tokens"}, True),      # Anthropic
+    ({"finish_reason": "length"}, True),        # OpenAI, DeepSeek
+    ({"truncated": True}, True),                # replayed from the memo
+    ({"stop_reason": "end_turn"}, False),
+    ({"stop_reason": "tool_use"}, False),
+    ({"finish_reason": "stop"}, False),
+    ({}, False),
+])
+def test_truncation_is_read_from_the_provider_stop_signal(metadata, cut):
+    from langchain_core.messages import AIMessage
+    from harness.llm import is_truncated
+    assert is_truncated(AIMessage(content="", response_metadata=metadata)) is cut
 
 
 def test_default_config_does_not_force_the_tool(tmp_path):

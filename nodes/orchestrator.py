@@ -4,6 +4,7 @@ from langgraph.types import Send
 
 from harness.errors import LLMCallFailed, PlanRejected, ReservationExhausted
 from harness.crash import Crasher
+from harness.llm import is_truncated
 from harness.steps import reservation_from_ledger
 
 from .plan import SubmitPlan, system_prompt, user_prompt, validate_plan
@@ -72,6 +73,14 @@ def make_llm_orchestrator(caller, contract, *, max_workers, log, tokens, usd, at
             except LLMCallFailed as e:
                 return stop("FAILED_LLM", str(e))
             crasher.point("orchestrator@after_llm", node="orchestrator", iteration=iteration)
+
+            if is_truncated(msg):
+                # The plan may be cut off mid-argument, so it is never validated or accepted. Retrying is
+                # not worth paying for: the next attempt gets no more output room than this one had.
+                out = (getattr(msg, "usage_metadata", None) or {}).get("output_tokens")
+                log.emit("plan_truncated", attempt=attempt, iteration=iteration, output_tokens=out)
+                return stop("FAILED_PLAN", f"output_truncated: the plan reply hit max_tokens after {out} "
+                                           f"output tokens; not accepted, not retried")
 
             calls = list(getattr(msg, "tool_calls", None) or [])
             plan_calls = [c for c in calls if c.get("name") == "SubmitPlan"]
