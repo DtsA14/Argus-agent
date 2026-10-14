@@ -97,3 +97,20 @@ huruf besar-kecil, nama lain di kalimat yang sama).
 
 Mutasi: 4 dijalankan, 4 tertangkap. Yang dimutasi: tanpa masking, semua produk di-mask (bukan hanya yang dirujuk),
 masking tidak peka huruf besar-kecil, nama terpendek di-mask lebih dulu.
+
+## Tanggapan atas review ulang GPT (2026-10-15)
+
+Bukti: `verification/verify-20261014T191445Z-aarch64.log` (commit `4de0318`, working tree bersih, **534 lulus, 0 tes
+sandbox di-skip**).
+
+| Temuan | Status |
+|---|---|
+| P2: masking memakai `str.replace`, jadi `Model 3x` atau `XModel 3` kehilangan bagian `Model 3` dan digitnya tidak dicek | **Diperbaiki.** Nama hanya di-mask kalau berdiri sebagai token sendiri: tidak ada karakter kata (`\w`) tepat sebelum dan sesudahnya. Tetap peka huruf besar-kecil, hanya untuk produk yang dirujuk, dan nama terpanjang lebih dulu |
+
+Tes:
+- Positif: `Model 3`, `Model 3 2024` (nama di dalam nama lain), `iPhone 15 Pro` (teks setelah nama yang persis).
+- Negatif: `Model 3x`, `XModel 3`, `Model 30` (sekarang menyebut `30`), `model 3`, dan `Model 3x sold 4 units` (angka
+  `4` tetap ditolak).
+
+Mutasi: 4 dijalankan, 4 tertangkap. Yang dimutasi: `replace` biasa tanpa batas, batas hanya di belakang nama, batas
+hanya di depan nama, nama terpendek lebih dulu.
