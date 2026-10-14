@@ -56,7 +56,8 @@ Urutan disarankan, karena saling bergantung.
 - [x] **3b. Penulis rekomendasi + angka berdasar** (branch `m3-3b`, [`docs/reviews/REVIEW_3B.md`](docs/reviews/REVIEW_3B.md)): tabel fakta dari harness, setiap digit di teks dan aksi dicek terhadap fakta yang dirujuk, provenance dicek ulang terhadap data (`recs_grounded`). Ditemukan dan diperbaiki: bug memo dari 2c (key argumen tool tidak diurutkan, langkah setelah replay dibeli ulang). 24 mutasi tertangkap; `verify.sh` di VM 524 lulus, 0 skip
 - [x] **3b** di-merge (PR #7, `bd0a5fa`)
 - [x] **3c. Judge rubric** (branch `m3-3c`, [`docs/reviews/REVIEW_3C.md`](docs/reviews/REVIEW_3C.md)): `deepseek-flash`, menggantikan stub `recs_rubric`, dijalankan hanya kalau cek programatik lulus; semua jalur gagal (malformed, terpotong, kutipan palsu, API error, budget habis) fail closed; laporan sebagai data tak tepercaya. 21 mutasi tertangkap; `verify.sh` di VM 568 lulus, 0 skip
-- [ ] **3d. Set kalibrasi + run live** (≤ $1.00, setelah GPT menyetujui fixture)
+- [x] **3d. Dry-run kalibrasi** (branch `m3-3d`, [`docs/reviews/REVIEW_3D.md`](docs/reviews/REVIEW_3D.md)): metrik semantik dan operasional dipisah (review GPT PR #8), 31 fixture + 4 cadangan, runner dengan batas biaya per penilaian; dry-run: oracle lulus, pass/invalid/flaky gagal sebagaimana mestinya. 12 mutasi tertangkap; `verify.sh` di VM 626 lulus, 0 skip. Belum ada uang dipakai
+- [ ] **3d. Run kalibrasi live** (`deepseek-flash`, ≤ $1.00, satu kali) setelah GPT menyetujui dry-run
 - [ ] Acceptance criteria untuk task umum (bukan cuma CSV demo)
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 
