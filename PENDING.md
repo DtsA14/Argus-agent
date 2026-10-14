@@ -55,7 +55,7 @@ Urutan disarankan, karena saling bergantung.
 **Milestone 3: evaluator** (rencana: [`docs/MILESTONE3_PLAN.md`](docs/MILESTONE3_PLAN.md), menunggu keputusan Atha di bagian 8)
 - [ ] Rubric LLM menggantikan stub `recs_rubric`; evaluator pakai provider berbeda dari worker
 - [ ] Acceptance criteria untuk task umum (bukan cuma CSV demo)
-- [ ] Cek evaluator tambahan: baris duplikat, urutan salah, produk atau bagian ekstra
+- [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 
 **Milestone 4+**
 - [ ] Approval manusia untuk aksi berisiko (interrupt LangGraph)
