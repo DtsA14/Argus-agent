@@ -122,7 +122,7 @@ Semua dicek terhadap ground truth yang dihitung ulang dari data, tidak pernah da
 
 ## 8. Keputusan
 
-**Status 2026-10-15:** Atha memilih **DeepSeek** sebagai judge (key sudah ada di VM). Usulan lain (2–5) dipakai
+**Status 2026-10-15:** Atha memilih **DeepSeek V4.1 Flash (`deepseek-flash`)** sebagai judge (key sudah ada di VM). Usulan lain (2–5) dipakai
 sementara sampai GPT atau Atha bilang lain.
 
 Hasil pengecekan:
@@ -132,14 +132,17 @@ Hasil pengecekan:
   - `deepseek-flash`: $0.15 / $0.003 / $0.60 per 1M token.
   - Jam sibuk ×2 (01–04 dan 06–10 UTC, Senin–Jumat), sudah dimodelkan. Gate budget memakai tarif jam sibuk sebagai worst
     case. Pengecualian hari libur Tiongkok tidak dimodelkan, jadi perhitungannya selalu konservatif.
-- **Chat dan tool call:** `smoke_models.py --model evaluator=deepseek:deepseek-v4-pro` lulus untuk ketiga role
-  (DeepSeek ±$0.00008).
+- **Chat dan tool call:** `smoke_models.py` lulus dengan evaluator `deepseek-v4-pro` (±$0.00008) maupun
+  `deepseek-flash` (±$0.000014).
+- **Risiko:** Flash lebih murah tapi mungkin judge yang lebih lemah. Run kalibrasi 3d yang membuktikannya. Kalau
+  ambang tidak tercapai, hasilnya dilaporkan apa adanya, dan ganti ke `deepseek-v4-pro` adalah keputusan terpisah,
+  bukan ulang otomatis.
 - **Catatan desain judge:** mode thinking DeepSeek aktif secara default. Judge memakai tool tanpa paksaan
   (`tool_choice` auto) dan aturan output terpotong dari 2e.
 
 Daftar keputusan:
 1. **Provider judge** (harus beda dari penulis laporan Anthropic):
-   - **DeepSeek** (usul: `deepseek-v4-pro`). Harga sudah ada di config, murah, butuh `DEEPSEEK_API_KEY`.
+   - **DeepSeek** (**dipilih: `deepseek-flash`**). Harga sudah ada di config, murah, butuh `DEEPSEEK_API_KEY`.
      Catatan: harga ganda di jam sibuk (sudah dimodelkan).
    - **OpenAI.** Butuh `OPENAI_API_KEY`, ID model dan harganya belum diverifikasi (sekarang placeholder).
    - **Anthropic Opus 5.5.** Tanpa key baru, tapi provider sama dengan penulis, jadi independensinya lebih lemah.
