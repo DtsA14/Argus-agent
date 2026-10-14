@@ -64,9 +64,10 @@ def check_numbers(text, facts, refs):
     months = {f["month"] for f in referenced if "month" in f}
     # GPT review 3b: a product name may contain digits ("Model 3", "iPhone 15"). Digits inside the exact name of a
     # referenced product fact are backed by that fact, so the name is masked out first (longest first, so a longer
-    # name is never half-masked by a shorter one). Unreferenced, partial or re-cased names are not masked.
+    # name is never half-masked by a shorter one). Unreferenced, partial or re-cased names are not masked, and the
+    # name must stand as its own token (GPT re-review: "Model 3x" or "XModel 3" is not the product "Model 3").
     for name in sorted((f["value"] for f in referenced if f["unit"] == "product"), key=len, reverse=True):
-        text = text.replace(name, " ")
+        text = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", " ", text)
     for m in MONTH_TOKEN.finditer(text):
         token, month = m.group(0), int(m.group(2))
         if not 1 <= month <= 12:

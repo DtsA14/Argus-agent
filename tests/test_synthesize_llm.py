@@ -116,7 +116,10 @@ def test_digits_inside_a_referenced_product_name_are_backed_by_that_fact():
 @pytest.mark.parametrize("text, refs, bad", [
     ("Model 3 sold 4 more units.", NAMES, "4"),                          # an unrelated number is still checked
     ("Galaxy S24 is third.", NAMES, "24"),                               # a product name that is not referenced
-    ("Model 30 is next.", NAMES, "0"),                                   # not the exact name
+    ("Model 30 is next.", NAMES, "30"),                                  # not the exact name
+    ("Model 3x is next.", NAMES, "3"),                                   # name glued to more letters (re-review)
+    ("XModel 3 is next.", NAMES, "3"),                                   # name glued to letters in front
+    ("Model 3x sold 4 units.", NAMES, "4"),                              # ... and the other number is still checked
     ("model 3 leads.", NAMES, "3"),                                      # re-cased: not the exact name
     ("iPhone 15 Pro leads.", ["top3.1.product"], None),                  # longer text around an exact name: fine
     ("iPhone 15 and iPhone 16.", ["top3.1.product"], "16"),
