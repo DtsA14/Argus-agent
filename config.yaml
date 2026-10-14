@@ -12,6 +12,7 @@ budget:
 impl:
   orchestrator: fake
   worker: fake
+  synthesize: fake
 
 orchestrator:
   plan_attempts: 3       # model calls allowed to produce a valid plan (1 + 2 retries with the errors)
@@ -24,6 +25,14 @@ orchestrator:
 node_roles:
   orchestrator: orchestrator
   worker: worker
+# Only for a node running a real model (impl: llm): its fake makes no model call, so it costs nothing.
+llm_node_roles:
+  synthesize: writer
+
+# Phase 3b: the writer fills in the recommendations; every number must match a referenced fact
+# (docs/MILESTONE3_PLAN.md 3.6). attempts: model calls allowed to produce valid recommendations.
+synthesize:
+  attempts: 3
 
 # The LLM wrapper (harness/llm.py). Each request's max_tokens is derived from what is left of the
 # node's reservation; a request that cannot fit min_output_tokens is refused before it is sent.
@@ -54,6 +63,7 @@ token_estimates:
 llm_token_estimates:
   orchestrator: 12000
   worker: 12000
+  synthesize: 8000       # 3b starting point (prompt ~1,500 + up to 3 attempts); corrected from the ledger
 
 retry:
   attempts: 3
@@ -106,6 +116,11 @@ roles:
     max_output_tokens: 2048
     timeout_s: 60
     max_steps: 6           # model calls per worker run (impl.worker: llm)
+  writer:
+    # Phase 3b: writes the recommendations (impl.synthesize: llm). Decision M3-2: Sonnet 5.5.
+    model: "anthropic:claude-sonnet-5-5"
+    max_output_tokens: 2048
+    timeout_s: 60
   evaluator:
     # Not called in milestone 2 (evaluator stays programmatic until M3).
     # PLACEHOLDER: this OpenAI model id is not verified against OpenAI's catalog.
