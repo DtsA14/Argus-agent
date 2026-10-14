@@ -14,7 +14,7 @@ Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 - [x] **2b. Orchestrator LLM** di branch `m2-2b`, **menunggu review 2a sebelum merge ke `main`** (detail di bagian Selesai)
 - [x] **2c** di branch `m2-2c`, PR #2, menunggu review GPT (detail di bagian Selesai)
 - [x] **2d** di branch `m2-2d`, PR #3: `verify.sh` lulus di VM OCI ARM (`verification/verify-20261014T142108Z-aarch64.log`), **GPT: layak merge**. Merge menunggu Atha (detail di bagian Selesai)
-- [ ] **`verify.sh` mencatat commit** (saran GPT, PR terpisah setelah PR #3, bukan blocker): tulis `git rev-parse HEAD` dan `git status --porcelain` ke log, supaya log langsung menunjuk commit yang diverifikasi dan menunjukkan apakah working tree bersih
+- [x] **`verify.sh` mencatat commit** (saran GPT): `scripts/provenance.sh` menulis `commit:` dan `working tree: clean|DIRTY` (plus daftar `git status --porcelain`, file untracked ikut dihitung) ke log. 5 tes, 9 mutasi tertangkap. Bukti: `verification/verify-20261014T155946Z-aarch64.log` (408 lulus, 0 skip, VM ARM)
 
 ## 2. Keputusan (sudah diambil 2026-10-14)
 
