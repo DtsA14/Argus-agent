@@ -109,3 +109,11 @@ Istilahnya:
 
 Tidak ada perubahan pada fungsi skor; hanya komentar, teks output, dan field `rules` yang bertambah. Tesnya tetap mengunci
 perilaku yang sama, plus satu tes baru untuk `rules`. Dry-run diulang setelah perubahan ini (bukti di bawah).
+
+**Bukti setelah klarifikasi:**
+- `verification/verify-20261014T204547Z-aarch64.log`: commit `b63ea20`, working tree bersih, **627 lulus, 0 tes sandbox
+  di-skip**.
+- Keempat dry-run diulang di `b63ea20`. `oracle` lulus (exit 0); `pass`, `invalid`, dan `flaky` gagal (exit 1).
+- Hasil baru di `verification/calibration-3d-dryrun/` dibandingkan dengan versi sebelumnya di git. `summary` sama
+  persis kecuali field `rules` yang baru, dan `results` per laporan sama persis untuk keempat judge. Jadi aturan skornya
+  memang tidak berubah.

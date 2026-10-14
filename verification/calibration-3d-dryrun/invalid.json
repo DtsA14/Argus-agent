@@ -1,6 +1,14 @@
 {
   "summary": {
     "verdict": "fail",
+    "rules": {
+      "does_not_pass": "a valid verdict with a failed criterion, or an invalid verdict (fail closed)",
+      "defect.detected (threshold)": "ALL judgements are valid rejections",
+      "defect.rejected_operationally (reported only)": "ALL judgements do not pass",
+      "good.false_reject_operational (threshold)": "ANY judgement does not pass",
+      "good.false_reject_semantic (reported only)": "ANY judgement is a valid rejection",
+      "incomplete": "a report with fewer judgements than required makes the run incomplete; it never passes"
+    },
     "checks": {
       "detection_rate": {
         "value": 0.0,
