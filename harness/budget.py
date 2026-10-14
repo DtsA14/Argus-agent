@@ -16,6 +16,9 @@ class Budget:
 
     @classmethod
     def from_cfg(cls, d):
+        d = dict(d)
+        if d.get("max_usd") is None:
+            d["max_usd"] = math.inf   # null in config = no USD limit
         return cls(**d)
 
 
@@ -38,10 +41,8 @@ def node_usd_estimates(cfg):
         ref = ModelRef.parse(cfg["roles"][role]["model"])
         price = price_for(cfg, ref)
         if price is None:
-            if not cfg["budget"].get("allow_unpriced", False):
-                from models.registry import ConfigError
-                raise ConfigError(f"node {node!r} uses {ref} which has no price; add it to 'prices' "
-                                  "or set budget.allow_unpriced: true")
+            from harness.llm import check_priced
+            check_priced(cfg, ref, f"node {node!r}")   # raises unless max_usd is null and allow_unpriced
             continue
         rate = max(price["input"], price["output"]) * price.get("peak_multiplier", 1) / 1_000_000
         out[node] = est[node] * rate

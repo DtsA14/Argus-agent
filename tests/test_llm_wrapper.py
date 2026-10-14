@@ -212,12 +212,15 @@ def test_reservation_is_never_exceeded(tmp_path, seed):
 
 # ---- configuration safety ---------------------------------------------------------
 
-def test_unpriced_model_is_refused_unless_allowed(tmp_path):
+def test_unpriced_model_is_refused_while_a_usd_budget_is_enforced(tmp_path):
     cfg = copy.deepcopy(load_config())
     cfg["roles"]["worker"]["model"] = "openai:gpt-5.6-sol"     # no price in config
     with pytest.raises(ConfigError, match="no price"):
         LLMCaller(cfg, "worker", EventLog(tmp_path / "e.jsonl"), model=ScriptedChatModel())
-    cfg["budget"]["allow_unpriced"] = True
+    cfg["budget"]["allow_unpriced"] = True                      # not enough while max_usd is finite
+    with pytest.raises(ConfigError, match="cannot be capped"):
+        LLMCaller(cfg, "worker", EventLog(tmp_path / "e.jsonl"), model=ScriptedChatModel())
+    cfg["budget"]["max_usd"] = None                             # explicitly uncapped: allowed
     LLMCaller(cfg, "worker", EventLog(tmp_path / "e.jsonl"), model=ScriptedChatModel())
 
 

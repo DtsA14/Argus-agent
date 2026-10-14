@@ -24,10 +24,26 @@ Reproducible check from scratch (fresh venv, pinned versions, full suite):
   estimate at the dearer of its model's input/output rate (times the peak multiplier). Models without a
   price are refused unless `budget.allow_unpriced: true`.
 - **Per request (harness/llm.py):** every model call goes through `LLMCaller`. It counts input tokens
-  (exact for Anthropic, heuristic with margin otherwise), sets `max_tokens` to what is left of the node's
-  reservation in tokens and USD, and refuses before sending when that is below `llm.min_output_tokens`.
-  Every attempt, including failed and refused ones, is an `llm_call` event; failed attempts are charged
-  at worst case. SDK-internal retries are disabled so no attempt escapes the ledger.
+  over the whole context (content, assistant tool calls and their arguments, tool results, tool schemas),
+  sets `max_tokens` to what is left of the node's reservation in tokens and USD, and refuses before
+  sending when that is below `llm.min_output_tokens`. SDK-internal retries are disabled so no attempt
+  escapes the ledger.
+- **How hard is the cap?** With an exact counter (Anthropic) charges cannot exceed the reservation.
+  With a heuristic counter (OpenAI, DeepSeek) the cap holds against an estimate with a margin: if a
+  provider bills more input than estimated and the node goes over, that is a `budget_violation`, logged,
+  further calls are refused, and the run ends `FAILED_BUDGET`. Detected and reported, but **not an
+  absolute financial cap**.
+- **Unpriced models** are refused whenever `max_usd` is finite (`allow_unpriced` only applies with
+  `max_usd: null`). Their cost is recorded as unknown (`null`), never as $0, and `result.json` shows
+  `usd_complete: false`.
+- **Ledger lifecycle:** `llm_call_started` (with a `call_id` and the worst case) is written before each
+  request, the final `llm_call` after it, and only then is the reservation charged (even if writing the
+  ledger fails). A started call with no final event, because the process died mid-request, is
+  reconciled as `unknown_after_crash` at worst case (`reconcile_ledger`, `llm_calls_unknown` in
+  `result.json`). Errors record `delivery`: `received` (the provider answered with a status) or
+  `unknown` (timeout or connection error: it may or may not have been processed or billed).
+- Money is accounted in **integer nano-dollars** (`usd_nano`), so the ledger and the reservations sum
+  exactly. `meta` passed to a call is limited to `run_id, node, task, iteration, step, tool_call_id`.
 - **Iterations (hard):** checked before each iteration.
 - **Time (soft):** `max_seconds` is the sum of node run times (parallel workers add up),
   checked between iterations only. It does not interrupt a running node.
