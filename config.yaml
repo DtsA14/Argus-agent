@@ -13,6 +13,7 @@ impl:
   orchestrator: fake
   worker: fake
   synthesize: fake
+  evaluator: fake       # llm: adds the phase-3c judge (role evaluator) after the programmatic checks
 
 orchestrator:
   plan_attempts: 3       # model calls allowed to produce a valid plan (1 + 2 retries with the errors)
@@ -28,11 +29,17 @@ node_roles:
 # Only for a node running a real model (impl: llm): its fake makes no model call, so it costs nothing.
 llm_node_roles:
   synthesize: writer
+  evaluator: evaluator
 
 # Phase 3b: the writer fills in the recommendations; every number must match a referenced fact
 # (docs/MILESTONE3_PLAN.md 3.6). attempts: model calls allowed to produce valid recommendations.
 synthesize:
   attempts: 3
+
+# Phase 3c: the rubric judge. attempts: model calls allowed to produce a usable verdict; after that the rubric
+# fails (fail closed). A cut-off reply is never retried.
+judge:
+  attempts: 2
 
 # The LLM wrapper (harness/llm.py). Each request's max_tokens is derived from what is left of the
 # node's reservation; a request that cannot fit min_output_tokens is refused before it is sent.
@@ -64,6 +71,7 @@ llm_token_estimates:
   orchestrator: 12000
   worker: 12000
   synthesize: 8000       # 3b starting point (prompt ~1,500 + up to 3 attempts); corrected from the ledger
+  evaluator: 14000       # 3c starting point (prompt ~2,500 + 4,096 output incl. thinking, x2 attempts)
 
 retry:
   attempts: 3
@@ -122,12 +130,11 @@ roles:
     max_output_tokens: 2048
     timeout_s: 60
   evaluator:
-    # Not called in milestone 2 (evaluator stays programmatic until M3).
-    # PLACEHOLDER: this OpenAI model id is not verified against OpenAI's catalog.
-    # Run `python scripts/smoke_models.py --list --grep gpt` with your key and pick a real id.
-    model: "openai:gpt-5.6-sol"
-    max_output_tokens: 2048
-    timeout_s: 60
+    # Phase 3c judge (impl.evaluator: llm). Decision M3-1: DeepSeek V4.1 Flash, a different provider from the
+    # writer. Thinking is on by default and counts as output, hence the larger output cap. No forced tool_choice.
+    model: "deepseek:deepseek-flash"
+    max_output_tokens: 4096
+    timeout_s: 90
 
 # ---------------------------------------------------------------------------
 # Price catalog, USD per 1M tokens, from public pages checked mid-Oct 2026. Verify before relying on them.

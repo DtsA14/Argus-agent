@@ -54,7 +54,9 @@ Urutan disarankan, karena saling bergantung.
 
 **Milestone 3: evaluator** (rencana: [`docs/MILESTONE3_PLAN.md`](docs/MILESTONE3_PLAN.md), menunggu keputusan Atha di bagian 8)
 - [x] **3b. Penulis rekomendasi + angka berdasar** (branch `m3-3b`, [`docs/reviews/REVIEW_3B.md`](docs/reviews/REVIEW_3B.md)): tabel fakta dari harness, setiap digit di teks dan aksi dicek terhadap fakta yang dirujuk, provenance dicek ulang terhadap data (`recs_grounded`). Ditemukan dan diperbaiki: bug memo dari 2c (key argumen tool tidak diurutkan, langkah setelah replay dibeli ulang). 24 mutasi tertangkap; `verify.sh` di VM 524 lulus, 0 skip
-- [ ] Rubric LLM menggantikan stub `recs_rubric` (3c, judge `deepseek-flash`)
+- [x] **3b** di-merge (PR #7, `bd0a5fa`)
+- [x] **3c. Judge rubric** (branch `m3-3c`, [`docs/reviews/REVIEW_3C.md`](docs/reviews/REVIEW_3C.md)): `deepseek-flash`, menggantikan stub `recs_rubric`, dijalankan hanya kalau cek programatik lulus; semua jalur gagal (malformed, terpotong, kutipan palsu, API error, budget habis) fail closed; laporan sebagai data tak tepercaya. 21 mutasi tertangkap; `verify.sh` di VM 568 lulus, 0 skip
+- [ ] **3d. Set kalibrasi + run live** (≤ $1.00, setelah GPT menyetujui fixture)
 - [ ] Acceptance criteria untuk task umum (bukan cuma CSV demo)
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 
