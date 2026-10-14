@@ -390,3 +390,42 @@ def test_worker_runs_python_once_and_replays_it_from_the_memo(cfg, tmp_path):
     fn(p)                                                                # resume of the same node run
     runs = [e for e in log.read() if e["event"] == "sandbox_run"]
     assert len(runs) == 1 and len(model.calls) == 2                      # nothing re-run, nothing re-bought
+
+
+def test_python_only_worker_reads_the_data_only_through_the_sandbox(cfg, tmp_path):
+    # GPT review 2e: the directed live smoke gives workers RunPython and no ReadData. Offline first: the
+    # prompt and tools say so, the value comes out of a real container, and read_data is never called.
+    from harness.llm import LLMCaller
+    from harness.memo import Memo
+    from models.fake import ScriptedChatModel, reply
+    from nodes.contract import SALES_REPORT
+    from nodes.llm_worker import make_llm_worker
+    from runner import load_config
+    from tools.registry import ToolGate
+    import dataset
+
+    truth = [list(x) for x in dataset.truth()["trend"]]
+    code = ("import csv, collections, json\nt = collections.Counter()\n"
+            "for r in csv.DictReader(open('/data/penjualan.csv')): t[r['month']] += int(r['omzet'])\n"
+            "print(json.dumps(sorted([k, v] for k, v in t.items())))")
+    script = {"T3": [reply("", tool_calls=[{"name": "RunPython", "args": {"code": code}, "id": "p1"}]),
+                     reply("", tool_calls=[{"name": "SubmitResult", "args": {"value": truth}, "id": "s1"}])]}
+    c = copy.deepcopy(load_config())
+    c["roles"]["worker"]["model"] = "fake:scripted"
+    log = EventLog(tmp_path / "e.jsonl")
+    model = ScriptedChatModel(script=script)
+    fn = make_llm_worker(LLMCaller(c, "worker", log, model=model), SALES_REPORT,
+                         ToolGate("worker", ["run_python"], log), Memo(tmp_path / "m.sqlite"), log,
+                         tokens=20_000, usd=1.0,
+                         sandbox={"cfg": cfg, "workspace": str(tmp_path / "ws"), "data_dir": str(CSV_PATH.parent)})
+    p = {"task": {"id": "T3", "output": "trend", "instruction": "Monthly revenue trend.", "feedback": ""},
+         "iteration": 0}
+    out = fn(p)
+    assert out["results"]["T3"]["value"] == truth
+    assert [t.__name__ for t in model.bound_tools] == ["SubmitResult", "RunPython"]
+    prompt = model.calls[0]["messages"][0].content
+    assert "RunPython" in prompt and "/data/penjualan.csv" in prompt and "ReadData" not in prompt
+    assert json.loads(json.loads(model.calls[1]["messages"][-1].content)["stdout"]) == truth
+    evs = log.read()
+    assert [e["tool"] for e in evs if e["event"] == "tool_call"] == ["run_python"]
+    assert [e["exit_code"] for e in evs if e["event"] == "sandbox_run"] == [0]

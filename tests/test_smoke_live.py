@@ -88,6 +88,23 @@ def test_an_invalid_smoke_cap_is_refused(cap):
         prepare_config(cfg, env=KEYS)
 
 
+def test_python_only_needs_the_docker_sandbox():
+    with pytest.raises(SmokeRefused, match="--python-only needs --sandbox docker"):
+        prepare_config(fake_cfg(), python_only=True, env=KEYS)
+
+
+def test_python_only_leaves_workers_only_run_python():
+    cfg = prepare_config(fake_cfg(), sandbox="docker", python_only=True, env=KEYS, sandbox_status=(True, ""))
+    assert cfg["sandbox"]["kind"] == "docker" and cfg["tools"]["worker"] == ["run_python"]
+    plain = prepare_config(fake_cfg(), sandbox="docker", env=KEYS, sandbox_status=(True, ""))
+    assert plain["tools"]["worker"] == ["read_data", "run_python"]
+
+
+def test_unusable_sandbox_is_refused_before_anything_is_created():
+    with pytest.raises(SmokeRefused, match="sandbox not usable: no daemon"):
+        prepare_config(fake_cfg(), sandbox="docker", env=KEYS, sandbox_status=(False, "no daemon"))
+
+
 def test_allow_unpriced_is_refused():
     cfg = fake_cfg()
     cfg["budget"]["allow_unpriced"] = True

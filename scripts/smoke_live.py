@@ -12,6 +12,7 @@ the same summary to <run>/smoke_summary.json.
 
   ARGUS_LIVE=1 python scripts/smoke_live.py
   ARGUS_LIVE=1 python scripts/smoke_live.py --sandbox docker     # workers also get RunPython
+  ARGUS_LIVE=1 python scripts/smoke_live.py --sandbox docker --python-only   # RunPython is the only way to the data
 """
 import argparse
 import json
@@ -35,8 +36,10 @@ class SmokeRefused(Exception):
     """The run was not started; nothing was sent and nothing was created."""
 
 
-def prepare_config(cfg, *, sandbox=None, env=None):
-    """Return the config for a smoke run, or raise SmokeRefused. Never raises budget.max_usd."""
+def prepare_config(cfg, *, sandbox=None, python_only=False, env=None, sandbox_status=None):
+    """Return the config for a smoke run, or raise SmokeRefused. Never raises budget.max_usd.
+    python_only: workers get RunPython but no ReadData, so the data can only be read in the sandbox.
+    sandbox_status: (ok, reason) of the sandbox; checked against Docker when not given (tests pass it)."""
     env = os.environ if env is None else env
     smoke = cfg.get("smoke") or {}
     cap = smoke.get("max_usd")
@@ -48,8 +51,18 @@ def prepare_config(cfg, *, sandbox=None, env=None):
     budget_usd = cfg["budget"].get("max_usd")
     cfg["budget"]["max_usd"] = cap if budget_usd is None else min(float(budget_usd), cap)
     cfg.setdefault("impl", {}).update({role: "llm" for role in LIVE_ROLES})
+    if python_only and sandbox != "docker":
+        raise SmokeRefused("--python-only needs --sandbox docker: without RunPython a worker could not read the data")
     if sandbox:
         cfg.setdefault("sandbox", {})["kind"] = sandbox
+        if sandbox_status is None:
+            from tools import sandbox as sb
+            sandbox_status = sb.status(cfg["sandbox"])
+        ok, reason = sandbox_status
+        if not ok:
+            raise SmokeRefused(f"sandbox not usable: {reason}")
+    if python_only:
+        cfg.setdefault("tools", {})["worker"] = ["run_python"]   # the allowlist decides what is offered
 
     for role in LIVE_ROLES:
         ref = ModelRef.parse(cfg["roles"][role]["model"])
@@ -76,7 +89,7 @@ def ledger(events):
     return rows
 
 
-def summarize(result, run_dir):
+def summarize(result, run_dir, cfg=None):
     events = read_events(run_dir / "events.jsonl")
     verdicts = [{k: e.get(k) for k in ("iteration", "score", "passed", "failures", "status", "stop_reason")}
                 for e in events if e["event"] == "eval_verdict"]
@@ -85,6 +98,13 @@ def summarize(result, run_dir):
         "result": result,
         "verdicts": verdicts,
         "ledger": ledger(events),
+        "worker_tools": ((cfg or {}).get("tools") or {}).get("worker"),
+        "sandbox": ((cfg or {}).get("sandbox") or {}).get("kind"),
+        "sandbox_runs": [{k: e.get(k) for k in ("task", "iteration", "step", "exit_code", "timed_out", "killed",
+                                                  "stdout_bytes", "stderr_bytes", "cleanup_failed")}
+                         for e in events if e["event"] == "sandbox_run"],
+        "rejected_submissions": [{k: e.get(k) for k in ("task", "iteration", "step", "errors")}
+                                 for e in events if e["event"] == "submission_invalid"],
         "plans": [{k: e.get(k) for k in ("event", "revision", "attempt", "tasks", "outputs", "errors")}
                   for e in events if e["event"] in ("spec_created", "spec_revised", "plan_invalid")],
         "warnings": [e for e in events if e["event"] in ("config_warning", "estimate_miss", "budget_violation",
@@ -112,6 +132,13 @@ def print_summary(s, cfg):
               + (" TRUNCATED" if c.get("truncated") else "") + (f"  {c['error']}" if c.get("error") else ""))
     for w in s["warnings"]:
         print(f"  ! {w['event']}: {w.get('message') or w.get('reason') or w.get('error') or ''}")
+    for r in s["rejected_submissions"]:
+        print(f"  rejected {r['task']} step {r['step']}: {r['errors']}")
+    if s["sandbox"] == "docker":
+        print(f"\n== sandbox (worker tools: {s['worker_tools']})")
+        for r in s["sandbox_runs"] or [{"task": "-", "step": "-", "exit_code": "no RunPython call"}]:
+            print(f"  {r['task']} step {r['step']}: exit {r['exit_code']} timed_out {r.get('timed_out')} "
+                  f"stdout {r.get('stdout_bytes')} B cleanup_failed {r.get('cleanup_failed')}")
     print(f"\nreport: {s['report'] or '(not written)'}\nevents: {s['events']}")
 
 
@@ -121,6 +148,8 @@ def main(argv=None):
     ap.add_argument("--run-id", default=time.strftime("smoke_%Y%m%d_%H%M%S"))
     ap.add_argument("--runs-dir", default=str(ROOT / "runs"))
     ap.add_argument("--sandbox", choices=["docker"], help="give workers RunPython in the Docker sandbox")
+    ap.add_argument("--python-only", action="store_true",
+                    help="with --sandbox docker: no ReadData, so workers must read and compute the data in the sandbox")
     a = ap.parse_args(argv)
 
     if os.environ.get("ARGUS_LIVE") != "1":
@@ -129,14 +158,15 @@ def main(argv=None):
     if a.sandbox and not os.environ.get("ARGUS_SANDBOX_IMAGE") and (ROOT / ".sandbox_image").exists():
         os.environ["ARGUS_SANDBOX_IMAGE"] = (ROOT / ".sandbox_image").read_text().strip()
     try:
-        cfg = prepare_config(load_config(a.config), sandbox=a.sandbox)
+        cfg = prepare_config(load_config(a.config), sandbox=a.sandbox, python_only=a.python_only)
     except (SmokeRefused, ConfigError, KeyError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
 
     max_conc = int((cfg.get("smoke") or {}).get("max_concurrency", 1))
     print(f"smoke: orchestrator={cfg['roles']['orchestrator']['model']} worker={cfg['roles']['worker']['model']} "
-          f"max_usd={cfg['budget']['max_usd']} max_concurrency={max_conc} sandbox={cfg['sandbox'].get('kind')}")
+          f"max_usd={cfg['budget']['max_usd']} max_concurrency={max_conc} sandbox={cfg['sandbox'].get('kind')} "
+          f"worker_tools={cfg['tools'].get('worker')}")
     try:  # exactly one attempt: no retry on any outcome
         result = run_task(goal=GOAL, scenario="pass", run_id=a.run_id, runs_dir=a.runs_dir, cfg=cfg,
                           echo=False, max_concurrency=max_conc)
@@ -148,7 +178,7 @@ def main(argv=None):
         return 1
 
     run_dir = Path(a.runs_dir) / a.run_id
-    s = summarize(result, run_dir)
+    s = summarize(result, run_dir, cfg)
     (run_dir / "smoke_summary.json").write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
     print_summary(s, cfg)
     return 0 if result["status"] == "DONE" else 1
