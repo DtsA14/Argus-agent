@@ -12,6 +12,7 @@ from nodes.evaluator import make_evaluator
 from harness.llm import LLMCaller
 from models.registry import ConfigError
 from nodes.contract import SALES_REPORT
+from nodes.judge import make_judge
 from nodes.llm_worker import make_llm_worker
 from nodes.orchestrator import make_fan_out, make_llm_orchestrator, make_orchestrator
 from nodes.synthesize import make_llm_synthesize, make_synthesize
@@ -76,6 +77,19 @@ def make_synthesize_node(cfg, log, gate, memo, est, usd_est, models=None, crashe
                                attempts=int((cfg.get("synthesize") or {}).get("attempts", 3)), crasher=crasher)
 
 
+def make_judge_for(cfg, log, memo, est, usd_est, models=None, crasher=None):
+    """impl.evaluator: 'fake' (programmatic checks + the recs_rubric stub) or 'llm' (adds the 3c judge)."""
+    impl = (cfg.get("impl") or {}).get("evaluator", "fake")
+    if impl == "fake":
+        return None
+    if impl != "llm":
+        raise ConfigError(f"impl.evaluator must be 'fake' or 'llm', got {impl!r}")
+    caller = LLMCaller(cfg, "evaluator", log, model=(models or {}).get("evaluator"))
+    return make_judge(caller, memo, log, criteria=SALES_REPORT["rubric"], tokens=est["evaluator"],
+                      usd=usd_est["evaluator"], attempts=int((cfg.get("judge") or {}).get("attempts", 2)),
+                      crasher=crasher)
+
+
 def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
     budget = Budget.from_cfg(cfg["budget"])
     est = effective_estimates(cfg)   # llm_token_estimates for nodes with impl: llm
@@ -116,7 +130,9 @@ def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
     synthesize = make_synthesize_node(cfg, log, orch_gate, memo, est, usd_est, models, crasher, run_dir)
     g.add_node("synthesize", guard("synthesize", synthesize,
                                    estimate=est["synthesize"], usd_estimate=usd_est["synthesize"], **common))
-    g.add_node("evaluator", guard("evaluator", make_evaluator(report_path, budget, log, iter_tokens, iter_usd),
+    judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)
+    g.add_node("evaluator", guard("evaluator", make_evaluator(report_path, budget, log, iter_tokens, iter_usd,
+                                                              judge=judge),
                                   estimate=est["evaluator"], usd_estimate=usd_est["evaluator"], **common))
 
     g.add_edge(START, "orchestrator")

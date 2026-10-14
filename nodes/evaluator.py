@@ -142,21 +142,49 @@ def run_checks(report_path, truth):
     return checks
 
 
-def make_evaluator(report_path, budget, log, iteration_tokens, iteration_usd=0.0):
+def rubric_checks(rubric):
+    """The judge's verdict as checks: one per criterion, or a single failing rubric_valid when it is unusable."""
+    if not rubric["valid"]:
+        return [{"id": "rubric_valid", "task": "report", "ok": False, "kind": "rubric",
+                 "detail": f"no usable verdict from the judge (counted as failed): {rubric['reason']}"[:500]}]
+    return [{"id": f"rubric_{cid}", "task": "report", "ok": bool(v["pass"]), "kind": "rubric",
+             "detail": "" if v["pass"] else f"{v['reason']} | evidence: {' / '.join(v['evidence'])}"[:500]}
+            for cid, v in rubric["criteria"].items()]
+
+
+def make_evaluator(report_path, budget, log, iteration_tokens, iteration_usd=0.0, judge=None):
+    """judge: None (programmatic checks plus the recs_rubric stub, M1/M2) or a phase-3c judge, which replaces
+    the stub. The judge runs only when every programmatic check passes: a report with wrong numbers is never
+    paid for, and the rubric can never pass a report the code rejects. The score counts programmatic checks
+    only; the rubric is reported next to it and must pass too."""
+
     def evaluator(state):
-        checks = run_checks(report_path, dataset.truth())
-        failures = [{"id": c["id"], "task": c["task"], "detail": c["detail"]} for c in checks if not c["ok"]]
+        truth = dataset.truth()
+        checks = run_checks(report_path, truth)
+        if judge is not None:
+            checks = [c for c in checks if c["id"] != "recs_rubric"]
         score = round(sum(c["ok"] for c in checks) / len(checks), 3)
+        rubric, judged = None, []
+        if judge is not None:
+            if all(c["ok"] for c in checks):
+                text = Path(report_path).read_text(encoding="utf-8")
+                rubric = judge(text, build_facts(truth["top3"], truth["trend"]), state.get("iteration", 0))
+                judged = rubric_checks(rubric)
+            else:
+                log.emit("rubric_skipped", reason="programmatic checks failed", iteration=state.get("iteration", 0))
+        failures = [{"id": c["id"], "task": c["task"], "detail": c["detail"]} for c in checks + judged if not c["ok"]]
+        tokens = rubric["tokens_used"] if rubric else (0 if judge is not None else EVAL_TOKENS)
+        usd = rubric["usd_used"] if rubric else 0.0
 
         iteration = state.get("iteration", 0) + 1
         best, stale = update_progress(state.get("best_score", -1.0), state.get("stale_rounds", 0), score)
         blocker = next_iteration_blocker(
             budget,
             iteration=iteration,
-            tokens_used=state.get("tokens_used", 0) + EVAL_TOKENS,
+            tokens_used=state.get("tokens_used", 0) + tokens,
             elapsed_s=state.get("elapsed_s", 0.0),
             iteration_tokens=iteration_tokens,
-            usd_used=state.get("usd_used", 0.0),
+            usd_used=state.get("usd_used", 0.0) + usd,
             iteration_usd=iteration_usd,
         )
         status, stop_reason = decide_status(
@@ -166,15 +194,18 @@ def make_evaluator(report_path, budget, log, iteration_tokens, iteration_usd=0.0
 
         log.emit("eval_verdict", iteration=iteration, score=score, best_score=best, stale_rounds=stale,
                  passed=not failures, failures=[f"{f['task']}:{f['id']}" for f in failures],
+                 rubric=None if rubric is None else {"valid": rubric["valid"], "passed": rubric["passed"]},
                  status=status, stop_reason=stop_reason)
         return {
-            "verdict": {"passed": not failures, "score": score, "checks": checks, "failures": failures},
+            "verdict": {"passed": not failures, "score": score, "checks": checks + judged, "failures": failures,
+                        "rubric": rubric and {k: rubric[k] for k in ("valid", "passed", "criteria", "reason")}},
             "iteration": iteration,
             "best_score": best,
             "stale_rounds": stale,
             "status": status,
             "stop_reason": stop_reason,
-            "tokens_used": EVAL_TOKENS,
+            "tokens_used": tokens,
+            **({"usd_used": usd} if judge is not None else {}),
         }
 
     return evaluator

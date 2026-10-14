@@ -27,11 +27,15 @@ def utc(y, m, d, h):
 
 def test_default_roles_build_without_network(keys):
     from langchain_anthropic import ChatAnthropic
-    from langchain_openai import ChatOpenAI
+    from langchain_deepseek import ChatDeepSeek
     cfg = load_config()
     assert isinstance(build_chat_model(cfg, "orchestrator"), ChatAnthropic)
     assert isinstance(build_chat_model(cfg, "worker"), ChatAnthropic)
-    assert isinstance(build_chat_model(cfg, "evaluator"), ChatOpenAI)
+    assert isinstance(build_chat_model(cfg, "writer"), ChatAnthropic)
+    # Decision M3-1: the judge is DeepSeek V4.1 Flash, a different provider from the writer (was an OpenAI placeholder)
+    assert isinstance(build_chat_model(cfg, "evaluator"), ChatDeepSeek)
+    assert cfg["roles"]["evaluator"]["model"] == "deepseek:deepseek-flash"
+    assert role_warnings(cfg) == []
 
 
 def test_deepseek_role_builds(keys):
