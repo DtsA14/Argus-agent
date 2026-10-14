@@ -13,7 +13,7 @@ Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
 - [x] **2b. Orchestrator LLM** di branch `m2-2b`, **menunggu review 2a sebelum merge ke `main`** (detail di bagian Selesai)
 - [x] **2c** di branch `m2-2c`, PR #2, menunggu review GPT (detail di bagian Selesai)
-- [x] **2d** di branch `m2-2d`, PR #3, review ulang GPT: layak merge setelah `verify.sh` lulus di VM OCI ARM (satu-satunya syarat tersisa) (detail di bagian Selesai)
+- [x] **2d** di branch `m2-2d`, PR #3, review ulang GPT: layak merge setelah `verify.sh` lulus di VM OCI ARM. **Sudah lulus** di VM (`verification/verify-20261014T142108Z-aarch64.log`), merge menunggu keputusan Atha (detail di bagian Selesai)
 
 ## 2. Keputusan (sudah diambil 2026-10-14)
 
@@ -27,8 +27,8 @@ Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 Urutan disarankan, karena saling bergantung.
 
 - [ ] **Jalankan verifikasi M1 di VM:** `git clone` repo → `bash scripts/verify.sh` → kirim baris `RESULT:` (butuh token GitHub read-only, lihat README)
-- [ ] **Pasang Docker di VM**, lalu `bash scripts/pin_sandbox_image.sh` (pull `python:3.13-slim`, pin ke digest, tulis `.sandbox_image`)
-- [ ] **Jalankan `bash scripts/verify.sh` di VM** (ARM, image resmi): syarat GPT, tes sandbox harus benar-benar jalan di sana, bukan di-skip
+- [x] **Pasang Docker di VM**, lalu `bash scripts/pin_sandbox_image.sh` (Docker 29.1.3, cgroup v2; `python:3.13-slim` dipin ke `sha256:70729b46…`)
+- [x] **Jalankan `bash scripts/verify.sh` di VM** (ARM, image resmi): `RESULT: PASS`, 403 lulus, 0 tes sandbox di-skip (`verification/verify-20261014T142108Z-aarch64.log`)
 - [ ] **Set API key di VM** sebagai env var: `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`. Jangan di file repo
 - [ ] **Cek ID model:** `python scripts/smoke_models.py --list --grep gpt`, lalu `python scripts/smoke_models.py`. Kirim hasilnya
 - [ ] **2e. Smoke live:** satu run nyata task CSV di VM, dibatasi `max_usd` (setelah 2a-2d selesai)
@@ -42,7 +42,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] Audit 2b: "layak lanjut setelah patch kecil" (P2 tool call asing), sudah dipatch
 - [x] PR #1 (2b) di-merge ke `main` (`d9f3e78`)
 - [x] Audit 2c (PR #2): "tahan merge untuk patch P2" (submit bercampur tool lain), sudah dipatch
-- [x] Audit 2d (PR #3): "tahan merge untuk patch P1" (output dibuffer penuh di harness) + P2 (race direktori induk), sudah dipatch; review ulang GPT: tertutup, merge menunggu `verify.sh` di VM OCI ARM
+- [x] Audit 2d (PR #3): "tahan merge untuk patch P1" (output dibuffer penuh di harness) + P2 (race direktori induk), sudah dipatch; review ulang GPT: tertutup; `verify.sh` di VM OCI ARM lulus (`verify-20261014T142108Z-aarch64.log`)
 - [ ] Audit setelah 2e (run live di OCI)
 
 ## 5. Nanti

@@ -57,3 +57,17 @@ Bukti setelah patch: `verification/verify-20261014T110744Z-x86_64.log`: 402 lulu
 | Cleanup (`docker kill`, `docker rm -f`, masing-masing timeout 30 dtk, plus tunggu proses dan reader) bisa memperpanjang operasi jauh melewati `timeout_s` bila daemon macet | **Dikerjakan.** Semua langkah cleanup berbagi satu anggaran `cleanup_timeout_s` (default 15 dtk). Penghapusan dikonfirmasi dengan `docker ps`; daemon yang tidak menjawab **tidak** dianggap berhasil. Bila tidak terkonfirmasi: `cleanup_failed: true` di hasil dan event `sandbox_run`, plus event `sandbox_cleanup_failed` berisi nama container. Tes: docker palsu yang menjalankan `run` sungguhan tapi macet pada `kill`/`rm`/`ps`; dengan `timeout_s=2`, `cleanup_timeout_s=3` panggilan selesai < 9 dtk dan kegagalan dilaporkan. Tes timeout normal kini juga memeriksa `cleanup_failed is False`. Mutasi: 4 dijalankan, 4 tertangkap (timeout 30 dtk per panggilan seperti dulu, kegagalan tidak dilaporkan, daemon macet dianggap "sudah hilang", event tidak ditulis) |
 
 Bukti setelah hardening: `verification/verify-20261014T113842Z-x86_64.log`: 403 lulus, **0 tes sandbox di-skip**. Secara code review GPT menyatakan PR #3 layak di-merge **setelah** `verify.sh` lulus di VM OCI ARM.
+
+## Verifikasi VM OCI ARM (2026-10-14)
+
+Syarat terakhir sebelum merge, dijalankan di commit `2e165d5` tanpa `ARGUS_SANDBOX_OPTIONAL`.
+
+- **Log:** `verification/verify-20261014T142108Z-aarch64.log`
+- **Hasil:** `RESULT: PASS`, **403 lulus**, `sandbox tests skipped: 0` (4 menit 8 detik)
+- **Arsitektur:** aarch64 (OCI `VM.Standard.A1.Flex`, 1 OCPU, 1,9 GiB RAM, Ubuntu 24.04.4, kernel `7.0.0-1013-oracle`)
+- **Docker:** 29.1.3 client/server, `linux/arm64` (paket `docker.io` Ubuntu)
+- **cgroup:** v2, driver `systemd`
+- **Image sandbox:** `python@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f` (`python:3.13-slim` resmi, dipin oleh `scripts/pin_sandbox_image.sh`, `linux/arm64`)
+- **Python harness:** 3.12.3 (Python sistem Ubuntu 24.04; log x86 memakai 3.13.16)
+
+Dengan ini, tiga batasan di atas yang belum teruji sudah tertutup: cgroup v2, ARM, dan image resmi. Tidak ada perubahan kode, tes, atau config. `.sandbox_image` tetap di-ignore git. Setelah run, tidak ada container `argus.sandbox=1` yang tertinggal. VM ini juga menjalankan layanan lain, dan semuanya tetap aktif selama dan setelah run.
