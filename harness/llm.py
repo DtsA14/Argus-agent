@@ -157,10 +157,13 @@ class LLMCaller:
 
     # ---- the call ------------------------------------------------------------------
 
-    def call(self, messages, reservation, *, tools=None, meta=None):
+    def call(self, messages, reservation, *, tools=None, tool_choice=None, meta=None):
         meta = dict(meta or {})
         phash = prompt_hash(messages, tools)
-        model = self.model.bind_tools(tools) if tools else self.model
+        if tools:
+            model = self.model.bind_tools(tools, tool_choice=tool_choice) if tool_choice else self.model.bind_tools(tools)
+        else:
+            model = self.model
         base = {"role": self.role, "model": str(self.ref), "prompt_hash": phash, **meta}
 
         for attempt in range(1, self.attempts + 1):

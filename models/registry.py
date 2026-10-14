@@ -130,6 +130,18 @@ def _openai_compatible(ref, pcfg, params):
     return ChatOpenAI(model=ref.model, api_key=_api_key(ref, pcfg), base_url=pcfg["base_url"], **params)
 
 
+@register_kind("fake")
+def _fake(ref, pcfg, params):
+    """Scripted model for tests and offline demos: no network, no key. The script is a JSON file whose
+    path is in the environment variable named by pcfg['script_env'] (default ARGUS_FAKE_SCRIPT)."""
+    from models.fake import FileScriptedChatModel
+    env = pcfg.get("script_env", "ARGUS_FAKE_SCRIPT")
+    path = os.environ.get(env)
+    if not path:
+        raise MissingApiKey(f"{ref.provider}: set {env} to a JSON script file")
+    return FileScriptedChatModel(path=path)
+
+
 def build_chat_model(cfg, role):
     if role not in cfg.get("roles", {}):
         raise ConfigError(f"unknown role {role!r}")

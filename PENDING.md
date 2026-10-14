@@ -11,7 +11,7 @@ Terakhir diperbarui: 2026-10-14.
 
 Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
-- [ ] **2b. Orchestrator LLM** dengan output terstruktur + validasi rencana (skema, jumlah task ≤ `max_workers`, ID unik), retry maksimal 2x lalu `plan_invalid`
+- [x] **2b. Orchestrator LLM** di branch `m2-2b`, **menunggu review 2a sebelum merge ke `main`** (detail di bagian Selesai)
 - [ ] **2c. Worker loop tool-calling** dengan `max_steps`, tool call cacat dikembalikan sebagai error
 - [ ] **2c. Memo per langkah worker** `(node, task, iteration, step)`, **termasuk hasil tool**, persisten dan atomik + tes crash di tengah loop
 - [ ] **2d. Path jail** untuk semua tool file (`../`, path absolut, symlink keluar) + `write_file` atomic (temp lalu rename)
@@ -33,6 +33,8 @@ Urutan disarankan, karena saling bergantung.
 - [ ] **Set API key di VM** sebagai env var: `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`. Jangan di file repo
 - [ ] **Cek ID model:** `python scripts/smoke_models.py --list --grep gpt`, lalu `python scripts/smoke_models.py`. Kirim hasilnya
 - [ ] **2e. Smoke live:** satu run nyata task CSV di VM, dibatasi `max_usd` (setelah 2a-2d selesai)
+- [ ] **2e. Setel `token_estimates` untuk node LLM dari ledger.** Satu panggilan orchestrator ≈ 700-1300 token input + output rencana; estimasi 3000 (dibuat untuk node palsu) hanya muat ~2 percobaan. Tes LLM memakai 12000. Angka final diambil dari `llm_call` hasil run nyata, bukan ditebak
+- [ ] **2e. Cek `tool_choice` per provider.** Orchestrator memaksa tool `SubmitPlan`; kalau sebuah provider menolaknya (mis. mode thinking DeepSeek), set `orchestrator.force_tool: false`
 
 ## 4. Butuh GPT (audit)
 
@@ -69,3 +71,6 @@ Urutan disarankan, karena saling bergantung.
 - [x] **2a:** wrapper LLM (`harness/llm.py`): reservasi token+USD per request, tolak sebelum kirim, cap output dikirim ke provider, ledger per percobaan (gagal di-charge worst case), retry transient + `Retry-After`, prompt di-hash, retry tersembunyi SDK dimatikan
 - [x] **2a:** budget USD tingkat run dengan reservasi per iterasi; `recursion_limit` mengikuti `max_iterations` (sebelumnya crash di atas ~14 iterasi)
 - [x] **2a:** model palsu terskrip (`models/fake.py`), 78 tes wrapper + 6 mutasi tertangkap
+- [x] **2b (branch `m2-2b`):** orchestrator LLM lewat tool `SubmitPlan` (dipaksa dengan `tool_choice`), divalidasi harness: skema, ID unik dan valid, ≤ `max_workers`, setiap output wajib tepat sekali. Rencana tidak valid dikembalikan ke model dengan error persisnya (maks 3 panggilan), lalu `FAILED_PLAN`. Error model permanen → `FAILED_LLM`; reservasi habis → `FAILED_BUDGET`; semuanya berhenti rapi tanpa menjalankan worker
+- [x] **2b:** kontrak output (`nodes/contract.py`): worker, synthesize, dan evaluator membaca hasil per **nama output + iterasi**, jadi ID task bebas dipilih planner dan hasil basi iterasi lama tidak terbawa
+- [x] **2b:** provider `fake` berbasis file (posisi skrip disimpan) untuk tes crash-resume lintas proses dan demo offline; flag `--impl`, `--config`; 35 tes + 9 mutasi tertangkap

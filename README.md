@@ -53,6 +53,18 @@ run twice for the same `(node, task, iteration)`, e.g. write to a temp file and 
 Simulate crashes yourself: `python main.py --crash-at worker`, or `--crash-at worker@after_commit`,
 then the same command with `--resume`. A fresh run refuses an existing `--run-id`.
 
+## Node implementations
+
+`impl` in `config.yaml` picks each node's implementation: `fake` (deterministic, no model calls) or
+`llm` (real model through `harness/llm.py`). Per run: `--impl orchestrator=llm`.
+
+Try the LLM orchestrator offline with the scripted `fake` provider:
+
+    ARGUS_FAKE_SCRIPT=script.json python main.py --impl orchestrator=llm --model orchestrator=fake:scripted
+
+where `script.json` is a list of replies, e.g. `[{"tool_calls": [{"name": "SubmitPlan", "args": {...}, "id": "p1"}]}]`.
+See `tests/test_orchestrator_llm.py` for complete plans. `--config other.yaml` runs with another config file.
+
 ## Providers and models
 
 Everything lives in `config.yaml` (`providers`, `roles`, `prices`).

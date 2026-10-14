@@ -37,10 +37,10 @@ def test_fail_then_pass_uses_feedback(tmp_path):
     assert r["status"] == "DONE" and r["iteration"] == 2
     verdicts = [e for e in events(tmp_path, "t") if e["event"] == "eval_verdict"]
     assert verdicts[0]["passed"] is False
-    assert {"T2:top3_amounts", "T3:trend_months"} <= set(verdicts[0]["failures"])
+    assert {"top3:top3_amounts", "trend:trend_months"} <= set(verdicts[0]["failures"])
     assert verdicts[1]["passed"] is True
     revised = [e for e in events(tmp_path, "t") if e["event"] == "spec_revised"]
-    assert revised[0]["fix_ids"] == ["T2", "T3"]
+    assert sorted(revised[0]["revised"]) == ["top3", "trend"]
 
 
 def test_stops_when_score_stagnates(tmp_path):

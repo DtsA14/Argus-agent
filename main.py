@@ -18,13 +18,19 @@ def main():
     ap.add_argument("--resume", action="store_true", help="continue a run from its last checkpoint")
     ap.add_argument("--model", action="append", metavar="ROLE=PROVIDER:MODEL",
                     help="swap the model for a role this run, e.g. worker=deepseek:deepseek-flash")
+    ap.add_argument("--config", help="config file (default: config.yaml next to main.py)")
+    ap.add_argument("--impl", action="append", metavar="NODE=KIND",
+                    help="node implementation this run, e.g. orchestrator=llm (default from config 'impl')")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
 
     try:
-        cfg = apply_overrides(load_config(), parse_overrides(a.model))
+        cfg = apply_overrides(load_config(a.config), parse_overrides(a.model))
     except ConfigError as e:
         sys.exit(f"config error: {e}")
+    for item in a.impl or []:
+        node, _, kind = item.partition("=")
+        cfg.setdefault("impl", {})[node] = kind
     if a.max_iter:
         cfg["budget"]["max_iterations"] = a.max_iter
     if a.max_tokens:

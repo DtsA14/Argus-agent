@@ -7,6 +7,16 @@ budget:
   max_usd: 0.50          # hard limit, reserved like tokens: an iteration starts only if its worst case fits
   allow_unpriced: false  # refuse models that have no entry in 'prices' (their cost could not be capped)
 
+# Node implementations. fake = deterministic stand-in (no model calls); llm = real model via harness/llm.py.
+# Milestone 2 turns these on phase by phase; override per run with  --impl orchestrator=llm
+impl:
+  orchestrator: fake
+  worker: fake
+
+orchestrator:
+  plan_attempts: 3       # model calls allowed to produce a valid plan (1 + 2 retries with the errors)
+  force_tool: true       # require the SubmitPlan tool call (tool_choice); turn off if a provider rejects it
+
 # Which nodes call which role's model. Nodes not listed make no model calls (cost 0 USD).
 node_roles:
   orchestrator: orchestrator
@@ -59,6 +69,9 @@ providers:
     kind: deepseek
     api_key_env: DEEPSEEK_API_KEY
     base_url: https://api.deepseek.com
+  fake:                  # scripted model for tests and offline demos (no network, no key)
+    kind: fake
+    script_env: ARGUS_FAKE_SCRIPT
   # Example: uncomment to add another provider without touching any code
   # together:
   #   kind: openai_compatible
@@ -99,6 +112,7 @@ prices:
   "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00}
   "deepseek:deepseek-flash":     {input: 0.15, output: 0.60, cache_read: 0.003, peak_multiplier: 2}
   "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
+  "fake:scripted":               {input: 1.00, output: 5.00}   # made-up price so tests exercise USD limits
 
 # DeepSeek charges double during these UTC windows on weekdays (Chinese public holidays are off-peak;
 # that exception is not modelled here). 01-04 and 06-10 UTC = 08-11 and 13-17 WIB.
