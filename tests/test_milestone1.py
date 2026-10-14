@@ -40,7 +40,9 @@ def test_fail_then_pass_uses_feedback(tmp_path):
     assert {"top3:top3_amounts", "trend:trend_months"} <= set(verdicts[0]["failures"])
     assert verdicts[1]["passed"] is True
     revised = [e for e in events(tmp_path, "t") if e["event"] == "spec_revised"]
-    assert sorted(revised[0]["revised"]) == ["top3", "trend"]
+    # 3b: the template recommendations were built from the wrong worker values, so recs_grounded (task "report")
+    # fails against the data in the same iteration.
+    assert sorted(revised[0]["revised"]) == ["report", "top3", "trend"]
 
 
 def test_stops_when_score_stagnates(tmp_path):

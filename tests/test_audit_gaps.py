@@ -176,9 +176,13 @@ def _report(tmp_path, extra_trend=()):
     t = dataset.truth()
     lines = ["# Laporan Penjualan", "", "## Top 3 Produk"] + [f"- {n}: {v}" for n, v in t["top3"]]
     lines += ["", "## Tren Bulanan"] + [f"- {m}: {v}" for m, v in t["trend"]] + list(extra_trend)
-    lines += ["", "## Rekomendasi", "1. Bundle A + B: 72%.", "2. Raise stock 10%."]
+    from nodes.facts import render_line
+    from nodes.synthesize import provenance_text, template_recommendations
+    recs = template_recommendations([list(x) for x in t["top3"]], [list(x) for x in t["trend"]])
+    lines += ["", "## Rekomendasi"] + [render_line(i, r) for i, r in enumerate(recs, 1)]
     p = tmp_path / "laporan.md"
     p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (tmp_path / "laporan.provenance.json").write_text(provenance_text(recs, "test"), encoding="utf-8")
     return p, t
 
 

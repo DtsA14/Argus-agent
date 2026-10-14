@@ -3,16 +3,20 @@
 Each case breaks a correct report in one way and asserts the exact set of checks that fail, so a check that
 stops firing (or starts firing where it should not) is caught. Before 3a a malformed line was silently skipped
 and a repeated month with the same value passed, because the trend was read into a dict."""
+import json
+
 import pytest
 
 import dataset
 from nodes.evaluator import run_checks
+from nodes.facts import render_line
+from nodes.synthesize import provenance_text, template_recommendations
 
 T = dataset.truth()
 TOP = [f"- {n}: {v}" for n, v in T["top3"]]
 TREND = [f"- {m}: {v}" for m, v in T["trend"]]
-RECS = ["1. Bundle Kopi + Teh: together 72% of top-3 revenue.",
-        "2. Raise stock ahead of demand: revenue grew 28% from 2026-01 to 2026-06."]
+PROV = template_recommendations([list(x) for x in T["top3"]], [list(x) for x in T["trend"]])
+RECS = [render_line(i, r) for i, r in enumerate(PROV, 1)]   # rendered exactly as synthesize writes them
 
 
 def report(top=TOP, trend=TREND, recs=RECS, pre=("# Laporan Penjualan", ""), extra=()):
@@ -20,9 +24,11 @@ def report(top=TOP, trend=TREND, recs=RECS, pre=("# Laporan Penjualan", ""), ext
     return "\n".join(lines + list(extra)) + "\n"
 
 
-def failing(tmp_path, text):
+def failing(tmp_path, text, prov=PROV):
     p = tmp_path / "laporan.md"
     p.write_text(text, encoding="utf-8")
+    if prov is not None:   # what synthesize saved next to the report (3b); None = no provenance file
+        (tmp_path / "laporan.provenance.json").write_text(provenance_text(prov, "test"), encoding="utf-8")
     checks = run_checks(p, T)
     return {c["id"] for c in checks if not c["ok"]}, {c["id"]: c for c in checks}
 
@@ -38,7 +44,7 @@ CASES = {
     # structure
     "section repeated": (report(extra=["", "## Top 3 Produk", K]), {"sections"}),
     "section missing": (report().replace("## Rekomendasi\n", "").replace("\n".join(RECS) + "\n", ""),
-                        {"sections", "recs_count", "recs_rubric"}),
+                        {"sections", "recs_count", "recs_rubric", "recs_grounded"}),
     "unknown section": (report(extra=["", "## Catatan", "Data lengkap."]), {"sections"}),
     "text before the first section": (report(pre=("# Laporan Penjualan", "Ringkasan singkat.", "")), {"sections"}),
     "title missing": (report(pre=()), {"sections"}),
@@ -64,11 +70,13 @@ CASES = {
     "month amount wrong": (report(trend=[TREND[0].replace(str(T["trend"][0][1]), "1")] + TREND[1:]),
                            {"trend_amounts"}),
     # Rekomendasi
-    "one recommendation": (report(recs=RECS[:1]), {"recs_count", "recs_rubric"}),
+    # (a line that is not exactly what the provenance holds also fails recs_grounded)
+    "one recommendation": (report(recs=RECS[:1]), {"recs_count", "recs_rubric", "recs_grounded"}),
     "too many recommendations": (report(recs=[f"{i}. Action {i}: {i}0% more." for i in range(1, 7)]),
-                                 {"recs_count"}),
-    "recommendation repeated": (report(recs=[RECS[0], "2. " + RECS[0][3:].upper()]), {"recs_no_duplicates"}),
-    "numbering skips": (report(recs=[RECS[0], "3. " + RECS[1][3:]]), {"recs_format"}),
+                                 {"recs_count", "recs_grounded"}),
+    "recommendation repeated": (report(recs=[RECS[0], "2. " + RECS[0][3:].upper()]),
+                                {"recs_no_duplicates", "recs_grounded"}),
+    "numbering skips": (report(recs=[RECS[0], "3. " + RECS[1][3:]]), {"recs_format", "recs_grounded"}),
     "unnumbered line among recommendations": (report(recs=RECS + ["- also: discount 5%"]), {"recs_format"}),
 }
 
@@ -99,3 +107,43 @@ def test_the_synthesized_report_passes(tmp_path):
                "b": {"output": "trend", "value": [list(x) for x in T["trend"]], "iteration": 0}}
     make_synthesize(gate, str(tmp_path), EventLog(tmp_path / "e.jsonl"))({"iteration": 0, "results": results})
     assert {c["id"] for c in run_checks(tmp_path / "laporan.md", T) if not c["ok"]} == set()
+
+
+# ---- recs_grounded (3b): the recommendations are the provenance's, and grounded in the data ------------
+
+def _prov_with(i, **change):
+    prov = [dict(r) for r in PROV]
+    prov[i].update(change)
+    return prov
+
+
+def _recs_for(prov):
+    return [render_line(i, r) for i, r in enumerate(prov, 1)]
+
+
+GROUNDED = {
+    "no provenance file": (report(), None),
+    "report edited after it was written": (report(recs=[RECS[0], RECS[1].replace("Aksi:", "Aksi: Now,")]), PROV),
+    "number not backed by the data": (lambda p: (report(recs=_recs_for(p)), p))(
+        _prov_with(0, text=PROV[0]["text"].replace("%", "1%"))),
+    "number in the action not backed": (lambda p: (report(recs=_recs_for(p)), p))(
+        _prov_with(1, action="Raise stock by 15%.")),
+    "unknown fact id": (lambda p: (report(recs=_recs_for(p)), p))(
+        _prov_with(0, facts=PROV[0]["facts"] + ["top3.7.revenue"])),
+    "no fact ids": (lambda p: (report(recs=_recs_for(p)), p))(_prov_with(1, facts=[])),
+}
+
+
+@pytest.mark.parametrize("case", sorted(GROUNDED))
+def test_recs_grounded_fails_alone_for_each_provenance_defect(tmp_path, case):
+    text, prov = GROUNDED[case]
+    bad, checks = failing(tmp_path, text, prov=prov)
+    assert bad == {"recs_grounded"}, checks["recs_grounded"]["detail"]
+    assert checks["recs_grounded"]["detail"]
+
+
+def test_provenance_that_is_not_json_fails_closed(tmp_path):
+    p = tmp_path / "laporan.md"
+    p.write_text(report(), encoding="utf-8")
+    (tmp_path / "laporan.provenance.json").write_text("{not json", encoding="utf-8")
+    assert {c["id"] for c in run_checks(p, T) if not c["ok"]} == {"recs_grounded"}

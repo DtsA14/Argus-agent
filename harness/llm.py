@@ -132,11 +132,14 @@ def retry_after_seconds(exc):
 
 def _text(m):
     """Everything in a message that is sent to the provider: content, tool calls (name + args), ids."""
-    content = m.content if isinstance(m.content, str) else json.dumps(m.content, default=str, ensure_ascii=False)
+    # sort_keys: the memo stores replies with sorted keys, so a replayed reply must hash like the original or the
+    # step after it misses the memo and is bought again (found in 3b: args with more than one key).
+    content = m.content if isinstance(m.content, str) else json.dumps(m.content, default=str, ensure_ascii=False,
+                                                                        sort_keys=True)
     parts = [content]
     for tc in getattr(m, "tool_calls", None) or []:
         parts.append(json.dumps({"name": tc.get("name"), "args": tc.get("args"), "id": tc.get("id")},
-                                default=str, ensure_ascii=False))
+                                default=str, ensure_ascii=False, sort_keys=True))
     if getattr(m, "tool_call_id", None):
         parts.append(m.tool_call_id)
     return "".join(parts)

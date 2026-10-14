@@ -1,9 +1,12 @@
+import json
 import re
 from pathlib import Path
 
 import dataset
 from harness.budget import next_iteration_blocker
 from harness.progress import decide_status, update_progress
+
+from .facts import build_facts, check_numbers, render_line
 
 LINE = re.compile(r"^- (.+?): (\d+)$")
 MONTH_LINE = re.compile(r"^- (\d{4}-(?:0[1-9]|1[0-2])): (\d+)$")   # a real YYYY-MM month
@@ -46,6 +49,28 @@ def _dupes(items):
 
 def _show(lines, n=3):
     return "; ".join(repr(l[:60]) for l in lines[:n]) + (f" (+{len(lines) - n} more)" if len(lines) > n else "")
+
+
+def _grounded(report_path, lines, truth):
+    """(ok, detail): the recommendations in the report are exactly the ones in the provenance, and every number
+    in them matches a fact they reference, with facts recomputed from the data (not the workers' values)."""
+    prov_path = Path(report_path).with_name("laporan.provenance.json")
+    try:
+        recs = json.loads(prov_path.read_text(encoding="utf-8"))["recommendations"]
+        expected = [render_line(i, r) for i, r in enumerate(recs, 1)]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return False, f"no readable provenance for the recommendations ({type(e).__name__})"
+    if lines != expected:
+        return False, "the recommendations in the report differ from their provenance"
+    facts, problems = build_facts(truth["top3"], truth["trend"]), []
+    for i, r in enumerate(recs, 1):
+        refs = r.get("facts") or []
+        unknown = [x for x in refs if x not in facts]
+        if unknown or not refs:
+            problems.append(f"recommendation {i}: unknown or missing fact ids {unknown}")
+        for where in ("text", "action"):
+            problems += [f"recommendation {i} {where}: {e}" for e in check_numbers(r.get(where) or "", facts, refs)]
+    return not problems, "; ".join(problems)[:500]
 
 
 def run_checks(report_path, truth):
@@ -110,6 +135,7 @@ def run_checks(report_path, truth):
     add("recs_count", "report", 2 <= len(recs) <= MAX_RECS, f"{len(recs)} recommendations, expected 2 to {MAX_RECS}")
     norm = [" ".join(r.lower().split()) for r in recs]
     add("recs_no_duplicates", "report", not _dupes(norm), f"repeated recommendations: {_dupes(norm)}")
+    add("recs_grounded", "report", *_grounded(p, [m.group(0) for m in rec_m], truth))
     add("recs_rubric", "report",
         len(recs) >= 2 and all(re.search(r"\d", r) for r in recs[:2]),
         "stand-in for the LLM rubric (milestone 3)", kind="rubric-stub")

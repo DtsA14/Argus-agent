@@ -302,6 +302,20 @@ def test_rerunning_a_finished_worker_makes_zero_calls_and_runs_zero_tools(tmp_pa
     assert replayed == {"llm": 2, "tool": 2}
 
 
+def test_replay_after_a_reply_with_multi_key_args_still_hits_the_memo(tmp_path):
+    # Found in 3b: the memo stores replies with sorted keys; the next step's key was computed from the unsorted
+    # original, so after a replay the next step missed the memo and was bought again.
+    bad = {"rows": 1, "products": ["x"], "months": ["2026-01"]}          # keys deliberately not in sorted order
+    rejected = reply("", input_tokens=900, output_tokens=120,
+                     tool_calls=[{"name": "SubmitResult", "args": {"value": bad, "notes": "first try"}, "id": "s0"}])
+    fn, model, log = _worker(tmp_path, {"T2": [read_call(), rejected, submit_call(VALUES["T2"])]})
+    first = fn(P)
+    second = fn(P)                                             # same node run, e.g. after a crash
+    assert len(model.calls) == 3                               # nothing bought again
+    assert second["results"] == first["results"]
+    assert Counter(e["kind"] for e in log.read() if e["event"] == "step_replayed") == {"llm": 3, "tool": 3}
+
+
 def test_changed_feedback_does_not_reuse_the_memo(tmp_path):
     fn, model, log = _worker(tmp_path, {"T2": [read_call(), submit_call(VALUES["T2"])] * 2})
     fn(P)

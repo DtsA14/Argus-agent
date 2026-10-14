@@ -45,12 +45,22 @@ def iteration_cost(estimates, max_workers):
     )
 
 
+def node_roles(cfg):
+    """Which node calls which role's model. node_roles always apply (their fake implementations report a
+    worst-case cost so budgets are exercised); llm_node_roles only for a node whose impl is llm, since its fake
+    makes no model call. So a fake synthesize keeps the M1/M2 USD figures unchanged."""
+    roles = dict(cfg.get("node_roles") or {})
+    impl = cfg.get("impl") or {}
+    roles.update({n: r for n, r in (cfg.get("llm_node_roles") or {}).items() if impl.get(n) == "llm"})
+    return roles
+
+
 def node_usd_estimates(cfg):
     """Worst-case USD per node run: its token estimate, all billed at the dearer of the role model's
     input/output rate, times the peak multiplier. Nodes not listed in `node_roles` make no model calls."""
     est = effective_estimates(cfg)
     out = {node: 0.0 for node in est}
-    for node, role in (cfg.get("node_roles") or {}).items():
+    for node, role in node_roles(cfg).items():
         ref = ModelRef.parse(cfg["roles"][role]["model"])
         price = price_for(cfg, ref)
         if price is None:

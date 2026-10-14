@@ -14,7 +14,7 @@ from models.registry import ConfigError
 from nodes.contract import SALES_REPORT
 from nodes.llm_worker import make_llm_worker
 from nodes.orchestrator import make_fan_out, make_llm_orchestrator, make_orchestrator
-from nodes.synthesize import make_synthesize
+from nodes.synthesize import make_llm_synthesize, make_synthesize
 from nodes.worker import make_worker
 from state import State
 from tools.registry import ToolGate
@@ -63,6 +63,19 @@ def make_worker_node(cfg, log, gate, memo, est, usd_est, models=None, crasher=No
                            sandbox=sandbox)
 
 
+def make_synthesize_node(cfg, log, gate, memo, est, usd_est, models=None, crasher=None, run_dir="."):
+    """impl.synthesize: 'fake' (template recommendations) or 'llm' (the writer model, phase 3b)."""
+    impl = (cfg.get("impl") or {}).get("synthesize", "fake")
+    if impl == "fake":
+        return make_synthesize(gate, str(run_dir), log)
+    if impl != "llm":
+        raise ConfigError(f"impl.synthesize must be 'fake' or 'llm', got {impl!r}")
+    caller = LLMCaller(cfg, "writer", log, model=(models or {}).get("writer"))
+    return make_llm_synthesize(caller, gate, memo, log, str(run_dir), tokens=est["synthesize"],
+                               usd=usd_est["synthesize"],
+                               attempts=int((cfg.get("synthesize") or {}).get("attempts", 3)), crasher=crasher)
+
+
 def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
     budget = Budget.from_cfg(cfg["budget"])
     est = effective_estimates(cfg)   # llm_token_estimates for nodes with impl: llm
@@ -100,7 +113,8 @@ def build_graph(cfg, run_dir, log, checkpointer, crash_at=None, models=None):
                                      usd_estimate=usd_est["orchestrator"], **common))
     g.add_node("worker", guard("worker", worker,
                                estimate=est["worker"], usd_estimate=usd_est["worker"], **common))
-    g.add_node("synthesize", guard("synthesize", make_synthesize(orch_gate, str(run_dir), log),
+    synthesize = make_synthesize_node(cfg, log, orch_gate, memo, est, usd_est, models, crasher, run_dir)
+    g.add_node("synthesize", guard("synthesize", synthesize,
                                    estimate=est["synthesize"], usd_estimate=usd_est["synthesize"], **common))
     g.add_node("evaluator", guard("evaluator", make_evaluator(report_path, budget, log, iter_tokens, iter_usd),
                                   estimate=est["evaluator"], usd_estimate=usd_est["evaluator"], **common))
