@@ -2,7 +2,7 @@
 
 Status: **keputusan dikunci** (Atha + GPT, 2026-10-15, bagian 8). 3a selesai (PR #6, di-merge `b01eda3`).
 Kontrak 3.4 dan 3.6 disetujui GPT setelah dua koreksi (aturan angka untuk `action`, format angka kanonis dan pembagi
-nol); implementasi 3b dengan model palsu boleh dimulai. Kalibrasi live baru setelah 3c selesai.
+nol). **3b selesai** (branch `m3-3b`, `docs/reviews/REVIEW_3B.md`). Kalibrasi live baru setelah 3c selesai.
 Dasar: M2 selesai di `main` `8ee005a` (orchestrator dan worker LLM, sandbox Docker, smoke live di VM OCI ARM).
 
 ## 1. Tujuan
