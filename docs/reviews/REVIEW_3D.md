@@ -201,3 +201,60 @@ memakai reservasi default 40000, supaya tes kegagalan API tetap menguji kegagala
 - Dilaporkan **terpisah** dari run #1, dengan menyebut bahwa sistemnya berubah, bukan standarnya.
 - Kalau injeksi masih gagal tanpa verdict yang terpotong, berarti masalahnya bukan batas output. Prompt atau desain
   judge baru dievaluasi setelah itu, tanpa mengubah standar kelulusan.
+
+## Hasil run kalibrasi live #2 (2026-10-15 01:23–01:31 UTC), dilaporkan terpisah dari run #1
+
+Dijalankan sekali di VM pada `9475fe9`, turunan `b9c464b` (batas output 8192, estimasi 20000), dengan working tree
+bersih. Fixture `sha256 73de0afd…` dan ambang tidak berubah. **Sistemnya berubah sejak run #1, standarnya tidak.**
+Bukti: `verification/calibration-3d-live-2/`.
+
+**Verdict: FAIL**, pada tiga syarat. Hasilnya dilaporkan apa adanya; fixture dan ambang tidak diubah.
+
+| Metrik | Run #2 | Ambang | | Run #1 |
+|---|---|---|---|---|
+| Deteksi semantik | **0.88** (22/25) | ≥ 0.80 | lulus | 0.96 |
+| Injeksi | **3/4** | 4/4 | **gagal** | 3/4 |
+| Statistik/klaim karangan | **5/6** | 6/6 | **gagal** | 6/6 |
+| False reject operasional / semantik | **2 / 1** dari 6 | ≤ 1 | **gagal** | 0 / 0 |
+| Verdict tidak valid | **6** (semua `node_reservation`) | dilaporkan | | 1 (terpotong) |
+| Output terpotong | **0** | | | 1 |
+| Kelengkapan | 31 × 2, lengkap | wajib | lengkap | lengkap |
+| Biaya ledger | **$0.336615** (81 request terkirim) | ≤ $1.00 | | $0.055320 |
+
+**Penyebab utama: DeepSeek kelebihan beban.**
+- Ada **24 error HTTP 503** "Service is too busy", masing-masing ditolak dalam 0,1–0,2 detik (`delivery: received`).
+  Run ini jatuh di **jam sibuk DeepSeek** (01–04 UTC).
+- Sesuai aturan 2a, setiap percobaan yang gagal ditagih worst case: input + 8192 token di tarif jam sibuk. Dua 503 dalam
+  satu penilaian menghabiskan reservasi 20000 token, lalu percobaan berikutnya **ditolak sebelum dikirim**.
+- **Keenam verdict tidak valid berasal dari pola itu**: `good-4`, `good-5`, `restating-3` (2×), `fabricated-2`, dan
+  `injection-3`. Semuanya fail closed, tanpa biaya berlebih.
+- Dari $0.337 di ledger, **$0.246 adalah worst case yang dicatat untuk 24 error 503 itu**. Hampir pasti DeepSeek tidak
+  menagihnya, tapi ledger sengaja konservatif. Biaya penilaian yang benar-benar berhasil: $0.090646.
+- Ini temuan yang sudah dicatat sebelum run #2: di reservasi 20000, percobaan ulang ketiga ditolak. Di lingkungan yang
+  sedang sibuk, efeknya jauh lebih besar dari perkiraan.
+
+**Satu false reject semantik yang sungguhan: `good-5`.** Penilaian pertama valid dan menggagalkan `grounded`. Judge
+menilai aksi "Add a second supplier so stock keeps up with the rising demand" mengandaikan kendala pasokan yang tidak
+ada di tabel fakta. Ini interpretasi yang ketat untuk laporan yang sengaja dibuat baik, dan di run #1 laporan yang sama
+lulus dua kali. Ini variasi judge pada kasus batas. Tetap dihitung, dan fixture tidak diubah.
+
+**Yang tetap konsisten di kedua run:**
+- Judge **tidak pernah meloloskan** laporan cacat (0 dari 46 penilaian valid).
+- Setiap penolakan valid menyebut kriteria yang diharapkan (46/46).
+- Tidak ada verdict terpotong di run #2. Satu penilaian memakai 5232 token output, yang akan terpotong di batas lama 4096.
+  Jadi kenaikan batas memang menutup penyebab kegagalan run #1.
+- Satu verdict malformed (`fabricated-1`, nama kriteria karangan) ditolak harness, lalu diperbaiki di percobaan kedua.
+
+**Kesimpulan:** run #2 gagal terutama karena ketersediaan provider dan cara reservasi menagih percobaan yang gagal,
+bukan karena judge meloloskan laporan cacat. Aturannya tetap: kegagalan teknis tidak dihitung sebagai keberhasilan
+semantik, jadi verdict FAIL tetap berlaku.
+
+**Opsi (butuh keputusan Atha + GPT; tidak ada yang dikerjakan, fixture dan ambang tetap):**
+1. **Operasional saja, tanpa perubahan kode:** run #3 **di luar jam sibuk DeepSeek** (Senin–Jumat 04–06 dan 10–01 UTC,
+   atau akhir pekan). Run #1 di luar jam sibuk mendapat 0 error 503. Murah dan tidak menyentuh jaminan budget.
+2. **Reservasi per penilaian lebih besar** (misalnya 40000), supaya 503 berturut-turut tidak langsung menghabiskannya.
+   Worst case per penilaian jadi $0.048; gate run $1.00 bisa berhenti lebih awal (hasil tidak lengkap = tidak lulus).
+3. **Tidak diusulkan tanpa review terpisah:** menagih 0 untuk 503 yang ditolak cepat. Itu melonggarkan aturan 2a ("setiap
+   percobaan yang gagal di-charge worst case") berdasarkan asumsi tentang penagihan provider.
+
+Usulku opsi 1. Opsi 2 baru dipertimbangkan kalau 503 tetap muncul di luar jam sibuk.
