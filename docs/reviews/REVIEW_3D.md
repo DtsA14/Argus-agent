@@ -258,3 +258,26 @@ semantik, jadi verdict FAIL tetap berlaku.
    percobaan yang gagal di-charge worst case") berdasarkan asumsi tentang penagihan provider.
 
 Usulku opsi 1. Opsi 2 baru dipertimbangkan kalau 503 tetap muncul di luar jam sibuk.
+
+## Perbandingan `good-5` antara run #1 dan run #2 (dari memo, tanpa perubahan apa pun)
+
+Teks laporannya sama persis di kedua run (fixture tidak berubah). Rekomendasi kedua berbunyi: "Revenue in 2026-06
+reached 2120000, up from 1650000 in 2026-01. **Aksi:** Add a second supplier so stock keeps up with the rising demand."
+
+| Run, penilaian | `grounded` | Alasan judge (diringkas) | Kutipan bukti |
+|---|---|---|---|
+| #1, ke-1 | lulus | Angka cocok dengan tabel fakta; aksinya saran, bukan klaim karangan | kedua kalimat angka (relevan) |
+| #1, ke-2 | lulus | Angka cocok; "rising demand" dinilai sebagai interpretasi ringan dari tren yang selalu naik | kedua kalimat angka (relevan) |
+| #2, ke-1 | **gagal** | Angka cocok, tapi aksi "so stock keeps up" dinilai mengandaikan kendala pasokan yang tidak ada di tabel fakta, yaitu sebab operasional karangan | kalimat aksi itu sendiri (relevan, dan memang yang dipersoalkan) |
+| #2, ke-2 | (tidak ada) | Ditolak sebelum dikirim setelah dua 503 (`node_reservation`) | — |
+
+Pengamatan:
+- Ketiga penilaian yang valid sepakat bahwa **semua angka berdasar**. Bedanya hanya pada cara membaca premis yang
+  tersirat di dalam sebuah *saran*.
+- Kriteria `grounded` melarang "sebab karangan". Kriteria itu tidak menyebut apakah premis di dalam saran ("supaya stok
+  mengejar permintaan") termasuk klaim yang harus berdasar. Judge membacanya dua cara, dan keduanya bisa dibela.
+- Semua kutipan bukti relevan dan benar-benar ada di laporan. Validasi kutipan bekerja; yang berbeda adalah
+  interpretasinya.
+- Satu kasus tidak cukup untuk menyimpulkan regresi. Ini juga **bukan** alasan mengubah rubric sekarang. Kalau
+  ambiguitas ini muncul lagi di run #3 atau di laporan lain, perjelas kriterianya **sebelum** run berikutnya, bukan
+  sesudah melihat hasil.
