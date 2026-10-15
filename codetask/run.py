@@ -1,0 +1,270 @@
+"""The code-task run: setup -> attempt -> acceptance -> (attempt -> acceptance)* -> end.
+
+  setup       freeze the contract (<run>/contract.json + sha256), copy the input repository to <run>/workspace,
+              check the scope against it, check the sandbox, and admit attempt 0
+  attempt     one agent attempt (codetask/agent.py); status stays RUNNING unless the contract changed
+  acceptance  the verdict from evidence (acceptance/verdict.py), written to <run>/verdict_<i>.json, then the next
+              status: DONE, BLOCKED, another attempt, or FAILED_ACCEPTANCE
+
+Budget: the ledger (llm_call_started / llm_call in events.jsonl) is the source of truth, never the checkpoint. An
+attempt is admitted only if everything the ledger shows spent (calls cut off by a crash at their worst case) plus the
+attempt's whole reservation fits the run's limits, and the attempt's reservation is itself restored from the ledger.
+So resuming can never give back money that was spent, and the run cannot exceed max_usd however often it crashes
+(given exact input counts; see harness/llm.py for heuristic counts).
+
+Every node runs under harness.guard: its result is committed to the memo before it is handed to LangGraph, and a
+committed result is never recomputed. Checkpoints use durability="sync".
+"""
+import json
+import math
+import operator
+import os
+import shutil
+from pathlib import Path
+from typing import Annotated, TypedDict
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+
+from acceptance import contract as ct
+from acceptance.validation import run_validation
+from acceptance.verdict import evaluate
+from acceptance.workspace import prepare
+from harness.crash import Crasher
+from harness.errors import EstimateExceeded
+from harness.events import EventLog
+from harness.guard import guard
+from harness.llm import LLMCaller, reconcile_ledger, to_nano
+from harness.memo import Memo
+from models.registry import ModelRef, price_for
+
+from . import frozen
+from . import status as st
+from .agent import feedback_from, make_attempt
+from .tools import Toolbox
+
+ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE = "workspace"
+
+
+class RunExists(Exception):
+    pass
+
+
+class State(TypedDict, total=False):
+    run_id: str
+    contract_path: str
+    contract_sha: str
+    before: dict                 # snapshot of the workspace as copied, before the agent ran
+    iteration: int               # the attempt that runs next (or ran last)
+    attempt: dict                # how the last attempt ended
+    verdict: dict                # outcome and failing criteria of the last verdict
+    failures: list               # failing criterion ids, one list per attempt
+    feedback: list
+    status: str
+    stop_reason: str
+    blocked_reason: str
+    tokens_used: Annotated[int, operator.add]
+    usd_used: Annotated[float, operator.add]
+    elapsed_s: Annotated[float, operator.add]
+
+
+def settings(cfg, contract=None):
+    """Run limits: the stricter of config and contract."""
+    c = cfg["code_task"]
+    role = cfg["roles"][c["role"]]
+    ref = ModelRef.parse(role["model"])
+    price = price_for(cfg, ref)
+    if price is None:
+        raise ct.ContractError([f"coder model {ref} has no price: its cost could not be capped"])
+    rate = max(price["input"], price["output"]) * price.get("peak_multiplier", 1) / 1_000_000
+    tokens = int(c["attempt_tokens"])
+    max_usd = cfg["budget"].get("max_usd")
+    max_usd = math.inf if max_usd is None else float(max_usd)
+    out = {"attempt_tokens": tokens, "attempt_usd": tokens * rate, "max_steps": int(c["max_steps"]),
+           "stagnation_rounds": int(c.get("stagnation_rounds", 2)),
+           "max_tokens": int(cfg["budget"]["max_tokens"]), "max_usd": max_usd, "max_iterations": None}
+    if contract is not None:
+        out["max_usd"] = min(out["max_usd"], float(contract["limits"]["max_usd"]))
+        out["max_iterations"] = int(contract["limits"]["max_iterations"])
+    return out
+
+
+def admission(log, lim):
+    """Name of the limit that forbids one more attempt, or None. Spend comes from the ledger only."""
+    _, totals = reconcile_ledger(log.read())
+    if totals["tokens"] + lim["attempt_tokens"] > lim["max_tokens"]:
+        return "max_tokens"
+    if math.isfinite(lim["max_usd"]) and totals["usd_nano"] + to_nano(lim["attempt_usd"]) > to_nano(lim["max_usd"]):
+        return "max_usd"
+    return None
+
+
+def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None):
+    """validate / preflight: injected by tests to run without Docker (default: the real sandbox)."""
+    run_dir = Path(run_dir)
+    ws = run_dir / WORKSPACE
+    memo = Memo(run_dir / "memo.sqlite")
+    crasher = Crasher(crash_at, str(run_dir / ".crashed"), log)
+    scfg = dict(cfg.get("sandbox") or {})
+    validate = validate or run_validation
+    if preflight is None:
+        from tools import sandbox as sb
+        preflight = lambda: sb.status(scfg)   # noqa: E731
+    lim0 = settings(cfg)
+    caller = LLMCaller(cfg, cfg["code_task"]["role"], log, model=(models or {}).get(cfg["code_task"]["role"]))
+    from tools.sandbox import tool_version
+    versions = {"ListFiles": "1", "ReadFile": "1", "WriteFile": "1", "Finish": "1",
+                "RunValidation": f"1:{tool_version(scfg)}"}
+    attempt_fn = make_attempt(caller, memo, log, tokens=lim0["attempt_tokens"], usd=lim0["attempt_usd"],
+                              max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher)
+    allowed = (cfg.get("tools") or {}).get(cfg["code_task"]["role"], [])
+    common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
+
+    def move(state, new, *, reason=None, blocked=None, **extra):
+        out = {"status": st.transition(state.get("status"), new, blocked)}
+        if reason is not None:
+            out["stop_reason"] = reason
+        if blocked is not None:
+            out["blocked_reason"] = blocked
+        log.emit("status", old=state.get("status"), new=new, reason=reason, blocked_reason=blocked)
+        return {**out, **extra}
+
+    def setup(state):
+        try:
+            contract = json.loads(Path(state["contract_path"]).read_text(encoding="utf-8"))
+            sha = frozen.freeze_to(run_dir, contract)
+        except (OSError, ValueError, ct.ContractError) as e:
+            return move(state, st.BLOCKED, reason=f"invalid contract: {e}", blocked="invalid_contract")
+        log.emit("contract_frozen", sha256=sha, contract=contract["contract"], version=contract["version"])
+        if ws.exists():
+            shutil.rmtree(ws)     # a copy from a setup that crashed before committing; the agent never ran on it
+        try:
+            before = prepare(ROOT / contract["inputs"]["workspace"], ws)
+        except (OSError, ValueError, RuntimeError) as e:
+            return move(state, st.BLOCKED, reason=f"invalid input repository: {e}", blocked="invalid_contract")
+        crasher.point("setup@after_copy")
+        problems = ct.check_scope_against(contract, before)
+        if problems:
+            return move(state, st.BLOCKED, reason="; ".join(problems), blocked="invalid_contract")
+        ok, why = preflight()
+        if not ok:
+            return move(state, st.BLOCKED, reason=f"sandbox unavailable: {why}", blocked="sandbox_unavailable")
+        blocker = admission(log, settings(cfg, contract))
+        if blocker:
+            return move(state, st.FAILED_BUDGET, reason=f"{blocker}: not even one attempt fits")
+        log.emit("workspace_prepared", files=len(before))
+        return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[])
+
+    def agent(state):
+        try:
+            contract = frozen.load(run_dir, state["contract_sha"])
+        except frozen.ContractChanged as e:
+            return move(state, st.BLOCKED, reason=str(e), blocked="contract_changed")
+        box = Toolbox(str(ws), contract, scfg, allowed, log, validate=validate)
+        a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None)
+        return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"]},
+                "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}
+
+    def acceptance(state):
+        try:
+            contract = frozen.load(run_dir, state["contract_sha"])
+        except frozen.ContractChanged as e:
+            return move(state, st.BLOCKED, reason=str(e), blocked="contract_changed")
+        i = state["iteration"]
+        v = evaluate(contract, str(ws), state["before"], scfg, log, run=validate)
+        path = run_dir / f"verdict_{i}.json"
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(v, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        os.replace(tmp, path)
+        failing = sorted(c["id"] for c in v["criteria"] if c["status"] != "pass")
+        log.emit("acceptance_verdict", iteration=i, outcome=v["outcome"], failing=failing,
+                 workspace_digest=v["workspace_digest"])
+        crasher.point("acceptance@after_verdict", iteration=i)
+        summary = {"iteration": i, "outcome": v["outcome"], "failing": failing,
+                   "workspace_digest": v["workspace_digest"]}
+        history = list(state.get("failures") or []) + [failing]
+        if v["outcome"] == "pass":
+            return move(state, st.DONE, reason="all criteria passed", verdict=summary, failures=history)
+        if v["outcome"] == "blocked":
+            why = "; ".join(c["reason"] for c in v["criteria"] if c["status"] == "blocked")
+            return move(state, st.BLOCKED, reason=why, blocked="sandbox_unavailable", verdict=summary,
+                        failures=history)
+        if (state.get("attempt") or {}).get("end") == "llm_failed":
+            return move(state, st.BLOCKED, reason="the model provider failed during the attempt",
+                        blocked="provider_failed", verdict=summary, failures=history)
+        lim = settings(cfg, contract)
+        n = lim["stagnation_rounds"]
+        if i + 1 >= lim["max_iterations"]:
+            stop = "max_iterations"
+        elif len(history) >= n and all(h == failing for h in history[-n:]):
+            stop = f"stagnant: the same criteria failed {n} attempts in a row"
+        else:
+            stop = admission(log, lim)
+        if stop:
+            return move(state, st.FAILED_ACCEPTANCE, reason=stop, verdict=summary, failures=history)
+        return move(state, st.RUNNING, iteration=i + 1, verdict=summary, failures=history,
+                    feedback=feedback_from(v))
+
+    g = StateGraph(State)
+    lim = settings(cfg)
+    g.add_node("setup", guard("setup", setup, **common))
+    g.add_node("agent", guard("agent", agent, estimate=lim["attempt_tokens"], usd_estimate=lim["attempt_usd"],
+                              **common))
+    g.add_node("acceptance", guard("acceptance", acceptance, **common))
+    running = lambda s: s["status"] == st.RUNNING   # noqa: E731
+    g.add_edge(START, "setup")
+    g.add_conditional_edges("setup", lambda s: "agent" if running(s) else END, ["agent", END])
+    g.add_conditional_edges("agent", lambda s: "acceptance" if running(s) else END, ["acceptance", END])
+    g.add_conditional_edges("acceptance", lambda s: "agent" if running(s) else END, ["agent", END])
+    return g.compile(checkpointer=checkpointer)
+
+
+def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_at=None, models=None,
+                  validate=None, preflight=None, echo=False):
+    run_dir = Path(runs_dir) / run_id
+    if not resume and (run_dir / "checkpoints.sqlite").exists():
+        raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
+    if resume and not (run_dir / "checkpoints.sqlite").exists():
+        raise RunExists(f"nothing to resume: run '{run_id}' has no checkpoint in {runs_dir}")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    log = EventLog(run_dir / "events.jsonl", echo=echo)
+    cfg = {**cfg, "sandbox": {**(cfg.get("sandbox") or {}), "labels": {"argus.run": run_id}}}
+    config = {"configurable": {"thread_id": run_id}, "recursion_limit": 3 * 10 + 10}
+
+    with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
+        graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models, validate=validate,
+                            preflight=preflight)
+        try:
+            if resume:
+                log.emit("resume", run_id=run_id)
+                if validate is None:     # a crashed harness cannot time out the containers it started
+                    from tools import sandbox as sb
+                    try:
+                        gone = sb.remove_labeled(cfg["sandbox"], {"argus.run": run_id})
+                        log.emit("leftover_containers_removed", count=len(gone))
+                    except sb.SandboxUnavailable as e:
+                        log.emit("leftover_containers_unchecked", error=str(e)[:200])
+                graph.invoke(None, config, durability="sync")
+            else:
+                log.emit("run_start", run_id=run_id, kind="code_task", contract=str(contract_path))
+                graph.invoke({"run_id": run_id, "contract_path": str(contract_path), "tokens_used": 0,
+                              "usd_used": 0.0, "elapsed_s": 0.0}, config, durability="sync")
+            final = dict(graph.get_state(config).values)
+        except EstimateExceeded as e:
+            # A model call overspent its reservation (heuristic input counts): the money is spent; stop here.
+            log.emit("budget_violation", source="node", error=str(e))
+            final = dict(graph.get_state(config).values)
+            new = st.transition(final.get("status"), st.FAILED_BUDGET)
+            log.emit("status", old=final.get("status"), new=new, reason=f"budget_violation: {e}")
+            final.update(status=new, stop_reason=f"budget_violation: {e}")
+
+    _, totals = reconcile_ledger(log.read())
+    result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
+                                        "attempt")}
+    result.update(run_id=run_id, attempts=len(final.get("failures") or []),
+                  usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
+                  llm_calls_unknown=totals["unknown_after_crash"])
+    (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    log.emit("run_end", **{k: v for k, v in result.items() if k not in ("verdict", "attempt")})
+    return result

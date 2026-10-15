@@ -73,6 +73,16 @@ llm_token_estimates:
   synthesize: 8000       # 3b starting point (prompt ~1,500 + up to 3 attempts); corrected from the ledger
   evaluator: 20000       # input ~1,200 + 8,192 output, x2 attempts (calibration run #1: input 1,155-1,214)
 
+# General tasks, slice 1 (docs/reviews/ACCEPTANCE_GENERAL.md). Run limits are the stricter of these and the
+# contract's limits. attempt_tokens is one attempt's whole reservation (all its steps); an attempt is admitted only if
+# the ledger's spend plus this worst case fits budget.max_tokens and the contract's max_usd. Starting point, to be
+# corrected from the ledger of the first live run.
+code_task:
+  role: coder
+  attempt_tokens: 30000
+  max_steps: 12
+  stagnation_rounds: 2     # the same failing criteria this many attempts in a row ends the run (FAILED_ACCEPTANCE)
+
 retry:
   attempts: 3
   base_delay: 0.05       # seconds, doubles each attempt
@@ -82,6 +92,7 @@ tools:
   orchestrator: [write_file]
   worker: [read_data, run_python]
   evaluator: []
+  coder: [list_files, read_file, write_file, run_validation]   # code tasks (codetask/); Finish is not gated
 
 # ---------------------------------------------------------------------------
 # LLM providers. Adding a provider = adding an entry here.
@@ -115,6 +126,11 @@ providers:
 # timeout_s: per-request timeout. params: passed straight to the provider's chat class (temperature, ...).
 # ---------------------------------------------------------------------------
 roles:
+  coder:
+    # General tasks, slice 1 (codetask/). The model for a live run is chosen in its approval; tests use fake:scripted.
+    model: "anthropic:claude-sonnet-5-5"
+    max_output_tokens: 4096
+    timeout_s: 90
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
