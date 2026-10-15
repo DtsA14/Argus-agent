@@ -334,3 +334,29 @@ request berikutnya selalu menjawab setiap `tool_call_id`.
 karena ketersediaan provider, bukan kualitas judge, dan run #3 di luar jam sibuk tidak mendapat satu pun 503. Hasil ini
 indikatif (31 laporan), bukan bukti reliabilitas provider secara umum. Dua temuan perlu ditindaklanjuti sebelum
 kalibrasi berikutnya: bug `invalid_tool_calls` dan ambiguitas `grounded`.
+
+## Perbaikan bug `invalid_tool_calls` (gate merge dari GPT, 2026-10-15)
+
+Commit `11152a3`. Bukti: `verification/verify-20261015T053136Z-aarch64.log` (`commit: 11152a3…`, working tree bersih,
+**642 lulus, 0 tes sandbox di-skip**, VM OCI ARM). Hasil kalibrasi yang sudah tercatat tidak berubah; perbaikan ini
+tidak membuat run #3 ditafsir ulang.
+
+| Syarat GPT | Implementasi | Tes |
+|---|---|---|
+| Tangani `invalid_tool_calls` eksplisit di keempat loop | Helper bersama di `harness/steps.py`: `invalid_calls`, `call_ids`, `invalid_call_errors`. Dipakai orchestrator, worker, penulis, dan judge | satu tes per loop |
+| Panggilan malformed tidak pernah dianggap valid | Tidak pernah dibaca sebagai rencana, hasil, submission, atau verdict. Worker tidak menjalankan apa pun dari balasan itu. Balasan campuran (valid + malformed) juga tidak diterima | `…a_malformed_verdict_alone_never_passes`, `…valid_and_a_malformed_call_answers_both`, worker: tidak ada langkah tool yang di-commit |
+| Setiap `tool_call_id` dijawab sebelum giliran berikutnya | `call_ids` mengembalikan **semua** id, valid atau tidak. Masing-masing dijawab `ToolMessage` berisi errornya | `StrictScriptedChatModel` membalas **HTTP 400 persis seperti DeepSeek** kalau ada id yang tidak dijawab. Kegagalan run #3 direproduksi, dan keempat loop lulus melewatinya |
+| Memo menyimpan panggilan invalid; replay sama dengan aslinya | `message_to_json`/`message_from_json` menyimpan `invalid_tool_calls`. `_text` ikut memasukkannya ke identitas kunci memo, karena argumen itu memang dikirim ke provider | round trip memo; replay balasan malformed setelah restart tetap dijawab, lalu langkah berikutnya diterima provider ketat; dua balasan malformed yang berbeda tidak berbagi kunci langkah berikutnya |
+| Seluruh tes lulus di Linux, termasuk reproduksi 400 | `verify.sh` di `11152a3` | 642 lulus, 0 di-skip |
+
+**Mutasi: 9 dijalankan, 9 tertangkap.** Yang dimutasi:
+- id invalid tidak dijawab (semua loop); panggilan invalid tidak terdeteksi (semua loop);
+- memo membuang panggilan invalid; kunci memo mengabaikan panggilan invalid;
+- judge mengabaikan panggilan malformed; worker mengabaikan panggilan malformed;
+- judge, penulis, atau orchestrator hanya menjawab id yang valid.
+
+Mutasi "kunci memo mengabaikan panggilan invalid" awalnya lolos, karena belum ada tes identitas kunci. Tes itu
+ditambahkan, lalu mutasinya tertangkap.
+
+Sisa yang **tidak** masuk perbaikan ini (sesuai urutan GPT): perjelasan kriteria `grounded` (perubahan rubric yang
+direview terpisah, sebelum kalibrasi berikutnya) dan implementasi desain 503 (PR terpisah).
