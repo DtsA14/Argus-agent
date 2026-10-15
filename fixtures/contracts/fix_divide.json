@@ -1,0 +1,20 @@
+{
+  "contract": "fix_divide",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/calc",
+    "issue": "divide(a, 0) returns 0. It must raise ZeroDivisionError, like Python's own division. Fix the code; do not change the tests."
+  },
+  "scope": {"writable": ["src/**"], "protected": ["tests/**"]},
+  "artifacts": [{"path": "SUMMARY.json", "type": "json", "schema": "claims_v1"}],
+  "validation": [
+    {"id": "unit", "executable": "python", "args": ["-m", "unittest", "discover", "-s", "tests", "-t", "."],
+     "timeout_s": 60, "min_tests": 7, "max_skipped": 0},
+    {"id": "target", "executable": "python",
+     "args": ["-m", "unittest", "discover", "-s", "tests", "-t", ".", "-k", "test_divide_by_zero"],
+     "timeout_s": 60, "min_tests": 1, "max_skipped": 0,
+     "must_pass": ["tests.test_calc.CalcTest.test_divide_by_zero"]}
+  ],
+  "judge": [],
+  "limits": {"max_usd": 0.5, "max_iterations": 3}
+}
