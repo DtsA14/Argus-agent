@@ -140,6 +140,9 @@ def _text(m):
     for tc in getattr(m, "tool_calls", None) or []:
         parts.append(json.dumps({"name": tc.get("name"), "args": tc.get("args"), "id": tc.get("id")},
                                 default=str, ensure_ascii=False, sort_keys=True))
+    for tc in getattr(m, "invalid_tool_calls", None) or []:   # sent to the provider too, so part of the identity
+        parts.append(json.dumps({"invalid": tc.get("name"), "args": tc.get("args"), "id": tc.get("id")},
+                                default=str, ensure_ascii=False, sort_keys=True))
     if getattr(m, "tool_call_id", None):
         parts.append(m.tool_call_id)
     return "".join(parts)
