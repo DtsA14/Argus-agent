@@ -194,3 +194,27 @@ def test_a_real_model_is_refused_without_the_live_switch(tmp_path, image):
     (tmp_path / "config.yaml").write_text(yaml.safe_dump(cfg))
     r = _cli(tmp_path)
     assert r.returncode == 2 and "ARGUS_LIVE=1" in r.stderr and not (tmp_path / "runs" / "rc").exists()
+
+
+def test_an_overspend_is_a_durable_failed_budget_that_resume_does_not_continue(tmp_path, image):
+    # The provider bills far more than the attempt reserved (a heuristic input count can be wrong): the money is
+    # spent, the run ends FAILED_BUDGET, and that status must be in the checkpoint, not only in result.json. A new
+    # process resuming the run must find it finished: no model call, no new spend, the same status.
+    _setup(tmp_path, image)
+    over = {"tool_calls": [{"name": "ReadFile", "args": {"path": "src/calc.py"}, "id": "r1"}],
+            "usage": {"input_tokens": 45000, "output_tokens": 60}}      # the attempt reserved 30,000 tokens
+    (tmp_path / "script.json").write_text(json.dumps([over] + SCRIPT))
+    r1 = _cli(tmp_path)
+    first = json.loads((tmp_path / "runs" / "rc" / "result.json").read_text())
+    assert r1.returncode == 1 and first["status"] == "FAILED_BUDGET", (r1.stdout[-1500:], r1.stderr[-1500:])
+    assert first["stop_reason"].startswith("budget_violation")
+    calls, billed = _model_calls(tmp_path), first["usd_billed"]
+    assert calls == 1 and billed >= 45000 * 1.0 / 1_000_000                 # the overspend is in the ledger
+
+    n = len(_events(tmp_path))
+    r2 = _cli(tmp_path, "--resume")
+    second = json.loads((tmp_path / "runs" / "rc" / "result.json").read_text())
+    after = _events(tmp_path)[n:]
+    assert r2.returncode == 1 and second["status"] == "FAILED_BUDGET" and second["stop_reason"] == first["stop_reason"]
+    assert _model_calls(tmp_path) == calls and second["usd_billed"] == billed and second["llm_calls"] == 1
+    assert not [e for e in after if e["event"] in ("llm_call", "llm_call_started", "node_start", "status")]

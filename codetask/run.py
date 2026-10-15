@@ -253,11 +253,18 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
             final = dict(graph.get_state(config).values)
         except EstimateExceeded as e:
             # A model call overspent its reservation (heuristic input counts): the money is spent; stop here.
+            # Only the agent node has estimates, and guard raises before committing its result, so the checkpoint
+            # still has the attempt pending. Write the terminal status into the checkpoint as the agent's update:
+            # routing after it goes to END, so a resume finds the run finished instead of running the attempt again.
             log.emit("budget_violation", source="node", error=str(e))
+            old = graph.get_state(config).values.get("status")
+            new = st.transition(old, st.FAILED_BUDGET)
+            graph.update_state(config, {"status": new, "stop_reason": f"budget_violation: {e}"}, as_node="agent")
+            log.emit("status", old=old, new=new, reason=f"budget_violation: {e}")
             final = dict(graph.get_state(config).values)
-            new = st.transition(final.get("status"), st.FAILED_BUDGET)
-            log.emit("status", old=final.get("status"), new=new, reason=f"budget_violation: {e}")
-            final.update(status=new, stop_reason=f"budget_violation: {e}")
+            if final.get("status") != new or graph.get_state(config).next:
+                raise RuntimeError(f"FAILED_BUDGET was not persisted: {final.get('status')}, "
+                                   f"next {graph.get_state(config).next}")
 
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
