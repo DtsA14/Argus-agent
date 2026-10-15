@@ -54,3 +54,11 @@ Kriteria ini dipakai di kalibrasi baseline baru #1 (`docs/reviews/REVIEW_3D.md`)
 Harapan B1 (`good-5` lulus) **tidak sepenuhnya terpenuhi**. Satu dari dua penilaian menolaknya dengan aturan baru, karena
 "a **second** supplier" mengandaikan pemasok tunggal yang sudah ada. Itu premis yang tidak dibahas di contoh B1. Tabel di
 atas tidak diubah setelah melihat hasil. Penajaman berikutnya, kalau ada, diputuskan sebelum kalibrasi selanjutnya.
+
+## Dipertajam setelah baseline #1: keputusan B (2026-10-15)
+Keputusan dan alasannya ada di `docs/reviews/GOOD5_DECISION.md`. Teks kriteria di `nodes/contract.py` sekarang:
+yang harus didukung tabel hanya apa yang laporan **nyatakan** sebagai fakta. Aksi boleh mengandaikan susunan wajar
+usaha sejenis (punya pemasok, staf, shift, jam ramai dan sepi) dan boleh menyebut tujuannya ("so that ...", "to ...").
+Klausa tujuan tetap diperiksa: kalau klausa itu menyatakan atau mengandaikan keadaan spesifik usaha ini yang tidak ada
+di tabel, laporan gagal. Contoh C1 sampai C4 dan teks fixture tidak masuk ke prompt (dijaga tes). Fixture dan label
+dibekukan (hash dijaga tes). Kalibrasi berikutnya adalah baseline baru #2.
