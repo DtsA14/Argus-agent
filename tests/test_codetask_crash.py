@@ -218,3 +218,30 @@ def test_an_overspend_is_a_durable_failed_budget_that_resume_does_not_continue(t
     assert r2.returncode == 1 and second["status"] == "FAILED_BUDGET" and second["stop_reason"] == first["stop_reason"]
     assert _model_calls(tmp_path) == calls and second["usd_billed"] == billed and second["llm_calls"] == 1
     assert not [e for e in after if e["event"] in ("llm_call", "llm_call_started", "node_start", "status")]
+
+
+def test_the_sandbox_flag_runs_validation_in_docker_and_without_it_the_run_is_blocked(tmp_path, image):
+    # The default config has sandbox.kind none. Without --sandbox docker the run must stop before any model call;
+    # with it, the same config runs validation in the pinned sandbox and finishes.
+    _setup(tmp_path, image)
+    cfg = yaml.safe_load((tmp_path / "config.yaml").read_text())
+    cfg["sandbox"] = {"kind": "none"}
+    (tmp_path / "config.yaml").write_text(yaml.safe_dump(cfg))
+    env_image = {"ARGUS_SANDBOX_IMAGE": image}
+    r = _cli_env(tmp_path, env_image)
+    blocked = json.loads((tmp_path / "runs" / "rc" / "result.json").read_text())
+    assert r.returncode == 1 and blocked["status"] == "BLOCKED" and blocked["blocked_reason"] == "sandbox_unavailable"
+    assert blocked["llm_calls"] == 0 and _model_calls(tmp_path) == 0
+    r = _cli_env(tmp_path, env_image, "--sandbox", "docker", run_id="rc2")
+    done = json.loads((tmp_path / "runs" / "rc2" / "result.json").read_text())
+    assert r.returncode == 0 and done["status"] == "DONE", (r.stdout[-1500:], r.stderr[-1500:])
+
+
+def _cli_env(tmp_path, extra_env, *extra, run_id="rc"):
+    env = {**os.environ, "ARGUS_FAKE_SCRIPT": str(tmp_path / "script.json"), **extra_env}
+    env.pop("ARGUS_LIVE", None)
+    base = [sys.executable, "scripts/run_code_task.py", "--config", str(tmp_path / "config.yaml"),
+            "--contract", str(tmp_path / "contract.json"), "--run-id", run_id, "--runs-dir", str(tmp_path / "runs"),
+            "--quiet"]
+    return subprocess.run(base + list(extra), cwd=ROOT, capture_output=True, text=True, env=env, timeout=300)
+
