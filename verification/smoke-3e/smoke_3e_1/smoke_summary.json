@@ -1,0 +1,245 @@
+{
+  "result": {
+    "status": "DONE",
+    "stop_reason": "",
+    "iteration": 1,
+    "tokens_used": 15593,
+    "scenario": "pass",
+    "elapsed_s": 32.281,
+    "run_id": "smoke_3e_1",
+    "tokens_spent": 15593,
+    "usd_used": 0.022463272,
+    "usd_billed": 0.022463272,
+    "usd_complete": true,
+    "llm_calls": 9,
+    "llm_calls_unknown": 0,
+    "budget_violations": 0
+  },
+  "verdicts": [
+    {
+      "iteration": 1,
+      "score": 1.0,
+      "passed": true,
+      "rubric": {
+        "valid": true,
+        "passed": true
+      },
+      "failures": [],
+      "status": "DONE",
+      "stop_reason": ""
+    }
+  ],
+  "ledger": [
+    {
+      "node": "orchestrator",
+      "task": null,
+      "iteration": 0,
+      "step": null,
+      "attempt": 1,
+      "model": "anthropic:claude-sonnet-5-5",
+      "status": "ok",
+      "input_tokens": 1243,
+      "output_tokens": 637,
+      "cache_read": 0,
+      "tokens": 1880,
+      "usd": 0.008856,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 5.118,
+      "error": null
+    },
+    {
+      "node": "worker",
+      "task": "T1",
+      "iteration": 0,
+      "step": 0,
+      "attempt": 1,
+      "model": "anthropic:claude-haiku-5-5",
+      "status": "ok",
+      "input_tokens": 960,
+      "output_tokens": 27,
+      "cache_read": 0,
+      "tokens": 987,
+      "usd": 0.0001095,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 1.014,
+      "error": null
+    },
+    {
+      "node": "worker",
+      "task": "T1",
+      "iteration": 0,
+      "step": 1,
+      "attempt": 1,
+      "model": "anthropic:claude-haiku-5-5",
+      "status": "ok",
+      "input_tokens": 1671,
+      "output_tokens": 329,
+      "cache_read": 0,
+      "tokens": 2000,
+      "usd": 0.0003316,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 1.871,
+      "error": null
+    },
+    {
+      "node": "worker",
+      "task": "T2",
+      "iteration": 0,
+      "step": 0,
+      "attempt": 1,
+      "model": "anthropic:claude-haiku-5-5",
+      "status": "ok",
+      "input_tokens": 969,
+      "output_tokens": 27,
+      "cache_read": 0,
+      "tokens": 996,
+      "usd": 0.0001104,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 0.879,
+      "error": null
+    },
+    {
+      "node": "worker",
+      "task": "T2",
+      "iteration": 0,
+      "step": 1,
+      "attempt": 1,
+      "model": "anthropic:claude-haiku-5-5",
+      "status": "ok",
+      "input_tokens": 1680,
+      "output_tokens": 289,
+      "cache_read": 0,
+      "tokens": 1969,
+      "usd": 0.0003125,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 1.6,
+      "error": null
+    },
+    {
+      "node": "worker",
+      "task": "T3",
+      "iteration": 0,
+      "step": 0,
+      "attempt": 1,
+      "model": "anthropic:claude-haiku-5-5",
+      "status": "ok",
+      "input_tokens": 921,
+      "output_tokens": 27,
+      "cache_read": 0,
+      "tokens": 948,
+      "usd": 0.0001056,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 1.418,
+      "error": null
+    },
+    {
+      "node": "worker",
+      "task": "T3",
+      "iteration": 0,
+      "step": 1,
+      "attempt": 1,
+      "model": "anthropic:claude-haiku-5-5",
+      "status": "ok",
+      "input_tokens": 1632,
+      "output_tokens": 407,
+      "cache_read": 0,
+      "tokens": 2039,
+      "usd": 0.0003667,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 2.076,
+      "error": null
+    },
+    {
+      "node": "synthesize",
+      "task": null,
+      "iteration": 0,
+      "step": 0,
+      "attempt": 1,
+      "model": "anthropic:claude-sonnet-5-5",
+      "status": "ok",
+      "input_tokens": 1193,
+      "output_tokens": 905,
+      "cache_read": 0,
+      "tokens": 2098,
+      "usd": 0.011436,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 7.544,
+      "error": null
+    },
+    {
+      "node": "evaluator",
+      "task": null,
+      "iteration": 0,
+      "step": 0,
+      "attempt": 1,
+      "model": "deepseek:deepseek-flash",
+      "status": "ok",
+      "input_tokens": 1378,
+      "output_tokens": 1298,
+      "cache_read": 1024,
+      "tokens": 2676,
+      "usd": 0.000834972,
+      "charged": "actual",
+      "truncated": false,
+      "latency_s": 7.812,
+      "error": null
+    }
+  ],
+  "worker_tools": [
+    "read_data",
+    "run_python"
+  ],
+  "sandbox": "none",
+  "sandbox_runs": [],
+  "rejected_submissions": [],
+  "plans": [
+    {
+      "event": "spec_created",
+      "revision": 0,
+      "attempt": 1,
+      "tasks": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "outputs": [
+        "top3",
+        "trend",
+        "data_check"
+      ],
+      "errors": null
+    }
+  ],
+  "writer": [
+    {
+      "event": "recs_accepted",
+      "iteration": 0,
+      "step": 0,
+      "count": 2,
+      "errors": null,
+      "reason": null
+    }
+  ],
+  "judge": [
+    {
+      "event": "rubric_verdict",
+      "iteration": 0,
+      "step": null,
+      "passed": true,
+      "failed": [],
+      "errors": null,
+      "reason": "ok"
+    }
+  ],
+  "warnings": [],
+  "report": "/home/ubuntu/Argus-agent/runs/smoke_3e_1/laporan.md",
+  "events": "/home/ubuntu/Argus-agent/runs/smoke_3e_1/events.jsonl"
+}
