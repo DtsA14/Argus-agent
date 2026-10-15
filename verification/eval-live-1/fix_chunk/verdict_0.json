@@ -1,0 +1,172 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/chunks.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/chunks.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "940629a56bc3287f1d8c733daab73e16c70980079afd5e9ef98ffeb681103952"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 6,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_empty_input (tests.test_chunks.ChunkTest.test_empty_input) ... ok\ntest_even_split (tests.test_chunks.ChunkTest.test_even_split) ... ok\ntest_invalid_size (tests.test_chunks.ChunkTest.test_invalid_size) ... ok\ntest_keeps_the_remainder (tests.test_chunks.ChunkTest.test_keeps_the_remainder) ... ok\ntest_pairs (tests.test_chunks.ChunkTest.test_pairs) ... ok\ntest_piece_longer_than_input (tests.test_chunks.ChunkTest.test_piece_longer_than_input) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-k",
+          "test_keeps_the_remainder",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 1,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_chunks.ChunkTest.test_keeps_the_remainder": "ok"
+        },
+        "output_tail": "test_keeps_the_remainder (tests.test_chunks.ChunkTest.test_keeps_the_remainder) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/chunks.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "35040f3637ab3ea786fb08c894125d96ff148921e28d8505eb8bc94bb96bf51c",
+  "summary_sha256": "940629a56bc3287f1d8c733daab73e16c70980079afd5e9ef98ffeb681103952",
+  "verdict_sha256": "233c968139ab0724ef6f93e2a38128f3be3491a907d857290dae641ee5471ede"
+}

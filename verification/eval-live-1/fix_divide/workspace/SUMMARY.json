@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/calc.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "Removed the special case in divide() that returned 0 when b == 0, so it now raises ZeroDivisionError like Python's own division."
+}

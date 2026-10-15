@@ -1,0 +1,12 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/chunks/src/chunks.py runs/eval_live_1/live_fix_chunk/workspace/src/chunks.py
+--- fixtures/repos/chunks/src/chunks.py	2026-10-15 18:24:26.033683972 +0000
++++ runs/eval_live_1/live_fix_chunk/workspace/src/chunks.py	2026-10-15 19:00:09.105292770 +0000
+@@ -5,7 +5,7 @@
+     """Consecutive pieces of length n; the last piece may be shorter."""
+     if n < 1:
+         raise ValueError("n must be at least 1")
+-    return [list(seq[i:i + n]) for i in range(0, len(seq) - n + 1, n)]
++    return [list(seq[i:i + n]) for i in range(0, len(seq), n)]
+ 
+ 
+ def pairs(seq):

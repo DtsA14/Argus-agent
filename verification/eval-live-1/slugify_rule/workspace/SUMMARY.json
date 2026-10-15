@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/slugs.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "slugify now lowercases, replaces each run of non [a-z0-9] characters with a single '-', and strips leading/trailing '-'."
+}

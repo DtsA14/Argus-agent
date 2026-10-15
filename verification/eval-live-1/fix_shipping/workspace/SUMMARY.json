@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/shipping.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "Free shipping for orders >= 50 now applies only to non-express orders; express is charged double the standard cost."
+}

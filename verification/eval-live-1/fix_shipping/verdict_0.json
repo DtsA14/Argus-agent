@@ -1,0 +1,172 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/shipping.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/shipping.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "bf5c5b6e75c29e11dde00d552e3f4fd7d0b9b986ad0bca40fb015e135f3951ed"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 6,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_express_doubles (tests.test_shipping.ShippingTest.test_express_doubles) ... ok\ntest_express_is_never_free (tests.test_shipping.ShippingTest.test_express_is_never_free) ... ok\ntest_first_kilogram (tests.test_shipping.ShippingTest.test_first_kilogram) ... ok\ntest_free_standard_over_50 (tests.test_shipping.ShippingTest.test_free_standard_over_50) ... ok\ntest_invalid_weight (tests.test_shipping.ShippingTest.test_invalid_weight) ... ok\ntest_started_kilograms (tests.test_shipping.ShippingTest.test_started_kilograms) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-k",
+          "test_express_is_never_free",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 1,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_shipping.ShippingTest.test_express_is_never_free": "ok"
+        },
+        "output_tail": "test_express_is_never_free (tests.test_shipping.ShippingTest.test_express_is_never_free) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/shipping.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "2c37cb1e62669200d04e17b7488e1ca4bbad1280485f72ac549ca8898a2fb054",
+  "summary_sha256": "bf5c5b6e75c29e11dde00d552e3f4fd7d0b9b986ad0bca40fb015e135f3951ed",
+  "verdict_sha256": "233c968139ab0724ef6f93e2a38128f3be3491a907d857290dae641ee5471ede"
+}

@@ -1,0 +1,12 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/slugs/src/slugs.py runs/eval_live_1/live_slugify_rule/workspace/src/slugs.py
+--- fixtures/repos/slugs/src/slugs.py	2026-10-15 18:24:26.039264403 +0000
++++ runs/eval_live_1/live_slugify_rule/workspace/src/slugs.py	2026-10-15 19:00:31.764338474 +0000
+@@ -1,5 +1,7 @@
+ """URL slugs."""
+ 
++import re
++
+ 
+ def slugify(text):
+-    return text.strip().lower().replace(" ", "-")
++    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")

@@ -1,0 +1,145 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "07bef47b63b83c68260c1412c7c9016cbbefbb6cba2dcf57ffa9ca51479a4ed3"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; unittest outcome FAILED",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-v"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 4,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 1,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_below_half (tests.test_rounding.RoundTest.test_below_half) ... ok\ntest_half_rounds_to_even (tests.test_rounding.RoundTest.test_half_rounds_to_even) ... ok\ntest_half_rounds_up (tests.test_rounding.RoundTest.test_half_rounds_up) ... FAIL\ntest_whole_numbers (tests.test_rounding.RoundTest.test_whole_numbers) ... ok\n\n======================================================================\nFAIL: test_half_rounds_up (tests.test_rounding.RoundTest.test_half_rounds_up)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/tests/test_rounding.py\", line 17, in test_half_rounds_up\n    self.assertEqual(round_half(2.5), 3)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\nAssertionError: 2 != 3\n\n----------------------------------------------------------------------\nRan 4 tests in 0.002s\n\nFAILED (failures=1)\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; unittest outcome FAILED; required test tests.test_rounding.RoundTest.test_half_rounds_up is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-k",
+          "test_half",
+          "-v"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 2,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 1,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_rounding.RoundTest.test_half_rounds_to_even": "ok",
+          "tests.test_rounding.RoundTest.test_half_rounds_up": "FAIL"
+        },
+        "output_tail": "test_half_rounds_to_even (tests.test_rounding.RoundTest.test_half_rounds_to_even) ... ok\ntest_half_rounds_up (tests.test_rounding.RoundTest.test_half_rounds_up) ... FAIL\n\n======================================================================\nFAIL: test_half_rounds_up (tests.test_rounding.RoundTest.test_half_rounds_up)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/tests/test_rounding.py\", line 17, in test_half_rounds_up\n    self.assertEqual(round_half(2.5), 3)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\nAssertionError: 2 != 3\n\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nFAILED (failures=1)\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "fail",
+      "reason": "'src/rounding.py' was not changed in the workspace",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/rounding.py"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "25ffca9d45ce54a843e99d9dc1867e117fa607935cbe56b0c7be5898a4241754",
+  "summary_sha256": "07bef47b63b83c68260c1412c7c9016cbbefbb6cba2dcf57ffa9ca51479a4ed3",
+  "verdict_sha256": "5b88df2f88acb5dea374ef8c0f95dcce9cf1497650045f3cb8590276b6c9b367"
+}

@@ -1,0 +1,175 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/slugs.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/slugs.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "8c2c400681912d11695d552c50747aaa01dda1fba5785b79709e66e3348ac7f2"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_digits_are_kept (tests.test_slugs.SlugTest.test_digits_are_kept) ... ok\ntest_lowercase_and_dashes (tests.test_slugs.SlugTest.test_lowercase_and_dashes) ... ok\ntest_no_dash_at_the_ends (tests.test_slugs.SlugTest.test_no_dash_at_the_ends) ... ok\ntest_runs_become_one_dash (tests.test_slugs.SlugTest.test_runs_become_one_dash) ... ok\ntest_surrounding_spaces (tests.test_slugs.SlugTest.test_surrounding_spaces) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-k",
+          "test_runs_become_one_dash",
+          "-k",
+          "test_no_dash_at_the_ends",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 2,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_slugs.SlugTest.test_runs_become_one_dash": "ok",
+          "tests.test_slugs.SlugTest.test_no_dash_at_the_ends": "ok"
+        },
+        "output_tail": "test_no_dash_at_the_ends (tests.test_slugs.SlugTest.test_no_dash_at_the_ends) ... ok\ntest_runs_become_one_dash (tests.test_slugs.SlugTest.test_runs_become_one_dash) ... ok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/slugs.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "c837f34adaaead726b04bdec7572222f07e80c01a62647132ef2e77cc2a50c5f",
+  "summary_sha256": "8c2c400681912d11695d552c50747aaa01dda1fba5785b79709e66e3348ac7f2",
+  "verdict_sha256": "233c968139ab0724ef6f93e2a38128f3be3491a907d857290dae641ee5471ede"
+}
