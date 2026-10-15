@@ -6,7 +6,7 @@ Shape (docs/reviews/ACCEPTANCE_GENERAL.md section 5):
   version: int >= 1
   inputs: {workspace, issue}    workspace: repository directory, relative to the project root, under fixtures/repos/
   scope: {writable, protected}  globs relative to the workspace; protected wins, and no input file may match both
-  artifacts: [{path, type, schema}]   slice 1: exactly SUMMARY.json, json, claims_v1
+  artifacts: [{path, type, schema}]   slice 1: exactly SUMMARY.json, json, claims_v1 or claims_v2
   validation: [{id, executable, args, timeout_s, min_tests, max_skipped, must_pass?}]
   judge: []                     slice 1 has no subjective criteria
   limits: {max_usd, max_iterations}
@@ -18,7 +18,7 @@ import re
 
 from .validation import validate_command
 
-ARTIFACT_TYPES = {"json": {"claims_v1"}}
+ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
 KEYS = {"contract", "version", "inputs", "scope", "artifacts", "validation", "judge", "limits"}
 VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass"}
@@ -67,6 +67,10 @@ def glob_regex(g):
     return re.compile("^" + "".join(out) + "$")
 
 
+def claims_schema(c):
+    return c["artifacts"][0]["schema"]
+
+
 def matches(path, globs):
     return any(glob_regex(g).match(path) for g in globs)
 
@@ -106,8 +110,10 @@ def validate(c):
             errors.append("a glob is both writable and protected")
 
     arts = c["artifacts"]
-    if arts != [{"path": SUMMARY, "type": "json", "schema": "claims_v1"}]:
-        errors.append(f"artifacts must be exactly [{{path: {SUMMARY}, type: json, schema: claims_v1}}] in slice 1")
+    if not (isinstance(arts, list) and len(arts) == 1 and isinstance(arts[0], dict)
+            and set(arts[0]) == {"path", "type", "schema"} and arts[0]["path"] == SUMMARY and arts[0]["type"] == "json"
+            and arts[0]["schema"] in ARTIFACT_TYPES["json"]):
+        errors.append(f"artifacts must be exactly [{{path: {SUMMARY}, type: json, schema: claims_v1 | claims_v2}}]")
 
     vals = c["validation"]
     if not isinstance(vals, list) or not vals:

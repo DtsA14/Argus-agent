@@ -14,7 +14,7 @@ import statistics
 from pathlib import Path
 
 from acceptance.claims import read_summary
-from acceptance.contract import SUMMARY, matches
+from acceptance.contract import SUMMARY, claims_schema, matches
 from acceptance.validation import run_validation
 from acceptance.workspace import diff, snapshot
 
@@ -37,7 +37,7 @@ def independent_checks(contract, run_dir, sandbox_cfg, validate=run_validation):
                      and not matches(p, sc["writable"]))
 
     present = ws.exists() and (ws / SUMMARY).exists()
-    doc, problems = read_summary(str(ws)) if present else (None, [])
+    doc, problems = read_summary(str(ws), claims_schema(contract)) if present else (None, [])
     specs = {f"validation:{v['id']}": v for v in contract["validation"]}
     fresh, false_claims = {}, []
     if doc is not None and not problems:

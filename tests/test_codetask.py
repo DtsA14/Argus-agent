@@ -241,3 +241,35 @@ def test_a_finished_run_is_not_continued_by_resume(tmp_path):
     r2, model2, _ = run(tmp_path, [], resume=True)
     assert r2["status"] == r1["status"] == st.DONE and len(model2.calls) == 0
     assert r2["usd_billed"] == r1["usd_billed"]
+
+
+# ---- claims_v2: an agent that cannot finish may claim nothing -------------------------------------------------
+
+def v2_contract(**limits):
+    c = copy.deepcopy(CONTRACT)
+    c["artifacts"][0]["schema"] = "claims_v2"
+    c["limits"].update(limits)
+    return c
+
+
+def test_with_claims_v2_an_empty_finish_ends_the_attempt_and_the_task_still_fails(tmp_path):
+    nothing = call("Finish", {"claims": [], "summary": "I could not fix it."}, "f1")
+    r, model, d = run(tmp_path, [nothing, nothing], contract=v2_contract())
+    assert r["status"] == st.FAILED_ACCEPTANCE and r["attempts"] == 2              # honest, but not done
+    assert json.loads((d / "workspace" / "SUMMARY.json").read_text())["claims"] == []
+    assert not any(e["event"] == "finish_rejected" for e in events(d))
+    answers = [m.content for c in model.calls for m in c["messages"] if getattr(m, "tool_call_id", None) == "f1"]
+    assert not any(a.startswith("Rejected") for a in answers)
+
+
+def test_with_claims_v1_an_empty_finish_is_still_rejected(tmp_path):
+    nothing = call("Finish", {"claims": [], "summary": "I could not fix it."}, "f0")
+    r, model, d = run(tmp_path, [nothing, WRITE, FINISH])
+    answer = next(m for m in model.calls[1]["messages"] if getattr(m, "tool_call_id", None) == "f0").content
+    assert "claims must be a list of 1 to 50 claims" in answer and r["status"] == st.DONE
+
+
+def test_with_claims_v2_a_real_fix_needs_no_claims_to_be_done(tmp_path):
+    r, model, d = run(tmp_path, [WRITE, call("Finish", {"claims": [], "summary": "fixed"}, "f1")],
+                      contract=v2_contract())
+    assert r["status"] == st.DONE

@@ -10,7 +10,7 @@ Layer E (budget and time) is enforced by the run itself (LLMCaller, reservations
 import hashlib
 
 from . import claims as cl
-from .contract import SUMMARY
+from .contract import SUMMARY, claims_schema
 from .validation import run_validation
 from .workspace import diff, digest, scope_check, snapshot
 
@@ -26,7 +26,7 @@ def evaluate(contract, workspace, before, sandbox_cfg, log=None, run=run_validat
     after = snapshot(workspace)
     criteria = scope_check(contract, before, after)
 
-    doc, problems = cl.read_summary(workspace)
+    doc, problems = cl.read_summary(workspace, claims_schema(contract))
     art = {"path": SUMMARY, "sha256": after.get(SUMMARY)}
     criteria.append({"id": f"artifact:{SUMMARY}", "layer": "B", "status": "fail" if problems else "pass",
                      "reason": "; ".join(problems), "evidence": art})
@@ -41,7 +41,10 @@ def evaluate(contract, workspace, before, sandbox_cfg, log=None, run=run_validat
         criteria.append({"id": "claims", "layer": "D", "status": "fail",
                          "reason": f"no valid {SUMMARY}, so no completion claim can be checked", "evidence": {}})
     else:
-        criteria += cl.check_claims(doc, validations, diff(before, after))
+        checked = cl.check_claims(doc, validations, diff(before, after))
+        # Layer D is always reported: with claims_v2 an empty list is a valid, checked answer ("claims nothing").
+        criteria += checked or [{"id": "claims", "layer": "D", "status": "pass", "reason": "",
+                                 "evidence": {"count": 0}}]
 
     # The verdict holds only for the workspace it was reached on: validation mounts it read-only, and this
     # confirms nothing changed while the criteria were being checked.
