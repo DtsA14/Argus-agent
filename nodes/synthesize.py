@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field
 from harness.crash import Crasher
 from harness.errors import LLMCallFailed, ReservationExhausted
 from harness.llm import is_truncated
-from harness.steps import llm_step_key, message_from_json, message_to_json, reservation_from_ledger
+from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_from_json, message_to_json,
+                           reservation_from_ledger)
 
 from .facts import FORMAT_HELP, MAX_RECS, MIN_RECS, build_facts, fact_line, render_line, round_half_up, \
     validate_recommendations
@@ -160,7 +161,9 @@ def make_llm_synthesize(caller, gate, memo, log, run_dir, *, tokens, usd, attemp
                 return done([], "synthesize_failed", reason=f"output_truncated at step {attempt}")
 
             calls = list(msg.tool_calls or [])
-            if len(calls) != 1 or calls[0].get("name") != "SubmitRecommendations":
+            if invalid_call_errors(msg):   # a malformed call is never read as a submission
+                errors = invalid_call_errors(msg)
+            elif len(calls) != 1 or calls[0].get("name") != "SubmitRecommendations":
                 errors = [f"call only the SubmitRecommendations tool, exactly once; got {[c.get('name') for c in calls]}"]
             else:
                 recs, errors = validate_recommendations(calls[0].get("args"), facts)
@@ -168,9 +171,9 @@ def make_llm_synthesize(caller, gate, memo, log, run_dir, *, tokens, usd, attemp
                     return done(recs, "recs_accepted", step=attempt, count=len(recs))
             log.emit("recs_invalid", step=attempt, errors=[str(e)[:200] for e in errors[:10]], **meta)
             feedback = "Rejected by the harness:\n- " + "\n- ".join(errors) + "\nFix these and call SubmitRecommendations again."
-            if calls:   # every tool_use must be answered before the next turn
-                messages += [ToolMessage(feedback, tool_call_id=c.get("id") or f"call_{attempt}_{i}")
-                             for i, c in enumerate(calls)]
+            ids = call_ids(msg, f"call_{attempt}")
+            if ids:   # every tool call, valid or not, must be answered before the next turn
+                messages += [ToolMessage(feedback, tool_call_id=i) for i in ids]
             else:
                 messages.append(HumanMessage(feedback))
         return done([], "synthesize_failed", reason=f"recommendations invalid after {attempts} attempts: "

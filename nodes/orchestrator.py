@@ -5,7 +5,7 @@ from langgraph.types import Send
 from harness.errors import LLMCallFailed, PlanRejected, ReservationExhausted
 from harness.crash import Crasher
 from harness.llm import is_truncated
-from harness.steps import reservation_from_ledger
+from harness.steps import call_ids, invalid_call_errors, reservation_from_ledger
 
 from .plan import SubmitPlan, system_prompt, user_prompt, validate_plan
 
@@ -84,7 +84,9 @@ def make_llm_orchestrator(caller, contract, *, max_workers, log, tokens, usd, at
 
             calls = list(getattr(msg, "tool_calls", None) or [])
             plan_calls = [c for c in calls if c.get("name") == "SubmitPlan"]
-            if len(calls) != 1 or len(plan_calls) != 1:
+            if invalid_call_errors(msg):   # a malformed call is never read as a plan
+                errors, plan = invalid_call_errors(msg), None
+            elif len(calls) != 1 or len(plan_calls) != 1:
                 # Strict contract: the reply must be exactly one SubmitPlan call and nothing else.
                 others = sorted({c.get("name") or "?" for c in calls} - {"SubmitPlan"})
                 errors = [f"call only the SubmitPlan tool, exactly once: got {len(calls)} tool call(s), "
@@ -105,9 +107,9 @@ def make_llm_orchestrator(caller, contract, *, max_workers, log, tokens, usd, at
             log.emit("plan_invalid", attempt=attempt, errors=errors, iteration=iteration)
             feedback = "Plan rejected by the harness:\n- " + "\n- ".join(errors) + "\nFix these and call SubmitPlan again."
             messages.append(msg)
-            if calls:  # every tool_use must be answered before the next turn (Anthropic requires it)
-                messages += [ToolMessage(content=feedback, tool_call_id=c.get("id") or f"call_{i}")
-                             for i, c in enumerate(calls)]
+            ids = call_ids(msg, "call")
+            if ids:  # every tool call, valid or not, must be answered before the next turn
+                messages += [ToolMessage(content=feedback, tool_call_id=i) for i in ids]
             else:
                 messages.append(HumanMessage(feedback))
 
