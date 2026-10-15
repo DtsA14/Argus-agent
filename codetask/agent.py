@@ -2,8 +2,8 @@
 
 Per step:  model call -> commit reply -> run each tool call -> commit each tool result -> next step.
 On resume, committed steps are replayed from the memo (no model call, no tool run). A tool that ran but whose
-result was not committed runs again; every tool is safe to repeat (writes are atomic and leave the same file, and
-results do not depend on whether the file existed). The attempt's reservation starts from what this attempt already
+result was not committed runs again; every tool is safe to repeat (a write replaces the whole file atomically, so
+repeating it leaves the same file). The attempt's reservation starts from what this attempt already
 spent according to the ledger, so a crash never lets it spend its budget twice.
 
 An attempt ends with Finish, after max_steps, when its reservation is exhausted, when the provider fails, or on a

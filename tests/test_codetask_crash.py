@@ -144,8 +144,8 @@ def test_a_crash_before_a_reply_is_committed_buys_it_again_and_pays_for_both(tmp
 
 def test_a_write_that_ran_but_was_not_committed_runs_again_with_the_same_result(tmp_path, image):
     # The write (step 1) changed the file, then the process died before its result was committed. Resume replays
-    # the committed reply and runs the write again: same file, same result text, so the conversation goes on as it
-    # would have, with no extra model call.
+    # the committed reply and runs the write again. Its effect must be idempotent: the file ends up exactly as after
+    # one write (a write that appended when repeated is caught here), and no model call is bought again.
     r2, result, evs = _crash_and_resume(tmp_path, image, "agent@after_tool:WriteFile")
     _assert_done(tmp_path, r2, result)
     ran = [e for e in evs if e["event"] == "tool_call" and e.get("tool") == "write_file"]

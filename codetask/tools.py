@@ -1,9 +1,10 @@
 """The agent's tools for a code task. Every path goes through the path jail of the workspace; writes are checked
 against the frozen contract's scope before anything is written (acceptance re-checks the result anyway).
 
-Results are written so a tool run twice on the same workspace gives the same text (no timings, no "created"
-versus "overwritten"): after a crash between running a tool and committing its result, the tool runs again and the
-conversation continues exactly as it would have.
+After a crash between running a tool and committing its result, the tool runs again. What must be the same is its
+effect: a write replaces the whole file atomically, so running it twice leaves the same file (a repeated append would
+not). The result text of that uncommitted run was never seen by a committed step, so it need not match; it is still
+kept free of timings and of "created" versus "overwritten" so replays read the same.
 """
 import hashlib
 import json
