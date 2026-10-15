@@ -165,3 +165,39 @@ pertimbangan.
    Membandingkan run #1 dan #2 harus menyebut bahwa sistemnya berubah, bukan bar-nya.
 3. Alternatif yang **tidak** diusulkan: mematikan thinking DeepSeek. Itu mengubah perilaku judge yang baru saja diukur,
    dan risikonya lebih besar daripada menaikkan batas output.
+
+## Perubahan sebelum run live #2 (disetujui Atha + GPT 2026-10-15; run #2 belum dijalankan)
+
+Commit `b9c464b`. Sejak commit run #1 (`08f4367`), di luar dokumen dan bukti, **hanya** dua angka di `config.yaml` dan
+tesnya yang berubah:
+- `roles.evaluator.max_output_tokens`: 4096 → **8192**
+- `llm_token_estimates.evaluator`: 14000 → **20000**
+
+`nodes/judge.py` (prompt), `nodes/contract.py` (rubric), `calibration/fixtures.json` (`sha256 73de0afd…`), dan
+`scripts/calibrate_judge.py` (aturan skor) **identik** dengan saat run #1 (`git diff --quiet 08f4367 b9c464b`).
+
+Checklist GPT:
+
+| Syarat | Bukti |
+|---|---|
+| Hanya config dan dokumentasi yang perlu; prompt, rubric, fixture, dan skor tidak berubah | `git diff` di atas |
+| `max_output_tokens=8192` benar-benar diteruskan ke provider | Judge yang dibangun dari config meminta 8192 di **kedua** percobaan (`test_the_judge_asks_for_8192_output_tokens_on_both_attempts`). Payload request `ChatDeepSeek` berisi 8192 (`test_the_8192_cap_reaches_the_deepseek_request`) |
+| Estimasi 20000 diuji bersama reservasi, termasuk penolakan sebelum request | Worst case per penilaian $0.024 (`…prices_one_judgement_at_its_peak_worst_case`). Request yang tidak muat ditolak sebelum dikirim (`…still_refused_before_sending`) |
+| `verify.sh` lulus di commit persis yang dipakai | `verification/verify-20261015T003131Z-aarch64.log`: `commit: b9c464b…`, working tree bersih, **632 lulus, 0 tes sandbox di-skip** |
+| Batas keras $1.00 dan run tidak lengkap = tidak lulus | Tidak berubah (dites sejak dry-run) |
+| Konfigurasi, commit, waktu, ledger, token output, hasil per laporan dicatat | Runner sudah mencatat semuanya di `calibration.json` dan `events.jsonl`, seperti run #1 |
+
+Mutasi: mengembalikan batas ke 4096 menggagalkan 2 tes; mengembalikan estimasi ke 14000 menggagalkan 3 tes.
+
+**Ditemukan saat menaikkan batas:** percobaan yang gagal ditagih worst case (input + 8192). Akibatnya, di reservasi
+20000, percobaan ulang ketiga dari wrapper setelah error server **ditolak sebelum dikirim**: fail closed, tanpa biaya
+berlebih, tapi alasannya `node_reservation`, bukan `llm_failed`. Ini dites
+(`test_with_the_real_reservation_a_third_retry_after_server_errors_is_refused_not_sent`). Helper tes judge sekarang
+memakai reservasi default 40000, supaya tes kegagalan API tetap menguji kegagalan API.
+
+**Rencana run #2** (menunggu persetujuan akhir):
+- Satu kali di VM pada `b9c464b` dengan `ARGUS_LIVE=1 python scripts/calibrate_judge.py --run-id calib_live_2`.
+- Worst case per penilaian $0.024; batas run $1.00.
+- Dilaporkan **terpisah** dari run #1, dengan menyebut bahwa sistemnya berubah, bukan standarnya.
+- Kalau injeksi masih gagal tanpa verdict yang terpotong, berarti masalahnya bukan batas output. Prompt atau desain
+  judge baru dievaluasi setelah itu, tanpa mengubah standar kelulusan.
