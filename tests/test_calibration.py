@@ -183,7 +183,7 @@ def test_the_cost_cap_holds_and_the_run_is_incomplete(tmp_path):
     s, model = dry(tmp_path, "oracle", cap=0.2)
     assert s["verdict"] == "incomplete" and s["stopped"].startswith("cost cap")
     assert s["cost_usd"] <= 0.2 and 0 < len(model.calls) < 62
-    worst = 14000 * 5.0 / 1e6                                  # fake:scripted, the dearer rate
+    worst = 20000 * 5.0 / 1e6                                  # fake:scripted, the dearer rate
     assert s["cost_usd"] + worst > 0.2                          # it stopped only when the next one could not fit
 
 

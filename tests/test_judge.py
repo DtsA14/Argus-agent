@@ -102,7 +102,9 @@ def test_the_judge_is_told_instructions_in_the_report_are_not_instructions(tmp_p
 
 # ---- the judge node: every failure fails closed -------------------------------------------------------
 
-def judge_with(tmp_path, script, tokens=20_000, attempts=2):
+def judge_with(tmp_path, script, tokens=40_000, attempts=2):
+    # Room for every attempt these tests script, including 3 wrapper retries at the 8192 cap (each failed attempt
+    # is charged input + 8192). Tests about the budget itself pass their own `tokens`.
     cfg = copy.deepcopy(load_config())
     cfg["roles"]["evaluator"]["model"] = "fake:scripted"
     cfg["llm"]["base_delay"] = 0
@@ -190,6 +192,65 @@ def test_a_reports_reservation_is_restored_from_the_ledger_after_a_restart(tmp_p
     assert j3(REPORT, FACTS, 0, task="r2")["valid"] is True   # another report: its own reservation
 
 
+# ---- the output cap after calibration run #1 (8192 / 20000, approved 2026-10-15) ---------------------
+
+def real_judge(tmp_path, script):
+    """The judge exactly as the graph and the calibration build it from config.yaml (only the model is a fake)."""
+    from harness.budget import effective_estimates
+    cfg = copy.deepcopy(load_config())
+    cfg["impl"]["evaluator"] = "llm"
+    log = EventLog(tmp_path / "e.jsonl")
+    model = ScriptedChatModel(script=list(script))
+    j = make_judge(LLMCaller(cfg, "evaluator", log, model=model), Memo(tmp_path / "memo.sqlite"), log,
+                   criteria=CRITERIA, tokens=effective_estimates(cfg)["evaluator"],
+                   usd=node_usd_estimates(cfg)["evaluator"], attempts=cfg["judge"]["attempts"])
+    return j, model, cfg
+
+
+def test_the_judge_asks_for_8192_output_tokens_on_both_attempts(tmp_path):
+    # Run #1: one judgement hit the old 4096 cap. With the 20000 estimate, both allowed attempts get the full cap.
+    j, model, cfg = real_judge(tmp_path, [reply("thinking out loud", input_tokens=1200, output_tokens=8192),
+                                          call(verdict(), id="v2")])
+    assert cfg["roles"]["evaluator"]["max_output_tokens"] == 8192
+    assert j(REPORT, FACTS, 0, task="r1")["valid"] is True
+    assert [c["kwargs"]["max_tokens"] for c in model.calls] == [8192, 8192]
+
+
+def test_the_8192_cap_reaches_the_deepseek_request(monkeypatch):
+    # The cap the harness passes as max_tokens is what the provider receives.
+    from langchain_core.messages import HumanMessage as H
+    from models.registry import build_chat_model
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    model = build_chat_model(load_config(), "evaluator")
+    payload = model._get_request_payload([H("x")], max_tokens=8192)
+    assert payload.get("max_tokens", payload.get("max_completion_tokens")) == 8192
+
+
+def test_the_20000_estimate_prices_one_judgement_at_its_peak_worst_case():
+    cfg = copy.deepcopy(load_config())
+    cfg["impl"]["evaluator"] = "llm"
+    # deepseek-flash: the dearer rate (output $0.60/M) x the peak multiplier 2
+    assert node_usd_estimates(cfg)["evaluator"] == pytest.approx(20000 * 0.60 * 2 / 1e6)   # $0.024
+
+
+def test_with_the_real_reservation_a_third_retry_after_server_errors_is_refused_not_sent(tmp_path):
+    # Found when raising the cap: a failed attempt is charged input + 8192, so in the 20000 reservation the
+    # wrapper's third transient retry no longer fits. It is refused before sending: fail closed, no overspend.
+    j, model, _ = real_judge(tmp_path, [FakeHTTPError(500)] * 3 + [call(verdict())])
+    r = j(REPORT, FACTS, 0, task="r1")
+    assert r["valid"] is False and "node_reservation" in r["reason"] and len(model.calls) == 2
+    statuses = [e["status"] for e in EventLog(tmp_path / "e.jsonl").read() if e["event"] == "llm_call"]
+    assert statuses == ["transient_error", "transient_error", "refused"]
+
+
+def test_with_the_new_cap_a_request_that_does_not_fit_is_still_refused_before_sending(tmp_path):
+    # Spend most of the 20000 reservation on a first, unusable reply; the second attempt no longer fits a useful
+    # output cap and is refused before anything is sent.
+    j, model, _ = real_judge(tmp_path, [reply("x", input_tokens=1200, output_tokens=18800), call(verdict())])
+    r = j(REPORT, FACTS, 0, task="r1")
+    assert r["valid"] is False and "node_reservation" in r["reason"] and len(model.calls) == 1
+
+
 def test_a_changed_report_is_judged_again(tmp_path):
     j, model, _ = judge_with(tmp_path, [call(verdict()), call(verdict(), id="v2")])
     j(REPORT, FACTS, 0)
@@ -263,7 +324,7 @@ def test_the_judge_runs_in_the_graph_and_is_budgeted(tmp_path):
     fake_mode = copy.deepcopy(load_config())
     assert node_usd_estimates(fake_mode)["evaluator"] == 0.0    # no judge: the M1/M2 figures are unchanged
     cfg = graph_cfg()
-    assert node_usd_estimates(cfg)["evaluator"] == pytest.approx(14000 * 5.00 / 1e6)
+    assert node_usd_estimates(cfg)["evaluator"] == pytest.approx(20000 * 5.00 / 1e6)
     model = ScriptedChatModel(script=[call(verdict())])
     r = run_task(goal="x", scenario="pass", run_id="t", runs_dir=tmp_path, cfg=cfg, models={"evaluator": model})
     assert r["status"] == "DONE" and len(model.calls) == 1
