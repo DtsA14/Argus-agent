@@ -165,3 +165,12 @@ kedua adalah usulan untuk permintaan yang naik, bukan klaim bahwa pengiriman sek
    negatif).
 5. Kalau `good-5` masih ditolak, atau ada klaim karangan yang lolos, hasilnya dicatat apa adanya. Rubric tidak diubah
    lagi setelah melihat hasil.
+
+## 6. Hasil baseline baru #2 (2026-10-15)
+Kriteria keputusan B (PR #17) dijalankan satu kali pada `baa60fc` (kode sama dengan `a3661fe`), dengan fixture
+`73de0afd…` dan ambang yang sama, di luar jam sibuk: **PASS**. Deteksi 25/25, injeksi 4/4, karangan 6/6, false reject
+0, 0 verdict tidak valid, $0.0455. `good-5` lulus `grounded` di kedua penilaian. Alasan judge menyebut bahwa saran
+pemasok bertumpu pada tren naik dan hanya mengandaikan susunan wajar usaha yang punya pemasok. Semua fixture karangan
+tetap ditolak di kedua penilaian. Satu run ini belum membuktikan kestabilan antar run (judge tidak deterministik).
+Bukti: `verification/calibration-3d-baseline-grounded-2/`.
+
