@@ -237,7 +237,9 @@ kriteria, dan model. Resume tidak membeli verdict yang sudah di-commit.
       (fail closed), dengan tes untuk setiap kasus.
 - [ ] Set kalibrasi: ambang deteksi dan penolakan palsu disepakati **sebelum** run live (keputusan 3), lalu hasil live
       dilaporkan apa adanya, termasuk kalau di bawah ambang.
-- [ ] Satu smoke live end-to-end di VM dengan synthesize dan evaluator LLM, biaya di bawah `max_usd`, ledger konsisten.
+- [x] Satu smoke live end-to-end di VM dengan synthesize dan evaluator LLM, biaya di bawah `max_usd`, ledger konsisten.
+  Smoke 3e (PR #14, `08829db`): DONE, skor 1.0, rubric lulus, 9/9 panggilan ok, $0.0225, rekonsiliasi cocok
+  (`verification/smoke-3e/smoke_3e_1/`).
 - [ ] `verify.sh` lulus di VM ARM, 0 tes sandbox di-skip. Audit GPT setelah 3c dan setelah 3d.
 
 ## 6. Urutan kerja
@@ -248,7 +250,7 @@ kriteria, dan model. Resume tidak membeli verdict yang sudah di-commit.
 | 3b | Synthesize LLM + cek angka berdasar | Tidak (model palsu); smoke di akhir |
 | 3c | Evaluator rubric LLM, fail closed, injeksi → **audit GPT** | Tidak (model palsu) |
 | 3d | Set kalibrasi + run live → **audit GPT** | Ya: key provider judge |
-| 3e | Smoke end-to-end di VM | Ya |
+| 3e | Smoke end-to-end di VM | Ya (**selesai**, PR #14) |
 
 ## 7. Risiko
 - **Judge tidak deterministik.** Hasil kalibrasi bisa berubah antar run. Mitigasi: setiap laporan dinilai 2 kali, dan
