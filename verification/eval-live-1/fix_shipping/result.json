@@ -1,0 +1,23 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "f2a44b8509f7dc0296b2cdfa9e31cd489c0b0d7c52814f63e4db9191a75bd210",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "2c37cb1e62669200d04e17b7488e1ca4bbad1280485f72ac549ca8898a2fb054"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "finished",
+    "steps": 2
+  },
+  "run_id": "live_fix_shipping",
+  "attempts": 1,
+  "usd_billed": 0.017984,
+  "usd_complete": true,
+  "llm_calls": 3,
+  "llm_calls_unknown": 0
+}

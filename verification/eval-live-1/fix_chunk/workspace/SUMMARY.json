@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/chunks.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "Changed the range in chunk() to run to len(seq) instead of len(seq) - n + 1, so the shorter last piece is kept."
+}

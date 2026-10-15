@@ -1,0 +1,12 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/shipping/src/shipping.py runs/eval_live_1/live_fix_shipping/workspace/src/shipping.py
+--- fixtures/repos/shipping/src/shipping.py	2026-10-15 18:24:26.037664314 +0000
++++ runs/eval_live_1/live_fix_shipping/workspace/src/shipping.py	2026-10-15 19:00:20.314437965 +0000
+@@ -10,7 +10,7 @@
+ def shipping_cost(weight_kg, order_total, express=False):
+     if weight_kg <= 0:
+         raise ValueError("weight must be positive")
+-    if order_total >= 50:
++    if order_total >= 50 and not express:
+         return 0.0
+     extra = max(0, math.ceil(weight_kg) - 1)
+     cost = 5.0 + 2.0 * extra

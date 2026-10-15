@@ -1,0 +1,123 @@
+{"ts": 1792090837.74, "event": "run_start", "run_id": "live_round_conflict", "kind": "code_task", "contract": "/home/ubuntu/Argus-agent/fixtures/contracts/round_conflict.json"}
+{"ts": 1792090837.76, "event": "node_start", "node": "setup"}
+{"ts": 1792090837.762, "event": "contract_frozen", "sha256": "a4bf102284dea244ef3f0b5a2af2def265d85602388d773a5e7e71c64bed71ff", "contract": "round_conflict", "version": 1}
+{"ts": 1792090837.825, "event": "workspace_prepared", "files": 4}
+{"ts": 1792090837.825, "event": "status", "old": null, "new": "RUNNING", "reason": null, "blocked_reason": null}
+{"ts": 1792090837.825, "event": "body_done", "node": "setup", "tokens": 0}
+{"ts": 1792090837.829, "event": "result_committed", "node": "setup"}
+{"ts": 1792090837.829, "event": "node_end", "node": "setup", "seconds": 0.07, "tokens": 0}
+{"ts": 1792090837.836, "event": "node_start", "node": "agent", "iteration": 0}
+{"ts": 1792090838.179, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8a078498c4db0df7", "call_id": "006d8ff0363a", "attempt": 1, "est_input": 1421, "max_tokens": 4096, "worst_tokens": 5517, "worst_usd_nano": 43802000, "worst_usd": 0.043802}
+{"ts": 1792090839.291, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8a078498c4db0df7", "call_id": "006d8ff0363a", "status": "ok", "attempt": 1, "est_input": 1421, "max_tokens": 4096, "input_tokens": 1421, "output_tokens": 28, "cache_read": 0, "tokens": 1449, "usd_nano": 3122000, "usd": 0.003122, "charged": "actual", "latency_s": 1.111, "truncated": false}
+{"ts": 1792090839.295, "event": "step_committed", "kind": "llm", "step": 0, "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090839.295, "event": "tool_call", "role": "coder", "tool": "list_files"}
+{"ts": 1792090839.3, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ListFiles", "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090839.677, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "1f8c39030cb4f08b", "call_id": "c9d9fec74ca1", "attempt": 1, "est_input": 1489, "max_tokens": 4096, "worst_tokens": 5585, "worst_usd_nano": 43938000, "worst_usd": 0.043938}
+{"ts": 1792090841.302, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "1f8c39030cb4f08b", "call_id": "c9d9fec74ca1", "status": "ok", "attempt": 1, "est_input": 1489, "max_tokens": 4096, "input_tokens": 1489, "output_tokens": 110, "cache_read": 0, "tokens": 1599, "usd_nano": 4078000, "usd": 0.004078, "charged": "actual", "latency_s": 1.625, "truncated": false}
+{"ts": 1792090841.309, "event": "step_committed", "kind": "llm", "step": 1, "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090841.31, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090841.314, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090841.314, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090841.318, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090841.638, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "6c92eedfac1702ee", "call_id": "b76ba312e0e9", "attempt": 1, "est_input": 1858, "max_tokens": 4096, "worst_tokens": 5954, "worst_usd_nano": 44676000, "worst_usd": 0.044676}
+{"ts": 1792090843.01, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "6c92eedfac1702ee", "call_id": "b76ba312e0e9", "status": "ok", "attempt": 1, "est_input": 1858, "max_tokens": 4096, "input_tokens": 1858, "output_tokens": 88, "cache_read": 0, "tokens": 1946, "usd_nano": 4596000, "usd": 0.004596, "charged": "actual", "latency_s": 1.371, "truncated": false}
+{"ts": 1792090843.016, "event": "step_committed", "kind": "llm", "step": 2, "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090843.016, "event": "tool_call", "role": "coder", "tool": "run_validation"}
+{"ts": 1792090843.728, "event": "sandbox_run", "container": "argus-881b2afa59a1", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 722, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792090843.733, "event": "step_committed", "kind": "tool", "step": 2, "tool": "RunValidation", "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090844.077, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "b093b1131c84e460", "call_id": "ea16c91d4f75", "attempt": 1, "est_input": 2451, "max_tokens": 4096, "worst_tokens": 6547, "worst_usd_nano": 45862000, "worst_usd": 0.045862}
+{"ts": 1792090848.342, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "b093b1131c84e460", "call_id": "ea16c91d4f75", "status": "ok", "attempt": 1, "est_input": 2451, "max_tokens": 4096, "input_tokens": 2451, "output_tokens": 496, "cache_read": 0, "tokens": 2947, "usd_nano": 9862000, "usd": 0.009862, "charged": "actual", "latency_s": 4.265, "truncated": false}
+{"ts": 1792090848.351, "event": "step_committed", "kind": "llm", "step": 3, "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090848.355, "event": "step_committed", "kind": "tool", "step": 3, "tool": "Finish", "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090848.692, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 4, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8f17cca6f2a11cae", "call_id": "b6a7d9d8a731", "attempt": 1, "est_input": 2981, "max_tokens": 4096, "worst_tokens": 7077, "worst_usd_nano": 46922000, "worst_usd": 0.046922}
+{"ts": 1792090850.594, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 0, "step": 4, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8f17cca6f2a11cae", "call_id": "b6a7d9d8a731", "status": "ok", "attempt": 1, "est_input": 2981, "max_tokens": 4096, "input_tokens": 2981, "output_tokens": 184, "cache_read": 0, "tokens": 3165, "usd_nano": 7802000, "usd": 0.007802, "charged": "actual", "latency_s": 1.902, "truncated": false}
+{"ts": 1792090850.602, "event": "step_committed", "kind": "llm", "step": 4, "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090850.609, "event": "step_committed", "kind": "tool", "step": 4, "tool": "Finish", "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090850.609, "event": "attempt_end", "reason": "finished", "steps": 4, "node": "agent", "task": "round_conflict", "iteration": 0}
+{"ts": 1792090850.609, "event": "body_done", "node": "agent", "tokens": 11106, "iteration": 0}
+{"ts": 1792090850.613, "event": "result_committed", "node": "agent", "iteration": 0}
+{"ts": 1792090850.613, "event": "node_end", "node": "agent", "seconds": 12.777, "tokens": 11106, "iteration": 0}
+{"ts": 1792090850.619, "event": "node_start", "node": "acceptance", "iteration": 0}
+{"ts": 1792090851.326, "event": "sandbox_run", "container": "argus-dd3961a6738e", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 870, "cleanup_failed": false, "validation": "unit"}
+{"ts": 1792090851.995, "event": "sandbox_run", "container": "argus-3fe267a7ba6f", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 722, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792090851.996, "event": "acceptance_verdict", "iteration": 0, "outcome": "fail", "failing": ["claim[0]:file_changed", "validation:target", "validation:unit"], "workspace_digest": "25ffca9d45ce54a843e99d9dc1867e117fa607935cbe56b0c7be5898a4241754"}
+{"ts": 1792090851.997, "event": "status", "old": "RUNNING", "new": "RUNNING", "reason": null, "blocked_reason": null}
+{"ts": 1792090851.997, "event": "body_done", "node": "acceptance", "tokens": 0, "iteration": 0}
+{"ts": 1792090852.002, "event": "result_committed", "node": "acceptance", "iteration": 0}
+{"ts": 1792090852.002, "event": "node_end", "node": "acceptance", "seconds": 1.383, "tokens": 0, "iteration": 0}
+{"ts": 1792090852.009, "event": "node_start", "node": "agent", "iteration": 1}
+{"ts": 1792090852.342, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "422a774f862c6bf6", "call_id": "3341be060d8a", "attempt": 1, "est_input": 1558, "max_tokens": 4096, "worst_tokens": 5654, "worst_usd_nano": 44076000, "worst_usd": 0.044076}
+{"ts": 1792090853.884, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "422a774f862c6bf6", "call_id": "3341be060d8a", "status": "ok", "attempt": 1, "est_input": 1558, "max_tokens": 4096, "input_tokens": 1558, "output_tokens": 135, "cache_read": 0, "tokens": 1693, "usd_nano": 4466000, "usd": 0.004466, "charged": "actual", "latency_s": 1.542, "truncated": false}
+{"ts": 1792090853.889, "event": "step_committed", "kind": "llm", "step": 0, "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090853.89, "event": "tool_call", "role": "coder", "tool": "list_files"}
+{"ts": 1792090853.894, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ListFiles", "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090853.895, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090853.9, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090853.9, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090853.904, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090854.218, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "e81a95a01a7d7e75", "call_id": "0a629435ff0c", "attempt": 1, "est_input": 2023, "max_tokens": 4096, "worst_tokens": 6119, "worst_usd_nano": 45006000, "worst_usd": 0.045006}
+{"ts": 1792090856.476, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "e81a95a01a7d7e75", "call_id": "0a629435ff0c", "status": "ok", "attempt": 1, "est_input": 2023, "max_tokens": 4096, "input_tokens": 2023, "output_tokens": 149, "cache_read": 0, "tokens": 2172, "usd_nano": 5536000, "usd": 0.005536, "charged": "actual", "latency_s": 2.258, "truncated": false}
+{"ts": 1792090856.483, "event": "step_committed", "kind": "llm", "step": 1, "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090856.484, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090856.487, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090856.815, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "5bc0f614548eae8a", "call_id": "c2dc9a7dcb39", "attempt": 1, "est_input": 2321, "max_tokens": 4096, "worst_tokens": 6417, "worst_usd_nano": 45602000, "worst_usd": 0.045602}
+{"ts": 1792090860.052, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "5bc0f614548eae8a", "call_id": "c2dc9a7dcb39", "status": "ok", "attempt": 1, "est_input": 2321, "max_tokens": 4096, "input_tokens": 2321, "output_tokens": 260, "cache_read": 0, "tokens": 2581, "usd_nano": 7242000, "usd": 0.007242, "charged": "actual", "latency_s": 3.236, "truncated": false}
+{"ts": 1792090860.057, "event": "step_committed", "kind": "llm", "step": 2, "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090860.061, "event": "step_committed", "kind": "tool", "step": 2, "tool": "Finish", "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090860.406, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "ff18fb33536e447a", "call_id": "a1588f15ad77", "attempt": 1, "est_input": 2615, "max_tokens": 4096, "worst_tokens": 6711, "worst_usd_nano": 46190000, "worst_usd": 0.04619}
+{"ts": 1792090864.095, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "ff18fb33536e447a", "call_id": "a1588f15ad77", "status": "ok", "attempt": 1, "est_input": 2615, "max_tokens": 4096, "input_tokens": 2615, "output_tokens": 320, "cache_read": 0, "tokens": 2935, "usd_nano": 8430000, "usd": 0.00843, "charged": "actual", "latency_s": 3.689, "truncated": false}
+{"ts": 1792090864.101, "event": "step_committed", "kind": "llm", "step": 3, "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090864.101, "event": "tool_call", "role": "coder", "tool": "write_file"}
+{"ts": 1792090864.11, "event": "step_committed", "kind": "tool", "step": 3, "tool": "WriteFile", "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090864.441, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 4, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "dd94177d811ad7aa", "call_id": "142f78ded8f1", "attempt": 1, "est_input": 2970, "max_tokens": 4096, "worst_tokens": 7066, "worst_usd_nano": 46900000, "worst_usd": 0.0469}
+{"ts": 1792090867.201, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 1, "step": 4, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "dd94177d811ad7aa", "call_id": "142f78ded8f1", "status": "ok", "attempt": 1, "est_input": 2970, "max_tokens": 4096, "input_tokens": 2970, "output_tokens": 225, "cache_read": 0, "tokens": 3195, "usd_nano": 8190000, "usd": 0.00819, "charged": "actual", "latency_s": 2.76, "truncated": false}
+{"ts": 1792090867.207, "event": "step_committed", "kind": "llm", "step": 4, "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090867.216, "event": "step_committed", "kind": "tool", "step": 4, "tool": "Finish", "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090867.216, "event": "attempt_end", "reason": "finished", "steps": 4, "node": "agent", "task": "round_conflict", "iteration": 1}
+{"ts": 1792090867.216, "event": "body_done", "node": "agent", "tokens": 12576, "iteration": 1}
+{"ts": 1792090867.22, "event": "result_committed", "node": "agent", "iteration": 1}
+{"ts": 1792090867.22, "event": "node_end", "node": "agent", "seconds": 15.211, "tokens": 12576, "iteration": 1}
+{"ts": 1792090867.227, "event": "node_start", "node": "acceptance", "iteration": 1}
+{"ts": 1792090867.941, "event": "sandbox_run", "container": "argus-0c8400d05ec8", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 870, "cleanup_failed": false, "validation": "unit"}
+{"ts": 1792090868.601, "event": "sandbox_run", "container": "argus-acee3daca78b", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 722, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792090868.602, "event": "acceptance_verdict", "iteration": 1, "outcome": "fail", "failing": ["validation:target", "validation:unit"], "workspace_digest": "06e6a73d2d4b8c1efb5b4ff9335773c416014558709bb1c2e9fc55563edc0475"}
+{"ts": 1792090868.603, "event": "status", "old": "RUNNING", "new": "RUNNING", "reason": null, "blocked_reason": null}
+{"ts": 1792090868.603, "event": "body_done", "node": "acceptance", "tokens": 0, "iteration": 1}
+{"ts": 1792090868.608, "event": "result_committed", "node": "acceptance", "iteration": 1}
+{"ts": 1792090868.608, "event": "node_end", "node": "acceptance", "seconds": 1.381, "tokens": 0, "iteration": 1}
+{"ts": 1792090868.616, "event": "node_start", "node": "agent", "iteration": 2}
+{"ts": 1792090868.933, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "dd27ab8a65a99bf7", "call_id": "c2a9d17efe63", "attempt": 1, "est_input": 1525, "max_tokens": 4096, "worst_tokens": 5621, "worst_usd_nano": 44010000, "worst_usd": 0.04401}
+{"ts": 1792090870.211, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "dd27ab8a65a99bf7", "call_id": "c2a9d17efe63", "status": "ok", "attempt": 1, "est_input": 1525, "max_tokens": 4096, "input_tokens": 1525, "output_tokens": 28, "cache_read": 0, "tokens": 1553, "usd_nano": 3330000, "usd": 0.00333, "charged": "actual", "latency_s": 1.278, "truncated": false}
+{"ts": 1792090870.216, "event": "step_committed", "kind": "llm", "step": 0, "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090870.216, "event": "tool_call", "role": "coder", "tool": "list_files"}
+{"ts": 1792090870.222, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ListFiles", "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090870.55, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "4e1b1ccf042133c1", "call_id": "f08465f637c7", "attempt": 1, "est_input": 1602, "max_tokens": 4096, "worst_tokens": 5698, "worst_usd_nano": 44164000, "worst_usd": 0.044164}
+{"ts": 1792090871.993, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "4e1b1ccf042133c1", "call_id": "f08465f637c7", "status": "ok", "attempt": 1, "est_input": 1602, "max_tokens": 4096, "input_tokens": 1602, "output_tokens": 163, "cache_read": 0, "tokens": 1765, "usd_nano": 4834000, "usd": 0.004834, "charged": "actual", "latency_s": 1.443, "truncated": false}
+{"ts": 1792090872.002, "event": "step_committed", "kind": "llm", "step": 1, "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090872.003, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090872.007, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090872.007, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090872.013, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090872.013, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792090872.018, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090872.329, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "e2bfb09f06cfa285", "call_id": "e100b029038c", "attempt": 1, "est_input": 2321, "max_tokens": 4096, "worst_tokens": 6417, "worst_usd_nano": 45602000, "worst_usd": 0.045602}
+{"ts": 1792090876.785, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "e2bfb09f06cfa285", "call_id": "e100b029038c", "status": "ok", "attempt": 1, "est_input": 2321, "max_tokens": 4096, "input_tokens": 2321, "output_tokens": 485, "cache_read": 0, "tokens": 2806, "usd_nano": 9492000, "usd": 0.009492, "charged": "actual", "latency_s": 4.456, "truncated": false}
+{"ts": 1792090876.791, "event": "step_committed", "kind": "llm", "step": 2, "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090876.796, "event": "step_committed", "kind": "tool", "step": 2, "tool": "Finish", "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090877.116, "event": "llm_call_started", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "062db492ac36cb1f", "call_id": "0056cc1e1997", "attempt": 1, "est_input": 2840, "max_tokens": 4096, "worst_tokens": 6936, "worst_usd_nano": 46640000, "worst_usd": 0.04664}
+{"ts": 1792090878.89, "event": "llm_call", "node": "agent", "task": "round_conflict", "iteration": 2, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "062db492ac36cb1f", "call_id": "0056cc1e1997", "status": "ok", "attempt": 1, "est_input": 2840, "max_tokens": 4096, "input_tokens": 2840, "output_tokens": 209, "cache_read": 0, "tokens": 3049, "usd_nano": 7770000, "usd": 0.00777, "charged": "actual", "latency_s": 1.774, "truncated": false}
+{"ts": 1792090878.898, "event": "step_committed", "kind": "llm", "step": 3, "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090878.905, "event": "step_committed", "kind": "tool", "step": 3, "tool": "Finish", "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090878.905, "event": "attempt_end", "reason": "finished", "steps": 3, "node": "agent", "task": "round_conflict", "iteration": 2}
+{"ts": 1792090878.905, "event": "body_done", "node": "agent", "tokens": 9173, "iteration": 2}
+{"ts": 1792090878.909, "event": "result_committed", "node": "agent", "iteration": 2}
+{"ts": 1792090878.909, "event": "node_end", "node": "agent", "seconds": 10.293, "tokens": 9173, "iteration": 2}
+{"ts": 1792090878.916, "event": "node_start", "node": "acceptance", "iteration": 2}
+{"ts": 1792090879.642, "event": "sandbox_run", "container": "argus-9f9ac5b26802", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 870, "cleanup_failed": false, "validation": "unit"}
+{"ts": 1792090880.348, "event": "sandbox_run", "container": "argus-03e93d9eba2f", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 722, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792090880.349, "event": "acceptance_verdict", "iteration": 2, "outcome": "fail", "failing": ["validation:target", "validation:unit"], "workspace_digest": "826d91956a9a1350ad0b420cc73de733f35848fcb6382df569534552cb5ce7a4"}
+{"ts": 1792090880.349, "event": "status", "old": "RUNNING", "new": "FAILED_ACCEPTANCE", "reason": "max_iterations", "blocked_reason": null}
+{"ts": 1792090880.349, "event": "body_done", "node": "acceptance", "tokens": 0, "iteration": 2}
+{"ts": 1792090880.354, "event": "result_committed", "node": "acceptance", "iteration": 2}
+{"ts": 1792090880.354, "event": "node_end", "node": "acceptance", "seconds": 1.439, "tokens": 0, "iteration": 2}
+{"ts": 1792090880.366, "event": "run_end", "status": "FAILED_ACCEPTANCE", "stop_reason": "max_iterations", "blocked_reason": null, "contract_sha": "a4bf102284dea244ef3f0b5a2af2def265d85602388d773a5e7e71c64bed71ff", "run_id": "live_round_conflict", "attempts": 3, "usd_billed": 0.08875, "usd_complete": true, "llm_calls": 14, "llm_calls_unknown": 0}
