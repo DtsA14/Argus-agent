@@ -54,7 +54,11 @@ Task dinyatakan `DONE` hanya kalau **semua kriteria wajib** di kelima lapis lulu
 
 ### C. Validasi yang relevan lulus
 - Perintah validasi (tes, build, lint, atau skrip cek) **ditulis di kontrak**, bukan dipilih agen di akhir run.
-- Harness yang menjalankannya, di sandbox Docker (tanpa network, sama seperti `run_python`), dengan batas waktu.
+- Harness yang menjalankannya, di sandbox Docker (tanpa network, sama seperti `run_python`), dengan timeout keras.
+  Timeout menghentikan prosesnya (kontainer dimatikan), bukan hanya berhenti menunggu.
+- Perintah validasi **terstruktur**: `executable` dan daftar `args`, bukan string. Tidak pernah dijalankan lewat shell
+  (tidak ada `sh -c`, tidak ada interpolasi). `executable` harus ada di allowlist harness, dan argumen divalidasi
+  sebelum run. Ini mencegah command injection lewat kontrak dan membuat jelas apa yang sebenarnya dieksekusi.
 - Lulus berarti exit code 0, **dan** jumlah tes yang dijalankan sesuai harapan kontrak (misalnya minimal N tes, 0
   skip untuk tes yang wajib). Exit 0 dengan 0 tes yang berjalan adalah gagal.
 - File validasi dilindungi: tes, config tes, dan skrip validasi yang disebut kontrak tidak boleh diubah agen, kecuali
@@ -103,8 +107,10 @@ scope:
 artifacts:
   - {path: "SUMMARY.json", type: json, schema: claims_v1}
 validation:
-  - {id: unit, run: "python -m unittest discover -s tests", timeout_s: 120, min_tests: 5, max_skipped: 0}
-  - {id: target, run: "python -m unittest tests.test_divide.DivideTest.test_zero", timeout_s: 60, min_tests: 1}
+  - {id: unit, executable: python, args: ["-m", "unittest", "discover", "-s", "tests"],
+     timeout_s: 120, min_tests: 5, max_skipped: 0}
+  - {id: target, executable: python, args: ["-m", "unittest", "tests.test_divide.DivideTest.test_zero"],
+     timeout_s: 60, min_tests: 1}
 judge: []                               # tidak ada kriteria subjektif di slice ini
 limits: {max_usd: 0.50, max_iterations: 3}
 ```
@@ -113,7 +119,7 @@ Image sandbox yang di-pin sekarang (`python:3.13-slim`) tidak punya pytest, dan 
 `pip install`. Karena itu slice pertama memakai `unittest` bawaan Python. Image dengan test runner lain berarti image
 baru yang di-pin dan direview terpisah.
 
-Kontrak divalidasi harness seperti plan sekarang: path relatif tanpa `..`, perintah validasi hanya dari daftar yang
+Kontrak divalidasi harness seperti plan sekarang: path relatif tanpa `..`, `executable` validasi hanya dari allowlist (tanpa shell) dan yang
 diizinkan, `protected` dan `writable` tidak tumpang tindih, dan semua angka positif dan terbatas.
 
 ## 6. Jaminan yang harus punya tes (dicek dengan mutasi)
@@ -157,3 +163,25 @@ merge otomatis.
    hanya kontrak tertulis tangan; usulan model dibahas setelah slice berjalan.)
 5. Angka ambang (misalnya `min_tests`) ditulis per kontrak, bukan global. Angka global baru ditetapkan setelah ada
    pengukuran, tidak dikarang sekarang.
+
+## 9. Keputusan review (GPT, 2026-10-15): disetujui, dengan revisi perintah terstruktur
+
+1. **Status baru disetujui.** `FAILED_ACCEPTANCE`: kriteria wajib masih gagal setelah upaya yang diizinkan habis atau
+   agen stagnan. `BLOCKED`: verifikasi tidak bisa dilakukan atau butuh persetujuan. Keduanya tidak pernah sukses.
+   Transisi status harus eksplisit dan tetap benar setelah crash-resume.
+2. **`max_seconds` global ditunda.** Slice pertama memakai timeout keras per perintah validasi, yang menghentikan
+   prosesnya, bukan hanya penantian harness. Batas global keras baru dirancang bersama checkpoint, proses sandbox,
+   dan resume.
+3. **`SUMMARY.json` wajib** untuk semua task umum di slice pertama. Harness memvalidasi schema, daftar jenis klaim
+   yang diizinkan, dan referensi bukti. Klaim yang tidak dikenal atau tidak didukung gagal.
+4. **Kontrak ditulis dan disetujui manusia** sebelum agen berjalan. Model tidak boleh mengubah kontrak aktif atau
+   melonggarkan kriteria tanpa persetujuan eksplisit. Usulan kontrak oleh model dibahas nanti.
+5. **Ambang per kontrak.** Harness memvalidasi nilainya (terbatas dan masuk akal), dan agen tidak bisa menurunkannya
+   selama eksekusi. Tidak ada angka global sebelum ada data benchmark.
+
+Revisi yang diminta: perintah validasi direpresentasikan terstruktur (`executable` + `args`), dicek terhadap
+allowlist, dan tidak pernah dijalankan sebagai string shell (bagian 3C dan 5 sudah diperbarui).
+
+Langkah berikutnya: vertical slice "perbaiki bug kecil di repo fixture", tahap 1 dengan model palsu dan mutation test,
+lalu review hasil lokal sebelum meminta persetujuan untuk satu run live berbiaya kecil.
+
