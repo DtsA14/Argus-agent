@@ -1,0 +1,25 @@
+{
+  "writer": "anthropic:claude-sonnet-5-5",
+  "recommendations": [
+    {
+      "text": "Kopi (4200000) and Teh (3100000) make up 72.3% of the revenue of the top three products, so Roti (2800000) is the product with the most room to catch up.",
+      "action": "Offer a Kopi plus Roti bundle or a Teh plus Roti combo at the counter to bring more Roti into each order, and compare Roti revenue against 2800000 after a trial period.",
+      "facts": [
+        "top3.1.revenue",
+        "top3.2.revenue",
+        "top3.3.revenue",
+        "top3.top2_share_of_top3_pct"
+      ]
+    },
+    {
+      "text": "Monthly revenue grew 28.5% from 1650000 in 2026-01 to 2120000 in 2026-06, but the step from 2080000 in 2026-05 to 2120000 in 2026-06 was the smallest of the period.",
+      "action": "Plan a short promotion or a new menu item for next month to restore the earlier pace of growth, and make sure Kopi and Teh stock is sufficient to meet rising demand.",
+      "facts": [
+        "trend.first_to_last_growth_pct",
+        "trend.2026-01.revenue",
+        "trend.2026-06.revenue",
+        "trend.2026-05.revenue"
+      ]
+    }
+  ]
+}

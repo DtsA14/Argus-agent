@@ -65,7 +65,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] **Reliabilitas kalibrasi (DESIGN_503 opsi 1 dan 2):** run live menolak jam sibuk provider judge (`--allow-peak` hanya melewati jadwal); circuit breaker berhenti setelah 4 error sementara berturut-turut dengan status tidak lengkap. Budget tidak dilonggarkan. Opsi 3 (backoff 503) hanya kalau 503 muncul di luar jam sibuk
 - [x] **Kriteria `grounded` diperjelas** (PR #12) dan **baseline baru #1** (`c928f0b`, 12:13 UTC): **PASS**. Deteksi 25/25, injeksi 4/4, karangan 6/6, false reject 1 (`good-5`, kali ini karena "a second supplier" mengandaikan pemasok tunggal), 0 verdict tidak valid, $0.0451. Bukti: `verification/calibration-3d-baseline-grounded-1/`
 - [ ] **`good-5`:** kasus batas tetap muncul dengan aturan baru. Putuskan sebelum kalibrasi berikutnya: fixture-nya memang membawa premis, atau aturan dipertajam lagi
-- [ ] **Smoke run end-to-end 3e** (≤ $0.50): menunggu persetujuan
+- [x] **Smoke run end-to-end 3e** (`08829db`, 13:06 UTC, cap $0.50; orchestrator Sonnet, worker Haiku, writer Sonnet, judge DeepSeek): **DONE, skor 1.0, rubric lulus (5/5 kriteria), $0.0225**. 1 iterasi, 9 panggilan (9 started = 9 ok), 0 retry, 0 error provider, 0 terpotong, 0 `recs_invalid`/`verdict_rejected`/`estimate_miss`; rekonsiliasi ledger cocok. Writer: `recs_accepted` 2 rekomendasi. Bukti: `verification/smoke-3e/smoke_3e_1/`
 - [ ] Acceptance criteria untuk task umum (bukan cuma CSV demo)
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 

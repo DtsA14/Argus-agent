@@ -1,0 +1,70 @@
+{"ts": 1792069608.733, "event": "run_start", "run_id": "smoke_3e_1", "scenario": "pass", "budget": {"max_iterations": 5, "max_tokens": 200000, "max_seconds": 600, "stagnation_rounds": 2, "max_workers": 3, "max_usd": 0.5, "allow_unpriced": false}, "roles": {"orchestrator": "anthropic:claude-sonnet-5-5", "worker": "anthropic:claude-haiku-5-5", "writer": "anthropic:claude-sonnet-5-5", "evaluator": "deepseek:deepseek-flash"}}
+{"ts": 1792069608.755, "event": "node_start", "node": "orchestrator", "iteration": 0}
+{"ts": 1792069609.186, "event": "llm_call_started", "node": "orchestrator", "iteration": 0, "role": "orchestrator", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "2c6adc7137ff663e", "call_id": "483b44e6ef0a", "attempt": 1, "est_input": 1243, "max_tokens": 2048, "worst_tokens": 3291, "worst_usd_nano": 22966000, "worst_usd": 0.022966}
+{"ts": 1792069614.304, "event": "llm_call", "node": "orchestrator", "iteration": 0, "role": "orchestrator", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "2c6adc7137ff663e", "call_id": "483b44e6ef0a", "status": "ok", "attempt": 1, "est_input": 1243, "max_tokens": 2048, "input_tokens": 1243, "output_tokens": 637, "cache_read": 0, "tokens": 1880, "usd_nano": 8856000, "usd": 0.008856, "charged": "actual", "latency_s": 5.118, "truncated": false}
+{"ts": 1792069614.304, "event": "spec_created", "revision": 0, "attempt": 1, "tasks": ["T1", "T2", "T3"], "outputs": ["top3", "trend", "data_check"]}
+{"ts": 1792069614.304, "event": "body_done", "node": "orchestrator", "tokens": 1880, "iteration": 0}
+{"ts": 1792069614.308, "event": "result_committed", "node": "orchestrator", "iteration": 0}
+{"ts": 1792069614.309, "event": "node_end", "node": "orchestrator", "seconds": 5.554, "tokens": 1880, "iteration": 0}
+{"ts": 1792069614.315, "event": "node_start", "node": "worker", "task": "T1", "iteration": 0}
+{"ts": 1792069614.66, "event": "llm_call_started", "node": "worker", "task": "T1", "iteration": 0, "step": 0, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "7595b76ea3c7c759", "call_id": "0695178319db", "attempt": 1, "est_input": 960, "max_tokens": 2048, "worst_tokens": 3008, "worst_usd_nano": 1120000, "worst_usd": 0.00112}
+{"ts": 1792069615.674, "event": "llm_call", "node": "worker", "task": "T1", "iteration": 0, "step": 0, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "7595b76ea3c7c759", "call_id": "0695178319db", "status": "ok", "attempt": 1, "est_input": 960, "max_tokens": 2048, "input_tokens": 960, "output_tokens": 27, "cache_read": 0, "tokens": 987, "usd_nano": 109500, "usd": 0.0001095, "charged": "actual", "latency_s": 1.014, "truncated": false}
+{"ts": 1792069615.678, "event": "step_committed", "kind": "llm", "step": 0, "node": "worker", "task": "T1", "iteration": 0}
+{"ts": 1792069615.678, "event": "tool_call", "role": "worker", "tool": "read_data"}
+{"ts": 1792069615.683, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ReadData", "node": "worker", "task": "T1", "iteration": 0}
+{"ts": 1792069616.02, "event": "llm_call_started", "node": "worker", "task": "T1", "iteration": 0, "step": 1, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "b210eb990a47b2e0", "call_id": "01e339603de0", "attempt": 1, "est_input": 1671, "max_tokens": 2048, "worst_tokens": 3719, "worst_usd_nano": 1191100, "worst_usd": 0.0011911}
+{"ts": 1792069617.891, "event": "llm_call", "node": "worker", "task": "T1", "iteration": 0, "step": 1, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "b210eb990a47b2e0", "call_id": "01e339603de0", "status": "ok", "attempt": 1, "est_input": 1671, "max_tokens": 2048, "input_tokens": 1671, "output_tokens": 329, "cache_read": 0, "tokens": 2000, "usd_nano": 331600, "usd": 0.0003316, "charged": "actual", "latency_s": 1.871, "truncated": false}
+{"ts": 1792069617.899, "event": "step_committed", "kind": "llm", "step": 1, "node": "worker", "task": "T1", "iteration": 0}
+{"ts": 1792069617.903, "event": "step_committed", "kind": "tool", "step": 1, "tool": "SubmitResult", "node": "worker", "task": "T1", "iteration": 0}
+{"ts": 1792069617.903, "event": "worker_submitted", "step": 1, "node": "worker", "task": "T1", "iteration": 0}
+{"ts": 1792069617.903, "event": "body_done", "node": "worker", "tokens": 2987, "task": "T1", "iteration": 0}
+{"ts": 1792069617.906, "event": "result_committed", "node": "worker", "task": "T1", "iteration": 0}
+{"ts": 1792069617.906, "event": "node_end", "node": "worker", "seconds": 3.591, "tokens": 2987, "task": "T1", "iteration": 0}
+{"ts": 1792069617.907, "event": "node_start", "node": "worker", "task": "T2", "iteration": 0}
+{"ts": 1792069618.233, "event": "llm_call_started", "node": "worker", "task": "T2", "iteration": 0, "step": 0, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "1729ca2c24790795", "call_id": "30e7e74722d9", "attempt": 1, "est_input": 969, "max_tokens": 2048, "worst_tokens": 3017, "worst_usd_nano": 1120900, "worst_usd": 0.0011209}
+{"ts": 1792069619.113, "event": "llm_call", "node": "worker", "task": "T2", "iteration": 0, "step": 0, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "1729ca2c24790795", "call_id": "30e7e74722d9", "status": "ok", "attempt": 1, "est_input": 969, "max_tokens": 2048, "input_tokens": 969, "output_tokens": 27, "cache_read": 0, "tokens": 996, "usd_nano": 110400, "usd": 0.0001104, "charged": "actual", "latency_s": 0.879, "truncated": false}
+{"ts": 1792069619.116, "event": "step_committed", "kind": "llm", "step": 0, "node": "worker", "task": "T2", "iteration": 0}
+{"ts": 1792069619.117, "event": "tool_call", "role": "worker", "tool": "read_data"}
+{"ts": 1792069619.121, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ReadData", "node": "worker", "task": "T2", "iteration": 0}
+{"ts": 1792069619.452, "event": "llm_call_started", "node": "worker", "task": "T2", "iteration": 0, "step": 1, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "9ff29ee3ff660894", "call_id": "d41a48cc441a", "attempt": 1, "est_input": 1680, "max_tokens": 2048, "worst_tokens": 3728, "worst_usd_nano": 1192000, "worst_usd": 0.001192}
+{"ts": 1792069621.052, "event": "llm_call", "node": "worker", "task": "T2", "iteration": 0, "step": 1, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "9ff29ee3ff660894", "call_id": "d41a48cc441a", "status": "ok", "attempt": 1, "est_input": 1680, "max_tokens": 2048, "input_tokens": 1680, "output_tokens": 289, "cache_read": 0, "tokens": 1969, "usd_nano": 312500, "usd": 0.0003125, "charged": "actual", "latency_s": 1.6, "truncated": false}
+{"ts": 1792069621.056, "event": "step_committed", "kind": "llm", "step": 1, "node": "worker", "task": "T2", "iteration": 0}
+{"ts": 1792069621.062, "event": "step_committed", "kind": "tool", "step": 1, "tool": "SubmitResult", "node": "worker", "task": "T2", "iteration": 0}
+{"ts": 1792069621.062, "event": "worker_submitted", "step": 1, "node": "worker", "task": "T2", "iteration": 0}
+{"ts": 1792069621.062, "event": "body_done", "node": "worker", "tokens": 2965, "task": "T2", "iteration": 0}
+{"ts": 1792069621.066, "event": "result_committed", "node": "worker", "task": "T2", "iteration": 0}
+{"ts": 1792069621.066, "event": "node_end", "node": "worker", "seconds": 3.159, "tokens": 2965, "task": "T2", "iteration": 0}
+{"ts": 1792069621.067, "event": "node_start", "node": "worker", "task": "T3", "iteration": 0}
+{"ts": 1792069621.427, "event": "llm_call_started", "node": "worker", "task": "T3", "iteration": 0, "step": 0, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "f73c80d26f8891f4", "call_id": "d894ed0e7f15", "attempt": 1, "est_input": 921, "max_tokens": 2048, "worst_tokens": 2969, "worst_usd_nano": 1116100, "worst_usd": 0.0011161}
+{"ts": 1792069622.845, "event": "llm_call", "node": "worker", "task": "T3", "iteration": 0, "step": 0, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "f73c80d26f8891f4", "call_id": "d894ed0e7f15", "status": "ok", "attempt": 1, "est_input": 921, "max_tokens": 2048, "input_tokens": 921, "output_tokens": 27, "cache_read": 0, "tokens": 948, "usd_nano": 105600, "usd": 0.0001056, "charged": "actual", "latency_s": 1.418, "truncated": false}
+{"ts": 1792069622.852, "event": "step_committed", "kind": "llm", "step": 0, "node": "worker", "task": "T3", "iteration": 0}
+{"ts": 1792069622.852, "event": "tool_call", "role": "worker", "tool": "read_data"}
+{"ts": 1792069622.856, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ReadData", "node": "worker", "task": "T3", "iteration": 0}
+{"ts": 1792069623.2, "event": "llm_call_started", "node": "worker", "task": "T3", "iteration": 0, "step": 1, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "be5b64d7f16dbd77", "call_id": "dc52c4734108", "attempt": 1, "est_input": 1632, "max_tokens": 2048, "worst_tokens": 3680, "worst_usd_nano": 1187200, "worst_usd": 0.0011872}
+{"ts": 1792069625.277, "event": "llm_call", "node": "worker", "task": "T3", "iteration": 0, "step": 1, "role": "worker", "model": "anthropic:claude-haiku-5-5", "prompt_hash": "be5b64d7f16dbd77", "call_id": "dc52c4734108", "status": "ok", "attempt": 1, "est_input": 1632, "max_tokens": 2048, "input_tokens": 1632, "output_tokens": 407, "cache_read": 0, "tokens": 2039, "usd_nano": 366700, "usd": 0.0003667, "charged": "actual", "latency_s": 2.076, "truncated": false}
+{"ts": 1792069625.282, "event": "step_committed", "kind": "llm", "step": 1, "node": "worker", "task": "T3", "iteration": 0}
+{"ts": 1792069625.286, "event": "step_committed", "kind": "tool", "step": 1, "tool": "SubmitResult", "node": "worker", "task": "T3", "iteration": 0}
+{"ts": 1792069625.286, "event": "worker_submitted", "step": 1, "node": "worker", "task": "T3", "iteration": 0}
+{"ts": 1792069625.286, "event": "body_done", "node": "worker", "tokens": 2987, "task": "T3", "iteration": 0}
+{"ts": 1792069625.29, "event": "result_committed", "node": "worker", "task": "T3", "iteration": 0}
+{"ts": 1792069625.29, "event": "node_end", "node": "worker", "seconds": 4.223, "tokens": 2987, "task": "T3", "iteration": 0}
+{"ts": 1792069625.299, "event": "node_start", "node": "synthesize", "iteration": 0}
+{"ts": 1792069625.665, "event": "llm_call_started", "node": "synthesize", "iteration": 0, "step": 0, "role": "writer", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "d1f06381c27c40a0", "call_id": "16bd77a33ebe", "attempt": 1, "est_input": 1193, "max_tokens": 2048, "worst_tokens": 3241, "worst_usd_nano": 22866000, "worst_usd": 0.022866}
+{"ts": 1792069633.209, "event": "llm_call", "node": "synthesize", "iteration": 0, "step": 0, "role": "writer", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "d1f06381c27c40a0", "call_id": "16bd77a33ebe", "status": "ok", "attempt": 1, "est_input": 1193, "max_tokens": 2048, "input_tokens": 1193, "output_tokens": 905, "cache_read": 0, "tokens": 2098, "usd_nano": 11436000, "usd": 0.011436, "charged": "actual", "latency_s": 7.544, "truncated": false}
+{"ts": 1792069633.215, "event": "step_committed", "kind": "llm", "step": 0, "node": "synthesize", "iteration": 0}
+{"ts": 1792069633.216, "event": "tool_call", "role": "orchestrator", "tool": "write_file"}
+{"ts": 1792069633.22, "event": "tool_call", "role": "orchestrator", "tool": "write_file"}
+{"ts": 1792069633.223, "event": "recs_accepted", "step": 0, "count": 2, "node": "synthesize", "iteration": 0}
+{"ts": 1792069633.223, "event": "body_done", "node": "synthesize", "tokens": 2098, "iteration": 0}
+{"ts": 1792069633.227, "event": "result_committed", "node": "synthesize", "iteration": 0}
+{"ts": 1792069633.227, "event": "node_end", "node": "synthesize", "seconds": 7.928, "tokens": 2098, "iteration": 0}
+{"ts": 1792069633.232, "event": "node_start", "node": "evaluator", "iteration": 0}
+{"ts": 1792069633.236, "event": "llm_call_started", "node": "evaluator", "iteration": 0, "step": 0, "role": "evaluator", "model": "deepseek:deepseek-flash", "prompt_hash": "aab42d4c72f3aa35", "call_id": "e7d2df8d0ba4", "attempt": 1, "est_input": 1704, "max_tokens": 8192, "worst_tokens": 9896, "worst_usd_nano": 5170800, "worst_usd": 0.0051708}
+{"ts": 1792069641.048, "event": "llm_call", "node": "evaluator", "iteration": 0, "step": 0, "role": "evaluator", "model": "deepseek:deepseek-flash", "prompt_hash": "aab42d4c72f3aa35", "call_id": "e7d2df8d0ba4", "status": "ok", "attempt": 1, "est_input": 1704, "max_tokens": 8192, "input_tokens": 1378, "output_tokens": 1298, "cache_read": 1024, "tokens": 2676, "usd_nano": 834972, "usd": 0.000834972, "charged": "actual", "latency_s": 7.812, "truncated": false}
+{"ts": 1792069641.053, "event": "step_committed", "kind": "llm", "step": 0, "node": "evaluator", "iteration": 0}
+{"ts": 1792069641.053, "event": "rubric_verdict", "passed": true, "reason": "ok", "failed": [], "node": "evaluator", "iteration": 0}
+{"ts": 1792069641.053, "event": "eval_verdict", "iteration": 1, "score": 1.0, "best_score": 1.0, "stale_rounds": 0, "passed": true, "failures": [], "rubric": {"valid": true, "passed": true}, "status": "DONE", "stop_reason": ""}
+{"ts": 1792069641.053, "event": "body_done", "node": "evaluator", "tokens": 2676, "iteration": 0}
+{"ts": 1792069641.059, "event": "result_committed", "node": "evaluator", "iteration": 0}
+{"ts": 1792069641.059, "event": "node_end", "node": "evaluator", "seconds": 7.826, "tokens": 2676, "iteration": 0}
+{"ts": 1792069641.069, "event": "run_end", "status": "DONE", "stop_reason": "", "iteration": 1, "tokens_used": 15593, "scenario": "pass", "elapsed_s": 32.281, "run_id": "smoke_3e_1", "tokens_spent": 15593, "usd_used": 0.022463272, "usd_billed": 0.022463272, "usd_complete": true, "llm_calls": 9, "llm_calls_unknown": 0, "budget_violations": 0}
