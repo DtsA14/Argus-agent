@@ -48,3 +48,9 @@ B1 adalah keputusan yang dipersoalkan di run #2 dan #3. Di bawah aturan ini, `go
    pada fixture). Alternatifnya, beberapa contoh yang tidak sama dengan fixture dimasukkan ke prompt. Itu keputusan
    terpisah.
 3. Kalibrasi berikutnya memakai fixture dan ambang yang sama, di luar jam sibuk, dan dilaporkan sebagai baseline baru.
+
+## Hasil baseline baru #1 (2026-10-15)
+Kriteria ini dipakai di kalibrasi baseline baru #1 (`docs/reviews/REVIEW_3D.md`): PASS, deteksi 25/25, 1 false reject.
+Harapan B1 (`good-5` lulus) **tidak sepenuhnya terpenuhi**. Satu dari dua penilaian menolaknya dengan aturan baru, karena
+"a **second** supplier" mengandaikan pemasok tunggal yang sudah ada. Itu premis yang tidak dibahas di contoh B1. Tabel di
+atas tidak diubah setelah melihat hasil. Penajaman berikutnya, kalau ada, diputuskan sebelum kalibrasi selanjutnya.

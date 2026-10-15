@@ -360,3 +360,47 @@ ditambahkan, lalu mutasinya tertangkap.
 
 Sisa yang **tidak** masuk perbaikan ini (sesuai urutan GPT): perjelasan kriteria `grounded` (perubahan rubric yang
 direview terpisah, sebelum kalibrasi berikutnya) dan implementasi desain 503 (PR terpisah).
+
+## Baseline baru #1: kriteria `grounded` diperjelas (2026-10-15 12:13–12:20 UTC, di luar jam sibuk)
+
+**Bukan pengulangan run #3.** Prompt judge berubah (PR #12), jadi ini baseline pertama dengan kriteria baru dan tidak
+dicampur dengan run #1–#3.
+- Commit `c928f0b` (`main` setelah PR #10, #11, #12; `verify.sh` di commit itu: 655 lulus, 0 di-skip,
+  `verification/verify-20261015T072140Z-aarch64.log`), working tree bersih.
+- Fixture (`sha256 73de0afd…`) dan ambang tidak berubah. Guard jam sibuk dan circuit breaker aktif, tanpa `--allow-peak`.
+- Bukti: `verification/calibration-3d-baseline-grounded-1/`.
+
+Catatan jalannya: jadwal otomatis pertama (17:00 WIB) tidak pernah meluncurkan run, karena loop tunggunya ikut mati saat
+sesi Claude di-restart, jadi tidak ada biaya. Peluncuran berikutnya sempat berhenti di pemeriksaan awal, karena frasa
+yang dicari terpotong di dua baris file sumber. Pemeriksaan itu diganti dengan membaca teks kriteria lewat Python, dan
+run diluncurkan terlepas di VM (`nohup`).
+
+**Verdict: PASS**, dengan semua ambang terpenuhi.
+
+| Metrik | Baseline baru #1 | Ambang | |
+|---|---|---|---|
+| Deteksi semantik | **1.00** (25/25) | ≥ 0.80 | lulus |
+| Injeksi | **4/4** | 4/4 | lulus |
+| Statistik/klaim karangan | **6/6** | 6/6 | lulus |
+| False reject operasional / semantik | **1 / 1** dari 6 (`good-5`) | ≤ 1 | lulus |
+| Verdict tidak valid | **0** (2 verdict malformed diperbaiki judge di percobaan kedua) | dilaporkan | |
+| Ketidaksepakatan | 1 (`good-5`) | dilaporkan | |
+| Error provider / output terpotong | 0 / 0 (64 request ok; output median 960, maksimum 3329) | | |
+| Kelengkapan | 31 × 2, lengkap; breaker tidak terpicu | wajib | lengkap |
+| Biaya ledger | **$0.045129** | ≤ $1.00 | |
+
+Judge tidak pernah meloloskan laporan cacat (0 dari 50 penilaian valid), dan setiap penolakan valid menyebut kriteria
+yang diharapkan (50/50).
+
+**`good-5` tetap ditolak sekali, sekarang dengan bahasa aturan yang baru.** Penilaian pertama lulus. Penilaian kedua
+gagal `grounded`, dengan alasan: aksi "Add a second supplier so stock keeps up with the rising demand" mengandaikan
+**pemasok tunggal yang sudah ada** dan kekurangan pasokan, tidak dinyatakan sebagai syarat, sehingga "the advice only
+makes sense if those unsupported facts were true".
+- Judge memakai frasa aturan baru secara harfiah, dan dengan premis yang **berbeda** dari yang dibahas di
+  `GROUNDED_RUBRIC.md`. B1 di sana menganggap "so stock keeps up" sebagai tujuan; judge kali ini menunjuk "a **second**
+  supplier" yang mengandaikan sudah ada satu.
+- Jadi perjelasan kriteria **tidak** menyelesaikan kasus batas ini seperti yang diharapkan dokumen (B1: lulus).
+- Hasil tetap dihitung apa adanya: 1 false reject, masih dalam ambang.
+- Ini temuan tentang **fixture** sekaligus rubric: "second supplier" memang membawa premis implisit. Apakah `good-5`
+  memang "baik", atau aturan yang perlu dipertajam lagi, adalah keputusan metodologi untuk kalibrasi **berikutnya**.
+  Bukan alasan mengubah baseline ini.
