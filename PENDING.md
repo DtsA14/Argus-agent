@@ -69,7 +69,8 @@ Urutan disarankan, karena saling bergantung.
 - [x] **Smoke run end-to-end 3e** (`08829db`, 13:06 UTC, cap $0.50; orchestrator Sonnet, worker Haiku, writer Sonnet, judge DeepSeek): **DONE, skor 1.0, rubric lulus (5/5 kriteria), $0.0225**. 1 iterasi, 9 panggilan (9 started = 9 ok), 0 retry, 0 error provider, 0 terpotong, 0 `recs_invalid`/`verdict_rejected`/`estimate_miss`; rekonsiliasi ledger cocok. Writer: `recs_accepted` 2 rekomendasi. Bukti: `verification/smoke-3e/smoke_3e_1/`
 - [x] Acceptance criteria untuk task umum: kontrak disetujui (PR #20, `docs/reviews/ACCEPTANCE_GENERAL.md`)
 - [x] **Slice 1 bagian A** (inti deterministik, `docs/reviews/REVIEW_M4_SLICE1A.md`): repo fixture `calc`, kontrak `fix_divide`, scope workspace, validasi terstruktur di sandbox read-only tanpa shell, klaim `SUMMARY.json`, putusan pass/fail/blocked. 32/32 mutan efektif tertangkap (33 dijalankan, 1 ekuivalen dikecualikan); `verify.sh` 746 lulus, 0 skip
-- [ ] **Slice 1 bagian B:** loop agen dengan model palsu, status `FAILED_ACCEPTANCE`/`BLOCKED`, budget per task, kontrak dibekukan per run, crash-resume (jaminan 8 dan 10)
+- [x] **Slice 1 bagian B** (`docs/reviews/REVIEW_M4_SLICE1B.md`): loop agen dengan model palsu, state machine (`DONE`/`FAILED_ACCEPTANCE`/`BLOCKED`/`FAILED_BUDGET`, transisi legal), admission dan reservasi dari ledger, kontrak beku per run, crash-resume di 9 titik + kontainer yatim. 26/26 mutan efektif tertangkap (27 dijalankan, 1 ekuivalen); `verify.sh` 782 lulus, 0 skip
+- [ ] **Slice 1 run live:** satu run `fix_divide` dengan model sungguhan, butuh persetujuan (model, cap, `attempt_tokens`)
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 
 **Milestone 4+**
