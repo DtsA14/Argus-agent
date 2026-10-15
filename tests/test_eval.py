@@ -171,3 +171,33 @@ def test_the_cli_refuses_a_results_directory_that_is_not_empty(tmp_path):
                        cwd=ROOT, capture_output=True, text=True, env=env)
     assert r.returncode == 2 and "not empty" in r.stderr and (old / "report.json").read_text() == "{}"
 
+
+def test_the_live_total_cap_is_checked_against_cumulative_spend(tmp_path, monkeypatch):
+    # Every task costs $0.30 and reserves its contract cap of $0.50 before it starts. Under a $1.00 total:
+    # task 1 starts at $0.00 spent (0 + 0.50 fits), task 2 at $0.30 (0.80 fits), task 3 at $0.60 (1.10 does not):
+    # it and every later task are not run, and nothing is created for them. No model and no sandbox are used.
+    from runner import load_config
+    started = []
+
+    def fake_run(*, contract_path, run_id, runs_dir, cfg, models, validate):
+        started.append(run_id)
+        contract = json.loads(Path(contract_path).read_text(encoding="utf-8"))
+        run = Path(runs_dir) / run_id
+        shutil.copytree(ROOT / contract["inputs"]["workspace"], run / "workspace",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (run / "result.json").write_text(json.dumps({"status": "FAILED_ACCEPTANCE", "attempts": 1,
+                                                     "usd_billed": 0.30, "llm_calls": 3}), encoding="utf-8")
+        (run / "events.jsonl").write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(ev, "run_code_task", fake_run)
+    m = ev.load_manifest(ROOT / "evals" / "v1" / "manifest.json")
+    assert len(m["tasks"]) >= 3
+    report = ev.run_eval(ROOT / "evals" / "v1" / "manifest.json", "live", tmp_path / "runs", load_config(),
+                         max_total_usd=1.00, validate=fresh_validate)
+    ids = [t["id"] for t in m["tasks"]]
+    assert started == [f"live_{i}" for i in ids[:2]]
+    assert [r.get("not_run", False) for r in report["tasks"]] == [False, False] + [True] * (len(ids) - 2)
+    assert all("total cap $1.0 would not fit" in r["why"][0] for r in report["tasks"][2:])
+    assert report["usd_spent"] == 0.60 and report["ran"] == 2 and report["stopped"] is None
+    assert sorted(p.name for p in (tmp_path / "runs").iterdir()) == [f"live_{i}" for i in ids[:2]]
+
