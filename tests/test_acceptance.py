@@ -7,6 +7,7 @@ import copy
 import json
 import math
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -154,26 +155,35 @@ def test_a_clean_run_with_the_required_tests_passes():
     assert va.judge_result(spec, run_result(VERBOSE_OK))["status"] == "pass"
 
 
-BAD_RUNS = {
-    "exit 0 but no tests ran": (unit(min_tests=1), run_result("Ran 0 tests in 0s\n\nNO TESTS RAN\n")),
-    "exit 0 and no summary": (unit(min_tests=1), run_result("all good, trust me\n")),
-    "fewer tests than required": (unit(min_tests=3), run_result(VERBOSE_OK)),
+BAD_RUNS = {   # case: (spec, run result, what the reason must say)
+    "exit 0 but no tests ran": (unit(min_tests=1), run_result("Ran 0 tests in 0s\n\nNO TESTS RAN\n"),
+                                "0 tests ran"),
+    "exit 0 and no summary": (unit(min_tests=1), run_result("all good, trust me\n"), "no unittest summary"),
+    "fewer tests than required": (unit(min_tests=3), run_result(VERBOSE_OK), "2 tests ran"),
     "skipped tests": (unit(min_tests=1, max_skipped=0),
-                      run_result("test_a (m.C.test_a) ... skipped 'x'\nRan 1 test in 0s\n\nOK (skipped=1)\n")),
-    "failed tests": (unit(min_tests=1), run_result("Ran 2 tests in 0s\n\nFAILED (failures=1)\n", exit_code=1)),
-    "OK printed but exit 1": (unit(min_tests=1), run_result(VERBOSE_OK, exit_code=1)),
+                      run_result("test_a (m.C.test_a) ... skipped 'x'\nRan 1 test in 0s\n\nOK (skipped=1)\n"),
+                      "1 tests skipped"),
+    "failed tests": (unit(min_tests=1), run_result("Ran 2 tests in 0s\n\nFAILED (failures=1)\n", exit_code=1),
+                     "exit code 1"),
+    "FAILED summary with exit 0": (unit(min_tests=1), run_result("Ran 2 tests in 0s\n\nFAILED (errors=1)\n"),
+                                   "unittest outcome FAILED"),
+    "OK printed but exit 1": (unit(min_tests=1), run_result(VERBOSE_OK, exit_code=1), "exit code 1"),
     "required test missing": (unit(min_tests=1, must_pass=["tests.test_calc.CalcTest.test_mean"]),
-                              run_result(VERBOSE_OK)),
-    "timed out": (unit(min_tests=1), run_result(VERBOSE_OK, exit_code=None, timed_out=True)),
-    "output flood": (unit(min_tests=1), run_result(VERBOSE_OK, output_limit_exceeded=True)),
+                              run_result(VERBOSE_OK), "test_mean did not run"),
+    "required test failed": (unit(min_tests=1, must_pass=["tests.test_calc.CalcTest.test_add"]),
+                             run_result(VERBOSE_OK.replace("test_add) ... ok", "test_add) ... FAIL")),
+                             "test_add is 'FAIL'"),
+    "timed out": (unit(min_tests=1), run_result(VERBOSE_OK, exit_code=None, timed_out=True),
+                  "timed out after 60s"),
+    "output flood": (unit(min_tests=1), run_result(VERBOSE_OK, output_limit_exceeded=True), "output limit"),
 }
 
 
 @pytest.mark.parametrize("case", sorted(BAD_RUNS))
 def test_a_validation_run_that_does_not_show_success_fails(case):
-    spec, r = BAD_RUNS[case]
+    spec, r, why = BAD_RUNS[case]
     v = va.judge_result(spec, r)
-    assert v["status"] == "fail" and v["reason"]
+    assert v["status"] == "fail" and why in v["reason"], v["reason"]
 
 
 def test_no_sandbox_means_blocked_never_a_pass(tmp_path):
@@ -193,10 +203,15 @@ def statuses(criteria):
     return {c["id"]: c["status"] for c in criteria}
 
 
-def test_the_workspace_is_an_exact_copy_without_bytecode_caches(ws):
+def test_the_workspace_is_an_exact_copy_without_bytecode_caches(ws, tmp_path):
     root, before = ws
     assert before == snapshot(REPO, skip_cache=True) and "src/calc.py" in before
-    assert not any("__pycache__" in p for p in before)
+    src = tmp_path / "input"
+    shutil.copytree(REPO, src)
+    (src / "src" / "__pycache__").mkdir(exist_ok=True)
+    (src / "src" / "__pycache__" / "calc.cpython-313.pyc").write_bytes(b"stale")
+    copied = prepare(src, tmp_path / "ws2")
+    assert not any("__pycache__" in p for p in copied) and not (tmp_path / "ws2" / "src" / "__pycache__").exists()
 
 
 def test_changing_only_writable_files_is_in_scope(ws):
