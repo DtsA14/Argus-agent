@@ -1,0 +1,11 @@
+--- fixtures/repos/calc/src/calc.py	2026-10-15 16:31:50.985784202 +0000
++++ runs/fix_divide_live_1/workspace/src/calc.py	2026-10-15 17:27:54.966166472 +0000
+@@ -14,8 +14,6 @@
+ 
+ 
+ def divide(a, b):
+-    if b == 0:
+-        return 0
+     return a / b
+ 
+ 
