@@ -155,3 +155,14 @@ def test_a_live_task_that_does_not_fit_the_total_cap_is_not_run(tmp_path):
                          tasks=["fix_divide"], max_total_usd=0.10)   # the contract cap is $0.50
     (row,) = report["tasks"]
     assert row["not_run"] and not row["eval_pass"] and not (tmp_path / "e").exists()
+
+
+def test_the_cli_refuses_a_results_directory_that_is_not_empty(tmp_path):
+    old = tmp_path / "e"
+    old.mkdir()
+    (old / "report.json").write_text("{}")
+    env = {k: v for k, v in os.environ.items() if k != "ARGUS_LIVE"}
+    r = subprocess.run([sys.executable, "scripts/run_eval.py", "--mode", "reference", "--runs-dir", str(old)],
+                       cwd=ROOT, capture_output=True, text=True, env=env)
+    assert r.returncode == 2 and "not empty" in r.stderr and (old / "report.json").read_text() == "{}"
+

@@ -62,3 +62,18 @@ def test_a_wrong_script_that_passes_is_reported_as_a_broken_benchmark(tmp_path, 
     assert all(t["eval_pass"] and t["benchmark_ok"] is False for t in report["tasks"])
     assert "BROKEN" in r.stdout
 
+
+
+def test_running_an_eval_again_into_the_same_runs_never_reuses_the_old_run(tmp_path, image):
+    # Run ids are deterministic (<mode>_<task>), so a second eval into the same runs directory must be refused,
+    # never answered from the first run's checkpoint and workspace.
+    from codetask.run import RunExists
+    from evals import runner as ev
+    from runner import load_config
+    cfg = load_config()
+    cfg["sandbox"] = {"kind": "docker", "image": image}
+    manifest = ROOT / "evals" / "v1" / "manifest.json"
+    first = ev.run_eval(manifest, "reference", tmp_path / "runs", cfg, tasks=["fix_divide"])
+    assert first["tasks"][0]["eval_pass"]
+    with pytest.raises(RunExists):
+        ev.run_eval(manifest, "reference", tmp_path / "runs", cfg, tasks=["fix_divide"])
