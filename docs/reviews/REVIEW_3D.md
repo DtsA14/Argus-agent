@@ -281,3 +281,56 @@ Pengamatan:
 - Satu kasus tidak cukup untuk menyimpulkan regresi. Ini juga **bukan** alasan mengubah rubric sekarang. Kalau
   ambiguitas ini muncul lagi di run #3 atau di laporan lain, perjelas kriterianya **sebelum** run berikutnya, bukan
   sesudah melihat hasil.
+
+## Hasil run kalibrasi live #3 (2026-10-15 04:00–04:09 UTC, di luar jam sibuk), dilaporkan terpisah
+
+Dijalankan sekali di VM pada `9475fe9` (sama persis dengan run #2: batas 8192, estimasi 20000), dengan working tree bersih
+yang dicek sebelum dan sesudah run. Fixture dan ambang tidak berubah. Dimulai otomatis setelah 04:00 UTC sesuai keputusan
+"run #3 di luar jam sibuk, tanpa perubahan kode". Bukti: `verification/calibration-3d-live-3/`.
+
+**Verdict: PASS**, dengan semua ambang terpenuhi.
+
+| Metrik | Run #3 | Ambang | | Run #2 | Run #1 |
+|---|---|---|---|---|---|
+| Deteksi semantik | **0.96** (24/25) | ≥ 0.80 | lulus | 0.88 | 0.96 |
+| Injeksi | **4/4** | 4/4 | lulus | 3/4 | 3/4 |
+| Statistik/klaim karangan | **6/6** | 6/6 | lulus | 5/6 | 6/6 |
+| False reject operasional / semantik | **1 / 1** dari 6 | ≤ 1 | lulus | 2 / 1 | 0 / 0 |
+| Verdict tidak valid | **1** | dilaporkan | | 6 | 1 |
+| Ketidaksepakatan | 1 (`good-5`) | dilaporkan | | 0 | 0 |
+| Error provider | **0× 503**; 1× HTTP 400 (lihat bawah) | | | 24× 503 | 0 |
+| Output terpotong | 0 (maksimum 5550, di atas batas lama 4096) | | | 0 | 1 |
+| Kelengkapan | 31 × 2, lengkap | wajib | lengkap | lengkap | lengkap |
+| Biaya ledger | **$0.057870** (64 request) | ≤ $1.00 | | $0.336615 | $0.055320 |
+
+Yang tetap konsisten di ketiga run:
+- Judge **tidak pernah meloloskan** laporan cacat (0 dari 49 penilaian valid di run #3).
+- Setiap penolakan valid menyebut kriteria yang diharapkan (49/49).
+
+**`good-5` lagi.** Penilaian pertama menggagalkan `grounded` (alasan yang sama dengan run #2: premis tersirat dalam saran),
+sementara penilaian kedua meloloskannya. Itu satu false reject (masih dalam ambang ≤ 1) dan satu-satunya
+ketidaksepakatan. Sekarang ambiguitas yang sama muncul di dua run, jadi ini **temuan nyata tentang kriteria
+`grounded`**, bukan noise. Perjelas kriterianya **sebelum** run kalibrasi berikutnya (bukan untuk mengubah hasil run #3),
+lalu ukur ulang.
+
+**Verdict tidak valid di `vague-3` adalah bug harness yang ditemukan oleh run ini, bukan kegagalan judge maupun provider:**
+- Penilaian pertama: DeepSeek membalas dengan 2388 token output, tapi memo mencatat `tool_calls: []` dan konten kosong.
+  Artinya model memanggil tool dengan argumen yang **tidak bisa di-parse**, dan LangChain menaruhnya di
+  `invalid_tool_calls`, yang tidak diperiksa harness.
+- Harness memperlakukannya sebagai "tidak memanggil tool" dan menjawab dengan `HumanMessage`, bukan `ToolMessage`.
+- Di request berikutnya, panggilan yang tidak valid itu ikut terkirim sebagai `tool_calls`, dan DeepSeek menolak dengan
+  **HTTP 400** ("An assistant message with 'tool_calls' must be followed by tool messages…"). Error 400 tidak diulang,
+  jadi verdict tidak valid (fail closed).
+- Penilaian kedua `vague-3` valid dan menolak dengan benar (`actionable`).
+- Pola yang sama ada di keempat loop yang memakai tool (orchestrator, worker, penulis, judge). Memo juga tidak menyimpan
+  `invalid_tool_calls`, sehingga replay tidak identik dengan balasan aslinya.
+
+**Usul perbaikan (belum dikerjakan, perlu review):** perlakukan `invalid_tool_calls` sebagai panggilan tool di keempat
+loop, jawab masing-masing dengan `ToolMessage` yang berisi error ("argumen bukan JSON yang valid"), dan simpan di memo
+supaya replay identik. Sertakan tes dengan model palsu yang mengembalikan panggilan tool tidak valid, dan pastikan
+request berikutnya selalu menjawab setiap `tool_call_id`.
+
+**Kesimpulan:** run #3 lulus semua ambang yang dikunci, dengan sistem dan standar yang sama dengan run #2. Run #2 gagal
+karena ketersediaan provider, bukan kualitas judge, dan run #3 di luar jam sibuk tidak mendapat satu pun 503. Hasil ini
+indikatif (31 laporan), bukan bukti reliabilitas provider secara umum. Dua temuan perlu ditindaklanjuti sebelum
+kalibrasi berikutnya: bug `invalid_tool_calls` dan ambiguitas `grounded`.
