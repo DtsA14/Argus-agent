@@ -199,3 +199,93 @@ def test_live_runs_need_argus_live_and_create_nothing(tmp_path, monkeypatch, cap
     assert cal.main(["--runs-dir", str(tmp_path / "runs")]) == 2
     assert "ARGUS_LIVE=1" in capsys.readouterr().err
     assert not (tmp_path / "runs").exists()
+
+
+# ---- reliability guards (docs/reviews/DESIGN_503.md options 1 and 2) ------------------------------------
+
+from datetime import datetime, timezone  # noqa: E402
+
+from models.fake import FakeHTTPError  # noqa: E402
+
+PEAK = datetime(2026, 10, 15, 2, 0, tzinfo=timezone.utc)      # Thursday 02:00 UTC: DeepSeek peak (01-04)
+OFF_PEAK = datetime(2026, 10, 15, 5, 0, tzinfo=timezone.utc)  # Thursday 05:00 UTC
+WEEKEND_PEAK_HOUR = datetime(2026, 10, 17, 2, 0, tzinfo=timezone.utc)   # Saturday: weekdays_only
+
+
+def live_main(tmp_path, monkeypatch, now, *args):
+    calls = []
+    monkeypatch.setenv("ARGUS_LIVE", "1")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(cal, "_now", lambda: now)
+    monkeypatch.setattr(cal, "run", lambda cfg, *a, **k: calls.append(cfg) or {"summary": dict(
+        verdict="pass", model="m", judgements=0, cost_usd=0.0, max_usd=1.0, checks={}, categories={},
+        good={"reports": 0, "false_reject_operational": 0, "false_reject_semantic": 0}, invalid_verdicts=0,
+        disagreements=0, stopped=None, incomplete=[])})
+    rc = cal.main(["--runs-dir", str(tmp_path / "runs"), *args])
+    return rc, calls
+
+
+def test_a_live_run_does_not_start_in_the_peak_window(tmp_path, monkeypatch, capsys):
+    rc, calls = live_main(tmp_path, monkeypatch, PEAK)
+    assert rc == 2 and calls == [] and not (tmp_path / "runs").exists()
+    assert "peak window" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("now", [OFF_PEAK, WEEKEND_PEAK_HOUR], ids=["weekday-off-peak", "weekend"])
+def test_a_live_run_starts_off_peak(tmp_path, monkeypatch, now):
+    rc, calls = live_main(tmp_path, monkeypatch, now)
+    assert rc == 0 and len(calls) == 1
+
+
+def test_allow_peak_skips_only_the_schedule_check(tmp_path, monkeypatch):
+    rc, calls = live_main(tmp_path, monkeypatch, PEAK, "--allow-peak")
+    assert rc == 0 and len(calls) == 1
+    cfg = calls[0]                                           # the cap and the breaker reach the run unchanged
+    assert cfg["calibration"] == load_config()["calibration"]
+    assert cfg["calibration_guard"]["breaker_consecutive_transient"] == 4
+
+
+def test_dry_runs_are_not_held_back_by_the_schedule(tmp_path, monkeypatch):
+    monkeypatch.setattr(cal, "_now", lambda: PEAK)
+    assert cal.main(["--fake", "oracle", "--runs-dir", str(tmp_path / "runs")]) == 0
+
+
+def flaky_provider(failures):
+    """The oracle judge behind a provider that answers HTTP 503 to the first `failures` requests."""
+    model = cal.fake_judge("oracle", FIX)
+    inner, state = model.respond, {"n": 0}
+
+    def respond(messages):
+        state["n"] += 1
+        if state["n"] <= failures:
+            return FakeHTTPError(503, "Service is too busy")
+        return inner(messages)
+    model.respond = respond
+    return model
+
+
+def guarded_run(tmp_path, model):
+    cfg = copy.deepcopy(load_config())
+    cfg["roles"]["evaluator"]["model"] = "fake:scripted"
+    return cal.run(cfg, FIX, tmp_path, model=model)["summary"]
+
+
+def test_the_breaker_stops_a_run_when_the_provider_is_down(tmp_path):
+    model = flaky_provider(10**6)
+    s = guarded_run(tmp_path, model)
+    assert s["stopped"] == "provider unavailable: 4 consecutive transient errors"
+    assert s["verdict"] == "incomplete"                      # never a pass, and not scored as the judge's failure
+    assert len(model.calls) == 4 and s["judgements"] == 2    # 2 judgements x 2 sent attempts, then it stopped
+    assert s["cost_usd"] <= 1.00
+
+
+def test_a_successful_call_resets_the_breaker(tmp_path):
+    s = guarded_run(tmp_path, flaky_provider(3))             # 3 in a row, then the provider recovers
+    assert s["stopped"] is None and s["verdict"] != "incomplete" and s["judgements"] == 62
+
+
+def test_calls_refused_before_sending_do_not_count_towards_the_breaker():
+    e = lambda status: {"event": "llm_call", "status": status}
+    assert cal.consecutive_transient([e("ok"), e("transient_error"), e("refused"), e("transient_error")]) == 2
+    assert cal.consecutive_transient([e("transient_error"), e("ok")]) == 0
+    assert cal.consecutive_transient([e("transient_error"), e("error")]) == 0

@@ -22,6 +22,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,6 +34,7 @@ from harness.events import EventLog  # noqa: E402
 from harness.llm import LLMCaller, reconcile_ledger  # noqa: E402
 from harness.memo import Memo  # noqa: E402
 from models.fake import CallableChatModel, reply  # noqa: E402
+from models.pricing import is_peak  # noqa: E402
 from models.registry import ModelRef  # noqa: E402
 from nodes.contract import SALES_REPORT  # noqa: E402
 from nodes.facts import build_facts  # noqa: E402
@@ -150,6 +152,23 @@ def fake_judge(kind, fixtures, truth=None):
     return CallableChatModel(respond=respond)
 
 
+# ---- reliability guards (DESIGN_503.md options 1 and 2) -------------------------------------------
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def consecutive_transient(events):
+    """Transient errors in a row at the end of the ledger. Calls refused before sending are skipped: they never
+    reached the provider, so they say nothing about whether it is available."""
+    n = 0
+    for e in reversed([e for e in events if e["event"] == "llm_call" and e.get("status") != "refused"]):
+        if e.get("status") != "transient_error":
+            break
+        n += 1
+    return n
+
+
 # ---- the run ----------------------------------------------------------------------------------
 
 def run(cfg, fixtures, run_dir, *, model=None, log_echo=False):
@@ -167,6 +186,7 @@ def run(cfg, fixtures, run_dir, *, model=None, log_echo=False):
     facts = build_facts(truth["top3"], truth["trend"])
     log.emit("calibration_start", fixtures=len(fixtures), judgements=judgements, max_usd=cap,
              worst_usd_per_judgement=worst_usd, model=cfg["roles"]["evaluator"]["model"])
+    breaker = int((cfg.get("calibration_guard") or {}).get("breaker_consecutive_transient", 0) or 0)
     results, stopped = [], None
     for fx in fixtures:
         entry = {"id": fx["id"], "category": fx["category"], "expect_fail": fx["expect_fail"], "judgements": []}
@@ -179,6 +199,10 @@ def run(cfg, fixtures, run_dir, *, model=None, log_echo=False):
             r = judge(truth_report(fx["recs"], truth), facts, k, task=fx["id"])
             entry["judgements"].append({"valid": r["valid"], "passed": r["passed"], "reason": r["reason"][:200],
                                         "failed": sorted(c for c, v in r["criteria"].items() if not v["pass"])})
+            streak = consecutive_transient(log.read())
+            if breaker and streak >= breaker:     # the provider is down: stop instead of burning judgements
+                stopped = f"provider unavailable: {streak} consecutive transient errors"
+                log.emit("calibration_breaker", consecutive=streak, after=fx["id"], judgement=k)
     totals = reconcile_ledger(log.read())[1]
     summary = score(results, judgements=judgements, thresholds=ccfg["thresholds"])
     summary.update(cost_usd=totals["usd"], cost_complete=totals["usd_complete"], llm_calls=totals["calls"],
@@ -215,6 +239,8 @@ def main(argv=None):
     ap.add_argument("--include-reserve", action="store_true")
     ap.add_argument("--run-id", default=time.strftime("calib_%Y%m%d_%H%M%S"))
     ap.add_argument("--runs-dir", default=str(ROOT / "runs"))
+    ap.add_argument("--allow-peak", action="store_true",
+                    help="start a live run in the judge provider's peak window (skips only the schedule check)")
     a = ap.parse_args(argv)
 
     cfg = load_config()
@@ -234,6 +260,11 @@ def main(argv=None):
         var = cfg["providers"][ref.provider].get("api_key_env")
         if var and not os.environ.get(var):
             print(f"refused: {var} is not set", file=sys.stderr)
+            return 2
+        window = (cfg.get("peak_windows") or {}).get(ref.provider)
+        if (cfg.get("calibration_guard") or {}).get("refuse_peak") and not a.allow_peak and is_peak(window, _now()):
+            print(f"refused: {_now():%a %H:%M} UTC is in {ref.provider}'s peak window {window['utc_hours']} "
+                  f"(run #2 met 24 HTTP 503 there); start off-peak or pass --allow-peak", file=sys.stderr)
             return 2
     run_dir = Path(a.runs_dir) / a.run_id
     if run_dir.exists():

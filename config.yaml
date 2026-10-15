@@ -177,6 +177,14 @@ calibration:
     min_detection_rate: 0.80
     max_false_rejects: 1
 
+# Reliability guards for live calibration (docs/reviews/DESIGN_503.md, options 1 and 2; approved by GPT 2026-10-15).
+# Separate from `calibration` so the locked thresholds stay untouched. Neither loosens a budget rule.
+calibration_guard:
+  refuse_peak: true                  # a live run does not start in the judge provider's peak window (--allow-peak skips
+                                     # only this check; the cost cap and the breaker still apply)
+  breaker_consecutive_transient: 4   # stop the run after this many transient errors in a row: "incomplete: provider
+                                     # unavailable", never a pass and never a judge failure
+
 # Code execution for LLM workers (RunPython). kind: docker | none. With none, workers get no RunPython.
 # The image must be pinned (name@sha256:... or sha256:<image id>); scripts/pin_sandbox_image.sh does it
 # on the VM. ARGUS_SANDBOX_IMAGE overrides `image`. There is never an unsandboxed fallback.
