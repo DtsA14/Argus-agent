@@ -1,4 +1,5 @@
-"""Phase 2e: one live run of the CSV task with real models (orchestrator and worker = llm).
+"""Phase 2e/3e: one live run of the CSV task with every model-backed node on a real model: orchestrator,
+workers, the writer (synthesize, phase 3b) and the rubric judge (evaluator, phase 3c).
 
 Real money, so the script is deliberately narrow:
   - it does nothing unless ARGUS_LIVE=1;
@@ -29,7 +30,9 @@ from models.registry import ConfigError, ModelRef  # noqa: E402
 from runner import load_config, read_events, run_task  # noqa: E402
 
 GOAL = "Analyze penjualan.csv: top 3 products, monthly trend, 2 recommendations -> laporan.md"
-LIVE_ROLES = ("orchestrator", "worker")
+# node -> the role whose model it calls (3e: all four model-backed nodes run live)
+LIVE_NODES = {"orchestrator": "orchestrator", "worker": "worker", "synthesize": "writer", "evaluator": "evaluator"}
+LIVE_ROLES = tuple(LIVE_NODES.values())
 
 
 class SmokeRefused(Exception):
@@ -50,7 +53,7 @@ def prepare_config(cfg, *, sandbox=None, python_only=False, env=None, sandbox_st
 
     budget_usd = cfg["budget"].get("max_usd")
     cfg["budget"]["max_usd"] = cap if budget_usd is None else min(float(budget_usd), cap)
-    cfg.setdefault("impl", {}).update({role: "llm" for role in LIVE_ROLES})
+    cfg.setdefault("impl", {}).update({node: "llm" for node in LIVE_NODES})
     if python_only and sandbox != "docker":
         raise SmokeRefused("--python-only needs --sandbox docker: without RunPython a worker could not read the data")
     if sandbox:
@@ -91,7 +94,7 @@ def ledger(events):
 
 def summarize(result, run_dir, cfg=None):
     events = read_events(run_dir / "events.jsonl")
-    verdicts = [{k: e.get(k) for k in ("iteration", "score", "passed", "failures", "status", "stop_reason")}
+    verdicts = [{k: e.get(k) for k in ("iteration", "score", "passed", "rubric", "failures", "status", "stop_reason")}
                 for e in events if e["event"] == "eval_verdict"]
     report = run_dir / "laporan.md"
     return {
@@ -107,6 +110,12 @@ def summarize(result, run_dir, cfg=None):
                                  for e in events if e["event"] == "submission_invalid"],
         "plans": [{k: e.get(k) for k in ("event", "revision", "attempt", "tasks", "outputs", "errors")}
                   for e in events if e["event"] in ("spec_created", "spec_revised", "plan_invalid")],
+        "writer": [{k: e.get(k) for k in ("event", "iteration", "step", "count", "errors", "reason")}
+                   for e in events if e["event"] in ("recs_accepted", "recs_invalid", "synthesize_failed",
+                                                     "synthesize_skipped")],
+        "judge": [{k: e.get(k) for k in ("event", "iteration", "step", "passed", "failed", "errors", "reason")}
+                  for e in events if e["event"] in ("rubric_verdict", "rubric_invalid", "rubric_skipped",
+                                                    "verdict_rejected")],
         "warnings": [e for e in events if e["event"] in ("config_warning", "estimate_miss", "budget_violation",
                                                           "output_truncated", "plan_truncated", "reply_truncated",
                                                           "worker_failed", "orchestrator_stop", "run_error")],
@@ -122,7 +131,12 @@ def print_summary(s, cfg):
           f"(complete: {r['usd_complete']}) | calls {r['llm_calls']} | iterations {r['iteration']}")
     print("\n== evaluator")
     for v in s["verdicts"] or [{"iteration": "-", "score": "-", "passed": "-", "failures": "no verdict"}]:
-        print(f"  iteration {v['iteration']}: score {v['score']} passed {v['passed']} failures {v['failures']}")
+        print(f"  iteration {v['iteration']}: score {v['score']} passed {v['passed']} rubric {v.get('rubric')} "
+              f"failures {v['failures']}")
+    print("\n== writer (synthesize) and judge (evaluator)")
+    for w in s["writer"] + s["judge"]:
+        detail = w.get("count") or w.get("failed") or w.get("errors") or w.get("reason") or ""
+        print(f"  {w['event']:<18} iteration {w['iteration']} {detail}")
     print("\n== ledger (llm_call)")
     for c in s["ledger"]:
         where = c["node"] + (f"/{c['task']}" if c.get("task") else "") + \

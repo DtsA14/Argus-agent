@@ -1,4 +1,4 @@
-"""Phase 2e: scripts/smoke_live.py, the one live run. Tested with scripted fake models only: no network, no cost.
+"""Phase 2e/3e: scripts/smoke_live.py, the one live run (3e: writer and judge live too). Tested with scripted fake models only: no network, no cost.
 
 What must hold before real money is spent: nothing happens without ARGUS_LIVE=1, the USD cap can only be
 lowered, unpriced models and missing keys are refused before anything is created, workers run one at a
@@ -17,6 +17,8 @@ import yaml
 
 import dataset
 import graph as graph_module
+from nodes.contract import SALES_REPORT
+from nodes.synthesize import template_recommendations
 from runner import ROOT, load_config, run_task
 from scripts import smoke_live
 from scripts.smoke_live import SmokeRefused, prepare_config
@@ -38,18 +40,34 @@ def _reply(tool, args, id):
 
 def fake_cfg(max_usd=5.0):
     cfg = copy.deepcopy(load_config())
-    cfg["roles"]["orchestrator"]["model"] = "fake:scripted"
-    cfg["roles"]["worker"]["model"] = "fake:scripted"
+    for role in ("orchestrator", "worker", "writer", "evaluator"):   # 3e: every model-backed node, all fake
+        cfg["roles"][role]["model"] = "fake:scripted"
     cfg["token_estimates"].update(orchestrator=12_000, worker=20_000)
     cfg["llm"]["base_delay"] = 0
     cfg["budget"]["max_usd"] = max_usd
     return cfg
 
 
-def run_cli(tmp_path, cfg, *, live=True):
+# The writer's and the judge's prompts carry no "Task id", so they take the "default" queue after the plan.
+RECS = template_recommendations(VALUES["T2"], VALUES["T3"])
+CRITERIA = [c["id"] for c in SALES_REPORT["rubric"]]
+
+
+def recs_reply(recs=RECS, id="w1"):
+    return _reply("SubmitRecommendations", {"recommendations": recs}, id)
+
+
+def verdict_reply(fail=(), id="v1"):
+    items = [{"id": c, "pass": c not in fail, "evidence": [RECS[0]["text"][:40]], "reason": f"checked {c}"}
+             for c in CRITERIA]
+    return _reply("SubmitVerdict", {"criteria": items}, id)
+
+
+def run_cli(tmp_path, cfg, *, live=True, default=None):
     (tmp_path / "config.yaml").write_text(yaml.safe_dump(cfg))
     script = {t: [_reply("ReadData", {}, "r1"), _reply("SubmitResult", {"value": v}, "s1")] for t, v in VALUES.items()}
-    script["default"] = [_reply("SubmitPlan", PLAN, "p1")]
+    script["default"] = [_reply("SubmitPlan", PLAN, "p1")] + (default if default is not None
+                                                               else [recs_reply(), verdict_reply()])
     (tmp_path / "script.json").write_text(json.dumps(script))
     env = {k: v for k, v in os.environ.items() if k != "ARGUS_LIVE"}
     env["ARGUS_FAKE_SCRIPT"] = str(tmp_path / "script.json")
@@ -74,10 +92,17 @@ def test_max_usd_is_lowered_to_the_smoke_cap_never_raised(budget_usd, expected):
     assert prepare_config(cfg, env=KEYS)["budget"]["max_usd"] == expected
 
 
-def test_both_live_roles_are_switched_to_llm():
+def test_every_model_backed_node_is_switched_to_llm():
+    # 3e: the writer (synthesize) and the judge (evaluator) run live too.
     cfg = fake_cfg()
-    cfg["impl"] = {"orchestrator": "fake", "worker": "fake"}
-    assert prepare_config(cfg, env=KEYS)["impl"] == {"orchestrator": "llm", "worker": "llm"}
+    cfg["impl"] = {"orchestrator": "fake", "worker": "fake", "synthesize": "fake", "evaluator": "fake"}
+    assert prepare_config(cfg, env=KEYS)["impl"] == {"orchestrator": "llm", "worker": "llm",
+                                                      "synthesize": "llm", "evaluator": "llm"}
+
+
+def test_the_judge_key_is_required_too():
+    with pytest.raises(SmokeRefused, match="evaluator: environment variable DEEPSEEK_API_KEY"):
+        prepare_config(copy.deepcopy(load_config()), env={"ANTHROPIC_API_KEY": "x"})
 
 
 @pytest.mark.parametrize("cap", [0, -1, math.inf, None, True, "0.5"])
@@ -139,14 +164,49 @@ def test_offline_run_end_to_end_reports_verdict_and_ledger(tmp_path):
     run_dir = tmp_path / "runs" / "s"
     s = json.loads((run_dir / "smoke_summary.json").read_text())
     assert s["result"]["status"] == "DONE"
-    assert [v["passed"] for v in s["verdicts"]] == [True]
-    assert len(s["ledger"]) == 1 + 3 * 2 and all(c["status"] == "ok" for c in s["ledger"])
+    assert [(v["passed"], v["rubric"]) for v in s["verdicts"]] == [(True, {"valid": True, "passed": True})]
+    # orchestrator 1 + 3 workers x 2 steps + writer 1 + judge 1
+    assert len(s["ledger"]) == 1 + 3 * 2 + 1 + 1 and all(c["status"] == "ok" for c in s["ledger"])
+    assert [c["node"] for c in s["ledger"]][-2:] == ["synthesize", "evaluator"]
     assert sum(c["usd"] for c in s["ledger"]) == pytest.approx(s["result"]["usd_billed"])
-    assert s["report"] and (run_dir / "laporan.md").exists()
+    assert [w["event"] for w in s["writer"]] == ["recs_accepted"] and [j["event"] for j in s["judge"]] == ["rubric_verdict"]
+    assert s["report"] and " Aksi: " in (run_dir / "laporan.md").read_text()
+    assert json.loads((run_dir / "laporan.provenance.json").read_text())["recommendations"] == RECS
     start = next(json.loads(l) for l in (run_dir / "events.jsonl").read_text().splitlines()
                  if json.loads(l)["event"] == "run_start")
     assert start["budget"]["max_usd"] == 0.50                 # lowered from 5.0
-    assert "== evaluator" in r.stdout and "== ledger" in r.stdout
+    assert "== evaluator" in r.stdout and "== ledger" in r.stdout and "== writer (synthesize) and judge" in r.stdout
+
+
+def _summary(tmp_path, default, **budget):
+    cfg = fake_cfg()
+    cfg["budget"].update(budget)
+    r = run_cli(tmp_path, cfg, default=default)
+    return r, json.loads((tmp_path / "runs" / "s" / "smoke_summary.json").read_text())
+
+
+def test_a_criterion_the_judge_fails_keeps_the_run_from_passing(tmp_path):
+    r, s = _summary(tmp_path, [recs_reply(), verdict_reply(fail=["actionable"])], max_iterations=1)
+    assert r.returncode == 1 and s["result"]["status"] != "DONE"
+    (v,) = s["verdicts"]
+    assert v["passed"] is False and v["failures"] == ["report:rubric_actionable"]
+    assert s["judge"][0]["failed"] == ["actionable"]
+
+
+def test_a_judge_that_never_answers_with_the_tool_fails_closed(tmp_path):
+    r, s = _summary(tmp_path, [recs_reply(), {"content": "Looks fine.", "usage": {"input_tokens": 500, "output_tokens": 5}},
+                               {"content": "Pass.", "usage": {"input_tokens": 500, "output_tokens": 5}}], max_iterations=1)
+    assert r.returncode == 1 and s["verdicts"][0]["failures"] == ["report:rubric_valid"]
+    assert [j["event"] for j in s["judge"]] == ["verdict_rejected", "verdict_rejected", "rubric_invalid"]
+
+
+def test_a_writer_that_never_grounds_its_numbers_means_no_judge_call(tmp_path):
+    bad = [dict(RECS[0], text=RECS[0]["text"].replace("%", "1%")), RECS[1]]       # a number not in the facts
+    r, s = _summary(tmp_path, [recs_reply(bad, id=f"w{i}") for i in range(3)], max_iterations=1)
+    assert r.returncode == 1 and [w["event"] for w in s["writer"]] == ["recs_invalid"] * 3 + ["synthesize_failed"]
+    assert [j["event"] for j in s["judge"]] == ["rubric_skipped"]                 # the code rejected it: not paid
+    assert not [c for c in s["ledger"] if c["node"] == "evaluator"]
+    assert "report:recs_count" in s["verdicts"][0]["failures"]
 
 
 def test_a_failed_run_is_not_retried(tmp_path, monkeypatch):
