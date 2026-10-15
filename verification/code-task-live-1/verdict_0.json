@@ -1,0 +1,172 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/calc.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/calc.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "06e165e3276443dc8d7959b81d23845468d87b6df9cba05c46877ad999fb086c"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 7,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_add (tests.test_calc.CalcTest.test_add) ... ok\ntest_divide (tests.test_calc.CalcTest.test_divide) ... ok\ntest_divide_by_zero (tests.test_calc.CalcTest.test_divide_by_zero) ... ok\ntest_mean (tests.test_calc.CalcTest.test_mean) ... ok\ntest_mean_of_nothing (tests.test_calc.CalcTest.test_mean_of_nothing) ... ok\ntest_multiply (tests.test_calc.CalcTest.test_multiply) ... ok\ntest_subtract (tests.test_calc.CalcTest.test_subtract) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.003s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-k",
+          "test_divide_by_zero",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 1,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_calc.CalcTest.test_divide_by_zero": "ok"
+        },
+        "output_tail": "test_divide_by_zero (tests.test_calc.CalcTest.test_divide_by_zero) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/calc.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "4f002f955245e25b2b74bed05e2046e4377f18cb455829d829433a29dbba0914",
+  "summary_sha256": "06e165e3276443dc8d7959b81d23845468d87b6df9cba05c46877ad999fb086c",
+  "verdict_sha256": "233c968139ab0724ef6f93e2a38128f3be3491a907d857290dae641ee5471ede"
+}
