@@ -199,5 +199,5 @@ def test_the_live_total_cap_is_checked_against_cumulative_spend(tmp_path, monkey
     assert [r.get("not_run", False) for r in report["tasks"]] == [False, False] + [True] * (len(ids) - 2)
     assert all("total cap $1.0 would not fit" in r["why"][0] for r in report["tasks"][2:])
     assert report["usd_spent"] == 0.60 and report["ran"] == 2 and report["stopped"] is None
-    assert sorted(p.name for p in (tmp_path / "runs").iterdir()) == [f"live_{i}" for i in ids[:2]]
+    assert sorted(p.name for p in (tmp_path / "runs").iterdir()) == sorted(f"live_{i}" for i in ids[:2])
 
