@@ -77,6 +77,8 @@ Urutan disarankan, karena saling bergantung.
   - biaya aktual 4,34% dari cap, jadi budget tidak perlu dinaikkan;
   - jalur retry, output terpotong, dan error provider belum diuji live; buktinya tetap dari tes model palsu;
   - satu keberhasilan belum cukup untuk menyimpulkan tingkat keberhasilan agen secara umum
+- [x] **Eval Set v1: desain** (PR #26, `docs/reviews/EVAL_SET_V1.md`) dan **runner** (`docs/reviews/REVIEW_EVAL_RUNNER.md`): penilaian independen (efek samping dan klaim dihitung ulang, validasi dijalankan ulang), mode reference/wrong/live, hash benchmark, versi agen. 15/15 mutan tertangkap. Manifest baru berisi `fix_divide`
+- [ ] **Eval Set v1: 19 fixture lagi** per kategori (bug sederhana 4, bug logika 5, perubahan kecil 5, negatif 5), lalu bekukan hash v1
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 

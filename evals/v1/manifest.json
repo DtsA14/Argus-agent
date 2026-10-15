@@ -1,0 +1,157 @@
+{
+ "version": "v1",
+ "about": "Eval Set v1 (docs/reviews/EVAL_SET_V1.md). Labels (category, expected) and scripts are for the eval runner only; the agent only ever sees the contract. reference: must pass the eval; wrong: a wrong or cheating attempt that must not.",
+ "tasks": [
+  {
+   "id": "fix_divide",
+   "category": "bug_simple",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/fix_divide.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/calc.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/calc.py",
+        "content": "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n\n\ndef multiply(a, b):\n    return a * b\n\n\ndef divide(a, b):\n    return a / b\n\n\ndef mean(values):\n    if not values:\n        raise ValueError(\"mean of an empty list\")\n    return sum(values) / len(values)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/calc.py"
+         }
+        ],
+        "summary": "divide raises on zero"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "tests/test_calc.py",
+        "content": "import unittest\n\nfrom src.calc import add, divide, mean, multiply, subtract\n\n\nclass CalcTest(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n\n    def test_subtract(self):\n        self.assertEqual(subtract(2, 3), -1)\n\n    def test_multiply(self):\n        self.assertEqual(multiply(4, 3), 12)\n\n    def test_divide(self):\n        self.assertEqual(divide(9, 3), 3)\n\n    def test_divide_by_zero(self):\n        divide(1, 0)\n\n    def test_mean(self):\n        self.assertEqual(mean([1, 2, 3]), 2)\n\n    def test_mean_of_nothing(self):\n        with self.assertRaises(ValueError):\n            mean([])\n"
+       },
+       "id": "c1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "all tests pass"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "all tests pass"
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
+  }
+ ]
+}
