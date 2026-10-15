@@ -63,10 +63,23 @@ Jaminan 8 (kontrak berubah di tengah run) dan 10 (crash di tengah validasi) ada 
 
 ## Mutation check (VM, `tests/test_acceptance.py` + `tests/test_acceptance_sandbox.py`)
 
-31 mutan dijalankan: **30 tertangkap**. Satu yang lolos, `os.walk(followlinks=True)`, adalah mutan ekuivalen. Kode
-sudah membuang direktori symlink dari `dirnames` (dan mencatatnya sebagai bukan file biasa) sebelum `os.walk` bisa
-masuk, jadi flag itu lapis kedua. Dua mutan yang benar-benar menghapus perlindungannya (cabang symlink dihapus, dengan
-dan tanpa `followlinks=True`) tertangkap oleh `test_a_symlink_in_the_workspace_fails_and_is_not_followed`.
+Total **33 mutan** dijalankan: 31 di run pertama dan 2 tambahan.
+- **1 ekuivalen, tidak dihitung**: `os.walk(followlinks=True)`. Kode sudah membuang direktori symlink dari
+  `dirnames`, dan mencatatnya sebagai bukan file biasa, sebelum `os.walk` sempat masuk. Jadi flag itu hanya lapis
+  kedua, dan perilakunya tidak berubah.
+- **32 mutan efektif, semuanya tertangkap**: 30 dari run pertama, ditambah 2 mutan tambahan yang benar-benar menghapus
+  perlindungan symlink:
+  - cabang `is_symlink()` dihapus (direktori symlink tidak lagi dicatat dan tidak lagi dibuang dari `dirnames`);
+  - cabang yang sama dihapus **dan** `followlinks=True` (walk benar-benar masuk ke direktori di luar workspace).
+
+  Keduanya tertangkap oleh `test_a_symlink_in_the_workspace_fails_and_is_not_followed`.
+
+Tes symlink itu menguji perilaku, bukan teks kode. Tes membuat direktori sungguhan di luar workspace berisi sebuah
+file, lalu memasang symlink ke direktori itu dari dalam `src/`. Setelah itu tes memeriksa tiga hal: snapshot mencatat
+symlink sebagai bukan file biasa, tidak ada satu pun file dari luar workspace yang masuk ke snapshot, dan kriteria
+`scope:regular_files` gagal. Path traversal di bagian ini dijaga oleh validasi kontrak (glob dan nilai opsi tanpa `..`
+atau path absolut, diuji di `BAD_CONTRACTS`) dan oleh mount read-only saat validasi. Tool tulis milik agen datang di
+bagian B lewat `PathJail`, yang sudah punya tes traversal dan race sendiri (`tests/test_fs.py`).
 
 Daftar mutan mencakup: setiap syarat lulus validasi (min_tests, skip, must_pass, exit code, outcome, ringkasan, timeout,
 `-v`, timeout kontrak), `blocked` menjadi pass, allowlist (executable, prefix, nilai), workspace read-only, argv
