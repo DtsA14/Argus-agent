@@ -9,8 +9,6 @@ spent according to the ledger, so a crash never lets it spend its budget twice.
 An attempt ends with Finish, after max_steps, when its reservation is exhausted, when the provider fails, or on a
 cut-off reply. Whatever the reason, the harness then checks the workspace; the end reason only shapes what follows.
 """
-import json
-
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from harness.crash import Crasher
@@ -123,6 +121,7 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
                 else:
                     record = toolbox.run(c)
                     crasher.point("agent@after_tool", step=step, **meta)      # ran, result not yet committed
+                    crasher.point(f"agent@after_tool:{c.get('name')}", step=step, **meta)
                     memo.put(tkey, record)
                     log.emit("step_committed", kind="tool", step=step, tool=c.get("name"), **meta)
                     crasher.point("agent@tool_committed", step=step, **meta)
@@ -140,6 +139,3 @@ def feedback_from(verdict, limit=10):
     out = [f"{c['id']}: {c['reason'][:300]}" for c in verdict["criteria"] if c["status"] != "pass"]
     return out[:limit]
 
-
-def dumps(x):
-    return json.dumps(x, ensure_ascii=False, sort_keys=True)
