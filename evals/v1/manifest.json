@@ -152,6 +152,647 @@
      }
     }
    ]
+  },
+  {
+   "id": "fix_chunk",
+   "category": "bug_simple",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/fix_chunk.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/chunks.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/chunks.py",
+        "content": "\"\"\"Split sequences into pieces.\"\"\"\n\n\ndef chunk(seq, n):\n    \"\"\"Consecutive pieces of length n; the last piece may be shorter.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    return [list(seq[i:i + n]) for i in range(0, len(seq), n)]\n\n\ndef pairs(seq):\n    return chunk(seq, 2)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "unit"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/chunks.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/chunks.py",
+        "content": "\"\"\"Split sequences into pieces.\"\"\"\n\n\ndef chunk(seq, n):\n    \"\"\"Consecutive pieces of length n; the last piece may be shorter.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    return [list(seq[i:i + n]) for i in range(0, len(seq) - 1, n)]\n\n\ndef pairs(seq):\n    return chunk(seq, 2)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/chunks.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/chunks.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
+  },
+  {
+   "id": "fix_shipping",
+   "category": "bug_logic",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/fix_shipping.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/shipping.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/shipping.py",
+        "content": "\"\"\"Shipping cost rules.\n\nStandard: 5.00 for the first kilogram, plus 2.00 for every started kilogram after it.\nExpress: twice the standard cost.\nOrders of 50.00 or more ship for free, but only with standard shipping; express is never free.\n\"\"\"\nimport math\n\n\ndef shipping_cost(weight_kg, order_total, express=False):\n    if weight_kg <= 0:\n        raise ValueError(\"weight must be positive\")\n    if order_total >= 50 and not express:\n        return 0.0\n    extra = max(0, math.ceil(weight_kg) - 1)\n    cost = 5.0 + 2.0 * extra\n    if express:\n        cost *= 2\n    return cost\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/shipping.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/shipping.py",
+        "content": "\"\"\"Shipping cost rules.\n\nStandard: 5.00 for the first kilogram, plus 2.00 for every started kilogram after it.\nExpress: twice the standard cost.\nOrders of 50.00 or more ship for free, but only with standard shipping; express is never free.\n\"\"\"\nimport math\n\n\ndef shipping_cost(weight_kg, order_total, express=False):\n    if weight_kg <= 0:\n        raise ValueError(\"weight must be positive\")\n    extra = max(0, math.ceil(weight_kg) - 1)\n    cost = 5.0 + 2.0 * extra\n    if express:\n        cost *= 2\n    return cost\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/shipping.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/shipping.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
+  },
+  {
+   "id": "slugify_rule",
+   "category": "small_change",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/slugify_rule.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/slugs.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/slugs.py",
+        "content": "\"\"\"URL slugs.\"\"\"\nimport re\n\n\ndef slugify(text):\n    return re.sub(r\"[^a-z0-9]+\", \"-\", text.lower()).strip(\"-\")\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "unit"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/slugs.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/slugs.py",
+        "content": "\"\"\"URL slugs.\"\"\"\n\n\ndef slugify(text):\n    return text.strip().lower().replace(\" \", \"-\").strip(\"-\")\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/slugs.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/slugs.py"
+         }
+        ],
+        "summary": "done"
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
+  },
+  {
+   "id": "round_conflict",
+   "category": "negative",
+   "expected": "FAILED_ACCEPTANCE",
+   "contract": "fixtures/contracts/round_conflict.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "tests/test_rounding.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/rounding.py",
+        "content": "\"\"\"Rounding helpers.\"\"\"\nimport math\n\n\ndef round_half(x):\n    return math.floor(x + 0.5)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "unit"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/rounding.py"
+         }
+        ],
+        "summary": "The tests expect round_half(2.5) to be both 2 and 3; no implementation can pass both. Changed rounding to half-up."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/rounding.py"
+         }
+        ],
+        "summary": "Same conflict: the two half-way tests contradict each other."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "tests/test_rounding.py",
+        "content": "import unittest\n\nfrom src.rounding import round_half\n\n\nclass RoundTest(unittest.TestCase):\n    def test_whole_numbers(self):\n        self.assertEqual(round_half(3), 3)\n\n    def test_below_half(self):\n        self.assertEqual(round_half(2.4), 2)\n\n    def test_half_rounds_up(self):\n        self.assertEqual(round_half(2.5), 3)\n"
+       },
+       "id": "c1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "all tests pass"
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "all tests pass"
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
   }
  ]
 }

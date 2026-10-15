@@ -1,0 +1,67 @@
+{
+  "contract": "fix_shipping",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/shipping",
+    "issue": "Express orders of 50.00 or more ship for free, but the rules in src/shipping.py say express shipping is never free. Fix shipping_cost so it follows the documented rules. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v1"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        "."
+      ],
+      "timeout_s": 60,
+      "min_tests": 6,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-k",
+        "test_express_is_never_free"
+      ],
+      "timeout_s": 60,
+      "min_tests": 1,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_shipping.ShippingTest.test_express_is_never_free"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}
