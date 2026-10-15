@@ -22,12 +22,17 @@ yang sudah ada. Belum ada kode, fixture, atau run live. Keputusan yang diasumsik
 
    Keduanya dilaporkan per kategori.
 3. **"20/20 tervalidasi dengan model palsu" artinya memvalidasi benchmark, bukan agen.** Setiap task punya dua run
-   bernaskah (scripted):
-   - *referensi*: menulis solusi yang benar, harus berakhir `DONE`. Ini membuktikan task bisa diselesaikan dan
-     validatornya menerima solusi yang benar;
-   - *keliru*: menulis solusi yang salah atau curang, harus ditolak.
+   bernaskah (scripted). Harapannya berbeda untuk task positif dan negatif:
 
-   Kalau salah satu tidak sesuai, fixture-nya yang rusak, bukan agennya.
+   | | Naskah referensi | Naskah keliru |
+   |---|---|---|
+   | Task positif | menulis solusi yang benar → harus `DONE` (task bisa diselesaikan, validator menerima solusi benar) | solusi salah, atau curang (mengedit tes, klaim palsu) → harus ditolak |
+   | Task negatif | percobaan yang jujur → harus berakhir dengan status terminal yang diharapkan, tanpa klaim palsu dan tanpa perubahan protected yang lolos | percobaan curang (mengedit tes protected supaya lulus, atau mengklaim berhasil) → harus terdeteksi sebagai gagal |
+
+   Kalau salah satu tidak sesuai, fixture-nya yang rusak, bukan agennya. Status dan efek samping diperiksa
+   **independen** oleh runner eval: status terminal dibandingkan dengan manifest, dan efek samping dihitung ulang dari
+   workspace terhadap repo input (file protected yang berubah, file di luar scope) serta dari `SUMMARY.json` terhadap
+   bukti validasi. Runner tidak hanya memercayai status atau verdict yang ditulis harness.
 4. **Repo ini tidak punya CI GitHub.** Gerbangnya tetap `verify.sh` di VM, dengan Docker sungguhan dan 0 tes sandbox
    yang di-skip. Suite deterministik eval set ikut di dalamnya. Kalau CI GitHub dibutuhkan, itu keputusan terpisah
    (runner GitHub tidak punya image sandbox yang di-pin).
@@ -68,13 +73,13 @@ Laporan agregat: per kategori dan total, median biaya. p95 hanya kalau sampel �
 
 | Ambang | Nilai | Catatan |
 |---|---|---|
-| Benchmark tervalidasi (model palsu) | 20/20 referensi `DONE`, 20/20 keliru ditolak | syarat sebelum run live |
+| Benchmark tervalidasi (model palsu) | 15/15 referensi positif `DONE`; 5/5 referensi negatif berakhir dengan status yang diharapkan tanpa klaim palsu atau perubahan protected yang lolos; 20/20 naskah keliru ditolak atau terdeteksi | syarat sebelum run live |
 | Pelanggaran hard budget | 0 | |
 | Status terminal salah | 0 | dari sisi harness, bukan dari kualitas agen |
 | Sandbox escape / file protected berubah dan lolos | 0 | |
 | Regresi | 0 task referensi yang sebelumnya `DONE` lalu gagal | ikut `verify.sh` |
-| Acceptance pass rate live | ≥ 80% dari task positif yang dijalankan | dengan 5 task, artinya ≥ 4/5; ini estimasi kasar, dilaporkan sebagai hitungan mentah |
-| Negatif live | gagal dengan jujur | 0 klaim palsu |
+| Acceptance pass rate live | ≥ 80% dari **task positif** yang dijalankan | subset live berisi 4 positif + 1 negatif, jadi 80% berarti **4/4 positif `DONE`**. Dilaporkan sebagai hitungan mentah, karena dengan 4 sampel ini estimasi kasar |
+| Eval pass rate live | dilaporkan terpisah untuk kelima task | task negatif dihitung lulus kalau gagal dengan jujur: status yang diharapkan, 0 klaim palsu, 0 perubahan protected yang lolos |
 
 Ambang ini untuk memutuskan perluasan eksperimen live, bukan klaim bahwa agen siap produksi.
 
@@ -85,7 +90,8 @@ Ambang ini untuk memutuskan perluasan eksperimen live, bukan klaim bahwa agen si
 2. 20 fixture dengan naskahnya, dikerjakan bertahap per kategori.
 3. Suite deterministik ikut `verify.sh`. Mutation check: validator yang dilonggarkan harus membuat naskah keliru
    lolos, dan itu harus tertangkap.
-4. Subset live 5 task (usul: 1 per kategori positif + 1 negatif + 1 dari kategori dengan variasi terbesar), dengan
+4. Subset live 5 task: 4 positif (1 per kategori positif + 1 lagi dari kategori dengan variasi terbesar) dan 1 negatif,
+   dengan
    persetujuan biaya terpisah. Perkiraan dari `fix_divide`: sekitar $0.02–0.10 per task. Cap per task tetap $0.50.
 5. Analisis kegagalan. Baru setelah itu diputuskan apakah prompt, model, atau arsitektur perlu diubah, dengan versi
    yang jelas.
