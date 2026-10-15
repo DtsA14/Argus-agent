@@ -33,14 +33,20 @@ SALES_REPORT = {
     # can check stays a programmatic check; these are the parts only a reader can judge.
     "rubric": [
         # Clarified after calibration runs #2 and #3 (good-5), agreed with GPT before the next calibration:
-        # docs/reviews/GROUNDED_RUBRIC.md has the passing, failing and boundary examples.
+        # docs/reviews/GROUNDED_RUBRIC.md has the passing, failing and boundary examples. Sharpened after baseline #1
+        # (decision B, docs/reviews/GOOD5_DECISION.md): only what the report asserts must follow from the table, and a
+        # goal clause is still checked. The agreed examples stay out of the prompt.
         {"id": "grounded",
-         "description": "Every claim stated as fact follows from the fact table: no invented numbers, causes, costs, "
-                        "margins, surveys, benchmarks, forecasts, products or periods. Advice passes when it rests on "
-                        "what the facts show (rising revenue means planning for more demand) or states its "
-                        "assumption as a condition (\"if stock runs short, ...\"). It fails when it states as fact a "
-                        "cause or constraint the table does not contain, or when the advice only makes sense if such "
-                        "an unsupported fact were true."},
+         "description": "Every claim the report asserts as fact follows from the fact table: no invented numbers, "
+                        "causes, costs, margins, surveys, benchmarks, forecasts, products or periods. Advice passes "
+                        "when it rests on what the facts show (rising revenue means planning for more demand) or "
+                        "states its assumption as a condition (\"if stock runs short, ...\"). An action may assume "
+                        "the ordinary setup of a business like this one (it has suppliers, staff, shifts, busier and "
+                        "quieter times) and may name the goal it serves (\"so that ...\", \"to ...\"); neither is a "
+                        "claim by itself. A goal clause is still checked: it fails when it states or presumes a "
+                        "specific state of this business that the table does not show. The report fails when it "
+                        "states as fact a cause, problem, constraint or specific state of the business that the table "
+                        "does not contain, or when the advice only makes sense if such an unsupported fact were true."},
         {"id": "consistent_with_trend",
          "description": "The recommendations agree with the direction of the trend and with the ranking of the "
                         "products; no advice contradicts them."},
