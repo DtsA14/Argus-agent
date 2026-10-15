@@ -86,7 +86,11 @@ def status(cfg):
     return True, "ok"
 
 
-def docker_args(s, name, workdir, data_dir):
+def docker_args(s, name, workdir, data_dir, command=None, workspace_mode="rw"):
+    """The docker command line. `command` is an argv list run without a shell (default: python reading code
+    from stdin); `workspace_mode` "ro" mounts the workspace read-only (validation must not change what it checks).
+    data_dir None mounts no data."""
+    data = ["-v", f"{data_dir}:/data:ro"] if data_dir is not None else []
     return [
         s["docker"], "run", "--rm", "-i", "--name", name, "--label", "argus.sandbox=1",
         "--network", "none",
@@ -96,11 +100,11 @@ def docker_args(s, name, workdir, data_dir):
         "--security-opt", "no-new-privileges",
         "--memory", s["memory"], "--memory-swap", s["memory"],
         "--cpus", str(s["cpus"]), "--pids-limit", str(s["pids"]),
-        "-v", f"{workdir}:/workspace:rw", "-v", f"{data_dir}:/data:ro",
+        "-v", f"{workdir}:/workspace:{workspace_mode}", *data,
         "-w", "/workspace",
         "--env", "PYTHONDONTWRITEBYTECODE=1",
         "--log-driver", "none",
-        s["image"], "python3", "-I", "-",
+        s["image"], *(command or ["python3", "-I", "-"]),
     ]
 
 
@@ -188,7 +192,27 @@ def _container_gone(s, name, deadline):
 
 
 def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
-    """Run `code` in the sandbox.
+    """Run `code` (python, sent on stdin) in the sandbox with the workspace writable. See _run."""
+    workdir, data_dir = Path(workdir).resolve(), Path(data_dir).resolve()
+    workdir.mkdir(parents=True, exist_ok=True)
+    os.chmod(workdir, 0o777)   # the container runs as nobody (65534); this directory is its only writable place
+    return _run(cfg, lambda s, name: docker_args(s, name, workdir, data_dir), code.encode("utf-8"), log, meta)
+
+
+def run_command(argv, *, workdir, cfg, log=None, meta=None):
+    """Run an argv list (never a shell string) in the sandbox with the workspace mounted read-only and no data.
+    The caller validates argv against its allowlist; this only refuses anything that is not a list of plain
+    strings. Same limits, timeout (the container is killed, not just abandoned) and result as run_python."""
+    if not isinstance(argv, (list, tuple)) or not argv or not all(isinstance(a, str) and a and "\x00" not in a
+                                                                  for a in argv):
+        raise ValueError(f"argv must be a non-empty list of non-empty strings without NUL, got {argv!r}")
+    workdir = Path(workdir).resolve()
+    return _run(cfg, lambda s, name: docker_args(s, name, workdir, None, command=list(argv), workspace_mode="ro"),
+                b"", log, meta)
+
+
+def _run(cfg, make_args, stdin_bytes, log, meta):
+    """Run one container (make_args(settings, name) gives the docker command line), feeding stdin_bytes.
 
     Returns {exit_code, stdout, stderr, timed_out, truncated, killed, output_limit_exceeded,
     stdout_bytes, stderr_bytes}. Output is read with a bounded reader: the host keeps at most
@@ -207,11 +231,8 @@ def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
             log.emit("sandbox_refused", reason=reason, **(meta or {}))
         raise SandboxUnavailable(reason)
 
-    workdir, data_dir = Path(workdir).resolve(), Path(data_dir).resolve()
-    workdir.mkdir(parents=True, exist_ok=True)
-    os.chmod(workdir, 0o777)   # the container runs as nobody (65534); this directory is its only writable place
     name = f"argus-{uuid.uuid4().hex[:12]}"
-    args = docker_args(s, name, workdir, data_dir)
+    args = make_args(s, name)
     limit = int(s["max_output_bytes"])
     kill_after = int(s["kill_after_output_bytes"])
     deadline = time.monotonic() + float(s["timeout_s"])
@@ -225,7 +246,7 @@ def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
 
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     readers.extend([_BoundedReader(proc.stdout, limit, on_total), _BoundedReader(proc.stderr, limit, on_total)])
-    feeder = threading.Thread(target=_feed, args=(proc.stdin, code.encode("utf-8")), daemon=True)
+    feeder = threading.Thread(target=_feed, args=(proc.stdin, stdin_bytes), daemon=True)
     for t in (feeder, *readers):
         t.start()
 
