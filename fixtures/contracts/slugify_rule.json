@@ -1,0 +1,70 @@
+{
+  "contract": "slugify_rule",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/slugs",
+    "issue": "New rule for slugify(text): every run of characters that are not a-z or 0-9 (after lowercasing) becomes a single '-', and the slug never starts or ends with '-'. For example 'Hello,   World!!  Again' becomes 'hello-world-again'. Implement it in src/slugs.py. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v1"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        "."
+      ],
+      "timeout_s": 60,
+      "min_tests": 5,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-k",
+        "test_runs_become_one_dash",
+        "-k",
+        "test_no_dash_at_the_ends"
+      ],
+      "timeout_s": 60,
+      "min_tests": 2,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_slugs.SlugTest.test_runs_become_one_dash",
+        "tests.test_slugs.SlugTest.test_no_dash_at_the_ends"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}

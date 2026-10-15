@@ -1,0 +1,67 @@
+{
+  "contract": "fix_chunk",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/chunks",
+    "issue": "chunk(seq, n) drops the last, shorter piece: chunk([1, 2, 3, 4, 5], 2) returns [[1, 2], [3, 4]] instead of [[1, 2], [3, 4], [5]]. Fix it so the last piece is kept. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v1"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        "."
+      ],
+      "timeout_s": 60,
+      "min_tests": 6,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-k",
+        "test_keeps_the_remainder"
+      ],
+      "timeout_s": 60,
+      "min_tests": 1,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_chunks.ChunkTest.test_keeps_the_remainder"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}
