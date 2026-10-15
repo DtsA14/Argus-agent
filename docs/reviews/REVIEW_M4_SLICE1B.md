@@ -133,3 +133,32 @@ terpotong crash tidak dihitung, verdict blocked diperlakukan sebagai fail, provi
 beku tidak dicek, scope tulis (protected, di luar writable, `SUMMARY.json`), allowlist, schema dan aturan "Finish
 sendirian", commit balasan dan hasil tool, reservasi tidak dipulihkan dari ledger, kontainer yatim dibiarkan, salinan
 setup yang crash dipakai ulang, dan saklar `ARGUS_LIVE`.
+
+## Perbaikan setelah review GPT: overspend menjadi `FAILED_BUDGET` yang durable
+
+**Temuan reviewer:** saat ada overspend (`EstimateExceeded`), handler hanya mengubah status di memori dan menulis
+`result.json`. Guard melempar exception sebelum hasil node di-commit, jadi checkpoint masih menyimpan attempt sebagai
+pekerjaan yang tertunda.
+
+**Dampak yang terbukti** (handler lama, dicek di VM): resume menjalankan node `agent` lagi. Panggilan modelnya
+ditolak sebelum dikirim, karena reservasi dipulihkan dari ledger, jadi tidak ada uang yang keluar. Tapi run yang
+seharusnya terminal ternyata dilanjutkan, dan itu melanggar state machine.
+
+**Perbaikan** (`codetask/run.py`): `FAILED_BUDGET` ditulis ke checkpoint lewat `graph.update_state(..., as_node="agent")`.
+Routing setelah `agent` langsung ke `END`. Handler juga memastikan status sudah tersimpan dan tidak ada node yang
+tertunda; kalau tidak, ia raise.
+
+**Tes regresi:** `test_an_overspend_is_a_durable_failed_budget_that_resume_does_not_continue`, lintas proses dengan
+sandbox sungguhan. Provider menagih 45.000 token input, padahal reservasi attempt 30.000. Run pertama berakhir
+`FAILED_BUDGET`, dan overspend-nya tercatat di ledger. Lalu sebuah **proses baru** me-resume run itu dan tes
+memeriksa:
+- statusnya tetap `FAILED_BUDGET` dengan alasan yang sama;
+- jumlah panggilan model tidak bertambah, dan `usd_billed` sama;
+- tidak ada event `llm_call`, `llm_call_started`, `node_start`, atau `status` baru.
+
+Tes ini **gagal dengan handler lama** dan lulus dengan perbaikannya. Satu catatan jujur: percobaan revert pertama
+tidak berlaku karena bug di skrip mutasiku sendiri (`index()` menemukan baris yang lebih awal). Baru setelah
+diperbaiki (`rindex`, dan dicek bahwa `update_state` benar-benar hilang dari file), tes itu terbukti menangkap bug ini.
+
+Hitungan mutasi bagian B sekarang: 28 dijalankan, 1 ekuivalen, **27/27 efektif tertangkap**.
+
