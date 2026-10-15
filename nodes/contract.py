@@ -32,9 +32,15 @@ SALES_REPORT = {
     # Phase 3c: what the judge decides, one verdict per criterion (docs/MILESTONE3_PLAN.md 3.6). Everything that code
     # can check stays a programmatic check; these are the parts only a reader can judge.
     "rubric": [
+        # Clarified after calibration runs #2 and #3 (good-5), agreed with GPT before the next calibration:
+        # docs/reviews/GROUNDED_RUBRIC.md has the passing, failing and boundary examples.
         {"id": "grounded",
-         "description": "Every claim in the recommendations follows from the fact table: no invented numbers, causes, "
-                        "costs, margins, surveys, benchmarks, forecasts, products or periods."},
+         "description": "Every claim stated as fact follows from the fact table: no invented numbers, causes, costs, "
+                        "margins, surveys, benchmarks, forecasts, products or periods. Advice passes when it rests on "
+                        "what the facts show (rising revenue means planning for more demand) or states its "
+                        "assumption as a condition (\"if stock runs short, ...\"). It fails when it states as fact a "
+                        "cause or constraint the table does not contain, or when the advice only makes sense if such "
+                        "an unsupported fact were true."},
         {"id": "consistent_with_trend",
          "description": "The recommendations agree with the direction of the trend and with the ranking of the "
                         "products; no advice contradicts them."},

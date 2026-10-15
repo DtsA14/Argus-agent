@@ -341,3 +341,16 @@ def test_a_judge_that_never_gives_a_usable_verdict_never_lets_the_run_pass(tmp_p
     evs = [json.loads(l) for l in (tmp_path / "t" / "events.jsonl").read_text().splitlines()]
     (v,) = [e for e in evs if e["event"] == "eval_verdict"]
     assert v["passed"] is False and v["failures"] == ["report:rubric_valid"]
+
+
+def test_the_judge_receives_the_clarified_grounded_rule(tmp_path):
+    # docs/reviews/GROUNDED_RUBRIC.md: advice on what the facts show, or stated as a condition, passes; a cause or
+    # constraint stated as fact without support fails (clarified after good-5 in calibration runs #2 and #3).
+    j, model, _ = judge_with(tmp_path, [call(verdict())])
+    j(REPORT, FACTS, 0)
+    system = model.calls[0]["messages"][0].content
+    for phrase in ("Every claim stated as fact follows from the fact table",
+                   "states its assumption as a condition",
+                   "states as fact a cause or constraint the table does not contain",
+                   "only makes sense if such an unsupported fact were true"):
+        assert phrase in system
