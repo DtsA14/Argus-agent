@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from harness.crash import Crasher
 from harness.errors import LLMCallFailed, ReservationExhausted
 from harness.llm import is_truncated
-from harness.steps import (llm_step_key, message_from_json, message_to_json, reservation_from_ledger,
+from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_from_json, message_to_json, reservation_from_ledger,
                            tool_step_key)
 
 from .contract import validate_output
@@ -178,6 +178,13 @@ def make_llm_worker(caller, contract, gate, memo, log, *, tokens, usd, max_steps
                                     f"its tool calls were not run")
 
             calls = list(msg.tool_calls or [])
+            if invalid_call_errors(msg):
+                # A malformed call: nothing in this reply is run (as with a mixed submission), and every call id,
+                # valid or not, is answered so the next request is well-formed.
+                log.emit("invalid_tool_call", step=step, tools=[c.get("name") for c in msg.invalid_tool_calls], **meta)
+                reason = "Rejected: " + "; ".join(invalid_call_errors(msg)) + ". Nothing in this reply was executed."
+                messages += [ToolMessage(reason, tool_call_id=i) for i in call_ids(msg, f"call_{step}")]
+                continue
             if not calls:
                 messages.append(HumanMessage(nudge(tools)))
                 continue

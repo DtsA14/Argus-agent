@@ -42,10 +42,30 @@ def tool_step_key(node, task, iteration, step, tool_call_id, name, args, version
     return json.dumps(["tool", node, task, iteration, step, tool_call_id, _sha([name, args, parent]), version])
 
 
+def invalid_calls(msg):
+    """Tool calls the provider returned but whose arguments could not be parsed (LangChain's invalid_tool_calls).
+    They are never treated as valid calls, but they are still tool calls: each must be answered."""
+    return list(getattr(msg, "invalid_tool_calls", None) or [])
+
+
+def call_ids(msg, prefix):
+    """Every tool call id in a reply, valid or not. Each needs a ToolMessage before the next model turn: providers
+    reject the request otherwise (DeepSeek answered HTTP 400 in calibration run #3, docs/reviews/REVIEW_3D.md)."""
+    return [c.get("id") or f"{prefix}_{i}" for i, c in enumerate(list(msg.tool_calls or []) + invalid_calls(msg))]
+
+
+def invalid_call_errors(msg):
+    return [f"the {c.get('name') or 'tool'} call had arguments that are not valid JSON ({str(c.get('error') or '')[:120]}); "
+            f"call it again with valid arguments" for c in invalid_calls(msg)]
+
+
 def message_to_json(msg):
     return {
         "content": msg.content,
         "tool_calls": [{"name": c["name"], "args": c["args"], "id": c["id"]} for c in (msg.tool_calls or [])],
+        # kept so a replayed reply is the reply that was received (and is answered the same way)
+        "invalid_tool_calls": [{"name": c.get("name"), "args": c.get("args"), "id": c.get("id"), "error": c.get("error")}
+                               for c in invalid_calls(msg)],
         "usage_metadata": dict(msg.usage_metadata) if getattr(msg, "usage_metadata", None) else None,
         "truncated": is_truncated(msg),  # a replayed cut-off reply must stay cut off
     }
@@ -55,6 +75,8 @@ def message_from_json(d):
     kw = {"content": d["content"]}
     if d.get("tool_calls"):
         kw["tool_calls"] = d["tool_calls"]
+    if d.get("invalid_tool_calls"):
+        kw["invalid_tool_calls"] = [{**c, "type": "invalid_tool_call"} for c in d["invalid_tool_calls"]]
     if d.get("usage_metadata"):
         kw["usage_metadata"] = d["usage_metadata"]
     if d.get("truncated"):

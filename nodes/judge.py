@@ -16,7 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from harness.crash import Crasher
 from harness.errors import LLMCallFailed, ReservationExhausted
 from harness.llm import is_truncated
-from harness.steps import llm_step_key, message_from_json, message_to_json, reservation_from_ledger
+from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_from_json, message_to_json,
+                           reservation_from_ledger)
 
 from .facts import fact_line
 
@@ -105,16 +106,18 @@ def judge_prompt(report_text, facts):
 
 
 def make_judge(caller, memo, log, *, criteria, tokens, usd, attempts=2, crasher=None):
-    """judge(report_text, facts, iteration) -> {valid, passed, criteria, reason, tokens_used, usd_used}.
+    """judge(report_text, facts, iteration, task=None) -> {valid, passed, criteria, reason, tokens_used, usd_used}.
+    task: None in the evaluator; the calibration runner gives each report its own, so every judgement has its own
+    reservation and memo keys.
     Each reply is committed to the memo before it is used; its key carries the report, the facts, the criteria
     and the model (all in the messages), so a changed report is judged again and a resume never re-buys."""
     crasher = crasher or Crasher()
     tools = [SubmitVerdict]
     sys_msg = SystemMessage(judge_system(criteria))
 
-    def judge(report_text, facts, iteration):
-        meta = {"node": "evaluator", "iteration": iteration}
-        res = reservation_from_ledger(log, tokens=tokens, usd=usd, node="evaluator", task=None, iteration=iteration)
+    def judge(report_text, facts, iteration, task=None):
+        meta = {"node": "evaluator", "iteration": iteration, **({"task": task} if task is not None else {})}
+        res = reservation_from_ledger(log, tokens=tokens, usd=usd, node="evaluator", task=task, iteration=iteration)
 
         def result(valid, verdict, reason):
             passed = bool(valid and all(v["pass"] for v in verdict.values()))
@@ -126,7 +129,7 @@ def make_judge(caller, memo, log, *, criteria, tokens, usd, attempts=2, crasher=
         messages = [sys_msg, HumanMessage(judge_prompt(report_text, facts))]
         errors = []
         for attempt in range(attempts):
-            key = llm_step_key("evaluator", None, iteration, attempt, messages, tools, caller.ref)
+            key = llm_step_key("evaluator", task, iteration, attempt, messages, tools, caller.ref)
             cached = memo.get(key)
             if cached is not None:
                 msg = message_from_json(cached)
@@ -146,7 +149,9 @@ def make_judge(caller, memo, log, *, criteria, tokens, usd, attempts=2, crasher=
             if is_truncated(msg):   # cut off: never read, never retried (2e)
                 return result(False, None, f"output_truncated at step {attempt}")
             calls = list(msg.tool_calls or [])
-            if len(calls) != 1 or calls[0].get("name") != "SubmitVerdict":
+            if invalid_call_errors(msg):   # a malformed call is never read as a submission
+                errors = invalid_call_errors(msg)
+            elif len(calls) != 1 or calls[0].get("name") != "SubmitVerdict":
                 errors = [f"call only the SubmitVerdict tool, exactly once; got {[c.get('name') for c in calls]}"]
             else:
                 verdict, errors = validate_verdict(calls[0].get("args"), criteria, report_text)
@@ -154,9 +159,9 @@ def make_judge(caller, memo, log, *, criteria, tokens, usd, attempts=2, crasher=
                     return result(True, verdict, "ok")
             log.emit("verdict_rejected", step=attempt, errors=[str(e)[:200] for e in errors[:10]], **meta)
             feedback = "Rejected by the harness:\n- " + "\n- ".join(errors) + "\nFix these and call SubmitVerdict again."
-            if calls:
-                messages += [ToolMessage(feedback, tool_call_id=c.get("id") or f"call_{attempt}_{i}")
-                             for i, c in enumerate(calls)]
+            ids = call_ids(msg, f"call_{attempt}")
+            if ids:   # every tool call, valid or not, must be answered before the next turn
+                messages += [ToolMessage(feedback, tool_call_id=i) for i in ids]
             else:
                 messages.append(HumanMessage(feedback))
         return result(False, None, f"verdict invalid after {attempts} attempts: " + "; ".join(errors)[:300])

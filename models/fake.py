@@ -71,8 +71,50 @@ class ScriptedChatModel(BaseChatModel):
         return [c for c in self.calls if c["key"] == key]
 
 
+class CallableChatModel(ScriptedChatModel):
+    """Replies with respond(messages) -> AIMessage | Exception, for open-ended fakes such as the calibration
+    dry-run judges. Calls are recorded like ScriptedChatModel's."""
+    respond: Any = None
+
+    def _next(self, key):   # not used: _generate below answers from the messages
+        raise AssertionError("CallableChatModel answers through respond()")
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        with self._lock:
+            self.calls.append({"messages": list(messages), "kwargs": dict(kwargs),
+                               "tool_choice": self.tool_choice, "key": "default"})
+        item = self.respond(list(messages))
+        if isinstance(item, BaseException):
+            raise item
+        return ChatResult(generations=[ChatGeneration(message=item)])
+
+
+class StrictScriptedChatModel(ScriptedChatModel):
+    """A scripted model that rejects a request the way DeepSeek did in calibration run #3: every tool call id in an
+    assistant message (valid or not) must be answered by a ToolMessage before any other message, or HTTP 400."""
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        from langchain_core.messages import AIMessage as _AI, ToolMessage as _Tool
+        for i, m in enumerate(messages):
+            if not isinstance(m, _AI):
+                continue
+            ids = [c.get("id") for c in list(m.tool_calls or []) + list(getattr(m, "invalid_tool_calls", None) or [])]
+            answered = []
+            for n in messages[i + 1:]:
+                if not isinstance(n, _Tool):
+                    break
+                answered.append(n.tool_call_id)
+            if set(ids) - set(answered):
+                with self._lock:
+                    self.calls.append({"messages": list(messages), "kwargs": dict(kwargs), "rejected": True,
+                                       "tool_choice": self.tool_choice, "key": "default"})
+                raise FakeHTTPError(400, "An assistant message with 'tool_calls' must be followed by tool messages "
+                                         "responding to each 'tool_call_id'.")
+        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+
 def reply(text="ok", *, input_tokens=100, output_tokens=20, cache_read=0, tool_calls=None, usage=True,
-          stop_reason=None):
+          stop_reason=None, invalid_tool_calls=None):
     """Build a scripted AIMessage with provider-style usage metadata. stop_reason="max_tokens" makes a
     reply that the provider cut off (Anthropic style)."""
     kw = {"content": text}
@@ -80,6 +122,8 @@ def reply(text="ok", *, input_tokens=100, output_tokens=20, cache_read=0, tool_c
         kw["tool_calls"] = tool_calls
     if stop_reason:
         kw["response_metadata"] = {"stop_reason": stop_reason}
+    if invalid_tool_calls:   # a call whose arguments could not be parsed (as LangChain reports it)
+        kw["invalid_tool_calls"] = [{"type": "invalid_tool_call", **c} for c in invalid_tool_calls]
     if usage:
         kw["usage_metadata"] = {
             "input_tokens": input_tokens,
@@ -97,7 +141,8 @@ def item_from_json(d):
     usage = d.get("usage", {"input_tokens": 100, "output_tokens": 20})
     return reply(d.get("content", ""), input_tokens=usage.get("input_tokens", 0),
                  output_tokens=usage.get("output_tokens", 0), cache_read=usage.get("cache_read", 0),
-                 tool_calls=d.get("tool_calls"), usage=bool(usage), stop_reason=d.get("stop_reason"))
+                 tool_calls=d.get("tool_calls"), usage=bool(usage), stop_reason=d.get("stop_reason"),
+                 invalid_tool_calls=d.get("invalid_tool_calls"))
 
 
 def pos_path(path, key):
