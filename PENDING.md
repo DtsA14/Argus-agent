@@ -72,6 +72,12 @@ Urutan disarankan, karena saling bergantung.
 - [x] **Slice 1 bagian B** (`docs/reviews/REVIEW_M4_SLICE1B.md`): loop agen dengan model palsu, state machine (`DONE`/`FAILED_ACCEPTANCE`/`BLOCKED`/`FAILED_BUDGET`, transisi legal), admission dan reservasi dari ledger, kontrak beku per run, crash-resume di 9 titik + kontainer yatim. overspend menjadi `FAILED_BUDGET` yang durable di checkpoint (temuan review GPT, dengan tes regresi lintas proses). 27/27 mutan efektif tertangkap (28 dijalankan, 1 ekuivalen); `verify.sh` 783 lulus, 0 skip (`1e9e179`)
 - [x] **Runner CSV: `FAILED_BUDGET` durable** (pola yang sama dengan temuan review PR #22): status ditulis ke checkpoint sebagai update evaluator, sehingga resume tidak menjalankan node lagi. Tes regresi lintas proses untuk overspend worker dan gerbang admission, keduanya gagal di kode lama; 3 mutan tertangkap
 - [x] **Slice 1 run live** (`4ae41bb`, Sonnet 5.5, cap $0.50, `--sandbox docker`): **DONE di attempt pertama**, semua 10 kriteria lulus, 4 panggilan model, 8.443 token, **$0.0217**. 0 retry, 0 terpotong, 0 error provider. Agen menghapus cabang `if b == 0: return 0`; klaim `SUMMARY.json` semua terbukti. Bukti: `verification/code-task-live-1/`
+  **Live Smoke Test 1: PASS**, dengan catatan:
+  - keberhasilan pertama terkonfirmasi untuk satu task dan satu model;
+  - biaya aktual 4,34% dari cap, jadi budget tidak perlu dinaikkan;
+  - jalur retry, output terpotong, dan error provider belum diuji live; buktinya tetap dari tes model palsu;
+  - satu keberhasilan belum cukup untuk menyimpulkan tingkat keberhasilan agen secara umum
+- [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 
 **Milestone 4+**
