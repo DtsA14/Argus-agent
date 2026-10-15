@@ -349,8 +349,27 @@ def test_the_judge_receives_the_clarified_grounded_rule(tmp_path):
     j, model, _ = judge_with(tmp_path, [call(verdict())])
     j(REPORT, FACTS, 0)
     system = model.calls[0]["messages"][0].content
-    for phrase in ("Every claim stated as fact follows from the fact table",
+    # docs/reviews/GOOD5_DECISION.md (decision B): only what the report asserts counts; ordinary setup and a goal
+    # are not claims by themselves, but a goal clause that presumes a specific state of the business still fails.
+    for phrase in ("Every claim the report asserts as fact follows from the fact table",
                    "states its assumption as a condition",
-                   "states as fact a cause or constraint the table does not contain",
+                   "may assume the ordinary setup of a business like this one",
+                   "may name the goal it serves",
+                   "A goal clause is still checked",
+                   "states or presumes a specific state of this business that the table does not show",
+                   "states as fact a cause, problem, constraint or specific state of the business",
                    "only makes sense if such an unsupported fact were true"):
         assert phrase in system
+
+
+def test_the_agreed_grounded_examples_and_the_fixtures_stay_out_of_the_rubric():
+    # Decision B: the examples agreed in docs/reviews/GOOD5_DECISION.md (C1-C4) are for review only, and the rubric
+    # must not quote any calibration fixture, so the judge is never tuned on the set it is measured with.
+    from scripts import calibrate_judge as cal
+    rubric = " ".join(c["description"] for c in CRITERIA).lower()
+    for phrase in ("register", "queue", "barista", "the current one", "daily delivery", "complain",
+                   "second supplier", "stock keeps up", "only supplier"):
+        assert phrase not in rubric
+    for fx in cal.load_fixtures(include_reserve=True):
+        for r in fx["recs"]:
+            assert r["text"].lower() not in rubric and r["action"].lower() not in rubric

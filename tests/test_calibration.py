@@ -36,6 +36,18 @@ def test_the_fixture_set_matches_the_plan():
     assert all(f["expect_fail"] for f in ALL if f["category"] != "good")
 
 
+FIXTURES_SHA256 = "73de0afdfa710f85bb7dda18d83df4da807e5f9bfb4b104e336986bebc5184ea"
+
+
+def test_the_fixture_set_and_its_labels_are_frozen():
+    # Decision B (docs/reviews/GOOD5_DECISION.md): the rubric changes, the fixtures and labels do not. Baseline #2
+    # runs on the same set as every earlier run, so a rejected good-5 or a passed fabrication is reported as it is.
+    # Hashed with LF line endings, as git stores the file (a Windows checkout may have CRLF).
+    import hashlib
+    data = cal.FIXTURES.read_bytes().replace(b"\r\n", b"\n")
+    assert hashlib.sha256(data).hexdigest() == FIXTURES_SHA256
+
+
 @pytest.mark.parametrize("fx", [f for f in FIX if f["category"] == "good"], ids=lambda f: f["id"])
 def test_good_reports_are_really_good_by_every_programmatic_rule(tmp_path, fx):
     assert validate_recommendations({"recommendations": fx["recs"]}, FACTS)[1] == []
