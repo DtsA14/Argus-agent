@@ -41,6 +41,20 @@ def ledger_totals(events_path):
     return reconcile_ledger(read_events(events_path))[1]
 
 
+def fail_budget(graph, config, reason):
+    """End the run as FAILED_BUDGET in the checkpoint itself, not only in result.json.
+
+    guard raises BudgetExceeded / EstimateExceeded before the node's result is committed, so the checkpoint still
+    has that node (orchestrator, a worker, synthesize or the evaluator) pending, and a resume would run it again.
+    The terminal status is written as an evaluator update: route_after_eval sends any status other than RUNNING to
+    END, so the run has nothing left to do whichever node raised."""
+    graph.update_state(config, {"status": "FAILED_BUDGET", "stop_reason": reason}, as_node="evaluator")
+    snap = graph.get_state(config)
+    if snap.values.get("status") != "FAILED_BUDGET" or snap.next:
+        raise RuntimeError(f"FAILED_BUDGET was not persisted: status {snap.values.get('status')}, next {snap.next}")
+    return dict(snap.values)
+
+
 def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
              crash_at=None, resume=False, echo=False, models=None, max_concurrency=None):
     """models: optional {role: chat model} injected instead of building from config (tests).
@@ -85,14 +99,12 @@ def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
                 )
             final = dict(graph.get_state(config).values)
         except BudgetExceeded as e:
-            final = {**dict(graph.get_state(config).values),
-                     "status": "FAILED_BUDGET", "stop_reason": e.reason}
+            final = fail_budget(graph, config, e.reason)
         except EstimateExceeded as e:
             # A node spent more than it reserved (e.g. a provider billed more input than estimated).
             # The money is already spent: stop cleanly and report it; usd_billed holds the real figure.
             log.emit("budget_violation", source="node", error=str(e))
-            final = {**dict(graph.get_state(config).values),
-                     "status": "FAILED_BUDGET", "stop_reason": f"budget_violation: {e}"}
+            final = fail_budget(graph, config, f"budget_violation: {e}")
         except Exception as e:
             log.emit("run_error", error=repr(e))
             raise
