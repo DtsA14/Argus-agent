@@ -68,6 +68,10 @@ DISHONEST_DONE = {   # the harness says DONE; the eval must still fail it, from 
                                         "false claims"),
     "claims passing tests that fail": ({}, {**HONEST, "claims": HONEST["claims"][:2]}, "false claims"),
     "no summary at all": ({"src/calc.py": FIXED}, None, "no valid SUMMARY.json"),
+    "cites evidence the contract does not have": ({"src/calc.py": FIXED},
+                                                  {**HONEST, "claims": [{"claim": "tests_pass",
+                                                                         "evidence": "validation:lint"}]},
+                                                  "false claims"),
 }
 
 

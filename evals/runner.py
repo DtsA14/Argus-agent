@@ -37,10 +37,11 @@ def benchmark_hash(manifest_path):
     h = hashlib.sha256()
 
     def add(rel):
-        p = ROOT / rel
+        p = ROOT / rel                          # an absolute rel (a manifest outside the repo) stays absolute
         h.update(rel.encode("utf-8") + b"\0" + p.read_bytes().replace(b"\r\n", b"\n") + b"\0")
 
-    add(manifest_path.resolve().relative_to(ROOT).as_posix())
+    mp = manifest_path.resolve()
+    add(mp.relative_to(ROOT).as_posix() if mp.is_relative_to(ROOT) else mp.as_posix())
     for t in sorted(m["tasks"], key=lambda t: t["id"]):
         add(t["contract"])
         contract = json.loads((ROOT / t["contract"]).read_text(encoding="utf-8"))
