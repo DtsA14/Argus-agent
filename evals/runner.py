@@ -23,6 +23,10 @@ from .score import aggregate, independent_checks, run_stats, score
 
 ROOT = Path(__file__).resolve().parent.parent
 MODES = ("reference", "wrong", "live")
+# A task that ends like this says the infrastructure or the budget failed, not the agent: the eval stops, and every
+# remaining task is reported as not run (a report row only; no run is created for it). FAILED_ACCEPTANCE is data
+# about the agent and never stops the eval.
+STOP_ON = ("BLOCKED", "FAILED_BUDGET")
 
 
 def _sha_text(text):
@@ -88,13 +92,20 @@ def run_eval(manifest_path, mode, runs_dir, cfg, *, tasks=None, max_total_usd=No
         role = cfg["code_task"]["role"]
         cfg = {**cfg, "roles": {**cfg["roles"], role: {**cfg["roles"][role], "model": "fake:scripted"}}}
     runs_dir = Path(runs_dir)
-    rows, spent = [], 0.0
+    rows, spent, stopped = [], 0.0, None
+
+    def not_run(t, why):
+        return {"id": t["id"], "category": t["category"], "expected": t["expected"], "status": None,
+                "eval_pass": False, "honest": None, "acceptance_pass": None if t["expected"] != "DONE" else False,
+                "why": [f"not run: {why}"], "not_run": True}
+
     for t in selected:
+        if stopped:
+            rows.append(not_run(t, f"the eval stopped after {stopped['task']} ended {stopped['status']}"))
+            continue
         contract = json.loads((ROOT / t["contract"]).read_text(encoding="utf-8"))
         if mode == "live" and spent + float(contract["limits"]["max_usd"]) > max_total_usd + 1e-12:
-            rows.append({"id": t["id"], "category": t["category"], "expected": t["expected"], "status": None,
-                         "eval_pass": False, "honest": None, "acceptance_pass": None if t["expected"] != "DONE"
-                         else False, "why": [f"not run: total cap ${max_total_usd} would not fit"], "not_run": True})
+            rows.append(not_run(t, f"total cap ${max_total_usd} would not fit"))
             continue
         models = None
         if mode != "live":
@@ -114,8 +125,12 @@ def run_eval(manifest_path, mode, runs_dir, cfg, *, tasks=None, max_total_usd=No
             row["benchmark_ok"] = row["eval_pass"]
         spent += row["stats"]["usd_billed"] or 0.0
         rows.append(row)
+        if row["status"] in STOP_ON:
+            stopped = {"task": t["id"], "status": row["status"], "blocked_reason": checks["blocked_reason"]}
     report = {"benchmark": m["version"], "benchmark_sha256": benchmark_hash(manifest_path), "mode": mode,
-              "agent": agent_version(cfg), "tasks": rows, "summary": aggregate([r for r in rows if not r.get("not_run")])}
+              "agent": agent_version(cfg), "tasks": rows, "stopped": stopped,
+              "ran": sum(not r.get("not_run") for r in rows), "not_run": sum(bool(r.get("not_run")) for r in rows),
+              "usd_spent": round(spent, 6), "summary": aggregate([r for r in rows if not r.get("not_run")])}
     if mode != "live":
         report["benchmark_valid"] = all(r.get("benchmark_ok") for r in rows)
     return report

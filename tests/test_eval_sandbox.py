@@ -77,3 +77,43 @@ def test_running_an_eval_again_into_the_same_runs_never_reuses_the_old_run(tmp_p
     assert first["tasks"][0]["eval_pass"]
     with pytest.raises(RunExists):
         ev.run_eval(manifest, "reference", tmp_path / "runs", cfg, tasks=["fix_divide"])
+
+
+def _script_eval(tmp_path, image, first_script):
+    """Mode reference over the real manifest, with the first task's script replaced."""
+    from evals import runner as ev
+    from runner import load_config
+    m = json.loads((ROOT / "evals" / "v1" / "manifest.json").read_text(encoding="utf-8"))
+    m["tasks"][0]["reference"] = first_script
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(m), encoding="utf-8")
+    cfg = load_config()
+    cfg["sandbox"] = {"kind": "docker", "image": image}
+    return m, ev.run_eval(path, "reference", tmp_path / "runs", cfg)
+
+
+@pytest.mark.parametrize("status,first_script", [
+    ("BLOCKED", [{"error_status": 401, "message": "invalid api key"}]),               # the provider fails
+    ("FAILED_BUDGET", [{"tool_calls": [{"name": "ListFiles", "args": {}, "id": "l1"}],  # billed far over the reservation
+                        "usage": {"input_tokens": 45000, "output_tokens": 50}}]),
+])
+def test_an_infrastructure_or_budget_stop_ends_the_eval_and_skips_the_rest(tmp_path, image, status, first_script):
+    m, report = _script_eval(tmp_path, image, first_script)
+    first, rest = report["tasks"][0], report["tasks"][1:]
+    assert first["status"] == status and not first.get("not_run") and first["stats"]["llm_calls"] == 1
+    assert report["stopped"]["task"] == m["tasks"][0]["id"] and report["stopped"]["status"] == status
+    assert rest and all(r["not_run"] and r["status"] is None and "stopped after" in r["why"][0] for r in rest)
+    assert report["ran"] == 1 and report["not_run"] == len(rest) and report["summary"]["total"]["tasks"] == 1
+    assert report["usd_spent"] == first["stats"]["usd_billed"] > 0                  # what ran is still paid for
+    assert sorted(p.name for p in (tmp_path / "runs").iterdir()) == [f"reference_{m['tasks'][0]['id']}"]
+    assert report["benchmark_valid"] is False                                        # fail closed
+
+
+def test_failed_acceptance_is_data_and_never_stops_the_eval(tmp_path, image):
+    lazy = {"tool_calls": [{"name": "Finish", "args": {"claims": [{"claim": "tests_pass",
+                                                                   "evidence": "validation:unit"}],
+                                                       "summary": "done"}, "id": "f1"}],
+            "usage": {"input_tokens": 500, "output_tokens": 60}}
+    m, report = _script_eval(tmp_path, image, [lazy, lazy])
+    assert report["tasks"][0]["status"] == "FAILED_ACCEPTANCE" and report["stopped"] is None
+    assert report["not_run"] == 0 and report["ran"] == len(m["tasks"])
