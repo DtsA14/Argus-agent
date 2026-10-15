@@ -20,6 +20,7 @@ The image must be pinned (name@sha256:... or an image id sha256:...), so a run i
 changed image changes the tool version used in memo keys.
 """
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -45,7 +46,20 @@ DEFAULTS = {
     "kill_after_output_bytes": 16 << 20,  # total output after which the container is killed early
     "cleanup_timeout_s": 15,            # total time allowed for kill/remove/join after the run ends
     "allow_unpinned": False,
+    "labels": {},                       # extra docker labels, e.g. {"argus.run": run_id}, to find a run's containers
 }
+
+LABEL = re.compile(r"^[a-z][a-z0-9.]{0,63}$")
+LABEL_VALUE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+
+
+def label_args(labels):
+    out = []
+    for k, v in sorted((labels or {}).items()):
+        if not LABEL.match(str(k)) or not LABEL_VALUE.match(str(v)):
+            raise ValueError(f"invalid sandbox label {k!r}={v!r}")
+        out += ["--label", f"{k}={v}"]
+    return out
 
 
 def settings(cfg):
@@ -92,7 +106,7 @@ def docker_args(s, name, workdir, data_dir, command=None, workspace_mode="rw"):
     data_dir None mounts no data."""
     data = ["-v", f"{data_dir}:/data:ro"] if data_dir is not None else []
     return [
-        s["docker"], "run", "--rm", "-i", "--name", name, "--label", "argus.sandbox=1",
+        s["docker"], "run", "--rm", "-i", "--name", name, "--label", "argus.sandbox=1", *label_args(s["labels"]),
         "--network", "none",
         "--read-only", "--tmpfs", f"/tmp:rw,size={s['tmpfs_size']},mode=1777",
         "--user", "65534:65534",
@@ -189,6 +203,23 @@ def _container_gone(s, name, deadline):
     """True only when docker positively reports no container with this name (a hung daemon is not 'gone')."""
     r = _docker(s, ["ps", "-a", "-q", "--filter", f"name=^{name}$"], deadline)
     return r is not None and r.returncode == 0 and not r.stdout.strip()
+
+
+def remove_labeled(cfg, labels, timeout_s=30):
+    """Kill and remove every sandbox container carrying all of `labels`. A crashed harness cannot enforce the
+    timeout of a container it started, so a resumed run removes its own leftovers first. Returns their ids."""
+    s = settings(cfg)
+    filt = ["--filter", "label=argus.sandbox=1"]
+    for a in label_args(labels)[1::2]:
+        filt += ["--filter", f"label={a}"]
+    deadline = time.monotonic() + timeout_s
+    r = _docker(s, ["ps", "-a", "-q", *filt], deadline)
+    if r is None or r.returncode != 0:
+        raise SandboxUnavailable(f"cannot list sandbox containers: {getattr(r, 'stderr', '')!s:.200}")
+    ids = r.stdout.split()
+    for cid in ids:
+        _docker(s, ["rm", "-f", cid], deadline)
+    return ids
 
 
 def run_python(code, *, workdir, data_dir, cfg, log=None, meta=None):
