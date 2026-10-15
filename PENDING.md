@@ -63,7 +63,9 @@ Urutan disarankan, karena saling bergantung.
 - [x] **Run kalibrasi live #3** (`9475fe9`, 04:00 UTC di luar jam sibuk, tanpa perubahan kode): **PASS** semua ambang. Deteksi 0.96, injeksi 4/4, karangan 6/6, false reject 1, 0× 503, $0.0579. Bukti: `verification/calibration-3d-live-3/`
 - [x] **Bug `invalid_tool_calls` diperbaiki** (`11152a3`, gate merge PR #9): keempat loop menjawab setiap `tool_call_id`, panggilan malformed tidak pernah dianggap valid, dan memo menyimpannya. Kegagalan HTTP 400 run #3 direproduksi dengan model palsu ketat. 9 mutasi tertangkap; `verify.sh` 642 lulus, 0 skip
 - [x] **Reliabilitas kalibrasi (DESIGN_503 opsi 1 dan 2):** run live menolak jam sibuk provider judge (`--allow-peak` hanya melewati jadwal); circuit breaker berhenti setelah 4 error sementara berturut-turut dengan status tidak lengkap. Budget tidak dilonggarkan. Opsi 3 (backoff 503) hanya kalau 503 muncul di luar jam sibuk
-- [ ] **Ambiguitas kriteria `grounded`** (premis tersirat dalam saran, `good-5` di run #2 dan #3): perjelas sebelum kalibrasi berikutnya
+- [x] **Kriteria `grounded` diperjelas** (PR #12) dan **baseline baru #1** (`c928f0b`, 12:13 UTC): **PASS**. Deteksi 25/25, injeksi 4/4, karangan 6/6, false reject 1 (`good-5`, kali ini karena "a second supplier" mengandaikan pemasok tunggal), 0 verdict tidak valid, $0.0451. Bukti: `verification/calibration-3d-baseline-grounded-1/`
+- [ ] **`good-5`:** kasus batas tetap muncul dengan aturan baru. Putuskan sebelum kalibrasi berikutnya: fixture-nya memang membawa premis, atau aturan dipertajam lagi
+- [ ] **Smoke run end-to-end 3e** (≤ $0.50): menunggu persetujuan
 - [ ] Acceptance criteria untuk task umum (bukan cuma CSV demo)
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 
