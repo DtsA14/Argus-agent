@@ -403,8 +403,8 @@ def test_claiming_nothing_neither_passes_a_failed_task_nor_fails_a_done_one(ws):
     root, before = ws
     c = contract(artifacts=[V2])
     (root / "SUMMARY.json").write_text(json.dumps(summary()), encoding="utf-8")
-    failed = evaluate(c, root, before, {}, run=fake_run({"unit": failed("x"), "target": failed("x")}))
-    assert failed["outcome"] == "fail" and statuses(failed["criteria"])["claims"] == "pass"
+    not_done = evaluate(c, root, before, {}, run=fake_run({"unit": failed("x"), "target": failed("x")}))
+    assert not_done["outcome"] == "fail" and statuses(not_done["criteria"])["claims"] == "pass"
     (root / "src" / "calc.py").write_text(FIXED, encoding="utf-8")
     done = evaluate(c, root, before, {}, run=fake_run(ALL_PASS))
     assert done["outcome"] == "pass" and {x["layer"] for x in done["criteria"]} == {"A", "B", "C", "D"}
