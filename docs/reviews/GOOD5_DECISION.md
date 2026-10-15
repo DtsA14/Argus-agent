@@ -138,3 +138,30 @@ Yang perlu diputuskan reviewer:
 2. Kalau B: teks prinsip di atas, terutama C3 gagal dan C4 lulus.
 3. Kalau A: siapa yang menulis fixture `good` pengganti, dan fixture itu disetujui sebelum run.
 4. Contoh tetap di luar prompt judge (default), kecuali diputuskan terpisah.
+
+## 5. Keputusan (reviewer, 2026-10-15): **opsi B**, dengan satu penyempurnaan
+
+Alasan: ketidakkonsistenan judge pada `good-5` (4 lulus, 3 gagal) dibandingkan aksi sejenis di fixture `good` lain yang
+selalu lulus. Dua penolakan terakhir membaca klausa tujuan yang sama sebagai klaim tentang kondisi stok saat ini, jadi
+masalahnya lebih luas daripada kata "second". Opsi A akan membersihkan metrik kalibrasi tapi membiarkan
+ketidakkonsistenan itu tetap ada di produksi.
+
+**Penyempurnaan:** klausa tujuan ("so that ...") **tidak otomatis lulus**. Kalau klausa itu menyatakan atau
+mengandaikan keadaan usaha yang spesifik sebagai fakta, klausa itu tetap harus didukung data.
+- Lulus: rekomendasi yang masuk akal untuk mencapai tujuan bisnis, tanpa menyatakan kondisi yang tidak diketahui
+  sebagai fakta.
+- Gagal: klausa tujuan yang tetap mengandaikan keadaan spesifik yang tidak didukung data.
+- Kasus batas: kalau penilaian bergantung pada tafsiran frasa, pakai contoh yang disepakati sebelum kalibrasi.
+
+Contoh yang disepakati: C1 lulus (tujuan menjaga antrean pendek, tanpa klaim keluhan), C2 gagal (keluhan pelanggan
+dinyatakan tanpa bukti), C3 gagal ("the current one" mengandaikan keadaan staf yang spesifik), C4 lulus (pengiriman
+kedua adalah usulan untuk permintaan yang naik, bukan klaim bahwa pengiriman sekarang kurang).
+
+**Ketentuan:**
+1. Fixture dan label historis tidak diubah.
+2. Contoh C1 sampai C4 tidak dimasukkan ke prompt judge.
+3. Prinsip ini diterapkan lewat PR terpisah, bersama tes regresi.
+4. Kalibrasi berikutnya adalah baseline baru #2, dengan ambang dan fixture yang dibekukan (termasuk semua fixture
+   negatif).
+5. Kalau `good-5` masih ditolak, atau ada klaim karangan yang lolos, hasilnya dicatat apa adanya. Rubric tidak diubah
+   lagi setelah melihat hasil.
