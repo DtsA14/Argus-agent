@@ -117,10 +117,15 @@ def test_acceptance_counts_positive_tasks_only_and_eval_counts_all():
 
 def test_the_benchmark_hash_covers_every_file_and_ignores_line_endings(tmp_path, monkeypatch):
     root = tmp_path / "root"
-    for rel in ("evals/v1/manifest.json", "fixtures/contracts/fix_divide.json"):
+    m = ev.load_manifest(ROOT / "evals" / "v1" / "manifest.json")
+    rels = ["evals/v1/manifest.json"] + [t["contract"] for t in m["tasks"]]
+    for rel in rels:
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / rel, root / rel)
-    shutil.copytree(REPO, root / "fixtures/repos/calc", ignore=shutil.ignore_patterns("__pycache__"))
+    for t in m["tasks"]:                                    # every task's input repository
+        ws = json.loads((ROOT / t["contract"]).read_text(encoding="utf-8"))["inputs"]["workspace"]
+        if not (root / ws).exists():
+            shutil.copytree(ROOT / ws, root / ws, ignore=shutil.ignore_patterns("__pycache__"))
     monkeypatch.setattr(ev, "ROOT", root)
     manifest = root / "evals/v1/manifest.json"
     h = ev.benchmark_hash(manifest)
