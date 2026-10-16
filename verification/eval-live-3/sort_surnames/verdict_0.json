@@ -1,0 +1,144 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "9c9aa1475180c6b6ec3b8556c44d8492f524689907445344d4bb9cd3470dabe2"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_names.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 4,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_case_insensitive (tests.test_names.SimpleNamesTest.test_case_insensitive) ... ok\ntest_empty (tests.test_names.SimpleNamesTest.test_empty) ... ok\ntest_single_surnames (tests.test_names.SimpleNamesTest.test_single_surnames) ... ok\ntest_ties_by_full_name (tests.test_names.SimpleNamesTest.test_ties_by_full_name) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.001s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; unittest outcome FAILED; required test tests.test_multipart.MultiPartNamesTest.test_the_rule_is_decided is 'FAIL'; required test tests.test_multipart.MultiPartNamesTest.test_multi_part_names_follow_the_rule is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_multipart.py",
+          "-v"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 2,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 2,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_multipart.MultiPartNamesTest.test_the_rule_is_decided": "FAIL",
+          "tests.test_multipart.MultiPartNamesTest.test_multi_part_names_follow_the_rule": "FAIL"
+        },
+        "output_tail": "t_names_follow_the_rule (tests.test_multipart.MultiPartNamesTest.test_multi_part_names_follow_the_rule) ... FAIL\ntest_the_rule_is_decided (tests.test_multipart.MultiPartNamesTest.test_the_rule_is_decided) ... FAIL\n\n======================================================================\nFAIL: test_multi_part_names_follow_the_rule (tests.test_multipart.MultiPartNamesTest.test_multi_part_names_follow_the_rule)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/tests/test_multipart.py\", line 19, in test_multi_part_names_follow_the_rule\n    self.assertIn(SURNAME_RULE, EXPECTED, \"the product decision for multi-part surnames is missing\")\n    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: None not found in {'last-token': ['Ludwig van Beethoven', 'Ana Maria Garcia Lopez', 'Carl Zeiss'], 'first-surname': ['Ana Maria Garcia Lopez', 'Ludwig van Beethoven', 'Carl Zeiss']} : the product decision for multi-part surnames is missing\n\n======================================================================\nFAIL: test_the_rule_is_decided (tests.test_multipart.MultiPartNamesTest.test_the_rule_is_decided)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/tests/test_multipart.py\", line 16, in test_the_rule_is_decided\n    self.assertIn(SURNAME_RULE, EXPECTED, \"the product decision for multi-part surnames is missing\")\n    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: None not found in {'last-token': ['Ludwig van Beethoven', 'Ana Maria Garcia Lopez', 'Carl Zeiss'], 'first-surname': ['Ana Maria Garcia Lopez', 'Ludwig van Beethoven', 'Carl Zeiss']} : the product decision for multi-part surnames is missing\n\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nFAILED (failures=2)\n"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "count": 0
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "ea0f7ce3f0a1cc847111294d97ae542759f5b416f4ee2597a3c8897c19d44fd7",
+  "summary_sha256": "9c9aa1475180c6b6ec3b8556c44d8492f524689907445344d4bb9cd3470dabe2",
+  "verdict_sha256": "8d4ccca0c4969efccbc7e6ea9e4bbf5baf5792cdaad53d536a835f03edfe1b83"
+}

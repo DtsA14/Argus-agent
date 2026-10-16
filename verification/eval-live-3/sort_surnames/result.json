@@ -1,0 +1,25 @@
+{
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+  "blocked_reason": null,
+  "contract_sha": "9516d79280c8658ff4f810a1da0e47e11c7f027afd5d2c4ed7aac28ee102f97f",
+  "verdict": {
+    "iteration": 1,
+    "outcome": "fail",
+    "failing": [
+      "validation:target"
+    ],
+    "workspace_digest": "16fda517f1b7a906a0fde4a42bb953c0f06edc83b86070f6122675e8b77134f5"
+  },
+  "attempt": {
+    "iteration": 1,
+    "end": "finished",
+    "steps": 2
+  },
+  "run_id": "live_sort_surnames",
+  "attempts": 2,
+  "usd_billed": 0.044838,
+  "usd_complete": true,
+  "llm_calls": 6,
+  "llm_calls_unknown": 0
+}

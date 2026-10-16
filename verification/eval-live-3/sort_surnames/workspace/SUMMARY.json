@@ -1,0 +1,4 @@
+{
+  "claims": [],
+  "summary": "No changes made. The multi-part surname rule is an undecided product decision (SURNAME_RULE is None in protected policy/name_rules.py), and the target tests require it to be set. I did not guess one; the product team needs to set it first."
+}
