@@ -180,81 +180,64 @@ def simulate():
                       f"{r['total']:>6} | {r['end']}{note}")
 
 
-# ---- prototype SearchFiles (design: docs/reviews/DESIGN_SEARCHFILES.md); lives only in this script ----------
+# ---- SearchFiles scenarios (the real tool in codetask/tools.py; design: docs/reviews/DESIGN_SEARCHFILES.md) ---------
 
-SEARCH_MAX_MATCHES, SEARCH_MAX_LINE, SEARCH_MAX_TEXT = 20, 200, 200
-
-
-def install_search():
-    """Offer a read-only SearchFiles tool to the agent loop, for this measurement only (no harness change)."""
-    from pydantic import BaseModel, Field
-
-    import codetask.tools as ct
-    from acceptance.workspace import SPECIAL, snapshot
-
-    class SearchFiles(BaseModel):
-        """Find a literal piece of text in the workspace files. Read-only. Returns matching lines as
-        "path:line: text", at most 20, in path and line order."""
-        text: str = Field(description="Literal text to find (not a pattern), case-sensitive")
-        path: str = Field(default="", description="Optional: only files under this directory, e.g. src")
-
-    def searchfiles(self, args):
-        text, under = args.get("text"), (args.get("path") or "").strip("/")
-        if not isinstance(text, str) or not text or len(text) > SEARCH_MAX_TEXT or "\n" in text:
-            return f"Rejected: text must be one line of 1 to {SEARCH_MAX_TEXT} characters."
-        if under:
-            self.jail.parts(under)                                     # PathEscape for '..' or absolute paths
-        hits = []
-        for rel, digest in sorted(snapshot(self.workspace).items()):
-            if digest == SPECIAL or (under and not rel.startswith(under + "/")):
-                continue
-            for n, line in enumerate(self.jail.read_text(rel).splitlines(), start=1):
-                if text in line:
-                    hits.append(f"{rel}:{n}: {line.strip()[:SEARCH_MAX_LINE]}")
-        shown = hits[:SEARCH_MAX_MATCHES]
-        more = len(hits) - len(shown)
-        return "\n".join(shown + ([f"... {more} more matches not shown; narrow the text or the path"] if more else [])) \
-            or "No matches."
-
-    if SearchFiles.__name__ not in ct.GATED:
-        ct.TOOLS.insert(1, SearchFiles)
-        ct.GATED["SearchFiles"] = "search_files"
-        ct.Toolbox.searchfiles = searchfiles
+SEARCH_TOOLS = TOOLS + ["search_files"]
 
 
 def search_repo(ws, n_files, size, symbol="report_key"):
-    """n_files modules; the symbol is defined in one and used in another (the two files the fix needs)."""
+    """n_files modules; the symbol is defined in one and used in another (the two files the fix needs); a third file
+    mentions currencies without being part of the bug (a plausible but wrong lead)."""
     files = [f"src/mod_{i:02d}.py" for i in range(n_files)]
+    needed = [files[n_files // 3], files[n_files // 2]]
+    lead = files[(2 * n_files) // 3]
     for i, f in enumerate(files):
         text = module_text(i, size)
-        if i == n_files // 2:
+        if f == needed[1]:
             text += f"\n\ndef {symbol}(customer, period, currency):\n    return (customer, period)\n"
-        if i == n_files // 3 and n_files > 1:
+        if f == needed[0]:
             text += f"\n\ndef cached(cache, c, p, cur):\n    return cache.get({symbol}(c, p, cur))\n"
+        if f == lead:
+            text += "\n\nCURRENCIES = ('EUR', 'USD')  # currency formatting table\n"
         (ws / f).parent.mkdir(parents=True, exist_ok=True)
         (ws / f).write_text(text, encoding="utf-8")
-    return files, [files[n_files // 3], files[n_files // 2]] if n_files > 1 else [files[0]]
+    return files, needed, lead
 
 
-def simulate_search_one(n_files, size, use_search, term="report_key", attempt_tokens=30000, max_steps=12):
+def search_plan(scenario, files, needed, lead, symbol="report_key"):
+    """The scripted moves. read_all: no search. perfect: the right term first. wrong_term: a term with no match, then
+    the right one. too_common: a term that hits everywhere (cut at 20), then the right one. wrong_lead: a plausible term
+    that leads to an unrelated file, which is read, then the right term."""
+    search = lambda t: [("SearchFiles", {"text": t})]  # noqa: E731
+    read = lambda fs: [("ReadFile", {"path": f}) for f in fs]  # noqa: E731
+    if scenario == "read_all":
+        steps = [read(files)]
+    elif scenario == "perfect":
+        steps = [search(symbol), read(needed)]
+    elif scenario == "wrong_term":
+        steps = [search("cache_key_for"), search(symbol), read(needed)]
+    elif scenario == "too_common":
+        steps = [search("return"), search(symbol), read(needed)]
+    elif scenario == "wrong_lead":
+        steps = [search("CURRENCIES"), read([lead]), search(symbol), read(needed)]
+    else:
+        raise ValueError(scenario)
+    return [[("ListFiles", {})]] + steps + [
+        [("WriteFile", {"path": needed[-1], "content": module_text(0, 1000) + "\n# fixed\n"})],
+        [("RunValidation", {"id": "target"})], [("Finish", {"claims": [], "summary": "done"})]]
+
+
+def simulate_search_one(n_files, size, scenario, attempt_tokens=30000, max_steps=12):
     from models.fake import CallableChatModel
-    install_search()
     cfg = load_config()
     hl.provider_counter = lambda model, margin: (estimate, True)
-    allowed = TOOLS + ["search_files"]
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         ws = tmp / "ws"
-        files, needed = search_repo(ws, n_files, size)
+        files, needed, lead = search_repo(ws, n_files, size)
         (ws / "tests").mkdir(parents=True, exist_ok=True)
         (ws / "tests" / "test_mod.py").write_text("import unittest\n", encoding="utf-8")
-        plan = [[("ListFiles", {})]]
-        if use_search:
-            plan += [[("SearchFiles", {"text": term})], [("ReadFile", {"path": f}) for f in needed]]
-        else:
-            plan += [[("ReadFile", {"path": f}) for f in files]]
-        plan += [[("WriteFile", {"path": needed[-1], "content": module_text(0, size) + "\n# fixed\n"})],
-                 [("RunValidation", {"id": "target"})], [("Finish", {"claims": [], "summary": "done"})]]
+        plan = search_plan(scenario, files, needed, lead)
 
         def respond(messages):
             step = sum(isinstance(m, AIMessage) for m in messages)
@@ -262,7 +245,7 @@ def simulate_search_one(n_files, size, use_search, term="report_key", attempt_to
                      for j, (n, a) in enumerate(plan[min(step, len(plan) - 1)])]
             out_chars = sum(len(json.dumps(c["args"])) + len(c["name"]) for c in calls)
             return AIMessage(content="", tool_calls=calls, usage_metadata={
-                "input_tokens": estimate(messages, offered(allowed)), "output_tokens": int(20 + B * out_chars),
+                "input_tokens": estimate(messages, offered(SEARCH_TOOLS)), "output_tokens": int(20 + B * out_chars),
                 "total_tokens": 0})
 
         log = EventLog(tmp / "events.jsonl")
@@ -274,42 +257,32 @@ def simulate_search_one(n_files, size, use_search, term="report_key", attempt_to
         def ok(spec, workspace, sandbox_cfg, log=None):
             return {"id": "validation:target", "status": "pass", "reason": "", "evidence": {}}
 
-        box = Toolbox(str(ws), contract, {}, allowed, log, validate=ok)
+        box = Toolbox(str(ws), contract, {}, SEARCH_TOOLS, log, validate=ok)
         attempt = make_attempt(caller, Memo(tmp / "memo.sqlite"), log, tokens=attempt_tokens, usd=10.0,
-                               max_steps=max_steps, tool_versions={**TOOL_VERSIONS, "SearchFiles": "proto"})
+                               max_steps=max_steps, tool_versions={**TOOL_VERSIONS, "SearchFiles": "1"})
         end = attempt(contract, box, 0)
         evs = [json.loads(line) for line in (tmp / "events.jsonl").read_text().splitlines()]
-        found = None                                   # what SearchFiles returned (tool step 1), from the memo
-        for k, v in sqlite3.connect(tmp / "memo.sqlite").execute("select key, value from memo"):
-            key = json.loads(k)
-            if use_search and key[0] == "tool" and key[4] == 1:
-                found = json.loads(v)["content"]
     calls = [e for e in evs if e["event"] == "llm_call" and e["status"] == "ok"]
     refused = [e for e in evs if e["event"] == "llm_call" and e["status"] == "refused"]
-    read = sum(1 for e in evs if e["event"] == "tool_call" and e.get("tool") == "read_file")
-    return {"end": end["end"], "calls": len(calls), "files_read": read, "total": sum(e["tokens"] for e in calls),
+    count = lambda tool: sum(1 for e in evs if e["event"] == "tool_call" and e.get("tool") == tool)  # noqa: E731
+    return {"end": end["end"], "calls": len(calls), "files_read": count("read_file"),
+            "searches": count("search_files"), "total": sum(e["tokens"] for e in calls),
             "max_input": max((e["input_tokens"] for e in calls), default=0),
-            "refused_at": refused[0]["est_input"] if refused else None,
-            "search_found_needed": (all(f in (found or "") for f in needed) if use_search else None),
-            "search_output_lines": len((found or "").splitlines()) if use_search else None}
+            "refused_at": refused[0]["est_input"] if refused else None}
 
 
 def simulate_search():
-    print("estimates: billed input = 407 + 0.3186 x chars (calibrated, max error 9.4%); attempt_tokens 30000")
-    print(f"{'size':>5} {'files':>5} {'mode':>9} | {'calls':>5} {'read':>4} {'max in':>6} {'total':>6} | end")
+    print("estimates: billed input = 407 + 0.3186 x chars (calibrated, max error 9.4%); attempt_tokens 30000; "
+          "the real SearchFiles")
+    print(f"{'size':>5} {'files':>5} {'scenario':>11} | {'calls':>5} {'srch':>4} {'read':>4} {'max in':>6} "
+          f"{'total':>6} | end")
     for size in (1000, 3000):
-        for n in (5, 10, 20, 40, 80):
-            for use in (False, True):
-                r = simulate_search_one(n, size, use)
+        for n in (10, 20, 40, 80):
+            for scenario in ("read_all", "perfect", "wrong_term", "too_common", "wrong_lead"):
+                r = simulate_search_one(n, size, scenario)
                 note = f" (refused, est. input {r['refused_at']})" if r["refused_at"] else ""
-                if use:
-                    note += f" | search: needed files found {r['search_found_needed']}, {r['search_output_lines']} lines"
-                print(f"{size:>5} {n:>5} {'search' if use else 'read-all':>9} | {r['calls']:>5} {r['files_read']:>4} "
+                print(f"{size:>5} {n:>5} {scenario:>11} | {r['calls']:>5} {r['searches']:>4} {r['files_read']:>4} "
                       f"{r['max_input']:>6} {r['total']:>6} | {r['end']}{note}")
-    print("common term (many matches), 40 files of 3000 chars, text 'result':")
-    r = simulate_search_one(40, 3000, True, term="result")
-    print(f"   calls {r['calls']} read {r['files_read']} max in {r['max_input']} total {r['total']} | {r['end']} | "
-          f"search output {r['search_output_lines']} lines")
 
 
 if __name__ == "__main__":
