@@ -1,0 +1,75 @@
+{"ts": 1792118550.69, "event": "run_start", "run_id": "live_sort_surnames", "kind": "code_task", "contract": "/home/ubuntu/Argus-agent/fixtures/contracts/sort_surnames.json"}
+{"ts": 1792118550.711, "event": "node_start", "node": "setup"}
+{"ts": 1792118550.713, "event": "contract_frozen", "sha256": "9516d79280c8658ff4f810a1da0e47e11c7f027afd5d2c4ed7aac28ee102f97f", "contract": "sort_surnames", "version": 1}
+{"ts": 1792118550.769, "event": "workspace_prepared", "files": 7}
+{"ts": 1792118550.769, "event": "status", "old": null, "new": "RUNNING", "reason": null, "blocked_reason": null}
+{"ts": 1792118550.769, "event": "body_done", "node": "setup", "tokens": 0}
+{"ts": 1792118550.774, "event": "result_committed", "node": "setup"}
+{"ts": 1792118550.774, "event": "node_end", "node": "setup", "seconds": 0.063, "tokens": 0}
+{"ts": 1792118550.78, "event": "node_start", "node": "agent", "iteration": 0}
+{"ts": 1792118551.192, "event": "llm_call_started", "node": "agent", "task": "sort_surnames", "iteration": 0, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "71571340799b24f8", "call_id": "ae70893c1a72", "attempt": 1, "est_input": 1487, "max_tokens": 4096, "worst_tokens": 5583, "worst_usd_nano": 43934000, "worst_usd": 0.043934}
+{"ts": 1792118552.585, "event": "llm_call", "node": "agent", "task": "sort_surnames", "iteration": 0, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "71571340799b24f8", "call_id": "ae70893c1a72", "status": "ok", "attempt": 1, "est_input": 1487, "max_tokens": 4096, "input_tokens": 1487, "output_tokens": 28, "cache_read": 0, "tokens": 1515, "usd_nano": 3254000, "usd": 0.003254, "charged": "actual", "latency_s": 1.393, "truncated": false}
+{"ts": 1792118552.592, "event": "step_committed", "kind": "llm", "step": 0, "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118552.592, "event": "tool_call", "role": "coder", "tool": "list_files"}
+{"ts": 1792118552.597, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ListFiles", "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118552.909, "event": "llm_call_started", "node": "agent", "task": "sort_surnames", "iteration": 0, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "c449a5ddc9f892c1", "call_id": "2d1596bfbee7", "attempt": 1, "est_input": 1581, "max_tokens": 4096, "worst_tokens": 5677, "worst_usd_nano": 44122000, "worst_usd": 0.044122}
+{"ts": 1792118554.764, "event": "llm_call", "node": "agent", "task": "sort_surnames", "iteration": 0, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "c449a5ddc9f892c1", "call_id": "2d1596bfbee7", "status": "ok", "attempt": 1, "est_input": 1581, "max_tokens": 4096, "input_tokens": 1581, "output_tokens": 215, "cache_read": 0, "tokens": 1796, "usd_nano": 5312000, "usd": 0.005312, "charged": "actual", "latency_s": 1.854, "truncated": false}
+{"ts": 1792118554.768, "event": "step_committed", "kind": "llm", "step": 1, "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118554.768, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118554.772, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118554.772, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118554.777, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118554.777, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118554.781, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118554.781, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118554.784, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118555.101, "event": "llm_call_started", "node": "agent", "task": "sort_surnames", "iteration": 0, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "70c3d603eed4d0b2", "call_id": "d58cdaab91b5", "attempt": 1, "est_input": 2906, "max_tokens": 4096, "worst_tokens": 7002, "worst_usd_nano": 46772000, "worst_usd": 0.046772}
+{"ts": 1792118563.521, "event": "llm_call", "node": "agent", "task": "sort_surnames", "iteration": 0, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "70c3d603eed4d0b2", "call_id": "d58cdaab91b5", "status": "ok", "attempt": 1, "est_input": 2906, "max_tokens": 4096, "input_tokens": 2906, "output_tokens": 937, "cache_read": 0, "tokens": 3843, "usd_nano": 15182000, "usd": 0.015182, "charged": "actual", "latency_s": 8.42, "truncated": false}
+{"ts": 1792118563.526, "event": "step_committed", "kind": "llm", "step": 2, "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118563.533, "event": "step_committed", "kind": "tool", "step": 2, "tool": "Finish", "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118563.533, "event": "attempt_end", "reason": "finished", "steps": 2, "node": "agent", "task": "sort_surnames", "iteration": 0}
+{"ts": 1792118563.533, "event": "body_done", "node": "agent", "tokens": 7154, "iteration": 0}
+{"ts": 1792118563.536, "event": "result_committed", "node": "agent", "iteration": 0}
+{"ts": 1792118563.536, "event": "node_end", "node": "agent", "seconds": 12.757, "tokens": 7154, "iteration": 0}
+{"ts": 1792118563.542, "event": "node_start", "node": "acceptance", "iteration": 0}
+{"ts": 1792118564.251, "event": "sandbox_run", "container": "argus-e087bbc6d3b6", "exit_code": 0, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 420, "cleanup_failed": false, "validation": "unit"}
+{"ts": 1792118564.925, "event": "sandbox_run", "container": "argus-ed9fa25706ce", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 2014, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792118564.926, "event": "acceptance_verdict", "iteration": 0, "outcome": "fail", "failing": ["validation:target"], "workspace_digest": "ea0f7ce3f0a1cc847111294d97ae542759f5b416f4ee2597a3c8897c19d44fd7"}
+{"ts": 1792118564.927, "event": "status", "old": "RUNNING", "new": "RUNNING", "reason": null, "blocked_reason": null}
+{"ts": 1792118564.927, "event": "body_done", "node": "acceptance", "tokens": 0, "iteration": 0}
+{"ts": 1792118564.932, "event": "result_committed", "node": "acceptance", "iteration": 0}
+{"ts": 1792118564.932, "event": "node_end", "node": "acceptance", "seconds": 1.389, "tokens": 0, "iteration": 0}
+{"ts": 1792118564.939, "event": "node_start", "node": "agent", "iteration": 1}
+{"ts": 1792118565.26, "event": "llm_call_started", "node": "agent", "task": "sort_surnames", "iteration": 1, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "33f90dbb832d384e", "call_id": "b513f08663d3", "attempt": 1, "est_input": 1620, "max_tokens": 4096, "worst_tokens": 5716, "worst_usd_nano": 44200000, "worst_usd": 0.0442}
+{"ts": 1792118566.455, "event": "llm_call", "node": "agent", "task": "sort_surnames", "iteration": 1, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "33f90dbb832d384e", "call_id": "b513f08663d3", "status": "ok", "attempt": 1, "est_input": 1620, "max_tokens": 4096, "input_tokens": 1620, "output_tokens": 28, "cache_read": 0, "tokens": 1648, "usd_nano": 3520000, "usd": 0.00352, "charged": "actual", "latency_s": 1.195, "truncated": false}
+{"ts": 1792118566.462, "event": "step_committed", "kind": "llm", "step": 0, "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118566.463, "event": "tool_call", "role": "coder", "tool": "list_files"}
+{"ts": 1792118566.467, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ListFiles", "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118566.782, "event": "llm_call_started", "node": "agent", "task": "sort_surnames", "iteration": 1, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "52e245b2f95d643a", "call_id": "34f25c378126", "attempt": 1, "est_input": 1723, "max_tokens": 4096, "worst_tokens": 5819, "worst_usd_nano": 44406000, "worst_usd": 0.044406}
+{"ts": 1792118568.385, "event": "llm_call", "node": "agent", "task": "sort_surnames", "iteration": 1, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "52e245b2f95d643a", "call_id": "34f25c378126", "status": "ok", "attempt": 1, "est_input": 1723, "max_tokens": 4096, "input_tokens": 1723, "output_tokens": 215, "cache_read": 0, "tokens": 1938, "usd_nano": 5596000, "usd": 0.005596, "charged": "actual", "latency_s": 1.603, "truncated": false}
+{"ts": 1792118568.391, "event": "step_committed", "kind": "llm", "step": 1, "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118568.392, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118568.395, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118568.396, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118568.399, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118568.4, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118568.404, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118568.404, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792118568.409, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118568.734, "event": "llm_call_started", "node": "agent", "task": "sort_surnames", "iteration": 1, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8599f8c6579567e7", "call_id": "9a45c4cd269f", "attempt": 1, "est_input": 2862, "max_tokens": 4096, "worst_tokens": 6958, "worst_usd_nano": 46684000, "worst_usd": 0.046684}
+{"ts": 1792118574.088, "event": "llm_call", "node": "agent", "task": "sort_surnames", "iteration": 1, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8599f8c6579567e7", "call_id": "9a45c4cd269f", "status": "ok", "attempt": 1, "est_input": 2862, "max_tokens": 4096, "input_tokens": 2862, "output_tokens": 625, "cache_read": 0, "tokens": 3487, "usd_nano": 11974000, "usd": 0.011974, "charged": "actual", "latency_s": 5.354, "truncated": false}
+{"ts": 1792118574.096, "event": "step_committed", "kind": "llm", "step": 2, "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118574.104, "event": "step_committed", "kind": "tool", "step": 2, "tool": "Finish", "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118574.104, "event": "attempt_end", "reason": "finished", "steps": 2, "node": "agent", "task": "sort_surnames", "iteration": 1}
+{"ts": 1792118574.104, "event": "body_done", "node": "agent", "tokens": 7073, "iteration": 1}
+{"ts": 1792118574.108, "event": "result_committed", "node": "agent", "iteration": 1}
+{"ts": 1792118574.108, "event": "node_end", "node": "agent", "seconds": 9.168, "tokens": 7073, "iteration": 1}
+{"ts": 1792118574.115, "event": "node_start", "node": "acceptance", "iteration": 1}
+{"ts": 1792118574.825, "event": "sandbox_run", "container": "argus-bda1ad831fdf", "exit_code": 0, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 420, "cleanup_failed": false, "validation": "unit"}
+{"ts": 1792118575.483, "event": "sandbox_run", "container": "argus-b59ca470a72b", "exit_code": 1, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 2014, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792118575.485, "event": "acceptance_verdict", "iteration": 1, "outcome": "fail", "failing": ["validation:target"], "workspace_digest": "16fda517f1b7a906a0fde4a42bb953c0f06edc83b86070f6122675e8b77134f5"}
+{"ts": 1792118575.485, "event": "status", "old": "RUNNING", "new": "FAILED_ACCEPTANCE", "reason": "stagnant: the same criteria failed 2 attempts in a row", "blocked_reason": null}
+{"ts": 1792118575.485, "event": "body_done", "node": "acceptance", "tokens": 0, "iteration": 1}
+{"ts": 1792118575.489, "event": "result_committed", "node": "acceptance", "iteration": 1}
+{"ts": 1792118575.489, "event": "node_end", "node": "acceptance", "seconds": 1.374, "tokens": 0, "iteration": 1}
+{"ts": 1792118575.502, "event": "run_end", "status": "FAILED_ACCEPTANCE", "stop_reason": "stagnant: the same criteria failed 2 attempts in a row", "blocked_reason": null, "contract_sha": "9516d79280c8658ff4f810a1da0e47e11c7f027afd5d2c4ed7aac28ee102f97f", "run_id": "live_sort_surnames", "attempts": 2, "usd_billed": 0.044838, "usd_complete": true, "llm_calls": 6, "llm_calls_unknown": 0}
