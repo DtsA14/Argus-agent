@@ -61,3 +61,26 @@ bahkan untuk perbaikan satu fungsi.
 
 Usul: 2 dan 3. Opsi 1 hanya sebagai pembanding cepat jika diperlukan. Pilot ini sendiri tidak diulang tanpa
 persetujuan baru.
+
+## Koreksi diagnosis (2026-10-17, setelah review)
+
+Metadata usage yang tersimpan di memo menunjukkan bahwa kedua balasan yang terpotong **memakai sebagian besar jatah
+output untuk thinking** (penalaran internal model, hanya tersimpan sebagai signature):
+
+| Balasan terpotong | Output | Thinking (`output_token_details.reasoning`) | Tersisa untuk `WriteFile` |
+|---|---|---|---|
+| attempt 1, langkah 3 | 4.096 | **2.505** (61%) | sekitar 1.590 |
+| attempt 2, langkah 3 | 4.096 | **3.093** (75%) | sekitar 1.000 |
+
+Jadi kalimat di atas, "penulisan ulang utuh mendekati atau melewati 4.096 token", **tidak tepat**. File 7 KB butuh
+sekitar 2–2,5 ribu token. Yang terpotong adalah **thinking ditambah penulisan file utuh**. Panggilan lain (membaca file)
+tidak memakai thinking sama sekali.
+
+**Isi `content` yang terpotong memang tidak dikembalikan API:** blok `tool_use` hanya berisi `path`. Karena itu
+penyimpanannya tidak mungkin tanpa streaming, dan sebagai gantinya ledger kini mencatat `reasoning_tokens` dan
+`stop_reason` per panggilan.
+
+**Keputusan setelah koreksi (review):**
+- tool edit (`EditFile`) dan pencatatan ledger dikerjakan;
+- pilot berikutnya hanya dengan `EditFile` dan `max_output_tokens` tetap 4.096;
+- menaikkan batas output menjadi hipotesis terpisah.
