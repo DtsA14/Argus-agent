@@ -31,9 +31,60 @@ def changed(ws):
     return out
 
 
+BUG, CONTRACT_FN = "src/steps/prepare.py", "src/common/options.py"
+NAMES_IT = ("swap", "merge order", "argument order", "reversed")
+
+
+def diagnostics(run, evs):
+    """Supporting evidence per run (docs/reviews/DESIGN_BUDGET_45K.md section 2), from the ledger, the memo and the
+    verdicts: whether the agent reached the root cause, when the first write landed and whether that attempt's
+    verdict passed the target, refused and cut-off calls, and attempts the run cap did not admit. Descriptive only."""
+    import sqlite3
+    from harness.steps import message_from_json
+    ok = {(e["iteration"], e["step"]): e for e in evs if e["event"] == "llm_call" and e["status"] == "ok"}
+    msgs = {}
+    for k, v in sqlite3.connect(run / "memo.sqlite").execute("select key, value from memo"):
+        key = json.loads(k)
+        if key[0] == "llm":
+            msgs[(key[3], key[4])] = message_from_json(json.loads(v))
+    read, said, first_write = set(), None, None
+    for (it, st) in sorted(msgs):
+        m = msgs[(it, st)]
+        text = m.content if isinstance(m.content, str) else " ".join(
+            p.get("text", "") for p in m.content if isinstance(p, dict))
+        if said is None and any(w in text.lower() for w in NAMES_IT):
+            said = {"attempt": it, "step": st, "text": " ".join(text.split())[:200]}
+        for c in m.tool_calls or []:
+            if c["name"] == "ReadFile":
+                read.add(c["args"].get("path"))
+            if c["name"] == "WriteFile" and first_write is None:
+                cum = sum(e["tokens"] for (i, s), e in ok.items() if i == it and s <= st)
+                verdict = run / f"verdict_{it}.json"
+                target = None
+                if verdict.exists():
+                    target = next((c2["status"] for c2 in json.loads(verdict.read_text())["criteria"]
+                                   if c2["id"] == "validation:target"), None)
+                first_write = {"attempt": it, "step": st, "path": c["args"].get("path"),
+                               "attempt_tokens_through_this_call": cum, "attempt_verdict_target": target}
+    return {
+        "read_bug_and_contract": BUG in read and CONTRACT_FN in read,
+        "named_root_cause": said,
+        "first_write": first_write,
+        "refused": [{"attempt": e["iteration"], "step": e["step"], "needed": e.get("est_input"),
+                     "left": e.get("tokens_left")} for e in evs
+                    if e["event"] == "llm_call" and e["status"] == "refused"],
+        "cut_off": [{"attempt": e["iteration"], "step": e["step"], "tools": e.get("tools")} for e in evs
+                    if e["event"] == "reply_truncated"],
+        "not_admitted_by_cap": [e.get("reason") for e in evs if e["event"] == "status"
+                                and "max_usd" in str(e.get("reason"))],
+        "usd_per_attempt": {i: round(sum(e["usd_nano"] for (j, _), e in ok.items() if j == i) / 1e9, 6)
+                            for i in sorted({i for i, _ in ok})},
+    }
+
+
 series = json.loads((SERIES / "series.json").read_text())
 for row in series["runs"]:
-    d = SERIES / f"{row['position']:02d}_{row['entry']}"
+    d = SERIES / f"{row['position']:02d}_{row['entry'].replace('@', '_')}"
     run = next(p.parent for p in d.rglob("result.json"))
     res = json.loads((run / "result.json").read_text())
     evs = [json.loads(line) for line in (run / "events.jsonl").read_text().splitlines()]
@@ -58,10 +109,10 @@ for row in series["runs"]:
                                  "must_pass": sorted(set((e.get("must_pass") or {}).values()))}
     summary = json.loads((run / "workspace" / "SUMMARY.json").read_text()) if (run / "workspace" / "SUMMARY.json").exists() else None
     print(json.dumps({
-        "entry": row["entry"], "status": res["status"], "stop": res["stop_reason"], "attempts": res["attempts"],
+        "entry": row["entry"], "arm": row.get("arm"), "status": res["status"], "stop": res["stop_reason"], "attempts": res["attempts"],
         "attempt_ends": ends, "tools_effective": res["tools"], "usd": res["usd_billed"],
         "llm_started": len(started), "llm_calls": len(calls), "refused": sum(e["status"] == "refused" for e in calls),
         "tokens_per_attempt": per_attempt, "tool_calls": len(tools),
         "searches": sum(t == "search_files" for _, t in tools), "reads": sum(t == "read_file" for _, t in tools),
         "changed": changed(run / "workspace"), "claims": summary and summary.get("claims"),
-        "summary": summary and summary.get("summary"), "fresh": fresh}))
+        "summary": summary and summary.get("summary"), "fresh": fresh, "diagnostics": diagnostics(run, evs)}))
