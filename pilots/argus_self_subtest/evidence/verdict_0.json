@@ -1,0 +1,142 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "pilot_tests",
+          "-t",
+          ".",
+          "-p",
+          "test_parser_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_a_docstring_line_comes_before_the_status (pilot_tests.test_parser_regression.ParserRegressionTest.test_a_docstring_line_comes_before_the_status) ... ok\ntest_an_all_passing_run (pilot_tests.test_parser_regression.ParserRegressionTest.test_an_all_passing_run) ... ok\ntest_missing_pieces_stay_none (pilot_tests.test_parser_regression.ParserRegressionTest.test_missing_pieces_stay_none) ... ok\ntest_no_tests (pilot_tests.test_parser_regression.ParserRegressionTest.test_no_tests) ... ok\ntest_plain_statuses_and_summary (pilot_tests.test_parser_regression.ParserRegressionTest.test_plain_statuses_and_summary) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.908s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; unittest outcome FAILED; required test pilot_tests.test_subtest_status.SubTestStatusTest.test_failed_subtests_make_the_test_fail is 'FAIL'; required test pilot_tests.test_subtest_status.SubTestStatusTest.test_an_erroring_subtest_makes_the_test_error is 'FAIL'; required test pilot_tests.test_subtest_status.SubTestStatusTest.test_a_later_failure_is_not_hidden_by_an_earlier_passing_subtest is 'FAIL'; required test pilot_tests.test_subtest_status.SubTestStatusTest.test_an_error_anywhere_among_the_subtests_wins_over_failures is ''; required test pilot_tests.test_subtest_status.SubTestStatusTest.test_a_failing_subtest_is_never_ok_next_to_other_tests is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "pilot_tests",
+          "-t",
+          ".",
+          "-p",
+          "test_subtest_status.py",
+          "-v"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 6,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 6,
+        "errors": 0,
+        "must_pass": {
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_failed_subtests_make_the_test_fail": "FAIL",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_an_erroring_subtest_makes_the_test_error": "FAIL",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_a_later_failure_is_not_hidden_by_an_earlier_passing_subtest": "FAIL",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_an_error_anywhere_among_the_subtests_wins_over_failures": "",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_all_passing_subtests_are_ok": "ok",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_a_failing_subtest_is_never_ok_next_to_other_tests": "FAIL"
+        },
+        "output_tail": "================================\nFAIL: test_an_error_anywhere_among_the_subtests_wins_over_failures (pilot_tests.test_subtest_status.SubTestStatusTest.test_an_error_anywhere_among_the_subtests_wins_over_failures) (order='error_then_fail')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/pilot_tests/test_subtest_status.py\", line 50, in test_an_error_anywhere_among_the_subtests_wins_over_failures\n    self.assertEqual(status_of(parse_unittest(out), \"test_x\"), \"ERROR\")\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: '' != 'ERROR'\n+ ERROR\n\n\n======================================================================\nFAIL: test_an_erroring_subtest_makes_the_test_error (pilot_tests.test_subtest_status.SubTestStatusTest.test_an_erroring_subtest_makes_the_test_error)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/pilot_tests/test_subtest_status.py\", line 26, in test_an_erroring_subtest_makes_the_test_error\n    self.assertEqual(status_of(parse_unittest(out), \"test_x\"), \"ERROR\")\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: '' != 'ERROR'\n+ ERROR\n\n\n======================================================================\nFAIL: test_failed_subtests_make_the_test_fail (pilot_tests.test_subtest_status.SubTestStatusTest.test_failed_subtests_make_the_test_fail)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/pilot_tests/test_subtest_status.py\", line 16, in test_failed_subtests_make_the_test_fail\n    self.assertEqual(status_of(parse_unittest(out), \"test_x\"), \"FAIL\")\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: '' != 'FAIL'\n+ FAIL\n\n\n----------------------------------------------------------------------\nRan 6 tests in 2.149s\n\nFAILED (failures=6)\n"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "e5fea7cd0d9274964ac350c4667df151dbb9e117d312fbccaccacec0d86279d0",
+  "summary_sha256": null,
+  "verdict_sha256": "b276ff473b49961bae7318fb00e9a8f1c53d9f77b73f93173583345a0f56f680"
+}
