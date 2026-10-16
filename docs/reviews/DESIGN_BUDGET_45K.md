@@ -1,6 +1,6 @@
 # Eksperimen diagnostik budget 30k vs 45k: desain (untuk review; tanpa kode dan tanpa run)
 
-Status: **draf**, 2026-10-17. Persetujuan menulis desain bukan persetujuan menjalankan eksperimen. Latar:
+Status: **draf, revisi 1** (review PR #64), 2026-10-17. Persetujuan menulis desain bukan persetujuan menjalankan eksperimen. Latar:
 `docs/reviews/M3_CLOSING.md` bagian 4. Kelima kegagalan seri #2 sudah menemukan akar masalah, lalu kehabisan
 reservasi pada panggilan untuk menulis fix (di tiga run kurangnya 344–694 token).
 
@@ -18,56 +18,74 @@ attempt, dibanding 30.000.
 
 Kedua lengan dijalankan di commit yang sama, dalam satu seri yang diselang-seling.
 
-## 2. Membedakan "budget memang kurang" dari "budget tambahan hanya dihabiskan"
+## 2. Sinyal utama dan bukti pendukung (revisi setelah review)
 
-Status DONE saja tidak cukup untuk membedakan keduanya. Per attempt yang menulis perbaikan yang benar, dicatat:
+**Sinyal utama:** tingkat sukses task di 45k dibanding 30k, ditambah biaya per task sukses dan tingkat kegagalan jujur.
+**Satu klaim palsu adalah regresi kejujuran**, berapa pun suksesnya. Dengan 9 pasangan, ini sinyal diagnostik, bukan
+kesimpulan statistik dan bukan estimasi kemampuan Argus secara umum.
 
-| Diagnostik | Definisi |
+**Bukti pendukung** dicatat per run untuk menjelaskan hasil, **bukan untuk mengklasifikasikan penyebab secara otomatis**.
+Tidak ada ambang ±20%.
+
+| Dicatat per run | Sumber |
 |---|---|
-| **Token sampai fix** | token kumulatif attempt itu pada panggilan yang menulis perbaikan yang lolos tes target (dari ledger, dikonfirmasi oleh verdict attempt itu) |
-| File dibaca sebelum fix | jumlah `ReadFile` dan `SearchFiles` sebelum panggilan itu |
-| Panggilan sebelum fix | jumlah panggilan model sebelum panggilan itu |
-| Sisa sesudah fix | `attempt_tokens` − token sampai fix − token panggilan `Finish` |
-| Alasan gagal | ditolak sebelum menulis / balasan terpotong saat menulis / fix salah / klaim tidak didukung / lainnya, dari ledger dan verdict |
+| Apakah agen menemukan akar masalah: membaca `prepare.py` dan `options.py`, dan teks model menyebutnya | ledger, memo (`scripts/failure_trace.py`) |
+| Kapan fix pertama ditulis: attempt, panggilan ke berapa, token kumulatif attempt, dan apakah lolos target | ledger, verdict attempt itu |
+| Panggilan yang ditolak (input dibutuhkan vs sisa) dan balasan yang terpotong | ledger (`refused`, `reply_truncated`) |
+| Attempt yang tidak diterima karena cap (`max_usd`) | event `status` / `stop_reason` |
+| Total token dan biaya aktual per attempt dan per run | ledger |
 
-**Pembacaan dikunci sebelum run.** Ambangnya eksploratif dan dipilih sekarang, bukan setelah melihat data.
+Laporan akhir membandingkan catatan ini secara deskriptif antarlengan. Contohnya:
+- apakah sukses tambahan di 45k adalah run yang menulis fix di atas 30.000 token kumulatif;
+- apakah agen di 45k membaca lebih banyak sebelum fix.
 
-- **Budget memang kurang.** Sukses 45k > sukses 30k, **dan** median token sampai fix di 45k berada dalam ±20% dari 30k,
-  **dan** sebagian sukses tambahan di 45k punya token sampai fix + `Finish` di atas 30.000. Artinya jalurnya sama,
-  hanya tidak muat di 30k.
-- **Budget tambahan dihabiskan.**
-  - Median token sampai fix atau file dibaca sebelum fix di 45k naik lebih dari 20% dibanding 30k, **dan** sukses
-    tidak naik atau naik sedikit (selisih ≤ 1 run). Agen membaca lebih banyak karena bisa.
-  - Kalau sukses naik **dan** token sampai fix juga naik lebih dari 20%: keduanya terjadi. Dilaporkan dengan biaya per
-    task sukses sebagai penentu nilai.
-- Hasil lain dilaporkan apa adanya.
-- **Satu klaim palsu adalah regresi kejujuran**, berapa pun suksesnya.
+Itu penjelasan yang mungkin, bukan bukti kausal.
 
-## 3. Cap biaya: kenapa harus berubah, dan bagaimana agar tidak menjadi variabel kedua
+## 3. Cap biaya: semantik reservasi yang sebenarnya, dan simulasinya
 
-Admission mencadangkan `attempt_tokens` × tarif tertinggi per attempt: 30k → $0.30, 45k → $0.45.
+**Semantik di harness (dari kode, bukan asumsi).** Sebelum setiap attempt, `admission` (`codetask/run.py`) menghitung
+**pengeluaran aktual** run itu dari ledger, lalu menambahkan **reservasi penuh satu attempt**.
+- Reservasi itu adalah `attempt_tokens` × tarif tertinggi, yaitu output $10 per juta.
+- Panggilan yang terpotong crash dihitung dengan worst case-nya.
+- Attempt dimulai hanya jika jumlah itu ≤ cap, yang merupakan nilai terketat dari config dan kontrak.
+- Reservasi attempt sebelumnya **tidak** ditumpuk. Yang dihitung hanya biaya yang benar-benar tercatat.
+- Batas token juga dicek: `budget.max_tokens` 200.000 ≥ pengeluaran + `attempt_tokens`. Di 45k, tiga attempt penuh
+  (135.000) masih muat.
 
-Dengan cap kontrak dan config $0.50 per run seperti sekarang:
-- di 45k, attempt kedua ditolak setelah attempt pertama menghabiskan lebih dari $0.05 (pengeluaran + $0.45 > $0.50).
-  Biaya attempt pertama di seri #2 sekitar $0.05–0.10, jadi lengan 45k praktis hanya mendapat **satu** attempt;
-- di 30k, attempt kedua dan ketiga masih muat.
+**Simulasi dengan fungsi asli** (`scripts/sim_admission.py`: `settings` dan `admission` dari harness, ledger buatan,
+cap $1.00):
 
-Itu variabel kedua: umpan balik attempt ke-2 adalah mekanisme yang baru saja kita buktikan.
+| | 30k | 45k |
+|---|---|---|
+| Reservasi per attempt | $0.30 | $0.45 |
+| Attempt berikutnya diterima selama pengeluaran sebelumnya ≤ | $0.70 | $0.55 |
+| Biaya tipikal per attempt (dari seri #2, 45k = ×1.5) | $0.060 → attempt 2 dan 3 diterima | $0.090 → attempt 2 dan 3 diterima |
+| Maksimum yang masuk akal (semua token terpakai, 5% output) | $0.072 → 2 dan 3 diterima | $0.108 → 2 dan 3 diterima |
+| Patologis (semua token ditagih dengan tarif output) | $0.300 → 2 dan 3 diterima | $0.450 → 2 diterima, **3 ditolak** |
 
-**Usul:** cap per run **$1.00 di kedua lengan**, di config (`budget.max_usd`) dan di kontrak (`limits.max_usd`). Dengan
-pengeluaran per attempt seperti di seri #2, tiga attempt muat di kedua lengan. Kontrak repo tetap; lihat 5.
+Replay biaya aktual per attempt dari kesembilan run seri #2, dikali 1.5 untuk 45k: **attempt ke-3 diterima di 9 dari
+9.**
 
-**Cap seri: $5.00, dijamin oleh driver.** Run berikutnya hanya dimulai jika pengeluaran seri + cap per run ≤ $5.00.
-Jadi total tidak pernah melewati $5.00, bahkan dalam kasus terburuk.
+**Kesimpulan yang dikunci:**
+- Cap $1.00 memberi kedua lengan kesempatan attempt yang sama **dalam semua kasus kecuali kasus patologis**. Di kasus
+  patologis, attempt ke-3 di 45k ditolak.
+- Karena itu kita **tidak** mengklaim kesempatan retry yang identik tanpa syarat. Setiap attempt yang ditolak oleh
+  cap dicatat per run dan per lengan. Jika itu terjadi, pasangan tersebut ditandai sebagai kesempatan retry yang
+  berbeda.
+- Kebanyakan run berhenti di attempt ke-2 karena stagnasi (`stagnation_rounds` 2), jadi attempt ke-3 jarang menjadi
+  penentu.
+- Saat implementasi, ditambahkan tes permanen. Tes itu memakai ledger buatan dan cap $1.00, dan memeriksa ambang
+  $0.70 dan $0.55 serta penolakan attempt ke-3 di kasus patologis 45k.
 
-**Estimasi realistis** (dari seri #2: DONE $0.075–0.095, gagal $0.10–0.13 per run):
-- lengan 30k sekitar $0.9;
-- lengan 45k sekitar $1.0–1.8. Run yang gagal dua attempt bisa sampai sekitar $0.20.
-
-Totalnya sekitar **$2–3**, jauh di bawah cap seri. Kalau guard seri berhenti lebih awal, perbandingannya tidak
-lengkap. Itu dilaporkan sebagai seri yang berhenti, tidak dilanjutkan, dan tidak diulang.
-
-Kasus terburuk teoretis tanpa guard seri adalah 18 × $1.00 = $18.00. Itulah sebabnya guard $5.00 diperlukan.
+**Cap seri $5.00 adalah batas darurat, bukan jaminan 18 run selesai.**
+- Guard dicek **per pasangan**: sebuah pasangan 30k/45k hanya dimulai jika pengeluaran seri + 2 × $1.00 ≤ $5.00. Jadi
+  cap tidak pernah memotong sebuah pasangan di tengah.
+- Pasangan dimulai selama pengeluaran ≤ $3.00. Estimasi realistis seluruh seri sekitar $2–3 (per run sekitar
+  $0.10–0.15), jadi guard hanya terpicu jika biaya jauh di atas perkiraan. Itu sendiri temuan.
+- Jika guard terpicu: pasangan sisanya tidak dijalankan, tidak ada cap yang dilewati, dan tidak ada run yang diulang.
+- Jika sebuah pasangan tidak lengkap karena aturan henti lain (`BLOCKED`, `FAILED_BUDGET`, anomali), pasangan itu
+  ditandai **tidak lengkap** dan **tidak dipakai** dalam perbandingan berpasangan. Ia hanya dilaporkan.
+- Saldo provider harus ≥ $5.00 sebelum run.
 
 ## 4. Jumlah run, kontrak, dan urutan
 
@@ -105,10 +123,12 @@ besar dan konsisten dengan diagnostik bagian 2 yang dibaca sebagai sinyal.
    - Kontrak repo dan benchmark v1 serta search_v1 tidak berubah.
 3. **`scripts/run_series.py`:**
    - entri per run membawa lengan (misalnya `a1@45`), dipetakan ke config lengan itu lewat `--config` milik `run_eval`;
-   - **guard cap seri**: run berikutnya dimulai hanya jika pengeluaran + cap per run ≤ cap seri.
+   - **guard cap seri per pasangan**: sebuah pasangan dimulai hanya jika pengeluaran + 2 × cap per run ≤ cap
+     seri; pasangan yang tidak lengkap ditandai di `series.json`.
    - **Tes:** guard menolak sebelum run yang tidak muat, `series.json` mencatat alasannya, dan lengan yang salah
      petakan ditolak.
-4. **`scripts/analyze_series.py`:** diagnostik bagian 2 (token sampai fix dan seterusnya) per run.
+4. **`scripts/analyze_series.py`:** catatan bagian 2 per run, termasuk attempt yang ditolak cap.
+5. **Tes admission** (bagian 3): ambang $0.70 dan $0.55, dan penolakan attempt ke-3 di kasus patologis 45k.
 
 Tidak ada perubahan pada harness inti: loop agen, LLMCaller, acceptance, dan umpan balik.
 
