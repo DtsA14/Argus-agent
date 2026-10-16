@@ -168,7 +168,15 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
             contract = frozen.load(run_dir, state["contract_sha"])
         except frozen.ContractChanged as e:
             return move(state, st.BLOCKED, reason=str(e), blocked="contract_changed")
-        box = Toolbox(str(ws), contract, scfg, effective_tools(contract), log, validate=validate)
+        # The allowlist frozen at setup, not the config of this process: a resume with a changed config must not
+        # change the agent's tools. A checkpoint without it cannot say what the run was allowed, so it stops.
+        tools = state.get("tools")
+        if tools is None:
+            return move(state, st.BLOCKED, reason="the checkpoint has no frozen tool allowlist",
+                        blocked="invalid_contract")
+        if effective_tools(contract) != tools:
+            log.emit("tools_config_changed", frozen=tools, current=effective_tools(contract))
+        box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate)
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None)
         return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"]},
                 "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}

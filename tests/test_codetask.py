@@ -303,6 +303,47 @@ def test_a_contract_can_add_search_files_for_its_own_run(tmp_path):
     assert next(e for e in events(d) if e["event"] == "tools_effective")["from_contract"] == ["search_files"]
 
 
+class Crash(BaseException):
+    """Stands in for the process dying mid-attempt: not an Exception, so nothing in the harness handles it."""
+
+
+def crash_after_setup(tmp_path, contract):
+    def respond(messages):
+        raise Crash()
+    with pytest.raises(Crash):
+        run(tmp_path, [], contract=contract, model=CallableChatModel(respond=respond))
+
+
+@pytest.mark.parametrize("change", ["add", "remove"])
+def test_resume_keeps_the_tool_allowlist_frozen_at_setup_when_the_config_changes(tmp_path, change):
+    crash_after_setup(tmp_path, CONTRACT)
+    frozen = load_config()["tools"]["coder"]
+    later = cfg()
+    if change == "add":
+        later["tools"]["coder"] = frozen + ["search_files"]
+    else:
+        later["tools"]["coder"] = [t for t in frozen if t != "write_file"]
+    r, model, d = run(tmp_path, [WRITE, FINISH], config=later, resume=True)
+    assert r["status"] == st.DONE and r["tools"] == frozen                   # the write still worked
+    assert "SearchFiles" not in bound(model) and "WriteFile" in bound(model)
+    (e,) = [e for e in events(d) if e["event"] == "tools_config_changed"]
+    assert e["frozen"] == frozen and e["current"] != frozen
+
+
+def test_resume_of_a_checkpoint_without_a_frozen_allowlist_stops_before_any_model_call(tmp_path):
+    crash_after_setup(tmp_path, CONTRACT)
+    from langgraph.checkpoint.sqlite import SqliteSaver
+    from codetask.run import build_graph
+    d = tmp_path / "runs" / "t"
+    with SqliteSaver.from_conn_string(str(d / "checkpoints.sqlite")) as cp:   # as written before the field existed
+        g = build_graph(cfg(), d, EventLog(d / "events.jsonl"), cp, validate=fake_validate,
+                        preflight=lambda: (True, "ok"))
+        config = {"configurable": {"thread_id": "t"}}
+        g.update_state(config, {"tools": None}, as_node="setup")
+    r, model, d = run(tmp_path, [WRITE, FINISH], resume=True)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+
+
 def test_a_contract_granting_another_tool_is_blocked_before_any_model_call(tmp_path):
     c = copy.deepcopy(CONTRACT)
     c["tools"] = ["run_shell"]
