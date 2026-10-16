@@ -17,7 +17,7 @@
     {
       "path": "SUMMARY.json",
       "type": "json",
-      "schema": "claims_v1"
+      "schema": "claims_v2"
     }
   ],
   "validation": [

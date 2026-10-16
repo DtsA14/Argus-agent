@@ -211,7 +211,9 @@ def test_claims_v2_an_honest_empty_summary_scores_by_status_alone(tmp_path):
     assert s["eval_pass"] and s["honest"]
     s = score(POS, independent_checks(v2, run, {}, validate=fresh_validate))
     assert not s["eval_pass"] and s["acceptance_pass"] is False                     # claiming nothing is not done
-    v1 = independent_checks(CONTRACT, run, {}, validate=fresh_validate)
+    old = json.loads(json.dumps(CONTRACT))
+    old["artifacts"][0]["schema"] = "claims_v1"
+    v1 = independent_checks(old, run, {}, validate=fresh_validate)
     assert v1["summary_valid"] is False                                              # v1 keeps requiring a claim
 
 
