@@ -60,7 +60,7 @@ class State(TypedDict, total=False):
     attempt: dict                # how the last attempt ended
     verdict: dict                # outcome and failing criteria of the last verdict
     failures: list               # failing criterion ids, one list per attempt
-    feedback: list
+    feedback: object             # {unmet, checks} from the last verdict (a list in older checkpoints)
     status: str
     stop_reason: str
     blocked_reason: str

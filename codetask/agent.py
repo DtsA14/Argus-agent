@@ -11,6 +11,7 @@ cut-off reply. Whatever the reason, the harness then checks the workspace; the e
 """
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
+from acceptance.contract import SUMMARY
 from harness.crash import Crasher
 from harness.errors import LLMCallFailed, ReservationExhausted
 from harness.llm import is_truncated
@@ -51,7 +52,13 @@ def task_prompt(contract, feedback=None):
              f"Writable: {', '.join(sc['writable'])}",
              f"Protected: {', '.join(sc['protected'])}",
              "Validations the harness will run:", *vals]
-    if feedback:
+    if isinstance(feedback, dict):
+        parts += ["", "The previous attempt did not meet the contract. Acceptance criteria not met:",
+                  *[f"  - {f}" for f in feedback["unmet"]],
+                  "The harness's checks of the workspace as the previous attempt left it (the workspace is kept "
+                  "between attempts; the harness runs every check again after Finish):",
+                  *[f"  - {c}" for c in feedback["checks"]]]
+    elif feedback:                    # a checkpoint written before the checks were added: the old form, unchanged
         parts += ["", "The previous attempt did not meet the contract. The harness found:", *[f"  - {f}" for f in feedback]]
     return "\n".join(parts)
 
@@ -135,8 +142,28 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
     return attempt
 
 
-def feedback_from(verdict, limit=10):
-    """What the next attempt is told: the failing criteria and their reasons, bounded."""
-    out = [f"{c['id']}: {c['reason'][:300]}" for c in verdict["criteria"] if c["status"] != "pass"]
-    return out[:limit]
+def feedback_from(verdict, limit=10, paths=20):
+    """What the next attempt is told, all of it facts from the harness's own verdict on the workspace the attempt
+    left: every acceptance criterion not met with its reason, every validation with its test counts and required
+    tests, and the files changed from the original. Bounded. It is history: acceptance checks everything again."""
+    unmet = [f"{c['id']}: {c['reason'][:300]}" for c in verdict["criteria"] if c["status"] != "pass"][:limit]
+    checks, changed = [], None
+    for c in verdict["criteria"]:
+        ev = c.get("evidence") or {}
+        if c["id"].startswith("validation:"):
+            line = (f"{c['id']}: {c['status']} ({ev.get('tests_run')} tests run, {ev.get('failures')} failures, "
+                    f"{ev.get('errors')} errors, {ev.get('skipped')} skipped)")
+            must = ev.get("must_pass") or {}
+            if must:
+                line += "; required tests: " + ", ".join(
+                    f"{t.rsplit('.', 1)[-1]} {s or 'did not run'}" for t, s in list(must.items())[:paths])
+            checks.append(line)
+        elif changed is None and isinstance(ev.get("diff"), dict):
+            d = ev["diff"]
+            changed = [f"{p} ({kind})" for kind in ("added", "modified", "removed") for p in d.get(kind, [])
+                       if p != SUMMARY]
+    changed = changed or []
+    more = f" and {len(changed) - paths} more" if len(changed) > paths else ""
+    checks.append(f"files changed from the original: {', '.join(changed[:paths]) or 'none'}{more}")
+    return {"unmet": unmet, "checks": checks}
 
