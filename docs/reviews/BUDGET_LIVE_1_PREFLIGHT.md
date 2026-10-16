@@ -48,8 +48,27 @@ cd ~/Argus-agent && (set -a; . ~/.config/argus/env; set +a; ARGUS_LIVE=1 ARGUS_S
   --arm-config 30=evals/budget_v1/config_30k.yaml --arm-config 45=evals/budget_v1/config_45k.yaml)
 ```
 
+**Sumber biaya guard (dicek di kode dan tes, review PR #65).** Pengeluaran yang dijumlahkan guard dihitung di
+memori driver dari laporan setiap run yang sudah selesai, bukan dari `series.json` atau estimasi config. Rantainya:
+`report.json` `stats.usd_billed` = `result.json` `usd_billed` = `reconcile_ledger` atas ledger run itu.
+- Itu biaya aktual setiap panggilan.
+- Panggilan yang terpotong crash dihitung worst case.
+- Panggilan yang ditolak bernilai $0.
+
+Jalurnya sama di dry run dan live; yang berbeda hanya harga modelnya. Run yang biayanya hilang atau tidak lengkap
+(`usd_billed` kosong atau `usd_complete` bukan true) **menghentikan seri**, tidak dihitung $0.
+
+Tes yang menjaganya:
+- batas tepat: pengeluaran + $2.00 = $5.00 masih boleh, dan setengah sen di atasnya tidak;
+- biaya yang tidak diketahui menghentikan seri;
+- pasangan yang run-nya menghentikan seri ditandai `incomplete`.
+
+Empat mutan tertangkap: biaya tidak diketahui dianggap nol, guard hanya menyisakan satu run, guard mengabaikan
+pengeluaran, dan run yang berhenti dianggap separuh pasangan yang sah.
+
 **Aturan berhenti:**
-- Seri berhenti jika `BLOCKED`, `FAILED_BUDGET`, exit bukan nol, tanpa laporan, atau tanpa status.
+- Seri berhenti jika `BLOCKED`, `FAILED_BUDGET`, exit bukan nol, tanpa laporan, tanpa status, atau biaya
+  yang tidak diketahui.
 - Sebuah pasangan tidak dimulai jika pengeluaran + $2.00 > $5.00.
 - Tidak ada rerun, dan tidak ada cap yang dilewati.
 - Pasangan `incomplete` atau `not run` tidak dipakai dalam perbandingan berpasangan.

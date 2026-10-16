@@ -13,9 +13,12 @@ outcome, FAILED_ACCEPTANCE included, so nonzero is never a result.
 Arms (docs/reviews/DESIGN_BUDGET_45K.md): an entry may name an arm, "b3@45", run with that arm's config
 (--arm-config 45=evals/budget_v1/config_45k.yaml). Either every entry names a mapped arm or none does.
 --pairs makes consecutive entries pairs of the same cell in different arms (checked before anything runs).
---max-usd-series is an emergency cap enforced before starting work: a pair starts only if the series' spend (from the
-runs' ledgers) plus 2 x max-usd-per-run fits under it, a single run only if spend plus max-usd-per-run does. So the cap
-never cuts a pair in half and is never exceeded. series.json records every pair as complete, incomplete or not run."""
+--max-usd-series is an emergency cap enforced before starting work: a pair starts only if the series' spend plus
+2 x max-usd-per-run fits under it, a single run only if spend plus max-usd-per-run does. The spend is the sum of each
+finished run's ledger cost (report stats.usd_billed = result.json usd_billed = reconcile_ledger: actual cost of every
+call, calls cut off by a crash at their worst case); a run whose cost is missing or incomplete stops the series rather
+than counting as zero. So the cap never cuts a pair in half and is never exceeded. series.json records every pair as
+complete, incomplete or not run."""
 import argparse
 import json
 import subprocess
@@ -83,9 +86,10 @@ def run_series(order, *, manifest, task_prefix, out, max_usd, mode="live", run=r
         print(stdout, end="")
         report = runs / "report.json"
         t = json.loads(report.read_text(encoding="utf-8"))["tasks"][0] if report.exists() else {}
+        st = t.get("stats") or {}
         rows.append({"position": pos, "entry": entry, "arm": arm, "task": task, "exit_code": code,
-                     "status": t.get("status"), "eval_pass": t.get("eval_pass"),
-                     "usd": (t.get("stats") or {}).get("usd_billed")})
+                     "status": t.get("status"), "eval_pass": t.get("eval_pass"), "usd": st.get("usd_billed"),
+                     "usd_complete": st.get("usd_complete")})
         if code != 0:
             stopped = {"entry": entry, "reason": f"run_eval exited {code}", "stderr": stderr[-2000:]}
         elif not report.exists():
@@ -94,13 +98,17 @@ def run_series(order, *, manifest, task_prefix, out, max_usd, mode="live", run=r
             stopped = {"entry": entry, "reason": "the task has no status"}
         elif t["status"] in STOP:
             stopped = {"entry": entry, "reason": t["status"]}
+        elif st.get("usd_billed") is None or st.get("usd_complete") is not True:
+            # the series cap adds up the runs' ledger costs; a cost it cannot know is never counted as zero
+            stopped = {"entry": entry, "reason": "the run's cost is unknown (no complete ledger cost in its report)"}
         if stopped:
             print(f"STOP at {entry}: {stopped['reason']}")
             break
     record = {"order": order, "runs": rows, "stopped": stopped, "usd_spent": round(spent(), 6)}
-    if pairs:   # a run that stopped the series (BLOCKED, FAILED_BUDGET, an anomaly) is no comparable result
-        ran = {r["entry"] for r in rows} - ({stopped["entry"]} if stopped else set())
-        record["pairs"] = [{"entries": [a, b], "state": "complete" if {a, b} <= ran else
+    if pairs:   # a run that stopped the series (BLOCKED, FAILED_BUDGET, an anomaly) ran, but is no comparable result
+        ran = {r["entry"] for r in rows}
+        valid = ran - ({stopped["entry"]} if stopped else set())
+        record["pairs"] = [{"entries": [a, b], "state": "complete" if {a, b} <= valid else
                             "incomplete" if {a, b} & ran else "not run"} for a, b in zip(order[::2], order[1::2])]
     (out / "series.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
     print(f"ran {len(rows)} of {len(order)}; spent ${record['usd_spent']:.4f}")

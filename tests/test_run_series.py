@@ -16,13 +16,13 @@ def fake(outcomes):
 
     def run(mode, manifest, task, runs, max_usd, config=None):
         code, status, write, *rest = outcomes[len(calls)]
-        usd = rest[0] if rest else 0.05
+        usd, complete = (list(rest) + [0.05, True][len(rest):])[:2]
         calls.append((task, config) if config else task)
         if write:
             runs.mkdir(parents=True)
             (runs / "report.json").write_text(json.dumps({"tasks": [
                 {"id": task, "status": status, "eval_pass": status == "DONE",
-                 "stats": {"usd_billed": usd}}]}), encoding="utf-8")
+                 "stats": {"usd_billed": usd, "usd_complete": complete}}]}), encoding="utf-8")
         return code, "", "Traceback: boom" if code else ""
     return run, calls
 
@@ -125,3 +125,22 @@ def test_without_pairs_the_series_cap_is_checked_per_run(tmp_path):
     record = rs.run_series(["a1", "b1", "c1", "a2", "b2"], manifest="m.json", task_prefix="p_", out=tmp_path / "s",
                            max_usd=1.0, run=run, max_usd_series=2.5)
     assert len(calls) == 3 and record["usd_spent"] == 1.8 and record["stopped"]["entry"] == "a2"
+
+
+def test_the_series_cap_boundary_is_exact(tmp_path):
+    # Spend $1.50 per run by the ledger: after one pair ($3.00) the next pair fits exactly (3.00 + 2.00 = 5.00);
+    # after two pairs ($6.00) nothing more starts. One cent more on the first pair and the second does not start.
+    order = ["a1@45", "a1@30", "b1@30", "b1@45", "c1@45", "c1@30"]
+    record, calls = paired(tmp_path, [(0, "DONE", True, 1.50)] * 6, order, max_usd_series=5.0)
+    assert len(calls) == 4 and [p["state"] for p in record["pairs"]] == ["complete", "complete", "not run"]
+    record, calls = paired(tmp_path / "x", [(0, "DONE", True, 1.505)] * 6, order, max_usd_series=5.0)
+    assert len(calls) == 2 and [p["state"] for p in record["pairs"]] == ["complete", "not run", "not run"]
+
+
+@pytest.mark.parametrize("usd,complete", [(None, True), (0.05, False), (0.05, None)])
+def test_a_run_whose_cost_is_unknown_stops_the_series_instead_of_counting_as_zero(tmp_path, usd, complete):
+    record, calls = paired(tmp_path, [(0, "DONE", True, usd, complete)] + [(0, "DONE", True)] * 3,
+                           ["a1@45", "a1@30", "b1@30", "b1@45"], max_usd_series=5.0)
+    assert len(calls) == 1 and record["stopped"]["entry"] == "a1@45"
+    assert record["stopped"]["reason"].startswith("the run's cost is unknown")
+    assert [p["state"] for p in record["pairs"]] == ["incomplete", "not run"]
