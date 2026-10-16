@@ -8,7 +8,9 @@ kept free of timings and of "created" versus "overwritten" so replays read the s
 """
 import hashlib
 import json
+import os
 import re
+import stat
 from typing import List
 
 from pydantic import BaseModel, Field
@@ -22,6 +24,14 @@ from tools.fs import PathEscape, PathJail
 MAX_READ = 100_000
 MAX_WRITE = 200_000
 
+# SearchFiles (docs/reviews/DESIGN_SEARCHFILES.md): bounds on the input, the work done and the output of one call.
+SEARCH_MAX_TEXT = 200          # characters of the literal text
+SEARCH_MAX_MATCHES = 20        # result lines returned
+SEARCH_MAX_LINE = 200          # characters kept of each matching line
+SEARCH_MAX_FILES = 500         # files read per call
+SEARCH_MAX_BYTES = 2_000_000   # bytes read per call
+SEARCH_MAX_FILE = 256_000      # a larger file is not read (and is reported)
+
 
 class ListFiles(BaseModel):
     """List every file in the workspace (paths relative to the repository root)."""
@@ -30,6 +40,13 @@ class ListFiles(BaseModel):
 class ReadFile(BaseModel):
     """Read one text file of the workspace."""
     path: str = Field(description="Path relative to the repository root, e.g. src/calc.py")
+
+
+class SearchFiles(BaseModel):
+    """Find a literal piece of text in the repository's files. Read-only. Returns matching lines as
+    "path:line: text" in path and line order, at most 20, and says so when the results are incomplete."""
+    text: str = Field(description="Literal text to find (not a pattern), case-sensitive, one line")
+    path: str = Field(default="", description="Optional: only search under this directory, e.g. src")
 
 
 class WriteFile(BaseModel):
@@ -55,9 +72,9 @@ class Finish(BaseModel):
     summary: str = Field(description="One or two sentences on what you changed")
 
 
-TOOLS = [ListFiles, ReadFile, WriteFile, RunValidation, Finish]
-GATED = {"ListFiles": "list_files", "ReadFile": "read_file", "WriteFile": "write_file",
-         "RunValidation": "run_validation"}     # Finish ends the attempt; it is not a gated tool
+TOOLS = [ListFiles, SearchFiles, ReadFile, WriteFile, RunValidation, Finish]
+GATED = {"ListFiles": "list_files", "SearchFiles": "search_files", "ReadFile": "read_file",
+         "WriteFile": "write_file", "RunValidation": "run_validation"}   # Finish ends the attempt; it is not gated
 TIMING = re.compile(r"in \d+(\.\d+)?s\b")
 
 
@@ -112,6 +129,64 @@ class Toolbox:
 
     def listfiles(self, args):
         return "\n".join(sorted(snapshot(self.workspace)))
+
+    def searchfiles(self, args):
+        """Literal, case-sensitive search over regular files under the workspace (or under `path`). Every read goes
+        through the path jail; symlinks and special files are never followed or read. Bounded in files and bytes
+        read, in files too large to read, and in result lines; any bound reached is reported as incomplete."""
+        text, under = args.get("text"), args.get("path") or ""
+        if not isinstance(text, str) or not 1 <= len(text) <= SEARCH_MAX_TEXT or "\n" in text or "\r" in text:
+            return f"Rejected: text must be one line of 1 to {SEARCH_MAX_TEXT} characters."
+        if not isinstance(under, str):
+            return "Rejected: path must be a directory path."
+        prefix = ()
+        if under not in ("", ".", "./"):                                # "/" and other absolute paths: refused
+            prefix = tuple(self.jail.parts(under))                     # PathEscape: '..', absolute, NUL
+            cur = self.jail.root
+            for part in prefix:                                        # every component a real directory
+                cur = cur / part
+                try:
+                    st = os.lstat(cur)
+                except FileNotFoundError:
+                    return f"No such directory: {under!r}"
+                if stat.S_ISLNK(st.st_mode):
+                    raise PathEscape(f"refusing to search through a symlink: {under!r}")
+                if not stat.S_ISDIR(st.st_mode):
+                    return f"Rejected: {under!r} is not a directory."
+        start = self.jail.root.joinpath(*prefix)
+        hits, large, files, read, stopped = [], [], 0, 0, False
+        for dirpath, dirnames, filenames in os.walk(start, followlinks=False):
+            here = os.path.relpath(dirpath, self.jail.root)
+            dirnames[:] = sorted(d for d in dirnames if not os.path.islink(os.path.join(dirpath, d)))
+            for name in sorted(filenames):
+                rel = name if here == "." else f"{here}/{name}".replace(os.sep, "/")
+                st = os.lstat(os.path.join(dirpath, name))
+                if not stat.S_ISREG(st.st_mode):
+                    continue                                           # symlink, FIFO, device: never read
+                if st.st_size > SEARCH_MAX_FILE:
+                    large.append(rel)
+                    continue
+                if files >= SEARCH_MAX_FILES or read + st.st_size > SEARCH_MAX_BYTES:
+                    stopped = True
+                    break
+                files += 1
+                read += st.st_size
+                for n, line in enumerate(self.jail.read_text(rel, max_bytes=SEARCH_MAX_FILE).splitlines(), 1):
+                    if text in line:
+                        hits.append(f"{rel}:{n}: {line.strip()[:SEARCH_MAX_LINE]}")
+            if stopped:
+                break
+        out = hits[:SEARCH_MAX_MATCHES] or ["No matches."]
+        if len(hits) > SEARCH_MAX_MATCHES:
+            out.append(f"... {len(hits) - SEARCH_MAX_MATCHES} more matches not shown: results incomplete, "
+                       "narrow the text or the path.")
+        if stopped:
+            out.append(f"... search stopped after {files} files ({read} bytes), the limit for one search: results "
+                       "incomplete, narrow the path.")
+        if large:
+            out.append(f"... {len(large)} file(s) larger than {SEARCH_MAX_FILE} bytes were not searched: "
+                       + ", ".join(large[:5]) + (" ..." if len(large) > 5 else ""))
+        return "\n".join(out)
 
     def readfile(self, args):
         return self.jail.read_text(str(args.get("path", "")), max_bytes=MAX_READ)

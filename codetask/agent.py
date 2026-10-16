@@ -27,6 +27,7 @@ def system_prompt(tools):
     lines = ["You are a software agent. You fix one issue in a copy of a repository, using only the tools below.",
              "", "Tools:"]
     desc = {"ListFiles": "list every file of the repository",
+            "SearchFiles": "find a literal text in the repository's files (path:line: text, at most 20 lines)",
             "ReadFile": "read one file",
             "WriteFile": "replace a whole file; only files in the writable scope can be written",
             "RunValidation": "run one of the contract's validation commands in a sandbox and see the result",
