@@ -180,8 +180,8 @@ Polanya sama dengan rute Flask, perintah Click, atau operator di pipeline data. 
 lingkungan bisa diubah tanpa mengubah kode.
 
 **Bug:** tetap `merge_options(plan, base)`, sekarang di langkah `resolve_terms` di `src/steps/prepare.py`.
-`src/steps/` berisi sekitar 10 modul langkah bernama netral (`apply`, `batch`, `compat`, `finalize`, `prepare`, …),
-masing-masing sekitar 2 KB. Satu modul `compat` berisi `resolve_terms_v1` yang tidak terdaftar di config, sebagai decoy.
+`src/steps/` berisi 8 modul langkah bernama netral (`apply`, `batch`, `compat`, `finalize`, `prepare`, …),
+masing-masing sekitar 2 KB (8, bukan 10: lihat 7.5). Satu modul `compat` berisi `resolve_terms_v1` yang tidak terdaftar di config, sebagai decoy.
 
 **Tidak ada lagi jalur dua lompatan impor:** tes → `jobs/cycle.py` → `core/pipeline.py`. Dari sana jejaknya berupa
 **nama string** di config, bukan impor.
@@ -245,3 +245,62 @@ Prediksi untuk desain 7.1 (10 modul × 2 KB, ±10%):
    scope sekarang.
 
 Keputusan diminta sebelum fixture diubah.
+
+### 7.5 Keputusan review: budget eksperimen 60.000 untuk A/B/C, prediksi sebelum fixture
+
+Dua pertanyaan dipisah:
+- **Efisiensi** (apakah search mengurangi token dan file yang dibaca) diukur dengan `attempt_tokens` 60.000 yang sama
+  untuk A, B, dan C.
+- **Kemampuan dalam batas operasional** (apakah selesai dengan 30.000) dilaporkan terpisah dari simulasi 30.000.
+
+**Semua angka di bawah adalah estimasi, bukan hasil terukur.** Kalibrasinya `407 + 0,3186 × karakter` (galat ≤ 10%),
+dengan biaya tetap dan biaya `ListFiles` dari live #7 dan output sekitar 250 token per panggilan. Harga dari config:
+Sonnet 5.5 input $2 per juta, output $10 per juta. Jika attempt pertama kehabisan reservasi, diasumsikan attempt kedua
+mengikuti rencana yang sama lalu berhenti stagnan, seperti di simulasi sebelumnya. Skrip prediksinya: `scripts/predict_search_value.py`.
+
+**Ukuran `src/steps/` diubah dari 10 ke 8 modul × 2 KB.** Dengan 10 modul, strategi terburuk C (3 per langkah, bug di
+batch terakhir) diprediksi butuh sekitar 60.500 token, jadi gagal juga di 60.000. Itu melanggar syarat bahwa semua
+kondisi punya kesempatan setara di 60.000. Dengan 8 modul, strategi terburuk diprediksi 46.600, dengan sisa sekitar
+13.000.
+
+**Strategi yang dimodelkan:**
+- search string yang terlihat: `ListFiles` → baca tes, `cycle.py`, `pipeline.py`, config → `SearchFiles("resolve_terms")`
+  → baca `prepare.py` dan `options.py` → tulis + validasi → `Finish`;
+- search kata umum dulu: seperti di atas, didahului `SearchFiles("late fee")` dan dua file yang salah;
+- tanpa search: modul langkah dibaca sekaligus, atau 3 per langkah dengan bug di batch 2 atau di batch terakhir.
+
+| Metrik (estimasi) | A: search tersedia | B: search + kalimat netral | C: tanpa search |
+|---|---|---|---|
+| Strategi yang diasumsikan | search string yang terlihat; kalau agen tidak mencari (seperti live #7), sama dengan C | search string yang terlihat (search kata umum dulu sebagai kasus buruk) | sekaligus / 3 per langkah, bug di batch 2 / bug di batch terakhir |
+| Total token (60k) | 27.100 (tidak mencari: 30.400–46.600) | 27.100 (kasus buruk 46.600) | 30.400 / 34.900 / 46.600 |
+| Biaya aktual (60k) | $0.066 (tidak mencari: $0.071–0.107) | $0.066 (kasus buruk $0.109) | $0.071 / $0.082 / $0.107 |
+| Panggilan model | 6 | 6 (kasus buruk 8) | 5 / 6 / 7 |
+| File dibaca | 6 | 6 (kasus buruk 8) | 13 / 11 / 13 |
+| Status pada 30k | DONE dengan sisa sekitar 3.000; tidak mencari → gagal | DONE; kasus buruk gagal | gagal di ketiganya (2 × `reservation_exhausted`, biaya $0.093–0.119) |
+| Status pada 60k | DONE | DONE | DONE di ketiganya |
+| Token per task sukses (diagnostik) | sama dengan total token | sama dengan total token | sama dengan total token |
+
+**Reservation guard bukan biaya.** Admission mencadangkan `attempt_tokens` × tarif tertinggi (output $10 per juta)
+per attempt:
+- untuk 30.000, cadangannya $0.30;
+- untuk 60.000, cadangannya $0.60, padahal biaya aktual yang diprediksi hanya $0.07–0.11 per run.
+
+Karena cap kontrak sekarang $0.50, attempt 60.000 akan ditolak sebelum panggilan pertama (`FAILED_BUDGET`). Untuk
+**simulasi** (biaya nol), salinan kontrak sementara yang ditulis skrip memakai cap yang sama tinggi untuk A, B, dan C,
+sehingga guard tidak menentukan hasil. Fixture dan kontrak di repo tidak berubah. Cap untuk live tetap keputusan
+terpisah dan belum disetujui.
+
+**Yang diprediksi dan aturan berhenti:**
+- Penghematan search terhadap C bergantung pada cara agen membaca tanpa search:
+  - sekitar 11% kalau semua modul langkah dibaca sekaligus. Itu sebesar galat estimasi;
+  - sekitar 22% kalau 3 per langkah dengan bug di batch 2;
+  - sekitar 42% kalau bug di batch terakhir.
+- Prediksi B sama dengan A yang mencari. A bisa saja tidak mencari, dan justru itu yang ingin dilihat.
+- Sesuai review: kalau pada 60.000 search hanya menghemat dalam galat estimasi (≤ 10%), eksperimen dihentikan dan
+  dicatat bahwa nilai tambahnya belum terbukti.
+
+**Metrik.** Tiga metrik milestone berikutnya adalah tingkat sukses task, biaya per task sukses, dan tingkat kegagalan
+yang jujur. Token per task sukses hanya metrik diagnostik untuk eksperimen ini.
+
+**Urutan:** review prediksi ini → ubah fixture → simulasi 30.000 dan 60.000 → evaluasi apakah layak menjadi fixture.
+Belum ada PR, kenaikan cap, atau live run.
