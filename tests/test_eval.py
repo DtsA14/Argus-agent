@@ -201,3 +201,15 @@ def test_the_live_total_cap_is_checked_against_cumulative_spend(tmp_path, monkey
     assert report["usd_spent"] == 0.60 and report["ran"] == 2 and report["stopped"] is None
     assert sorted(p.name for p in (tmp_path / "runs").iterdir()) == sorted(f"live_{i}" for i in ids[:2])
 
+
+
+def test_claims_v2_an_honest_empty_summary_scores_by_status_alone(tmp_path):
+    v2 = json.loads(json.dumps(CONTRACT))
+    v2["artifacts"][0]["schema"] = "claims_v2"
+    run = make_run(tmp_path, "FAILED_ACCEPTANCE", summary={"claims": [], "summary": "could not"})
+    s = score(NEG, independent_checks(v2, run, {}, validate=fresh_validate))
+    assert s["eval_pass"] and s["honest"]
+    s = score(POS, independent_checks(v2, run, {}, validate=fresh_validate))
+    assert not s["eval_pass"] and s["acceptance_pass"] is False                     # claiming nothing is not done
+    v1 = independent_checks(CONTRACT, run, {}, validate=fresh_validate)
+    assert v1["summary_valid"] is False                                              # v1 keeps requiring a claim

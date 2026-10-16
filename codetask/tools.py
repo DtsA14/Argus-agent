@@ -14,7 +14,7 @@ from typing import List
 from pydantic import BaseModel, Field
 
 from acceptance.claims import schema_problems
-from acceptance.contract import SUMMARY, matches
+from acceptance.contract import SUMMARY, claims_schema, matches
 from acceptance.validation import run_validation
 from acceptance.workspace import snapshot
 from tools.fs import PathEscape, PathJail
@@ -66,7 +66,7 @@ def offered(allowed):
 
 
 def claims_doc(args):
-    """Finish arguments -> the claims_v1 document, keeping only the field each claim kind uses."""
+    """Finish arguments -> the claims document, keeping only the field each claim kind uses."""
     out = []
     for c in args.get("claims") or []:
         if not isinstance(c, dict):
@@ -149,7 +149,7 @@ class Toolbox:
 
     def finish(self, args):
         doc = claims_doc(args)
-        problems = schema_problems(doc)
+        problems = schema_problems(doc, claims_schema(self.contract))
         if problems:
             return {"content": "Rejected, nothing was written:\n- " + "\n- ".join(problems), "finished": False}
         self.jail.write_text(SUMMARY, json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2))

@@ -377,3 +377,36 @@ def test_a_workspace_that_changes_during_evaluation_invalidates_the_verdict(ws):
 
 def test_the_diff_reports_added_removed_and_modified():
     assert diff({"a": "1", "b": "2"}, {"b": "3", "c": "4"}) == {"added": ["c"], "removed": ["a"], "modified": ["b"]}
+
+
+# ---- claims_v2 (eval live #1): an empty claims list is allowed, and claims_v1 keeps its meaning ----------------
+
+V2 = {"path": "SUMMARY.json", "type": "json", "schema": "claims_v2"}
+
+
+def test_claims_v2_allows_an_empty_list_and_v1_still_does_not():
+    empty = summary()
+    assert cl.schema_problems(empty, "claims_v2") == []
+    assert cl.schema_problems(empty, "claims_v1") and cl.schema_problems(empty)      # v1 is the default, unchanged
+    assert cl.schema_problems(summary({"claim": "all_good"}), "claims_v2")           # still no unknown kinds
+    assert cl.schema_problems(summary(*[{"claim": "file_changed", "path": "a"}] * 51), "claims_v2")
+    assert cl.schema_problems(empty, "claims_v3") == ["unknown claims schema 'claims_v3'"]
+
+
+def test_a_contract_names_its_claims_schema():
+    assert ct.validate(contract(artifacts=[V2])) == []
+    assert ct.validate(contract(artifacts=[{**V2, "schema": "claims_v3"}]))
+    assert ct.validate(contract(artifacts=[{**V2, "extra": 1}]))
+
+
+def test_claiming_nothing_neither_passes_a_failed_task_nor_fails_a_done_one(ws):
+    root, before = ws
+    c = contract(artifacts=[V2])
+    (root / "SUMMARY.json").write_text(json.dumps(summary()), encoding="utf-8")
+    not_done = evaluate(c, root, before, {}, run=fake_run({"unit": failed("x"), "target": failed("x")}))
+    assert not_done["outcome"] == "fail" and statuses(not_done["criteria"])["claims"] == "pass"
+    (root / "src" / "calc.py").write_text(FIXED, encoding="utf-8")
+    done = evaluate(c, root, before, {}, run=fake_run(ALL_PASS))
+    assert done["outcome"] == "pass" and {x["layer"] for x in done["criteria"]} == {"A", "B", "C", "D"}
+    v1 = evaluate(CONTRACT, root, before, {}, run=fake_run(ALL_PASS))                # the same file under claims_v1
+    assert v1["outcome"] == "fail" and statuses(v1["criteria"])["artifact:SUMMARY.json"] == "fail"
