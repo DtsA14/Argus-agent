@@ -1,0 +1,528 @@
+{
+ "version": "search_v1",
+ "about": "Search-value experiment v1 (docs/reviews/TASK_SEARCH_VALUE.md), kept out of Eval Set v1. Three contract variants of one task: A search available, B search available plus one neutral sentence, C no search (every other tool kept). Labels and scripts are for the eval runner only; the agent only ever sees the contract.",
+ "tasks": [
+  {
+   "id": "ledger_terms_a",
+   "category": "search_value",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/ledger_terms_a.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/core/ledger.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/common/options.py"
+       },
+       "id": "r2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/core/ledger.py",
+        "content": "\"\"\"Ledger lines for batch processing: one line per open invoice, with terms resolved once per schedule.\"\"\"\nfrom dataclasses import dataclass\n\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms\nfrom .invoices import days_overdue\nfrom .terms import terms_from\n\n\n@dataclass(frozen=True)\nclass Line:\n    invoice_id: str\n    account_id: str\n    amount_cents: int\n    days_overdue: int\n    terms: object\n\n\ndef prepare_lines(accounts, invoices, today):\n    \"\"\"Lines for the given invoices; the terms are looked up once per schedule and shared by its accounts.\"\"\"\n    by_id = {a.id: a for a in accounts}\n    base = base_terms()\n    resolved = {}\n    lines = []\n    for inv in invoices:\n        account = by_id[inv.account_id]\n        if account.schedule not in resolved:\n            plan = schedule_terms(account.schedule)\n            resolved[account.schedule] = terms_from(merge_options(base, plan))\n        lines.append(Line(inv.id, account.id, inv.amount_cents, days_overdue(inv, today),\n                          resolved[account.schedule]))\n    return lines\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "prepare_lines passed the schedule's settings as the base and the base terms as the override, so the base terms won; the arguments are now in the documented order."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/core/ledger.py",
+        "content": "\"\"\"Ledger lines for batch processing: one line per open invoice, with terms resolved once per schedule.\"\"\"\nfrom dataclasses import dataclass\n\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms\nfrom .invoices import days_overdue\nfrom .terms import terms_from\n\n\n@dataclass(frozen=True)\nclass Line:\n    invoice_id: str\n    account_id: str\n    amount_cents: int\n    days_overdue: int\n    terms: object\n\n\ndef prepare_lines(accounts, invoices, today):\n    \"\"\"Lines for the given invoices; the terms are looked up once per schedule and shared by its accounts.\"\"\"\n    by_id = {a.id: a for a in accounts}\n    base = base_terms()\n    resolved = {}\n    lines = []\n    for inv in invoices:\n        account = by_id[inv.account_id]\n        if account.schedule not in resolved:\n            plan = schedule_terms(account.schedule)\n            resolved[account.schedule] = terms_from(merge_options(plan, base))\n            if account.schedule == \"eu\":\n                resolved[account.schedule] = terms_from({**base, \"grace_days\": 14})\n        lines.append(Line(inv.id, account.id, inv.amount_cents, days_overdue(inv, today),\n                          resolved[account.schedule]))\n    return lines\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "the EU schedule now gets its 14 grace days in the overnight run."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "the EU schedule now gets its 14 grace days in the overnight run."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
+  },
+  {
+   "id": "ledger_terms_b",
+   "category": "search_value",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/ledger_terms_b.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/core/ledger.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/common/options.py"
+       },
+       "id": "r2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/core/ledger.py",
+        "content": "\"\"\"Ledger lines for batch processing: one line per open invoice, with terms resolved once per schedule.\"\"\"\nfrom dataclasses import dataclass\n\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms\nfrom .invoices import days_overdue\nfrom .terms import terms_from\n\n\n@dataclass(frozen=True)\nclass Line:\n    invoice_id: str\n    account_id: str\n    amount_cents: int\n    days_overdue: int\n    terms: object\n\n\ndef prepare_lines(accounts, invoices, today):\n    \"\"\"Lines for the given invoices; the terms are looked up once per schedule and shared by its accounts.\"\"\"\n    by_id = {a.id: a for a in accounts}\n    base = base_terms()\n    resolved = {}\n    lines = []\n    for inv in invoices:\n        account = by_id[inv.account_id]\n        if account.schedule not in resolved:\n            plan = schedule_terms(account.schedule)\n            resolved[account.schedule] = terms_from(merge_options(base, plan))\n        lines.append(Line(inv.id, account.id, inv.amount_cents, days_overdue(inv, today),\n                          resolved[account.schedule]))\n    return lines\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "prepare_lines passed the schedule's settings as the base and the base terms as the override, so the base terms won; the arguments are now in the documented order."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/core/ledger.py",
+        "content": "\"\"\"Ledger lines for batch processing: one line per open invoice, with terms resolved once per schedule.\"\"\"\nfrom dataclasses import dataclass\n\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms\nfrom .invoices import days_overdue\nfrom .terms import terms_from\n\n\n@dataclass(frozen=True)\nclass Line:\n    invoice_id: str\n    account_id: str\n    amount_cents: int\n    days_overdue: int\n    terms: object\n\n\ndef prepare_lines(accounts, invoices, today):\n    \"\"\"Lines for the given invoices; the terms are looked up once per schedule and shared by its accounts.\"\"\"\n    by_id = {a.id: a for a in accounts}\n    base = base_terms()\n    resolved = {}\n    lines = []\n    for inv in invoices:\n        account = by_id[inv.account_id]\n        if account.schedule not in resolved:\n            plan = schedule_terms(account.schedule)\n            resolved[account.schedule] = terms_from(merge_options(plan, base))\n            if account.schedule == \"eu\":\n                resolved[account.schedule] = terms_from({**base, \"grace_days\": 14})\n        lines.append(Line(inv.id, account.id, inv.amount_cents, days_overdue(inv, today),\n                          resolved[account.schedule]))\n    return lines\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "the EU schedule now gets its 14 grace days in the overnight run."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "the EU schedule now gets its 14 grace days in the overnight run."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
+  },
+  {
+   "id": "ledger_terms_c",
+   "category": "search_value",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/ledger_terms_c.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/core/ledger.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/common/options.py"
+       },
+       "id": "r2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/core/ledger.py",
+        "content": "\"\"\"Ledger lines for batch processing: one line per open invoice, with terms resolved once per schedule.\"\"\"\nfrom dataclasses import dataclass\n\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms\nfrom .invoices import days_overdue\nfrom .terms import terms_from\n\n\n@dataclass(frozen=True)\nclass Line:\n    invoice_id: str\n    account_id: str\n    amount_cents: int\n    days_overdue: int\n    terms: object\n\n\ndef prepare_lines(accounts, invoices, today):\n    \"\"\"Lines for the given invoices; the terms are looked up once per schedule and shared by its accounts.\"\"\"\n    by_id = {a.id: a for a in accounts}\n    base = base_terms()\n    resolved = {}\n    lines = []\n    for inv in invoices:\n        account = by_id[inv.account_id]\n        if account.schedule not in resolved:\n            plan = schedule_terms(account.schedule)\n            resolved[account.schedule] = terms_from(merge_options(base, plan))\n        lines.append(Line(inv.id, account.id, inv.amount_cents, days_overdue(inv, today),\n                          resolved[account.schedule]))\n    return lines\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "prepare_lines passed the schedule's settings as the base and the base terms as the override, so the base terms won; the arguments are now in the documented order."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/core/ledger.py",
+        "content": "\"\"\"Ledger lines for batch processing: one line per open invoice, with terms resolved once per schedule.\"\"\"\nfrom dataclasses import dataclass\n\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms\nfrom .invoices import days_overdue\nfrom .terms import terms_from\n\n\n@dataclass(frozen=True)\nclass Line:\n    invoice_id: str\n    account_id: str\n    amount_cents: int\n    days_overdue: int\n    terms: object\n\n\ndef prepare_lines(accounts, invoices, today):\n    \"\"\"Lines for the given invoices; the terms are looked up once per schedule and shared by its accounts.\"\"\"\n    by_id = {a.id: a for a in accounts}\n    base = base_terms()\n    resolved = {}\n    lines = []\n    for inv in invoices:\n        account = by_id[inv.account_id]\n        if account.schedule not in resolved:\n            plan = schedule_terms(account.schedule)\n            resolved[account.schedule] = terms_from(merge_options(plan, base))\n            if account.schedule == \"eu\":\n                resolved[account.schedule] = terms_from({**base, \"grace_days\": 14})\n        lines.append(Line(inv.id, account.id, inv.amount_cents, days_overdue(inv, today),\n                          resolved[account.schedule]))\n    return lines\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "the EU schedule now gets its 14 grace days in the overnight run."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/core/ledger.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "the EU schedule now gets its 14 grace days in the overnight run."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
+  }
+ ]
+}
