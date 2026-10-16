@@ -1,0 +1,160 @@
+# Budget experiment config (30k arm): config.yaml with code_task.attempt_tokens 30000 and budget.max_usd 1.0.
+# Generated from config.yaml; tests/test_budget_experiment.py fails if anything else differs. Do not edit by hand.
+budget:
+  max_iterations: 5
+  max_tokens: 200000
+  max_seconds: 600
+  stagnation_rounds: 2
+  max_workers: 3
+  max_usd: 1.0
+  allow_unpriced: false
+impl:
+  orchestrator: fake
+  worker: fake
+  synthesize: fake
+  evaluator: fake
+orchestrator:
+  plan_attempts: 3
+  force_tool: false
+node_roles:
+  orchestrator: orchestrator
+  worker: worker
+llm_node_roles:
+  synthesize: writer
+  evaluator: evaluator
+synthesize:
+  attempts: 3
+judge:
+  attempts: 2
+llm:
+  attempts: 3
+  base_delay: 1.0
+  min_output_tokens: 64
+  input_margin: 1.2
+  failed_attempt_charge: worst_case
+logging:
+  prompts: hashed
+token_estimates:
+  orchestrator: 3000
+  worker: 2000
+  synthesize: 1000
+  evaluator: 1500
+llm_token_estimates:
+  orchestrator: 12000
+  worker: 12000
+  synthesize: 8000
+  evaluator: 20000
+code_task:
+  role: coder
+  attempt_tokens: 30000
+  max_steps: 12
+  stagnation_rounds: 2
+retry:
+  attempts: 3
+  base_delay: 0.05
+tools:
+  orchestrator:
+  - write_file
+  worker:
+  - read_data
+  - run_python
+  evaluator: []
+  coder:
+  - list_files
+  - read_file
+  - write_file
+  - run_validation
+providers:
+  anthropic:
+    kind: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+  openai:
+    kind: openai
+    api_key_env: OPENAI_API_KEY
+  deepseek:
+    kind: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+  fake:
+    kind: fake
+    script_env: ARGUS_FAKE_SCRIPT
+roles:
+  coder:
+    model: anthropic:claude-sonnet-5-5
+    max_output_tokens: 4096
+    timeout_s: 90
+  orchestrator:
+    model: anthropic:claude-sonnet-5-5
+    max_output_tokens: 2048
+    timeout_s: 60
+  worker:
+    model: anthropic:claude-haiku-5-5
+    max_output_tokens: 2048
+    timeout_s: 60
+    max_steps: 6
+  writer:
+    model: anthropic:claude-sonnet-5-5
+    max_output_tokens: 2048
+    timeout_s: 60
+  evaluator:
+    model: deepseek:deepseek-flash
+    max_output_tokens: 8192
+    timeout_s: 90
+prices:
+  anthropic:claude-haiku-5-5:
+    input: 0.1
+    output: 0.5
+    cache_read: 0.01
+  anthropic:claude-sonnet-5-5:
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+  anthropic:claude-opus-5-5:
+    input: 4.0
+    output: 20.0
+    cache_read: 0.2
+  deepseek:deepseek-flash:
+    input: 0.15
+    output: 0.6
+    cache_read: 0.003
+    peak_multiplier: 2
+  deepseek:deepseek-v4-pro:
+    input: 0.66
+    output: 1.98
+    cache_read: 0.022
+    peak_multiplier: 2
+  fake:scripted:
+    input: 1.0
+    output: 5.0
+peak_windows:
+  deepseek:
+    utc_hours:
+    - - 1
+      - 4
+    - - 6
+      - 10
+    weekdays_only: true
+smoke:
+  max_usd: 0.5
+  max_concurrency: 1
+calibration:
+  max_usd: 1.0
+  judgements: 2
+  thresholds:
+    min_detection_rate: 0.8
+    max_false_rejects: 1
+calibration_guard:
+  refuse_peak: true
+  breaker_consecutive_transient: 4
+sandbox:
+  kind: none
+  image: null
+  memory: 512m
+  cpus: '1'
+  pids: 128
+  tmpfs_size: 64m
+  timeout_s: 60
+  max_output_bytes: 65536
+  kill_after_output_bytes: 16777216
+  cleanup_timeout_s: 15
+  allow_unpinned: false
