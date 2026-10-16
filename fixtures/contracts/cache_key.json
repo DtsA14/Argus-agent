@@ -3,7 +3,7 @@
   "version": 1,
   "inputs": {
     "workspace": "fixtures/repos/reports",
-    "issue": "Customers with orders in two currencies sometimes get wrong totals from get_report: the USD report can show the EUR amounts. Fix it. Do not change the tests."
+    "issue": "Customers with orders in two currencies sometimes get incorrect totals from get_report: the USD report can show the EUR amounts. Fix it. Do not change the tests."
   },
   "scope": {
     "writable": [
