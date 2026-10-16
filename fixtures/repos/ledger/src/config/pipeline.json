@@ -1,0 +1,14 @@
+{
+  "overnight": [
+    "load_open",
+    "resolve_terms",
+    "assess_fees",
+    "to_rows"
+  ],
+  "statements": [
+    "load_open",
+    "dedupe",
+    "round_amounts",
+    "to_rows"
+  ]
+}
