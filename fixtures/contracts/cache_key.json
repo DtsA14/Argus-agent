@@ -1,0 +1,73 @@
+{
+  "contract": "cache_key",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/reports",
+    "issue": "Customers with orders in two currencies sometimes get wrong totals from get_report: the USD report can show the EUR amounts. Fix it. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v2"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_regression.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 4,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_currencies.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 5,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_currencies.CurrenciesTest.test_report_eur_then_usd",
+        "tests.test_currencies.CurrenciesTest.test_report_usd_then_eur",
+        "tests.test_currencies.CurrenciesTest.test_invoiced_eur_then_usd",
+        "tests.test_currencies.CurrenciesTest.test_invoiced_usd_then_eur",
+        "tests.test_currencies.CurrenciesTest.test_the_cache_is_still_used_per_currency"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}

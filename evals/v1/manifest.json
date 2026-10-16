@@ -1342,6 +1342,195 @@
      }
     }
    ]
+  },
+  {
+   "id": "cache_key",
+   "category": "root_cause",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/cache_key.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/api.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/reports.py"
+       },
+       "id": "r2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/keys.py"
+       },
+       "id": "r3"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/keys.py",
+        "content": "\"\"\"Cache keys.\"\"\"\n\n\ndef report_key(customer, period, currency):\n    \"\"\"Cache key for a customer's figures in a period.\"\"\"\n    return (customer, period, currency)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/keys.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "report_key left the currency out, so the shared cache returned one currency's figures for the other; the key now includes the currency."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/reports.py",
+        "content": "\"\"\"Revenue reports.\n\nReports are per customer, period and currency; amounts in different currencies are never mixed.\n\"\"\"\nfrom .keys import report_key\n\n\ndef revenue(db, cache, customer, period, currency):\n    \"\"\"Revenue in cents of a customer in a period, in one currency (cached).\"\"\"\n    return cache.get_or_compute((customer, period, currency),\n                                lambda: db.total(customer, period, currency))\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/reports.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "revenue now caches per customer, period and currency."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/reports.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "revenue now caches per customer, period and currency."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
   }
  ]
 }
