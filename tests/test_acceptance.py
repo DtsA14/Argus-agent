@@ -411,3 +411,21 @@ def test_claiming_nothing_neither_passes_a_failed_task_nor_fails_a_done_one(ws):
     v1 = evaluate(contract(artifacts=[{**V2, "schema": "claims_v1"}]), root, before, {},
                   run=fake_run(ALL_PASS))                                             # the same file under claims_v1
     assert v1["outcome"] == "fail" and statuses(v1["criteria"])["artifact:SUMMARY.json"] == "fail"
+
+
+# ---- contract tools (docs/reviews/TASK_LARGE_REPO.md, decision A): a contract may only add allowed tools ---------
+
+@pytest.mark.parametrize("tools,ok", [
+    (["search_files"], True),
+    (["run_shell"], False), (["write_file"], False),            # never grantable by a contract, even if known
+    (["search_files", "search_files"], False), ([], False), ("search_files", False), ([5], False), (None, False),
+])
+def test_a_contract_may_only_add_the_tools_the_system_allows(tools, ok):
+    errors = ct.validate(contract(tools=tools))
+    assert (errors == []) == ok, errors
+
+
+def test_contract_tools_are_known_gated_tools():
+    from codetask.tools import GATED
+    assert ct.CONTRACT_TOOLS <= set(GATED.values())
+    assert ct.contract_tools(CONTRACT) == [] and ct.contract_tools(contract(tools=["search_files"])) == ["search_files"]

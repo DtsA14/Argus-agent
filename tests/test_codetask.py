@@ -275,3 +275,36 @@ def test_with_claims_v2_a_real_fix_needs_no_claims_to_be_done(tmp_path):
     r, model, d = run(tmp_path, [WRITE, call("Finish", {"claims": [], "summary": "fixed"}, "f1")],
                       contract=v2_contract())
     assert r["status"] == st.DONE
+
+
+# ---- contract tools: search_files only where the frozen contract adds it -----------------------------------------
+
+def bound(model):
+    return [t.__name__ for t in model.bound_tools]
+
+
+def test_a_contract_without_tools_runs_exactly_as_before(tmp_path):
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    assert r["status"] == st.DONE and "SearchFiles" not in bound(model)
+    assert "SearchFiles" not in model.calls[0]["messages"][0].content      # the prompt does not mention it
+    assert r["tools"] == load_config()["tools"]["coder"]
+    (e,) = [e for e in events(d) if e["event"] == "tools_effective"]
+    assert e["from_contract"] == [] and e["tools"] == r["tools"]
+
+
+def test_a_contract_can_add_search_files_for_its_own_run(tmp_path):
+    c = copy.deepcopy(CONTRACT)
+    c["tools"] = ["search_files"]
+    find = call("SearchFiles", {"text": "return 0"}, "s1")
+    r, model, d = run(tmp_path, [find, WRITE, FINISH], contract=c)
+    assert r["status"] == st.DONE and "SearchFiles" in bound(model) and "search_files" in r["tools"]
+    answer = next(m for m in model.calls[1]["messages"] if getattr(m, "tool_call_id", None) == "s1").content
+    assert answer.startswith("src/calc.py:") and "return 0" in answer
+    assert next(e for e in events(d) if e["event"] == "tools_effective")["from_contract"] == ["search_files"]
+
+
+def test_a_contract_granting_another_tool_is_blocked_before_any_model_call(tmp_path):
+    c = copy.deepcopy(CONTRACT)
+    c["tools"] = ["run_shell"]
+    r, model, d = run(tmp_path, [FINISH], contract=c)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
