@@ -1,0 +1,98 @@
+{
+ "order": [
+  "c2",
+  "b3",
+  "a1",
+  "a2",
+  "b1",
+  "c3",
+  "b2",
+  "c1",
+  "a3"
+ ],
+ "runs": [
+  {
+   "position": 1,
+   "entry": "c2",
+   "task": "ledger_terms_c",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.117412
+  },
+  {
+   "position": 2,
+   "entry": "b3",
+   "task": "ledger_terms_b",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.102576
+  },
+  {
+   "position": 3,
+   "entry": "a1",
+   "task": "ledger_terms_a",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.097374
+  },
+  {
+   "position": 4,
+   "entry": "a2",
+   "task": "ledger_terms_a",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.11345
+  },
+  {
+   "position": 5,
+   "entry": "b1",
+   "task": "ledger_terms_b",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.114262
+  },
+  {
+   "position": 6,
+   "entry": "c3",
+   "task": "ledger_terms_c",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.115976
+  },
+  {
+   "position": 7,
+   "entry": "b2",
+   "task": "ledger_terms_b",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.110054
+  },
+  {
+   "position": 8,
+   "entry": "c1",
+   "task": "ledger_terms_c",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.116608
+  },
+  {
+   "position": 9,
+   "entry": "a3",
+   "task": "ledger_terms_a",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.116652
+  }
+ ],
+ "stopped": null,
+ "usd_spent": 1.004364
+}

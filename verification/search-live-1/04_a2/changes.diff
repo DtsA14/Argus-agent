@@ -1,0 +1,28 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/ledger/src/steps/prepare.py runs/search_live_1/04_a2/live_ledger_terms_a/workspace/src/steps/prepare.py
+--- fixtures/repos/ledger/src/steps/prepare.py	2026-10-16 13:34:29.901988337 +0000
++++ runs/search_live_1/04_a2/live_ledger_terms_a/workspace/src/steps/prepare.py	2026-10-16 15:03:34.749976830 +0000
+@@ -1,20 +1,17 @@
+ """Per-run preparation of the items."""
+-from ..common.options import merge_options
+-from ..common.settings import base_terms, schedule_terms
++from ..core.accounts import account_terms
+ from ..core.pipeline import step
+-from ..core.terms import terms_from
+ 
+ 
+ @step("resolve_terms")
+ def resolve_terms(context):
+     """Attach the payment terms to every item; the terms are looked up once per schedule and shared."""
+-    base = base_terms()
+     resolved = {}
+     for item in context["items"]:
+-        schedule = item["account"].schedule
++        account = item["account"]
++        schedule = account.schedule
+         if schedule not in resolved:
+-            plan = schedule_terms(schedule)
+-            resolved[schedule] = terms_from(merge_options(plan, base))
++            resolved[schedule] = account_terms(account)
+         item["terms"] = resolved[schedule]
+     return context
+ 

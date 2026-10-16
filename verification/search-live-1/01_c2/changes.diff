@@ -1,0 +1,12 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/ledger/src/steps/prepare.py runs/search_live_1/01_c2/live_ledger_terms_c/workspace/src/steps/prepare.py
+--- fixtures/repos/ledger/src/steps/prepare.py	2026-10-16 13:34:29.901988337 +0000
++++ runs/search_live_1/01_c2/live_ledger_terms_c/workspace/src/steps/prepare.py	2026-10-16 15:02:02.924308275 +0000
+@@ -14,7 +14,7 @@
+         schedule = item["account"].schedule
+         if schedule not in resolved:
+             plan = schedule_terms(schedule)
+-            resolved[schedule] = terms_from(merge_options(plan, base))
++            resolved[schedule] = terms_from(merge_options(base, plan))
+         item["terms"] = resolved[schedule]
+     return context
+ 
