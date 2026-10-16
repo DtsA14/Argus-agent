@@ -39,8 +39,24 @@ cd ~/Argus-agent && (set -a; . ~/.config/argus/env; set +a; ARGUS_LIVE=1 ARGUS_S
 - `scripts/run_series.py` menjalankan setiap run lewat `scripts/run_eval.py --mode live`, dengan `--max-total-usd 0.50`
   per run, ke direktori sendiri `runs/search_live_1/<urutan>_<run>`.
 - `run_eval` menolak direktori yang tidak kosong, sehingga hasil tidak pernah tercampur atau dipakai ulang.
-- **Seri berhenti** pada run pertama yang berakhir `BLOCKED` atau `FAILED_BUDGET`, tanpa status, atau tanpa laporan.
-  Run sisanya tidak dijalankan dan tidak diulang. `FAILED_ACCEPTANCE` adalah data dan tidak menghentikan seri.
+- **Seri berhenti** pada run pertama yang memenuhi salah satu kondisi ini:
+  - berakhir `BLOCKED` atau `FAILED_BUDGET`;
+  - `run_eval` keluar dengan kode bukan nol, **walaupun laporannya ada**;
+  - tanpa laporan;
+  - task tanpa status.
+
+  Run sisanya tidak dijalankan dan tidak diulang. `series.json` selalu ditulis, dengan `stopped` (run dan alasan,
+  termasuk stderr untuk exit bukan nol). Di mode live, `run_eval` keluar 0 untuk setiap hasil yang terskor,
+  termasuk `FAILED_ACCEPTANCE`, jadi exit bukan nol tidak pernah merupakan hasil. `FAILED_ACCEPTANCE` adalah data dan
+  tidak menghentikan seri.
+- Tes `tests/test_run_series.py` (run_eval diganti tiruan) mencakup:
+  - exit bukan nol dengan laporan ada → seri berhenti, run berikutnya tidak dijalankan, `series.json` berisi
+    alasannya;
+  - `FAILED_ACCEPTANCE` → seri lanjut;
+  - `BLOCKED`, `FAILED_BUDGET`, tanpa status, tanpa laporan, dan exit 2 → seri berhenti;
+  - urutan yang berulang ditolak.
+
+  Dua mutan tertangkap: tanpa cek exit code (2 tes gagal) dan `series.json` tidak ditulis saat berhenti (6 tes gagal).
 - Dry run dengan model palsu (mode `reference`, urutan yang sama) di main `207faaf`: 9 dari 9 lulus dalam 45 detik.
   Jalur berhenti juga diuji: run pertama ditolak, sehingga run kedua tidak dijalankan dan `series.json` tetap
   tertulis.
