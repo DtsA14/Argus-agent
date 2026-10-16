@@ -142,6 +142,16 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
     return attempt
 
 
+def test_status(status):
+    """A required test's status as the parser recorded it. None: the test is not in the output at all. "": it ran
+    but unittest printed no single status for it (a test whose subTests failed reports them separately)."""
+    if status is None:
+        return "did not run"
+    if status == "":
+        return "not ok (no single status in the unittest output)"
+    return status
+
+
 def feedback_from(verdict, limit=10, paths=20):
     """What the next attempt is told, all of it facts from the harness's own verdict on the workspace the attempt
     left: every acceptance criterion not met with its reason, every validation with its test counts and required
@@ -156,7 +166,7 @@ def feedback_from(verdict, limit=10, paths=20):
             must = ev.get("must_pass") or {}
             if must:
                 line += "; required tests: " + ", ".join(
-                    f"{t.rsplit('.', 1)[-1]} {s or 'did not run'}" for t, s in list(must.items())[:paths])
+                    f"{t.rsplit('.', 1)[-1]} {test_status(s)}" for t, s in list(must.items())[:paths])
             checks.append(line)
         elif changed is None and isinstance(ev.get("diff"), dict):
             d = ev["diff"]

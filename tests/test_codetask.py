@@ -455,3 +455,17 @@ def test_a_checkpoint_with_the_older_feedback_form_still_renders_it():
     from codetask.agent import task_prompt
     p = task_prompt(CONTRACT, ["validation:target: exit code 1"])
     assert "The previous attempt did not meet the contract. The harness found:\n  - validation:target: exit code 1" in p
+
+
+def test_required_test_statuses_are_reported_as_the_parser_recorded_them():
+    # A test whose subTests failed has no single status in unittest's output (the parser records ""): it ran and is
+    # not ok. Only a test missing from the output (None) "did not run".
+    from codetask.agent import feedback_from
+    must = {"t.C.test_ok": "ok", "t.C.test_subtests": "", "t.C.test_missing": None, "t.C.test_fail": "FAIL"}
+    verdict = {"criteria": [{"id": "validation:target", "status": "fail", "reason": "x",
+                             "evidence": {"tests_run": 3, "failures": 4, "errors": 0, "skipped": 0,
+                                          "must_pass": must}}]}
+    (line,) = [c for c in feedback_from(verdict)["checks"] if c.startswith("validation:target")]
+    assert "test_ok ok" in line and "test_fail FAIL" in line and "test_missing did not run" in line
+    assert "test_subtests not ok (no single status in the unittest output)" in line
+    assert "test_subtests did not run" not in line
