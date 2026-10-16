@@ -1,6 +1,7 @@
 # Task repo besar dengan `search_files`: desain (untuk review sebelum fixture)
 
-Status: **draf**, 2026-10-16. Belum ada fixture, kontrak, atau run. Arah dari review PR #50: satu task repo besar,
+Status: desain disetujui (PR #51); fixture dan pengukuran model palsu selesai (bagian 5), 2026-10-16.
+Arah dari review PR #50: satu task repo besar,
 `search_files` aktif **hanya untuk task itu**, dan tiga kondisi pembanding diukur dengan model palsu sebelum ada
 preflight live.
 
@@ -72,3 +73,67 @@ mutasi.
   sungguhan.
 - Simbol `active_rules` tetap bisa ditemukan agen sungguhan lewat baris `active_rules(` di `checkout/cart.py`. Itu
   memang jalur diagnosis yang wajar, dan yang diuji adalah apakah ia menempuh jalur itu dalam budget.
+
+## 5. Hasil (model palsu, sandbox asli, biaya nol)
+
+Fixture `fixtures/repos/shop/` (39 modul, sekitar 90 KB), kontrak `shop_coupon_leak` dengan `"tools": ["search_files"]`.
+Semua run di VM (aarch64) dengan sandbox Docker sungguhan. Biaya di bawah adalah **estimasi** dari penghitung token
+terkalibrasi (MEASURE_CONTEXT_B, galat ≤ 10%) dan harga Sonnet, bukan tagihan.
+
+### Benchmark-nya sendiri
+
+| Varian kode | Tes target (5) |
+|---|---|
+| bug asli | 5 gagal |
+| referensi: `active_rules` mengembalikan salinan | semua lulus |
+| tambalan dangkal: salin hanya di `checkout/cart.py` | 2 gagal (quote setelah checkout berkupon, dan sebaliknya) |
+| salin di kedua pemanggil | semua lulus |
+
+Baris terakhir adalah **perbaikan alternatif yang sah**: ia memenuhi tes, walaupun tidak memperbaiki kontrak
+`active_rules` di sumbernya. Benchmark menerimanya, dan itu disengaja: yang dinilai adalah perilaku, bukan lokasi patch.
+
+- Mode `reference`: PASS, `DONE`, jujur, 7 panggilan, $0.0056.
+- Mode `wrong` (tambalan dangkal + klaim `issue_fixed`): `FAILED_ACCEPTANCE`, tertangkap hanya pada `issue_fixed`,
+  benchmark OK.
+- **Mutan validasi** (`judge_result` selalu `pass`): tambalan dangkal lolos `DONE`, dan eval melaporkan
+  **benchmark `BROKEN`**. Mutan dikembalikan sesudahnya.
+
+### Empat kondisi (`scripts/measure_context.py shop`, loop agen dan `run_code_task` penuh)
+
+| Kondisi | Hasil | Attempt | Token per attempt | File dibaca | Pencarian | Estimasi biaya |
+|---|---|---|---|---|---|---|
+| tanpa pencarian, naif (urutan listing, 5 file per langkah) | `FAILED_ACCEPTANCE` (stagnan) | 2, keduanya `reservation_exhausted` | 27.829 / 28.136 | 24 | 0 | $0.119 |
+| tanpa pencarian, terinformasi (hanya `checkout/`, `discounts/`, `quotes/`, `pricing/`) | `FAILED_ACCEPTANCE` (stagnan) | 2, keduanya `reservation_exhausted` | 26.868 / 27.177 | 26 | 0 | $0.116 |
+| pencarian efektif | **`DONE`** | 1 | **28.436** | 2 | 3 | $0.061 |
+| pencarian tidak efektif (mulai dari `"discount"`, membaca `pricing/rounding.py`) | `FAILED_ACCEPTANCE` (stagnan) | 2, keduanya `reservation_exhausted` | 27.170 / 27.662 | 6 | 6 | $0.117 |
+
+Syarat review terpenuhi: baseline terinformasi hanya membaca empat direktori yang relevan (13 file per attempt), dan
+tetap habis karena biaya konteks, bukan karena membaca file tak terkait tanpa batas.
+
+### Yang ditunjukkan data (fakta, lalu hipotesis)
+
+**Fakta:**
+1. Di repo ini, tanpa pencarian, task tidak selesai dalam budget, bahkan kalau model tahu direktori mana yang relevan.
+   Dengan pencarian dan jalur yang hampir optimal, task selesai di attempt pertama dengan biaya sekitar setengahnya.
+2. **Marginnya sangat tipis.** Jalur efektif memakai 9 panggilan dan 28.436 dari 30.000 token, menyisakan 1.564 token.
+   Itu kurang dari satu langkah tambahan (input per panggilan sudah 3–4 ribu token di akhir).
+3. Satu belokan saja sudah cukup untuk gagal: kondisi tidak efektif hanya menambah satu pencarian umum dan satu file
+   salah (sekitar 2,6 KB). Panggilan ke-9 (`RunValidation` setelah menulis) ditolak sebelum mengirim, karena butuh
+   input sekitar 4.540 token sementara sisa reservasi 2.830.
+4. Pengikatnya adalah **jumlah langkah**, bukan isi file. Biaya tetap per panggilan (system prompt, issue, skema tool)
+   sekitar 1.770 token, dan dikirim ulang di setiap panggilan: 9 × 1.770 ≈ 16 ribu, lebih dari separuh input jalur
+   efektif.
+
+**Asumsi:** model palsu memanggil satu tool per langkah. Model sungguhan bisa memanggil beberapa tool dalam satu
+langkah (di live #4–#6 agen membaca beberapa file sekaligus), sehingga jumlah langkahnya bisa lebih sedikit.
+
+**Hipotesis untuk live (belum diuji):** dengan `attempt_tokens` 30.000, task ini hanya lulus kalau agen menemukan jalur
+yang hampir optimal di attempt pertama, atau memanggil beberapa tool per langkah. Hasil live `FAILED_ACCEPTANCE`
+karena `reservation_exhausted` adalah hasil eksperimen yang sah, bukan anomali harness.
+
+### Keputusan yang terbuka (tidak diubah di PR ini)
+
+- Apakah budget per attempt dibiarkan 30.000 untuk preflight live (mengukur agen apa adanya), atau task ini diberi
+  margin lebih. Usulku dibiarkan dulu: yang ingin kita ukur adalah apakah agen menempuh jalur itu dalam budget yang
+  sama dengan task lain. Mengubah budget atau prompt adalah keputusan terpisah setelah ada data live.
+- Preflight live tetap menunggu persetujuan eksplisit.

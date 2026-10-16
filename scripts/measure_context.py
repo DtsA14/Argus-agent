@@ -285,8 +285,99 @@ def simulate_search():
                       f"{r['max_input']:>6} {r['total']:>6} | {r['end']}{note}")
 
 
+# ---- the large-repo task shop_coupon_leak: the full run (setup, attempts, acceptance with the real sandbox) -------
+
+SHOP_CONTRACT = ROOT / "fixtures" / "contracts" / "shop_coupon_leak.json"
+
+
+def shop_plan(condition):
+    """Explicit scripted moves. The model does not know `active_rules` up front: it learns it from cart.py."""
+    import runpy
+    contract = json.loads(SHOP_CONTRACT.read_text(encoding="utf-8"))
+    repo = ROOT / contract["inputs"]["workspace"]
+    src = sorted(p.relative_to(repo).as_posix() for p in repo.joinpath("src").rglob("*.py")
+                 if p.name != "__init__.py")
+    fixed = repo.joinpath("src/discounts/registry.py").read_text(encoding="utf-8").replace(
+        "    return RULES\n", "    return list(RULES)\n")
+    read = lambda fs: [("ReadFile", {"path": f}) for f in fs]  # noqa: E731
+    find = lambda t, p="": [("SearchFiles", {"text": t, **({"path": p} if p else {})})]  # noqa: E731
+    first = [[("ListFiles", {})]]
+    if condition == "no_search_informed":       # reads the directories its names point at, five files per step
+        wanted = [f for f in src if f.split("/")[1] in ("checkout", "discounts", "quotes", "pricing")]
+        steps = [read(wanted[k:k + 5]) for k in range(0, len(wanted), 5)]
+    elif condition == "no_search_naive":        # reads in listing order, five files per step, until the registry
+        upto = src[:src.index("src/discounts/registry.py") + 1]
+        steps = [read(upto[k:k + 5]) for k in range(0, len(upto), 5)]
+    elif condition == "search_effective":
+        steps = [find("coupon"), find("coupon", "src/checkout"), read(["src/checkout/cart.py"]),
+                 find("def active_rules"), read(["src/discounts/registry.py"])]
+    elif condition == "search_ineffective":
+        steps = [find("discount"), read(["src/pricing/rounding.py"]), find("coupon", "src/checkout"),
+                 read(["src/checkout/cart.py"]), find("def active_rules"), read(["src/discounts/registry.py"])]
+    else:
+        raise ValueError(condition)
+    return first + steps + [[("WriteFile", {"path": "src/discounts/registry.py", "content": fixed})],
+                            [("RunValidation", {"id": "target"})],
+                            [("Finish", {"claims": [{"claim": "file_changed", "path": "src/discounts/registry.py"},
+                                                    {"claim": "issue_fixed", "evidence": "validation:target"}],
+                                         "summary": "active_rules now returns a copy."})]]
+
+
+def shop_one(condition, runs_dir):
+    from codetask.run import run_code_task
+    from models.fake import CallableChatModel
+    cfg = load_config()
+    cfg["roles"]["coder"]["model"] = "anthropic:claude-sonnet-5-5"       # priced as the live model would be
+    cfg["sandbox"] = {**(cfg.get("sandbox") or {}), "kind": "docker"}
+    contract = json.loads(SHOP_CONTRACT.read_text(encoding="utf-8"))
+    if condition.startswith("no_search"):
+        contract.pop("tools")                                             # the baseline cannot search
+    cpath = Path(runs_dir) / f"{condition}.contract.json"
+    cpath.parent.mkdir(parents=True, exist_ok=True)
+    cpath.write_text(json.dumps(contract), encoding="utf-8")
+    plan = shop_plan(condition)
+    allowed = cfg["tools"]["coder"] + ct_contract_tools(contract)
+
+    def respond(messages):
+        step = sum(isinstance(m, AIMessage) for m in messages)
+        calls = [{"name": n, "args": a, "id": f"c{step}_{j}"} for j, (n, a) in enumerate(plan[min(step, len(plan) - 1)])]
+        out_chars = sum(len(json.dumps(c["args"])) + len(c["name"]) for c in calls)
+        return AIMessage(content="", tool_calls=calls, usage_metadata={
+            "input_tokens": estimate(messages, offered(allowed)), "output_tokens": int(20 + B * out_chars),
+            "total_tokens": 0})
+
+    hl.provider_counter = lambda model, margin: (estimate, True)
+    r = run_code_task(contract_path=cpath, run_id=condition, runs_dir=runs_dir, cfg=cfg,
+                      models={"coder": CallableChatModel(respond=respond)})
+    evs = [json.loads(line) for line in (Path(runs_dir) / condition / "events.jsonl").read_text().splitlines()]
+    count = lambda tool: sum(1 for e in evs if e["event"] == "tool_call" and e.get("tool") == tool)  # noqa: E731
+    per_attempt = {}
+    for e in evs:
+        if e["event"] == "llm_call" and e["status"] == "ok":
+            per_attempt[e["iteration"]] = per_attempt.get(e["iteration"], 0) + e["tokens"]
+    ends = [e["reason"] for e in evs if e["event"] == "attempt_end"]
+    return {"condition": condition, "status": r["status"], "stop": r["stop_reason"], "attempts": r["attempts"],
+            "attempt_ends": ends, "tokens_per_attempt": per_attempt, "usd_estimate": round(r["usd_billed"], 4),
+            "files_read": count("read_file"), "searches": count("search_files"), "tools": r["tools"]}
+
+
+def ct_contract_tools(contract):
+    from acceptance.contract import contract_tools
+    return contract_tools(contract)
+
+
+def shop():
+    print("estimates: billed input = 407 + 0.3186 x chars (calibrated, max error 9.4%), priced as Sonnet 5.5; "
+          "attempt_tokens 30000; real sandbox validation and acceptance")
+    with tempfile.TemporaryDirectory() as tmp:
+        for condition in ("no_search_naive", "no_search_informed", "search_effective", "search_ineffective"):
+            print(json.dumps(shop_one(condition, Path(tmp) / "runs")))
+
+
 if __name__ == "__main__":
-    if sys.argv[1] == "calibrate":
+    if sys.argv[1] == "shop":
+        shop()
+    elif sys.argv[1] == "calibrate":
         calibrate(sys.argv[2:])
     elif sys.argv[1] == "simulate":
         simulate()
