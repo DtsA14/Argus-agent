@@ -1,0 +1,9 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/reports/src/keys.py runs/eval_live_6/live_cache_key/workspace/src/keys.py
+--- fixtures/repos/reports/src/keys.py	2026-10-16 06:22:00.457606176 +0000
++++ runs/eval_live_6/live_cache_key/workspace/src/keys.py	2026-10-16 06:27:01.153269249 +0000
+@@ -3,4 +3,4 @@
+ 
+ def report_key(customer, period, currency):
+     """Cache key for a customer's figures in a period."""
+-    return (customer, period)
++    return (customer, period, currency)
