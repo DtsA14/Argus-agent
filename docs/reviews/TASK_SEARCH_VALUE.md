@@ -123,3 +123,45 @@ EOF
 git push -q -u origin task-search-design 2>&1|tail -1; gh pr create --base main --head task-search-design --title "Design: task to measure the value of search_files (draft for review)" --body "Design only, no fixture, code or run. See \`docs/reviews/TASK_SEARCH_VALUE.md\`. Follows live #7, where the agent finished \`shop_coupon_leak\` without using SearchFiles. Open questions for review: the bug (caller swaps \`merge_options\` arguments; contract + config + caller), the three conditions as contract variants in a separate experiment manifest (no harness change), and a 3 × 3 live plan to be approved separately.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+## 6. Hasil fixture pertama (`fixtures/repos/ledger`, branch `fixture-search-value`, biaya nol)
+
+**Penyimpangan dari desain:** bug dipindah dari `jobs/nightly.py` ke `core/ledger.py` (`prepare_lines` memanggil
+`merge_options(plan, base)`). Alasannya, tes target harus mengimpor titik masuknya. Kalau bug ada di titik masuk,
+file tes sudah menunjuk langsung ke sana.
+
+**Varian kode (tes regresi 8, tes target 5):**
+
+| Varian | Hasil |
+|---|---|
+| bug | 5 tes target gagal |
+| referensi `merge_options(base, plan)` | lulus |
+| alternatif sah dengan keyword argument | lulus |
+| tambalan dangkal `eu` | 4 tes target gagal (tes `eu` sendiri lulus) |
+| jalur halaman akun ikut dibuat salah | 4 tes target gagal |
+
+**Mode eval:**
+- `reference` A/B/C: DONE. Tool efektif dari `result.json` dan `tools_effective`: A/B lima tool, C empat tool.
+- Di C, panggilan `SearchFiles` dijawab "Denied" dan tercatat sebagai `tool_denied`.
+- `wrong`: tertangkap hanya pada `issue_fixed`.
+
+**Mutan, semua tertangkap:**
+- Validasi yang selalu lulus → ketiga varian `BROKEN`.
+- Petunjuk di B, nama fungsi di issue, `tools` di C, dan batas C yang berbeda → tes guard gagal.
+
+**Simulasi model palsu (3 tool per langkah, sandbox asli):**
+
+| Strategi | Kontrak | Hasil | Token |
+|---|---|---|---|
+| tanpa search, ikuti impor dari tes target | C | DONE | **15.982** |
+| tanpa search, baca direktori yang terdengar relevan | C | `reservation_exhausted` ×2 | 28.226 / 29.215 |
+| search "efektif" | A | DONE | 19.889 |
+| search kata umum dulu | A | DONE | 29.761 (nyaris batas) |
+
+**Temuan yang mengubah desain.** Jalur termurah ternyata **tanpa** search: dari tes target ikuti impor `cycle.py` →
+`ledger.py` → `options.py`. Nama path yang netral tidak menghalanginya, karena impor eksplisit menunjuk ke file
+berikutnya. Naskah "search efektif" juga tidak realistis: ia mencari `merge_options(`, padahal nama itu baru terlihat
+setelah `ledger.py` dibaca.
+
+Jadi dalam bentuk sekarang, search tidak punya keunggulan nyata atas agen yang mengikuti impor. A vs C kemungkinan
+hanya mengukur strategi baca agen, bukan nilai search. Fixture ini **belum** dipakai untuk live. Keputusan desain
+berikutnya menunggu review.
