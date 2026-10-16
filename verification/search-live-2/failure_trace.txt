@@ -1,0 +1,73 @@
+##### 02_b3
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py)
+  it0 s2 ok      in  4708 | SearchFiles("terms") ReadFile(src/core/accounts.py)
+        text: Now where the pipeline sets item["terms"].
+  it0 s3 ok      in  5179 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py)
+  it0 s4 ok      in  6790 | ReadFile(src/common/options.py)
+  it0 s5 ok      in  7076 | WriteFile(src/steps/prepare.py)
+        text: Arguments are swapped in prepare.py.
+  it1 s0 ok      in  2230 | ListFiles()
+  it1 s1 ok      in  2887 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it1 s2 ok      in  4721 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json) RunValidation(target)
+  it1 s3 ok      in  6687 | SearchFiles(@step() ReadFile(src/core/terms.py) ReadFile(src/core/accounts.py)
+  it1 s4 ok      in  7606 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py) ReadFile(src/steps/intake.py) ReadFile(src/steps/output.py)
+  it1 s5 refused in 11646 | 
+##### 03_a1
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(src/config/schedules.json) ReadFile(src/plugins/fee_a.py) ReadFile(src/plugins/fee_b.py) ReadFile(tests/test_consistency.py)
+  it0 s2 ok      in  4026 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/common/settings.py) ReadFile(src/core/pipeline.py)
+  it0 s3 ok      in  5499 | ReadFile(src/config/pipeline.json) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py) SearchFiles(@step()
+  it0 s4 ok      in  6593 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py) ReadFile(src/common/options.py)
+  it0 s5 refused in  9312 | 
+  it1 s0 ok      in  2210 | ListFiles()
+  it1 s1 ok      in  2867 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json)
+  it1 s2 ok      in  4227 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/common/settings.py) ReadFile(src/core/pipeline.py)
+  it1 s3 ok      in  5700 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it1 s4 ok      in  8000 | ReadFile(src/common/options.py)
+  it1 s5 refused in  8281 | 
+##### 05_b1
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py) ReadFile(src/config/schedules.json)
+  it0 s2 ok      in  4935 | SearchFiles("terms") ReadFile(src/core/accounts.py)
+        text: Now where the pipeline builds item terms.
+  it0 s3 ok      in  5404 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py)
+  it0 s4 ok      in  7015 | ReadFile(src/common/options.py)
+        text: Merge order is swapped; check merge_options.
+  it0 s5 refused in  7285 | 
+  it1 s0 ok      in  2230 | ListFiles()
+  it1 s1 ok      in  2887 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it1 s2 ok      in  4721 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json) RunValidation(target)
+  it1 s3 ok      in  6687 | SearchFiles(@step() ReadFile(src/core/terms.py) ReadFile(src/core/accounts.py)
+  it1 s4 ok      in  7606 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py) ReadFile(src/steps/intake.py) ReadFile(src/steps/output.py)
+  it1 s5 refused in 11646 | 
+##### 07_b2
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py) ReadFile(src/config/schedules.json)
+  it0 s2 ok      in  4935 | ReadFile(src/core/accounts.py) SearchFiles(src)
+        text: Now the pipeline's terms source.
+  it0 s3 ok      in  5423 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py)
+  it0 s4 ok      in  7034 | ReadFile(src/common/options.py) ReadFile(src/config/pipeline.json)
+        text: Merge order is swapped. Check merge_options and the pipeline config.
+  it0 s5 refused in  7515 | 
+  it1 s0 ok      in  2230 | ListFiles()
+  it1 s1 ok      in  2887 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it1 s2 ok      in  4721 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json) ReadFile(src/common/settings.py)
+  it1 s3 ok      in  5720 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it1 s4 ok      in  8020 | ReadFile(src/common/options.py) SearchFiles(@step()
+  it1 s5 refused in  8655 | 
+##### 09_a3
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4259 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json)
+  it0 s3 ok      in  4946 | SearchFiles(resolve_terms) SearchFiles(assess_fees) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it0 s4 ok      in  5911 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py)
+  it0 s5 ok      in  8357 | ReadFile(src/common/options.py)
+        text: Merge order is swapped in prepare.py. Check merge_options.
+  it0 s6 refused in  8634 | 
+  it1 s0 ok      in  2210 | ListFiles()
+  it1 s1 ok      in  2867 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json)
+  it1 s2 ok      in  4227 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/common/settings.py) ReadFile(src/core/pipeline.py)
+  it1 s3 ok      in  5700 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it1 s4 ok      in  8000 | ReadFile(src/common/options.py)
+  it1 s5 refused in  8291 | 
