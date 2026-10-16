@@ -99,6 +99,16 @@ class Reservation:
             self.violated = True
 
 
+def reply_details(msg):
+    """What the provider reported about how a reply ended, for the ledger: the reasoning (thinking) tokens included
+    in output_tokens and the stop reason. None when the provider did not report it; never inferred."""
+    usage = getattr(msg, "usage_metadata", None) or {}
+    md = getattr(msg, "response_metadata", None) or {}
+    details = usage.get("output_token_details") or {}
+    return {"reasoning_tokens": details.get("reasoning"),
+            "stop_reason": md.get("stop_reason") or md.get("finish_reason")}
+
+
 def is_truncated(msg):
     """True when the provider stopped the reply at max_tokens: its text or tool arguments may be cut
     off, so nothing in it may be executed or accepted. Anthropic: stop_reason "max_tokens"; OpenAI and
@@ -358,7 +368,8 @@ class LLMCaller:
             try:
                 emit("llm_call", call_id=call_id, status="ok", attempt=attempt, est_input=est_in, max_tokens=cap,
                      input_tokens=tin, output_tokens=tout, cache_read=cached, tokens=tok,
-                     usd_nano=nano, usd=_usd(nano), charged=charged, latency_s=latency, truncated=truncated)
+                     usd_nano=nano, usd=_usd(nano), charged=charged, latency_s=latency, truncated=truncated,
+                     **reply_details(msg))
             finally:
                 reservation.charge(tok, nano)
             if truncated:

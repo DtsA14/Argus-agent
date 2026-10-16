@@ -115,7 +115,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
     lim0 = settings(cfg)
     caller = LLMCaller(cfg, cfg["code_task"]["role"], log, model=(models or {}).get(cfg["code_task"]["role"]))
     from tools.sandbox import tool_version
-    versions = {"ListFiles": "1", "SearchFiles": "1", "ReadFile": "1", "WriteFile": "1", "Finish": "1",
+    versions = {"ListFiles": "1", "SearchFiles": "1", "ReadFile": "1", "WriteFile": "1", "EditFile": "1", "Finish": "1",
                 "RunValidation": f"1:{tool_version(scfg)}"}
     attempt_fn = make_attempt(caller, memo, log, tokens=lim0["attempt_tokens"], usd=lim0["attempt_usd"],
                               max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher)
@@ -176,7 +176,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                         blocked="invalid_contract")
         if effective_tools(contract) != tools:
             log.emit("tools_config_changed", frozen=tools, current=effective_tools(contract))
-        box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate)
+        box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate, journal=run_dir / "tool_journal.jsonl",
+                      crasher=crasher)
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None)
         return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"]},
                 "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}

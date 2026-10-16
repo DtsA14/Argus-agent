@@ -24,7 +24,7 @@ KEYS = {"contract", "version", "inputs", "scope", "artifacts", "validation", "ju
 OPTIONAL_KEYS = {"tools"}
 # Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
 # Only these, and only by adding: a contract can never grant anything else, nor remove a configured tool.
-CONTRACT_TOOLS = {"search_files"}
+CONTRACT_TOOLS = {"search_files", "edit_file"}
 VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass"}
 MAX_TIMEOUT_S = 600
 ID = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
