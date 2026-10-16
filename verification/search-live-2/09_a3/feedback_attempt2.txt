@@ -1,0 +1,8 @@
+The previous attempt did not meet the contract. Acceptance criteria not met:
+  - artifact:SUMMARY.json: SUMMARY.json is missing
+  - validation:target: exit code 1; unittest outcome FAILED; required test tests.test_consistency.ConsistencyTest.test_every_schedule_matches_the_account_page is ''; required test tests.test_consistency.ConsistencyTest.test_eu_fee_starts_after_two_weeks is 'FAIL'; required test tests.test_consistency.ConsistencyTest.test_
+  - claims: no valid SUMMARY.json, so no completion claim can be checked
+The harness's checks of the workspace as the previous attempt left it (the workspace is kept between attempts; the harness runs every check again after Finish):
+  - validation:unit: pass (8 tests run, 0 failures, 0 errors, 0 skipped)
+  - validation:target: fail (5 tests run, 31 failures, 0 errors, 0 skipped); required tests: test_every_schedule_matches_the_account_page did not run, test_eu_fee_starts_after_two_weeks FAIL, test_nordic_minimum_fee FAIL, test_partner_percentage FAIL, test_mixed_schedules_in_one_run FAIL
+  - files changed from the original: none

@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In src/steps/prepare.py, resolve_terms now builds the payment terms separately for each schedule. Before, the terms were shared and could carry one schedule's values into another, so EU accounts got the wrong late-fee start in the export."
+}

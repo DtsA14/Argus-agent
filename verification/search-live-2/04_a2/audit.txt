@@ -1,0 +1,39 @@
+effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files']
+effective system prompt sha256 9f9e718c7ae339f8666475159e8867e97c048e4c3c48ae8421435389f61882a6
+llm_call_started 8, llm_call 9 (ok 8, refused 1)
+  it 0 step  0 ok       hash ok in 1768 out 28 usd 0.003816 
+      -> ListFiles {}
+  it 0 step  1 ok       hash ok in 2425 out 222 usd 0.00707 
+      -> ReadFile {"path": "tests/test_consistency.py"}
+      -> ReadFile {"path": "src/config/schedules.json"}
+      -> ReadFile {"path": "src/core/pipeline.py"}
+      -> ReadFile {"path": "src/config/pipeline.json"}
+  it 0 step  2 ok       hash ok in 4434 out 222 usd 0.011088 
+      -> ReadFile {"path": "src/jobs/cycle.py"}
+      -> ReadFile {"path": "src/jobs/query.py"}
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ReadFile {"path": "src/steps/apply.py"}
+  it 0 step  3 ok       hash ok in 6625 out 241 usd 0.01566 
+      -> ReadFile {"path": "src/common/options.py"}
+      -> ReadFile {"path": "src/common/settings.py"}
+      -> ReadFile {"path": "src/core/accounts.py"}
+      -> ReadFile {"path": "src/core/terms.py"}
+  it 0 step  4 ok       hash ok in 7857 out 948 usd 0.025194 
+      -> WriteFile {"content": "\"\"\"Per-run preparation of the items.\"\"\"\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms
+      -> RunValidation {"id": "target"}
+      -> RunValidation {"id": "unit"}
+  it 0 step  5 refused  hash ok in 10006 out None usd None tokens_left 5230
+  it 1 step  0 ok       hash ok in 2080 out 129 usd 0.00545 
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ListFiles {}
+  it 1 step  1 ok       hash ok in 3655 out 108 usd 0.00839 
+      -> ReadFile {"path": "src/common/options.py"}
+  it 1 step  2 ok       hash ok in 3962 out 262 usd 0.010544 
+      -> Finish {"claims": [{"claim": "file_changed", "path": "src/steps/prepare.py"}, {"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": "tests_pass", "evidence
+prompt_hash checked 9, mismatches 0
+  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'reservation_exhausted', 'steps': 5, 'node': 'agent', 'task': 'ledger_terms_a', 'iteration': 0}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'finished', 'steps': 2, 'node': 'agent', 'task': 'ledger_terms_a', 'iteration': 1}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', 'blocked_reason': None}
+result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': 2, 'usd_billed': 0.087212, 'llm_calls': 8, 'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files']}
