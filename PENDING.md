@@ -88,7 +88,8 @@ Urutan disarankan, karena saling bergantung.
   - data asli `round_conflict` dari eksperimen #1 tetap tercatat: klaim palsu di attempt 0, pulih di akhir, `eval_pass` hasil akhir tetap benar.
 
   **Batas kesimpulan:** ini membuktikan schema mengizinkan selesai tanpa klaim dan evaluator menghitungnya dengan benar. Ini **belum** membuktikan bahwa model tidak lagi terdorong mengarang klaim; itu hipotesis perilaku yang hanya bisa diuji dengan eksperimen live terkontrol
-- [ ] Putuskan apakah eksperimen live #2 diperlukan untuk hipotesis itu, lalu baru task yang lebih sulit
+- [x] **Eksperimen live #2** (`round_conflict` saja, `f9e525a`, `claims_v2`, `docs/reviews/EVAL_LIVE_2.md`): `FAILED_ACCEPTANCE` dengan `claims: []`, tanpa klaim palsu di attempt mana pun, tanpa perubahan file, berhenti stagnan setelah 2 attempt, **$0.0391** (live #1: $0.0888, 3 attempt, 1 klaim palsu, perubahan docstring). Satu observasi yang mendukung hipotesis, bukan bukti statistik
+- [ ] Putuskan: replikasi `round_conflict`, atau lanjut ke task yang lebih sulit
 - [ ] Perluasan benchmark berdasarkan kegagalan nyata dari eksperimen itu, lalu bekukan hash v1
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
