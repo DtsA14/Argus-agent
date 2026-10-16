@@ -324,18 +324,22 @@ def shop_plan(condition):
 
 
 def shop_one(condition, runs_dir):
+    contract = json.loads(SHOP_CONTRACT.read_text(encoding="utf-8"))
+    if condition.startswith("no_search"):
+        contract.pop("tools")                                             # the baseline cannot search
+    return full_run(contract, shop_plan(condition), condition, runs_dir)
+
+
+def full_run(contract, plan, condition, runs_dir):
+    """One scripted run of a contract through run_code_task with the real sandbox and the calibrated counter."""
     from codetask.run import run_code_task
     from models.fake import CallableChatModel
     cfg = load_config()
     cfg["roles"]["coder"]["model"] = "anthropic:claude-sonnet-5-5"       # priced as the live model would be
     cfg["sandbox"] = {**(cfg.get("sandbox") or {}), "kind": "docker"}
-    contract = json.loads(SHOP_CONTRACT.read_text(encoding="utf-8"))
-    if condition.startswith("no_search"):
-        contract.pop("tools")                                             # the baseline cannot search
     cpath = Path(runs_dir) / f"{condition}.contract.json"
     cpath.parent.mkdir(parents=True, exist_ok=True)
     cpath.write_text(json.dumps(contract), encoding="utf-8")
-    plan = shop_plan(condition)
     allowed = cfg["tools"]["coder"] + ct_contract_tools(contract)
 
     def respond(messages):
@@ -361,6 +365,54 @@ def shop_one(condition, runs_dir):
             "files_read": count("read_file"), "searches": count("search_files"), "tools": r["tools"]}
 
 
+# ---- the search-value experiment (evals/search_v1): several tool calls per step, as live #7 showed -------------
+
+LEDGER = "fixtures/contracts/ledger_terms_{}.json"
+
+
+def ledger_plan(condition):
+    """Explicit scripted moves, three files per step. The model does not know `prepare_lines` up front."""
+    contract = json.loads((ROOT / LEDGER.format("a")).read_text(encoding="utf-8"))
+    repo = ROOT / contract["inputs"]["workspace"]
+    fixed = repo.joinpath("src/core/ledger.py").read_text(encoding="utf-8").replace(
+        "merge_options(plan, base)", "merge_options(base, plan)")
+    read = lambda fs: [("ReadFile", {"path": f}) for f in fs]  # noqa: E731
+    find = lambda t, p="": [("SearchFiles", {"text": t, **({"path": p} if p else {})})]  # noqa: E731
+    by3 = lambda fs: [read(fs[k:k + 3]) for k in range(0, len(fs), 3)]  # noqa: E731
+    if condition == "no_search_imports":        # from the target test along the imports, the shortest honest path
+        steps = [read(["tests/test_consistency.py", "src/jobs/cycle.py", "src/jobs/query.py"]),
+                 read(["src/core/ledger.py", "src/core/accounts.py", "src/common/options.py"])]
+    elif condition == "no_search_dirs":         # the directories that sound relevant, three files per step
+        files = sorted(p.relative_to(repo).as_posix() for d in ("jobs", "core", "common")
+                       for p in repo.joinpath("src", d).glob("*.py") if p.name != "__init__.py")
+        steps = by3(["src/config/schedules.json"] + files[:files.index("src/core/ledger.py") + 1])
+    elif condition == "search_effective":
+        steps = [read(["tests/test_consistency.py", "src/jobs/cycle.py"]), find("merge_options("),
+                 read(["src/core/ledger.py", "src/common/options.py"])]
+    elif condition == "search_broad":           # a broad word first, one plausible wrong file, then the same path
+        steps = [find("late fee"), read(["src/plugins/fee_a.py", "src/core/terms.py"]),
+                 read(["tests/test_consistency.py", "src/jobs/cycle.py"]), find("merge_options("),
+                 read(["src/core/ledger.py", "src/common/options.py"])]
+    else:
+        raise ValueError(condition)
+    return [[("ListFiles", {})]] + steps + [
+        [("WriteFile", {"path": "src/core/ledger.py", "content": fixed}),
+         ("RunValidation", {"id": "target"}), ("RunValidation", {"id": "unit"})],
+        [("Finish", {"claims": [{"claim": "file_changed", "path": "src/core/ledger.py"},
+                                {"claim": "issue_fixed", "evidence": "validation:target"}],
+                     "summary": "the base terms were passed as the override; the arguments are now in order."})]]
+
+
+def searchvalue():
+    print("estimates: billed input = 407 + 0.3186 x chars (calibrated, max error 9.4%), priced as Sonnet 5.5; "
+          "attempt_tokens 30000; real sandbox validation and acceptance")
+    with tempfile.TemporaryDirectory() as tmp:
+        for condition, variant in (("no_search_imports", "c"), ("no_search_dirs", "c"),
+                                   ("search_effective", "a"), ("search_broad", "a")):
+            contract = json.loads((ROOT / LEDGER.format(variant)).read_text(encoding="utf-8"))
+            print(json.dumps(full_run(contract, ledger_plan(condition), condition, Path(tmp) / "runs")))
+
+
 def ct_contract_tools(contract):
     from acceptance.contract import contract_tools
     return contract_tools(contract)
@@ -377,6 +429,8 @@ def shop():
 if __name__ == "__main__":
     if sys.argv[1] == "shop":
         shop()
+    elif sys.argv[1] == "searchvalue":
+        searchvalue()
     elif sys.argv[1] == "calibrate":
         calibrate(sys.argv[2:])
     elif sys.argv[1] == "simulate":
