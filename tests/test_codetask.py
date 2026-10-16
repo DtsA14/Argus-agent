@@ -350,3 +350,108 @@ def test_a_contract_granting_another_tool_is_blocked_before_any_model_call(tmp_p
     c["tools"] = ["run_shell"]
     r, model, d = run(tmp_path, [FINISH], contract=c)
     assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+
+
+# ---- the next attempt carries the harness's own checks (docs/reviews/DESIGN_FINISH_STEP.md) ----------------------
+
+def short(**budget):
+    """Two model calls per attempt: an attempt that does not Finish leaves no SUMMARY.json."""
+    c = cfg(**budget)
+    c["code_task"]["max_steps"] = 2
+    return c
+
+
+def counted():
+    seen = []
+
+    def validate(spec, workspace, sandbox_cfg, log=None):
+        seen.append(spec["id"])
+        return fake_validate(spec, workspace, sandbox_cfg, log)
+    return validate, seen
+
+
+def human(model, n):
+    """The task message of the n-th model call (0-based)."""
+    return model.calls[n]["messages"][1].content
+
+
+def sha(text):
+    import hashlib
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+READ2 = call("ReadFile", {"path": "tests/test_calc.py"}, "r2")
+BREAK = call("WriteFile", {"path": "src/calc.py", "content": CALC}, "w2")
+
+
+def test_validated_work_without_a_summary_is_reported_with_every_blocker_and_acceptance_runs_again(tmp_path):
+    validate, seen = counted()
+    r, model, d = run(tmp_path, [READ, WRITE, FINISH], config=short(), validate=validate)
+    p = human(model, 2)
+    assert "Acceptance criteria not met:" in p
+    assert "artifact:SUMMARY.json: SUMMARY.json is missing" in p and "  - claims: no valid SUMMARY.json" in p
+    assert "validation:unit: pass (7 tests run, 0 failures" in p
+    assert "validation:target: pass" in p and "required tests: test_divide_by_zero ok" in p
+    assert "files changed from the original: src/calc.py (modified)" in p and "as the previous attempt left it" in p
+    assert r["status"] == st.DONE and len(model.calls) == 3                    # one call in the second attempt
+    assert seen == ["unit", "target", "unit", "target"]                        # acceptance ran again after Finish
+
+
+def test_a_failing_validation_is_reported_as_failing_and_an_unsupported_claim_still_fails(tmp_path):
+    r, model, d = run(tmp_path, [READ, READ2, FINISH, FINISH], config=short())
+    p = human(model, 2)
+    assert "validation:target: fail" in p and "validation:target: pass" not in p
+    assert "test_divide_by_zero FAIL" in p and "files changed from the original: none" in p
+    assert r["status"] == st.FAILED_ACCEPTANCE
+    v = json.loads((d / "verdict_1.json").read_text())
+    false = [c for c in v["criteria"] if c["id"].startswith("claim") and c["status"] == "fail"]
+    assert any("issue_fixed" in c["id"] + c["reason"] for c in false), v["criteria"]
+
+
+def test_the_feedback_comes_from_the_latest_verdict(tmp_path):
+    r, model, d = run(tmp_path, [READ, READ2, WRITE, READ2, FINISH], config=short())
+    assert "validation:target: fail" in human(model, 2)                       # after attempt 0: nothing written
+    p = human(model, 4)                                                        # after attempt 1: the fix is there
+    assert "validation:target: pass" in p and "src/calc.py (modified)" in p
+    assert r["status"] == st.DONE
+
+
+def test_old_checks_are_history_a_workspace_broken_after_them_fails(tmp_path):
+    r, model, d = run(tmp_path, [READ, WRITE, BREAK, FINISH, FINISH], config=short())
+    assert "validation:target: pass" in human(model, 2)                        # told it passed...
+    assert r["status"] == st.FAILED_ACCEPTANCE                                 # ...but the new verdict decides
+    v = json.loads((d / "verdict_1.json").read_text())
+    assert next(c for c in v["criteria"] if c["id"] == "validation:target")["status"] == "fail"
+
+
+def test_the_first_attempt_prompt_is_unchanged(tmp_path):
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    assert sha(human(model, 0)) == "56d8c4f3f2eb070af313b8aad343149e1db8de9f91b542f410ba63dfb03df5e5"
+    assert sha(model.calls[0]["messages"][0].content) == \
+        "ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0"
+
+
+def test_a_next_attempt_that_does_not_fit_the_budget_is_not_run_and_nothing_is_done(tmp_path):
+    r, model, d = run(tmp_path, [READ, WRITE, FINISH], config=short(max_usd=0.1505))
+    assert r["status"] == st.FAILED_ACCEPTANCE and r["stop_reason"] == "max_usd" and len(model.calls) == 2
+
+
+def test_a_crash_before_finish_resumes_with_the_same_feedback_and_repeats_nothing(tmp_path):
+    seen = []
+
+    def respond(messages):
+        seen.append(messages[1].content)
+        if len(seen) == 3:
+            raise Crash()
+        return [READ, WRITE][len(seen) - 1]
+    with pytest.raises(Crash):
+        run(tmp_path, [], config=short(), model=CallableChatModel(respond=respond))
+    r, model, d = run(tmp_path, [FINISH], config=short(), resume=True)
+    assert r["status"] == st.DONE and len(model.calls) == 1                     # attempt 0 is not run again
+    assert human(model, 0) == seen[2] and "validation:target: pass" in seen[2]
+
+
+def test_a_checkpoint_with_the_older_feedback_form_still_renders_it():
+    from codetask.agent import task_prompt
+    p = task_prompt(CONTRACT, ["validation:target: exit code 1"])
+    assert "The previous attempt did not meet the contract. The harness found:\n  - validation:target: exit code 1" in p
