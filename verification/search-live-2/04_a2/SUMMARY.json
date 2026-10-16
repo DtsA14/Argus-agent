@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "Fixed per-schedule terms resolution in src/steps/prepare.py so each schedule's terms are merged from its own plan (EU fee now starts at the correct time, matching the account page). Unit and target validations pass."
+}

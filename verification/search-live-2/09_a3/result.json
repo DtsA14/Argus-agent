@@ -1,0 +1,34 @@
+{
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+  "blocked_reason": null,
+  "contract_sha": "b71478deea7a2e9dc41b1f8f4c629a8b36350f87a16d0e577569705376dccd8e",
+  "verdict": {
+    "iteration": 1,
+    "outcome": "fail",
+    "failing": [
+      "artifact:SUMMARY.json",
+      "claims",
+      "validation:target"
+    ],
+    "workspace_digest": "0c52d04aad0c10be713ea788f444e5755ace06e5c1d2581cca6d91303797414c"
+  },
+  "attempt": {
+    "iteration": 1,
+    "end": "reservation_exhausted",
+    "steps": 5
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "search_files"
+  ],
+  "run_id": "live_ledger_terms_a",
+  "attempts": 2,
+  "usd_billed": 0.11681,
+  "usd_complete": true,
+  "llm_calls": 11,
+  "llm_calls_unknown": 0
+}

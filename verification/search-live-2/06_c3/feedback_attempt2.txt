@@ -1,0 +1,7 @@
+The previous attempt did not meet the contract. Acceptance criteria not met:
+  - artifact:SUMMARY.json: SUMMARY.json is missing
+  - claims: no valid SUMMARY.json, so no completion claim can be checked
+The harness's checks of the workspace as the previous attempt left it (the workspace is kept between attempts; the harness runs every check again after Finish):
+  - validation:unit: pass (8 tests run, 0 failures, 0 errors, 0 skipped)
+  - validation:target: pass (5 tests run, 0 failures, 0 errors, 0 skipped); required tests: test_every_schedule_matches_the_account_page ok, test_eu_fee_starts_after_two_weeks ok, test_nordic_minimum_fee ok, test_partner_percentage ok, test_mixed_schedules_in_one_run ok
+  - files changed from the original: src/steps/prepare.py (modified)

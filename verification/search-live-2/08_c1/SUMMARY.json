@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In src/steps/prepare.py, resolve_terms now builds each schedule's terms by merging that schedule's overrides onto the shared base terms (merge_options returns a new dict). The overnight export now uses the same per-schedule terms as the account page, so EU accounts get the late fee at the right time."
+}

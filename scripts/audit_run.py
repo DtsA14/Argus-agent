@@ -14,6 +14,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 import harness.llm as hl
 from codetask.agent import feedback_from, system_prompt, task_prompt
 from codetask.tools import offered
+from harness.llm import is_truncated
 from harness.steps import llm_step_key, message_from_json
 from runner import load_config
 
@@ -66,6 +67,9 @@ for it in range(contract["limits"].get("max_iterations", 5)):
             break
         msg = message_from_json(memo[key])
         messages.append(msg)
+        if is_truncated(msg):                   # the harness ran none of its tool calls and ended the attempt
+            print(f"      (reply cut off at max_tokens: {[c['name'] for c in msg.tool_calls or []]} not run)")
+            break
         for i, c in enumerate(msg.tool_calls or []):
             print(f"      -> {c['name']} {json.dumps(c['args'])[:160]}")
             tk = [k for k in memo if k.startswith('["tool", "agent"') and json.loads(k)[3] == it
