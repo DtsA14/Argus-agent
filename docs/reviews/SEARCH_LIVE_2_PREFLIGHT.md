@@ -8,7 +8,7 @@ PR #60). Completion reserve tidak ada, dan budget tidak naik.
 
 | | Seri #1 (baseline) | Seri #2 |
 |---|---|---|
-| Agen | `6de48d5` | `8b96f7b` (main setelah PR #60) |
+| Agen | `6de48d5` | main setelah PR preflight ini di-merge. PR ini hanya menambah dokumen dan `scripts/dry_feedback.py`, yang tidak dipakai run, jadi kodenya identik dengan `8b96f7b` (main setelah PR #60) |
 | Umpan balik attempt ke-2 dan seterusnya | hanya kriteria yang gagal | kriteria yang gagal **ditambah** pemeriksaan harness atas workspace (validasi per tes, file yang berubah) |
 | Benchmark | `815a9976…` | **sama** |
 | Kontrak beku | A `b71478de…`, B `4fb48ee2…`, C `03c3fa60…` | **sama** |
