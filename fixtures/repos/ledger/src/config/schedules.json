@@ -1,0 +1,20 @@
+{
+  "defaults": {
+    "grace_days": 30,
+    "fee_percent": 2,
+    "min_fee_cents": 100
+  },
+  "schedules": {
+    "standard": {},
+    "eu": {
+      "grace_days": 14
+    },
+    "nordic": {
+      "grace_days": 21,
+      "min_fee_cents": 200
+    },
+    "partner": {
+      "fee_percent": 1
+    }
+  }
+}

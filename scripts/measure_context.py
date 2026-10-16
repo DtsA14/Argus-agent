@@ -324,18 +324,26 @@ def shop_plan(condition):
 
 
 def shop_one(condition, runs_dir):
+    contract = json.loads(SHOP_CONTRACT.read_text(encoding="utf-8"))
+    if condition.startswith("no_search"):
+        contract.pop("tools")                                             # the baseline cannot search
+    return full_run(contract, shop_plan(condition), condition, runs_dir)
+
+
+def full_run(contract, plan, condition, runs_dir, attempt_tokens=None):
+    """One scripted run of a contract through run_code_task with the real sandbox and the calibrated counter."""
     from codetask.run import run_code_task
     from models.fake import CallableChatModel
     cfg = load_config()
     cfg["roles"]["coder"]["model"] = "anthropic:claude-sonnet-5-5"       # priced as the live model would be
     cfg["sandbox"] = {**(cfg.get("sandbox") or {}), "kind": "docker"}
-    contract = json.loads(SHOP_CONTRACT.read_text(encoding="utf-8"))
-    if condition.startswith("no_search"):
-        contract.pop("tools")                                             # the baseline cannot search
+    if attempt_tokens:
+        cfg["code_task"]["attempt_tokens"] = attempt_tokens
+        if attempt_tokens > 30000:      # the run's cap is the stricter of config and contract: raise both, for all
+            cfg["budget"]["max_usd"] = 2.0
     cpath = Path(runs_dir) / f"{condition}.contract.json"
     cpath.parent.mkdir(parents=True, exist_ok=True)
     cpath.write_text(json.dumps(contract), encoding="utf-8")
-    plan = shop_plan(condition)
     allowed = cfg["tools"]["coder"] + ct_contract_tools(contract)
 
     def respond(messages):
@@ -361,6 +369,70 @@ def shop_one(condition, runs_dir):
             "files_read": count("read_file"), "searches": count("search_files"), "tools": r["tools"]}
 
 
+# ---- the search-value experiment (evals/search_v1): several tool calls per step, as live #7 showed -------------
+
+LEDGER = "fixtures/contracts/ledger_terms_{}.json"
+
+
+def ledger_plan(condition):
+    """Explicit scripted moves. The model only searches for text it has already seen: the step name resolve_terms
+    is in config/pipeline.json, which it reads after following the imports from the target test to the pipeline."""
+    contract = json.loads((ROOT / LEDGER.format("a")).read_text(encoding="utf-8"))
+    repo = ROOT / contract["inputs"]["workspace"]
+    bug = "src/steps/prepare.py"
+    fixed = repo.joinpath(bug).read_text(encoding="utf-8").replace(
+        "merge_options(plan, base)", "merge_options(base, plan)")
+    read = lambda fs: [("ReadFile", {"path": f}) for f in fs]  # noqa: E731
+    find = lambda t: [("SearchFiles", {"text": t})]  # noqa: E731
+    entry = read(["tests/test_consistency.py", "src/jobs/cycle.py", "src/core/pipeline.py",
+                  "src/config/pipeline.json"])
+    steps_dir = sorted(p.relative_to(repo).as_posix() for p in repo.joinpath("src", "steps").glob("*.py")
+                       if p.name != "__init__.py")
+    others = [f for f in steps_dir if f != bug]
+    if condition == "search_seen":              # search the step name it has just read in the config
+        steps = [entry, find("resolve_terms"), read([bug, "src/common/options.py"])]
+    elif condition == "search_broad":           # a broad word first and two plausible wrong files, then the same path
+        steps = [find("late fee"), read(["src/plugins/fee_a.py", "src/core/terms.py"]), entry,
+                 find("resolve_terms"), read([bug, "src/common/options.py"])]
+    elif condition == "steps_all":              # every module of the steps package in one step
+        steps = [entry, read(steps_dir + ["src/common/options.py"])]
+    elif condition == "steps_by3_batch2":       # three per step; the step with the bug is in the second batch
+        order = others[:3] + [bug] + others[3:]
+        steps = [entry, read(order[:3]), read(order[3:6] + ["src/common/options.py"])]
+    elif condition == "steps_by3_last":         # three per step in listing order; prepare.py comes last
+        steps = [entry, read(steps_dir[:3]), read(steps_dir[3:6]), read(steps_dir[6:] + ["src/common/options.py"])]
+    else:
+        raise ValueError(condition)
+    return [[("ListFiles", {})]] + steps + [
+        [("WriteFile", {"path": bug, "content": fixed}),
+         ("RunValidation", {"id": "target"}), ("RunValidation", {"id": "unit"})],
+        [("Finish", {"claims": [{"claim": "file_changed", "path": bug},
+                                {"claim": "issue_fixed", "evidence": "validation:target"}],
+                     "summary": "the base terms were passed as the override; the arguments are now in order."})]]
+
+
+# (condition, contract variant): A and B with the search strategies, and A without searching (the tool is offered
+# but not used, as in live #7); C only without search. Same bug, criteria, attempts and budget for all.
+SEARCH_VALUE_RUNS = [("search_seen", "a"), ("search_seen", "b"), ("search_broad", "a"),
+                     ("steps_all", "a"), ("steps_all", "c"), ("steps_by3_batch2", "c"), ("steps_by3_last", "c")]
+
+
+def searchvalue(attempt_tokens):
+    """Every run with the same attempt_tokens. For 60,000 every contract copy (and the config) gets the same cap,
+    high enough that the reservation guard (attempt_tokens x the output price) cannot decide the outcome; the
+    repository's contracts keep their cap. The model's cost is still the real price of what is sent and received."""
+    print(f"estimates: billed input = 407 + 0.3186 x chars (calibrated, max error 9.4%), priced as Sonnet 5.5; "
+          f"attempt_tokens {attempt_tokens}; real sandbox validation and acceptance")
+    with tempfile.TemporaryDirectory() as tmp:
+        for condition, variant in SEARCH_VALUE_RUNS:
+            contract = json.loads((ROOT / LEDGER.format(variant)).read_text(encoding="utf-8"))
+            if attempt_tokens > 30000:
+                contract["limits"]["max_usd"] = 2.0
+            name = f"{condition}_{variant}"
+            out = full_run(contract, ledger_plan(condition), name, Path(tmp) / "runs", attempt_tokens=attempt_tokens)
+            print(json.dumps({"variant": variant, **out}))
+
+
 def ct_contract_tools(contract):
     from acceptance.contract import contract_tools
     return contract_tools(contract)
@@ -377,6 +449,8 @@ def shop():
 if __name__ == "__main__":
     if sys.argv[1] == "shop":
         shop()
+    elif sys.argv[1] == "searchvalue":
+        searchvalue(int(sys.argv[2]) if len(sys.argv) > 2 else 30000)
     elif sys.argv[1] == "calibrate":
         calibrate(sys.argv[2:])
     elif sys.argv[1] == "simulate":

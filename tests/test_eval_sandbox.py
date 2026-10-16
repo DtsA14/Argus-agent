@@ -117,3 +117,36 @@ def test_failed_acceptance_is_data_and_never_stops_the_eval(tmp_path, image):
     m, report = _script_eval(tmp_path, image, [lazy, lazy])
     assert report["tasks"][0]["status"] == "FAILED_ACCEPTANCE" and report["stopped"] is None
     assert report["not_run"] == 0 and report["ran"] == len(m["tasks"])
+
+
+# ---- the search-value experiment (evals/search_v1, outside Eval Set v1) ------------------------------------------
+
+def _search_eval(tmp_path, mode, image):
+    env = {**{k: v for k, v in os.environ.items() if k != "ARGUS_LIVE"}, "ARGUS_SANDBOX_IMAGE": image}
+    r = subprocess.run([sys.executable, "scripts/run_eval.py", "--mode", mode, "--manifest",
+                        str(ROOT / "evals" / "search_v1" / "manifest.json"), "--runs-dir", str(tmp_path / mode)],
+                       cwd=ROOT, capture_output=True, text=True, env=env, timeout=900)
+    return r, json.loads((tmp_path / mode / "report.json").read_text())
+
+
+def test_search_value_references_pass_with_search_only_where_the_contract_adds_it(tmp_path, image):
+    r, report = _search_eval(tmp_path, "reference", image)
+    assert r.returncode == 0 and report["benchmark_valid"], (r.stdout[-2000:], r.stderr[-2000:])
+    assert [t["id"] for t in report["tasks"]] == ["ledger_terms_a", "ledger_terms_b", "ledger_terms_c"]
+    assert all(t["eval_pass"] and t["status"] == "DONE" for t in report["tasks"])
+    base = ["list_files", "read_file", "write_file", "run_validation"]
+    for k, tools in (("a", base + ["search_files"]), ("b", base + ["search_files"]), ("c", base)):
+        run = tmp_path / "reference" / f"reference_ledger_terms_{k}"
+        assert json.loads((run / "result.json").read_text())["tools"] == tools, k
+        evs = [json.loads(line) for line in (run / "events.jsonl").read_text().splitlines()]
+        assert next(e for e in evs if e["event"] == "tools_effective")["tools"] == tools, k
+
+
+def test_search_value_shallow_patch_is_caught_only_on_its_issue_fixed_claim(tmp_path, image):
+    r, report = _search_eval(tmp_path, "wrong", image)
+    assert r.returncode == 0 and report["benchmark_valid"], (r.stdout[-2000:], r.stderr[-2000:])
+    for t in report["tasks"]:
+        assert not t["eval_pass"] and t["status"] == "FAILED_ACCEPTANCE", t["id"]
+        assert [c["claim"] for c in t["checks"]["false_claims"]] == ["issue_fixed"], t["id"]
+        assert t["checks"]["fresh_validations"]["validation:unit"]["status"] == "pass", t["id"]
+        assert t["checks"]["protected_changed"] == [], t["id"]
