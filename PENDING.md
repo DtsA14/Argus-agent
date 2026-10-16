@@ -116,7 +116,10 @@ Urutan disarankan, karena saling bergantung.
 - [x] **M3 ditutup** (`docs/reviews/M3_CLOSING.md`): sukses 0/9 → 4/9 di fixture `ledger`, 0 klaim palsu. Analisis lima kegagalan: diagnosis benar di 10/10 attempt, kehabisan budget saat menulis fix (kurang 344–694 token di tiga run)
 - [x] Milestone berikutnya dipilih: eksperimen diagnostik budget 30k vs 45k (desain PR #64, implementasi dan preflight PR #65)
 - [x] **Eksperimen budget** (`docs/reviews/BUDGET_LIVE_1.md`, `99b7dd8`, 18 run berpasangan, **$1.7525**): sukses **30k 3/9 vs 45k 9/9**, biaya per sukses $0.30 vs **$0.09**, total token 45k lebih sedikit, 0 klaim palsu, 18/18 audit prompt cocok, 9/9 pasangan lengkap. Berpasangan 6–0–3. Token sampai fix sama di pasangan yang sebanding: budget tambahan dipakai untuk menyelesaikan, bukan membaca lebih banyak
-- [ ] Keputusan berikutnya: default `attempt_tokens`, budget per task, efisiensi konteks, atau memperluas eval (satu fixture, satu model)
+- [x] Keputusan: evaluasi lintas task dengan Eval Set yang ada, bukan budget adaptif dulu; proses berjenjang menurut risiko
+- [x] **Baseline lintas task** (`docs/reviews/XTASK_BASELINE.md`, `c2748a7`, Eval Set v1 × 2 putaran, **$0.6499**): sukses **16/16**, gagal jujur **4/4**, 0 klaim palsu, $0.03–0.04 per sukses, semua di attempt pertama dengan ≤21 ribu token. **v1 sudah jenuh** untuk agen ini: berguna sebagai suite regresi, tidak untuk mengukur batas kemampuan
+- [ ] `evals/runner.py`: cap total menghitung biaya yang tidak diketahui sebagai $0 (`usd_billed or 0.0`); buat fail-closed seperti `run_series`
+- [ ] Pilot internal di task nyata yang kecil (workspace terisolasi, review manusia sebelum merge): menunggu pilihan repo dan task dari user
 - [ ] Tes eval di sandbox dijalankan pada 1–2 task saja, bukan seluruh manifest (`verify.sh` naik dari 447 ke 516 detik dengan jumlah tes yang sama, karena setiap task baru menambah beberapa run penuh)
 - [ ] Perluasan benchmark berdasarkan kegagalan nyata dari eksperimen itu, lalu bekukan hash v1
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
