@@ -1,0 +1,29 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "871bd71dfca5056dcef4683827ba83028bf2d69dcc7b633cc913666f1862563c",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "6fc9c7269a1387a7f2c89f84cc3e5f8aafa997b997e2cc7a8766a18e5fe53372"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "finished",
+    "steps": 5
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation"
+  ],
+  "run_id": "live_ledger_cap1_c",
+  "attempts": 1,
+  "usd_billed": 0.082786,
+  "usd_complete": true,
+  "llm_calls": 6,
+  "llm_calls_unknown": 0
+}

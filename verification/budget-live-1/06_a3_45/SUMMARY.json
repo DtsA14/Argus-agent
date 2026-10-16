@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "Fixed term resolution in src/steps/prepare.py so each schedule's terms are resolved correctly in the export. EU accounts now get the late fee at the right time and match the account page. Unit and target validations pass."
+}

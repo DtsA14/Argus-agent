@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In resolve_terms (src/steps/prepare.py), merge_options had its arguments swapped, so the base terms overrode the schedule's. I put them back in the right order, with the schedule's settings overriding the base. EU accounts now get the 14-day grace period in the overnight export, the same as on the account page. Both the unit and target validations pass."
+}

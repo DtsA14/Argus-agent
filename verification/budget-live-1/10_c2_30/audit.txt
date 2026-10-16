@@ -1,0 +1,50 @@
+effective tools ['list_files', 'read_file', 'write_file', 'run_validation']
+effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0
+llm_call_started 10, llm_call 12 (ok 10, refused 2)
+  it 0 step  0 ok       hash ok in 1541 out 28 usd 0.003362 
+      -> ListFiles {}
+  it 0 step  1 ok       hash ok in 2198 out 222 usd 0.006616 
+      -> ReadFile {"path": "tests/test_consistency.py"}
+      -> ReadFile {"path": "src/config/schedules.json"}
+      -> ReadFile {"path": "src/config/pipeline.json"}
+      -> ReadFile {"path": "src/core/pipeline.py"}
+  it 0 step  2 ok       hash ok in 4207 out 275 usd 0.011164 
+      -> ReadFile {"path": "src/jobs/cycle.py"}
+      -> ReadFile {"path": "src/jobs/query.py"}
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ReadFile {"path": "src/steps/apply.py"}
+      -> ReadFile {"path": "src/core/terms.py"}
+  it 0 step  3 ok       hash ok in 6745 out 196 usd 0.01545 
+      -> ReadFile {"path": "src/common/options.py"}
+      -> ReadFile {"path": "src/common/settings.py"}
+      -> ReadFile {"path": "src/core/accounts.py"}
+  it 0 step  4 ok       hash ok in 7638 out 87 usd 0.016146 
+      -> ReadFile {"path": "src/steps/intake.py"}
+  it 0 step  5 refused  hash ok in 8417 out None usd None tokens_left 6863
+  it 1 step  0 ok       hash ok in 1993 out 28 usd 0.004266 
+      -> ListFiles {}
+  it 1 step  1 ok       hash ok in 2650 out 222 usd 0.00752 
+      -> ReadFile {"path": "tests/test_consistency.py"}
+      -> ReadFile {"path": "src/config/schedules.json"}
+      -> ReadFile {"path": "src/config/pipeline.json"}
+      -> ReadFile {"path": "src/core/pipeline.py"}
+  it 1 step  2 ok       hash ok in 4659 out 182 usd 0.011138 
+      -> RunValidation {"id": "target"}
+      -> ReadFile {"path": "src/jobs/cycle.py"}
+      -> ReadFile {"path": "src/jobs/query.py"}
+  it 1 step  3 ok       hash ok in 6473 out 272 usd 0.015666 
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ReadFile {"path": "src/steps/apply.py"}
+      -> ReadFile {"path": "src/core/accounts.py"}
+      -> ReadFile {"path": "src/core/terms.py"}
+      -> ReadFile {"path": "src/common/settings.py"}
+  it 1 step  4 ok       hash ok in 9085 out 78 usd 0.01895 
+      -> ReadFile {"path": "src/common/options.py"}
+  it 1 step  5 refused  hash ok in 9362 out None usd None tokens_left 4358
+prompt_hash checked 12, mismatches 0
+  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'reservation_exhausted', 'steps': 5, 'node': 'agent', 'task': 'ledger_cap1_c', 'iteration': 0}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'reservation_exhausted', 'steps': 5, 'node': 'agent', 'task': 'ledger_cap1_c', 'iteration': 1}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'FAILED_ACCEPTANCE', 'reason': 'stagnant: the same criteria failed 2 attempts in a row', 'blocked_reason': None}
+result {'status': 'FAILED_ACCEPTANCE', 'stop_reason': 'stagnant: the same criteria failed 2 attempts in a row', 'blocked_reason': None, 'attempts': 2, 'usd_billed': 0.110278, 'llm_calls': 10, 'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation']}

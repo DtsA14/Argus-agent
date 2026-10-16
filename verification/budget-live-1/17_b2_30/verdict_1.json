@@ -1,0 +1,190 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/steps/prepare.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/steps/prepare.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "6f89e5e6605f7f261afdcff86d3d58ead713c7bfeb346c67f5f2d3722b89e04b"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 8,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_keys_only_in_base_are_kept (tests.test_regression.OptionsTest.test_keys_only_in_base_are_kept) ... ok\ntest_keys_only_in_override_are_added (tests.test_regression.OptionsTest.test_keys_only_in_override_are_added) ... ok\ntest_neither_input_is_changed (tests.test_regression.OptionsTest.test_neither_input_is_changed) ... ok\ntest_override_wins_on_a_conflict (tests.test_regression.OptionsTest.test_override_wins_on_a_conflict) ... ok\ntest_account_page_on_the_standard_schedule (tests.test_regression.RegressionTest.test_account_page_on_the_standard_schedule) ... ok\ntest_overnight_rows_on_the_standard_schedule (tests.test_regression.RegressionTest.test_overnight_rows_on_the_standard_schedule) ... ok\ntest_paid_invoices_are_not_in_the_overnight_rows (tests.test_regression.RegressionTest.test_paid_invoices_are_not_in_the_overnight_rows) ... ok\ntest_row_text (tests.test_regression.RegressionTest.test_row_text) ... ok\n\n----------------------------------------------------------------------\nRan 8 tests in 0.010s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_consistency.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_consistency.ConsistencyTest.test_every_schedule_matches_the_account_page": "ok",
+          "tests.test_consistency.ConsistencyTest.test_eu_fee_starts_after_two_weeks": "ok",
+          "tests.test_consistency.ConsistencyTest.test_nordic_minimum_fee": "ok",
+          "tests.test_consistency.ConsistencyTest.test_partner_percentage": "ok",
+          "tests.test_consistency.ConsistencyTest.test_mixed_schedules_in_one_run": "ok"
+        },
+        "output_tail": "test_eu_fee_starts_after_two_weeks (tests.test_consistency.ConsistencyTest.test_eu_fee_starts_after_two_weeks) ... ok\ntest_every_schedule_matches_the_account_page (tests.test_consistency.ConsistencyTest.test_every_schedule_matches_the_account_page) ... ok\ntest_mixed_schedules_in_one_run (tests.test_consistency.ConsistencyTest.test_mixed_schedules_in_one_run) ... ok\ntest_nordic_minimum_fee (tests.test_consistency.ConsistencyTest.test_nordic_minimum_fee) ... ok\ntest_partner_percentage (tests.test_consistency.ConsistencyTest.test_partner_percentage) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.025s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/steps/prepare.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "claim[3]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "102dbcd2488bf4e975f751ddbb37a1635f5820a22fc2bab44c0d4f84c2ca0294",
+  "summary_sha256": "6f89e5e6605f7f261afdcff86d3d58ead713c7bfeb346c67f5f2d3722b89e04b",
+  "verdict_sha256": "4b31b4ca822f1710bd451e5c7dc8a59470d02483d4840b9299a18597545b03f5"
+}

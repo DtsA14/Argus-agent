@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In resolve_terms, merge_options had its arguments swapped, so base terms overrode the schedule's settings. I swapped them back so the schedule's settings win, as on the account page. The unit and target validations both pass."
+}

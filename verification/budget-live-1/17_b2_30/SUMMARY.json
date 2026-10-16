@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In src/steps/prepare.py, resolve_terms now builds the terms for each schedule from the base terms plus that schedule's own overrides. Before, the terms were shared across schedules, so the EU late fee started two weeks late in the overnight export. The unit and target validations both pass."
+}

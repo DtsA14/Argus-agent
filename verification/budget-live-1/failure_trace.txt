@@ -1,0 +1,203 @@
+##### 01_c3_45
+  it0 s0 ok      in  1541 | ListFiles()
+  it0 s1 ok      in  2198 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py) ReadFile(src/config/pipeline.json)
+  it0 s2 ok      in  4207 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/steps/apply.py) ReadFile(src/core/terms.py)
+  it0 s3 ok      in  5901 | ReadFile(src/steps/prepare.py) ReadFile(src/core/accounts.py) ReadFile(src/common/settings.py)
+  it0 s4 ok      in  7331 | ReadFile(src/common/options.py)
+        text: Argument order is swapped in prepare.py (the later argument wins presumably).
+  it0 s5 ok      in  7611 | WriteFile(src/steps/prepare.py) RunValidation(unit) RunValidation(target)
+  it0 s6 ok      in  9745 | Finish()
+##### 02_c3_30
+  it0 s0 ok      in  1541 | ListFiles()
+  it0 s1 ok      in  2198 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4207 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/terms.py) ReadFi
+  it0 s3 ok      in  7057 | ReadFile(src/common/options.py) ReadFile(src/core/accounts.py)
+  it0 s4 ok      in  7604 | WriteFile(src/steps/prepare.py) RunValidation(unit) RunValidation(target)
+        text: Arguments are swapped in prepare.py.
+  it0 s5 refused in  9754 | 
+  it1 s0 ok      in  1853 | ListFiles() ReadFile(src/steps/prepare.py)
+  it1 s1 ok      in  3408 | ReadFile(src/common/options.py) RunValidation(target) RunValidation(unit)
+        text: Looks fixed (per-schedule terms, merge_options presumably non-mutating). Let me verify quickly.
+  it1 s2 ok      in  4955 | Finish()
+##### 03_b3_30
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py) ReadFile(src/config/schedules.json)
+  it0 s2 ok      in  4935 | SearchFiles("terms") ReadFile(src/core/accounts.py)
+        text: Now how the pipeline builds item["terms"].
+  it0 s3 ok      in  5406 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py)
+  it0 s4 ok      in  7017 | ReadFile(src/common/options.py) ReadFile(src/config/pipeline.json)
+  it0 s5 refused in  7503 | 
+  it1 s0 ok      in  2240 | ListFiles()
+  it1 s1 ok      in  2897 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it1 s2 ok      in  4731 | RunValidation(target) ReadFile(src/config/pipeline.json) ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py)
+  it1 s3 ok      in  6697 | ReadFile(src/core/terms.py) ReadFile(src/core/accounts.py) ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py)
+  it1 s4 ok      in  8997 | ReadFile(src/common/options.py)
+  it1 s5 refused in  9279 | 
+##### 04_b3_45
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py) ReadFile(src/config/schedules.json)
+  it0 s2 ok      in  4935 | SearchFiles(src) ReadFile(src/core/accounts.py)
+        text: Need to see how the pipeline builds item["terms"].
+  it0 s3 ok      in  5429 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py)
+  it0 s4 ok      in  7040 | ReadFile(src/common/options.py) ReadFile(src/config/pipeline.json)
+  it0 s5 ok      in  7534 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+  it0 s6 ok      in  9668 | Finish()
+##### 05_a3_30
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4259 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json)
+  it0 s3 ok      in  4946 | SearchFiles(@step() ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it0 s4 ok      in  5865 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/intake.py) ReadFile(src/steps/output.py)
+  it0 s5 refused in  9905 | 
+  it1 s0 ok      in  2220 | ListFiles()
+  it1 s1 ok      in  2877 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json)
+  it1 s2 ok      in  4237 | RunValidation(target) ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py)
+  it1 s3 ok      in  6052 | ReadFile(src/core/pipeline.py) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py) ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py)
+  it1 s4 ok      in  9001 | ReadFile(src/common/options.py)
+  it1 s5 refused in  9279 | 
+##### 06_a3_45
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4259 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json)
+  it0 s3 ok      in  4946 | SearchFiles(@step() ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it0 s4 ok      in  5865 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/intake.py) ReadFile(src/steps/output.py)
+  it0 s5 ok      in  9905 | ReadFile(src/common/options.py)
+  it0 s6 ok      in 10190 | WriteFile(src/steps/prepare.py) RunValidation(unit) RunValidation(target)
+        text: Arguments are swapped in the step.
+  it0 s7 refused in 12337 | 
+  it1 s0 ok      in  2080 | ReadFile(src/steps/prepare.py) ListFiles()
+  it1 s1 ok      in  3655 | Finish()
+##### 07_c1_45
+  it0 s0 ok      in  1541 | ListFiles()
+  it0 s1 ok      in  2198 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4207 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/terms.py)
+  it0 s3 ok      in  6745 | ReadFile(src/common/options.py) ReadFile(src/common/settings.py) ReadFile(src/core/accounts.py)
+  it0 s4 ok      in  7604 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+        text: Arguments are swapped in prepare.py (the base overrides the plan).
+  it0 s5 ok      in  9763 | Finish()
+##### 08_c1_30
+  it0 s0 ok      in  1541 | ListFiles()
+  it0 s1 ok      in  2198 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4207 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/terms.py)
+  it0 s3 ok      in  6745 | ReadFile(src/common/options.py) ReadFile(src/common/settings.py) ReadFile(src/core/accounts.py)
+  it0 s4 ok      in  7604 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+        text: The arguments are swapped in prepare.py: base overrides the plan.
+  it0 s5 refused in  9762 | 
+  it1 s0 ok      in  1853 | ListFiles() ReadFile(src/steps/prepare.py)
+  it1 s1 ok      in  3426 | Finish()
+##### 09_c2_45
+  it0 s0 ok      in  1541 | ListFiles()
+  it0 s1 ok      in  2198 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4207 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/terms.py)
+  it0 s3 ok      in  6745 | ReadFile(src/common/options.py) ReadFile(src/common/settings.py) ReadFile(src/core/accounts.py)
+  it0 s4 ok      in  7630 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+        text: Arguments are swapped in prepare.py.
+  it0 s5 ok      in  9780 | Finish()
+##### 10_c2_30
+  it0 s0 ok      in  1541 | ListFiles()
+  it0 s1 ok      in  2198 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4207 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/terms.py)
+  it0 s3 ok      in  6745 | ReadFile(src/common/options.py) ReadFile(src/common/settings.py) ReadFile(src/core/accounts.py)
+  it0 s4 ok      in  7638 | ReadFile(src/steps/intake.py)
+        text: Argument order is swapped in prepare.py. Let me also check the intake step for other differences.
+  it0 s5 refused in  8417 | 
+  it1 s0 ok      in  1993 | ListFiles()
+  it1 s1 ok      in  2650 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json) ReadFile(src/core/pipeline.py)
+  it1 s2 ok      in  4659 | RunValidation(target) ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py)
+  it1 s3 ok      in  6473 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py) ReadFile(src/common/settings.py
+  it1 s4 ok      in  9085 | ReadFile(src/common/options.py)
+        text: Merge order is swapped in prepare.py. Check merge_options.
+  it1 s5 refused in  9362 | 
+##### 11_a2_45
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4259 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json)
+  it0 s3 ok      in  4946 | SearchFiles(src/steps) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it0 s4 ok      in  5844 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py) ReadFile(src/common/options.py) ReadFile(src/common/settings
+  it0 s5 ok      in  8875 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+        text: The merge arguments are swapped in resolve_terms (base overrides the plan).
+  it0 s6 ok      in 11036 | Finish()
+##### 12_a2_30
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4259 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json)
+  it0 s3 ok      in  4946 | SearchFiles(resolve_terms) SearchFiles(assess_fees) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it0 s4 ok      in  5911 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py)
+  it0 s5 ok      in  8357 | ReadFile(src/common/options.py)
+        text: The merge order is swapped in resolve_terms (plan, base) vs account_terms (base, plan). Check merge_options.
+  it0 s6 refused in  8652 | 
+  it1 s0 ok      in  2220 | ListFiles()
+  it1 s1 ok      in  2877 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json)
+  it1 s2 ok      in  4237 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/core/pipeline.py) ReadFile(src/common/settings.py)
+  it1 s3 ok      in  5710 | ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py) SearchFiles(@step()
+  it1 s4 ok      in  6629 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py) ReadFile(src/common/options.py)
+  it1 s5 refused in  9348 | 
+##### 13_b1_45
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py) ReadFile(src/config/schedules.json)
+  it0 s2 ok      in  4935 | SearchFiles(src/steps) ReadFile(src/core/accounts.py)
+        text: Now how the pipeline builds item terms.
+  it0 s3 ok      in  5895 | ReadFile(src/steps/prepare.py) ReadFile(src/common/options.py) ReadFile(src/config/pipeline.json)
+  it0 s4 ok      in  7239 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+        text: Swap the arguments.
+  it0 s5 ok      in  9382 | Finish()
+##### 14_b1_30
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py)
+  it0 s2 ok      in  4708 | SearchFiles(src) ReadFile(src/core/accounts.py) ReadFile(src/config/schedules.json)
+        text: Now where item["terms"] is set.
+  it0 s3 ok      in  5423 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py)
+  it0 s4 ok      in  7034 | ReadFile(src/common/options.py) ReadFile(src/config/pipeline.json)
+  it0 s5 refused in  7525 | 
+  it1 s0 ok      in  2240 | ListFiles()
+  it1 s1 ok      in  2897 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it1 s2 ok      in  4731 | RunValidation(target) ReadFile(src/config/pipeline.json) ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py)
+  it1 s3 ok      in  6697 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it1 s4 ok      in  8997 | ReadFile(src/common/options.py)
+  it1 s5 refused in  9291 | 
+##### 15_a1_30
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4259 | ReadFile(src/jobs/cycle.py) ReadFile(src/config/pipeline.json) ReadFile(src/jobs/query.py)
+  it0 s3 ok      in  4946 | SearchFiles(resolve_terms) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it0 s4 ok      in  5768 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/compat.py) ReadFile(src/steps/apply.py)
+  it0 s5 ok      in  8214 | ReadFile(src/common/options.py)
+  it0 s6 refused in  8494 | 
+  it1 s0 ok      in  2220 | ListFiles()
+  it1 s1 ok      in  2877 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/config/pipeline.json)
+  it1 s2 ok      in  4237 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/core/pipeline.py) ReadFile(src/common/settings.py)
+  it1 s3 ok      in  5710 | ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py) SearchFiles(@step()
+  it1 s4 ok      in  6629 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py) ReadFile(src/common/options.py)
+  it1 s5 refused in  9348 | 
+##### 16_a1_45
+  it0 s0 ok      in  1768 | ListFiles()
+  it0 s1 ok      in  2425 | ReadFile(tests/test_consistency.py) ReadFile(src/config/schedules.json) ReadFile(src/core/pipeline.py)
+  it0 s2 ok      in  4259 | ReadFile(src/jobs/cycle.py) ReadFile(src/jobs/query.py) ReadFile(src/config/pipeline.json)
+  it0 s3 ok      in  4946 | SearchFiles(src/steps) ReadFile(src/core/accounts.py) ReadFile(src/core/terms.py)
+  it0 s4 ok      in  5844 | ReadFile(src/steps/prepare.py) ReadFile(src/steps/apply.py) ReadFile(src/steps/compat.py) ReadFile(src/common/options.py) ReadFile(src/common/settings
+  it0 s5 ok      in  8875 | WriteFile(src/steps/prepare.py) ReadFile(src/steps/intake.py)
+        text: The merge arguments are swapped in prepare.py.
+  it0 s6 ok      in 10568 | RunValidation(target) RunValidation(unit)
+  it0 s7 refused in 11804 | 
+  it1 s0 ok      in  2080 | ListFiles() ReadFile(src/steps/prepare.py)
+  it1 s1 ok      in  3662 | Finish()
+##### 17_b2_30
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py) ReadFile(src/config/schedules.json)
+  it0 s2 ok      in  4935 | SearchFiles(src/steps) ReadFile(src/core/accounts.py)
+        text: Now how the pipeline builds item terms.
+  it0 s3 ok      in  5895 | ReadFile(src/common/options.py) ReadFile(src/steps/prepare.py) ReadFile(src/config/pipeline.json)
+  it0 s4 ok      in  7229 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+        text: Arguments are swapped in prepare.py.
+  it0 s5 refused in  9379 | 
+  it1 s0 ok      in  2100 | ReadFile(src/steps/prepare.py) RunValidation(unit) RunValidation(target)
+  it1 s1 ok      in  4218 | Finish()
+##### 18_b2_45
+  it0 s0 ok      in  1788 | ListFiles() SearchFiles(late_fee)
+  it0 s1 ok      in  3252 | ReadFile(src/core/terms.py) ReadFile(src/steps/apply.py) ReadFile(src/jobs/query.py) ReadFile(src/config/schedules.json)
+  it0 s2 ok      in  4935 | SearchFiles(src/steps) ReadFile(src/core/accounts.py)
+        text: Now where the pipeline builds item["terms"].
+  it0 s3 ok      in  5897 | ReadFile(src/steps/prepare.py) ReadFile(src/common/options.py) ReadFile(src/config/pipeline.json)
+  it0 s4 ok      in  7240 | WriteFile(src/steps/prepare.py) RunValidation(target) RunValidation(unit)
+        text: Arguments are swapped in prepare.py.
+  it0 s5 ok      in  9390 | Finish()
