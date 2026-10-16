@@ -231,8 +231,9 @@ Prediksi untuk desain 7.1 (10 modul × 2 KB, ±10%):
 1. **Budget eksperimen yang sama dan cukup untuk semua kondisi (usulku).**
    - Run eksperimen ini memakai config eksperimen lewat `--config`, tanpa perubahan harness: `attempt_tokens` 60.000
      untuk A, B, dan C sekaligus.
-   - Konsekuensinya: reservasi satu attempt menjadi 60.000 × tarif tertinggi. Dengan harga output Sonnet itu sekitar
-     $0.90, jadi cap kontrak harus dinaikkan ke sekitar $1–2 per run. Itu perlu persetujuan biaya tersendiri.
+   - Konsekuensinya: reservasi satu attempt menjadi 60.000 × tarif tertinggi. Dengan harga output Sonnet di config ($10 per
+     juta), itu $0.60 per attempt, padahal sekarang $0.30. Cap kontrak sekarang $0.50, jadi satu attempt pun tidak
+     akan diterima. Cap per run harus dinaikkan ke sekitar $1. Itu perlu persetujuan biaya tersendiri.
    - Dengan begitu tidak ada kondisi yang gagal karena budget, dan nilai search terlihat sebagai token, file yang
      dibaca, dan langkah pada anggaran yang sama.
    - Status dengan 30.000 tetap dilaporkan dari simulasi, sebagai informasi terpisah.
