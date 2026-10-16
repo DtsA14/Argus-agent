@@ -339,6 +339,8 @@ def full_run(contract, plan, condition, runs_dir, attempt_tokens=None):
     cfg["sandbox"] = {**(cfg.get("sandbox") or {}), "kind": "docker"}
     if attempt_tokens:
         cfg["code_task"]["attempt_tokens"] = attempt_tokens
+        if attempt_tokens > 30000:      # the run's cap is the stricter of config and contract: raise both, for all
+            cfg["budget"]["max_usd"] = 2.0
     cpath = Path(runs_dir) / f"{condition}.contract.json"
     cpath.parent.mkdir(parents=True, exist_ok=True)
     cpath.write_text(json.dumps(contract), encoding="utf-8")
@@ -416,7 +418,7 @@ SEARCH_VALUE_RUNS = [("search_seen", "a"), ("search_seen", "b"), ("search_broad"
 
 
 def searchvalue(attempt_tokens):
-    """Every run with the same attempt_tokens. For 60,000 every contract copy gets the same cap, high enough that the
+    """Every run with the same attempt_tokens. For 60,000 every contract copy (and the config) gets the same cap, high enough that the
     reservation guard (attempt_tokens x the output price) cannot decide the outcome; the repository's contracts keep
     their cap. The model's cost is still the real price of what is sent and received."""
     print(f"estimates: billed input = 407 + 0.3186 x chars (calibrated, max error 9.4%), priced as Sonnet 5.5; "
