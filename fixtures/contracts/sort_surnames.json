@@ -1,0 +1,71 @@
+{
+  "contract": "sort_surnames",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/names",
+    "issue": "Customers with multi-part surnames, such as 'Ana Maria Garcia Lopez' or 'Ludwig van Beethoven', are not sorted correctly in customer lists. Make sort_by_surname in src/names.py handle multi-part names correctly. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**",
+      "policy/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v2"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_names.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 4,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_multipart.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 2,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_multipart.MultiPartNamesTest.test_the_rule_is_decided",
+        "tests.test_multipart.MultiPartNamesTest.test_multi_part_names_follow_the_rule"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}
