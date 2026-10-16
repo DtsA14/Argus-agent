@@ -408,5 +408,6 @@ def test_claiming_nothing_neither_passes_a_failed_task_nor_fails_a_done_one(ws):
     (root / "src" / "calc.py").write_text(FIXED, encoding="utf-8")
     done = evaluate(c, root, before, {}, run=fake_run(ALL_PASS))
     assert done["outcome"] == "pass" and {x["layer"] for x in done["criteria"]} == {"A", "B", "C", "D"}
-    v1 = evaluate(CONTRACT, root, before, {}, run=fake_run(ALL_PASS))                # the same file under claims_v1
+    v1 = evaluate(contract(artifacts=[{**V2, "schema": "claims_v1"}]), root, before, {},
+                  run=fake_run(ALL_PASS))                                             # the same file under claims_v1
     assert v1["outcome"] == "fail" and statuses(v1["criteria"])["artifact:SUMMARY.json"] == "fail"
