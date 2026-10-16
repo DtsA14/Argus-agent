@@ -1,0 +1,13 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/billing/src/money.py runs/eval_live_5/live_money_precision/workspace/src/money.py
+--- fixtures/repos/billing/src/money.py	2026-10-16 05:18:46.991989847 +0000
++++ runs/eval_live_5/live_money_precision/workspace/src/money.py	2026-10-16 05:26:04.452187100 +0000
+@@ -11,7 +11,8 @@
+     The result is exact for every valid input, however large: "0.29" is 29 cents. Anything else raises ValueError."""
+     if not isinstance(text, str) or not AMOUNT.fullmatch(text):
+         raise ValueError(f"not an amount: {text!r}")
+-    return int(float(text) * 100)
++    units, _, frac = text.partition(".")
++    return int(units) * 100 + int(frac.ljust(2, "0") or "0")
+ 
+ 
+ def format_cents(cents):
