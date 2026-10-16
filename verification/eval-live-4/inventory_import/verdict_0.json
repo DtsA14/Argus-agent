@@ -1,0 +1,191 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/importer.py",
+            "src/validate.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/importer.py",
+            "src/validate.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "7489a67e324c123906fd40391290a9021faa218f873b379d781a2f2ccb25101c"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_adjustment_below_zero_changes_nothing (tests.test_regression.RegressionTest.test_adjustment_below_zero_changes_nothing) ... ok\ntest_empty_file_changes_nothing (tests.test_regression.RegressionTest.test_empty_file_changes_nothing) ... ok\ntest_manual_adjustment (tests.test_regression.RegressionTest.test_manual_adjustment) ... ok\ntest_report_is_ordered_by_sku (tests.test_regression.RegressionTest.test_report_is_ordered_by_sku) ... ok\ntest_valid_import_adds_and_updates (tests.test_regression.RegressionTest.test_valid_import_adds_and_updates) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_import_rules.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 4,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_import_rules.ImportRulesTest.test_new_sku_twice_in_one_file_is_rejected": "ok",
+          "tests.test_import_rules.ImportRulesTest.test_bad_quantity_mid_file_changes_nothing": "ok",
+          "tests.test_import_rules.ImportRulesTest.test_malformed_line_mid_file_changes_nothing": "ok",
+          "tests.test_import_rules.ImportRulesTest.test_valid_import_after_a_failed_one_is_applied": "ok"
+        },
+        "output_tail": "test_bad_quantity_mid_file_changes_nothing (tests.test_import_rules.ImportRulesTest.test_bad_quantity_mid_file_changes_nothing) ... ok\ntest_malformed_line_mid_file_changes_nothing (tests.test_import_rules.ImportRulesTest.test_malformed_line_mid_file_changes_nothing) ... ok\ntest_new_sku_twice_in_one_file_is_rejected (tests.test_import_rules.ImportRulesTest.test_new_sku_twice_in_one_file_is_rejected) ... ok\ntest_valid_import_after_a_failed_one_is_applied (tests.test_import_rules.ImportRulesTest.test_valid_import_after_a_failed_one_is_applied) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/validate.py"
+        }
+      }
+    },
+    {
+      "id": "claim[3]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/importer.py"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "32710bfc47d3884f38bb2243601f218f0ce7c59012867b375f4c06a71bb4cfe8",
+  "summary_sha256": "7489a67e324c123906fd40391290a9021faa218f873b379d781a2f2ccb25101c",
+  "verdict_sha256": "3e2b89019ceb830de048330dd5255dd57b2c3559f82b4a3642e3e44c042592b9"
+}
