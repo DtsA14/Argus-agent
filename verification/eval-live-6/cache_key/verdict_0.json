@@ -1,0 +1,178 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/keys.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/keys.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "593b19778f5b9604683ceae01e934c1c9de756d764b81e671ae26d0a3aa57403"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 4,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_formatting (tests.test_regression.RegressionTest.test_formatting) ... ok\ntest_periods_are_separate (tests.test_regression.RegressionTest.test_periods_are_separate) ... ok\ntest_single_currency_report (tests.test_regression.RegressionTest.test_single_currency_report) ... ok\ntest_the_cache_is_used_for_a_repeated_request (tests.test_regression.RegressionTest.test_the_cache_is_used_for_a_repeated_request) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_currencies.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_currencies.CurrenciesTest.test_report_eur_then_usd": "ok",
+          "tests.test_currencies.CurrenciesTest.test_report_usd_then_eur": "ok",
+          "tests.test_currencies.CurrenciesTest.test_invoiced_eur_then_usd": "ok",
+          "tests.test_currencies.CurrenciesTest.test_invoiced_usd_then_eur": "ok",
+          "tests.test_currencies.CurrenciesTest.test_the_cache_is_still_used_per_currency": "ok"
+        },
+        "output_tail": "test_invoiced_eur_then_usd (tests.test_currencies.CurrenciesTest.test_invoiced_eur_then_usd) ... ok\ntest_invoiced_usd_then_eur (tests.test_currencies.CurrenciesTest.test_invoiced_usd_then_eur) ... ok\ntest_report_eur_then_usd (tests.test_currencies.CurrenciesTest.test_report_eur_then_usd) ... ok\ntest_report_usd_then_eur (tests.test_currencies.CurrenciesTest.test_report_usd_then_eur) ... ok\ntest_the_cache_is_still_used_per_currency (tests.test_currencies.CurrenciesTest.test_the_cache_is_still_used_per_currency) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/keys.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "c598034bdf6ea873f1e4b3c3af44668629122d3a57f8d3685e0c2b17367de7cd",
+  "summary_sha256": "593b19778f5b9604683ceae01e934c1c9de756d764b81e671ae26d0a3aa57403",
+  "verdict_sha256": "233c968139ab0724ef6f93e2a38128f3be3491a907d857290dae641ee5471ede"
+}
