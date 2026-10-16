@@ -1,0 +1,66 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/ledger/src/steps/prepare.py runs/search_live_1/07_b2/live_ledger_terms_b/workspace/src/steps/prepare.py
+--- fixtures/repos/ledger/src/steps/prepare.py	2026-10-16 13:34:29.901988337 +0000
++++ runs/search_live_1/07_b2/live_ledger_terms_b/workspace/src/steps/prepare.py	2026-10-16 15:05:11.306346460 +0000
+@@ -14,61 +14,6 @@
+         schedule = item["account"].schedule
+         if schedule not in resolved:
+             plan = schedule_terms(schedule)
+-            resolved[schedule] = terms_from(merge_options(plan, base))
++            resolved[schedule] = terms_from(merge_options(base, plan))
+         item["terms"] = resolved[schedule]
+     return context
+-
+-
+-def prepare_batches(values, limit=3):
+-    """Prepare helper: keep the values that pass the prepare check, at most limit."""
+-    kept = []
+-    for value in values:
+-        if len(kept) >= limit:
+-            break
+-        if value is not None and str(value).strip():
+-            kept.append(value)
+-    return kept
+-
+-
+-def warm_lookup(values, limit=4):
+-    """Prepare helper: keep the values that pass the prepare check, at most limit."""
+-    kept = []
+-    for value in values:
+-        if len(kept) >= limit:
+-            break
+-        if value is not None and str(value).strip():
+-            kept.append(value)
+-    return kept
+-
+-
+-def prepare_limit(values, limit=5):
+-    """Prepare helper: keep the values that pass the prepare check, at most limit."""
+-    kept = []
+-    for value in values:
+-        if len(kept) >= limit:
+-            break
+-        if value is not None and str(value).strip():
+-            kept.append(value)
+-    return kept
+-
+-
+-def prepare_batches_1(values, limit=6):
+-    """Prepare helper: keep the values that pass the prepare check, at most limit."""
+-    kept = []
+-    for value in values:
+-        if len(kept) >= limit:
+-            break
+-        if value is not None and str(value).strip():
+-            kept.append(value)
+-    return kept
+-
+-
+-def warm_lookup_1(values, limit=7):
+-    """Prepare helper: keep the values that pass the prepare check, at most limit."""
+-    kept = []
+-    for value in values:
+-        if len(kept) >= limit:
+-            break
+-        if value is not None and str(value).strip():
+-            kept.append(value)
+-    return kept

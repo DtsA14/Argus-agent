@@ -1,0 +1,53 @@
+effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files']
+effective system prompt sha256 9f9e718c7ae339f8666475159e8867e97c048e4c3c48ae8421435389f61882a6
+llm_call_started 11, llm_call 13 (ok 11, refused 2)
+  it 0 step  0 ok       hash ok in 1768 out 28 usd 0.003816 
+      -> ListFiles {}
+  it 0 step  1 ok       hash ok in 2425 out 167 usd 0.00652 
+      -> ReadFile {"path": "tests/test_consistency.py"}
+      -> ReadFile {"path": "src/config/schedules.json"}
+      -> ReadFile {"path": "src/core/pipeline.py"}
+  it 0 step  2 ok       hash ok in 4259 out 168 usd 0.010198 
+      -> ReadFile {"path": "src/jobs/cycle.py"}
+      -> ReadFile {"path": "src/jobs/query.py"}
+      -> ReadFile {"path": "src/config/pipeline.json"}
+  it 0 step  3 ok       hash ok in 4946 out 183 usd 0.011722 
+      -> SearchFiles {"path": "src/steps", "text": "@step("}
+      -> ReadFile {"path": "src/core/accounts.py"}
+      -> ReadFile {"path": "src/core/terms.py"}
+  it 0 step  4 ok       hash ok in 5844 out 271 usd 0.014398 
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ReadFile {"path": "src/steps/apply.py"}
+      -> ReadFile {"path": "src/steps/compat.py"}
+      -> ReadFile {"path": "src/common/options.py"}
+      -> ReadFile {"path": "src/common/settings.py"}
+  it 0 step  5 ok       hash ok in 8875 out 134 usd 0.01909 
+      -> SearchFiles {"text": "merge_options(plan, base)"}
+      -> ReadFile {"path": "src/steps/intake.py"}
+  it 0 step  6 refused  hash ok in 9794 out None usd None tokens_left 932
+  it 1 step  0 ok       hash ok in 1977 out 28 usd 0.004234 
+      -> ListFiles {}
+  it 1 step  1 ok       hash ok in 2634 out 167 usd 0.006938 
+      -> ReadFile {"path": "tests/test_consistency.py"}
+      -> ReadFile {"path": "src/config/schedules.json"}
+      -> ReadFile {"path": "src/config/pipeline.json"}
+  it 1 step  2 ok       hash ok in 3994 out 221 usd 0.010198 
+      -> ReadFile {"path": "src/jobs/cycle.py"}
+      -> ReadFile {"path": "src/jobs/query.py"}
+      -> ReadFile {"path": "src/core/pipeline.py"}
+      -> ReadFile {"path": "src/common/settings.py"}
+  it 1 step  3 ok       hash ok in 5467 out 219 usd 0.013124 
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ReadFile {"path": "src/steps/apply.py"}
+      -> ReadFile {"path": "src/core/accounts.py"}
+      -> ReadFile {"path": "src/core/terms.py"}
+  it 1 step  4 ok       hash ok in 7767 out 88 usd 0.016414 
+      -> ReadFile {"path": "src/common/options.py"}
+  it 1 step  5 refused  hash ok in 8054 out None usd None tokens_left 7438
+prompt_hash checked 13, mismatches 0
+  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'reservation_exhausted', 'steps': 6, 'node': 'agent', 'task': 'ledger_terms_a', 'iteration': 0}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'reservation_exhausted', 'steps': 5, 'node': 'agent', 'task': 'ledger_terms_a', 'iteration': 1}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'FAILED_ACCEPTANCE', 'reason': 'stagnant: the same criteria failed 2 attempts in a row', 'blocked_reason': None}
+result {'status': 'FAILED_ACCEPTANCE', 'stop_reason': 'stagnant: the same criteria failed 2 attempts in a row', 'blocked_reason': None, 'attempts': 2, 'usd_billed': 0.116652, 'llm_calls': 11, 'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files']}
