@@ -944,6 +944,230 @@
      }
     }
    ]
+  },
+  {
+   "id": "inventory_import",
+   "category": "multi_module",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/inventory_import.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/importer.py"
+       },
+       "id": "r0"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/validate.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/csvparse.py"
+       },
+       "id": "r2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/store.py"
+       },
+       "id": "r3"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/validate.py",
+        "content": "\"\"\"Rules every imported row must follow.\"\"\"\nfrom .csvparse import Problem\n\n\ndef check(rows, inventory):\n    \"\"\"Problems with these rows, or []. Rules:\n    - the SKU is not empty;\n    - the quantity is zero or more;\n    - a SKU appears at most once among the rows (an import file may not set the same SKU twice).\n    A SKU that already exists in the inventory may appear (once): the import updates it.\"\"\"\n    problems, seen = [], set()\n    for row in rows:\n        if not row.sku:\n            problems.append(Problem(row.line, \"empty SKU\"))\n        if row.qty < 0:\n            problems.append(Problem(row.line, f\"negative quantity for {row.sku}\"))\n        if row.sku in seen:\n            problems.append(Problem(row.line, f\"SKU {row.sku} appears more than once\"))\n        seen.add(row.sku)\n    return problems\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/importer.py",
+        "content": "\"\"\"Import inventory CSV into an Inventory.\"\"\"\nfrom .csvparse import parse\nfrom .validate import check\n\n\nclass ImportFailed(Exception):\n    def __init__(self, problems):\n        super().__init__(f\"{len(problems)} problem(s) in the import file\")\n        self.problems = problems\n\n\ndef import_csv(text, inventory):\n    \"\"\"Set each SKU in the file to its quantity (new SKUs are added, existing ones updated).\n\n    All or nothing: if parse() or check() reports any problem anywhere in the file, ImportFailed is raised with the\n    problems, and the inventory is exactly as it was before the call. That guarantee covers the problems parse() and\n    check() report; the in-memory store does not fail on validated rows, so no rollback for storage failures is\n    provided or claimed.\"\"\"\n    rows, problems = parse(text)\n    if problems:\n        raise ImportFailed(problems)\n    problems = check(rows, inventory)\n    if problems:\n        raise ImportFailed(problems)\n    for row in rows:\n        inventory.set_quantity(row.sku, row.qty)\n    return len(rows)\n"
+       },
+       "id": "w2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/validate.py"
+         },
+         {
+          "claim": "file_changed",
+          "path": "src/importer.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "validate.py checks duplicates for every SKU in the file; import_csv checks the whole batch before writing anything."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/importer.py",
+        "content": "\"\"\"Import inventory CSV into an Inventory.\"\"\"\nfrom .csvparse import Problem, parse\nfrom .validate import check\n\n\nclass ImportFailed(Exception):\n    def __init__(self, problems):\n        super().__init__(f\"{len(problems)} problem(s) in the import file\")\n        self.problems = problems\n\n\ndef import_csv(text, inventory):\n    \"\"\"Set each SKU in the file to its quantity (new SKUs are added, existing ones updated).\n\n    All or nothing: if parse() or check() reports any problem anywhere in the file, ImportFailed is raised with the\n    problems, and the inventory is exactly as it was before the call. That guarantee covers the problems parse() and\n    check() report; the in-memory store does not fail on validated rows, so no rollback for storage failures is\n    provided or claimed.\"\"\"\n    rows, problems = parse(text)\n    if problems:\n        raise ImportFailed(problems)\n    seen = set()\n    for row in rows:\n        if row.sku in seen:\n            raise ImportFailed([Problem(row.line, f\"SKU {row.sku} appears more than once\")])\n        seen.add(row.sku)\n    for row in rows:\n        row_problems = check([row], inventory)\n        if row_problems:\n            raise ImportFailed(row_problems)\n        inventory.set_quantity(row.sku, row.qty)\n    return len(rows)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/importer.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "Duplicate SKUs are now rejected across the whole file."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/importer.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "Duplicate SKUs are now rejected across the whole file."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
   }
  ]
 }
