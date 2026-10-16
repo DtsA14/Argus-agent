@@ -1,0 +1,9 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/shop/src/discounts/registry.py runs/eval_live_7/live_shop_coupon_leak/workspace/src/discounts/registry.py
+--- fixtures/repos/shop/src/discounts/registry.py	2026-10-16 10:17:05.540386170 +0000
++++ runs/eval_live_7/live_shop_coupon_leak/workspace/src/discounts/registry.py	2026-10-16 11:12:58.638696900 +0000
+@@ -14,4 +14,4 @@
+     """The discount rules that apply to this customer's orders."""
+     if customer.blocked:
+         return []
+-    return RULES
++    return list(RULES)
