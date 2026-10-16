@@ -1,6 +1,6 @@
 # Pekerjaan tervalidasi yang hilang di langkah terakhir: desain (untuk review, belum ada perubahan kode)
 
-Status: **draf desain**, 2026-10-16. Baseline: eksperimen live search-value #1 (`docs/reviews/SEARCH_LIVE_1.md`, PR #58).
+Status: **desain disetujui** (review PR #59), 2026-10-16. Baseline: eksperimen live search-value #1 (`docs/reviews/SEARCH_LIVE_1.md`, PR #58).
 Belum ada perubahan harness, kenaikan budget, maupun run live baru.
 
 ## 1. Masalah, dari data baseline
@@ -32,17 +32,33 @@ memulai diagnosis dari nol dan kehabisan reservasi lagi.
 Umpan balik untuk attempt berikutnya ditambah satu bagian, **"keadaan workspace menurut pemeriksaan harness"**. Isinya
 diambil dari verdict attempt sebelumnya (pemeriksaan harness sendiri, ditulis atomik sebelum umpan balik dibuat).
 
+Isinya tiga bagian, semuanya fakta dari verdict:
+1. **Semua kriteria acceptance yang belum terpenuhi**, dengan alasan aktualnya. Termasuk `SUMMARY.json` dan `claims`,
+   bukan hanya hasil tes.
+2. **Validasi wajib**: status, jumlah tes, dan status setiap tes wajib.
+3. **File yang berubah** menurut harness.
+
+Ditambah satu kalimat yang menegaskan bahwa ini keadaan workspace **saat attempt sebelumnya berakhir**, dan harness
+memeriksa semuanya lagi setelah `Finish`.
+
 Contoh untuk c2:
 
 ```
-The previous attempt did not meet the contract. The harness found:
+The previous attempt did not meet the contract. Acceptance criteria not met:
   - artifact:SUMMARY.json: SUMMARY.json is missing
   - claims: no valid SUMMARY.json, so no completion claim can be checked
-The harness's own checks of the current workspace (it is kept between attempts):
-  - validation:unit: pass (8 tests, 0 failures, 0 skipped)
-  - validation:target: pass (5 tests; required tests: 5 ok)
+The harness's checks of the workspace as the previous attempt left it (the workspace is kept between attempts; the
+harness runs every check again after Finish):
+  - validation:unit: pass (8 tests run, 0 failures, 0 errors, 0 skipped)
+  - validation:target: pass (5 tests run, 0 failures, 0 errors, 0 skipped); required tests: 5 ok
   - files changed from the original: src/steps/prepare.py
 ```
+
+**Verdict lama bukan bukti keadaan sekarang.**
+- Bagian kedua menyebut dirinya sebagai keadaan "as the previous attempt left it", jadi agen tahu itu riwayat.
+- Kalau workspace berubah di attempt berikutnya, hasil itu tidak berlaku lagi. Acceptance setelah `Finish` menjalankan
+  ulang semua validasi pada workspace terbaru, dan hanya verdict baru itu yang menentukan status.
+- Ini diuji: attempt 2 merusak fix setelah menerima umpan balik "pass", lalu harus berakhir gagal.
 
 - **Tidak menandai DONE lebih awal.** Acceptance tidak berubah. Setelah `Finish`, harness tetap menjalankan semua
   validasi dari awal, memeriksa scope, dan memeriksa setiap klaim terhadap buktinya sendiri. Jika workspace berubah
@@ -107,6 +123,11 @@ Kekurangannya:
 2. Ukur. Kalau agen tetap mendiagnosis ulang meski diberi bukti, atau kalau biaya attempt tambahan terlalu besar,
    baru desain 2.2 versi ringkas, dengan review sendiri.
 3. **Versi naif 2.2 tidak dikerjakan**, karena data baseline menunjukkan ia memblokir perbaikan.
+
+**Keputusan review PR #59:** 2.1 disetujui untuk implementasi, dengan umpan balik yang mencakup semua blocker
+acceptance. 2.2 (versi ringkas) **tidak** diimplementasikan sampai eksperimen membuktikan 2.1 saja belum cukup.
+Seri berikutnya dibandingkan dengan baseline pada tingkat sukses, biaya per task sukses, dan tingkat kegagalan
+jujur. Kenaikan sukses yang disertai klaim tanpa bukti bukan kemenangan.
 
 ## 3. Tes yang direncanakan (model palsu, tanpa biaya)
 
