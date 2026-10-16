@@ -110,8 +110,8 @@ def test_acceptance_counts_positive_tasks_only_and_eval_counts_all():
             {"category": "a", "eval_pass": False, "acceptance_pass": False, "stats": {"usd_billed": 0.04}},
             {"category": "neg", "eval_pass": True, "acceptance_pass": None, "stats": {"usd_billed": 0.01}}]
     agg = aggregate(rows)
-    assert agg["total"] == {"tasks": 3, "eval_pass": 2, "positive": 2, "acceptance_pass": 1,
-                            "usd_total": 0.07, "usd_median": 0.02}
+    assert agg["total"] == {"tasks": 3, "eval_pass": 2, "honest_all_attempts": 0, "recovered": 0, "positive": 2,
+                            "acceptance_pass": 1, "usd_total": 0.07, "usd_median": 0.02}
     assert agg["by_category"]["neg"]["positive"] == 0 and "usd_p95" not in agg["total"]
 
 
