@@ -337,6 +337,7 @@ def test_resume_of_a_checkpoint_without_a_frozen_allowlist_stops_before_any_mode
     d = tmp_path / "runs" / "t"
     with SqliteSaver.from_conn_string(str(d / "checkpoints.sqlite")) as cp:   # as written before the field existed
         g = build_graph(cfg(), d, EventLog(d / "events.jsonl"), cp, validate=fake_validate,
+                        models={"coder": StrictScriptedChatModel(script=[])},
                         preflight=lambda: (True, "ok"))
         config = {"configurable": {"thread_id": "t"}}
         g.update_state(config, {"tools": None}, as_node="setup")
