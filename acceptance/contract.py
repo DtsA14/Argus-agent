@@ -21,6 +21,10 @@ from .validation import validate_command
 ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
 KEYS = {"contract", "version", "inputs", "scope", "artifacts", "validation", "judge", "limits"}
+OPTIONAL_KEYS = {"tools"}
+# Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
+# Only these, and only by adding: a contract can never grant anything else, nor remove a configured tool.
+CONTRACT_TOOLS = {"search_files"}
 VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass"}
 MAX_TIMEOUT_S = 600
 ID = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
@@ -67,6 +71,11 @@ def glob_regex(g):
     return re.compile("^" + "".join(out) + "$")
 
 
+def contract_tools(c):
+    """The tools this (valid) contract adds to the configured allowlist."""
+    return list(c.get("tools") or [])
+
+
 def claims_schema(c):
     return c["artifacts"][0]["schema"]
 
@@ -79,7 +88,7 @@ def validate(c):
     """Every problem with the contract, or [] if it is valid. Never fixes or loosens anything."""
     if not isinstance(c, dict):
         return ["contract must be an object"]
-    errors = [f"unknown key {k!r}" for k in sorted(set(c) - KEYS)]
+    errors = [f"unknown key {k!r}" for k in sorted(set(c) - KEYS - OPTIONAL_KEYS)]
     errors += [f"missing key {k!r}" for k in sorted(KEYS - set(c))]
     if errors:
         return errors
@@ -143,6 +152,16 @@ def validate(c):
             mp = v.get("must_pass", [])
             if not isinstance(mp, list) or not all(isinstance(x, str) and TEST_ID.match(x) for x in mp):
                 errors.append(f"{where}: must_pass must be a list of dotted test ids")
+
+    if "tools" in c:
+        t = c["tools"]
+        if not isinstance(t, list) or not t or not all(isinstance(x, str) for x in t):
+            errors.append("tools must be a non-empty list of tool names")
+        else:
+            errors += [f"tools: {x!r} cannot be granted by a contract (allowed: {sorted(CONTRACT_TOOLS)})"
+                       for x in t if x not in CONTRACT_TOOLS]
+            if len(set(t)) != len(t):
+                errors.append("tools: duplicate tool names")
 
     if c["judge"] != []:
         errors.append("judge must be [] in slice 1 (no subjective criteria)")

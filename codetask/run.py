@@ -64,6 +64,7 @@ class State(TypedDict, total=False):
     status: str
     stop_reason: str
     blocked_reason: str
+    tools: list                  # the effective tool allowlist of this run (config + frozen contract)
     tokens_used: Annotated[int, operator.add]
     usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
@@ -118,7 +119,11 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                 "RunValidation": f"1:{tool_version(scfg)}"}
     attempt_fn = make_attempt(caller, memo, log, tokens=lim0["attempt_tokens"], usd=lim0["attempt_usd"],
                               max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher)
-    allowed = (cfg.get("tools") or {}).get(cfg["code_task"]["role"], [])
+    configured = list((cfg.get("tools") or {}).get(cfg["code_task"]["role"], []))
+
+    def effective_tools(contract):
+        """The configured allowlist plus what the frozen contract adds (contract tools are validated at setup)."""
+        return configured + [t for t in ct.contract_tools(contract) if t not in configured]
     common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
 
     def move(state, new, *, reason=None, blocked=None, **extra):
@@ -137,6 +142,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         except (OSError, ValueError, ct.ContractError) as e:
             return move(state, st.BLOCKED, reason=f"invalid contract: {e}", blocked="invalid_contract")
         log.emit("contract_frozen", sha256=sha, contract=contract["contract"], version=contract["version"])
+        log.emit("tools_effective", tools=effective_tools(contract), from_contract=ct.contract_tools(contract))
         if ws.exists():
             shutil.rmtree(ws)     # a copy from a setup that crashed before committing; the agent never ran on it
         try:
@@ -154,14 +160,23 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if blocker:
             return move(state, st.FAILED_BUDGET, reason=f"{blocker}: not even one attempt fits")
         log.emit("workspace_prepared", files=len(before))
-        return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[])
+        return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[],
+                    tools=effective_tools(contract))
 
     def agent(state):
         try:
             contract = frozen.load(run_dir, state["contract_sha"])
         except frozen.ContractChanged as e:
             return move(state, st.BLOCKED, reason=str(e), blocked="contract_changed")
-        box = Toolbox(str(ws), contract, scfg, allowed, log, validate=validate)
+        # The allowlist frozen at setup, not the config of this process: a resume with a changed config must not
+        # change the agent's tools. A checkpoint without it cannot say what the run was allowed, so it stops.
+        tools = state.get("tools")
+        if tools is None:
+            return move(state, st.BLOCKED, reason="the checkpoint has no frozen tool allowlist",
+                        blocked="invalid_contract")
+        if effective_tools(contract) != tools:
+            log.emit("tools_config_changed", frozen=tools, current=effective_tools(contract))
+        box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate)
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None)
         return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"]},
                 "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}
@@ -268,7 +283,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
-                                        "attempt")}
+                                        "attempt", "tools")}
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
                   llm_calls_unknown=totals["unknown_after_crash"])

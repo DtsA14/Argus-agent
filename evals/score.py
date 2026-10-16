@@ -99,7 +99,7 @@ def run_stats(run_dir):
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
     events = [json.loads(l) for l in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     calls = [e for e in events if e.get("event") == "llm_call"]
-    return {"attempts": result.get("attempts"), "llm_calls": result.get("llm_calls"),
+    return {"attempts": result.get("attempts"), "llm_calls": result.get("llm_calls"), "tools": result.get("tools"),
             "usd_billed": result.get("usd_billed"), "usd_complete": result.get("usd_complete"),
             "tokens": sum(e.get("tokens") or 0 for e in calls),
             "transient_errors": sum(e.get("status") == "transient_error" for e in calls),
