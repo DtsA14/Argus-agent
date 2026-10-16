@@ -1,0 +1,29 @@
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/inventory/src/importer.py runs/eval_live_4/live_inventory_import/workspace/src/importer.py
+--- fixtures/repos/inventory/src/importer.py	2026-10-16 03:49:29.382001047 +0000
++++ runs/eval_live_4/live_inventory_import/workspace/src/importer.py	2026-10-16 04:23:00.419131361 +0000
+@@ -17,11 +17,9 @@
+     check() report; the in-memory store does not fail on validated rows, so no rollback for storage failures is
+     provided or claimed."""
+     rows, problems = parse(text)
++    problems = list(problems) + check(rows, inventory)
+     if problems:
+-        raise ImportFailed(problems)
++        raise ImportFailed(sorted(problems, key=lambda p: p.line))
+     for row in rows:
+-        row_problems = check([row], inventory)
+-        if row_problems:
+-            raise ImportFailed(row_problems)
+         inventory.set_quantity(row.sku, row.qty)
+     return len(rows)
+diff -ru -x __pycache__ -x SUMMARY.json fixtures/repos/inventory/src/validate.py runs/eval_live_4/live_inventory_import/workspace/src/validate.py
+--- fixtures/repos/inventory/src/validate.py	2026-10-16 03:49:29.382799691 +0000
++++ runs/eval_live_4/live_inventory_import/workspace/src/validate.py	2026-10-16 04:23:00.411340118 +0000
+@@ -14,7 +14,7 @@
+             problems.append(Problem(row.line, "empty SKU"))
+         if row.qty < 0:
+             problems.append(Problem(row.line, f"negative quantity for {row.sku}"))
+-        if row.sku in seen and inventory.has(row.sku):
++        if row.sku in seen:
+             problems.append(Problem(row.line, f"SKU {row.sku} appears more than once"))
+         seen.add(row.sku)
+     return problems
