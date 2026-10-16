@@ -1168,6 +1168,180 @@
      }
     }
    ]
+  },
+  {
+   "id": "money_precision",
+   "category": "root_cause",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/money_precision.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/invoice.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/money.py"
+       },
+       "id": "r2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/money.py",
+        "content": "\"\"\"Money amounts, kept as whole cents (int).\"\"\"\nimport re\n\nAMOUNT = re.compile(r\"\\d+(\\.\\d{1,2})?\")\n\n\ndef parse_amount(text):\n    \"\"\"A decimal amount -> its exact number of cents.\n\n    Valid input: a non-negative decimal number with at most two digits after the point, e.g. \"12\", \"12.3\", \"12.34\".\n    The result is exact for every valid input, however large: \"0.29\" is 29 cents. Anything else raises ValueError.\"\"\"\n    if not isinstance(text, str) or not AMOUNT.fullmatch(text):\n        raise ValueError(f\"not an amount: {text!r}\")\n    whole, _, frac = text.partition(\".\")\n    return int(whole) * 100 + int((frac + \"00\")[:2])\n\n\ndef format_cents(cents):\n    \"\"\"Whole cents -> \"units.cc\", e.g. 1234 -> \"12.34\".\"\"\"\n    return f\"{cents // 100}.{cents % 100:02d}\"\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/money.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "parse_amount converted through float and truncated; it now builds the cents from the digits, so every flow that uses it is exact."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/invoice.py",
+        "content": "\"\"\"Invoice totals.\"\"\"\nfrom .money import parse_amount\n\n\ndef invoice_total(lines):\n    \"\"\"Total in cents of (description, unit_price_text, quantity) lines: the sum of price x quantity.\"\"\"\n    # parse_amount truncates float cents; round here instead\n    return sum(round(float(price) * 100) * quantity for _, price, quantity in lines)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/invoice.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "Invoice totals now round the cents instead of truncating."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/invoice.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "Invoice totals now round the cents instead of truncating."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
   }
  ]
 }
