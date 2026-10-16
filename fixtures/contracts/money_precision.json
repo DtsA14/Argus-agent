@@ -1,0 +1,73 @@
+{
+  "contract": "money_precision",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/billing",
+    "issue": "Invoice totals are sometimes off by one cent: for example, an invoice with a single line of 0.29 shows 0.28. Fix it. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v2"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_regression.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 6,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_amounts.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 5,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_amounts.AmountsTest.test_invoice_with_cent_values",
+        "tests.test_amounts.AmountsTest.test_refund_of_cent_values",
+        "tests.test_amounts.AmountsTest.test_tax_on_a_cent_value",
+        "tests.test_amounts.AmountsTest.test_invoice_with_large_amounts",
+        "tests.test_amounts.AmountsTest.test_refund_of_large_amounts"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}
