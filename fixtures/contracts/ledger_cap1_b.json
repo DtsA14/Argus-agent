@@ -1,0 +1,76 @@
+{
+  "contract": "ledger_cap1_b",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/ledger",
+    "issue": "In the overnight export, accounts on the EU schedule are charged their late fee about two weeks later than they should be; the account page shows the right fee. Fix it. Do not change the tests. The repository is large; you can search file contents with SearchFiles."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v2"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_regression.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 8,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_consistency.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 5,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_consistency.ConsistencyTest.test_every_schedule_matches_the_account_page",
+        "tests.test_consistency.ConsistencyTest.test_eu_fee_starts_after_two_weeks",
+        "tests.test_consistency.ConsistencyTest.test_nordic_minimum_fee",
+        "tests.test_consistency.ConsistencyTest.test_partner_percentage",
+        "tests.test_consistency.ConsistencyTest.test_mixed_schedules_in_one_run"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 1.0,
+    "max_iterations": 3
+  },
+  "tools": [
+    "search_files"
+  ]
+}
