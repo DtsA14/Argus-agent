@@ -264,7 +264,9 @@ def test_with_claims_v2_an_empty_finish_ends_the_attempt_and_the_task_still_fail
 
 def test_with_claims_v1_an_empty_finish_is_still_rejected(tmp_path):
     nothing = call("Finish", {"claims": [], "summary": "I could not fix it."}, "f0")
-    r, model, d = run(tmp_path, [nothing, WRITE, FINISH])
+    v1 = copy.deepcopy(CONTRACT)
+    v1["artifacts"][0]["schema"] = "claims_v1"
+    r, model, d = run(tmp_path, [nothing, WRITE, FINISH], contract=v1)
     answer = next(m for m in model.calls[1]["messages"] if getattr(m, "tool_call_id", None) == "f0").content
     assert "claims must be a list of 1 to 50 claims" in answer and r["status"] == st.DONE
 

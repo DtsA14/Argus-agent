@@ -6,7 +6,7 @@
     "issue": "divide(a, 0) returns 0. It must raise ZeroDivisionError, like Python's own division. Fix the code; do not change the tests."
   },
   "scope": {"writable": ["src/**"], "protected": ["tests/**"]},
-  "artifacts": [{"path": "SUMMARY.json", "type": "json", "schema": "claims_v1"}],
+  "artifacts": [{"path": "SUMMARY.json", "type": "json", "schema": "claims_v2"}],
   "validation": [
     {"id": "unit", "executable": "python", "args": ["-m", "unittest", "discover", "-s", "tests", "-t", "."],
      "timeout_s": 60, "min_tests": 7, "max_skipped": 0},
