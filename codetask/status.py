@@ -24,6 +24,8 @@ LEGAL = {(None, RUNNING), (None, BLOCKED), (None, FAILED_BUDGET), (RUNNING, RUNN
         {(RUNNING, t) for t in TERMINAL}
 
 # Why a run is BLOCKED; each needs a human, none is a pass.
+# invalid_contract also covers a checkpoint without the tool allowlist frozen at setup: the run's frozen contract
+# state is incomplete, so what the agent was allowed cannot be known (a dedicated reason is not worth it yet).
 BLOCKED_REASONS = {"invalid_contract", "contract_changed", "sandbox_unavailable", "provider_failed"}
 
 
