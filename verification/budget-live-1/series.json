@@ -1,0 +1,289 @@
+{
+ "order": [
+  "c3@45",
+  "c3@30",
+  "b3@30",
+  "b3@45",
+  "a3@30",
+  "a3@45",
+  "c1@45",
+  "c1@30",
+  "c2@45",
+  "c2@30",
+  "a2@45",
+  "a2@30",
+  "b1@45",
+  "b1@30",
+  "a1@30",
+  "a1@45",
+  "b2@30",
+  "b2@45"
+ ],
+ "runs": [
+  {
+   "position": 1,
+   "entry": "c3@45",
+   "arm": "45",
+   "task": "ledger_cap1_c",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.096068,
+   "usd_complete": true
+  },
+  {
+   "position": 2,
+   "entry": "c3@30",
+   "arm": "30",
+   "task": "ledger_cap1_c",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.087406,
+   "usd_complete": true
+  },
+  {
+   "position": 3,
+   "entry": "b3@30",
+   "arm": "30",
+   "task": "ledger_cap1_b",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.10974,
+   "usd_complete": true
+  },
+  {
+   "position": 4,
+   "entry": "b3@45",
+   "arm": "45",
+   "task": "ledger_cap1_b",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.098422,
+   "usd_complete": true
+  },
+  {
+   "position": 5,
+   "entry": "a3@30",
+   "arm": "30",
+   "task": "ledger_cap1_a",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.10256,
+   "usd_complete": true
+  },
+  {
+   "position": 6,
+   "entry": "a3@45",
+   "arm": "45",
+   "task": "ledger_cap1_a",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.112556,
+   "usd_complete": true
+  },
+  {
+   "position": 7,
+   "entry": "c1@45",
+   "arm": "45",
+   "task": "ledger_cap1_c",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.082786,
+   "usd_complete": true
+  },
+  {
+   "position": 8,
+   "entry": "c1@30",
+   "arm": "30",
+   "task": "ledger_cap1_c",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.075338,
+   "usd_complete": true
+  },
+  {
+   "position": 9,
+   "entry": "c2@45",
+   "arm": "45",
+   "task": "ledger_cap1_c",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.083342,
+   "usd_complete": true
+  },
+  {
+   "position": 10,
+   "entry": "c2@30",
+   "arm": "30",
+   "task": "ledger_cap1_c",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.110278,
+   "usd_complete": true
+  },
+  {
+   "position": 11,
+   "entry": "a2@45",
+   "arm": "45",
+   "task": "ledger_cap1_a",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.098206,
+   "usd_complete": true
+  },
+  {
+   "position": 12,
+   "entry": "a2@30",
+   "arm": "30",
+   "task": "ledger_cap1_a",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.114988,
+   "usd_complete": true
+  },
+  {
+   "position": 13,
+   "entry": "b1@45",
+   "arm": "45",
+   "task": "ledger_cap1_b",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.083262,
+   "usd_complete": true
+  },
+  {
+   "position": 14,
+   "entry": "b1@30",
+   "arm": "30",
+   "task": "ledger_cap1_b",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.109694,
+   "usd_complete": true
+  },
+  {
+   "position": 15,
+   "entry": "a1@30",
+   "arm": "30",
+   "task": "ledger_cap1_a",
+   "exit_code": 0,
+   "status": "FAILED_ACCEPTANCE",
+   "eval_pass": false,
+   "usd": 0.113756,
+   "usd_complete": true
+  },
+  {
+   "position": 16,
+   "entry": "a1@45",
+   "arm": "45",
+   "task": "ledger_cap1_a",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.111144,
+   "usd_complete": true
+  },
+  {
+   "position": 17,
+   "entry": "b2@30",
+   "arm": "30",
+   "task": "ledger_cap1_b",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.079174,
+   "usd_complete": true
+  },
+  {
+   "position": 18,
+   "entry": "b2@45",
+   "arm": "45",
+   "task": "ledger_cap1_b",
+   "exit_code": 0,
+   "status": "DONE",
+   "eval_pass": true,
+   "usd": 0.083784,
+   "usd_complete": true
+  }
+ ],
+ "stopped": null,
+ "usd_spent": 1.752504,
+ "pairs": [
+  {
+   "entries": [
+    "c3@45",
+    "c3@30"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "b3@30",
+    "b3@45"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "a3@30",
+    "a3@45"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "c1@45",
+    "c1@30"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "c2@45",
+    "c2@30"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "a2@45",
+    "a2@30"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "b1@45",
+    "b1@30"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "a1@30",
+    "a1@45"
+   ],
+   "state": "complete"
+  },
+  {
+   "entries": [
+    "b2@30",
+    "b2@45"
+   ],
+   "state": "complete"
+  }
+ ]
+}

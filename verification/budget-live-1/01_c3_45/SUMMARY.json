@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In resolve_terms (src/steps/prepare.py), merge_options had its arguments swapped, so the base defaults overrode each schedule's settings. I changed it to merge_options(base, plan), the same order the account page uses. The unit and target validations both pass."
+}

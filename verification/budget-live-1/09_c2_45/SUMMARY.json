@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In the overnight pipeline's resolve_terms step (src/steps/prepare.py), the arguments to merge_options were swapped, so the base defaults overrode each schedule's settings. I put them in the right order, matching account_terms. The unit and target validations pass."
+}

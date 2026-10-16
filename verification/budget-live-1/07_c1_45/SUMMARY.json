@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In the overnight pipeline's resolve_terms step, merge_options had its arguments swapped, so the base terms overrode the schedule's terms. I swapped them back, so the EU schedule's 14-day grace now applies and matches the account page."
+}

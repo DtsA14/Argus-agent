@@ -1,0 +1,42 @@
+effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files']
+effective system prompt sha256 9f9e718c7ae339f8666475159e8867e97c048e4c3c48ae8421435389f61882a6
+llm_call_started 9, llm_call 10 (ok 9, refused 1)
+  it 0 step  0 ok       hash ok in 1768 out 28 usd 0.003816 
+      -> ListFiles {}
+  it 0 step  1 ok       hash ok in 2425 out 167 usd 0.00652 
+      -> ReadFile {"path": "tests/test_consistency.py"}
+      -> ReadFile {"path": "src/config/schedules.json"}
+      -> ReadFile {"path": "src/core/pipeline.py"}
+  it 0 step  2 ok       hash ok in 4259 out 168 usd 0.010198 
+      -> ReadFile {"path": "src/jobs/cycle.py"}
+      -> ReadFile {"path": "src/jobs/query.py"}
+      -> ReadFile {"path": "src/config/pipeline.json"}
+  it 0 step  3 ok       hash ok in 4946 out 159 usd 0.011482 
+      -> SearchFiles {"text": "@step("}
+      -> ReadFile {"path": "src/core/accounts.py"}
+      -> ReadFile {"path": "src/core/terms.py"}
+  it 0 step  4 ok       hash ok in 5865 out 273 usd 0.01446 
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ReadFile {"path": "src/steps/compat.py"}
+      -> ReadFile {"path": "src/steps/apply.py"}
+      -> ReadFile {"path": "src/steps/intake.py"}
+      -> ReadFile {"path": "src/steps/output.py"}
+  it 0 step  5 ok       hash ok in 9905 out 86 usd 0.02067 
+      -> ReadFile {"path": "src/common/options.py"}
+  it 0 step  6 ok       hash ok in 10190 out 946 usd 0.02984 
+      -> WriteFile {"content": "\"\"\"Per-run preparation of the items.\"\"\"\nfrom ..common.options import merge_options\nfrom ..common.settings import base_terms, schedule_terms
+      -> RunValidation {"id": "unit"}
+      -> RunValidation {"id": "target"}
+  it 0 step  7 refused  hash ok in 12337 out None usd None tokens_left 3815
+  it 1 step  0 ok       hash ok in 2080 out 129 usd 0.00545 
+      -> ReadFile {"path": "src/steps/prepare.py"}
+      -> ListFiles {}
+  it 1 step  1 ok       hash ok in 3655 out 281 usd 0.01012 
+      -> Finish {"claims": [{"claim": "file_changed", "path": "src/steps/prepare.py"}, {"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": "tests_pass", "evidence
+prompt_hash checked 10, mismatches 0
+  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'reservation_exhausted', 'steps': 7, 'node': 'agent', 'task': 'ledger_cap1_a', 'iteration': 0}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'finished', 'steps': 1, 'node': 'agent', 'task': 'ledger_cap1_a', 'iteration': 1}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', 'blocked_reason': None}
+result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': 2, 'usd_billed': 0.112556, 'llm_calls': 9, 'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files']}

@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/steps/prepare.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "In resolve_terms (src/steps/prepare.py), merge_options had its arguments swapped, so the base terms overrode the schedule's terms. I put them in the right order, base first and then the schedule. Overnight fees now use the schedule's grace period, so EU accounts get the 14-day grace period. The `unit` and `target` validations both pass."
+}
