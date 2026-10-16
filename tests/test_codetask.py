@@ -404,8 +404,8 @@ def test_a_failing_validation_is_reported_as_failing_and_an_unsupported_claim_st
     assert "test_divide_by_zero FAIL" in p and "files changed from the original: none" in p
     assert r["status"] == st.FAILED_ACCEPTANCE
     v = json.loads((d / "verdict_1.json").read_text())
-    claims = next(c for c in v["criteria"] if c["id"] == "claims")
-    assert claims["status"] == "fail" and "issue_fixed" in claims["reason"]
+    false = [c for c in v["criteria"] if c["id"].startswith("claim") and c["status"] == "fail"]
+    assert any("issue_fixed" in c["id"] + c["reason"] for c in false), v["criteria"]
 
 
 def test_the_feedback_comes_from_the_latest_verdict(tmp_path):
