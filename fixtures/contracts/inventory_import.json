@@ -1,0 +1,72 @@
+{
+  "contract": "inventory_import",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/inventory",
+    "issue": "Two bug reports about CSV import (src/importer.py and the modules it uses). 1) An import file that lists the same new SKU twice is accepted, although the rules say a SKU may appear at most once per file. 2) When a line in the middle of a file is invalid, the import fails but the lines before it are already applied, although import_csv promises all or nothing. Fix both so the documented behaviour holds. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "src/**"
+    ],
+    "protected": [
+      "tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v2"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_regression.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 5,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_import_rules.py"
+      ],
+      "timeout_s": 60,
+      "min_tests": 4,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests.test_import_rules.ImportRulesTest.test_new_sku_twice_in_one_file_is_rejected",
+        "tests.test_import_rules.ImportRulesTest.test_bad_quantity_mid_file_changes_nothing",
+        "tests.test_import_rules.ImportRulesTest.test_malformed_line_mid_file_changes_nothing",
+        "tests.test_import_rules.ImportRulesTest.test_valid_import_after_a_failed_one_is_applied"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}
