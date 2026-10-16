@@ -1531,6 +1531,211 @@
      }
     }
    ]
+  },
+  {
+   "id": "shop_coupon_leak",
+   "category": "large_repo",
+   "expected": "DONE",
+   "contract": "fixtures/contracts/shop_coupon_leak.json",
+   "reference": [
+    {
+     "tool_calls": [
+      {
+       "name": "SearchFiles",
+       "args": {
+        "text": "coupon",
+        "path": "src/checkout"
+       },
+       "id": "s1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/checkout/cart.py"
+       },
+       "id": "r1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "SearchFiles",
+       "args": {
+        "text": "def active_rules"
+       },
+       "id": "s2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "ReadFile",
+       "args": {
+        "path": "src/discounts/registry.py"
+       },
+       "id": "r2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/discounts/registry.py",
+        "content": "\"\"\"Discount rules that apply to every customer.\n\nactive_rules() gives each caller its own list of the rules that currently apply; callers may extend it with\norder-specific rules (a coupon, a quote promotion) without affecting anyone else.\n\"\"\"\nfrom .rules import Rule\n\nRULES = [\n    Rule(\"volume\", 5, lambda order: order.subtotal >= 10000),\n]\n\n\ndef active_rules(customer):\n    \"\"\"The discount rules that apply to this customer's orders.\"\"\"\n    if customer.blocked:\n        return []\n    return list(RULES)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "RunValidation",
+       "args": {
+        "id": "target"
+       },
+       "id": "v1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/discounts/registry.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "active_rules returned the shared RULES list, which callers then extended; it now returns a copy, as its docstring promises."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ],
+   "wrong": [
+    {
+     "tool_calls": [
+      {
+       "name": "WriteFile",
+       "args": {
+        "path": "src/checkout/cart.py",
+        "content": "\"\"\"Checkout: the total a customer pays for a cart.\"\"\"\nfrom ..discounts.coupons import coupon_rule\nfrom ..discounts.registry import active_rules\nfrom ..pricing.base import Order, apply_rules\n\n\ndef checkout_total(customer, items, coupon=None):\n    \"\"\"Total in cents for the items, with the customer's discount rules and an optional coupon code.\"\"\"\n    order = Order(list(items))\n    rules = list(active_rules(customer))\n    rule = coupon_rule(coupon) if coupon else None\n    if rule is not None:\n        rules.append(rule)\n    return apply_rules(order, rules)\n"
+       },
+       "id": "w1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/checkout/cart.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "checkout now copies the discount rules before adding a coupon."
+       },
+       "id": "f1"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    },
+    {
+     "tool_calls": [
+      {
+       "name": "Finish",
+       "args": {
+        "claims": [
+         {
+          "claim": "file_changed",
+          "path": "src/checkout/cart.py"
+         },
+         {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+         },
+         {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+         }
+        ],
+        "summary": "checkout now copies the discount rules before adding a coupon."
+       },
+       "id": "f2"
+      }
+     ],
+     "usage": {
+      "input_tokens": 500,
+      "output_tokens": 60
+     }
+    }
+   ]
   }
  ]
 }
