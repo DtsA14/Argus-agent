@@ -1,0 +1,61 @@
+{"ts": 1792149168.479, "event": "run_start", "run_id": "live_shop_coupon_leak", "kind": "code_task", "contract": "/home/ubuntu/Argus-agent/fixtures/contracts/shop_coupon_leak.json"}
+{"ts": 1792149168.506, "event": "node_start", "node": "setup"}
+{"ts": 1792149168.508, "event": "contract_frozen", "sha256": "d1533366cc890114fc8ebf030c905bd5c048de7420248765bd0e85b013d04a01", "contract": "shop_coupon_leak", "version": 1}
+{"ts": 1792149168.508, "event": "tools_effective", "tools": ["list_files", "read_file", "write_file", "run_validation", "search_files"], "from_contract": ["search_files"]}
+{"ts": 1792149168.579, "event": "workspace_prepared", "files": 56}
+{"ts": 1792149168.579, "event": "status", "old": null, "new": "RUNNING", "reason": null, "blocked_reason": null}
+{"ts": 1792149168.579, "event": "body_done", "node": "setup", "tokens": 0}
+{"ts": 1792149168.585, "event": "result_committed", "node": "setup"}
+{"ts": 1792149168.585, "event": "node_end", "node": "setup", "seconds": 0.079, "tokens": 0}
+{"ts": 1792149168.591, "event": "node_start", "node": "agent", "iteration": 0}
+{"ts": 1792149169.047, "event": "llm_call_started", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "d171da328c03d852", "call_id": "44db3d15d7fe", "attempt": 1, "est_input": 1789, "max_tokens": 4096, "worst_tokens": 5885, "worst_usd_nano": 44538000, "worst_usd": 0.044538}
+{"ts": 1792149170.761, "event": "llm_call", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 0, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "d171da328c03d852", "call_id": "44db3d15d7fe", "status": "ok", "attempt": 1, "est_input": 1789, "max_tokens": 4096, "input_tokens": 1789, "output_tokens": 28, "cache_read": 0, "tokens": 1817, "usd_nano": 3858000, "usd": 0.003858, "charged": "actual", "latency_s": 1.713, "truncated": false}
+{"ts": 1792149170.765, "event": "step_committed", "kind": "llm", "step": 0, "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149170.765, "event": "tool_call", "role": "coder", "tool": "list_files"}
+{"ts": 1792149170.774, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ListFiles", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149171.094, "event": "llm_call_started", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "ed865a543b6199d6", "call_id": "e694e6106cc4", "attempt": 1, "est_input": 2434, "max_tokens": 4096, "worst_tokens": 6530, "worst_usd_nano": 45828000, "worst_usd": 0.045828}
+{"ts": 1792149173.184, "event": "llm_call", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 1, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "ed865a543b6199d6", "call_id": "e694e6106cc4", "status": "ok", "attempt": 1, "est_input": 2434, "max_tokens": 4096, "input_tokens": 2434, "output_tokens": 169, "cache_read": 0, "tokens": 2603, "usd_nano": 6558000, "usd": 0.006558, "charged": "actual", "latency_s": 2.09, "truncated": false}
+{"ts": 1792149173.189, "event": "step_committed", "kind": "llm", "step": 1, "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149173.19, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792149173.193, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149173.194, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792149173.198, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149173.198, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792149173.202, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149173.534, "event": "llm_call_started", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "ad08b4e5694862f6", "call_id": "ce3f42d80e5d", "attempt": 1, "est_input": 4407, "max_tokens": 4096, "worst_tokens": 8503, "worst_usd_nano": 49774000, "worst_usd": 0.049774}
+{"ts": 1792149175.406, "event": "llm_call", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 2, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "ad08b4e5694862f6", "call_id": "ce3f42d80e5d", "status": "ok", "attempt": 1, "est_input": 4407, "max_tokens": 4096, "input_tokens": 4407, "output_tokens": 170, "cache_read": 0, "tokens": 4577, "usd_nano": 10514000, "usd": 0.010514, "charged": "actual", "latency_s": 1.871, "truncated": false}
+{"ts": 1792149175.412, "event": "step_committed", "kind": "llm", "step": 2, "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149175.412, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792149175.416, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149175.416, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792149175.42, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149175.42, "event": "tool_call", "role": "coder", "tool": "read_file"}
+{"ts": 1792149175.424, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149175.753, "event": "llm_call_started", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "06b9ad16c5f85d5c", "call_id": "2ff4cee9ab97", "attempt": 1, "est_input": 5285, "max_tokens": 4096, "worst_tokens": 9381, "worst_usd_nano": 51530000, "worst_usd": 0.05153}
+{"ts": 1792149178.63, "event": "llm_call", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 3, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "06b9ad16c5f85d5c", "call_id": "2ff4cee9ab97", "status": "ok", "attempt": 1, "est_input": 5285, "max_tokens": 4096, "input_tokens": 5285, "output_tokens": 349, "cache_read": 0, "tokens": 5634, "usd_nano": 14060000, "usd": 0.01406, "charged": "actual", "latency_s": 2.876, "truncated": false}
+{"ts": 1792149178.638, "event": "step_committed", "kind": "llm", "step": 3, "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149178.638, "event": "tool_call", "role": "coder", "tool": "write_file"}
+{"ts": 1792149178.645, "event": "step_committed", "kind": "tool", "step": 3, "tool": "WriteFile", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149178.646, "event": "tool_call", "role": "coder", "tool": "run_validation"}
+{"ts": 1792149179.353, "event": "sandbox_run", "container": "argus-479038c47a4d", "exit_code": 0, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 747, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792149179.358, "event": "step_committed", "kind": "tool", "step": 3, "tool": "RunValidation", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149179.359, "event": "tool_call", "role": "coder", "tool": "run_validation"}
+{"ts": 1792149180.023, "event": "sandbox_run", "container": "argus-eb10413822e5", "exit_code": 0, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 612, "cleanup_failed": false, "validation": "unit"}
+{"ts": 1792149180.028, "event": "step_committed", "kind": "tool", "step": 3, "tool": "RunValidation", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149180.361, "event": "llm_call_started", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 4, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "0c951e2fd87a4efe", "call_id": "9364d49ab31f", "attempt": 1, "est_input": 6701, "max_tokens": 4096, "worst_tokens": 10797, "worst_usd_nano": 54362000, "worst_usd": 0.054362}
+{"ts": 1792149183.23, "event": "llm_call", "node": "agent", "task": "shop_coupon_leak", "iteration": 0, "step": 4, "role": "coder", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "0c951e2fd87a4efe", "call_id": "9364d49ab31f", "status": "ok", "attempt": 1, "est_input": 6701, "max_tokens": 4096, "input_tokens": 6701, "output_tokens": 191, "cache_read": 0, "tokens": 6892, "usd_nano": 15312000, "usd": 0.015312, "charged": "actual", "latency_s": 2.868, "truncated": false}
+{"ts": 1792149183.234, "event": "step_committed", "kind": "llm", "step": 4, "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149183.242, "event": "step_committed", "kind": "tool", "step": 4, "tool": "Finish", "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149183.242, "event": "attempt_end", "reason": "finished", "steps": 4, "node": "agent", "task": "shop_coupon_leak", "iteration": 0}
+{"ts": 1792149183.242, "event": "body_done", "node": "agent", "tokens": 21523, "iteration": 0}
+{"ts": 1792149183.246, "event": "result_committed", "node": "agent", "iteration": 0}
+{"ts": 1792149183.246, "event": "node_end", "node": "agent", "seconds": 14.655, "tokens": 21523, "iteration": 0}
+{"ts": 1792149183.252, "event": "node_start", "node": "acceptance", "iteration": 0}
+{"ts": 1792149183.974, "event": "sandbox_run", "container": "argus-a40e901d6580", "exit_code": 0, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 612, "cleanup_failed": false, "validation": "unit"}
+{"ts": 1792149184.629, "event": "sandbox_run", "container": "argus-e1265854520c", "exit_code": 0, "timed_out": false, "killed": false, "truncated": false, "output_limit_exceeded": false, "stdout_bytes": 0, "stderr_bytes": 747, "cleanup_failed": false, "validation": "target"}
+{"ts": 1792149184.635, "event": "acceptance_verdict", "iteration": 0, "outcome": "pass", "failing": [], "workspace_digest": "b48f857723b68f326afda78ddafb1e96cdc97d1b7163467c51027d54c7281955"}
+{"ts": 1792149184.635, "event": "status", "old": "RUNNING", "new": "DONE", "reason": "all criteria passed", "blocked_reason": null}
+{"ts": 1792149184.635, "event": "body_done", "node": "acceptance", "tokens": 0, "iteration": 0}
+{"ts": 1792149184.639, "event": "result_committed", "node": "acceptance", "iteration": 0}
+{"ts": 1792149184.64, "event": "node_end", "node": "acceptance", "seconds": 1.388, "tokens": 0, "iteration": 0}
+{"ts": 1792149184.65, "event": "run_end", "status": "DONE", "stop_reason": "all criteria passed", "blocked_reason": null, "contract_sha": "d1533366cc890114fc8ebf030c905bd5c048de7420248765bd0e85b013d04a01", "tools": ["list_files", "read_file", "write_file", "run_validation", "search_files"], "run_id": "live_shop_coupon_leak", "attempts": 1, "usd_billed": 0.050302, "usd_complete": true, "llm_calls": 5, "llm_calls_unknown": 0}

@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "file_changed",
+      "path": "src/discounts/registry.py"
+    }
+  ],
+  "summary": "active_rules() returned the shared global RULES list, so callers appending a coupon or promo rule mutated it for everyone. It now returns a copy."
+}

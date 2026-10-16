@@ -1,0 +1,178 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/discounts/registry.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/discounts/registry.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "e36eb6f3be1c71e32699caf21c4a5a9d419cc30d2e4350383b5241eaba9b9523"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_blocked_customer_gets_no_discount (tests.test_regression.RegressionTest.test_blocked_customer_gets_no_discount) ... ok\ntest_checkout_without_coupon (tests.test_regression.RegressionTest.test_checkout_without_coupon) ... ok\ntest_coupon_description (tests.test_regression.RegressionTest.test_coupon_description) ... ok\ntest_quote_without_promotion (tests.test_regression.RegressionTest.test_quote_without_promotion) ... ok\ntest_volume_discount (tests.test_regression.RegressionTest.test_volume_discount) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_order_isolation.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_order_isolation.OrderIsolationTest.test_coupon_checkout": "ok",
+          "tests.test_order_isolation.OrderIsolationTest.test_no_coupon_after_a_coupon_checkout": "ok",
+          "tests.test_order_isolation.OrderIsolationTest.test_coupon_between_two_plain_checkouts": "ok",
+          "tests.test_order_isolation.OrderIsolationTest.test_plain_quote_after_a_coupon_checkout": "ok",
+          "tests.test_order_isolation.OrderIsolationTest.test_plain_checkout_after_a_promotional_quote": "ok"
+        },
+        "output_tail": "test_coupon_between_two_plain_checkouts (tests.test_order_isolation.OrderIsolationTest.test_coupon_between_two_plain_checkouts) ... ok\ntest_coupon_checkout (tests.test_order_isolation.OrderIsolationTest.test_coupon_checkout) ... ok\ntest_no_coupon_after_a_coupon_checkout (tests.test_order_isolation.OrderIsolationTest.test_no_coupon_after_a_coupon_checkout) ... ok\ntest_plain_checkout_after_a_promotional_quote (tests.test_order_isolation.OrderIsolationTest.test_plain_checkout_after_a_promotional_quote) ... ok\ntest_plain_quote_after_a_coupon_checkout (tests.test_order_isolation.OrderIsolationTest.test_plain_quote_after_a_coupon_checkout) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.002s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/discounts/registry.py"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "b48f857723b68f326afda78ddafb1e96cdc97d1b7163467c51027d54c7281955",
+  "summary_sha256": "e36eb6f3be1c71e32699caf21c4a5a9d419cc30d2e4350383b5241eaba9b9523",
+  "verdict_sha256": "2966b7c85841ed82cc7a7b11c56ed7de16b072ac51b615273ab32387ea4454a1"
+}
