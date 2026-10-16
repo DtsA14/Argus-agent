@@ -1,0 +1,74 @@
+{
+  "contract": "argus_self_subtest",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/argus_self",
+    "issue": "In acceptance/validation.py, parse_unittest records an empty status for a test whose subTests fail or error: unittest prints the test's own line with no status and then one indented line per failing or erroring subTest, and the parser only reads the first. The harness then cannot tell that such a test failed. Expected: a test with any failing subTest is 'FAIL', with any erroring subTest 'ERROR' (an error wins over failures, whatever the order), and 'ok' only when it passed; every other part of the parsing stays as it is. Do not change the tests."
+  },
+  "scope": {
+    "writable": [
+      "acceptance/validation.py"
+    ],
+    "protected": [
+      "pilot_tests/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v2"
+    }
+  ],
+  "validation": [
+    {
+      "id": "unit",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "pilot_tests",
+        "-t",
+        ".",
+        "-p",
+        "test_parser_regression.py"
+      ],
+      "timeout_s": 120,
+      "min_tests": 5,
+      "max_skipped": 0
+    },
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "pilot_tests",
+        "-t",
+        ".",
+        "-p",
+        "test_subtest_status.py"
+      ],
+      "timeout_s": 120,
+      "min_tests": 6,
+      "max_skipped": 0,
+      "must_pass": [
+        "pilot_tests.test_subtest_status.SubTestStatusTest.test_failed_subtests_make_the_test_fail",
+        "pilot_tests.test_subtest_status.SubTestStatusTest.test_an_erroring_subtest_makes_the_test_error",
+        "pilot_tests.test_subtest_status.SubTestStatusTest.test_a_later_failure_is_not_hidden_by_an_earlier_passing_subtest",
+        "pilot_tests.test_subtest_status.SubTestStatusTest.test_an_error_anywhere_among_the_subtests_wins_over_failures",
+        "pilot_tests.test_subtest_status.SubTestStatusTest.test_all_passing_subtests_are_ok",
+        "pilot_tests.test_subtest_status.SubTestStatusTest.test_a_failing_subtest_is_never_ok_next_to_other_tests"
+      ]
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  }
+}
