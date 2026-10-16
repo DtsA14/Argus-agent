@@ -165,3 +165,82 @@ setelah `ledger.py` dibaca.
 Jadi dalam bentuk sekarang, search tidak punya keunggulan nyata atas agen yang mengikuti impor. A vs C kemungkinan
 hanya mengukur strategi baca agen, bukan nilai search. Fixture ini **belum** dipakai untuk live. Keputusan desain
 berikutnya menunggu review.
+
+## 7. Revisi desain (untuk review; fixture belum diubah)
+
+### 7.1 Registry langkah yang masuk akal secara produk
+
+Run overnight menjadi pipeline yang langkahnya diatur lewat konfigurasi. Ini pola yang umum:
+- `src/config/pipeline.json` berisi `"overnight": ["load_open", "resolve_terms", "assess_fees", "to_rows"]`;
+- setiap langkah mendaftarkan diri dengan dekorator `@step("resolve_terms")`;
+- `core/pipeline.py` mengimpor semua modul di `src/steps/` (auto-discovery) lalu menjalankan langkah sesuai urutan
+  config.
+
+Polanya sama dengan rute Flask, perintah Click, atau operator di pipeline data. Alasan produknya: urutan langkah per
+lingkungan bisa diubah tanpa mengubah kode.
+
+**Bug:** tetap `merge_options(plan, base)`, sekarang di langkah `resolve_terms` di `src/steps/prepare.py`.
+`src/steps/` berisi sekitar 10 modul langkah bernama netral (`apply`, `batch`, `compat`, `finalize`, `prepare`, …),
+masing-masing sekitar 2 KB. Satu modul `compat` berisi `resolve_terms_v1` yang tidak terdaftar di config, sebagai decoy.
+
+**Tidak ada lagi jalur dua lompatan impor:** tes → `jobs/cycle.py` → `core/pipeline.py`. Dari sana jejaknya berupa
+**nama string** di config, bukan impor.
+- **Jalur wajar tanpa search:** baca `pipeline.py` dan config (keduanya terlihat dari impor), lalu baca modul di
+  `src/steps/` sampai menemukan `@step("resolve_terms")`.
+- **Jalur dengan search:** cari string `resolve_terms`, yang sudah terlihat di config, lalu baca satu modul.
+
+### 7.2 Kondisi setara
+
+Definisi A/B/C tetap seperti bagian 3:
+- A: search tersedia;
+- B: search tersedia + satu kalimat netral;
+- C: tanpa search, semua tool lain ada.
+
+Bug, kriteria penerimaan, budget, batas attempt, repo, dan tes sama persis, dan ditegakkan oleh tes kesetaraan yang
+sudah ada. Yang berbeda hanya akses tool (dan karena itu daftar tool di prompt sistem, yang tidak terhindarkan) serta
+kalimat B. Naskah model palsu hanya mencari string yang sudah terlihat di konteksnya.
+
+### 7.3 Temuan dari prediksi: search punya biaya tetap yang besar
+
+Prediksinya memakai kalibrasi dan diambil dari panggilan nyata live #7: biaya tetap 1.790 token, `ListFiles` 640 token,
+dan output sekitar 250 token per panggilan. Satu panggilan `SearchFiles` adalah **satu panggilan model tambahan**,
+yang mengirim ulang seluruh percakapan (4–6 ribu token di titik itu). Membaca satu modul 2 KB hanya menambah sekitar
+640 token per panggilan berikutnya.
+
+Disapu untuk 4–12 modul langkah berukuran 1–3 KB, dengan budget 30.000:
+- kalau baseline membaca **semua modul sekaligus**, search lebih murah hanya di sedikit kombinasi, dan selisihnya
+  paling banyak sekitar 10%. Itu sebesar galat kalibrasi;
+- kalau baseline membaca **3 per langkah** (pola live #7), search jelas lebih murah, tapi di hampir semua kombinasi
+  itu baseline-nya sudah melewati 30.000.
+
+Artinya, dengan budget 30.000, "search menang" hampir selalu bertepatan dengan "baseline kehabisan budget". Persis itu
+yang tidak boleh kita sebut nilai search.
+
+Prediksi untuk desain 7.1 (10 modul × 2 KB, ±10%):
+
+| Strategi | Prediksi token |
+|---|---|
+| search string yang terlihat | ~27.000 |
+| search kata umum dulu, satu file salah | ~46.600 |
+| tanpa search, semua modul langkah sekaligus | ~33.000 |
+| tanpa search, 3 per langkah, bug di batch 2 | ~34.900 |
+| tanpa search, 3 per langkah, bug terakhir | ~60.500 |
+
+### 7.4 Pilihan
+
+1. **Budget eksperimen yang sama dan cukup untuk semua kondisi (usulku).**
+   - Run eksperimen ini memakai config eksperimen lewat `--config`, tanpa perubahan harness: `attempt_tokens` 60.000
+     untuk A, B, dan C sekaligus.
+   - Konsekuensinya: reservasi satu attempt menjadi 60.000 × tarif tertinggi. Dengan harga output Sonnet itu sekitar
+     $0.90, jadi cap kontrak harus dinaikkan ke sekitar $1–2 per run. Itu perlu persetujuan biaya tersendiri.
+   - Dengan begitu tidak ada kondisi yang gagal karena budget, dan nilai search terlihat sebagai token, file yang
+     dibaca, dan langkah pada anggaran yang sama.
+   - Status dengan 30.000 tetap dilaporkan dari simulasi, sebagai informasi terpisah.
+2. **Tetap 30.000.** Selisih token yang diharapkan sebesar galat kalibrasi, dan kegagalan baseline akan bercampur
+   dengan efek budget. Hasilnya sulit ditafsirkan.
+3. **Tunda eksperimen search.** Catat temuannya: dengan pengiriman ulang kumulatif, satu panggilan tool tambahan
+   seharga membaca beberapa file kecil. Jadi search hanya jelas bernilai di repo yang memang tidak bisa dibaca
+   dengan budget ini. Pengungkit yang lebih besar mungkin biaya per panggilan, tapi itu perubahan harness dan di luar
+   scope sekarang.
+
+Keputusan diminta sebelum fixture diubah.
