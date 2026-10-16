@@ -16,7 +16,7 @@ revisi 1).
 
 Loop agen, LLMCaller, acceptance, umpan balik, dan prompt tidak berubah.
 
-**Verify:** `verify.sh` di VM pada `a3b52d2` lulus **900 tes, 0 skip**.
+**Verify:** `verify.sh` di VM pada `a3b52d2` lulus 900 tes, 0 skip. Setelah perbaikan guard: `d9c1b37` lulus **904 tes, 0 skip** (`verification/verify-20261016T182658Z-aarch64.log`).
 
 ## 2. Yang dikunci untuk run
 
