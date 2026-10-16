@@ -47,7 +47,7 @@ token per attempt, `max_iterations` 3, $0.50 per run). Kedua seri identik kecual
 
 ## 4. Analisis lima kegagalan seri #2 (dari log yang ada, tanpa biaya)
 
-Sumbernya ledger, memo (termasuk teks model sendiri), dan audit per panggilan. Ada 5 run dengan 2 attempt masing-masing,
+Sumbernya ledger, memo (termasuk teks model sendiri; `verification/search-live-2/failure_trace.txt`, dibuat dengan `scripts/failure_trace.py`), dan audit per panggilan. Ada 5 run dengan 2 attempt masing-masing,
 jadi 10 attempt.
 
 **Apakah agen salah arah? Tidak.**
