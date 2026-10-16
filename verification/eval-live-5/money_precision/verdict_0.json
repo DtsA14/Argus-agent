@@ -1,0 +1,178 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/money.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "src/money.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "bb07b16dff63c129374d9185bd660d727122ab7967f4d87c2f4e6f15c7d40836"
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 6,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_format (tests.test_regression.RegressionTest.test_format) ... ok\ntest_invalid_amounts (tests.test_regression.RegressionTest.test_invalid_amounts) ... ok\ntest_invoice (tests.test_regression.RegressionTest.test_invoice) ... ok\ntest_parse_simple_amounts (tests.test_regression.RegressionTest.test_parse_simple_amounts) ... ok\ntest_refund (tests.test_regression.RegressionTest.test_refund) ... ok\ntest_tax (tests.test_regression.RegressionTest.test_tax) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.003s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_amounts.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests.test_amounts.AmountsTest.test_invoice_with_cent_values": "ok",
+          "tests.test_amounts.AmountsTest.test_refund_of_cent_values": "ok",
+          "tests.test_amounts.AmountsTest.test_tax_on_a_cent_value": "ok",
+          "tests.test_amounts.AmountsTest.test_invoice_with_large_amounts": "ok",
+          "tests.test_amounts.AmountsTest.test_refund_of_large_amounts": "ok"
+        },
+        "output_tail": "test_invoice_with_cent_values (tests.test_amounts.AmountsTest.test_invoice_with_cent_values) ... ok\ntest_invoice_with_large_amounts (tests.test_amounts.AmountsTest.test_invoice_with_large_amounts) ... ok\ntest_refund_of_cent_values (tests.test_amounts.AmountsTest.test_refund_of_cent_values) ... ok\ntest_refund_of_large_amounts (tests.test_amounts.AmountsTest.test_refund_of_large_amounts) ... ok\ntest_tax_on_a_cent_value (tests.test_amounts.AmountsTest.test_tax_on_a_cent_value) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.001s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "src/money.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:unit"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "f71c6d190020ab7f240d130385f32832e09fe75b210568499a7bb61136fddd8a",
+  "summary_sha256": "bb07b16dff63c129374d9185bd660d727122ab7967f4d87c2f4e6f15c7d40836",
+  "verdict_sha256": "233c968139ab0724ef6f93e2a38128f3be3491a907d857290dae641ee5471ede"
+}

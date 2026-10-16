@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "src/money.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "parse_amount used int(float(text)*100), which truncated values like 0.29 to 28 cents. It now parses the units and cents with integer arithmetic, so results are exact for any size."
+}
