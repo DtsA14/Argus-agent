@@ -304,3 +304,85 @@ yang jujur. Token per task sukses hanya metrik diagnostik untuk eksperimen ini.
 
 **Urutan:** review prediksi ini → ubah fixture → simulasi 30.000 dan 60.000 → evaluasi apakah layak menjadi fixture.
 Belum ada PR, kenaikan cap, atau live run.
+
+## 8. Hasil fixture registry dan simulasi 30k/60k (model palsu, sandbox asli, biaya nol)
+
+Fixture: `fixtures/repos/ledger` dengan pipeline yang langkahnya diatur di config. Bug ada di
+`src/steps/prepare.py` (`resolve_terms`). Repo berisi 48 modul; `src/steps/` berisi 8 modul berukuran 2,1–2,4 KB.
+
+### Pemeriksaan benchmark
+
+- **Varian kode** (tes regresi 8, tes target 5):
+
+  | Varian | Hasil |
+  |---|---|
+  | bug | 5 tes target gagal |
+  | referensi `merge_options(base, plan)` | lulus |
+  | alternatif dengan keyword argument | lulus |
+  | tambalan dangkal `eu` | 4 gagal |
+  | jalur halaman akun ikut dibuat salah | 4 gagal |
+  | mengganti langkah ke `resolve_terms_v1` di config | 5 gagal |
+
+- **Properti utama desain diuji otomatis:** dari kedua file tes, impor statis mencapai `cycle.py`, `pipeline.py`, dan
+  `options.py`, tapi **tidak satu pun** modul langkah. Mutan yang membuat `cycle.py` mengimpor `steps.prepare` membuat
+  tes itu gagal.
+- **Mode eval:**
+  - `reference` A/B/C: DONE. Tool efektif dari `result.json` dan `tools_effective`: A/B lima tool, C empat tool.
+  - Di C, `SearchFiles` dijawab "Denied" dan tercatat sebagai `tool_denied`.
+  - `wrong`: tertangkap hanya pada `issue_fixed`.
+  - Mutan validasi yang selalu lulus → ketiga varian `BROKEN`.
+
+### Simulasi
+
+Model palsu menjalankan naskah. Search hanya untuk string yang sudah terlihat (`resolve_terms` dari config). Token
+adalah **estimasi** dari penghitung terkalibrasi (galat ≤ 10%). Bug, kriteria, attempt, dan budget sama untuk semua run.
+
+Untuk 60k, `attempt_tokens` diubah dan cap USD dinaikkan **di config dan salinan kontrak sementara**, sama untuk
+semua run. Run pertama 60k hanya menaikkan cap kontrak, sehingga semuanya `FAILED_BUDGET` karena cap config $0.50
+yang berlaku; itu kesalahan skrip dan sudah diperbaiki. Kontrak di repo tidak berubah.
+
+| Run | Kontrak | 30k | 60k: token | 60k: biaya est. | Panggilan berisi tool* | File dibaca | Search |
+|---|---|---|---|---|---|---|---|
+| search string yang terlihat | A | DONE (23.424) | **23.424** | $0.056 | 4 | 6 | 1 |
+| search string yang terlihat | B | DONE (23.561) | 23.561 | $0.056 | 4 | 6 | 1 |
+| search kata umum dulu | A | gagal (2 × exhausted) | 33.439 | $0.076 | 6 | 8 | 2 |
+| tanpa search, semua modul langkah sekaligus | A (tidak mencari) | DONE (29.643) | 29.643 | $0.068 | 3 | 13 | 0 |
+| tanpa search, semua modul langkah sekaligus | C | DONE (28.612) | **28.612** | $0.066 | 3 | 13 | 0 |
+| tanpa search, 3 per langkah, bug di batch 2 | C | gagal (2 × exhausted) | 31.323 | $0.072 | 4 | 11 | 0 |
+| tanpa search, 3 per langkah, bug terakhir | C | gagal (2 × exhausted) | 41.969 | $0.093 | 5 | 13 | 0 |
+
+\* Panggilan baca dan search, tidak termasuk `ListFiles`, tulis + validasi, dan `Finish`.
+
+### Evaluasi dengan aturan yang dikunci
+
+**Efisiensi (60k):**
+- Search string yang terlihat (A) memakai lebih sedikit token dibanding C:
+  - **18,1%** lebih sedikit dibanding membaca semua modul langkah sekaligus;
+  - **25,2%** dibanding 3 per langkah dengan bug di batch 2;
+  - **44,2%** dibanding bug terakhir.
+
+  Semuanya di atas ambang 10%, jadi ini **sinyal awal positif**.
+- Catatan galat: kedua sisi diestimasi dengan penghitung yang sama, sehingga galatnya sebagian berkorelasi. Selisih
+  relatif ini tetap estimasi, bukan hasil ukur.
+- **Search yang dipakai dengan buruk lebih mahal:** search kata umum dulu memakai 16,9% **lebih banyak** token
+  dibanding membaca semua modul tanpa search. Nilai search bergantung pada strategi, bukan pada ketersediaan tool.
+- **Menawarkan search juga ada harganya:** A yang tidak mencari memakai 1.031 token (+3,6%) lebih banyak daripada C
+  dengan strategi yang sama. Penyebabnya, skema dan deskripsi tool ikut terkirim di setiap panggilan.
+- B vs A: +137 token, dari kalimat tambahan.
+
+**Kemampuan dalam batas operasional (30k):**
+- Search string yang terlihat selesai.
+- Tanpa search, membaca semua modul sekaligus juga selesai, tapi dengan sisa tipis (sekitar 1.400 di C dan 400 di A).
+- Membaca 3 per langkah gagal.
+- Jadi search mengubah gagal menjadi sukses **hanya terhadap strategi baca bertahap**, bukan terhadap baca sekaligus.
+
+**Prediksi vs simulasi:** prediksi bagian 7.5 secara konsisten lebih tinggi (search string yang terlihat 27.100 vs
+23.424; semua sekaligus 30.400 vs 28.612; kasus buruk search 46.600 vs 33.439). Urutan strategi tetap sama, kecuali
+kasus buruk search, yang di simulasi lebih murah daripada 3 per langkah dengan bug terakhir.
+
+**Batas kesimpulan:** semuanya naskah. Yang belum diketahui, dan hanya bisa dijawab run live:
+- apakah model sungguhan memakai search di A;
+- apakah ia mencari string yang tepat;
+- bagaimana ia membaca tanpa search di C.
+
+Keputusan apakah fixture ini layak, dan rencana live-nya, menunggu review. Belum ada PR atau live run.

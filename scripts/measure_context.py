@@ -418,9 +418,9 @@ SEARCH_VALUE_RUNS = [("search_seen", "a"), ("search_seen", "b"), ("search_broad"
 
 
 def searchvalue(attempt_tokens):
-    """Every run with the same attempt_tokens. For 60,000 every contract copy (and the config) gets the same cap, high enough that the
-    reservation guard (attempt_tokens x the output price) cannot decide the outcome; the repository's contracts keep
-    their cap. The model's cost is still the real price of what is sent and received."""
+    """Every run with the same attempt_tokens. For 60,000 every contract copy (and the config) gets the same cap,
+    high enough that the reservation guard (attempt_tokens x the output price) cannot decide the outcome; the
+    repository's contracts keep their cap. The model's cost is still the real price of what is sent and received."""
     print(f"estimates: billed input = 407 + 0.3186 x chars (calibrated, max error 9.4%), priced as Sonnet 5.5; "
           f"attempt_tokens {attempt_tokens}; real sandbox validation and acceptance")
     with tempfile.TemporaryDirectory() as tmp:
