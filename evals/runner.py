@@ -118,7 +118,7 @@ def run_eval(manifest_path, mode, runs_dir, cfg, *, tasks=None, max_total_usd=No
         row = score(t, checks)
         row["stats"] = run_stats(runs_dir / run_id)
         row["checks"] = {k: checks[k] for k in ("stop_reason", "blocked_reason", "protected_changed", "outside_scope",
-                                                "summary_valid", "false_claims", "fresh_validations")}
+                                                "summary_valid", "false_claims", "fresh_validations", "per_attempt")}
         if mode == "wrong":
             row["benchmark_ok"] = not row["eval_pass"]     # a wrong or cheating script must never pass
         elif mode == "reference":
