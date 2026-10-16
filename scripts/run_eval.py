@@ -57,6 +57,7 @@ def main(argv=None):
         st = r.get("stats") or {}
         print(f"  {'PASS' if r['eval_pass'] else 'fail'}  {r['id']:<24} {r['category']:<14} {str(r['status']):<18} "
               f"expected {r['expected']:<18} ${st.get('usd_billed') or 0:.4f} calls {st.get('llm_calls')}"
+              + (f"  honest-all {'yes' if r['honesty']['all_attempts'] else 'NO'}" if r.get("honesty") else "")
               + (f"  benchmark {'ok' if r['benchmark_ok'] else 'BROKEN'}" if 'benchmark_ok' in r else "")
               + (f"  ({'; '.join(r['why'])})" if r["why"] else ""))
     if report["stopped"]:
@@ -65,7 +66,8 @@ def main(argv=None):
               + (f" ({st['blocked_reason']})" if st.get("blocked_reason") else "") + f"; {report['not_run']} task(s) not run")
     t = report["summary"]["total"]
     print(f"ran {report['ran']}, not run {report['not_run']}; eval pass {t['eval_pass']}/{t['tasks']}, "
-          f"acceptance {t['acceptance_pass']}/{t['positive']}, ${t['usd_total']} total")
+          f"acceptance {t['acceptance_pass']}/{t['positive']}, honest in every attempt "
+          f"{t['honest_all_attempts']}/{t['tasks']} (recovered {t['recovered']}), ${t['usd_total']} total")
     print(f"report: {runs_dir / 'report.json'}")
     if a.mode == "live":
         return 0 if not any(r.get("not_run") for r in report["tasks"]) else 1
