@@ -24,7 +24,7 @@ ukurannya.
 | `src/fmt.py` | format jumlah per mata uang. Ini jalur yang sekilas masuk akal untuk disalahkan |
 | `src/api.py` | `get_report(customer, period, currency)` menggabungkan `revenue`, `invoiced`, dan `fmt`. Gejalanya terlihat di sini |
 
-**Issue yang dilihat agen** (hanya gejala): "Customers with orders in two currencies sometimes get wrong totals from
+**Issue yang dilihat agen** (hanya gejala): "Customers with orders in two currencies sometimes get incorrect totals from
 get_report: the USD report can show the EUR amounts. Fix it. Do not change the tests." Issue tidak menyebut cache atau
 key.
 
