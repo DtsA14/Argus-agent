@@ -140,7 +140,7 @@ class Toolbox:
         if not isinstance(under, str):
             return "Rejected: path must be a directory path."
         prefix = ()
-        if under.strip("/") not in ("", "."):
+        if under not in ("", ".", "./"):                                # "/" and other absolute paths: refused
             prefix = tuple(self.jail.parts(under))                     # PathEscape: '..', absolute, NUL
             cur = self.jail.root
             for part in prefix:                                        # every component a real directory
