@@ -21,6 +21,12 @@ OLD_TEST = "from src.shop import total\n\n\ndef test_total_plain():\n    assert 
 NEW_TEST = "from src.shop import total\n\n\ndef test_total_never_negative():\n    assert total([1], 5) == 0\n"
 NEW_NODE = "tests/test_new.py::test_total_never_negative"
 OLD_NODE = "tests/test_old.py::test_total_plain"
+SKIP_TEST = "import pytest
+
+
+def test_skipped_here():
+    pytest.skip('not here')
+"
 
 
 def git(repo, *args):
@@ -30,7 +36,8 @@ def git(repo, *args):
 
 
 def spec(id, target, must):
-    return {"id": id, "executable": "python", "args": ["-m", "pytest", target], "timeout_s": 120, "min_tests": 1,
+    targets = target if isinstance(target, list) else [target]
+    return {"id": id, "executable": "python", "args": ["-m", "pytest", *targets], "timeout_s": 120, "min_tests": 1,
             "max_skipped": 0, "must_pass": must, "environment": "argus"}
 
 
@@ -51,6 +58,7 @@ def root(tmp_path):
     (repo / "conftest.py").write_text("")
     (repo / "src" / "shop.py").write_text(BUGGY)
     (repo / "tests" / "test_old.py").write_text(OLD_TEST)
+    (repo / "tests" / "test_skip.py").write_text(SKIP_TEST)
     git(tmp_path, "init", "-q", str(repo))
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "base")
@@ -64,7 +72,7 @@ def patch(tmp_path, changes):
     """A git diff against the baseline (the intake plus the draft's test) that writes `changes` ({path: text})."""
     r = tmp_path / f"patch_{len(list(tmp_path.glob('patch_*')))}"
     r.mkdir()
-    for p, t in {"src/shop.py": BUGGY, "tests/test_old.py": OLD_TEST, "conftest.py": "",
+    for p, t in {"src/shop.py": BUGGY, "tests/test_old.py": OLD_TEST, "conftest.py": "", "tests/test_skip.py": SKIP_TEST,
                  "tests/test_new.py": NEW_TEST}.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
         (r / p).write_text(t)
@@ -134,7 +142,8 @@ def test_static_problems(root, change, why):
     d = copy.deepcopy(DRAFT)
     change(d)
     c = dr.build_contract(d, task="t", workspace="fixtures/repos/t", issue="i", max_usd=0.5, max_iterations=2)
-    problems = dr.static_problems(d, c, {"src/shop.py": "x", "tests/test_old.py": "y", "conftest.py": "z"})
+    problems = dr.static_problems(d, c, {"src/shop.py": "x", "tests/test_old.py": "y", "conftest.py": "z",
+                                        "tests/test_skip.py": "w"})
     assert any(why in p for p in problems), problems
 
 
@@ -187,6 +196,28 @@ def test_the_baseline_must_be_red_by_assertion_and_only_where_required(root, tmp
     r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg, draft=draft)
     assert not r["ok"] and any(why in p for p in r["problems"]), r["problems"]
     assert "reference" not in r                                  # the reference patch is never tried on a bad baseline
+
+
+def test_an_existing_required_test_that_does_not_pass_on_the_baseline_is_refused(root, tmp_path, scfg):
+    # skipped, so the failure count alone would not notice it
+    d = copy.deepcopy(DRAFT)
+    d["contract"]["validation"][0] = spec("target", ["tests/test_new.py", "tests/test_skip.py"],
+                                          [NEW_NODE, "tests/test_skip.py::test_skipped_here"])
+    d["contract"]["validation"][0]["max_skipped"] = 1
+    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg, draft=d)
+    assert not r["ok"] and any("existing test tests/test_skip.py::test_skipped_here must pass on the baseline, is "
+                               "'skipped'" in p for p in r["problems"]), r["problems"]
+
+
+def test_a_baseline_whose_pytest_output_does_not_account_for_itself_is_refused(tmp_path):
+    def inconsistent(spec, ws, cfg, log=None):
+        must = {n: ("FAIL" if n == NEW_NODE else "ok") for n in spec.get("must_pass", [])}
+        return {"id": f"validation:{spec['id']}", "status": "fail" if NEW_NODE in must else "pass", "reason": "x",
+                "evidence": {"must_pass": must, "failures": 1 if NEW_NODE in must else 0, "errors": 0,
+                             "consistent": False}}
+    c = dr.build_contract(DRAFT, task="t", workspace="fixtures/repos/t", issue="i", max_usd=0.5, max_iterations=2)
+    problems, _ = dr.baseline_problems(c, {"tests/test_new.py"}, tmp_path, {}, validate=inconsistent)
+    assert problems == ["validation target: pytest output does not account for itself"]
 
 
 def test_a_regression_validation_that_fails_on_the_baseline_is_refused(root, tmp_path, scfg):
