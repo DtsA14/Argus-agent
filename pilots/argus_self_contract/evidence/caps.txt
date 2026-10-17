@@ -1,0 +1,6 @@
+it0 s0 in   2120 cap  4096 out    82 reasoning     0 | attempt left before  30000, after input  27880
+it0 s1 in   8430 cap  4096 out   178 reasoning     0 | attempt left before  27798, after input  19368
+it0 s2 in  14652 cap  4096 out  4096 reasoning  4096 | attempt left before  19190, after input   4538
+it1 s0 in   2648 cap  4096 out    82 reasoning     0 | attempt left before  30000, after input  27352
+it1 s1 in   8958 cap  4096 out   178 reasoning     0 | attempt left before  27270, after input  18312
+it1 s2 in  15180 cap  2954 out  2954 reasoning  2954 | attempt left before  18134, after input   2954

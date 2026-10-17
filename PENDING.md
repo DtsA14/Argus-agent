@@ -123,7 +123,9 @@ Urutan disarankan, karena saling bergantung.
 - [x] **Pilot `argus_self_1`** (`pilots/argus_self_subtest/README.md`, $0.1627): gagal jujur, kedua penulisan ulang file utuh terpotong di 4.096 token (thinking 61–75%)
 - [x] **`EditFile`** (PR #69): satu penggantian yang unik, aturan scope sama dengan WriteFile, aman setelah crash (jurnal per langkah); ledger mencatat `reasoning_tokens` dan `stop_reason`
 - [x] **Pilot `argus_self_2`** ($0.1853): **DONE** di attempt 3 (EditFile + umpan balik verdict), lolos audit independen dan `verify.sh`; fix Argus di-merge setelah review (PR #70)
-- [x] Celah subTest berbentuk pesan (`[case a]`) diperbaiki manual dengan tes pada output unittest asli (PR ini)
+- [x] Celah subTest berbentuk pesan (`[case a]`) diperbaiki manual dengan tes pada output unittest asli (PR #71)
+- [x] **Pilot `argus_self_3`** (`pilots/argus_self_contract/README.md`, validasi `must_pass`, $0.1797): gagal jujur, workspace tidak berubah. Thinking memakai **100%** output di langkah ketiga (4.096 dan 2.954), tanpa tool call. Batas output terkunci oleh sisa reservasi attempt (sekitar 4,5 ribu setelah input 15 ribu)
+- [ ] Keputusan: profil task besar (`attempt_tokens` 45.000 + `max_output_tokens` 8.192) untuk satu run, membatasi thinking, atau berhenti
 - [ ] Tes eval di sandbox dijalankan pada 1–2 task saja, bukan seluruh manifest (`verify.sh` naik dari 447 ke 516 detik dengan jumlah tes yang sama, karena setiap task baru menambah beberapa run penuh)
 - [ ] Perluasan benchmark berdasarkan kegagalan nyata dari eksperimen itu, lalu bekukan hash v1
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
