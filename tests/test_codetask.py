@@ -780,6 +780,8 @@ def test_a_profile_applied_that_the_frozen_contract_does_not_name_blocks_in_setu
     model = StrictScriptedChatModel(script=[WRITE, FINISH])
     r, model, d = run(tmp_path, [], model=model)
     assert r["status"] == st.BLOCKED and r["blocked_reason"] == "contract_changed" and len(model.calls) == 0
+    # in setup itself, before admission is computed with the wrong profile: the run never becomes RUNNING
+    assert statuses_seen(d) == [(None, "BLOCKED")]
 
 
 def test_a_resume_configured_with_another_profile_blocks_before_any_model_call(tmp_path, monkeypatch):
