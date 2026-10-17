@@ -84,3 +84,41 @@ penyimpanannya tidak mungkin tanpa streaming, dan sebagai gantinya ledger kini m
 - tool edit (`EditFile`) dan pencatatan ledger dikerjakan;
 - pilot berikutnya hanya dengan `EditFile` dan `max_output_tokens` tetap 4.096;
 - menaikkan batas output menjadi hipotesis terpisah.
+
+## Pilot self-hosting #2: `argus_self_2` (dengan `EditFile`)
+
+2026-10-17. Satu run yang disetujui. Harness `e38cc48`, snapshot yang sama (`validation.py` identik), dan kontrak
+`contract2.json` yang hanya menambah `tools: ["edit_file"]`. Budget dan batas output tetap: 30.000 token per attempt,
+3 attempt, cap $0.50, `max_output_tokens` 4.096. Bukti: `evidence_2/`.
+
+**Hasil: DONE di attempt ke-3, $0.1853.**
+- 8 panggilan dan 1 penolakan reservasi.
+- `prompt_hash` 9/9 cocok dengan prompt efektif `fc0d0ce1…`.
+- Biaya lengkap. Scope terjaga: hanya `acceptance/validation.py` yang berubah.
+
+| Attempt | Yang terjadi (ledger: `reasoning_tokens`, `stop_reason`) |
+|---|---|
+| 1 | dua `EditFile` dalam satu balasan, tetap terpotong: output 4.096 dengan thinking 3.147, `max_tokens` |
+| 2 | satu `EditFile` berhasil (output 3.901, thinking 2.948, `tool_use`), ditambah `RunValidation` target dan unit. Panggilan berikutnya ditolak reservasi (butuh input 14.545, sisa 6.452) |
+| 3 | umpan balik berbasis verdict (M3): validasi lulus, hanya `SUMMARY.json` yang kurang. Baca file lalu `Finish` (output 725) → **DONE** |
+
+**Perbandingan dengan pilot 1** (hanya `EditFile` yang berbeda):
+- pilot 1 gagal karena kedua penulisan ulang file utuh terpotong;
+- di pilot 2 sebuah edit berhasil di attempt ke-2, dan umpan balik verdict menyelesaikannya.
+
+Ini bukti kausal awal untuk task ini, bukan bukti umum. Thinking tetap memakai 2,9–3,1 ribu dari 4.096 token di
+langkah yang sulit, dan attempt 1 tetap terpotong walaupun memakai `EditFile`.
+
+**Verifikasi independen:**
+- tes target 6/6 dan regresi 5/5 dijalankan ulang di luar workspace;
+- kasus tambahan lulus: skip lalu fail → FAIL; fail lalu skip → FAIL; error, fail, error → ERROR; docstring ditambah
+  subTest gagal → FAIL;
+- diff yang byte-identik diterapkan ke branch dari main: tes parser dan codetask 133 lulus, ditambah `verify.sh`
+  penuh.
+
+**Satu celah yang ditemukan, juga ada di fix referensi kami:** subTest berbentuk pesan, `subTest("case a")` (dicetak
+`[case a]`), tetap menghasilkan status `''` (`msg_subtests.py`).
+- Ini **tidak membuat aman menjadi bahaya**: `''` tetap bukan `ok`, sehingga acceptance tetap menggagalkannya, sama
+  seperti sebelum fix.
+- Tapi perbaikannya **belum lengkap**. Penyebabnya celah di tes yang kami tulis, karena tes terlindung tidak mencakup
+  bentuk `[msg]`. Agen memenuhi kontrak seperti yang tertulis.
