@@ -216,6 +216,8 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
                               max_iterations=max_iterations)
     report["contract"] = contract
     problems = static_problems(draft, contract, snapshot(base_dir, skip_cache=True))
+    if not problems:
+        report["contract_sha256"] = ct.freeze(contract)[1]        # what approve() must still be publishing
     if problems:
         return {**report, "problems": problems}
     new_paths = {t["path"] for t in draft["new_tests"]}
@@ -249,9 +251,23 @@ def approve(report, draft, *, root="."):
     contract_path = root / "fixtures" / "contracts" / f"{task}.json"
     if dest.exists() or record_path.exists() or contract_path.exists():
         raise DraftError(f"task {task!r} already exists; approval never overwrites")
+    # Publish exactly what was checked: the same draft, the same contract, and a contract that is the draft plus the
+    # human's fields (so neither can be swapped between check() and approve(), by any caller). Before anything is
+    # written.
+    if hashlib.sha256(ct.canonical(draft).encode()).hexdigest() != report.get("draft_sha256"):
+        raise DraftError("the draft differs from the one that was checked")
+    contract = report.get("contract")
+    try:
+        _, contract_sha = ct.freeze(contract)
+    except ct.ContractError as e:
+        raise DraftError(f"the report's contract is not valid: {e}") from e
+    if contract_sha != report.get("contract_sha256"):
+        raise DraftError("the contract differs from the one that was checked")
+    rebuilt = build_contract(draft, task=task, workspace=f"fixtures/repos/{task}", issue=contract["inputs"]["issue"],
+                             max_usd=contract["limits"]["max_usd"], max_iterations=contract["limits"]["max_iterations"])
+    if ct.canonical(rebuilt) != ct.canonical(contract):
+        raise DraftError("the contract is not the draft plus the human's fields")
     base = intake.record_for(f"fixtures/repos/{draft['base']}", root)
-    contract = report["contract"]
-    _, contract_sha = ct.freeze(contract)
     (root / "fixtures" / "repos").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=root / "fixtures" / "repos", prefix=".task-") as tmp:
         stage = Path(tmp) / task

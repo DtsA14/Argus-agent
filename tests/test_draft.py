@@ -277,3 +277,38 @@ def test_an_approved_task_changed_afterwards_fails_its_check(root, tmp_path, scf
     test = root / "fixtures" / "repos" / "fix_shop" / "tests" / "test_new.py"
     test.write_text(NEW_TEST.replace("== 0", "== -4"))                 # the approved test is edited later
     assert intake.check(rec, test.parent.parent)
+
+
+def nothing_published(root):
+    return not any((root / "fixtures" / d / n).exists() for d, n in
+                   (("repos", "fix_shop"), ("intake", "fix_shop.json"), ("contracts", "fix_shop.json")))
+
+
+def change_limits(r, d):
+    r["contract"]["limits"]["max_usd"] = 5.0                      # after the check, before approval
+
+
+def forge_scope(r, d):
+    r["contract"]["scope"]["writable"].append("tests/*.py")       # and recompute the hash to match
+    r["contract_sha256"] = ct.freeze(r["contract"])[1]
+
+
+def change_draft(r, d):
+    d["plan"]["steps"].append("also rewrite the tests")
+
+
+@pytest.mark.parametrize("tamper, why", [
+    (change_limits, "the contract differs from the one that was checked"),
+    (forge_scope, "the contract is not the draft plus the human's fields"),
+    (change_draft, "the draft differs from the one that was checked"),
+])
+def test_a_report_or_draft_changed_between_check_and_approval_is_refused_and_publishes_nothing(
+        root, tmp_path, scfg, tamper, why):
+    # review of #79: approve() publishes exactly what check() checked, whoever calls it
+    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+    assert r["ok"] and r["contract_sha256"] == ct.freeze(r["contract"])[1]
+    d = copy.deepcopy(DRAFT)
+    tamper(r, d)
+    with pytest.raises(dr.DraftError, match=why):
+        dr.approve(r, d, root=root)
+    assert nothing_published(root)
