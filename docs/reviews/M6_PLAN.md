@@ -92,8 +92,10 @@ Setelah DONE, harness membuat `review/` di run dir secara deterministik:
 langsung:
 1. Snapshot murni dari intake (W4, tidak pernah ditulisi agen) disalin ke direktori sementara, lalu dibuat repo Git
    baru di sana dengan satu commit.
-2. Isi workspace akhir ditimpakan ke salinan itu, lalu `git add -A` dan `git diff --cached --binary --full-index`
-   menghasilkan `changes.patch`.
+2. Isi salinan itu **dicerminkan** (mirror) ke workspace akhir, bukan sekadar ditimpa: semua file yang dilacak di
+   salinan dihapus dulu, lalu seluruh isi workspace akhir disalin masuk. Dengan begitu file baru, file yang berubah,
+   dan **file yang dihapus agen** semuanya terwakili. Kemudian `git add -A` dan
+   `git diff --cached --binary --full-index` menghasilkan `changes.patch`.
 3. Git dijalankan tanpa konfigurasi pengguna atau sistem (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) dan
    tanpa hook. Git hanya membandingkan file; tidak ada kode repo yang dijalankan.
 
@@ -102,8 +104,21 @@ dilaporkan siap PR):
 - `git worktree add` pada commit dasar yang tercatat, dari repo asli, lalu `git apply --check` dan `git apply`;
 - file yang berubah setelah apply sama persis dengan file berubah di verdict, dan semuanya di dalam scope `writable`
   kontrak. Tidak ada file `protected` atau path yang dikecualikan saat intake;
-- hash isi setiap file yang berubah di worktree sama dengan workspace agen;
+- **keadaan akhir identik secara menyeluruh:** daftar semua file (path, mode eksekusi, hash isi) di worktree yang sudah
+  di-patch sama persis dengan workspace agen, di luar `.git` dan path yang dikecualikan saat intake. Ini mencakup file
+  yang tidak berubah, jadi file yang seharusnya terhapus tetapi tertinggal, atau file yang hilang, ikut tertangkap;
 - validasi kontrak dijalankan ulang di sandbox pada worktree yang sudah di-patch, dan hasilnya sama dengan verdict.
+
+**Tes deterministik pembuatan dan verifikasi patch** (dengan repo Git sementara, tanpa model dan tanpa biaya). Setiap
+kasus memeriksa bahwa patch diterapkan di worktree bersih menghasilkan keadaan yang identik:
+- file baru, file berubah, dan **file yang dihapus**, termasuk direktori yang menjadi kosong;
+- file binary: tool agen (`WriteFile`, `EditFile`) hanya menulis teks, jadi perubahan binary dari agen tidak mungkin.
+  Tesnya membuktikan dua hal: binary yang tidak disentuh tetap identik byte demi byte, dan perubahan binary yang
+  disuntikkan langsung ke workspace terbawa utuh oleh `--binary` (atau ditolak kalau di luar scope);
+- perubahan di luar scope `writable`, di file `protected`, atau di path yang dikecualikan saat intake: patch ditolak
+  dan paket ditandai tidak valid;
+- mutan: mirror yang tidak menghapus file, dan perbandingan yang hanya mengecek file berubah. Keduanya harus
+  menggagalkan tes.
 
 Manusia memeriksa paket itu, menerapkan patch yang sama ke branch dari commit dasar, lalu membuka PR.
 
