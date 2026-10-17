@@ -469,3 +469,101 @@ def test_required_test_statuses_are_reported_as_the_parser_recorded_them():
     assert "test_ok ok" in line and "test_fail FAIL" in line and "test_missing did not run" in line
     assert "test_subtests not ok (no single status in the unittest output)" in line
     assert "test_subtests did not run" not in line
+
+
+# ---- malformed, cut-off and timed-out replies (M6 W0) -------------------------------------------------------
+# Handled in codetask/agent.py (invalid_call_errors, is_truncated) and harness/llm.py (transient errors); these lock
+# that handling in the code-task loop itself. The strict model raises HTTP 400 if any tool call id is left unanswered.
+
+def malformed_write(id="bad1"):
+    """A WriteFile whose arguments could not be parsed, as LangChain reports it (invalid_tool_calls)."""
+    return reply("", input_tokens=500, output_tokens=60,
+                 invalid_tool_calls=[{"name": "WriteFile", "id": id, "error": "Expecting ',' delimiter",
+                                      "args": '{"path": "src/calc.py", "content": "BROKEN'}])
+
+
+def answer_to(model, call_no, id):
+    return next(m for m in model.calls[call_no]["messages"] if getattr(m, "tool_call_id", None) == id).content
+
+
+def test_a_malformed_tool_call_is_answered_runs_nothing_and_the_attempt_goes_on(tmp_path):
+    r, model, d = run(tmp_path, [malformed_write(), WRITE, FINISH])
+    assert r["status"] == st.DONE and r["attempts"] == 1 and len(model.calls) == 3
+    assert not any(c.get("rejected") for c in model.calls)              # every id answered: no HTTP 400
+    assert answer_to(model, 1, "bad1").startswith("Rejected:")
+    (bad,) = [e for e in events(d) if e["event"] == "invalid_tool_call"]
+    assert bad["step"] == 0 and bad["tools"] == ["WriteFile"]
+    assert not [e for e in events(d) if e["event"] == "step_committed" and e["kind"] == "tool" and e["step"] == 0]
+
+
+def test_a_malformed_call_alone_never_changes_the_workspace(tmp_path):
+    lazy = call("Finish", {"claims": CLAIMS, "summary": "x"}, "f1")
+    r, model, d = run(tmp_path, [malformed_write(), lazy, malformed_write("bad2"), lazy])
+    assert r["status"] == st.FAILED_ACCEPTANCE
+    assert (d / "workspace" / "src" / "calc.py").read_text() == CALC
+
+
+def test_a_reply_with_a_valid_and_a_malformed_call_runs_neither_and_answers_both(tmp_path):
+    both = reply("", input_tokens=500, output_tokens=60,
+                 tool_calls=[{"name": "WriteFile", "args": {"path": "src/calc.py", "content": FIXED}, "id": "w0"}],
+                 invalid_tool_calls=[{"name": "ReadFile", "id": "bad0", "error": "Expecting value", "args": '{"pa'}])
+    lazy = call("Finish", {"claims": CLAIMS, "summary": "x"}, "f1")
+    r, model, d = run(tmp_path, [both, lazy, lazy])
+    assert r["status"] == st.FAILED_ACCEPTANCE and not any(c.get("rejected") for c in model.calls)
+    assert answer_to(model, 1, "w0").startswith("Rejected:") and answer_to(model, 1, "bad0").startswith("Rejected:")
+    assert (d / "workspace" / "src" / "calc.py").read_text() == CALC     # the valid WriteFile did not run either
+
+
+def cut_off(msg, how):
+    msg.response_metadata = {"stop_reason": "max_tokens"} if how == "anthropic" else {"finish_reason": "length"}
+    return msg
+
+
+@pytest.mark.parametrize("how", ["anthropic", "openai"])
+def test_a_cut_off_reply_runs_none_of_its_tool_calls_and_ends_the_attempt(tmp_path, how):
+    r, model, d = run(tmp_path, [cut_off(call("WriteFile", {"path": "src/calc.py", "content": FIXED}, "w0"), how),
+                                 WRITE, FINISH])
+    assert r["status"] == st.DONE and r["attempts"] == 2                  # the fix came in the next attempt
+    ends = [(e["iteration"], e["reason"]) for e in events(d) if e["event"] == "attempt_end"]
+    assert ends == [(0, "output_truncated"), (1, "finished")]
+    assert json.loads((d / "verdict_0.json").read_text())["outcome"] == "fail"   # attempt 0 wrote nothing
+    assert [e["tools"] for e in events(d) if e["event"] == "reply_truncated"] == [["WriteFile"]]
+
+
+def test_a_cut_off_finish_is_not_accepted(tmp_path):
+    r, model, d = run(tmp_path, [WRITE, cut_off(call("Finish", {"claims": CLAIMS, "summary": "x"}, "f0"), "anthropic"),
+                                 FINISH])
+    assert r["status"] == st.DONE and r["attempts"] == 2
+    assert json.loads((d / "verdict_0.json").read_text())["outcome"] == "fail"   # no SUMMARY.json from it
+
+
+def timeout():
+    import anthropic
+    import httpx
+    return anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+
+
+def no_wait(**budget):
+    c = cfg(**budget)
+    c["llm"]["base_delay"] = 0
+    return c
+
+
+def test_model_timeouts_are_retried_charged_at_worst_case_then_block_the_run(tmp_path):
+    r, model, d = run(tmp_path, [timeout(), timeout(), timeout()], config=no_wait())
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "provider_failed"
+    assert len(model.calls) == 3                                         # llm.attempts, then no further attempt
+    calls = [e for e in events(d) if e["event"] == "llm_call"]
+    assert [(e["status"], e["delivery"], e["charged"]) for e in calls] == [("transient_error", "unknown", "worst_case")] * 3
+    started = [e for e in events(d) if e["event"] == "llm_call_started"]
+    assert [e["worst_usd_nano"] for e in started] == [e["usd_nano"] for e in calls]   # charged exactly the worst case
+    assert r["llm_calls"] == 3 and r["usd_billed"] == pytest.approx(sum(e["usd"] for e in calls))
+    assert (d / "verdict_0.json").exists() and (d / "workspace" / "src" / "calc.py").read_text() == CALC
+
+
+def test_a_timeout_then_an_answer_goes_on_and_the_lost_call_stays_charged(tmp_path):
+    r, model, d = run(tmp_path, [timeout(), WRITE, FINISH], config=no_wait())
+    assert r["status"] == st.DONE and r["attempts"] == 1 and len(model.calls) == 3
+    first = [e for e in events(d) if e["event"] == "llm_call"][0]
+    assert first["status"] == "transient_error" and first["usd_nano"] > 0
+    assert r["usd_billed"] >= first["usd"]
