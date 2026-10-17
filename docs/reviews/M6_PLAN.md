@@ -111,7 +111,8 @@ dilaporkan siap PR):
 
 **Tes deterministik pembuatan dan verifikasi patch** (dengan repo Git sementara, tanpa model dan tanpa biaya). Setiap
 kasus memeriksa bahwa patch diterapkan di worktree bersih menghasilkan keadaan yang identik:
-- file baru, file berubah, dan **file yang dihapus**, termasuk direktori yang menjadi kosong;
+- file baru, file berubah, dan **file yang dihapus**, termasuk direktori yang menjadi kosong. Saat ini agen tidak
+  punya tool hapus, tetapi patch harus mencerminkan workspace apa adanya, jadi penghapusan tetap diuji;
 - file binary: tool agen (`WriteFile`, `EditFile`) hanya menulis teks, jadi perubahan binary dari agen tidak mungkin.
   Tesnya membuktikan dua hal: binary yang tidak disentuh tetap identik byte demi byte, dan perubahan binary yang
   disuntikkan langsung ke workspace terbawa utuh oleh `--binary` (atau ditolak kalau di luar scope);
