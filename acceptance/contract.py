@@ -12,6 +12,8 @@ Shape (docs/reviews/ACCEPTANCE_GENERAL.md section 5):
                 sandbox environment in the config (its image); without it the default sandbox image runs it
   judge: []                     slice 1 has no subjective criteria
   limits: {max_usd, max_iterations}
+  budget_profile?: str          the name of a budget profile in the config (attempt reservation and output cap only;
+                                never the cost cap)
 """
 import hashlib
 import json
@@ -23,7 +25,7 @@ from .validation import PYTEST_NODE, kind, validate_command
 ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
 KEYS = {"contract", "version", "inputs", "scope", "artifacts", "validation", "judge", "limits"}
-OPTIONAL_KEYS = {"tools"}
+OPTIONAL_KEYS = {"tools", "budget_profile"}
 # Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
 # Only these, and only by adding: a contract can never grant anything else, nor remove a configured tool.
 CONTRACT_TOOLS = {"search_files", "edit_file"}
@@ -176,6 +178,9 @@ def validate(c):
                        for x in t if x not in CONTRACT_TOOLS]
             if len(set(t)) != len(t):
                 errors.append("tools: duplicate tool names")
+
+    if "budget_profile" in c and not (isinstance(c["budget_profile"], str) and ID.match(c["budget_profile"])):
+        errors.append("budget_profile must be a lower-case name")
 
     if c["judge"] != []:
         errors.append("judge must be [] in slice 1 (no subjective criteria)")

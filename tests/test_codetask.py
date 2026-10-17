@@ -667,3 +667,140 @@ def test_a_record_whose_workspace_is_missing_blocks_before_any_model_call(tmp_pa
     r, model, d = run(tmp_path, [], contract=c, model=model)
     assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
     assert "changed since intake" in r["stop_reason"] and "missing" in r["stop_reason"]
+
+
+# ---- budget profiles (M6 W5) -----------------------------------------------------------------------------------
+
+def with_profile(name, **limits):
+    c = copy.deepcopy(CONTRACT)
+    c["budget_profile"] = name
+    c["limits"].update(limits)
+    return c
+
+
+def started(run_dir):
+    return [e for e in events(run_dir) if e["event"] == "llm_call_started"]
+
+
+def test_the_default_profile_is_exactly_what_a_contract_without_profile_gets():
+    c = load_config()
+    assert c["code_task"]["profiles"]["default"] == {
+        "attempt_tokens": c["code_task"]["attempt_tokens"],
+        "max_output_tokens": c["roles"][c["code_task"]["role"]]["max_output_tokens"]}
+    assert c["code_task"]["profiles"]["large"] == {"attempt_tokens": 45000, "max_output_tokens": 8192}
+
+
+def test_a_profile_changes_only_the_attempt_reservation_and_the_output_cap():
+    from codetask.run import apply_profile
+    base = load_config()
+    out = apply_profile(base, "large")
+    assert out["code_task"]["attempt_tokens"] == 45000 and out["roles"]["coder"]["max_output_tokens"] == 8192
+    strip = lambda c: {**c, "code_task": {k: v for k, v in c["code_task"].items()     # noqa: E731
+                                          if k not in ("attempt_tokens", "applied_profile")},
+                       "roles": {**c["roles"], "coder": {k: v for k, v in c["roles"]["coder"].items()
+                                                         if k != "max_output_tokens"}}}
+    assert strip(out) == strip(base) and out["budget"] == base["budget"]
+    assert base["code_task"]["attempt_tokens"] == 30000                               # the input is not mutated
+
+
+@pytest.mark.parametrize("contract_cap", [0.5, 1.0, 5.0])
+def test_choosing_a_profile_never_changes_the_cost_cap(contract_cap):
+    from codetask.run import apply_profile
+    base = cfg()
+    plain = settings(base, with_profile("large", max_usd=contract_cap))
+    large = settings(apply_profile(base, "large"), with_profile("large", max_usd=contract_cap))
+    assert large["max_usd"] == plain["max_usd"] == min(0.5, contract_cap)
+    assert large["attempt_tokens"] == 45000 and plain["attempt_tokens"] == 30000
+
+
+def sonnet_limits(config_cap, contract_cap):
+    from codetask.run import apply_profile
+    c = load_config()
+    c["roles"]["coder"]["model"] = "anthropic:claude-sonnet-5-5"
+    c["budget"]["max_usd"] = config_cap
+    return settings(apply_profile(c, "large"), with_profile("large", max_usd=contract_cap))
+
+
+def admitted_after(limits, spends, tmp_path):
+    log = EventLog(tmp_path / f"e{len(list(tmp_path.iterdir()))}.jsonl")
+    for i, usd in enumerate(spends):
+        log.emit("llm_call_started", call_id=f"c{i}", node="agent", task="x", iteration=i, step=0,
+                 worst_tokens=1, worst_usd_nano=round(usd * 1e9))
+        log.emit("llm_call", call_id=f"c{i}", status="ok", node="agent", task="x", iteration=i, step=0,
+                 tokens=1000, usd_nano=round(usd * 1e9))
+    return admission(log, limits) is None
+
+
+def test_large_at_the_default_cap_leaves_room_for_practically_one_attempt(tmp_path):
+    lim = sonnet_limits(0.50, 0.50)                    # docs/reviews/M6_PLAN.md W5: $0.45 per attempt at $10/M
+    assert lim["attempt_usd"] == pytest.approx(0.45) and lim["max_usd"] == 0.50
+    assert admitted_after(lim, [], tmp_path)
+    assert admitted_after(lim, [0.05], tmp_path) and not admitted_after(lim, [0.06], tmp_path)
+
+
+def test_large_at_a_preflight_approved_one_dollar_cap(tmp_path):
+    lim = sonnet_limits(1.00, 1.00)                    # a per-run config approved in a preflight, not the default
+    assert admitted_after(lim, [0.55], tmp_path) and not admitted_after(lim, [0.56], tmp_path)
+    # any further attempt, the third too, needs spend so far + $0.45 <= $1.00
+    assert admitted_after(lim, [0.30, 0.25], tmp_path) and not admitted_after(lim, [0.30, 0.26], tmp_path)
+
+
+@pytest.mark.parametrize("profile, out_cap", [(None, 4096), ("default", 4096), ("large", 8192)])
+def test_the_profile_reaches_the_model_call_and_the_result(tmp_path, profile, out_cap):
+    c = with_profile(profile) if profile else copy.deepcopy(CONTRACT)
+    if profile is None:
+        c.pop("budget_profile", None)
+    r, model, d = run(tmp_path, [WRITE, FINISH], contract=c)
+    assert r["status"] == st.DONE
+    assert {e["max_tokens"] for e in started(d)} == {out_cap}
+    tokens = 45000 if profile == "large" else 30000
+    assert r["budget_profile"] == {"name": profile, "attempt_tokens": tokens, "max_output_tokens": out_cap}
+
+
+def test_an_unknown_profile_blocks_before_any_model_call(tmp_path):
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=with_profile("huge"), model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "unknown budget profile 'huge'" in r["stop_reason"]
+
+
+def test_a_contract_that_cannot_fund_one_large_attempt_stops_before_any_model_call(tmp_path):
+    # fake:scripted output is $5/M: one large attempt reserves $0.225
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=with_profile("large", max_usd=0.2), model=model)
+    assert r["status"] == st.FAILED_BUDGET and len(model.calls) == 0 and r["llm_calls"] == 0
+    (tmp_path / "small").mkdir()
+    r2, model2, d2 = run(tmp_path / "small", [WRITE, FINISH], contract=with_profile("default", max_usd=0.2))
+    assert r2["status"] == st.DONE                                     # the same cap funds a default attempt ($0.15)
+
+
+def test_a_profile_applied_that_the_frozen_contract_does_not_name_blocks_in_setup(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module, "contract_profile", lambda path: "large")      # the file changed after reading
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "contract_changed" and len(model.calls) == 0
+    # in setup itself, before admission is computed with the wrong profile: the run never becomes RUNNING
+    assert statuses_seen(d) == [(None, "BLOCKED")]
+
+
+def test_a_resume_configured_with_another_profile_blocks_before_any_model_call(tmp_path, monkeypatch):
+    seen = []
+
+    def respond(messages):
+        seen.append(1)
+        raise Crash()
+    with pytest.raises(Crash):
+        run(tmp_path, [], model=CallableChatModel(respond=respond))
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module, "contract_profile", lambda path: "large")
+    r, model, d = run(tmp_path, [WRITE, FINISH], resume=True)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "contract_changed" and len(model.calls) == 0
+    assert "budget profile" in r["stop_reason"]
+
+
+def test_a_profile_name_must_be_a_lower_case_name():
+    from acceptance import contract as ct
+    for bad in ("Large", "", 3, "../x"):
+        assert "budget_profile must be a lower-case name" in ct.validate(with_profile(bad))
+    assert ct.validate(with_profile("large")) == []
