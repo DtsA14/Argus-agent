@@ -12,7 +12,8 @@ Checks, all on the intake snapshot plus the draft's new tests, in the sandbox:
   - baseline red: every required node of a new test is collected and fails by assertion (FAIL). An error, a node not
     collected, any other failing or erroring test in that validation, or output that does not account for itself
     rejects the draft. Required nodes of existing tests pass, and every validation without new nodes passes;
-  - reference green: the human's reference patch, applied to a clean copy, changes only writable files (never a test
+  - reference green: the human's reference patch (a git diff against the intake plus the draft's tests), applied to a
+    clean copy, changes only writable files (never a test
     of the draft or a protected file), and then every validation passes.
 `unverifiable` is kept as reviewer notes; it is never a criterion and never counts as a pass.
 
@@ -172,6 +173,8 @@ def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validat
 
 def reference_problems(contract, new_paths, ws, patch, sandbox_cfg, validate=run_validation):
     """Apply the reference patch to a clean copy and require every validation to pass. Returns (problems, seen)."""
+    if not Path(patch).read_text(encoding="utf-8").strip():
+        return ["the reference patch changes nothing"], {}
     before = snapshot(ws)
     intake.git(ws, "apply", "--whitespace=nowarn", str(Path(patch).resolve()))
     changed = diff(before, snapshot(ws))

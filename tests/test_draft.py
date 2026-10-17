@@ -61,10 +61,11 @@ def root(tmp_path):
 
 
 def patch(tmp_path, changes):
-    """A git diff against the intake that writes `changes` ({path: text}); in a scratch repository."""
+    """A git diff against the baseline (the intake plus the draft's test) that writes `changes` ({path: text})."""
     r = tmp_path / f"patch_{len(list(tmp_path.glob('patch_*')))}"
     r.mkdir()
-    for p, t in {"src/shop.py": BUGGY, "tests/test_old.py": OLD_TEST, "conftest.py": ""}.items():
+    for p, t in {"src/shop.py": BUGGY, "tests/test_old.py": OLD_TEST, "conftest.py": "",
+                 "tests/test_new.py": NEW_TEST}.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
         (r / p).write_text(t)
     git(r, "init", "-q")
