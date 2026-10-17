@@ -1,9 +1,17 @@
 """Validation commands: structured (executable + args), checked against an allowlist, run in the sandbox without a
 shell, and judged from their own output. Never a shell string, never chosen by the agent.
 
-Slice 1 allows exactly one shape:  python -m unittest discover [-s DIR] [-t DIR] [-p PATTERN] [-k NAME ...]
-The harness runs it as  python3 -I -m unittest discover ... -v  with the workspace mounted read-only, so the
-check cannot change what it checks, and reads the verbose per-test lines and the summary from the output.
+Two shapes are allowed:
+  python -m unittest discover [-s DIR] [-t DIR] [-p PATTERN] [-k NAME ...]
+      run as  python3 -I -m unittest discover ... -v
+  python -m pytest TARGET [TARGET ...] [-k NAME ...]      (M6 W1; TARGET: a relative path or a pytest node id)
+      run as  python3 -I -B -m pytest <fixed harness options> TARGET ... ; the harness alone chooses the options
+      (no plugins, ini overrides or rootdir from the contract) and pins the rootdir to /workspace, so node ids are
+      relative to the workspace root.
+Both run with the workspace mounted read-only, so the check cannot change what it checks, and are judged from the
+runner's verbose per-test lines and its summary. A pytest run is trusted only when the per-test lines account for
+the summary exactly (same count per outcome, every collected test seen); otherwise the result fails closed.
+Node ids with spaces (some parametrize ids) are not supported: their lines do not parse, so such a run fails closed.
 
 Limits (stated, not hidden): the result is read from the test runner's own output, and the code under test runs in
 the same process. Code that deliberately forges unittest output from inside the process is not detected here; it
@@ -18,9 +26,57 @@ OPTIONS = {"-s": False, "-t": False, "-p": False, "-k": True}   # option -> may 
 VALUE = re.compile(r"^[A-Za-z0-9_*?.][A-Za-z0-9_*?./-]{0,199}$")
 MAX_ARGS = 16
 
+PYTEST_PREFIX = ["-m", "pytest"]
+PYTEST_OPTIONS = {"-k"}
+# a relative path, optionally with a node id: dir/test_x.py::Class::test_name[param]. No spaces, no '..'.
+PYTEST_TARGET = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}(::[A-Za-z_][A-Za-z0-9_]{0,99}){0,3}"
+                           r"(\[[A-Za-z0-9_.,=+-]{1,100}\])?$")
+PYTEST_NODE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.py(::[A-Za-z_][A-Za-z0-9_]{0,99}){1,3}"
+                         r"(\[[A-Za-z0-9_.,=+-]{1,100}\])?$")
+# The harness's own options, never the contract's: no cache, no ini addopts, classic per-test lines, a fixed rootdir.
+PYTEST_FIXED = ["-p", "no:cacheprovider", "-o", "addopts=", "-o", "console_output_style=classic",
+                "--rootdir", "/workspace", "-v", "--tb=short", "--color=no", "-rN"]
+
 TEST_LINE = re.compile(r"^(\w+) \(([\w.]+)\)(?: (.*))?$")
 RAN = re.compile(r"^Ran (\d+) tests? in ")
 FINAL = re.compile(r"^(OK|FAILED)(?: \((.*)\))?$")
+
+
+def kind(spec):
+    """"pytest" or "unittest", from the command's own prefix (validate_command decides whether it is allowed)."""
+    args = spec.get("args")
+    return "pytest" if isinstance(args, list) and args[:2] == PYTEST_PREFIX else "unittest"
+
+
+def _plain(val):
+    return ".." not in val.split("/") and not val.startswith("/")
+
+
+def validate_pytest(rest):
+    errors, targets, i = [], 0, 0
+    while i < len(rest):
+        a = rest[i]
+        if a.startswith("-"):
+            if a not in PYTEST_OPTIONS:
+                errors.append(f"pytest option {a!r} is not allowed (allowed: {sorted(PYTEST_OPTIONS)}; the harness "
+                              "sets every other option itself)")
+                i += 1
+                continue
+            if i + 1 >= len(rest):
+                errors.append(f"option {a!r} needs a value")
+                break
+            val = rest[i + 1]
+            if not VALUE.match(val) or not _plain(val):
+                errors.append(f"value {val!r} for {a} is not a plain name")
+            i += 2
+            continue
+        if not PYTEST_TARGET.match(a) or not _plain(a):
+            errors.append(f"pytest target {a!r} is not a plain relative path or node id")
+        targets += 1
+        i += 1
+    if not targets:
+        errors.append("a pytest validation must name at least one test path or node id")
+    return errors
 
 
 def validate_command(executable, args):
@@ -31,8 +87,10 @@ def validate_command(executable, args):
         return ["args must be a list of strings"]
     if len(args) > MAX_ARGS:
         return [f"at most {MAX_ARGS} args"]
+    if args[:2] == PYTEST_PREFIX:
+        return validate_pytest(args[2:])
     if args[:3] != PREFIX:
-        return [f"args must start with {PREFIX} (slice 1 allows unittest discovery only)"]
+        return [f"args must start with {PREFIX} or {PYTEST_PREFIX}"]
     errors, seen, rest = [], set(), args[3:]
     if len(rest) % 2:
         return ["every option needs exactly one value"]
@@ -53,6 +111,8 @@ def argv(spec):
     errors = validate_command(spec["executable"], spec["args"])
     if errors:
         raise ValueError("; ".join(errors))
+    if kind(spec) == "pytest":
+        return ["python3", "-I", "-B", *PYTEST_PREFIX, *PYTEST_FIXED, *spec["args"][2:]]
     return ["python3", "-I", *spec["args"], "-v"]
 
 
@@ -115,16 +175,81 @@ def parse_unittest(text):
             "errors": counts.get("errors", 0)}
 
 
+# pytest's verbose line for one test phase; statuses are mapped to the unittest words the rest of the harness uses
+PYTEST_LINE = re.compile(r"^(\S+::\S+) (PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)(?: .*)?$")
+PYTEST_STATUS = {"PASSED": "ok", "FAILED": "FAIL", "ERROR": "ERROR", "SKIPPED": "skipped",
+                 "XFAIL": "expected failure", "XPASS": "unexpected success"}
+PYTEST_COUNT = {"PASSED": "passed", "FAILED": "failed", "ERROR": "errors", "SKIPPED": "skipped",
+                "XFAIL": "xfailed", "XPASS": "xpassed"}
+PYTEST_SUMMARY = re.compile(r"^=+ (.+?) in [\d.]+s(?: \([^)]*\))? =+$")
+PYTEST_COLLECTED = re.compile(r"^collecting \.\.\. collected (\d+) items?(?: / (\d+) errors?)?"
+                              r"(?: / (\d+) deselected)?(?: / (\d+) selected)?$")
+PLURAL = {"error": "errors", "warning": "warnings"}
+
+
+def parse_pytest(text):
+    """Per-node statuses and the summary from pytest's verbose output, and whether the per-test lines account for
+    the summary exactly: the same count per outcome, and one node per collected, selected test. A test that passed
+    and then failed in teardown has two lines; its status is the worse one (ERROR > FAIL > the rest)."""
+    tests, lines = {}, {k: 0 for k in PYTEST_COUNT.values()}
+    rank = {"ERROR": 2, "FAIL": 1}
+    collected = deselected = summary = None
+    for line in text.splitlines():
+        m = PYTEST_LINE.match(line)
+        if m:
+            node, word = m.groups()
+            lines[PYTEST_COUNT[word]] += 1
+            status = PYTEST_STATUS[word]
+            if node not in tests or rank.get(status, 0) > rank.get(tests[node], 0):
+                tests[node] = status
+            continue
+        m = PYTEST_COLLECTED.match(line)
+        if m:
+            collected, deselected = int(m.group(1)), int(m.group(3) or 0)
+            continue
+        m = PYTEST_SUMMARY.match(line)
+        if m:
+            summary = {}
+            for part in m.group(1).split(", "):
+                n, _, word = part.partition(" ")
+                if n.isdigit():
+                    summary[PLURAL.get(word, word)] = int(n)
+                elif part == "no tests ran":
+                    summary["no tests ran"] = 1
+    counts = {k: (summary or {}).get(k, 0) for k in PYTEST_COUNT.values()}
+    consistent = (summary is not None and collected is not None and lines == counts
+                  and len(tests) == collected - deselected)
+    if summary is None:
+        outcome = None
+    elif "no tests ran" in summary or not tests:
+        outcome = "NO TESTS RAN"
+    else:
+        outcome = "FAILED" if counts["failed"] or counts["errors"] else "OK"
+    return {"tests": tests, "tests_run": None if summary is None else len(tests), "outcome": outcome,
+            "skipped": counts["skipped"] + counts["xfailed"] + counts["xpassed"], "failures": counts["failed"],
+            "errors": counts["errors"], "consistent": consistent, "collected": collected, "deselected": deselected}
+
+
 def judge_result(spec, r):
     """Criterion verdict for one validation run: ok only when every condition in the contract holds."""
-    parsed = parse_unittest((r.get("stderr") or "") + "\n" + (r.get("stdout") or ""))
+    pytest = kind(spec) == "pytest"
+    runner = "pytest" if pytest else "unittest"
+    if pytest:
+        parsed = parse_pytest(r.get("stdout") or "")           # pytest reports on stdout, unittest on stderr
+    else:
+        parsed = parse_unittest((r.get("stderr") or "") + "\n" + (r.get("stdout") or ""))
     must = {t: parsed["tests"].get(t) for t in spec.get("must_pass", [])}
     evidence = {"argv": argv(spec), "exit_code": r.get("exit_code"), "timed_out": r.get("timed_out"),
                 "killed": r.get("killed"), "cleanup_failed": r.get("cleanup_failed"),
                 "output_limit_exceeded": r.get("output_limit_exceeded"), "truncated": r.get("truncated"),
                 "tests_run": parsed["tests_run"], "outcome": parsed["outcome"], "skipped": parsed["skipped"],
                 "failures": parsed["failures"], "errors": parsed["errors"], "must_pass": must,
-                "output_tail": (r.get("stderr") or "")[-2000:]}
+                "output_tail": ((r.get("stdout") or "") if pytest else (r.get("stderr") or ""))[-2000:]}
+    if pytest:
+        evidence.update(runner="pytest", consistent=parsed["consistent"], collected=parsed["collected"],
+                        deselected=parsed["deselected"], stderr_tail=(r.get("stderr") or "")[-500:])
+    if spec.get("environment"):
+        evidence["environment"] = spec["environment"]
     problems = []
     if r.get("timed_out"):
         problems.append(f"timed out after {spec['timeout_s']}s (container killed"
@@ -132,12 +257,16 @@ def judge_result(spec, r):
     elif r.get("output_limit_exceeded"):
         problems.append("output limit exceeded (container killed)")
     else:
+        if pytest and r.get("truncated"):
+            problems.append("output truncated: the per-test results are incomplete")
         if parsed["tests_run"] is None or parsed["outcome"] is None:
-            problems.append("no unittest summary in the output")
+            problems.append(f"no {runner} summary in the output")
+        elif pytest and not parsed["consistent"]:
+            problems.append("pytest output inconsistent: the per-test lines do not account for the summary")
         if r.get("exit_code") != 0:
             problems.append(f"exit code {r.get('exit_code')}")
         if parsed["outcome"] not in (None, "OK"):
-            problems.append(f"unittest outcome {parsed['outcome']}")
+            problems.append(f"{runner} outcome {parsed['outcome']}")
         if parsed["tests_run"] is not None and parsed["tests_run"] < spec["min_tests"]:
             problems.append(f"{parsed['tests_run']} tests ran, contract requires at least {spec['min_tests']}")
         if parsed["skipped"] > spec["max_skipped"]:
@@ -152,6 +281,8 @@ def judge_result(spec, r):
 def run_validation(spec, workdir, sandbox_cfg, log=None):
     """Run one validation command in the sandbox. No sandbox means blocked, never a pass and never a fallback."""
     cfg = {**(sandbox_cfg or {}), "timeout_s": spec["timeout_s"]}
+    if spec.get("environment"):
+        cfg["environment"] = spec["environment"]      # its own image, never the default one (tools/sandbox.settings)
     try:
         r = sb.run_command(argv(spec), workdir=workdir, cfg=cfg, log=log, meta={"validation": spec["id"]})
     except sb.SandboxUnavailable as e:

@@ -33,6 +33,12 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
   echo "python: $("$VENV/bin/python" --version 2>&1)"
   echo "CRASH_REPEATS=$CRASH_REPEATS CRASH_STRESS=$CRASH_STRESS"
   echo "sandbox image: ${ARGUS_SANDBOX_IMAGE:-<none>}"
+  # M6 W1: the argus environment's image, built offline from this fresh venv (same pinned requirements)
+  if [ -z "${ARGUS_SANDBOX_IMAGE_ARGUS:-}" ] && docker version >/dev/null 2>&1; then
+    bash scripts/build_argus_sandbox_image.sh "$VENV"
+    export ARGUS_SANDBOX_IMAGE_ARGUS="$(tr -d '[:space:]' < .sandbox_image_argus)"
+  fi
+  echo "sandbox image (argus environment): ${ARGUS_SANDBOX_IMAGE_ARGUS:-<none>}"
   echo "docker: $(docker version --format 'client {{.Client.Version}} / server {{.Server.Version}} ({{.Server.Os}}/{{.Server.Arch}})' 2>/dev/null || echo 'not available')"
   echo "== pip freeze"
   "$VENV/bin/pip" freeze

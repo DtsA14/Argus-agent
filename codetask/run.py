@@ -101,8 +101,9 @@ def admission(log, lim):
     return None
 
 
-def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None):
-    """validate / preflight: injected by tests to run without Docker (default: the real sandbox)."""
+def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None,
+                env_preflight=None):
+    """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox)."""
     run_dir = Path(run_dir)
     ws = run_dir / WORKSPACE
     memo = Memo(run_dir / "memo.sqlite")
@@ -112,6 +113,9 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
     if preflight is None:
         from tools import sandbox as sb
         preflight = lambda: sb.status(scfg)   # noqa: E731
+    if env_preflight is None:
+        from tools import sandbox as sb
+        env_preflight = lambda name: sb.status({**scfg, "environment": name})   # noqa: E731
     lim0 = settings(cfg)
     caller = LLMCaller(cfg, cfg["code_task"]["role"], log, model=(models or {}).get(cfg["code_task"]["role"]))
     from tools.sandbox import tool_version
@@ -153,9 +157,19 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         problems = ct.check_scope_against(contract, before)
         if problems:
             return move(state, st.BLOCKED, reason="; ".join(problems), blocked="invalid_contract")
+        configured_envs = scfg.get("environments") or {}
+        unknown = [n for n in ct.environments(contract) if n not in configured_envs]
+        if unknown:                     # the contract names an environment this config does not have: fail closed
+            return move(state, st.BLOCKED, reason=f"unknown sandbox environment(s) {unknown} "
+                        f"(configured: {sorted(configured_envs)})", blocked="invalid_contract")
         ok, why = preflight()
         if not ok:
             return move(state, st.BLOCKED, reason=f"sandbox unavailable: {why}", blocked="sandbox_unavailable")
+        for name in ct.environments(contract):
+            ok, why = env_preflight(name)
+            if not ok:
+                return move(state, st.BLOCKED, reason=f"sandbox environment {name!r} unavailable: {why}",
+                            blocked="sandbox_unavailable")
         blocker = admission(log, settings(cfg, contract))
         if blocker:
             return move(state, st.FAILED_BUDGET, reason=f"{blocker}: not even one attempt fits")
@@ -176,6 +190,9 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                         blocked="invalid_contract")
         if effective_tools(contract) != tools:
             log.emit("tools_config_changed", frozen=tools, current=effective_tools(contract))
+        # RunValidation results are memo-keyed by the images that ran them, environments included (a contract
+        # without environments keeps the key it always had).
+        versions["RunValidation"] = f"1:{tool_version(scfg, ct.environments(contract))}"
         box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate, journal=run_dir / "tool_journal.jsonl",
                       crasher=crasher)
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None)
@@ -237,7 +254,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
 
 
 def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_at=None, models=None,
-                  validate=None, preflight=None, echo=False):
+                  validate=None, preflight=None, env_preflight=None, echo=False):
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
@@ -250,7 +267,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models, validate=validate,
-                            preflight=preflight)
+                            preflight=preflight, env_preflight=env_preflight)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)

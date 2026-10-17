@@ -469,3 +469,52 @@ def test_required_test_statuses_are_reported_as_the_parser_recorded_them():
     assert "test_ok ok" in line and "test_fail FAIL" in line and "test_missing did not run" in line
     assert "test_subtests not ok (no single status in the unittest output)" in line
     assert "test_subtests did not run" not in line
+
+
+# ---- named sandbox environments (M6 W1) -----------------------------------------------------------------------
+
+def with_environment(name):
+    c = copy.deepcopy(CONTRACT)
+    c["validation"][0]["environment"] = name
+    return c
+
+
+def env_cfg(**budget):
+    c = cfg(**budget)
+    c["sandbox"] = {**c["sandbox"], "environments": {"argus": {"image": "sha256:" + "b" * 64}}}
+    return c
+
+
+def test_an_unknown_environment_blocks_the_run_before_any_model_call(tmp_path):
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=with_environment("nosuch"), config=env_cfg(), model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract"
+    assert "unknown sandbox environment" in r["stop_reason"] and len(model.calls) == 0
+    assert not (d / "verdict_0.json").exists()
+
+
+def test_an_environment_whose_image_is_unavailable_blocks_before_any_model_call(tmp_path):
+    seen = []
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    path = tmp_path / "contract.json"
+    path.write_text(json.dumps(with_environment("argus")), encoding="utf-8")
+    r = run_code_task(contract_path=path, run_id="t", runs_dir=tmp_path / "runs", cfg=env_cfg(),
+                      models={"coder": model}, validate=fake_validate, preflight=lambda: (True, "ok"),
+                      env_preflight=lambda name: (seen.append(name), (False, "image not found"))[1])
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "sandbox_unavailable" and len(model.calls) == 0
+    assert seen == ["argus"] and "argus" in r["stop_reason"]
+
+
+def test_a_validation_in_an_environment_reaches_the_validator_with_its_environment(tmp_path):
+    specs = []
+
+    def validate(spec, workspace, sandbox_cfg, log=None):
+        specs.append(spec)
+        return fake_validate(spec, workspace, sandbox_cfg, log)
+    path = tmp_path / "contract.json"
+    path.write_text(json.dumps(with_environment("argus")), encoding="utf-8")
+    r = run_code_task(contract_path=path, run_id="t", runs_dir=tmp_path / "runs", cfg=env_cfg(),
+                      models={"coder": StrictScriptedChatModel(script=[WRITE, FINISH])}, validate=validate,
+                      preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"))
+    assert r["status"] == st.DONE
+    assert {s["id"]: s.get("environment") for s in specs} == {"unit": "argus", "target": None}

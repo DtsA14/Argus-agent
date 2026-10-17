@@ -18,6 +18,11 @@ Every flag below was checked for real effect inside a container (see tests/test_
                                       container "succeeds" without running anything
 The image must be pinned (name@sha256:... or an image id sha256:...), so a run is reproducible and a
 changed image changes the tool version used in memo keys.
+
+Named environments (M6 W1): cfg["environment"] = name selects cfg["environments"][name]["image"] instead of the
+default image, e.g. an image with a project's pinned dependencies. Its override is ARGUS_SANDBOX_IMAGE_<NAME>;
+ARGUS_SANDBOX_IMAGE never replaces an environment's image. An unknown name is not available (fail closed), and
+every other flag above is the same for every environment.
 """
 import os
 import re
@@ -50,6 +55,7 @@ DEFAULTS = {
 }
 
 LABEL = re.compile(r"^[a-z][a-z0-9.]{0,63}$")
+ENV_NAME = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 LABEL_VALUE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
 
@@ -62,8 +68,19 @@ def label_args(labels):
     return out
 
 
+def environment_image(cfg, name):
+    """(image, problem) of a named environment: its configured image or ARGUS_SANDBOX_IMAGE_<NAME>."""
+    envs = (cfg or {}).get("environments") or {}
+    if not isinstance(name, str) or not ENV_NAME.match(name) or not isinstance(envs.get(name), dict):
+        return None, f"unknown sandbox environment {name!r} (configured: {sorted(envs)})"
+    return os.environ.get(f"ARGUS_SANDBOX_IMAGE_{name.upper()}") or envs[name].get("image"), None
+
+
 def settings(cfg):
     s = {**DEFAULTS, **(cfg or {})}
+    if s.get("environment") is not None:
+        s["image"], s["environment_error"] = environment_image(s, s["environment"])
+        return s
     env_image = os.environ.get("ARGUS_SANDBOX_IMAGE")
     if env_image:
         s["image"] = env_image
@@ -74,9 +91,13 @@ def is_pinned(image):
     return bool(image) and ("@sha256:" in image or image.startswith("sha256:"))
 
 
-def tool_version(cfg):
-    """Part of the memo key of RunPython steps: a different image never reuses old results."""
-    return f"1:{settings(cfg)['image']}"
+def tool_version(cfg, environments=()):
+    """Part of the memo key of RunPython and RunValidation steps: a different image never reuses old results.
+    Each named environment the run uses adds its image, so changing that image also changes the key."""
+    out = f"1:{settings(cfg)['image']}"
+    for name in environments:
+        out += f";{name}={environment_image(cfg, name)[0]}"
+    return out
 
 
 def status(cfg):
@@ -84,6 +105,12 @@ def status(cfg):
     s = settings(cfg)
     if s["kind"] != "docker":
         return False, f"sandbox.kind is {s['kind']!r}, not 'docker'"
+    if s.get("environment_error"):
+        return False, s["environment_error"]
+    if not s["image"] and s.get("environment") is not None:
+        name = s["environment"]
+        return False, (f"sandbox environment {name!r} has no image configured (sandbox.environments.{name}.image "
+                       f"or ARGUS_SANDBOX_IMAGE_{name.upper()})")
     if not s["image"]:
         return False, "no sandbox image configured (sandbox.image or ARGUS_SANDBOX_IMAGE)"
     if not is_pinned(s["image"]) and not s["allow_unpinned"]:
