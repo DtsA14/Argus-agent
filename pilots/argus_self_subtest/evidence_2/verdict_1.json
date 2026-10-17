@@ -1,0 +1,146 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": [
+            "acceptance/validation.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": [
+            "acceptance/validation.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "pilot_tests",
+          "-t",
+          ".",
+          "-p",
+          "test_parser_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_a_docstring_line_comes_before_the_status (pilot_tests.test_parser_regression.ParserRegressionTest.test_a_docstring_line_comes_before_the_status) ... ok\ntest_an_all_passing_run (pilot_tests.test_parser_regression.ParserRegressionTest.test_an_all_passing_run) ... ok\ntest_missing_pieces_stay_none (pilot_tests.test_parser_regression.ParserRegressionTest.test_missing_pieces_stay_none) ... ok\ntest_no_tests (pilot_tests.test_parser_regression.ParserRegressionTest.test_no_tests) ... ok\ntest_plain_statuses_and_summary (pilot_tests.test_parser_regression.ParserRegressionTest.test_plain_statuses_and_summary) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.896s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "pilot_tests",
+          "-t",
+          ".",
+          "-p",
+          "test_subtest_status.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 6,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_failed_subtests_make_the_test_fail": "ok",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_an_erroring_subtest_makes_the_test_error": "ok",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_a_later_failure_is_not_hidden_by_an_earlier_passing_subtest": "ok",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_an_error_anywhere_among_the_subtests_wins_over_failures": "ok",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_all_passing_subtests_are_ok": "ok",
+          "pilot_tests.test_subtest_status.SubTestStatusTest.test_a_failing_subtest_is_never_ok_next_to_other_tests": "ok"
+        },
+        "output_tail": "test_a_failing_subtest_is_never_ok_next_to_other_tests (pilot_tests.test_subtest_status.SubTestStatusTest.test_a_failing_subtest_is_never_ok_next_to_other_tests) ... ok\ntest_a_later_failure_is_not_hidden_by_an_earlier_passing_subtest (pilot_tests.test_subtest_status.SubTestStatusTest.test_a_later_failure_is_not_hidden_by_an_earlier_passing_subtest) ... ok\ntest_all_passing_subtests_are_ok (pilot_tests.test_subtest_status.SubTestStatusTest.test_all_passing_subtests_are_ok) ... ok\ntest_an_error_anywhere_among_the_subtests_wins_over_failures (pilot_tests.test_subtest_status.SubTestStatusTest.test_an_error_anywhere_among_the_subtests_wins_over_failures) ... ok\ntest_an_erroring_subtest_makes_the_test_error (pilot_tests.test_subtest_status.SubTestStatusTest.test_an_erroring_subtest_makes_the_test_error) ... ok\ntest_failed_subtests_make_the_test_fail (pilot_tests.test_subtest_status.SubTestStatusTest.test_failed_subtests_make_the_test_fail) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 2.167s\n\nOK\n"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "2bf11c2ce0c5f823f3cf661cf8c0cbe08b9677106eda86dee81a5399e0caf0e8",
+  "summary_sha256": null,
+  "verdict_sha256": "0d4de92561db03455f3c9c1c2c2a521ccadf1ade4bacb1987229f6d1c51fead7"
+}

@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "claim": "file_changed",
+      "path": "acceptance/validation.py"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:unit"
+    },
+    {
+      "claim": "tests_pass",
+      "evidence": "validation:target"
+    },
+    {
+      "claim": "issue_fixed",
+      "evidence": "validation:target"
+    }
+  ],
+  "summary": "parse_unittest now reads the indented subTest lines as well as the test's own line. A test with any failing subTest is 'FAIL', and any erroring subTest makes it 'ERROR', whatever the order. A test is 'ok' only when it passed. The unit and target validations both passed."
+}
