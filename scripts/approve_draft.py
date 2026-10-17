@@ -40,7 +40,8 @@ def main(argv=None):
     ap.add_argument("--issue-file", required=True)
     ap.add_argument("--max-usd", type=float, required=True)
     ap.add_argument("--max-iterations", type=int, required=True)
-    ap.add_argument("--reference-patch", required=True, help="the human's solution: a git diff against the intake plus the draft's tests")
+    ap.add_argument("--reference-patch", required=True,
+                    help="the human's solution: a git diff against the intake plus the draft's tests")
     ap.add_argument("--config")
     ap.add_argument("--approve", action="store_true", help="publish the task if every check passes")
     a = ap.parse_args(argv)
