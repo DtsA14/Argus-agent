@@ -46,14 +46,17 @@ SCRIPT = [_reply("ReadFile", {"path": "src/calc.py"}, "r1"),
           _reply("Finish", {"claims": CLAIMS, "summary": "divide raises on zero"}, "f2")]
 
 
-def _setup(tmp_path, image, contract=CONTRACT):
+def _setup(tmp_path, image, contract=CONTRACT, script=SCRIPT, tools=None):
     cfg = load_config()
     cfg["roles"]["coder"]["model"] = "fake:scripted"
     cfg["sandbox"] = {"kind": "docker", "image": image}
     (tmp_path / "config.yaml").write_text(yaml.safe_dump(cfg))
-    (tmp_path / "script.json").write_text(json.dumps(SCRIPT))
+    (tmp_path / "script.json").write_text(json.dumps(script))
     c = tmp_path / "contract.json"
-    c.write_text(Path(contract).read_text(encoding="utf-8"), encoding="utf-8")
+    doc = json.loads(Path(contract).read_text(encoding="utf-8"))
+    if tools:
+        doc["tools"] = tools
+    c.write_text(json.dumps(doc, indent=2), encoding="utf-8")
     return c
 
 
@@ -75,8 +78,8 @@ def _model_calls(tmp_path):
     return int(p.read_text()) if p.exists() else 0
 
 
-def _crash_and_resume(tmp_path, image, point, between=None):
-    _setup(tmp_path, image)
+def _crash_and_resume(tmp_path, image, point, between=None, **setup):
+    _setup(tmp_path, image, **setup)
     r1 = _cli(tmp_path, "--crash-at", point)
     assert r1.returncode == 42, (r1.stdout[-2000:], r1.stderr[-2000:])
     if between:
@@ -245,3 +248,31 @@ def _cli_env(tmp_path, extra_env, *extra, run_id="rc"):
             "--quiet"]
     return subprocess.run(base + list(extra), cwd=ROOT, capture_output=True, text=True, env=env, timeout=300)
 
+
+# ---- EditFile (the journal in codetask/tools.py): an insertion run again after a crash is applied once ------------
+
+DOC_OLD = "def divide(a, b):\n"
+DOC_NEW = "def divide(a, b):\n    \"\"\"a / b; raises ZeroDivisionError when b is 0.\"\"\"\n"
+GUARD = "    if b == 0:\n        return 0\n"
+EDITED = FIXED.replace(DOC_OLD, DOC_NEW)
+EDIT_SCRIPT = [_reply("ReadFile", {"path": "src/calc.py"}, "r1"),
+               _reply("EditFile", {"path": "src/calc.py", "old_text": DOC_OLD, "new_text": DOC_NEW}, "e1"),
+               _reply("EditFile", {"path": "src/calc.py", "old_text": GUARD, "new_text": ""}, "e2"),
+               _reply("RunValidation", {"id": "target"}, "v1"),
+               _reply("Finish", {"claims": CLAIMS, "summary": "divide raises on zero"}, "f1"),
+               _reply("Finish", {"claims": CLAIMS, "summary": "divide raises on zero"}, "f2")]
+
+
+@pytest.mark.parametrize("point", ["agent@after_tool:EditFile", "edit@after_journal"])
+def test_an_insertion_edit_interrupted_by_a_crash_is_applied_exactly_once(tmp_path, image, point):
+    # The first EditFile inserts a docstring (its new_text contains its old_text, so running it twice would insert
+    # twice). The process dies after the edit ran but before its result was committed, or between recording the edit
+    # in the journal and writing the file. Resume runs the step again: the file must end up edited exactly once.
+    r2, result, evs = _crash_and_resume(tmp_path, image, point, script=EDIT_SCRIPT, tools=["edit_file"])
+    assert r2.returncode == 0 and result["status"] == "DONE", (r2.stdout[-2000:], r2.stderr[-2000:], result)
+    ws = tmp_path / "runs" / "rc" / "workspace"
+    assert (ws / "src" / "calc.py").read_text() == EDITED
+    _assert_nothing_committed_is_redone(evs)
+    assert _model_calls(tmp_path) == 5 and result["llm_calls"] == 5
+    journal = (tmp_path / "runs" / "rc" / "tool_journal.jsonl").read_text().splitlines()
+    assert len(journal) == 2                                    # one record per edit step, none for the rerun

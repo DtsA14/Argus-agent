@@ -55,6 +55,14 @@ class WriteFile(BaseModel):
     content: str = Field(description="The complete new file content")
 
 
+class EditFile(BaseModel):
+    """Replace one exact piece of text in one file with new text. The old text must occur exactly once in the file;
+    otherwise nothing changes. Only files in the writable scope may be edited. For changing part of a file."""
+    path: str = Field(description="Path relative to the repository root")
+    old_text: str = Field(description="The exact text to replace, including whitespace; it must occur exactly once")
+    new_text: str = Field(description="The text that replaces it")
+
+
 class RunValidation(BaseModel):
     """Run one of the contract's validation commands in the sandbox and see its result. Changes nothing."""
     id: str = Field(description="The validation id from the contract")
@@ -72,9 +80,10 @@ class Finish(BaseModel):
     summary: str = Field(description="One or two sentences on what you changed")
 
 
-TOOLS = [ListFiles, SearchFiles, ReadFile, WriteFile, RunValidation, Finish]
+TOOLS = [ListFiles, SearchFiles, ReadFile, WriteFile, EditFile, RunValidation, Finish]
 GATED = {"ListFiles": "list_files", "SearchFiles": "search_files", "ReadFile": "read_file",
-         "WriteFile": "write_file", "RunValidation": "run_validation"}   # Finish ends the attempt; it is not gated
+         "WriteFile": "write_file", "EditFile": "edit_file",
+         "RunValidation": "run_validation"}   # Finish ends the attempt; it is not gated
 TIMING = re.compile(r"in \d+(\.\d+)?s\b")
 
 
@@ -97,10 +106,13 @@ def claims_doc(args):
 class Toolbox:
     """allowed: the coder role's tool allowlist from config (tools.coder), enforced here, not by the prompt."""
 
-    def __init__(self, workspace, contract, sandbox_cfg, allowed, log, validate=run_validation):
+    def __init__(self, workspace, contract, sandbox_cfg, allowed, log, validate=run_validation, journal=None,
+                 crasher=None):
+        """journal: a file outside the workspace where EditFile records each edit before making it (crash-resume)."""
         self.jail = PathJail(workspace)
         self.workspace, self.contract, self.sandbox_cfg = workspace, contract, sandbox_cfg
         self.allowed, self.log, self.validate = set(allowed), log, validate
+        self.journal, self.crasher = journal, crasher
 
     def _gate(self, name):
         tool = GATED[name]
@@ -110,8 +122,9 @@ class Toolbox:
         self.log.emit("tool_call", role="coder", tool=tool)
         return None
 
-    def run(self, call):
-        """Execute one tool call -> {"content": text for the model, "finished": bool}."""
+    def run(self, call, step_key=None):
+        """Execute one tool call -> {"content": text for the model, "finished": bool}. step_key: the memo key of this
+        tool step, the same when a crashed step runs again; EditFile needs it to be safe to repeat."""
         name, args = call.get("name"), call.get("args") or {}
         if name == "Finish":
             return self.finish(args)
@@ -121,6 +134,8 @@ class Toolbox:
         if denied:
             return {"content": denied, "finished": False}
         try:
+            if name == "EditFile":
+                return {"content": self.editfile(args, step_key), "finished": False}
             return {"content": getattr(self, name.lower())(args), "finished": False}
         except PathEscape as e:
             return {"content": f"Refused: {e}", "finished": False}
@@ -191,19 +206,25 @@ class Toolbox:
     def readfile(self, args):
         return self.jail.read_text(str(args.get("path", "")), max_bytes=MAX_READ)
 
+    def _writable(self, path, tool):
+        """(normalised path, None) when path may be written, else (None, the reason). The same rules for every write."""
+        norm = "/".join(self.jail.parts(path))                  # PathEscape before any scope decision
+        sc = self.contract["scope"]
+        if norm == SUMMARY:
+            return None, f"Rejected: {SUMMARY} is written by Finish, not {tool}."
+        if matches(norm, sc["protected"]):
+            return None, f"Rejected: {norm} is protected by the contract and may not be changed."
+        if not matches(norm, sc["writable"]):
+            return None, f"Rejected: {norm} is outside the writable scope {sc['writable']}."
+        return norm, None
+
     def writefile(self, args):
         path, content = args.get("path"), args.get("content")
         if not isinstance(path, str) or not isinstance(content, str):
             return "Rejected: WriteFile needs a string 'path' and a string 'content'."
-        self.jail.parts(path)                                    # PathEscape before any scope decision
-        norm = "/".join(self.jail.parts(path))
-        sc = self.contract["scope"]
-        if norm == SUMMARY:
-            return f"Rejected: {SUMMARY} is written by Finish, not WriteFile."
-        if matches(norm, sc["protected"]):
-            return f"Rejected: {norm} is protected by the contract and may not be changed."
-        if not matches(norm, sc["writable"]):
-            return f"Rejected: {norm} is outside the writable scope {sc['writable']}."
+        norm, problem = self._writable(path, "WriteFile")
+        if problem:
+            return problem
         if len(content.encode("utf-8")) > MAX_WRITE:
             return f"Rejected: content larger than {MAX_WRITE} bytes."
         self.jail.write_text(norm, content)
@@ -230,3 +251,90 @@ class Toolbox:
         self.jail.write_text(SUMMARY, json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2))
         return {"content": f"{SUMMARY} written; the attempt is over and the harness now checks the contract.",
                 "finished": True}
+
+    # ---- EditFile: one exact, unique replacement, safe to run again after a crash ------------------------------
+    #
+    # An edit is not idempotent by itself: when new_text contains old_text (an insertion), applying it twice inserts
+    # twice. So before writing, the edit is recorded in a journal outside the workspace under this tool step's memo
+    # key, with the file's hash before and after. Writing the file is atomic (temp file, fsync, rename), so after a
+    # crash the file holds either the before or the after content:
+    #   entry, file == after     the edit was made and its result not committed: report it again, change nothing
+    #   entry, file == before    the crash fell between journal and write: make the same edit (same input, result)
+    #   entry, file elsewise     refuse and change nothing (cannot happen without interference from outside)
+    #   no entry                 a first run: check, record, then write
+    # Another step (another key) is a new edit, even with the same arguments.
+
+    def _journaled(self, key):
+        found = None
+        try:
+            with open(self.journal, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue                                 # cut off by a crash before its write: ignored
+                    if e.get("key") == key:
+                        found = e
+        except FileNotFoundError:
+            pass
+        return found
+
+    def _record(self, key, norm, before, after):
+        with open(self.journal, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"key": key, "path": norm, "before": before, "after": after}) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+
+    @staticmethod
+    def _edited(norm, text):
+        data = text.encode("utf-8")
+        return f"{norm} edited: 1 occurrence replaced; it now has {len(data)} bytes (sha256 {_sha(data)[:12]})."
+
+    def editfile(self, args, step_key):
+        path, old, new = args.get("path"), args.get("old_text"), args.get("new_text")
+        if not (isinstance(path, str) and isinstance(old, str) and isinstance(new, str)):
+            return "Rejected: EditFile needs a string 'path', 'old_text' and 'new_text'."
+        if not old:
+            return "Rejected: old_text must not be empty."
+        if old == new:
+            return "Rejected: old_text and new_text are the same; nothing to change."
+        if self.journal is None or step_key is None:
+            return "Refused: EditFile is not available here (no step journal)."
+        norm, problem = self._writable(path, "EditFile")
+        if problem:
+            return problem
+        current = self.jail.read_text(norm, max_bytes=MAX_READ)  # FileNotFoundError, PathEscape: reported by run()
+        if "\ufffd" in current:
+            return f"Rejected: {norm} is not plain UTF-8 text; nothing changed."
+        key = _sha(step_key.encode("utf-8"))
+        cur = _sha(current.encode("utf-8"))
+        entry = self._journaled(key)
+        if entry is not None:
+            if entry.get("path") != norm:
+                return "Refused: this step's edit was recorded for another file; nothing changed."
+            if cur == entry["after"]:
+                return self._edited(norm, current)
+            if cur != entry["before"]:
+                return f"Refused: {norm} changed after this edit was recorded; nothing changed."
+        n = current.count(old)
+        if n == 0:
+            return f"Rejected: old_text was not found in {norm}; nothing changed."
+        if n > 1:
+            return (f"Rejected: old_text occurs {n} times in {norm}; include more surrounding text so that it occurs "
+                    f"exactly once. Nothing changed.")
+        result = current.replace(old, new, 1)
+        if len(result.encode("utf-8")) > MAX_WRITE:
+            return f"Rejected: the edited file would be larger than {MAX_WRITE} bytes; nothing changed."
+        after = _sha(result.encode("utf-8"))
+        if entry is None:
+            self._record(key, norm, cur, after)
+        elif entry["after"] != after:
+            return "Refused: this step's edit was recorded with a different result; nothing changed."
+        if self.crasher is not None:
+            self.crasher.point("edit@after_journal")
+        self.jail.write_text(norm, result)
+        return self._edited(norm, result)
+
+
+def _sha(data):
+    return hashlib.sha256(data).hexdigest()

@@ -31,6 +31,7 @@ def system_prompt(tools):
             "SearchFiles": "find a literal text in the repository's files (path:line: text, at most 20 lines)",
             "ReadFile": "read one file",
             "WriteFile": "replace a whole file; only files in the writable scope can be written",
+            "EditFile": "replace one exact piece of text that occurs once in a file; for changing part of a file",
             "RunValidation": "run one of the contract's validation commands in a sandbox and see the result",
             "Finish": "end the attempt with your claims"}
     lines += [f"- {n}: {desc[n]}" for n in desc if n in names]
@@ -127,7 +128,7 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
                 if record is not None:
                     log.emit("step_replayed", kind="tool", step=step, tool=c.get("name"), **meta)
                 else:
-                    record = toolbox.run(c)
+                    record = toolbox.run(c, step_key=tkey)
                     crasher.point("agent@after_tool", step=step, **meta)      # ran, result not yet committed
                     crasher.point(f"agent@after_tool:{c.get('name')}", step=step, **meta)
                     memo.put(tkey, record)
