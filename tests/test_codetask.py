@@ -741,7 +741,8 @@ def test_large_at_the_default_cap_leaves_room_for_practically_one_attempt(tmp_pa
 def test_large_at_a_preflight_approved_one_dollar_cap(tmp_path):
     lim = sonnet_limits(1.00, 1.00)                    # a per-run config approved in a preflight, not the default
     assert admitted_after(lim, [0.55], tmp_path) and not admitted_after(lim, [0.56], tmp_path)
-    assert admitted_after(lim, [0.05, 0.05], tmp_path) and not admitted_after(lim, [0.05, 0.06], tmp_path)
+    # any further attempt, the third too, needs spend so far + $0.45 <= $1.00
+    assert admitted_after(lim, [0.30, 0.25], tmp_path) and not admitted_after(lim, [0.30, 0.26], tmp_path)
 
 
 @pytest.mark.parametrize("profile, out_cap", [(None, 4096), ("default", 4096), ("large", 8192)])
@@ -768,6 +769,7 @@ def test_a_contract_that_cannot_fund_one_large_attempt_stops_before_any_model_ca
     model = StrictScriptedChatModel(script=[WRITE, FINISH])
     r, model, d = run(tmp_path, [], contract=with_profile("large", max_usd=0.2), model=model)
     assert r["status"] == st.FAILED_BUDGET and len(model.calls) == 0 and r["llm_calls"] == 0
+    (tmp_path / "small").mkdir()
     r2, model2, d2 = run(tmp_path / "small", [WRITE, FINISH], contract=with_profile("default", max_usd=0.2))
     assert r2["status"] == st.DONE                                     # the same cap funds a default attempt ($0.15)
 

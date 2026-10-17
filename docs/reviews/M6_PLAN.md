@@ -144,7 +144,7 @@ Manusia memeriksa paket itu, menerapkan patch yang sama ke branch dari commit da
 - **Cap di atas $0.50 hanya untuk run yang disetujui di preflight.** Angka di config dan kontrak dinyatakan di
   preflight, berlaku untuk run itu saja, dan tidak diulang otomatis.
 - **Usulan untuk pilot M6:** `large` dengan cap **$1.00**, karena itu kondisi eksperimen budget (45k: 9/9). Di $1.00,
-  attempt kedua masuk kalau yang pertama ≤ $0.55, dan attempt ketiga kalau dua yang pertama ≤ $0.10 total. Kalau cap
+  attempt kedua masuk kalau yang pertama ≤ $0.55, dan attempt ketiga kalau dua yang pertama ≤ $0.55 total (koreksi 2026-10-17: sebelumnya tertulis $0.10, salah; admission = belanja sejauh ini + satu reservasi $0.45 ≤ cap, dikunci tes W5). Kalau cap
   $1.00 tidak disetujui, pilot berjalan di $0.50 dengan praktis satu attempt, dan itu dicatat sebagai kondisinya.
 - Kontrak yang cap-nya tidak memuat satu reservasi attempt profilnya ditolak saat validasi (fail-closed), bukan
   dijalankan lalu berhenti.
