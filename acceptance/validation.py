@@ -74,17 +74,19 @@ def parse_unittest(text):
 
     for line in text.splitlines():
         m = TEST_LINE.match(line)
+        subtest = False
         if not m and line[:1].isspace():
             m2 = TEST_LINE.match(line.strip())
-            if m2 and (m2.group(3) or "").startswith("("):
-                m = m2                        # an indented subTest line
+            # an indented subTest line: "(i=1) ... FAIL", "[message] ... FAIL" or "[message] (i=1) ... FAIL"
+            if m2 and (m2.group(3) or "").startswith(("(", "[")):
+                m, subtest = m2, True
         if m:
             name, tid, rest = m.groups()
             if tid.rsplit(".", 1)[-1] == name:
                 if rest and rest.startswith("... "):
                     record(tid, rest[4:].strip())
                     pending = None
-                elif rest and rest.startswith("(") and " ... " in rest:
+                elif subtest and " ... " in rest:
                     record(tid, rest.rsplit(" ... ", 1)[1].strip())     # a subTest line
                     pending = None
                 else:

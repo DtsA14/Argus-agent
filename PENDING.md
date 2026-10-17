@@ -119,7 +119,11 @@ Urutan disarankan, karena saling bergantung.
 - [x] Keputusan: evaluasi lintas task dengan Eval Set yang ada, bukan budget adaptif dulu; proses berjenjang menurut risiko
 - [x] **Baseline lintas task** (`docs/reviews/XTASK_BASELINE.md`, `c2748a7`, Eval Set v1 × 2 putaran, **$0.6499**): sukses **16/16**, gagal jujur **4/4**, 0 klaim palsu, $0.03–0.04 per sukses, semua di attempt pertama dengan ≤21 ribu token. **v1 sudah jenuh** untuk agen ini: berguna sebagai suite regresi, tidak untuk mengukur batas kemampuan
 - [ ] `evals/runner.py`: cap total menghitung biaya yang tidak diketahui sebagai $0 (`usd_billed or 0.0`); buat fail-closed seperti `run_series`
-- [ ] Pilot internal di task nyata yang kecil (workspace terisolasi, review manusia sebelum merge): menunggu pilihan repo dan task dari user
+- [x] Pilot internal: repo nyata lain belum bisa divalidasi di sandbox (Athena: pytest + numpy/pandas; bulking-app: JS); dipilih self-hosting di repo Argus
+- [x] **Pilot `argus_self_1`** (`pilots/argus_self_subtest/README.md`, $0.1627): gagal jujur, kedua penulisan ulang file utuh terpotong di 4.096 token (thinking 61–75%)
+- [x] **`EditFile`** (PR #69): satu penggantian yang unik, aturan scope sama dengan WriteFile, aman setelah crash (jurnal per langkah); ledger mencatat `reasoning_tokens` dan `stop_reason`
+- [x] **Pilot `argus_self_2`** ($0.1853): **DONE** di attempt 3 (EditFile + umpan balik verdict), lolos audit independen dan `verify.sh`; fix Argus di-merge setelah review (PR #70)
+- [x] Celah subTest berbentuk pesan (`[case a]`) diperbaiki manual dengan tes pada output unittest asli (PR ini)
 - [ ] Tes eval di sandbox dijalankan pada 1–2 task saja, bukan seluruh manifest (`verify.sh` naik dari 447 ke 516 detik dengan jumlah tes yang sama, karena setiap task baru menambah beberapa run penuh)
 - [ ] Perluasan benchmark berdasarkan kegagalan nyata dari eksperimen itu, lalu bekukan hash v1
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
