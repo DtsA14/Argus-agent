@@ -1,0 +1,143 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:unit",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "pilot_tests",
+          "-t",
+          ".",
+          "-p",
+          "test_contract_regression.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 7,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {},
+        "output_tail": "test_command_rules (pilot_tests.test_contract_regression.ContractRegressionTest.test_command_rules) ... ok\ntest_duplicate_validation_ids_and_malformed_must_pass (pilot_tests.test_contract_regression.ContractRegressionTest.test_duplicate_validation_ids_and_malformed_must_pass) ... ok\ntest_every_contract_in_the_repository_stays_valid (pilot_tests.test_contract_regression.ContractRegressionTest.test_every_contract_in_the_repository_stays_valid) ... ok\ntest_numeric_limits (pilot_tests.test_contract_regression.ContractRegressionTest.test_numeric_limits) ... ok\ntest_the_base_contract_is_valid (pilot_tests.test_contract_regression.ContractRegressionTest.test_the_base_contract_is_valid) ... ok\ntest_tools_and_limits (pilot_tests.test_contract_regression.ContractRegressionTest.test_tools_and_limits) ... ok\ntest_unknown_and_missing_keys (pilot_tests.test_contract_regression.ContractRegressionTest.test_unknown_and_missing_keys) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.007s\n\nOK\n"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; unittest outcome FAILED; required test pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_required_test_that_discovery_never_runs_is_rejected is 'FAIL'; required test pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_duplicated_required_test_is_rejected is 'FAIL'; required test pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_name_that_cannot_be_a_unittest_test_id_is_rejected is 'FAIL'; required test pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_only_the_offending_tests_are_reported is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "pilot_tests",
+          "-t",
+          ".",
+          "-p",
+          "test_must_pass_reachable.py",
+          "-v"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 7,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 27,
+        "errors": 0,
+        "must_pass": {
+          "pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_every_test_discovery_really_runs_is_accepted": "ok",
+          "pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_required_test_that_discovery_never_runs_is_rejected": "FAIL",
+          "pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_test_whose_file_may_not_exist_is_not_rejected": "ok",
+          "pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_duplicated_required_test_is_rejected": "FAIL",
+          "pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_name_that_cannot_be_a_unittest_test_id_is_rejected": "FAIL",
+          "pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_only_the_offending_tests_are_reported": "FAIL",
+          "pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_without_must_pass_nothing_changes": "ok"
+        },
+        "output_tail": "')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/pilot_tests/test_must_pass_reachable.py\", line 29, in test_a_required_test_that_discovery_never_runs_is_rejected\n    self.assertTrue(any(test in e and \"validation[1]\" in e for e in errors), errors)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: False is not true : []\n\n======================================================================\nFAIL: test_a_required_test_that_discovery_never_runs_is_rejected (pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_a_required_test_that_discovery_never_runs_is_rejected) (options=('-s', './tests', '-t', '.'), test='tests.helper.H.test_one')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/pilot_tests/test_must_pass_reachable.py\", line 29, in test_a_required_test_that_discovery_never_runs_is_rejected\n    self.assertTrue(any(test in e and \"validation[1]\" in e for e in errors), errors)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: False is not true : []\n\n======================================================================\nFAIL: test_only_the_offending_tests_are_reported (pilot_tests.test_must_pass_reachable.MustPassReachableTest.test_only_the_offending_tests_are_reported)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/pilot_tests/test_must_pass_reachable.py\", line 55, in test_only_the_offending_tests_are_reported\n    self.assertTrue(must and all(\"tests.test_b.B.test_one\" in e for e in must), errors)\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: [] is not true : []\n\n----------------------------------------------------------------------\nRan 7 tests in 2.834s\n\nFAILED (failures=27)\n"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "4f1a3f7a1a730745cd992b26cf936581dd9ff0c3e32d057cd354d150b90c7a6d",
+  "summary_sha256": null,
+  "verdict_sha256": "b276ff473b49961bae7318fb00e9a8f1c53d9f77b73f93173583345a0f56f680"
+}
