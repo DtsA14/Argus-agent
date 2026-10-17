@@ -135,10 +135,10 @@ Urutan disarankan, karena saling bergantung.
 - [ ] **W0.** Tes deterministik di loop code task: tool call rusak, balasan terpotong, timeout panggilan model (`BLOCKED provider_failed`, biaya worst case). Bisa paralel dengan W1
 - [ ] **W1.** Sandbox untuk repo Argus: image tanpa jaringan dari venv yang dipatok, lingkungan bernama di config (fail-closed), perintah pytest terstruktur dengan parser dan node id, bukti reproduksi (dua run identik, baseline merah/hijau). Tes yang butuh Docker tidak bisa menjadi kriteria
 - [ ] **W2.** Draf rencana, kontrak, dan tes oleh model; pemeriksaan deterministik (kontrak valid, tes baru gagal di commit dasar, kriteria tak terverifikasi tidak dihitung lulus); hanya kontrak beku yang disetujui manusia yang bisa dijalankan
-- [ ] **W3.** Paket review tanpa LLM: `changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`
+- [ ] **W3.** Paket review tanpa LLM: `changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`. Patch format Git dari snapshot murni, diverifikasi dengan `git apply` di worktree bersih pada commit dasar
 - [ ] **W4.** Intake repo pada satu commit ke `fixtures/repos/<nama>`; commit dasar dan commit agen di `result.json`
-- [ ] **W5.** Profil budget per task (`default` 30k / 4.096, `large` 45k / 8.192); cap kontrak harus memuat reservasi profil
-- [ ] **Pilot M6 pertama:** satu task kecil di repo Argus yang tidak menyentuh komponen keselamatan inti (bukan `evals/runner.py`); catat sukses, biaya, dan waktu supervisi. Butuh go/no-go dan preflight
+- [ ] **W5.** Profil budget per task (`default` 30k / 4.096, `large` 45k / 8.192). Profil tidak pernah mengubah cap biaya (default $0.50); cap di atas $0.50 hanya per run yang disetujui di preflight
+- [ ] **Pilot M6 pertama:** satu task kecil di repo Argus yang tidak menyentuh komponen keselamatan inti (bukan `evals/runner.py`); catat status (agent-completed, human-assisted, failed), biaya, dan waktu supervisi. Butuh go/no-go dan preflight
 
 **Proyek masa depan: Argus sebagai agen pembuat serba guna** (spesifikasi draf dari diskusi Atha + GPT, 2026-10-15:
 [`docs/FUTURE_ARCHITECTURE.md`](docs/FUTURE_ARCHITECTURE.md)). **Bukan deskripsi kode yang ada.** Hanya bagian M6 yang
