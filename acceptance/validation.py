@@ -61,19 +61,37 @@ def parse_unittest(text):
     tests, pending = {}, None
     ran = outcome = None
     counts = {}
+    rank = {"ERROR": 2, "FAIL": 1}
+
+    def record(tid, status):
+        # a failing or erroring subTest outranks the test's own (empty or passing) status; ERROR outranks FAIL
+        old = tests.get(tid)
+        if old is not None and rank.get(old, 0) > rank.get(status, 0):
+            return
+        if old is not None and rank.get(old, 0) == rank.get(status, 0) and not status:
+            return
+        tests[tid] = status
+
     for line in text.splitlines():
         m = TEST_LINE.match(line)
+        if not m and line[:1].isspace():
+            m2 = TEST_LINE.match(line.strip())
+            if m2 and (m2.group(3) or "").startswith("("):
+                m = m2                        # an indented subTest line
         if m:
             name, tid, rest = m.groups()
             if tid.rsplit(".", 1)[-1] == name:
                 if rest and rest.startswith("... "):
-                    tests[tid] = rest[4:].strip()
+                    record(tid, rest[4:].strip())
+                    pending = None
+                elif rest and rest.startswith("(") and " ... " in rest:
+                    record(tid, rest.rsplit(" ... ", 1)[1].strip())     # a subTest line
                     pending = None
                 else:
                     pending = tid             # a docstring line comes first, then " ... status"
                 continue
         if pending and " ... " in line:
-            tests[pending] = line.rsplit(" ... ", 1)[1].strip()
+            record(pending, line.rsplit(" ... ", 1)[1].strip())
             pending = None
             continue
         m = RAN.match(line)
