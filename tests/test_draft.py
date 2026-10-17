@@ -21,12 +21,7 @@ OLD_TEST = "from src.shop import total\n\n\ndef test_total_plain():\n    assert 
 NEW_TEST = "from src.shop import total\n\n\ndef test_total_never_negative():\n    assert total([1], 5) == 0\n"
 NEW_NODE = "tests/test_new.py::test_total_never_negative"
 OLD_NODE = "tests/test_old.py::test_total_plain"
-SKIP_TEST = "import pytest
-
-
-def test_skipped_here():
-    pytest.skip('not here')
-"
+SKIP_TEST = "import pytest\n\n\ndef test_skipped_here():\n    pytest.skip('not here')\n"
 
 
 def git(repo, *args):
