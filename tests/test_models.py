@@ -155,3 +155,12 @@ def test_message_cost_reads_usage_and_cache_from_the_message():
     cost = message_cost(load_config(), ModelRef("anthropic", "claude-haiku-5-5"), msg)
     assert cost == pytest.approx((60 * 0.10 + 40 * 0.01 + 20 * 0.50) / 1_000_000)
     assert message_cost(load_config(), ModelRef("openai", "gpt-5.6-sol"), msg) is None
+
+
+def test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries(keys):
+    # M6 W0: without a timeout a hung request would stall a code task forever; SDK retries would be billed outside
+    # the ledger. The harness retries timeouts itself (harness/llm.py) and charges each at its worst case.
+    cfg = load_config()
+    model = build_chat_model(cfg, "coder")
+    assert cfg["roles"]["coder"]["timeout_s"] == 90
+    assert model.default_request_timeout == 90 and model.max_retries == 0
