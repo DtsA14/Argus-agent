@@ -29,6 +29,9 @@ def without(c, *paths):
 
 def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap():
     base = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    # Keys added to config.yaml after the experiment ran; the arms' configs are kept as they were run.
+    # sandbox.environments: M6 W1 (named sandbox environments, unused by these arms' contracts).
+    del base["sandbox"]["environments"]
     keys = [("code_task", "attempt_tokens"), ("budget", "max_usd")]
     for name, tokens in (("30k", 30000), ("45k", 45000)):
         c = config(name)

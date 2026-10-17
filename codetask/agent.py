@@ -167,7 +167,8 @@ def feedback_from(verdict, limit=10, paths=20):
             must = ev.get("must_pass") or {}
             if must:
                 line += "; required tests: " + ", ".join(
-                    f"{t.rsplit('.', 1)[-1]} {test_status(s)}" for t, s in list(must.items())[:paths])
+                    f"{t if '::' in t else t.rsplit('.', 1)[-1]} {test_status(s)}"     # pytest: the node id
+                    for t, s in list(must.items())[:paths])
             checks.append(line)
         elif changed is None and isinstance(ev.get("diff"), dict):
             d = ev["diff"]

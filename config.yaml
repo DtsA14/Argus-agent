@@ -216,3 +216,10 @@ sandbox:
   kill_after_output_bytes: 16777216  # total output after which the container is killed early
   cleanup_timeout_s: 15              # total budget for kill/remove after a timeout; failure is logged
   allow_unpinned: false
+  # Named environments (M6 W1): a contract's validation may name one ("environment": "argus") to run in its image
+  # instead of the default one, with the same isolation flags. An unknown name blocks the run before any model call.
+  # The image is set by its build script (git-ignored file) and ARGUS_SANDBOX_IMAGE_<NAME>; never by
+  # ARGUS_SANDBOX_IMAGE.
+  environments:
+    argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
+      image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker

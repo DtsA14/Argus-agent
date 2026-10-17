@@ -1,0 +1,55 @@
+== W0 mutants
+CAUGHT  malformed calls not rejected: 1 failed, 1 passed, 57 deselected in 1.75s
+CAUGHT  cut-off reply not detected in the loop: 1 failed, 4 passed, 57 deselected in 1.54s
+CAUGHT  finish_reason length ignored: 1 failed, 5 passed, 57 deselected in 1.47s
+CAUGHT  timeouts not transient: 1 failed, 7 passed, 57 deselected in 2.99s
+CAUGHT  failed calls charged nothing: 1 failed, 7 passed, 57 deselected in 3.06s
+CAUGHT  one retry fewer: 1 failed, 7 passed, 57 deselected in 3.12s
+CAUGHT  provider failure not blocked: 1 failed, 7 passed, 57 deselected in 3.10s
+CAUGHT  no request timeout: 1 failed, 9 passed, 57 deselected in 3.28s
+tree clean: True
+MUTANTS_EXIT 0
+== W1 mutants
+CAUGHT  environment not passed to the sandbox: 1 failed, 54 passed in 0.71s
+CAUGHT  default override replaces an environment's image: 1 failed, 48 passed in 0.66s
+CAUGHT  unknown environment falls back to the default image: 1 failed, 49 passed in 0.67s
+CAUGHT  status ignores an environment error: 1 failed, 49 passed in 0.55s
+CAUGHT  setup does not check environment names: 1 failed, 106 passed in 37.01s
+CAUGHT  setup does not check environment images: 1 failed, 107 passed in 37.16s
+CAUGHT  consistency not required: 1 failed, 33 passed in 0.54s
+CAUGHT  line counts not compared: 1 failed, 23 passed in 0.54s
+CAUGHT  a later line overrides a worse status: 1 failed, 24 passed in 0.53s
+CAUGHT  truncated output trusted: 1 failed, 37 passed in 0.55s
+CAUGHT  skip counted as ok: 1 failed, 21 passed in 0.53s
+CAUGHT  xpass counted as ok: 1 failed, 21 passed in 0.53s
+CAUGHT  any pytest option allowed: 1 failed, 7 passed in 0.50s
+CAUGHT  pytest targets not checked: 1 failed, 13 passed in 0.52s
+CAUGHT  pytest must_pass not checked as node ids: 1 failed, 40 passed in 0.55s
+CAUGHT  environment name not checked: 1 failed, 43 passed in 0.55s
+CAUGHT  memo version ignores environments: 1 failed, 55 passed in 0.55s
+CAUGHT  no summary still trusted: 1 failed, 158 passed in 39.82s
+tree clean: True
+MUTANTS_MISSED 0
+== review findings
+finding 1, pytest node id in must_pass: valid
+finding 1, malformed node id: ['validation[0]: must_pass must be a list of pytest node ids (path.py::name)']
+finding 2, ['-k', 'some_name'] -> ['a pytest validation must name at least one test path or node id']
+finding 2, ['-k', 'some_name', 'tests'] -> valid
+finding 2, ['tests', '-k', 'some_name'] -> valid
+CAUGHT finding 1 as described: must_pass checked as unittest ids first:
+  FAILED tests/test_pytest_validation.py::test_a_pytest_validation_in_a_named_environment_is_a_valid_contract
+  FAILED tests/test_pytest_validation.py::test_invalid_pytest_validations_are_refused[changes0-pytest node ids]
+  FAILED tests/test_pytest_validation.py::test_invalid_pytest_validations_are_refused[changes2-duplicates]
+  FAILED tests/test_pytest_validation.py::test_a_contract_without_environment_names_none
+CAUGHT finding 2 as described: -k advances one position, its value read as a target:
+  FAILED tests/test_pytest_validation.py::test_refused_pytest_commands[args1-at least one test path]
+== git status after mutants
+== verify
+VERIFY_EXIT=0
+working tree: clean
+argus environment rootfs: sha256:52fc08ccf9f25dd2255c42bbc7c5afbcc2dc0accb8f06c9997381897802ae5ac
+1012 passed in 618.08s (0:10:18)
+== sandbox tests skipped: 0
+RESULT: PASS
+evidence saved to verification/verify-20261017T084815Z-aarch64.log
+CHAIN_DONE

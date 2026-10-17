@@ -1,0 +1,11 @@
+exit 4
+--- stdout
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /workspace
+plugins: anyio-4.15.1, langsmith-0.14.11
+collecting ... collected 0 items
+
+============================ no tests ran in 0.00s =============================
+--- stderr
+ERROR: file or directory not found: tests/test_nope.py

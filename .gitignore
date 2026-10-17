@@ -6,4 +6,5 @@ runs/
 .env
 .env.*
 .sandbox_image
+.sandbox_image_*
 .verify-pytest.out
