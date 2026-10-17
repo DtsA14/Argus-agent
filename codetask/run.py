@@ -78,9 +78,29 @@ class State(TypedDict, total=False):
     blocked_reason: str
     tools: list                  # the effective tool allowlist of this run (config + frozen contract)
     provenance: dict             # input (workspace, snapshot hash, intake record) and the Argus commit, at setup
+    budget_profile: dict         # the profile the run was configured with: name, attempt_tokens, max_output_tokens
     tokens_used: Annotated[int, operator.add]
     usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
+
+
+def apply_profile(cfg, name):
+    """The config with a budget profile applied: the attempt reservation and the coder's output cap, nothing else.
+    The cost cap (budget.max_usd, the contract's limits.max_usd) is never touched. Unknown names raise KeyError."""
+    p = cfg["code_task"]["profiles"][name]
+    role = cfg["code_task"]["role"]
+    out = {**cfg, "code_task": {**cfg["code_task"], "attempt_tokens": int(p["attempt_tokens"]), "applied_profile": name},
+           "roles": {**cfg["roles"], role: {**cfg["roles"][role], "max_output_tokens": int(p["max_output_tokens"])}}}
+    return out
+
+
+def contract_profile(path):
+    """The budget profile a contract file names, or None (also when the file is unreadable: setup reports that)."""
+    try:
+        c = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return c.get("budget_profile") if isinstance(c, dict) else None
 
 
 def settings(cfg, contract=None):
@@ -159,6 +179,14 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         except (OSError, ValueError, ct.ContractError) as e:
             return move(state, st.BLOCKED, reason=f"invalid contract: {e}", blocked="invalid_contract")
         log.emit("contract_frozen", sha256=sha, contract=contract["contract"], version=contract["version"])
+        profile = contract.get("budget_profile")
+        if profile is not None and profile not in (cfg["code_task"].get("profiles") or {}):
+            return move(state, st.BLOCKED, reason=f"unknown budget profile {profile!r} "
+                        f"(configured: {sorted(cfg['code_task'].get('profiles') or {})})", blocked="invalid_contract")
+        if profile != cfg["code_task"].get("applied_profile"):
+            return move(state, st.BLOCKED, reason=f"the frozen contract names budget profile {profile!r}, but the "
+                        f"run was configured with {cfg['code_task'].get('applied_profile')!r}",
+                        blocked="contract_changed")
         log.emit("tools_effective", tools=effective_tools(contract), from_contract=ct.contract_tools(contract))
         try:
             record = intake.record_for(contract["inputs"]["workspace"], ROOT)
@@ -201,14 +229,21 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                                 {k: record.get(k) for k in ("name", "repo", "commit", "tree", "exclude")}},
                       "argus": argus_provenance()}
         log.emit("provenance", **provenance)
+        budget = {"name": profile, "attempt_tokens": lim0["attempt_tokens"],
+                  "max_output_tokens": int(cfg["roles"][cfg["code_task"]["role"]].get("max_output_tokens", 2048))}
+        log.emit("budget_profile", **budget)
         return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[],
-                    tools=effective_tools(contract), provenance=provenance)
+                    tools=effective_tools(contract), provenance=provenance, budget_profile=budget)
 
     def agent(state):
         try:
             contract = frozen.load(run_dir, state["contract_sha"])
         except frozen.ContractChanged as e:
             return move(state, st.BLOCKED, reason=str(e), blocked="contract_changed")
+        if contract.get("budget_profile") != cfg["code_task"].get("applied_profile"):   # e.g. a resume configured
+            return move(state, st.BLOCKED, reason="the run is configured with budget profile "     # differently
+                        f"{cfg['code_task'].get('applied_profile')!r}, the frozen contract names "
+                        f"{contract.get('budget_profile')!r}", blocked="contract_changed")
         # The allowlist frozen at setup, not the config of this process: a resume with a changed config must not
         # change the agent's tools. A checkpoint without it cannot say what the run was allowed, so it stops.
         tools = state.get("tools")
@@ -290,6 +325,12 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
     run_dir.mkdir(parents=True, exist_ok=True)
     log = EventLog(run_dir / "events.jsonl", echo=echo)
     cfg = {**cfg, "sandbox": {**(cfg.get("sandbox") or {}), "labels": {"argus.run": run_id}}}
+    # The budget profile shapes the caller and the attempts, which are built before setup reads the contract: take it
+    # from the frozen contract on resume, from the contract file otherwise. Setup and the agent node check that the
+    # frozen contract names the same profile; an unknown one is applied nowhere and blocks in setup.
+    profile = contract_profile(run_dir / frozen.FILE if resume else contract_path)
+    if profile is not None and profile in (cfg["code_task"].get("profiles") or {}):
+        cfg = apply_profile(cfg, profile)
     config = {"configurable": {"thread_id": run_id}, "recursion_limit": 3 * 10 + 10}
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
@@ -328,7 +369,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
-                                        "attempt", "tools", "provenance")}
+                                        "attempt", "tools", "provenance", "budget_profile")}
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
                   llm_calls_unknown=totals["unknown_after_crash"])

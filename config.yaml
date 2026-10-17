@@ -82,6 +82,14 @@ code_task:
   attempt_tokens: 30000
   max_steps: 12
   stagnation_rounds: 2     # the same failing criteria this many attempts in a row ends the run (FAILED_ACCEPTANCE)
+  # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
+  # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
+  # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room
+  # for practically one attempt; a higher cap is a per-run config approved in a preflight, never implied by a
+  # profile. `default` is what a contract without a profile gets (kept equal to the values above by a test).
+  profiles:
+    default: {attempt_tokens: 30000, max_output_tokens: 4096}
+    large: {attempt_tokens: 45000, max_output_tokens: 8192}
 
 retry:
   attempts: 3
