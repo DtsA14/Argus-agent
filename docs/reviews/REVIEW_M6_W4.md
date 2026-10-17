@@ -9,6 +9,7 @@ Status: **implementasi untuk review.** 2026-10-17. Rencana: `docs/reviews/M6_PLA
 | **Intake** | `scripts/intake_repo.py --repo R --commit C --name N [--exclude P ...]` (`acceptance/intake.py`). Commit C dari repo R menjadi `fixtures/repos/N`. Catatannya ada di `fixtures/intake/N.json`, **di luar workspace**, jadi agen tidak bisa melihat atau mengubahnya. Isi catatan: repo, commit penuh, tree, pengecualian, jumlah file, hash snapshot, dan file executable. Intake tidak pernah menimpa. |
 | **Isi = tree commit persis** | Setiap blob ditulis dari `git cat-file`, bukan `git archive`. `git archive` menerapkan `.gitattributes` (`export-ignore`, `export-subst`), jadi isinya bisa berbeda dari commit. Ini **penyimpangan kecil dari rencana** ("git archive"), dengan alasan itu. Tesnya memakai repo dengan `export-ignore`, `export-subst`, dan CRLF: semua byte sama dengan commit. |
 | **Fail closed saat intake** | Ditolak: nama yang bukan nama huruf kecil; pengecualian yang bukan path relatif polos, atau yang tidak cocok dengan apa pun (salah ketik tidak boleh diam-diam mengecualikan apa-apa); symlink atau submodule yang tidak dikecualikan; commit yang tidak ada. Penolakan tidak meninggalkan apa pun. Git berjalan tanpa konfigurasi pengguna atau sistem dan tanpa hook. |
+| **Urutan publikasi** (temuan review #77) | Catatan dipublikasikan **sebelum** workspace, masing-masing dengan rename atomik. Kalau proses berhenti di antaranya, yang tertinggal catatan tanpa workspace. Kondisi itu dilaporkan `check` ("workspace ... is missing") dan diblok setup, dan intake ulang ditolak ("never overwrites"). Workspace tanpa catatan tidak pernah tertinggal, karena kondisi itu akan lolos sebagai fixture tulisan tangan dan melewati cek. Dua tes mensimulasikan berhenti di kedua titik. |
 | **Kredensial** | URL `origin` dicatat tanpa user atau password (`https://user:token@…` menjadi `https://…`). Path lokal mesin tidak dicatat. |
 | **Cek saat setup** | Kalau workspace kontrak punya catatan intake, setup membandingkan snapshot dengan catatan itu **sebelum panggilan model pertama**: hash isi, jumlah file, dan bit executable. Kalau ada file yang berubah, bertambah, atau terhapus, hasilnya `BLOCKED invalid_contract` ("input repository changed since intake"). Fixture tulisan tangan yang sudah ada tidak punya catatan, jadi berjalan seperti sebelumnya. |
 | **Provenance di `result.json`** | Isinya `input` (workspace, hash snapshot salinan, dan catatan intake: name, repo, commit, tree, exclude; atau `null`) dan `argus` (commit Argus yang menjalankan agen, dan apakah file terlacaknya berubah). Keduanya ditetapkan di setup dan disimpan di checkpoint, jadi resume tidak mengubahnya. |
@@ -28,12 +29,12 @@ Status: **implementasi untuk review.** 2026-10-17. Rencana: `docs/reviews/M6_PLA
   - URL tanpa kredensial;
   - setup memblok input yang berubah sebelum panggilan model;
   - `result.json` memuat provenance, dengan atau tanpa intake.
-- **Mutan: 12/12 tertangkap.**
+- **Mutan: 14/14 tertangkap** (dua tambahan setelah review #77: workspace dipublikasikan sebelum catatannya, dan workspace yang hilang lolos cek).
   - Cek snapshot: hash tidak dibandingkan, bit executable tidak dibandingkan, cek terhadap repo selalu bersih.
   - Isi intake: pengecualian diabaikan, pengecualian yang tidak cocok diterima, symlink/submodule diterima, mode tidak disimpan.
   - Keamanan intake: intake menimpa, kredensial tersimpan di URL.
   - Setup dan hasil: setup tidak memeriksa intake, provenance tidak ada di `result.json`, commit intake tidak tercatat.
-  - Log: `verification/mutants-w4-*.log`.
+  - Log: `verification/mutants-w4-20261017-b9e3586.log`.
 
 ## 3. Batas
 
