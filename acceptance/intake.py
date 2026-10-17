@@ -132,13 +132,18 @@ def intake(repo, commit, name, *, exclude=(), root="."):
         snap = snapshot(stage)
         if not snap:
             raise IntakeError("the snapshot is empty")
+        record = {"intake_version": VERSION, "name": name, "repo": remote_url(repo) or repo.resolve().name,
+                  "commit": full, "tree": tree, "exclude": exclude, "files": len(snap),
+                  "snapshot_sha256": digest(snap), "executable": exec_paths,
+                  "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+        # The record is published before the workspace, each by an atomic rename. A stop in between leaves a record
+        # without its workspace, which check() reports and setup blocks; never a workspace without its record, which
+        # would pass for a hand-written fixture and skip the check.
+        record_path.parent.mkdir(parents=True, exist_ok=True)
+        part = record_path.with_name(f".{name}.json.part")
+        part.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        os.replace(part, record_path)
         os.replace(stage, dest)
-    record = {"intake_version": VERSION, "name": name, "repo": remote_url(repo) or repo.resolve().name,
-              "commit": full, "tree": tree, "exclude": exclude, "files": len(snap),
-              "snapshot_sha256": digest(snap), "executable": exec_paths,
-              "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-    record_path.parent.mkdir(parents=True, exist_ok=True)
-    record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return record
 
 
@@ -158,6 +163,8 @@ def record_for(workspace, root="."):
 
 def check(record, workspace_dir):
     """Problems between a snapshot on disk and its intake record, or []."""
+    if not Path(workspace_dir).is_dir():
+        return [f"the workspace of intake {record.get('name')!r} is missing (an intake stopped before publishing it?)"]
     snap = snapshot(workspace_dir, skip_cache=True)
     problems = []
     if digest(snap) != record.get("snapshot_sha256") or len(snap) != record.get("files"):

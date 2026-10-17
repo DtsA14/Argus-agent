@@ -154,3 +154,35 @@ def test_the_remote_url_is_recorded_without_credentials(repo, root):
 def test_only_a_plain_fixture_workspace_has_a_record(root):
     assert intake.record_for("fixtures/repos/calc", root) is None            # hand-written fixtures have none
     assert intake.record_for("fixtures/repos/a/b", root) is None
+
+
+def failing_replace_to(target_name):
+    real = os.replace
+
+    def replace(src, dst):
+        if os.path.basename(str(dst)) == target_name:
+            raise OSError("simulated stop")
+        return real(src, dst)
+    return replace
+
+
+def test_a_stop_after_the_record_leaves_a_record_without_workspace_which_is_refused(repo, root, monkeypatch):
+    # the review finding on #77: the workspace must never exist without its record
+    monkeypatch.setattr(intake.os, "replace", failing_replace_to("demo"))
+    with pytest.raises(OSError, match="simulated stop"):
+        intake.intake(repo, "HEAD", "demo", root=root)
+    monkeypatch.undo()
+    rec = intake.record_for("fixtures/repos/demo", root)
+    assert rec is not None and not (root / "fixtures" / "repos" / "demo").exists()
+    assert "missing" in intake.check(rec, root / "fixtures" / "repos" / "demo")[0]
+    with pytest.raises(intake.IntakeError, match="never overwrites"):       # and it is not silently redone
+        intake.intake(repo, "HEAD", "demo", root=root)
+
+
+def test_a_stop_while_publishing_the_record_publishes_nothing(repo, root, monkeypatch):
+    monkeypatch.setattr(intake.os, "replace", failing_replace_to("demo.json"))
+    with pytest.raises(OSError, match="simulated stop"):
+        intake.intake(repo, "HEAD", "demo", root=root)
+    assert intake.record_for("fixtures/repos/demo", root) is None
+    assert not (root / "fixtures" / "repos" / "demo").exists()
+    assert not list((root / "fixtures" / "repos").glob(".intake-*"))

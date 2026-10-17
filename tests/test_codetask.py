@@ -656,3 +656,14 @@ def test_an_input_without_intake_is_recorded_as_such(tmp_path):
     p = json.loads((d / "result.json").read_text())["provenance"]
     assert p["input"]["intake"] is None and p["input"]["workspace"] == "fixtures/repos/calc"
     assert len(p["input"]["snapshot_sha256"]) == 64
+
+
+def test_a_record_whose_workspace_is_missing_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    c = copy.deepcopy(CONTRACT)
+    c["inputs"]["workspace"] = "fixtures/repos/ghost"
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: calc_record(name="ghost"))
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=c, model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "changed since intake" in r["stop_reason"] and "missing" in r["stop_reason"]
