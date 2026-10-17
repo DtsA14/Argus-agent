@@ -3,7 +3,7 @@
 Daftar kerja Argus, dipisah menurut **siapa yang bisa mengerjakan dan kapan**.
 Detail desain ada di [`docs/MILESTONE2_PLAN.md`](docs/MILESTONE2_PLAN.md), detail temuan audit di [`BACKLOG.md`](BACKLOG.md).
 
-Terakhir diperbarui: 2026-10-15.
+Terakhir diperbarui: 2026-10-17.
 
 ---
 
@@ -128,6 +128,17 @@ Urutan disarankan, karena saling bergantung.
 - [ ] Perluasan benchmark berdasarkan kegagalan nyata dari eksperimen itu, lalu bekukan hash v1
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
+
+**Milestone 6: MVP repo-to-PR** (gap analysis: [`docs/reviews/M6_GAP_ANALYSIS.md`](docs/reviews/M6_GAP_ANALYSIS.md); rencana: [`docs/reviews/M6_PLAN.md`](docs/reviews/M6_PLAN.md)). Desain disetujui; **implementasi ditahan** sampai rencana, kriteria acceptance, dan preflight disetujui
+- [x] Gap analysis terhadap `FUTURE_ARCHITECTURE.md` (PR #73) dan empat keputusan: scope = hambatan 1–4; draf rencana dan kriteria oleh model, disetujui manusia; PR dibuka manusia; repo pertama Argus sendiri (bersyarat, Athena sebagai alternatif)
+- [ ] Review rencana M6 (`docs/reviews/M6_PLAN.md`)
+- [ ] **W0.** Tes deterministik di loop code task: tool call rusak, balasan terpotong, timeout panggilan model (`BLOCKED provider_failed`, biaya worst case). Bisa paralel dengan W1
+- [ ] **W1.** Sandbox untuk repo Argus: image tanpa jaringan dari venv yang dipatok, lingkungan bernama di config (fail-closed), perintah pytest terstruktur dengan parser dan node id, bukti reproduksi (dua run identik, baseline merah/hijau). Tes yang butuh Docker tidak bisa menjadi kriteria
+- [ ] **W2.** Draf rencana, kontrak, dan tes oleh model; pemeriksaan deterministik (kontrak valid, tes baru gagal di commit dasar, kriteria tak terverifikasi tidak dihitung lulus); hanya kontrak beku yang disetujui manusia yang bisa dijalankan
+- [ ] **W3.** Paket review tanpa LLM: `changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`
+- [ ] **W4.** Intake repo pada satu commit ke `fixtures/repos/<nama>`; commit dasar dan commit agen di `result.json`
+- [ ] **W5.** Profil budget per task (`default` 30k / 4.096, `large` 45k / 8.192); cap kontrak harus memuat reservasi profil
+- [ ] **Pilot M6 pertama:** satu task kecil di repo Argus yang tidak menyentuh komponen keselamatan inti (bukan `evals/runner.py`); catat sukses, biaya, dan waktu supervisi. Butuh go/no-go dan preflight
 
 **Milestone 4+**
 - [ ] Approval manusia untuk aksi berisiko (interrupt LangGraph)
