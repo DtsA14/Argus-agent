@@ -20,6 +20,7 @@ import math
 import operator
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Annotated, TypedDict
 
@@ -27,9 +28,10 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from acceptance import contract as ct
+from acceptance import intake
 from acceptance.validation import run_validation
 from acceptance.verdict import evaluate
-from acceptance.workspace import prepare
+from acceptance.workspace import digest, prepare
 from harness.crash import Crasher
 from harness.errors import EstimateExceeded
 from harness.events import EventLog
@@ -51,6 +53,16 @@ class RunExists(Exception):
     pass
 
 
+def argus_provenance():
+    """The Argus commit running the agent and whether its tracked files were changed. None when unknown."""
+    try:
+        commit = intake.git(ROOT, "rev-parse", "HEAD").decode().strip()
+        dirty = bool(intake.git(ROOT, "status", "--porcelain", "--untracked-files=no").strip())
+    except (intake.IntakeError, OSError, subprocess.SubprocessError):
+        return {"commit": None, "dirty": None}
+    return {"commit": commit, "dirty": dirty}
+
+
 class State(TypedDict, total=False):
     run_id: str
     contract_path: str
@@ -65,6 +77,7 @@ class State(TypedDict, total=False):
     stop_reason: str
     blocked_reason: str
     tools: list                  # the effective tool allowlist of this run (config + frozen contract)
+    provenance: dict             # input (workspace, snapshot hash, intake record) and the Argus commit, at setup
     tokens_used: Annotated[int, operator.add]
     usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
@@ -147,6 +160,15 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
             return move(state, st.BLOCKED, reason=f"invalid contract: {e}", blocked="invalid_contract")
         log.emit("contract_frozen", sha256=sha, contract=contract["contract"], version=contract["version"])
         log.emit("tools_effective", tools=effective_tools(contract), from_contract=ct.contract_tools(contract))
+        try:
+            record = intake.record_for(contract["inputs"]["workspace"], ROOT)
+        except intake.IntakeError as e:
+            return move(state, st.BLOCKED, reason=str(e), blocked="invalid_contract")
+        if record is not None:        # an intake: the input must still be exactly the commit that was taken in
+            problems = intake.check(record, ROOT / contract["inputs"]["workspace"])
+            if problems:
+                return move(state, st.BLOCKED, reason="input repository changed since intake: " + "; ".join(problems),
+                            blocked="invalid_contract")
         if ws.exists():
             shutil.rmtree(ws)     # a copy from a setup that crashed before committing; the agent never ran on it
         try:
@@ -174,8 +196,13 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if blocker:
             return move(state, st.FAILED_BUDGET, reason=f"{blocker}: not even one attempt fits")
         log.emit("workspace_prepared", files=len(before))
+        provenance = {"input": {"workspace": contract["inputs"]["workspace"], "snapshot_sha256": digest(before),
+                                "intake": None if record is None else
+                                {k: record.get(k) for k in ("name", "repo", "commit", "tree", "exclude")}},
+                      "argus": argus_provenance()}
+        log.emit("provenance", **provenance)
         return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[],
-                    tools=effective_tools(contract))
+                    tools=effective_tools(contract), provenance=provenance)
 
     def agent(state):
         try:
@@ -301,7 +328,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
-                                        "attempt", "tools")}
+                                        "attempt", "tools", "provenance")}
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
                   llm_calls_unknown=totals["unknown_after_crash"])

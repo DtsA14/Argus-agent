@@ -616,3 +616,54 @@ def test_a_timeout_then_an_answer_goes_on_and_the_lost_call_stays_charged(tmp_pa
     first = [e for e in events(d) if e["event"] == "llm_call"][0]
     assert first["status"] == "transient_error" and first["usd_nano"] > 0
     assert r["usd_billed"] >= first["usd"]
+
+
+# ---- intake and provenance (M6 W4) -----------------------------------------------------------------------------
+
+def calc_record(**over):
+    from acceptance import intake
+    from acceptance.workspace import digest, snapshot
+    calc = ROOT / "fixtures" / "repos" / "calc"
+    snap = snapshot(calc, skip_cache=True)
+    return {"intake_version": 1, "name": "calc", "repo": "https://example.invalid/calc.git", "commit": "c" * 40,
+            "tree": "d" * 40, "exclude": [], "files": len(snap), "snapshot_sha256": digest(snap),
+            "executable": intake.executables(calc), **over}
+
+
+def test_an_input_taken_in_by_intake_is_recorded_in_the_result(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: calc_record())
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    assert r["status"] == st.DONE
+    p = json.loads((d / "result.json").read_text())["provenance"]
+    assert p["input"]["intake"] == {"name": "calc", "repo": "https://example.invalid/calc.git", "commit": "c" * 40,
+                                    "tree": "d" * 40, "exclude": []}
+    assert p["input"]["workspace"] == "fixtures/repos/calc" and p["input"]["snapshot_sha256"] == calc_record()["snapshot_sha256"]
+    assert len(p["argus"]["commit"]) == 40 and isinstance(p["argus"]["dirty"], bool)
+
+
+def test_an_input_that_changed_since_intake_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: calc_record(snapshot_sha256="0" * 64))
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "changed since intake" in r["stop_reason"]
+
+
+def test_an_input_without_intake_is_recorded_as_such(tmp_path):
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    p = json.loads((d / "result.json").read_text())["provenance"]
+    assert p["input"]["intake"] is None and p["input"]["workspace"] == "fixtures/repos/calc"
+    assert len(p["input"]["snapshot_sha256"]) == 64
+
+
+def test_a_record_whose_workspace_is_missing_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    c = copy.deepcopy(CONTRACT)
+    c["inputs"]["workspace"] = "fixtures/repos/ghost"
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: calc_record(name="ghost"))
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=c, model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "changed since intake" in r["stop_reason"] and "missing" in r["stop_reason"]
