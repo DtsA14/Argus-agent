@@ -99,6 +99,30 @@ def test_every_outcome_is_mapped_per_node():
     assert p["consistent"] and p["collected"] == 13 and p["outcome"] == "FAILED"
 
 
+def test_node_ids_with_spaces_are_parsed():
+    """Real output of Argus's own tests (tests/test_parse_subtests.py) in the argus environment: parametrize ids
+    with spaces, quotes, brackets and ' ... '."""
+    code, out, _ = captured("spaces")
+    p = va.parse_pytest(out)
+    assert code == 0 and p["consistent"] and p["outcome"] == "OK" and p["tests_run"] == p["collected"] == 7
+    assert any(" ... " in n for n in p["tests"]) and set(p["tests"].values()) == {"ok"}
+
+
+def test_a_status_word_in_a_skip_reason_cannot_turn_a_skip_into_a_pass():
+    # the reason is written by the test code; a line read with the wrong status no longer matches the summary
+    line = DEMO + "test_skipped SKIPPED (not on this platform)"
+    out = captured("all")[1]
+    assert line in out
+    p = va.parse_pytest(out.replace(line, DEMO + "test_skipped SKIPPED (x) PASSED (y)"))
+    assert not p["consistent"]
+
+
+def test_a_later_pass_line_never_hides_a_failure_of_the_same_node():
+    line = DEMO + "test_fails FAILED"
+    p = va.parse_pytest(captured("all")[1].replace(line, line + "\n" + DEMO + "test_fails PASSED"))
+    assert p["tests"][DEMO + "test_fails"] == "FAIL" and not p["consistent"]
+
+
 def test_a_collection_error_is_not_consistent():
     p = va.parse_pytest(captured("collection_error")[1])
     assert p["tests"] == {} and p["errors"] == 1 and not p["consistent"]
@@ -223,6 +247,13 @@ def test_a_contract_without_environment_names_none():
 ENVS = {"kind": "docker", "image": "sha256:" + "a" * 64, "environments": {"argus": {"image": "sha256:" + "b" * 64}}}
 
 
+@pytest.fixture(autouse=True)
+def no_image_overrides(monkeypatch):
+    """The image overrides of the machine running the tests (verify.sh sets them) must not leak into these."""
+    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE", raising=False)
+    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE_ARGUS", raising=False)
+
+
 def test_an_environment_runs_its_own_image_and_the_default_override_never_replaces_it(monkeypatch):
     monkeypatch.setenv("ARGUS_SANDBOX_IMAGE", "sha256:" + "c" * 64)
     assert sb.settings(ENVS)["image"] == "sha256:" + "c" * 64                    # the default image is overridden
@@ -239,8 +270,7 @@ def test_an_unknown_environment_is_not_available(name, monkeypatch):
     assert not ok and "unknown sandbox environment" in why
 
 
-def test_an_environment_without_an_image_is_not_available(monkeypatch):
-    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE_ARGUS", raising=False)
+def test_an_environment_without_an_image_is_not_available():
     cfg = {**ENVS, "environments": {"argus": {"image": None}}, "environment": "argus"}
     ok, why = sb.status(cfg)
     assert not ok and "has no image configured" in why
@@ -255,9 +285,7 @@ def test_an_unknown_environment_never_starts_a_container(monkeypatch):
     assert v["status"] == "blocked" and "unknown sandbox environment" in v["reason"]
 
 
-def test_the_memo_version_is_unchanged_without_environments_and_follows_an_environments_image(monkeypatch):
-    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE", raising=False)
-    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE_ARGUS", raising=False)
+def test_the_memo_version_is_unchanged_without_environments_and_follows_an_environments_image():
     assert sb.tool_version(ENVS) == "1:sha256:" + "a" * 64                       # what every existing run used
     v1 = sb.tool_version(ENVS, ["argus"])
     other = {**ENVS, "environments": {"argus": {"image": "sha256:" + "e" * 64}}}

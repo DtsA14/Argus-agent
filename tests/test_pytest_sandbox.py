@@ -94,6 +94,6 @@ def test_argus_tests_run_in_the_argus_environment(cfg, tmp_path):
     shutil.copytree(ROOT, ws, ignore=shutil.ignore_patterns(".git", ".venv*", "runs", "verification", "__pycache__"))
     node = "tests/test_parse_subtests.py::test_an_erroring_message_subtest_wins_over_a_failing_one"
     v = va.run_validation(spec("tests/test_parse_subtests.py", "tests/test_pytest_validation.py", must=[node],
-                               min_tests=20), str(ws), cfg)
+                               min_tests=50), str(ws), cfg)
     assert v["status"] == "pass", v["reason"]
     assert v["evidence"]["must_pass"] == {node: "ok"} and v["evidence"]["consistent"]

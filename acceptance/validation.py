@@ -11,7 +11,9 @@ Two shapes are allowed:
 Both run with the workspace mounted read-only, so the check cannot change what it checks, and are judged from the
 runner's verbose per-test lines and its summary. A pytest run is trusted only when the per-test lines account for
 the summary exactly (same count per outcome, every collected test seen); otherwise the result fails closed.
-Node ids with spaces (some parametrize ids) are not supported: their lines do not parse, so such a run fails closed.
+Node ids may contain spaces (parametrize ids often do): a line is the node id, one space, and the status word at the
+end (with pytest's reason in parentheses for skips and xfails). A line read wrongly cannot make a run pass: the counts
+would no longer match the summary. Required tests (must_pass) are written without spaces.
 
 Limits (stated, not hidden): the result is read from the test runner's own output, and the code under test runs in
 the same process. Code that deliberately forges unittest output from inside the process is not detected here; it
@@ -176,7 +178,7 @@ def parse_unittest(text):
 
 
 # pytest's verbose line for one test phase; statuses are mapped to the unittest words the rest of the harness uses
-PYTEST_LINE = re.compile(r"^(\S+::\S+) (PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)(?: .*)?$")
+PYTEST_LINE = re.compile(r"^(\S.*?::.*\S) (PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)(?: \(.*\))?$")
 PYTEST_STATUS = {"PASSED": "ok", "FAILED": "FAIL", "ERROR": "ERROR", "SKIPPED": "skipped",
                  "XFAIL": "expected failure", "XPASS": "unexpected success"}
 PYTEST_COUNT = {"PASSED": "passed", "FAILED": "failed", "ERROR": "errors", "SKIPPED": "skipped",
