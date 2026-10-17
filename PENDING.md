@@ -3,7 +3,7 @@
 Daftar kerja Argus, dipisah menurut **siapa yang bisa mengerjakan dan kapan**.
 Detail desain ada di [`docs/MILESTONE2_PLAN.md`](docs/MILESTONE2_PLAN.md), detail temuan audit di [`BACKLOG.md`](BACKLOG.md).
 
-Terakhir diperbarui: 2026-10-15.
+Terakhir diperbarui: 2026-10-17.
 
 ---
 
@@ -128,6 +128,64 @@ Urutan disarankan, karena saling bergantung.
 - [ ] Perluasan benchmark berdasarkan kegagalan nyata dari eksperimen itu, lalu bekukan hash v1
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
+
+**Milestone 6: MVP repo-to-PR** (gap analysis: [`docs/reviews/M6_GAP_ANALYSIS.md`](docs/reviews/M6_GAP_ANALYSIS.md); rencana: [`docs/reviews/M6_PLAN.md`](docs/reviews/M6_PLAN.md)). Desain disetujui; **implementasi ditahan** sampai rencana, kriteria acceptance, dan preflight disetujui
+- [x] Gap analysis terhadap `FUTURE_ARCHITECTURE.md` (PR #73) dan empat keputusan: scope = hambatan 1–4; draf rencana dan kriteria oleh model, disetujui manusia; PR dibuka manusia; repo pertama Argus sendiri (bersyarat, Athena sebagai alternatif)
+- [ ] Review rencana M6 (`docs/reviews/M6_PLAN.md`)
+- [ ] **W0.** Tes deterministik di loop code task: tool call rusak, balasan terpotong, timeout panggilan model (`BLOCKED provider_failed`, biaya worst case). Bisa paralel dengan W1
+- [ ] **W1.** Sandbox untuk repo Argus: image tanpa jaringan dari venv yang dipatok, lingkungan bernama di config (fail-closed), perintah pytest terstruktur dengan parser dan node id, bukti reproduksi (dua run identik, baseline merah/hijau). Tes yang butuh Docker tidak bisa menjadi kriteria
+- [ ] **W2.** Draf rencana, kontrak, dan tes oleh model; pemeriksaan deterministik (kontrak valid, tes baru gagal di commit dasar, kriteria tak terverifikasi tidak dihitung lulus); hanya kontrak beku yang disetujui manusia yang bisa dijalankan
+- [ ] **W3.** Paket review tanpa LLM: `changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`. Patch format Git dari snapshot murni, diverifikasi dengan `git apply` di worktree bersih pada commit dasar
+- [ ] **W4.** Intake repo pada satu commit ke `fixtures/repos/<nama>`; commit dasar dan commit agen di `result.json`
+- [ ] **W5.** Profil budget per task (`default` 30k / 4.096, `large` 45k / 8.192). Profil tidak pernah mengubah cap biaya (default $0.50); cap di atas $0.50 hanya per run yang disetujui di preflight
+- [ ] **Pilot M6 pertama:** satu task kecil di repo Argus yang tidak menyentuh komponen keselamatan inti (bukan `evals/runner.py`); catat status (agent-completed, human-assisted, failed), biaya, dan waktu supervisi. Butuh go/no-go dan preflight
+
+**Proyek masa depan: Argus sebagai agen pembuat serba guna** (spesifikasi draf dari diskusi Atha + GPT, 2026-10-15:
+[`docs/FUTURE_ARCHITECTURE.md`](docs/FUTURE_ARCHITECTURE.md)). **Bukan deskripsi kode yang ada.** Hanya bagian M6 yang
+sudah dicek terhadap kode (gap analysis PR #73). Setiap item lain butuh *reality check* repo dan rencana yang direview
+sebelum ada kode.
+
+Keputusan arsitektur (ADR), statusnya diperiksa saat milestone yang membutuhkannya dimulai:
+- [ ] **ADR-001. Registry kapabilitas dan policy:** setiap tool, bawaan atau hasil penemuan, terdaftar (id/versi, schema,
+  biaya, izin, scope filesystem/jaringan, batas, strategi verifikasi, status trust, provenance) dan lolos cek policy;
+  ragu berarti tolak. Untuk MVP M6 cukup allowlist dan tool lewat kontrak (gap analysis bagian 5). Target: M7
+- [ ] **ADR-002. Workflow bertipe dengan perencanaan dinamis:** planner boleh menyusun dan merevisi rencana, tapi
+  eksekusi memakai workflow bertipe yang divalidasi (dependensi eksplisit, transisi legal); rencana tidak valid tidak
+  dijalankan. Di M6 hanya draf rencana yang disetujui manusia (W2), bukan planner penuh
+- [ ] **ADR-003. Memori berlapis:** state eksekusi, knowledge memory (dokumentasi tool, prosedur teruji, catatan
+  kegagalan), dan project memory; memori tidak memberi izin. Belum ada bukti kebutuhan. Target: M8 (memori prosedural)
+- [ ] **ADR-004. Eksekusi durable, idempotensi, budget:** identitas task yang stabil, reservasi sebelum eksekusi dan
+  rekonsiliasi, `unknown_after_crash` direkonsiliasi sebelum retry, idempotency key provider kalau didukung, tanpa
+  janji exactly-once universal. Untuk code task, cost ceiling dan resume berstatus Lulus di gap analysis; idempotensi
+  sisi provider belum, dan di luar scope M6
+- [ ] **ADR-005. Artifact store dan workspace proyek:** byte terpisah dari metadata (id, versi, induk, SHA-256, tipe,
+  provenance, status validasi, retensi), tanpa menimpa versi lama diam-diam, path jail. Di M6 cukup run dir ditambah
+  paket review (W3)
+- [ ] **ADR-006. Quality gate dan acceptance criteria:** kriteria ditetapkan sebelum eksekusi, asumsi ditandai, standar
+  tidak diturunkan diam-diam, cek deterministik diutamakan; gate wajib yang gagal berarti task belum selesai. Gate
+  untuk gambar, video, dan game baru relevan di capability pack
+- [ ] **ADR-007. Keamanan, batas kepercayaan, approval berbasis policy:** tool, dokumen, file proyek, dan output model
+  dianggap tidak tepercaya; least privilege; sandbox; secret di luar prompt dan log; approval terikat pada aksi dan
+  parameter tertentu (parameter berubah berarti dievaluasi ulang); ragu berarti tolak. Keputusan policy dicatat
+  (`allow`/`deny`/`require_approval`, principal, aksi, resource, versi policy, alasan)
+
+Roadmap M3–M9 dari spesifikasi:
+- [x] **M3.** Evaluasi andal, grounding bukti, penanganan output rusak, kalibrasi (ditutup, `docs/reviews/M3_CLOSING.md`)
+- [ ] **M4.** Penjadwalan multi-agent paralel dengan dependensi dan sumber daya terbatas. Belum ada bukti bahwa
+  single-agent menjadi penghalang (gap analysis bagian 5)
+- [ ] **M5.** Observability dan benchmark: bandingkan single-agent dan multi-agent (kualitas, sukses, latensi, biaya per
+  task sukses, recovery, intervensi manusia)
+- [ ] **M6.** Agen repo-ke-PR: lihat bagian Milestone 6 di atas
+- [ ] **M7.** Registry kapabilitas formal, penegakan policy, adapter MCP/tool bila sesuai (ADR-001, ADR-007)
+- [ ] **M8.** Penemuan tool: membaca dokumentasi dan schema, validasi di sandbox, memori prosedural, validasi ulang
+  prosedur yang basi. Penemuan tidak pernah memberi trust atau izin
+- [ ] **M9.** Deployment terkendali: staging, health check, rollback; produksi hanya dengan policy dan otorisasi eksplisit
+- [ ] **Nanti:** capability pack gambar, video/audio, dan game, diprioritaskan menurut nilai terukur dan kesiapan
+  provider, tidak sekaligus
+
+Catatan: roadmap ini berbeda dengan daftar "Milestone 4+" di bawah (approval manusia, tracing, eval set 10–20 task,
+deploy sebagai service). Keduanya diselaraskan saat M6 selesai; urutan spesifikasi tidak otomatis menggantikan yang
+lama.
 
 **Milestone 4+**
 - [ ] Approval manusia untuk aksi berisiko (interrupt LangGraph)
