@@ -197,6 +197,10 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
             if problems:
                 return move(state, st.BLOCKED, reason="input repository changed since intake: " + "; ".join(problems),
                             blocked="invalid_contract")
+            if record.get("kind") == "task" and record.get("contract_sha256") != sha:   # M6 W2a: an approved task
+                return move(state, st.BLOCKED, reason="the contract is not the one approved for this task "
+                            f"(sha256 {sha[:12]}, approved {str(record.get('contract_sha256'))[:12]})",
+                            blocked="invalid_contract")
         if ws.exists():
             shutil.rmtree(ws)     # a copy from a setup that crashed before committing; the agent never ran on it
         try:
@@ -226,7 +230,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         log.emit("workspace_prepared", files=len(before))
         provenance = {"input": {"workspace": contract["inputs"]["workspace"], "snapshot_sha256": digest(before),
                                 "intake": None if record is None else
-                                {k: record.get(k) for k in ("name", "repo", "commit", "tree", "exclude")}},
+                                {**{k: record.get(k) for k in ("name", "repo", "commit", "tree", "exclude")},
+                                 **{k: record[k] for k in ("kind", "base", "added", "contract_sha256") if k in record}}},
                       "argus": argus_provenance()}
         log.emit("provenance", **provenance)
         budget = {"name": profile, "attempt_tokens": lim0["attempt_tokens"],

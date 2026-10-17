@@ -1,0 +1,26 @@
+CAUGHT  an error counts as red: 1 failed, 22 passed in 33.44s
+CAUGHT  a node not collected counts as red: 1 failed, 21 passed in 26.73s
+CAUGHT  other failures in a red validation allowed: 1 failed, 24 passed in 52.41s
+CAUGHT  a validation without new tests need not pass: 1 failed, 27 passed in 64.96s (0:01:04)
+CAUGHT  existing required tests need not pass on the baseline: 1 failed, 25 passed in 57.57s
+CAUGHT  the reference patch may change tests: 1 failed, 28 passed in 70.54s (0:01:10)
+CAUGHT  the reference patch need not make validations pass: 1 failed, 32 passed in 96.19s (0:01:36)
+CAUGHT  a new test may be writable: 1 failed, 12 passed in 0.79s
+CAUGHT  a new test may replace an existing file: 1 failed, 15 passed in 1.00s
+CAUGHT  a new test needs no required node: 1 failed, 14 passed in 0.96s
+CAUGHT  a failed report can be approved: 1 failed, 34 passed in 102.38s (0:01:42)
+CAUGHT  tests changed after the check can be approved: 1 failed, 35 passed in 127.24s (0:02:07)
+CAUGHT  the task repository is published before its record: 1 failed, 36 passed in 139.57s (0:02:19)
+CAUGHT  the draft may set the limits or inputs: 1 failed, 2 passed in 0.71s
+CAUGHT  setup does not check the approved contract: 1 failed, 109 passed in 158.76s (0:02:38)
+CAUGHT  the baseline is not required to be consistent: 1 failed, 26 passed in 51.73s
+tree clean: True
+MUTANTS_MISSED 0
+VERIFY_EXIT=0
+commit: 5090091cf8f15697c405bd60f766aec027d6e70d
+working tree: clean
+1092 passed in 718.62s (0:11:58)
+== sandbox tests skipped: 0
+RESULT: PASS
+evidence saved to verification/verify-20261017T111540Z-aarch64.log
+CHAIN_DONE

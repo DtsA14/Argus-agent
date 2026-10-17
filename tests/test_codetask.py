@@ -804,3 +804,27 @@ def test_a_profile_name_must_be_a_lower_case_name():
     for bad in ("Large", "", 3, "../x"):
         assert "budget_profile must be a lower-case name" in ct.validate(with_profile(bad))
     assert ct.validate(with_profile("large")) == []
+
+
+# ---- approved tasks (M6 W2a) -----------------------------------------------------------------------------------
+
+def test_a_task_run_with_a_contract_other_than_the_approved_one_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module.intake, "record_for",
+                        lambda workspace, root: calc_record(kind="task", contract_sha256="0" * 64))
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "not the one approved" in r["stop_reason"]
+
+
+def test_a_task_run_with_its_approved_contract_runs_and_records_the_task(tmp_path, monkeypatch):
+    from acceptance import contract as ct
+    from codetask import run as run_module
+    added = {"tests/test_new.py": "e" * 64}
+    rec = calc_record(kind="task", contract_sha256=ct.freeze(CONTRACT)[1], added=added)
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: rec)
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    assert r["status"] == st.DONE
+    p = json.loads((d / "result.json").read_text())["provenance"]["input"]["intake"]
+    assert p["kind"] == "task" and p["added"] == added and p["contract_sha256"] == rec["contract_sha256"]
