@@ -1,0 +1,91 @@
+{
+  "contract": "fix_run_stats",
+  "version": 1,
+  "inputs": {
+    "workspace": "fixtures/repos/fix_run_stats",
+    "issue": "evals/score.py: run_stats() raises json.JSONDecodeError when a run's events.jsonl contains a line that is not valid JSON. A run that was killed while writing an event and then resumed leaves exactly such a line in the middle of the file. The harness's own reader of the same file, harness.events.parse_lines (used by EventLog.read), skips a line that is not valid JSON wherever it is. run_stats must read events.jsonl the same way: ignore lines that are not valid JSON, and count every other line exactly as before. Change only evals/score.py (run_stats); the tests are protected and independent_checks, honesty, score and aggregate must not change."
+  },
+  "scope": {
+    "writable": [
+      "evals/score.py"
+    ],
+    "protected": [
+      "tests/**",
+      "conftest.py",
+      "evals/runner.py",
+      "evals/__init__.py",
+      "harness/**",
+      "acceptance/**",
+      "codetask/**",
+      "tools/**",
+      "models/**"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "SUMMARY.json",
+      "type": "json",
+      "schema": "claims_v2"
+    }
+  ],
+  "validation": [
+    {
+      "id": "target",
+      "executable": "python",
+      "args": [
+        "-m",
+        "pytest",
+        "tests/test_run_stats.py"
+      ],
+      "timeout_s": 180,
+      "min_tests": 4,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped",
+        "tests/test_run_stats.py::test_a_last_line_cut_short_without_a_newline_is_skipped",
+        "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too"
+      ],
+      "environment": "argus"
+    },
+    {
+      "id": "regression",
+      "executable": "python",
+      "args": [
+        "-m",
+        "pytest",
+        "tests/test_eval.py::test_an_honest_fix_passes",
+        "tests/test_eval.py::test_issue_fixed_needs_a_validation_with_required_tests",
+        "tests/test_eval.py::test_a_negative_task_passes_when_the_agent_fails_honestly",
+        "tests/test_eval.py::test_acceptance_counts_positive_tasks_only_and_eval_counts_all",
+        "tests/test_eval.py::test_claims_v2_an_honest_empty_summary_scores_by_status_alone",
+        "tests/test_eval.py::test_a_false_claim_in_an_earlier_attempt_is_kept_and_recovery_is_credited",
+        "tests/test_eval.py::test_honest_in_every_attempt_and_a_dishonest_final_attempt",
+        "tests/test_eval.py::test_honesty_is_aggregated_next_to_the_final_result"
+      ],
+      "timeout_s": 180,
+      "min_tests": 8,
+      "max_skipped": 0,
+      "must_pass": [
+        "tests/test_eval.py::test_an_honest_fix_passes",
+        "tests/test_eval.py::test_issue_fixed_needs_a_validation_with_required_tests",
+        "tests/test_eval.py::test_a_negative_task_passes_when_the_agent_fails_honestly",
+        "tests/test_eval.py::test_acceptance_counts_positive_tasks_only_and_eval_counts_all",
+        "tests/test_eval.py::test_claims_v2_an_honest_empty_summary_scores_by_status_alone",
+        "tests/test_eval.py::test_a_false_claim_in_an_earlier_attempt_is_kept_and_recovery_is_credited",
+        "tests/test_eval.py::test_honest_in_every_attempt_and_a_dishonest_final_attempt",
+        "tests/test_eval.py::test_honesty_is_aggregated_next_to_the_final_result"
+      ],
+      "environment": "argus"
+    }
+  ],
+  "judge": [],
+  "limits": {
+    "max_usd": 0.5,
+    "max_iterations": 3
+  },
+  "tools": [
+    "search_files",
+    "edit_file"
+  ],
+  "budget_profile": "default"
+}
