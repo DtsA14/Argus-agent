@@ -62,7 +62,24 @@ repo task, jadi perubahan sebelum run diblok di setup.
   task yang diubah setelah persetujuan.
 - **Code task** (`tests/test_codetask.py`): task dengan kontrak selain yang disetujui diblok tanpa panggilan model.
   Dengan kontrak yang disetujui, task berjalan dan `result.json` mencatat `kind: task`, file tambahan, dan sha kontrak.
-- **Mutan:** lihat PR.
+- **Mutan** (`verification/mutants-w2a-20261020-744c8b8.log`): 20 dari 21 tertangkap. Yang 21 itu 16 asli
+  ditambah 5 untuk perbaikan review #79: approval tidak membandingkan sha draf, tidak membandingkan sha kontrak, tidak
+  membangun ulang kontrak dari draf, tidak mengecek ulang intake, dan kontrak berbagi `scope` dengan draf. **Satu
+  ekuivalen:** "tes yang berubah setelah cek bisa disetujui". Hash tes tambahan hanya bergantung pada isi tes di draf,
+  dan sha draf kini dicek lebih dulu, sehingga cek `added` tidak bisa terpicu sendirian. Cek itu dipertahankan sebagai
+  pengaman lapis kedua.
+
+## 3a. Perbaikan setelah review #79
+
+`approve()` menerbitkan persis yang diperiksa `check()`, siapa pun pemanggilnya. Semua dicek sebelum ada yang ditulis:
+- `check()` menyimpan `contract_sha256`;
+- `approve()` membandingkan sha draf dan sha kontrak;
+- kontrak di laporan harus sama persis dengan draf yang dibangun ulang ditambah isian manusia, jadi scope atau validasi
+  tidak bisa diganti walaupun hash-nya ikut dipalsukan;
+- intake dicek ulang.
+
+Temuan tambahan saat itu: `build_contract` memakai objek `scope` dan `validation` yang sama dengan draf, sehingga
+mengubah kontrak di laporan ikut mengubah draf. Kini dipakai salinan, dan ada tes yang mengunci itu.
 
 ## 4. Batas
 
