@@ -75,7 +75,7 @@ dua tes end-to-end dengan model palsu lewat `run_code_task` (VM).
 - end-to-end: task yang disetujui, model palsu memperbaiki, paket valid, biaya dan model sama dengan ledger; agen yang
   mencoba mengubah tes yang disetujui ditolak tool-nya, run `FAILED_ACCEPTANCE`, tidak ada paket.
 
-Mutan (`verification/mutants-w3-38305ca.log`): **47/47 tertangkap** pada commit `38305ca`. Putaran pertama 42/47;
+Mutan (`verification/mutants-w3-38305ca.log`): **47/47 tertangkap** pada commit `38305ca`, dan **50/50** pada `7ca1935` setelah perbaikan review di bagian 4a (`verification/mutants-w3-7ca1935.log`). Putaran pertama 42/47;
 lima yang lolos adalah celah tes, bukan kode yang ekuivalen, dan ditutup dengan tes baru:
 - cek `intake.check` dan cek hash run pada `input_unchanged` saling menutupi bila satu-satunya tes mengubah input
   (sekarang dua tes yang masing-masing hanya bisa ditangkap salah satunya);
@@ -97,6 +97,8 @@ patch dibuat. Direproduksi dulu sebagai tes yang gagal (paket tetap `valid` bila
 ditulis ulang setelah patch dibuat), lalu diperbaiki dengan dua cek: `summary_bound` dan `workspace_stable`. Patch
 yang diterbitkan tidak pernah berbeda dari yang diverifikasi (bytes yang sama dikembalikan `verify()`); yang
 ditutup adalah teks klaim dari keadaan lain dan paket yang menyatakan `valid` untuk workspace yang sudah berubah.
+
+Verify penuh pada `7ca1935`: 1150 passed, 0 sandbox skip, tree bersih (`verification/verify-20261020T164449Z-aarch64.log`).
 
 ## 5. Batas
 
