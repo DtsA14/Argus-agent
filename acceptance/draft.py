@@ -94,7 +94,8 @@ def validate_draft(d):
 def build_contract(draft, *, task, workspace, issue, max_usd, max_iterations):
     """The task's contract: the draft's scope, validations, tools and profile; everything else from the human."""
     c = {"contract": task, "version": 1, "inputs": {"workspace": workspace, "issue": issue},
-         "scope": copy.deepcopy(draft["contract"]["scope"]), "artifacts": [{"path": ct.SUMMARY, "type": "json", "schema": "claims_v2"}],
+         "scope": copy.deepcopy(draft["contract"]["scope"]),
+         "artifacts": [{"path": ct.SUMMARY, "type": "json", "schema": "claims_v2"}],
          "validation": copy.deepcopy(draft["contract"]["validation"]), "judge": [],
          "limits": {"max_usd": max_usd, "max_iterations": max_iterations}}
     for k in ("tools", "budget_profile"):
