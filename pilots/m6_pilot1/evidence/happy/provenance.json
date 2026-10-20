@@ -1,0 +1,142 @@
+{
+  "argus": {
+    "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+    "dirty": true
+  },
+  "attempts": 1,
+  "base": {
+    "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+    "repo": "https://github.com/DtsA14/Argus-agent.git",
+    "tree": "816b1bf34f7bf95865224e3111e5aecbe0ae3488"
+  },
+  "checks": [
+    {
+      "detail": "",
+      "id": "contract_frozen",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "verdict_passed",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "summary_bound",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "input_unchanged",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "base_commit",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "changes_in_scope",
+      "ok": true
+    },
+    {
+      "detail": "the verdict lists {'added': [], 'removed': [], 'modified': ['evals/score.py']}, the workspace differs by ['evals/score.py']",
+      "id": "changes_match_verdict",
+      "ok": true
+    },
+    {
+      "detail": "the patch is empty",
+      "id": "patch_made",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "patch_applies",
+      "ok": true
+    },
+    {
+      "detail": "base commit + patch differs from the final workspace: {\"added\": [], \"modified\": [], \"removed\": []}",
+      "id": "final_state_identical",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "revalidation_matches",
+      "ok": true
+    },
+    {
+      "detail": "the workspace changed while the package was being built",
+      "id": "workspace_stable",
+      "ok": true
+    }
+  ],
+  "contract": {
+    "name": "fix_run_stats",
+    "sha256": "c75cecee3c1ee69d5e6b685a94caadfb402d1f766d5298282b7bc7b736ae7901"
+  },
+  "cost": {
+    "calls": 6,
+    "unknown_after_crash": 0,
+    "usd": 0.009,
+    "usd_complete": true,
+    "usd_nano": 9000000
+  },
+  "input": {
+    "intake": {
+      "added": {
+        "tests/test_run_stats.py": "ab5ce9d552ec5165bb99385ce70ec1e8438a5d4d8e3dc1990983c2dab75d6c90"
+      },
+      "base": {
+        "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+        "name": "argus_m6",
+        "snapshot_sha256": "3c975a90fb176f9812636b665d781d10beb1547e7dd6c3a2cba741bc1e9c846a",
+        "tree": "816b1bf34f7bf95865224e3111e5aecbe0ae3488"
+      },
+      "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+      "contract_sha256": "c75cecee3c1ee69d5e6b685a94caadfb402d1f766d5298282b7bc7b736ae7901",
+      "exclude": [
+        "verification",
+        "pilots"
+      ],
+      "kind": "task",
+      "name": "fix_run_stats",
+      "repo": "https://github.com/DtsA14/Argus-agent.git",
+      "tree": "816b1bf34f7bf95865224e3111e5aecbe0ae3488"
+    },
+    "snapshot_sha256": "e34d76d4074b676cbea10fb0fa20d293fa9481a028eeba5ca311bbfc9bb5162a",
+    "workspace": "fixtures/repos/fix_run_stats"
+  },
+  "models": [
+    "fake:scripted"
+  ],
+  "package_version": 1,
+  "patch": {
+    "bytes": 4255,
+    "files": [
+      {
+        "approved_test": false,
+        "change": "M",
+        "path": "evals/score.py"
+      },
+      {
+        "approved_test": true,
+        "change": "A",
+        "path": "tests/test_run_stats.py"
+      }
+    ],
+    "sha256": "c1f1a925a309a7d5fd4a766f5f6ac0063ae33489323b0b521b346c3cd84d3286"
+  },
+  "problems": [],
+  "run_id": "rehearsal_happy",
+  "valid": true,
+  "validation_fresh": {
+    "regression": "pass",
+    "target": "pass"
+  },
+  "verdict": {
+    "outcome": "pass",
+    "verdict_sha256": "693de8bd031e4b078f3de203ea8ee0bd02ebcc37903792bf80ee6452da754cf4",
+    "workspace_digest": "2ae8b29325e89719b7169beaef053f9d26166a2d2533a74993ceb3c4ab1e7623"
+  }
+}

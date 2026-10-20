@@ -1,0 +1,71 @@
+{
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+  "blocked_reason": null,
+  "contract_sha": "c75cecee3c1ee69d5e6b685a94caadfb402d1f766d5298282b7bc7b736ae7901",
+  "verdict": {
+    "iteration": 1,
+    "outcome": "fail",
+    "failing": [
+      "claim[1]:issue_fixed",
+      "claim[2]:file_changed",
+      "validation:target"
+    ],
+    "workspace_digest": "28b87d3626536b28d35f2a003839f8c644ca6df12c0f24d2df803d3cc4226629"
+  },
+  "attempt": {
+    "iteration": 1,
+    "end": "finished",
+    "steps": 0
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "search_files",
+    "edit_file"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/fix_run_stats",
+      "snapshot_sha256": "e34d76d4074b676cbea10fb0fa20d293fa9481a028eeba5ca311bbfc9bb5162a",
+      "intake": {
+        "name": "fix_run_stats",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+        "tree": "816b1bf34f7bf95865224e3111e5aecbe0ae3488",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "argus_m6",
+          "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+          "tree": "816b1bf34f7bf95865224e3111e5aecbe0ae3488",
+          "snapshot_sha256": "3c975a90fb176f9812636b665d781d10beb1547e7dd6c3a2cba741bc1e9c846a"
+        },
+        "added": {
+          "tests/test_run_stats.py": "ab5ce9d552ec5165bb99385ce70ec1e8438a5d4d8e3dc1990983c2dab75d6c90"
+        },
+        "contract_sha256": "c75cecee3c1ee69d5e6b685a94caadfb402d1f766d5298282b7bc7b736ae7901"
+      }
+    },
+    "argus": {
+      "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+      "dirty": true
+    }
+  },
+  "budget_profile": {
+    "name": "default",
+    "attempt_tokens": 30000,
+    "max_output_tokens": 4096
+  },
+  "run_id": "rehearsal_negative",
+  "attempts": 2,
+  "usd_billed": 0.006,
+  "usd_complete": true,
+  "llm_calls": 4,
+  "llm_calls_unknown": 0
+}
