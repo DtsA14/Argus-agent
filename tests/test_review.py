@@ -252,6 +252,16 @@ def test_the_agent_summary_cannot_close_its_fence_or_add_table_cells(proj):
     assert "not evidence" in text.lower()
 
 
+@pytest.mark.skipif(os.name != "posix", reason="a | in a file name is not allowed on Windows")
+def test_cells_with_a_pipe_in_a_path_or_a_claim_keep_the_table_intact(proj):
+    claims = {"claims": [{"claim": "file_changed", "path": "src/a|b.py"}], "summary": "ok"}
+    run_dir = proj.run(writes={**FIX, "src/a|b.py": "X = 1\n"}, claims=claims)
+    out = proj.build(run_dir)
+    assert out["valid"], out["problems"]
+    row = next(l for l in (run_dir / "review" / "claims.md").read_text().splitlines() if l.startswith("| 0 |"))
+    assert "a\\|b.py" in row and row.replace("\\|", "").count("|") == 6
+
+
 def test_what_was_never_verified_is_listed_and_never_a_criterion(proj):
     proj.task()
     run_dir = proj.run(writes=FIX, workspace="shoptask")
@@ -395,13 +405,23 @@ def test_a_change_to_an_approved_test_is_refused(proj):
     assert not proj.build(run_dir)["valid"] and "changes_in_scope" in failed_checks(run_dir)
 
 
+def other_project(tmp_path, files, **intake_kw):
+    p = Project.__new__(Project)
+    p.root, p.repo, p.n = tmp_path / "proj2", tmp_path / "repo2", 0
+    p.root.mkdir()
+    make_repo(p.repo, files)
+    p.record = intake.intake(p.repo, "HEAD", "shop", root=p.root, **intake_kw)
+    return p
+
+
+def test_an_input_that_already_has_a_summary_file_is_refused(tmp_path):
+    p2 = other_project(tmp_path, {**BASE, "SUMMARY.json": b"{}\n"})
+    run_dir = p2.run(writes=FIX)
+    assert not p2.build(run_dir)["valid"] and "base_commit" in failed_checks(run_dir)
+
+
 def test_a_path_the_intake_excluded_is_refused(proj, tmp_path):
-    repo = tmp_path / "ex_repo"
-    make_repo(repo, {**BASE, "verification/log.txt": b"big\n"})
-    p2 = Project.__new__(Project)
-    p2.root, p2.repo, p2.n = tmp_path / "proj2", repo, 0
-    p2.root.mkdir()
-    p2.record = intake.intake(repo, "HEAD", "shop", exclude=["verification"], root=p2.root)
+    p2 = other_project(tmp_path, {**BASE, "verification/log.txt": b"big\n"}, exclude=["verification"])
     loose = copy.deepcopy(CONTRACT)
     loose["scope"]["writable"] = ["**"]
     run_dir = p2.run(writes={**FIX, "verification/log.txt": "forged\n"}, verdict_contract=loose, contract=loose)
