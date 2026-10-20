@@ -1,6 +1,6 @@
 # Rekonsiliasi `FUTURE_ARCHITECTURE.md` dan `PENDING.md`
 
-Status: **laporan dan usulan, belum disetujui.** 2026-10-21. Basis: `main` pada `8fb3517` (setelah pilot M6 pertama).
+Status: **laporan; urutan dan arah disetujui GPT dan Atha pada 2026-10-21** (keputusan di bagian 8). Ditulis 2026-10-21. Basis: `main` pada `8fb3517` (setelah pilot M6 pertama).
 Tanpa perubahan kode. Status di bawah berasal dari catatan `PENDING.md` dan dokumen di `docs/reviews/`, bukan dijalankan
 ulang; tiga klaim diverifikasi langsung ke kode dan ditandai.
 
@@ -114,3 +114,22 @@ adalah batas kemampuan coder, dengan task multi-file di Argus sebagai langkah pe
 1. Apakah urutan di bagian 5 disetujui?
 2. Apakah pertanyaan eksperimen berikutnya adalah "batas kemampuan coder"?
 3. Apakah label "M4 slice 1" diganti nama di dokumen (docs saja)?
+
+## 8. Keputusan (GPT dan Atha, 2026-10-21)
+
+1. **Urutan di bagian 5: disetujui, dengan satu perubahan.** Perbaikan biaya eval yang tak diketahui dikerjakan sebagai
+   task terpisah dengan tes regresi ketat, dan **tidak boleh otomatis diubah menjadi angka atau perilaku tertentu**
+   sebelum kontrak data dan semua pemakai `evals/runner.py` diperiksa. Prinsipnya: biaya yang tidak diketahui tetap
+   unknown, tidak pernah diam-diam dianggap nol. M4 dan M7 ditunda; M8, M9, dan capability pack tetap di parking lot.
+2. **Pertanyaan eksperimen berikutnya:** seberapa baik coder menyelesaikan task **multi-file nyata** dengan kriteria
+   acceptance deterministik, dan berapa biaya serta supervisi manusia yang dibutuhkan. Task multi-file di repo Argus
+   sendiri (bukan Athena dulu). `.gitattributes` dan batas patch diperiksa sebelum task disetujui. Dicatat per pilot:
+   hasil dan acceptance, biaya/attempt/panggilan, waktu supervisi, apakah patch identik dengan referensi atau butuh
+   intervensi, dan kegagalan jujur versus klaim sukses yang tidak didukung.
+3. **Label "M4 slice 1": diganti nama menjadi "general-task agent"** (preferensi GPT), karena M4 di spesifikasi berarti
+   multi-agent paralel.
+4. **Urutan kerja:** (1) merge laporan ini; (2) rapikan `PENDING.md` dan label milestone, dengan status dibedakan menjadi
+   selesai, sebagian tersedia, belum diverifikasi, dan belum dimulai; (3) task terpisah untuk biaya yang tak diketahui;
+   (4) Claude mengusulkan maksimal tiga kandidat pilot multi-file, tanpa implementasi; (5) pilih satu dan bekukan
+   acceptance criteria sebelum membuat draf.
+
