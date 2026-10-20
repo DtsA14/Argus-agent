@@ -337,6 +337,8 @@ def test_a_verdict_that_did_not_pass_is_not_packaged_as_ready(proj):
     assert not out["valid"] and failed_checks(run_dir) == ["verdict_passed"]
     assert (run_dir / "review" / "PR.md").read_text().startswith("> **NOT READY")
     assert not (run_dir / "review" / "changes.patch").exists()
+    p = prov(run_dir)
+    assert p["valid"] is False and p["problems"] == out["problems"] and p["patch"]["sha256"] is None
 
 
 def test_a_workspace_changed_after_the_verdict_is_refused(proj):
@@ -637,3 +639,16 @@ def test_with_the_real_sandbox_a_fixed_task_is_a_valid_package_and_the_fresh_run
     assert prov(run_dir)["validation_fresh"] == {"target": "pass", "regression": "pass"}
     text = (run_dir / "review" / "tests.md").read_text()
     assert "`tests/test_new.py::test_total_never_negative`" in text and "| ok | ok |" in text
+
+
+@POSIX
+def test_a_symlink_in_the_workspace_is_refused_even_when_the_verdict_file_was_edited_to_pass(proj):
+    run_dir = proj.run(writes=FIX, post=lambda ws: os.symlink("shop.py", ws / "src" / "link.py"))
+    path = run_dir / "verdict_0.json"
+    v = json.loads(path.read_text())
+    assert v["outcome"] == "fail"                       # acceptance itself refused the symlink
+    v["outcome"] = "pass"
+    path.write_text(json.dumps(v))
+    out = proj.build(run_dir)
+    assert not out["valid"] and "changes_in_scope" in failed_checks(run_dir)
+    assert "not a regular file" in " ".join(out["problems"])
