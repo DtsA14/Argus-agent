@@ -3,11 +3,28 @@
 Daftar kerja Argus, dipisah menurut **siapa yang bisa mengerjakan dan kapan**.
 Detail desain ada di [`docs/MILESTONE2_PLAN.md`](docs/MILESTONE2_PLAN.md), detail temuan audit di [`BACKLOG.md`](BACKLOG.md).
 
-Terakhir diperbarui: 2026-10-20.
+Terakhir diperbarui: 2026-10-21.
+
+**Legenda status** (disepakati 2026-10-21, lihat [`docs/Reconciliation.md`](docs/Reconciliation.md)):
+`[x]` selesai dan terbukti · `[~]` sebagian tersedia (ada di kode untuk jalur tertentu, sisanya belum) ·
+`[?]` belum diverifikasi (mungkin sudah, buktinya belum cukup) · `[ ]` belum dimulai.
+
+**Ringkasan** (rinci di bagian bawah):
+
+| Milestone | Status | Catatan |
+|---|---|---|
+| M1–M3 | `[x]` | harness, LLM nyata, evaluator; M3 ditutup (`docs/reviews/M3_CLOSING.md`) |
+| General-task agent (sebelumnya berlabel "M4 slice 1") | `[x]` | agen tunggal untuk task umum: acceptance, sandbox, budget, crash-resume, eval set v1 jenuh (16/16) |
+| **M4** multi-agent paralel | `[ ]` | belum dimulai; belum ada bukti single-agent menjadi penghalang |
+| **M5** observability dan benchmark | `[ ]` | satu daftar dengan "Milestone 4+" di bawah |
+| **M6** repo → PR | `[x]` MVP | W0–W5 dan pilot 1 `agent-completed` ($0.0575). **Bukan** tingkat sukses umum; W2b belum |
+| M7–M9, capability pack | `[ ]` | parking lot sampai ada bukti kebutuhan |
+| ADR-002, 004, 005, 006, 007 | `[~]` | ada untuk code task, sebagian saja (lihat daftar ADR) |
+| ADR-001, 003 | `[ ]` | belum dimulai |
 
 ---
 
-## 1. Bisa dikerjakan sekarang (Claude, tanpa API key dan tanpa VM)
+## 1. Arsip M2 (selesai): yang dikerjakan Claude tanpa API key dan tanpa VM
 
 Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 
@@ -24,7 +41,7 @@ Semua bisa diuji penuh dengan model palsu, jadi tidak ada biaya.
 - [x] Log prompt: `hashed`; `full` hanya dengan `ARGUS_DEV=1` dan data sintetis
 - [x] Smoke live: maksimal $0.50, satu run serial, tidak diulang otomatis
 
-## 3. Butuh Atha di PC atau VM
+## 3. Arsip M2 (selesai): yang butuh Atha di PC atau VM
 
 Urutan disarankan, karena saling bergantung.
 
@@ -39,16 +56,16 @@ Urutan disarankan, karena saling bergantung.
 - [x] **2e. Review GPT PR #5:** prompt dan tool worker mengikuti allowlist dan sandbox (P2), `submission_invalid` berisi alasan validator; smoke Docker terarah `--sandbox docker --python-only`: **DONE, skor 1.0, $0.0119**, 7 eksekusi RunPython exit 0, `read_data` 0 kali (`verification/smoke-2e/smoke_2e_3`). 13 mutasi tertangkap
 - [x] **2e. Review ulang GPT PR #5:** pesan dorongan worker disusun dari tool yang ditawarkan (sebelumnya menyebut ReadData di mode python-only). 3 mutasi tertangkap; `verify.sh` di VM 451 lulus, 0 skip (`verify-20261014T174627Z-aarch64.log`)
 
-## 4. Butuh GPT (audit)
+## 4. Arsip M2/M3: audit GPT
 
-- [ ] Sign-off M1 dari log `verify.sh` hasil VM OCI
+- [?] Sign-off M1 dari log `verify.sh` hasil VM OCI (belum terverifikasi; kemungkinan basi, M1 sudah ditutup lama)
 - [x] Audit 2a (wrapper LLM): "perlu patch kecil", sudah dipatch
 - [x] Audit 2b: "layak lanjut setelah patch kecil" (P2 tool call asing), sudah dipatch
 - [x] PR #1 (2b) di-merge ke `main` (`d9f3e78`)
 - [x] Audit 2c (PR #2): "tahan merge untuk patch P2" (submit bercampur tool lain), sudah dipatch
 - [x] Audit 2d (PR #3): "tahan merge untuk patch P1" (output dibuffer penuh di harness) + P2 (race direktori induk), sudah dipatch; review ulang GPT: tertutup; `verify.sh` di VM OCI ARM lulus (`verify-20261014T142108Z-aarch64.log`); **GPT menyetujui, PR #3 di-merge** (`288fc31`)
 - [x] Audit setelah 2e (run live di OCI): GPT approve setelah dua putaran patch; PR #4 (`56f9eec`) dan PR #5 (`8ee005a`) di-merge. **M2 selesai**
-- [ ] Review rencana M3: [`docs/MILESTONE3_PLAN.md`](docs/MILESTONE3_PLAN.md)
+- [?] Review rencana M3: [`docs/MILESTONE3_PLAN.md`](docs/MILESTONE3_PLAN.md) (belum terverifikasi; kemungkinan basi, M3 sudah ditutup)
 
 ## 5. Nanti
 
@@ -68,8 +85,8 @@ Urutan disarankan, karena saling bergantung.
 - [x] **Kalibrasi baseline baru #2** (`baa60fc` = kode `a3661fe`, 13:48 UTC, di luar jam sibuk, cap $1.00): **PASS**. Deteksi 25/25 (1.0), injeksi 4/4, karangan 6/6, **false reject 0** (`good-5` lulus di kedua penilaian), 0 verdict tidak valid, 0 ketidaksepakatan, 62/62 panggilan ok, 0 error provider, $0.0455 (rekonsiliasi cocok). Bukti: `verification/calibration-3d-baseline-grounded-2/`
 - [x] **Smoke run end-to-end 3e** (`08829db`, 13:06 UTC, cap $0.50; orchestrator Sonnet, worker Haiku, writer Sonnet, judge DeepSeek): **DONE, skor 1.0, rubric lulus (5/5 kriteria), $0.0225**. 1 iterasi, 9 panggilan (9 started = 9 ok), 0 retry, 0 error provider, 0 terpotong, 0 `recs_invalid`/`verdict_rejected`/`estimate_miss`; rekonsiliasi ledger cocok. Writer: `recs_accepted` 2 rekomendasi. Bukti: `verification/smoke-3e/smoke_3e_1/`
 - [x] Acceptance criteria untuk task umum: kontrak disetujui (PR #20, `docs/reviews/ACCEPTANCE_GENERAL.md`)
-- [x] **Slice 1 bagian A** (inti deterministik, `docs/reviews/REVIEW_M4_SLICE1A.md`): repo fixture `calc`, kontrak `fix_divide`, scope workspace, validasi terstruktur di sandbox read-only tanpa shell, klaim `SUMMARY.json`, putusan pass/fail/blocked. 32/32 mutan efektif tertangkap (33 dijalankan, 1 ekuivalen dikecualikan); `verify.sh` 746 lulus, 0 skip
-- [x] **Slice 1 bagian B** (`docs/reviews/REVIEW_M4_SLICE1B.md`): loop agen dengan model palsu, state machine (`DONE`/`FAILED_ACCEPTANCE`/`BLOCKED`/`FAILED_BUDGET`, transisi legal), admission dan reservasi dari ledger, kontrak beku per run, crash-resume di 9 titik + kontainer yatim. overspend menjadi `FAILED_BUDGET` yang durable di checkpoint (temuan review GPT, dengan tes regresi lintas proses). 27/27 mutan efektif tertangkap (28 dijalankan, 1 ekuivalen); `verify.sh` 783 lulus, 0 skip (`1e9e179`)
+- [x] **Slice 1 bagian A** (general-task agent; inti deterministik, `docs/reviews/REVIEW_GENERAL_TASK_1A.md`): repo fixture `calc`, kontrak `fix_divide`, scope workspace, validasi terstruktur di sandbox read-only tanpa shell, klaim `SUMMARY.json`, putusan pass/fail/blocked. 32/32 mutan efektif tertangkap (33 dijalankan, 1 ekuivalen dikecualikan); `verify.sh` 746 lulus, 0 skip
+- [x] **Slice 1 bagian B** (general-task agent; `docs/reviews/REVIEW_GENERAL_TASK_1B.md`): loop agen dengan model palsu, state machine (`DONE`/`FAILED_ACCEPTANCE`/`BLOCKED`/`FAILED_BUDGET`, transisi legal), admission dan reservasi dari ledger, kontrak beku per run, crash-resume di 9 titik + kontainer yatim. overspend menjadi `FAILED_BUDGET` yang durable di checkpoint (temuan review GPT, dengan tes regresi lintas proses). 27/27 mutan efektif tertangkap (28 dijalankan, 1 ekuivalen); `verify.sh` 783 lulus, 0 skip (`1e9e179`)
 - [x] **Runner CSV: `FAILED_BUDGET` durable** (pola yang sama dengan temuan review PR #22): status ditulis ke checkpoint sebagai update evaluator, sehingga resume tidak menjalankan node lagi. Tes regresi lintas proses untuk overspend worker dan gerbang admission, keduanya gagal di kode lama; 3 mutan tertangkap
 - [x] **Slice 1 run live** (`4ae41bb`, Sonnet 5.5, cap $0.50, `--sandbox docker`): **DONE di attempt pertama**, semua 10 kriteria lulus, 4 panggilan model, 8.443 token, **$0.0217**. 0 retry, 0 terpotong, 0 error provider. Agen menghapus cabang `if b == 0: return 0`; klaim `SUMMARY.json` semua terbukti. Bukti: `verification/code-task-live-1/`
   **Live Smoke Test 1: PASS**, dengan catatan:
@@ -118,7 +135,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] **Eksperimen budget** (`docs/reviews/BUDGET_LIVE_1.md`, `99b7dd8`, 18 run berpasangan, **$1.7525**): sukses **30k 3/9 vs 45k 9/9**, biaya per sukses $0.30 vs **$0.09**, total token 45k lebih sedikit, 0 klaim palsu, 18/18 audit prompt cocok, 9/9 pasangan lengkap. Berpasangan 6–0–3. Token sampai fix sama di pasangan yang sebanding: budget tambahan dipakai untuk menyelesaikan, bukan membaca lebih banyak
 - [x] Keputusan: evaluasi lintas task dengan Eval Set yang ada, bukan budget adaptif dulu; proses berjenjang menurut risiko
 - [x] **Baseline lintas task** (`docs/reviews/XTASK_BASELINE.md`, `c2748a7`, Eval Set v1 × 2 putaran, **$0.6499**): sukses **16/16**, gagal jujur **4/4**, 0 klaim palsu, $0.03–0.04 per sukses, semua di attempt pertama dengan ≤21 ribu token. **v1 sudah jenuh** untuk agen ini: berguna sebagai suite regresi, tidak untuk mengukur batas kemampuan
-- [ ] `evals/runner.py`: cap total menghitung biaya yang tidak diketahui sebagai $0 (`usd_billed or 0.0`); buat fail-closed seperti `run_series`
+- [ ] `evals/runner.py:126`: cap total menghitung biaya yang tidak diketahui sebagai $0 (`usd_billed or 0.0`). **Task terpisah** dengan tes regresi ketat (keputusan 2026-10-21): periksa dulu kontrak data (`usd_complete`, `usd_billed` null) dan semua pemakai `evals/runner.py`; biaya tak diketahui harus tetap unknown, tidak diam-diam dianggap nol, dan jangan memilih perilaku sebelum pemeriksaan itu
 - [x] Pilot internal: repo nyata lain belum bisa divalidasi di sandbox (Athena: pytest + numpy/pandas; bulking-app: JS); dipilih self-hosting di repo Argus
 - [x] **Pilot `argus_self_1`** (`pilots/argus_self_subtest/README.md`, $0.1627): gagal jujur, kedua penulisan ulang file utuh terpotong di 4.096 token (thinking 61–75%)
 - [x] **`EditFile`** (PR #69): satu penggantian yang unik, aturan scope sama dengan WriteFile, aman setelah crash (jurnal per langkah); ledger mencatat `reasoning_tokens` dan `stop_reason`
@@ -129,44 +146,48 @@ Urutan disarankan, karena saling bergantung.
 - [ ] **Eval set task umum:** beberapa fixture task dengan tingkat kesulitan berbeda; ukur acceptance pass rate, biaya, jumlah attempt, dan regresi. Tes rutin tetap dengan model palsu; setiap run live butuh tujuan eksperimen dan persetujuan biaya sendiri
 - [x] **3a. Cek evaluator tambahan** (branch `m3-3a`): struktur bagian, format baris (baris salah format tidak lagi dilewati diam-diam), duplikat, urutan, produk/bulan/bagian ekstra, jumlah dan penomoran rekomendasi. 25 tes, 25 mutasi tertangkap; `verify.sh` di VM 476 lulus, 0 skip (`verify-20261014T180705Z-aarch64.log`)
 
-**Milestone 6: MVP repo-to-PR** (gap analysis: [`docs/reviews/M6_GAP_ANALYSIS.md`](docs/reviews/M6_GAP_ANALYSIS.md); rencana: [`docs/reviews/M6_PLAN.md`](docs/reviews/M6_PLAN.md)). Desain disetujui; **implementasi ditahan** sampai rencana, kriteria acceptance, dan preflight disetujui
+**Milestone 6: MVP repo-to-PR** (gap analysis: [`docs/reviews/M6_GAP_ANALYSIS.md`](docs/reviews/M6_GAP_ANALYSIS.md); rencana: [`docs/reviews/M6_PLAN.md`](docs/reviews/M6_PLAN.md)). Status 2026-10-21: **MVP tercapai di satu pilot** (W0–W5 di `main`, pilot 1 `agent-completed`). Itu bukti kelayakan, bukan tingkat sukses. Pertanyaan eksperimen berikutnya: batas kemampuan coder pada task multi-file nyata (`docs/Reconciliation.md` bagian 8)
 - [x] Gap analysis terhadap `FUTURE_ARCHITECTURE.md` (PR #73) dan empat keputusan: scope = hambatan 1–4; draf rencana dan kriteria oleh model, disetujui manusia; PR dibuka manusia; repo pertama Argus sendiri (bersyarat, Athena sebagai alternatif)
-- [ ] Review rencana M6 (`docs/reviews/M6_PLAN.md`)
+- [x] Review rencana M6 (`docs/reviews/M6_PLAN.md`): direvisi setelah review pertama PR #74, lalu dijalankan (W0–W5, pilot 1)
 - [x] **W0** (sudah di `main`, dikonfirmasi Atha 2026-10-20). Tes deterministik di loop code task: tool call rusak, balasan terpotong, timeout panggilan model (`BLOCKED provider_failed`, biaya worst case). Bisa paralel dengan W1
 - [x] **W1** (`docs/reviews/REVIEW_M6_W1.md`, PR ini): lingkungan `argus` dengan image offline (rootfs identik di dua build), validasi pytest per node yang gagal tertutup, lingkungan tidak dikenal BLOCKED sebelum panggilan model; 18/18 mutan. Batas: 4 tes provenance (butuh git/bash) dan 55 tes Docker tidak berjalan di lingkungan ini dan tidak bisa menjadi kriteria task. Rencana awal: Sandbox untuk repo Argus: image tanpa jaringan dari venv yang dipatok, lingkungan bernama di config (fail-closed), perintah pytest terstruktur dengan parser dan node id, bukti reproduksi (dua run identik, baseline merah/hijau). Tes yang butuh Docker tidak bisa menjadi kriteria
 - [x] **W2a** (`docs/reviews/REVIEW_M6_W2A.md`, PR ini): cek draf deterministik (baseline merah karena assertion, patch referensi manusia hijau dan hanya mengubah file writable), persetujuan `--approve` yang menerbitkan record → kontrak → repo task (intake + tes yang disetujui), setup memblok kontrak selain yang disetujui; 16/16 mutan
 - [ ] **W2b.** Drafter model (tool read-only + SubmitDraft, model palsu di tes) yang menulis file draf yang sama
-- [ ] **W2 (rencana awal).** Draf rencana, kontrak, dan tes oleh model; pemeriksaan deterministik (kontrak valid, tes baru gagal di commit dasar, kriteria tak terverifikasi tidak dihitung lulus); hanya kontrak beku yang disetujui manusia yang bisa dijalankan
+- [~] **W2 (rencana awal), dipecah:** W2a selesai (cek dan persetujuan deterministik), W2b belum. Catatan desain: baseline hijau W2a mewajibkan patch referensi buatan manusia, jadi drafter model menghemat sedikit; tidak diprioritaskan. Rencana awal: Draf rencana, kontrak, dan tes oleh model; pemeriksaan deterministik (kontrak valid, tes baru gagal di commit dasar, kriteria tak terverifikasi tidak dihitung lulus); hanya kontrak beku yang disetujui manusia yang bisa dijalankan
 - [x] **W3** (`docs/reviews/REVIEW_M6_W3.md`, PR ini): `scripts/build_review.py` membuat `review/` untuk run DONE (`changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`) tanpa model; patch dari tree commit dasar (tes task yang disetujui ikut), diverifikasi dengan `git apply` pada rebuild bersih, seluruh tree hasil apply identik dengan workspace agen, semua validasi dijalankan ulang di sandbox; paket tidak valid ditulis dengan NOT READY. 47/47 mutan. Rencana awal: Paket review tanpa LLM: `changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`. Patch format Git dari snapshot murni, diverifikasi dengan `git apply` di worktree bersih pada commit dasar
 - [x] **W4** (`docs/reviews/REVIEW_M6_W4.md`, PR ini): `scripts/intake_repo.py`, isi = tree commit persis (bukan `git archive`, karena `.gitattributes`), catatan di `fixtures/intake/`, setup memblok input yang berubah sebelum panggilan model, provenance (commit dasar, tree, hash snapshot, commit Argus) di `result.json`; 12/12 mutan. Rencana awal: Intake repo pada satu commit ke `fixtures/repos/<nama>`; commit dasar dan commit agen di `result.json`
 - [x] **W5** (`docs/reviews/REVIEW_M6_W5.md`, PR ini): `budget_profile` di kontrak, profil hanya mengubah reservasi attempt dan output cap (tidak pernah cap biaya), profil tidak dikenal atau berbeda dari kontrak beku diblok sebelum panggilan model; angka admission dikunci tes (koreksi rencana: attempt ketiga di $1.00 kalau belanja ≤ $0.55, bukan $0.10); 10/10 mutan. Rencana awal: Profil budget per task (`default` 30k / 4.096, `large` 45k / 8.192). Profil tidak pernah mengubah cap biaya (default $0.50); cap di atas $0.50 hanya per run yang disetujui di preflight
 - [x] **Pilot M6 pertama: `agent-completed`** (2026-10-21; `pilots/m6_pilot1/`, PR #83). Task `fix_run_stats`: `evals/score.py::run_stats` melempar `JSONDecodeError` pada baris bukan-JSON; harus memakai `harness.events.parse_lines`. Sonnet 5.5, profil `default`, cap $0.50: `DONE` di 1 attempt, 4 panggilan model, **$0.0575** (`usd_complete`), tanpa balasan terpotong. Patch **identik dengan patch referensi manusia** (dua baris di `evals/score.py` + tes yang disetujui), diterapkan tanpa perubahan (sha256 `c1f1a925…` sama dengan provenance). Paket review valid (12 cek, validasi ulang di sandbox lulus); `verify.sh` di branch fix: 1154 lulus, 0 skip sandbox; `argus.dirty: false` di `1b0780f`; patch direview dan disetujui GPT. Latihan model palsu mendahuluinya (jalur bahagia dan negatif). **Satu percobaan pertama mati sebelum panggilan model pertama (0 `llm_call_started`, tanpa biaya) dan dilanjutkan dengan `--resume` pada run yang sama.** Waktu supervisi manusia: **~10 menit** (estimasi Atha, tidak diukur). Satu run di satu task kecil adalah bukti kelayakan, bukan tingkat sukses. Temuan kecil: `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task (membandingkan dengan tree commit tanpa tes yang disetujui); judul `PR.md` dipotong di tengah kata. Catatan terpisah, tidak diperbaiki.
+- [ ] **Pilot M6 kedua (multi-file di repo Argus):** Claude mengusulkan maksimal tiga kandidat tanpa implementasi; satu dipilih dan acceptance dibekukan sebelum draf. Periksa `.gitattributes` dan batas patch sebelum disetujui. Catat hasil dan acceptance, biaya/attempt/panggilan, waktu supervisi, patch identik referensi atau butuh intervensi, kegagalan jujur vs klaim tak didukung
+- [ ] `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task (membandingkan dengan tree commit tanpa tes yang disetujui); tanpa `--repo` benar
+- [ ] Judul `PR.md` (paket review) dipotong 80 karakter di tengah kata; kosmetik
+- [ ] `models/pricing.py::is_peak`: jendela jam yang melewati tengah malam (misalnya 22–4 UTC) tidak pernah cocok. **Laten**: jendela di `config.yaml` tidak melewati tengah malam. Menyentuh uang, jadi proses ketat
 
 **Proyek masa depan: Argus sebagai agen pembuat serba guna** (spesifikasi draf dari diskusi Atha + GPT, 2026-10-15:
 [`docs/FUTURE_ARCHITECTURE.md`](docs/FUTURE_ARCHITECTURE.md)). **Bukan deskripsi kode yang ada.** Hanya bagian M6 yang
 sudah dicek terhadap kode (gap analysis PR #73). Setiap item lain butuh *reality check* repo dan rencana yang direview
 sebelum ada kode.
 
-Keputusan arsitektur (ADR), statusnya diperiksa saat milestone yang membutuhkannya dimulai:
+Keputusan arsitektur (ADR). Status diperbarui 2026-10-21 terhadap kode (bukti di `docs/Reconciliation.md` bagian 2): `[~]` berarti ada untuk code task, bukan untuk seluruh visi.
 - [ ] **ADR-001. Registry kapabilitas dan policy:** setiap tool, bawaan atau hasil penemuan, terdaftar (id/versi, schema,
   biaya, izin, scope filesystem/jaringan, batas, strategi verifikasi, status trust, provenance) dan lolos cek policy;
   ragu berarti tolak. Untuk MVP M6 cukup allowlist dan tool lewat kontrak (gap analysis bagian 5). Target: M7
-- [ ] **ADR-002. Workflow bertipe dengan perencanaan dinamis:** planner boleh menyusun dan merevisi rencana, tapi
+- [~] **ADR-002. Workflow bertipe dengan perencanaan dinamis:** planner boleh menyusun dan merevisi rencana, tapi
   eksekusi memakai workflow bertipe yang divalidasi (dependensi eksplisit, transisi legal); rencana tidak valid tidak
   dijalankan. Di M6 hanya draf rencana yang disetujui manusia (W2), bukan planner penuh
 - [ ] **ADR-003. Memori berlapis:** state eksekusi, knowledge memory (dokumentasi tool, prosedur teruji, catatan
   kegagalan), dan project memory; memori tidak memberi izin. Belum ada bukti kebutuhan. Target: M8 (memori prosedural)
-- [ ] **ADR-004. Eksekusi durable, idempotensi, budget:** identitas task yang stabil, reservasi sebelum eksekusi dan
+- [~] **ADR-004. Eksekusi durable, idempotensi, budget:** identitas task yang stabil, reservasi sebelum eksekusi dan
   rekonsiliasi, `unknown_after_crash` direkonsiliasi sebelum retry, idempotency key provider kalau didukung, tanpa
   janji exactly-once universal. Untuk code task, cost ceiling dan resume berstatus Lulus di gap analysis; idempotensi
   sisi provider belum, dan di luar scope M6
-- [ ] **ADR-005. Artifact store dan workspace proyek:** byte terpisah dari metadata (id, versi, induk, SHA-256, tipe,
+- [~] **ADR-005. Artifact store dan workspace proyek:** byte terpisah dari metadata (id, versi, induk, SHA-256, tipe,
   provenance, status validasi, retensi), tanpa menimpa versi lama diam-diam, path jail. Di M6 cukup run dir ditambah
   paket review (W3)
-- [ ] **ADR-006. Quality gate dan acceptance criteria:** kriteria ditetapkan sebelum eksekusi, asumsi ditandai, standar
+- [~] **ADR-006. Quality gate dan acceptance criteria:** kriteria ditetapkan sebelum eksekusi, asumsi ditandai, standar
   tidak diturunkan diam-diam, cek deterministik diutamakan; gate wajib yang gagal berarti task belum selesai. Gate
   untuk gambar, video, dan game baru relevan di capability pack
-- [ ] **ADR-007. Keamanan, batas kepercayaan, approval berbasis policy:** tool, dokumen, file proyek, dan output model
+- [~] **ADR-007. Keamanan, batas kepercayaan, approval berbasis policy:** tool, dokumen, file proyek, dan output model
   dianggap tidak tepercaya; least privilege; sandbox; secret di luar prompt dan log; approval terikat pada aksi dan
   parameter tertentu (parameter berubah berarti dievaluasi ulang); ragu berarti tolak. Keputusan policy dicatat
   (`allow`/`deny`/`require_approval`, principal, aksi, resource, versi policy, alasan)
@@ -177,7 +198,7 @@ Roadmap M3–M9 dari spesifikasi:
   single-agent menjadi penghalang (gap analysis bagian 5)
 - [ ] **M5.** Observability dan benchmark: bandingkan single-agent dan multi-agent (kualitas, sukses, latensi, biaya per
   task sukses, recovery, intervensi manusia)
-- [ ] **M6.** Agen repo-ke-PR: lihat bagian Milestone 6 di atas
+- [x] **M6.** Agen repo-ke-PR: MVP tercapai di satu pilot (lihat bagian Milestone 6 di atas); W2b dan tingkat sukses belum
 - [ ] **M7.** Registry kapabilitas formal, penegakan policy, adapter MCP/tool bila sesuai (ADR-001, ADR-007)
 - [ ] **M8.** Penemuan tool: membaca dokumentasi dan schema, validasi di sandbox, memori prosedural, validasi ulang
   prosedur yang basi. Penemuan tidak pernah memberi trust atau izin
@@ -185,15 +206,15 @@ Roadmap M3–M9 dari spesifikasi:
 - [ ] **Nanti:** capability pack gambar, video/audio, dan game, diprioritaskan menurut nilai terukur dan kesiapan
   provider, tidak sekaligus
 
-Catatan: roadmap ini berbeda dengan daftar "Milestone 4+" di bawah (approval manusia, tracing, eval set 10–20 task,
-deploy sebagai service). Keduanya diselaraskan saat M6 selesai; urutan spesifikasi tidak otomatis menggantikan yang
-lama.
+Catatan (diselaraskan 2026-10-21): daftar "Milestone 4+" di bawah dipetakan ke roadmap ini: approval manusia = ADR-007;
+tracing/dashboard dan eval set 10–20 task (single vs multi-agent) = M5; deploy harness sebagai service di OCI **bukan**
+M9 (M9 adalah Argus men-deploy produk buatannya), melainkan pekerjaan operasional terpisah.
 
 **Milestone 4+**
-- [ ] Approval manusia untuk aksi berisiko (interrupt LangGraph)
-- [ ] Tracing / dashboard (Langfuse atau LangSmith)
-- [ ] Eval set 10-20 task: bandingkan single-agent vs multi-agent, dan model kandidat worker (Haiku 5.5 vs DeepSeek V4.1 Flash) berdasarkan biaya per task yang lulus
-- [ ] Deploy harness sebagai service di OCI (systemd)
+- [ ] Approval manusia untuk aksi berisiko (interrupt LangGraph) → ADR-007 / M7
+- [ ] Tracing / dashboard (Langfuse atau LangSmith) → M5
+- [ ] → M5. Eval set 10-20 task: bandingkan single-agent vs multi-agent, dan model kandidat worker (Haiku 5.5 vs DeepSeek V4.1 Flash) berdasarkan biaya per task yang lulus
+- [ ] Deploy harness sebagai service di OCI (systemd): pekerjaan operasional, bukan M9
 
 **Diterima sebagai batasan untuk sekarang**
 - `max_seconds` masih soft limit (jumlah waktu node, dicek antar iterasi)

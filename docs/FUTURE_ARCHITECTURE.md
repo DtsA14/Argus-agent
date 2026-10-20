@@ -6,6 +6,11 @@
 > [`docs/reviews/M6_PLAN.md`](reviews/M6_PLAN.md). The other ADRs and milestones are tracked in
 > [`PENDING.md`](../PENDING.md) and have not been checked against the code yet. No code from this file without a
 > reality check and a reviewed plan.
+>
+> Update 2026-10-21: the M6 MVP was reached in one live pilot (`agent-completed`, $0.0575). The ADRs were compared with
+> the code in [`docs/Reconciliation.md`](Reconciliation.md): ADR-002, 004, 005, 006 and 007 exist in part for code
+> tasks; ADR-001 and 003 do not. The label "M4 slice 1" used in older review files meant the single general-task
+> agent, **not** this file's M4 (parallel multi-agent), which has not started. The body below is unchanged.
 
 Status: Draft for Claude review.
 Important: These are proposed decisions from discussion, not claims about current repository implementation.

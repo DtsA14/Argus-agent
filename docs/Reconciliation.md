@@ -127,7 +127,9 @@ adalah batas kemampuan coder, dengan task multi-file di Argus sebagai langkah pe
    hasil dan acceptance, biaya/attempt/panggilan, waktu supervisi, apakah patch identik dengan referensi atau butuh
    intervensi, dan kegagalan jujur versus klaim sukses yang tidak didukung.
 3. **Label "M4 slice 1": diganti nama menjadi "general-task agent"** (preferensi GPT), karena M4 di spesifikasi berarti
-   multi-agent paralel.
+   multi-agent paralel. Dilaksanakan 2026-10-21: `REVIEW_M4_SLICE1A.md` dan `REVIEW_M4_SLICE1B.md` menjadi
+   `REVIEW_GENERAL_TASK_1A.md` dan `REVIEW_GENERAL_TASK_1B.md`, dan rujukannya di `PENDING.md` dan `codetask/__init__.py`
+   (docstring) diperbarui. Bagian 1 dan 2 di atas menyebut nama lama sebagai kondisi saat laporan ditulis.
 4. **Urutan kerja:** (1) merge laporan ini; (2) rapikan `PENDING.md` dan label milestone, dengan status dibedakan menjadi
    selesai, sebagian tersedia, belum diverifikasi, dan belum dimulai; (3) task terpisah untuk biaya yang tak diketahui;
    (4) Claude mengusulkan maksimal tiga kandidat pilot multi-file, tanpa implementasi; (5) pilih satu dan bekukan
