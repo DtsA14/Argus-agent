@@ -73,7 +73,19 @@ dua tes end-to-end dengan model palsu lewat `run_code_task` (VM).
 - end-to-end: task yang disetujui, model palsu memperbaiki, paket valid, biaya dan model sama dengan ledger; agen yang
   mencoba mengubah tes yang disetujui ditolak tool-nya, run `FAILED_ACCEPTANCE`, tidak ada paket.
 
-Mutan: lihat bagian bukti di bawah.
+Mutan (`verification/mutants-w3-38305ca.log`): **47/47 tertangkap** pada commit `38305ca`. Putaran pertama 42/47;
+lima yang lolos adalah celah tes, bukan kode yang ekuivalen, dan ditutup dengan tes baru:
+- cek `intake.check` dan cek hash run pada `input_unchanged` saling menutupi bila satu-satunya tes mengubah input
+  (sekarang dua tes yang masing-masing hanya bisa ditangkap salah satunya);
+- patch kosong (`patch_made`) tidak pernah dicapai karena cek "tidak ada perubahan" lebih dulu, dan `git apply` atas
+  patch kosong gagal juga, jadi paket tetap tidak valid tetapi dengan nama cek yang lain; sekarang dikunci dengan nama cek;
+- validasi segar yang gagal atau diblok ditandai lewat dua baris yang tumpang tindih; sekarang pesannya dikunci;
+- `must_pass` yang berbeda dengan hitungan dan hasil yang sama tidak dibandingkan; sekarang ada tesnya.
+Mutan mencakup: cermin yang tidak menghapus, `add` tanpa `-f`, atribut Git aktif, patch tanpa `--binary`, `SUMMARY.json`
+di patch, setiap cek pada tabel di atas dilepas satu per satu, perbandingan tree yang hanya untuk file berubah,
+validasi ulang pada workspace run (bukan tree hasil apply), paket untuk run bukan DONE, paket ditimpa, sisa build
+gagal, fence dan `|` di markdown, catatan "tidak diverifikasi otomatis" hilang, model/biaya hilang, bit executable
+diabaikan, dan banner NOT READY hilang.
 
 ## 5. Batas
 

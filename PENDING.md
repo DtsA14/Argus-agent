@@ -3,7 +3,7 @@
 Daftar kerja Argus, dipisah menurut **siapa yang bisa mengerjakan dan kapan**.
 Detail desain ada di [`docs/MILESTONE2_PLAN.md`](docs/MILESTONE2_PLAN.md), detail temuan audit di [`BACKLOG.md`](BACKLOG.md).
 
-Terakhir diperbarui: 2026-10-17.
+Terakhir diperbarui: 2026-10-20.
 
 ---
 
@@ -137,7 +137,7 @@ Urutan disarankan, karena saling bergantung.
 - [x] **W2a** (`docs/reviews/REVIEW_M6_W2A.md`, PR ini): cek draf deterministik (baseline merah karena assertion, patch referensi manusia hijau dan hanya mengubah file writable), persetujuan `--approve` yang menerbitkan record → kontrak → repo task (intake + tes yang disetujui), setup memblok kontrak selain yang disetujui; 16/16 mutan
 - [ ] **W2b.** Drafter model (tool read-only + SubmitDraft, model palsu di tes) yang menulis file draf yang sama
 - [ ] **W2 (rencana awal).** Draf rencana, kontrak, dan tes oleh model; pemeriksaan deterministik (kontrak valid, tes baru gagal di commit dasar, kriteria tak terverifikasi tidak dihitung lulus); hanya kontrak beku yang disetujui manusia yang bisa dijalankan
-- [ ] **W3.** Paket review tanpa LLM: `changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`. Patch format Git dari snapshot murni, diverifikasi dengan `git apply` di worktree bersih pada commit dasar
+- [x] **W3** (`docs/reviews/REVIEW_M6_W3.md`, PR ini): `scripts/build_review.py` membuat `review/` untuk run DONE (`changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`) tanpa model; patch dari tree commit dasar (tes task yang disetujui ikut), diverifikasi dengan `git apply` pada rebuild bersih, seluruh tree hasil apply identik dengan workspace agen, semua validasi dijalankan ulang di sandbox; paket tidak valid ditulis dengan NOT READY. 47/47 mutan. Rencana awal: Paket review tanpa LLM: `changes.patch`, `tests.md`, `claims.md`, `provenance.json`, `PR.md`. Patch format Git dari snapshot murni, diverifikasi dengan `git apply` di worktree bersih pada commit dasar
 - [x] **W4** (`docs/reviews/REVIEW_M6_W4.md`, PR ini): `scripts/intake_repo.py`, isi = tree commit persis (bukan `git archive`, karena `.gitattributes`), catatan di `fixtures/intake/`, setup memblok input yang berubah sebelum panggilan model, provenance (commit dasar, tree, hash snapshot, commit Argus) di `result.json`; 12/12 mutan. Rencana awal: Intake repo pada satu commit ke `fixtures/repos/<nama>`; commit dasar dan commit agen di `result.json`
 - [x] **W5** (`docs/reviews/REVIEW_M6_W5.md`, PR ini): `budget_profile` di kontrak, profil hanya mengubah reservasi attempt dan output cap (tidak pernah cap biaya), profil tidak dikenal atau berbeda dari kontrak beku diblok sebelum panggilan model; angka admission dikunci tes (koreksi rencana: attempt ketiga di $1.00 kalau belanja ≤ $0.55, bukan $0.10); 10/10 mutan. Rencana awal: Profil budget per task (`default` 30k / 4.096, `large` 45k / 8.192). Profil tidak pernah mengubah cap biaya (default $0.50); cap di atas $0.50 hanya per run yang disetujui di preflight
 - [ ] **Pilot M6 pertama:** satu task kecil di repo Argus yang tidak menyentuh komponen keselamatan inti (bukan `evals/runner.py`); catat status (agent-completed, human-assisted, failed), biaya, dan waktu supervisi. Butuh go/no-go dan preflight
