@@ -37,6 +37,7 @@ Berurutan; cek yang gagal menghentikan cek berikutnya (dicatat sebagai gagal, ti
 |---|---|
 | `contract_frozen` | kontrak beku di run dir masih punya hash yang tercatat |
 | `verdict_passed` | verdict terakhir `pass` **dan** berlaku untuk workspace akhir persis (digest workspace sama) |
+| `summary_bound` | `SUMMARY.json` dibaca **sekali**, hash-nya sama dengan `summary_sha256` di verdict, dan teks yang diterbitkan di `claims.md` / `PR.md` berasal dari bytes yang sama (tidak dibaca ulang saat build) |
 | `input_unchanged` | repo input masih sama dengan saat run mulai (hash snapshot) dan lolos cek record intake. Tanpa record intake tidak ada commit dasar, jadi tidak ada paket |
 | `base_commit` | commit dasar yang dibangun ulang dari repo, ditambah tes yang disetujui, sama persis dengan input (path, isi, bit executable); tree-nya sama dengan record; input tidak sudah berisi `SUMMARY.json` |
 | `changes_in_scope` | yang diubah agen ada di scope `writable`, tidak `protected`, bukan path yang dikecualikan intake, bukan di dalam `.git`, dan semuanya file biasa. Dihitung sendiri, tidak mengandalkan verdict |
@@ -45,6 +46,7 @@ Berurutan; cek yang gagal menghentikan cek berikutnya (dicatat sebagai gagal, ti
 | `patch_applies` | `git apply --check` lalu `git apply` pada rebuild bersih commit dasar, seperti yang dilakukan reviewer |
 | `final_state_identical` | seluruh file (path, isi, bit executable) di tree hasil apply sama persis dengan workspace akhir, termasuk file yang tidak berubah, jadi file yang seharusnya terhapus tapi tertinggal ikut tertangkap |
 | `revalidation_matches` | tiap validasi kontrak, dijalankan ulang di sandbox pada tree hasil apply, lulus dan mengulang hasil verdict (status, jumlah tes, hasil tiap tes wajib) |
+| `workspace_stable` | setelah semua cek di atas selesai, workspace run masih persis keadaan yang dilihat verdict (digest sama): tidak ada yang menulis ke dalamnya selama paket dibangun |
 
 Cara membuat patch (`make_patch`): tree commit dasar disalin ke repo Git baru dengan satu commit; lalu **dicerminkan**:
 semua file dihapus, isi workspace akhir disalin masuk, `git add -A -f` (file yang di-`.gitignore` tetap ikut), dan
@@ -86,6 +88,15 @@ di patch, setiap cek pada tabel di atas dilepas satu per satu, perbandingan tree
 validasi ulang pada workspace run (bukan tree hasil apply), paket untuk run bukan DONE, paket ditimpa, sisa build
 gagal, fence dan `|` di markdown, catatan "tidak diverifikasi otomatis" hilang, model/biaya hilang, bit executable
 diabaikan, dan banner NOT READY hilang.
+
+## 4a. Temuan review GPT dan perbaikannya
+
+GPT (membaca extract `verify()` dan `build()`) tidak menemukan jalur scope yang lolos, tetapi menunjuk satu risiko
+konsistensi waktu: `build()` membaca `SUMMARY.json` lagi setelah `verify()`, dan workspace tidak dicek ulang setelah
+patch dibuat. Direproduksi dulu sebagai tes yang gagal (paket tetap `valid` bila `SUMMARY.json` atau file sumber
+ditulis ulang setelah patch dibuat), lalu diperbaiki dengan dua cek: `summary_bound` dan `workspace_stable`. Patch
+yang diterbitkan tidak pernah berbeda dari yang diverifikasi (bytes yang sama dikembalikan `verify()`); yang
+ditutup adalah teks klaim dari keadaan lain dan paket yang menyatakan `valid` untuk workspace yang sudah berubah.
 
 ## 5. Batas
 

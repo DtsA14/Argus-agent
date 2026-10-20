@@ -168,9 +168,10 @@ def test_a_done_run_gets_a_complete_valid_package(proj):
     assert sorted(p.name for p in (run_dir / "review").iterdir()) == sorted(review.FILES)
     p = prov(run_dir)
     assert p["valid"] and all(c["ok"] for c in p["checks"])
-    assert [c["id"] for c in p["checks"]] == ["contract_frozen", "verdict_passed", "input_unchanged", "base_commit",
-                                              "changes_in_scope", "changes_match_verdict", "patch_made",
-                                              "patch_applies", "final_state_identical", "revalidation_matches"]
+    assert [c["id"] for c in p["checks"]] == ["contract_frozen", "verdict_passed", "summary_bound", "input_unchanged",
+                                              "base_commit", "changes_in_scope", "changes_match_verdict", "patch_made",
+                                              "patch_applies", "final_state_identical", "revalidation_matches",
+                                              "workspace_stable"]
     assert p["base"]["commit"] == proj.record["commit"] and p["base"]["tree"] == proj.record["tree"]
     assert p["argus"] == {"commit": "a" * 40, "dirty": False} and p["models"] == ["fake:scripted"]
     assert p["cost"]["calls"] == 1 and p["cost"]["usd_nano"] == 3000 and p["cost"]["usd_complete"]
@@ -689,3 +690,46 @@ def test_a_symlink_in_the_workspace_is_refused_even_when_the_verdict_file_was_ed
     out = proj.build(run_dir)
     assert not out["valid"] and "changes_in_scope" in failed_checks(run_dir)
     assert "not a regular file" in " ".join(out["problems"])
+
+
+# ---- the workspace changing while the package is built ------------------------------------------------------------
+
+def changing_after_the_patch(change):
+    """make_patch that, once the patch is made, lets `change(workspace)` run: someone writing into the run directory
+    while the package is being built."""
+    real = review.make_patch
+
+    def patch(base_dir, final_dir, work):
+        out = real(base_dir, final_dir, work)
+        change(Path(final_dir))
+        return out
+    return patch
+
+
+def test_a_summary_rewritten_while_the_package_is_built_never_reaches_the_published_text(proj, monkeypatch):
+    def rewrite(ws):
+        (ws / "SUMMARY.json").write_text(json.dumps({"claims": CLAIMS["claims"], "summary": "INJECTED LATER"}))
+    monkeypatch.setattr(review, "make_patch", changing_after_the_patch(rewrite))
+    run_dir = proj.run(writes=FIX)
+    out = proj.build(run_dir)
+    assert not out["valid"] and "workspace_stable" in failed_checks(run_dir)
+    for name in ("claims.md", "PR.md", "provenance.json"):
+        assert "INJECTED LATER" not in (run_dir / "review" / name).read_text()
+    assert (run_dir / "review" / "PR.md").read_text().startswith("> **NOT READY")
+
+
+def test_a_source_file_changed_while_the_package_is_built_makes_it_not_ready(proj, monkeypatch):
+    monkeypatch.setattr(review, "make_patch", changing_after_the_patch(
+        lambda ws: (ws / "src" / "shop.py").write_text(FIXED + "# after the check\n")))
+    run_dir = proj.run(writes=FIX)
+    assert not proj.build(run_dir)["valid"] and "workspace_stable" in failed_checks(run_dir)
+
+
+def test_a_summary_that_is_not_the_one_the_verdict_saw_is_refused(proj):
+    run_dir = proj.run(writes=FIX)
+    path = run_dir / "verdict_0.json"
+    v = json.loads(path.read_text())
+    v["summary_sha256"] = "0" * 64
+    path.write_text(json.dumps(v))
+    out = proj.build(run_dir)
+    assert not out["valid"] and failed_checks(run_dir) == ["summary_bound"]

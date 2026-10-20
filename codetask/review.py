@@ -21,14 +21,16 @@ converts a byte; no code of the repository is run.
 What is checked, and the package is `valid` only if every check passes (otherwise it is written with the reasons and
 PR.md says NOT READY at the top):
   - the run is DONE and its frozen contract is unchanged;
-  - the last verdict passed and holds for exactly the final workspace (its workspace digest);
+  - the last verdict passed and holds for exactly the final workspace (its workspace digest), and the SUMMARY.json
+    that is published is the very one (same bytes, read once) the verdict saw;
   - the input repository still is what the run started from (digest and intake record);
   - the base commit rebuilt from the repository, plus the task's approved new tests, is that input exactly;
   - what the agent changed is inside the writable scope (never protected, never an intake exclusion) and is exactly
     the verdict's own list of changed files;
   - the patch applies to a clean rebuild of the base commit, and the result is identical to the final workspace in
     every file (path, content, executable bit), also the files nobody changed;
-  - every validation of the contract, run again on that patched tree in the sandbox, gives the verdict's result.
+  - every validation of the contract, run again on that patched tree in the sandbox, gives the verdict's result;
+  - the workspace is still exactly what the verdict saw when all of that is done (it was not written into meanwhile).
 
 Limit: the package is exact at the level of the committed bytes. A repository whose .gitattributes converts line
 endings or filters files at checkout can show the same patch differently in a reviewer's working tree; that is not
@@ -49,7 +51,7 @@ from pathlib import Path
 
 from acceptance import contract as ct
 from acceptance import intake
-from acceptance.claims import read_summary
+from acceptance.claims import schema_problems
 from acceptance.contract import SUMMARY, claims_schema, matches
 from acceptance.validation import run_validation
 from acceptance.workspace import SPECIAL, diff, digest, snapshot
@@ -191,12 +193,27 @@ def _same_validation(spec, verdict_c, fresh):
     return problems
 
 
+def read_summary_once(ws, schema):
+    """(document, sha256, problems) from ONE read of SUMMARY.json: the text that is published and the hash that is
+    checked are the same bytes."""
+    path = Path(ws) / SUMMARY
+    try:
+        if path.is_symlink() or not path.is_file():
+            return None, None, [f"{SUMMARY} is not a regular file"]
+        raw = path.read_bytes()
+        doc = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError) as e:
+        return None, None, [f"{SUMMARY} is unreadable: {e}"]
+    return doc, hashlib.sha256(raw).hexdigest(), schema_problems(doc, schema)
+
+
 # ---- the checks -------------------------------------------------------------------------------------------------
 
 def verify(run_dir, result, *, repo, sandbox_cfg, root, validate, work):
     """Run every check. Returns (checks, facts, patch bytes or None)."""
     run_dir, root, ck = Path(run_dir), Path(root), Checks()
-    facts = {"patch": None, "files": [], "fresh": {}, "verdict": None, "contract": None, "record": None}
+    facts = {"patch": None, "files": [], "fresh": {}, "verdict": None, "contract": None, "record": None,
+             "summary": None}
     ws = run_dir / "workspace"
     try:
         contract = frozen.load(run_dir, result["contract_sha"])
@@ -226,6 +243,12 @@ def verify(run_dir, result, *, repo, sandbox_cfg, root, validate, work):
         problems.append("result.json and the verdict disagree on the workspace digest")
     if not ck.add("verdict_passed", not problems, "; ".join(problems)):
         return ck, facts, None
+    doc, summary_sha, problems = read_summary_once(ws, claims_schema(contract))
+    if summary_sha != verdict.get("summary_sha256"):
+        problems.append(f"{SUMMARY} is not the one the verdict was reached on")
+    if not ck.add("summary_bound", not problems, "; ".join(problems)):
+        return ck, facts, None
+    facts["summary"] = doc
 
     # the input the run started from
     prov = (result.get("provenance") or {}).get("input") or {}
@@ -350,6 +373,10 @@ def verify(run_dir, result, *, repo, sandbox_cfg, root, validate, work):
             vc = next((c for c in verdict["criteria"] if c["id"] == f"validation:{spec['id']}"), None)
             problems += _same_validation(spec, vc, fresh)
         ck.add("revalidation_matches", not problems, "; ".join(problems))
+        # nothing was written into the run's workspace while all of the above ran: the package describes the
+        # state the verdict was reached on, not a later one
+        ck.add("workspace_stable", digest(snapshot(ws)) == verdict["workspace_digest"],
+               "the workspace changed while the package was being built")
     return ck, facts, patch
 
 
@@ -483,9 +510,7 @@ def build(run_dir, *, repo, sandbox_cfg, root=".", validate=run_validation):
         contract, verdict, record = facts["contract"], facts["verdict"], facts["record"]
         totals, models = ledger(run_dir)
         prov_in = (result.get("provenance") or {})
-        doc = None
-        if contract is not None and (run_dir / "workspace").is_dir():
-            doc, _ = read_summary(str(run_dir / "workspace"), claims_schema(contract))
+        doc = facts["summary"]            # read once, in verify(), and bound to the verdict's hash
         patch_info = {"sha256": hashlib.sha256(patch).hexdigest() if patch else None,
                       "bytes": len(patch) if patch else 0, "files": facts["files"]}
         prov = {"package_version": VERSION, "valid": ck.valid, "problems": ck.problems, "checks": ck.items,
