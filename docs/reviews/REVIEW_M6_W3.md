@@ -111,3 +111,9 @@ Verify penuh pada `7ca1935`: 1150 passed, 0 sandbox skip, tree bersih (`verifica
 - Status hasil pilot (agent-completed / human-assisted / failed) tetap keputusan reviewer; `PR.md` hanya menjelaskan
   syaratnya. Argus tidak membuka PR.
 - Biaya dibaca dari ledger; kalau ada model tak berharga, `usd_complete` false dan `PR.md` mengatakannya.
+- `workspace_stable` menjamin workspace sama dengan yang dilihat verdict **pada akhir `verify()`**, bukan pada detik
+  paket dipublikasikan: masih ada jendela kecil sampai rename `review.tmp` menjadi `review/`. Patch dan teks yang
+  diterbitkan sudah dibuat dari keadaan yang diperiksa, jadi perubahan di jendela itu tidak mengubah isi paket, tetapi
+  `valid` menyatakan snapshot yang diperiksa. Cukup untuk pilot internal (tidak ada proses lain yang menulis ke run
+  dir). Kalau suatu saat workspace bisa diubah proses yang tidak dipercaya secara bersamaan, perlu snapshot immutable
+  atau kunci; tidak ditambahkan sekarang (disetujui GPT 2026-10-21 untuk scope pilot).
