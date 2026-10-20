@@ -95,7 +95,7 @@ class Project:
         return rec
 
     def run(self, *, writes=None, deletes=(), workspace="shop", status="DONE", contract=None, verdict_contract=None,
-            claims=CLAIMS, events=True, post=None, validate=None):
+            claims=CLAIMS, events=True, post=None, validate=None, scfg=None):
         """A finished run: the workspace after the agent, the frozen contract, a real verdict and result.json."""
         self.n += 1
         run_dir = self.root / "runs" / f"r{self.n}"
@@ -114,7 +114,7 @@ class Project:
         contract["inputs"]["workspace"] = f"fixtures/repos/{workspace}"
         sha = frozen.freeze_to(run_dir, contract)
         before = snapshot(pristine, skip_cache=True)
-        verdict = evaluate(verdict_contract or contract, str(ws), before, {}, None, run=validate or fake_validate)
+        verdict = evaluate(verdict_contract or contract, str(ws), before, scfg or {}, None, run=validate or fake_validate)
         (run_dir / "verdict_0.json").write_text(json.dumps(verdict), encoding="utf-8")
         result = {"status": status, "stop_reason": "all criteria passed", "contract_sha": sha, "run_id": run_dir.name,
                   "verdict": {"iteration": 0, "outcome": verdict["outcome"], "failing": [],
@@ -580,3 +580,40 @@ def test_end_to_end_an_attempt_to_change_an_approved_test_gets_no_package(vm, pr
     with pytest.raises(review.ReviewError, match="not DONE"):
         proj.build(run_dir)
     assert not (run_dir / "review").exists()
+
+
+# ---- with the real sandbox (environment argus; skipped, and not counted as passing, without it) ---------------------
+
+@pytest.fixture
+def scfg():
+    pytest.importorskip("langgraph", reason="SANDBOX NOT AVAILABLE: the config is loaded through runner.py")
+    from runner import load_config
+    from tools import sandbox as sb
+    c = {**(load_config().get("sandbox") or {}), "kind": "docker"}
+    ok, why = sb.status({**c, "environment": "argus"})
+    if not ok:
+        pytest.skip(f"SANDBOX NOT AVAILABLE: {why}")
+    return c
+
+
+def real_contract():
+    c = copy.deepcopy(CONTRACT)
+    c["validation"] = [
+        {"id": "target", "executable": "python", "args": ["-m", "pytest", "tests/test_new.py"], "timeout_s": 120,
+         "min_tests": 1, "max_skipped": 0, "must_pass": ["tests/test_new.py::test_total_never_negative"],
+         "environment": "argus"},
+        {"id": "regression", "executable": "python", "args": ["-m", "pytest", "tests/test_old.py"], "timeout_s": 120,
+         "min_tests": 1, "max_skipped": 0, "must_pass": [OLD_NODE], "environment": "argus"}]
+    return c
+
+
+def test_with_the_real_sandbox_a_fixed_task_is_a_valid_package_and_the_fresh_runs_repeat_the_verdict(proj, scfg):
+    from acceptance.validation import run_validation
+    proj.task()
+    run_dir = proj.run(writes=FIX, workspace="shoptask", contract=real_contract(), scfg=scfg,
+                       validate=lambda spec, ws, cfg, log=None: run_validation(spec, ws, cfg, log))
+    out = proj.build(run_dir, validate=run_validation, sandbox_cfg=scfg)
+    assert out["valid"], out["problems"]
+    assert prov(run_dir)["validation_fresh"] == {"target": "pass", "regression": "pass"}
+    text = (run_dir / "review" / "tests.md").read_text()
+    assert "`tests/test_new.py::test_total_never_negative`" in text and "| ok | ok |" in text
