@@ -64,10 +64,11 @@ repo task, jadi perubahan sebelum run diblok di setup.
   Dengan kontrak yang disetujui, task berjalan dan `result.json` mencatat `kind: task`, file tambahan, dan sha kontrak.
 - **Mutan** (`verification/mutants-w2a-20261020-744c8b8.log`): 20 dari 21 tertangkap. Yang 21 itu 16 asli
   ditambah 5 untuk perbaikan review #79: approval tidak membandingkan sha draf, tidak membandingkan sha kontrak, tidak
-  membangun ulang kontrak dari draf, tidak mengecek ulang intake, dan kontrak berbagi `scope` dengan draf. **Satu
-  ekuivalen:** "tes yang berubah setelah cek bisa disetujui". Hash tes tambahan hanya bergantung pada isi tes di draf,
-  dan sha draf kini dicek lebih dulu, sehingga cek `added` tidak bisa terpicu sendirian. Cek itu dipertahankan sebagai
-  pengaman lapis kedua.
+  membangun ulang kontrak dari draf, tidak mengecek ulang intake, dan kontrak berbagi `scope` dengan draf. **Satu yang lolos**, "tes yang berubah setelah cek bisa disetujui", **tidak ekuivalen secara perilaku**. Itu
+  ekuivalen hanya terhadap apa yang diterbitkan. `added` dihitung `materialize()` dari `draft["new_tests"]`, dan sha
+  draf dicek lebih dulu, jadi `added` hasil hitung ulang selalu sama dengan saat `check()`. Bedanya hanya kalau
+  pemanggil mengubah `report["added"]` saja: kode asli menolak, sedangkan mutan tetap menerbitkan isi yang benar,
+  karena record memakai `added` hasil hitung ulang, bukan dari laporan. Cek itu dipertahankan sebagai lapis kedua.
 
 ## 3a. Perbaikan setelah review #79
 
