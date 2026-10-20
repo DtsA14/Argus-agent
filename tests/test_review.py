@@ -361,6 +361,27 @@ def test_an_input_changed_since_the_run_started_is_refused(proj):
     assert not proj.build(run_dir)["valid"] and "input_unchanged" in failed_checks(run_dir)
 
 
+def test_an_input_that_differs_from_its_intake_record_is_refused_even_if_the_run_recorded_the_new_hash(proj):
+    run_dir = proj.run(writes=FIX)
+    shop = proj.root / "fixtures" / "repos" / "shop"
+    (shop / "src" / "shop.py").write_text(BUGGY + "# edited\n")
+    path = run_dir / "result.json"
+    result = json.loads(path.read_text())
+    result["provenance"]["input"]["snapshot_sha256"] = digest(snapshot(shop, skip_cache=True))
+    path.write_text(json.dumps(result))
+    assert not proj.build(run_dir)["valid"] and "input_unchanged" in failed_checks(run_dir)
+
+
+def test_an_input_that_is_not_what_the_run_started_from_is_refused_even_if_it_matches_its_record(proj):
+    run_dir = proj.run(writes=FIX)
+    path = run_dir / "result.json"
+    result = json.loads(path.read_text())
+    result["provenance"]["input"]["snapshot_sha256"] = "0" * 64
+    path.write_text(json.dumps(result))
+    out = proj.build(run_dir)
+    assert not out["valid"] and failed_checks(run_dir) == ["input_unchanged"] and "started from" in out["problems"][0]
+
+
 def test_an_input_without_an_intake_record_has_no_base_commit_and_is_refused(proj):
     (proj.root / "fixtures" / "intake" / "shop.json").unlink()
     run_dir = proj.run(writes=FIX)
@@ -524,7 +545,23 @@ def test_a_validation_that_fails_or_is_blocked_fresh_is_refused(proj):
                          {"id": "validation:target", "layer": "C", "status": s, "reason": "sandbox unavailable",
                           "evidence": {}})
         assert not out["valid"] and failed_checks(run_dir) == ["revalidation_matches"]
+        assert f"fresh run is {status}" in out["problems"][0]
         assert (run_dir / "review" / "PR.md").read_text().startswith("> **NOT READY")
+
+
+def test_a_fresh_run_in_which_a_required_test_did_not_run_is_refused(proj):
+    def lost(spec, workspace, cfg, log=None):
+        v = fake_validate(spec, workspace, cfg, log)
+        v["evidence"]["must_pass"] = {n: None for n in spec["must_pass"]}      # same counts, same outcome
+        return v
+    out = proj.build(proj.run(writes=FIX), validate=lost)
+    assert not out["valid"] and "must_pass" in out["problems"][0]
+
+
+def test_a_patch_that_comes_out_empty_is_refused_as_such_before_it_is_applied(proj, monkeypatch):
+    monkeypatch.setattr(review, "make_patch", lambda *a: b"")
+    run_dir = proj.run(writes=FIX)
+    assert not proj.build(run_dir)["valid"] and failed_checks(run_dir) == ["patch_made"]
 
 
 # ---- the script ----------------------------------------------------------------------------------------------------
