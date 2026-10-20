@@ -19,3 +19,13 @@ the 8 regression nodes of `tests/test_eval.py` pass on the baseline; with the re
 only `evals/score.py` changes.
 
 Cap proposal for the run: `max_usd` 0.50, `max_iterations` 3, profile `default` (30k / 4,096). Not yet approved.
+
+## Why the undamaged-log test is not in `must_pass` (GPT review, 2026-10-21)
+
+GPT suggested listing `test_a_log_without_damage_is_counted_as_before` in `target.must_pass`. The draft check refuses
+that: a required node of a new test must **fail by assertion** on the baseline (W2a, `acceptance/draft.py`), and this
+one passes there. Tried on the VM: `ok: false`, "is 'ok', not a failure by assertion on the baseline" and "exactly the 4
+new required tests may fail". The behaviour is still enforced: the `target` validation runs the whole file, needs
+`min_tests` 4 and exit 0, so that test must pass after the change, and the tests are protected (the agent cannot edit or
+remove them). A per-node "must keep passing" list for new tests would be a change to the draft check, which is not part
+of this pilot.
