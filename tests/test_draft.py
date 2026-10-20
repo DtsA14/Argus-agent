@@ -255,7 +255,7 @@ def test_only_an_ok_report_is_approved_and_approval_never_overwrites(root, tmp_p
 def test_tests_changed_between_check_and_approval_are_refused(root, tmp_path, scfg):
     r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
     other = with_new_test(NEW_TEST.replace("[1], 5", "[2], 9"))
-    with pytest.raises(dr.DraftError, match="differ from the ones that were checked"):
+    with pytest.raises(dr.DraftError, match="differs from the one that was checked"):
         dr.approve(r, other, root=root)
     assert not (root / "fixtures" / "repos" / "fix_shop").exists()
 
@@ -311,4 +311,19 @@ def test_a_report_or_draft_changed_between_check_and_approval_is_refused_and_pub
     tamper(r, d)
     with pytest.raises(dr.DraftError, match=why):
         dr.approve(r, d, root=root)
+    assert nothing_published(root)
+
+
+def test_the_contract_never_shares_objects_with_the_draft():
+    c = dr.build_contract(DRAFT, task="t", workspace="fixtures/repos/t", issue="i", max_usd=0.5, max_iterations=2)
+    c["scope"]["writable"].append("tests/*.py")
+    c["validation"][0]["must_pass"].clear()
+    assert DRAFT["contract"]["scope"]["writable"] == ["src/*.py"] and DRAFT["contract"]["validation"][0]["must_pass"]
+
+
+def test_an_intake_changed_between_check_and_approval_is_refused(root, tmp_path, scfg):
+    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+    (root / "fixtures" / "repos" / "shop" / "src" / "shop.py").write_text(FIXED)
+    with pytest.raises(dr.DraftError, match="changed since the check"):
+        dr.approve(r, DRAFT, root=root)
     assert nothing_published(root)

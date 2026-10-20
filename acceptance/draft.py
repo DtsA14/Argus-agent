@@ -22,6 +22,7 @@ Approval publishes, in this order, the record (fixtures/intake/<task>.json), the
 The record binds the intake (commit, tree, snapshot), every added file's hash, the task snapshot and the contract's
 sha256. Setup refuses a task whose files or contract differ from it (codetask/run.py).
 """
+import copy
 import hashlib
 import json
 import os
@@ -93,12 +94,12 @@ def validate_draft(d):
 def build_contract(draft, *, task, workspace, issue, max_usd, max_iterations):
     """The task's contract: the draft's scope, validations, tools and profile; everything else from the human."""
     c = {"contract": task, "version": 1, "inputs": {"workspace": workspace, "issue": issue},
-         "scope": draft["contract"]["scope"], "artifacts": [{"path": ct.SUMMARY, "type": "json", "schema": "claims_v2"}],
-         "validation": draft["contract"]["validation"], "judge": [],
+         "scope": copy.deepcopy(draft["contract"]["scope"]), "artifacts": [{"path": ct.SUMMARY, "type": "json", "schema": "claims_v2"}],
+         "validation": copy.deepcopy(draft["contract"]["validation"]), "judge": [],
          "limits": {"max_usd": max_usd, "max_iterations": max_iterations}}
     for k in ("tools", "budget_profile"):
         if k in draft["contract"]:
-            c[k] = draft["contract"][k]
+            c[k] = copy.deepcopy(draft["contract"][k])
     return c
 
 
@@ -268,6 +269,9 @@ def approve(report, draft, *, root="."):
     if ct.canonical(rebuilt) != ct.canonical(contract):
         raise DraftError("the contract is not the draft plus the human's fields")
     base = intake.record_for(f"fixtures/repos/{draft['base']}", root)
+    stale = ["no intake"] if base is None else intake.check(base, root / "fixtures" / "repos" / draft["base"])
+    if stale:                      # the intake changed after the check: the tests ran on something else
+        raise DraftError(f"intake {draft['base']} changed since the check: {'; '.join(stale)}")
     (root / "fixtures" / "repos").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=root / "fixtures" / "repos", prefix=".task-") as tmp:
         stage = Path(tmp) / task
