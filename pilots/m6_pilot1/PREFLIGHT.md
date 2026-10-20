@@ -77,3 +77,37 @@ eksplisit atas bagian 3 (cap $0.50, profil `default`, aturan henti), (c) Atha me
 
 Yang tidak dibuktikan oleh latihan: perilaku model sungguhan (apakah ia menemukan `parse_lines`, memakai `edit_file`
 dengan benar, dan tidak terpotong oleh thinking di batas 4.096 token). Itu justru yang diukur live pilot.
+
+## 8. Urutan menuju live run (hasil review GPT 2026-10-21)
+
+Tidak ada langkah di bawah yang dijalankan sebelum persetujuan yang disebut di kolom kanan.
+
+| # | Langkah | Persetujuan |
+|---|---|---|
+| 1 | Review akhir draf dan paket latihan (`evidence/happy/`) | Atha + GPT |
+| 2 | Merge `m6-pilot1-draft` ke `main` (hanya `pilots/m6_pilot1/`, tanpa kode yang dikoleksi pytest) | setelah 1 |
+| 3 | Di VM, worktree **baru dan bersih** dari `main`; salin `.sandbox_image*`; `git status` harus kosong | |
+| 4 | Intake dengan perintah yang sama (`--commit 5ff64d0`, tanpa `verification` dan `pilots`). Hash harus sama dengan yang dicek: tree `816b1bf3...`, snapshot `3c975a90...` | |
+| 5 | `approve_draft.py ... --approve` (**tindakan manusia**). Hash kontrak harus `c75cecee...` | Atha, eksplisit |
+| 6 | Commit **record intake, record task, kontrak, dan laporan cek** (file kecil) ke `main` lewat PR bukti; snapshot 373 file tetap lokal (`.git/info/exclude`). Di VM hapus keempat file lokalnya lalu `git pull`, supaya checkout bersih dan commit Argus run memuat jejak audit | |
+| 7 | Gerbang preflight: `git status --porcelain --untracked-files=no` kosong; `intake_repo.py --check` untuk `argus_m6` dan `fix_run_stats`; sha256 kontrak sama; kedua image arm64 ada; `docker info` sehat | |
+| 8 | Live run **satu kali**: kunci dibaca diam-diam di shell VM (`read -rs ANTHROPIC_API_KEY; export ANTHROPIC_API_KEY`, tidak masuk riwayat, tidak ke chat, tidak ke commit), lalu `ARGUS_LIVE=1 python scripts/run_code_task.py --contract fixtures/contracts/fix_run_stats.json --run-id pilot1 --sandbox docker` | Atha, eksplisit "go live" |
+| 9 | `build_review.py`, catat status, biaya, menit supervisi | |
+
+Batas yang harus tetap tertulis: record yang di-commit **bukan** bukti bahwa snapshot lokal bisa direkonstruksi persis.
+Hash hanya mendeteksi ketidakcocokan; untuk mereproduksi run yang sama snapshot lokal (atau intake ulang dari commit
+dasar dengan exclude yang sama, yang menghasilkan hash yang sama) tetap diperlukan.
+
+**Syarat provenance:** run dihitung sebagai pilot hanya bila `result.json` memuat `provenance.argus.dirty: false`
+(file bertrack tidak berubah; checkout bersih dari langkah 3 dan 6). Paket latihan (`dirty: true`) bukan bukti run
+dari checkout bersih.
+
+**Aturan setelah run (tidak ada pengecualian):**
+- `FAILED_ACCEPTANCE`, `BLOCKED`, atau `FAILED_BUDGET`, termasuk karena thinking menghabiskan jatah output sebelum tool
+  dipanggil, dicatat sebagai hasil pilot dan **berhenti**. Tidak ada run ulang, tidak ada profil `large`, tidak ada
+  kenaikan cap tanpa persetujuan baru dan alasan tertulis.
+- `--resume` hanya untuk run yang mati (crash); ia tidak membeli ulang hasil yang sudah di-commit dan tetap di bawah cap
+  yang sama.
+- Cap $0.50 adalah batas keras, bukan prediksi biaya. Perkiraan di bawah $0.15 hanya perbandingan dengan pilot lama.
+- Patch final tetap ditinjau manusia sebelum merge; paket valid bukan pengganti review.
+
