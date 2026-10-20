@@ -1,0 +1,100 @@
+{
+  "draft_version": 1,
+  "base": "argus_m6",
+  "plan": {
+    "files": [
+      "evals/score.py"
+    ],
+    "steps": [
+      "import parse_lines from harness.events in evals/score.py",
+      "in run_stats, read events.jsonl with parse_lines instead of json.loads per line"
+    ],
+    "risks": [
+      "run_stats feeds the live eval report only; independent_checks, honesty, score and aggregate must stay as they are"
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "evals/score.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "evals/runner.py",
+        "evals/__init__.py",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "tools/**",
+        "models/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_run_stats.py"
+        ],
+        "timeout_s": 180,
+        "min_tests": 4,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped",
+          "tests/test_run_stats.py::test_a_last_line_cut_short_without_a_newline_is_skipped",
+          "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_eval.py::test_an_honest_fix_passes",
+          "tests/test_eval.py::test_issue_fixed_needs_a_validation_with_required_tests",
+          "tests/test_eval.py::test_a_negative_task_passes_when_the_agent_fails_honestly",
+          "tests/test_eval.py::test_acceptance_counts_positive_tasks_only_and_eval_counts_all",
+          "tests/test_eval.py::test_claims_v2_an_honest_empty_summary_scores_by_status_alone",
+          "tests/test_eval.py::test_a_false_claim_in_an_earlier_attempt_is_kept_and_recovery_is_credited",
+          "tests/test_eval.py::test_honest_in_every_attempt_and_a_dishonest_final_attempt",
+          "tests/test_eval.py::test_honesty_is_aggregated_next_to_the_final_result"
+        ],
+        "timeout_s": 180,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_eval.py::test_an_honest_fix_passes",
+          "tests/test_eval.py::test_issue_fixed_needs_a_validation_with_required_tests",
+          "tests/test_eval.py::test_a_negative_task_passes_when_the_agent_fails_honestly",
+          "tests/test_eval.py::test_acceptance_counts_positive_tasks_only_and_eval_counts_all",
+          "tests/test_eval.py::test_claims_v2_an_honest_empty_summary_scores_by_status_alone",
+          "tests/test_eval.py::test_a_false_claim_in_an_earlier_attempt_is_kept_and_recovery_is_credited",
+          "tests/test_eval.py::test_honest_in_every_attempt_and_a_dishonest_final_attempt",
+          "tests/test_eval.py::test_honesty_is_aggregated_next_to_the_final_result"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "tools": [
+      "search_files",
+      "edit_file"
+    ],
+    "budget_profile": "default"
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_run_stats.py",
+      "content": "\"\"\"run_stats reads a run's events.jsonl the way the harness does (harness.events.parse_lines): a line that is not\nvalid JSON is skipped wherever it is (a run killed while writing an event and then resumed leaves one in the middle),\nand every other line is counted exactly as before.\"\"\"\nimport json\n\nfrom evals.score import run_stats\n\nRESULT = {\"attempts\": 2, \"llm_calls\": 3, \"tools\": [\"edit_file\"], \"usd_billed\": 0.123, \"usd_complete\": True}\nEVENTS = [\n    {\"ts\": 1.0, \"event\": \"llm_call_started\", \"call_id\": \"a\"},\n    {\"ts\": 2.0, \"event\": \"llm_call\", \"call_id\": \"a\", \"status\": \"ok\", \"tokens\": 100},\n    {\"ts\": 3.0, \"event\": \"llm_call\", \"call_id\": \"b\", \"status\": \"transient_error\", \"tokens\": 40},\n    {\"ts\": 4.0, \"event\": \"reply_truncated\"},\n    {\"ts\": 5.0, \"event\": \"resume\"},\n    {\"ts\": 6.0, \"event\": \"llm_call\", \"call_id\": \"c\", \"status\": \"ok\", \"tokens\": 60},\n]\nCUT = '{\"ts\": 2.5, \"event\": \"llm_call\", \"cal'          # what a process killed mid-write leaves behind\n\n\ndef make_run(tmp_path, name, text):\n    run = tmp_path / name\n    run.mkdir()\n    (run / \"result.json\").write_text(json.dumps(RESULT), encoding=\"utf-8\")\n    (run / \"events.jsonl\").write_text(text, encoding=\"utf-8\")\n    return run\n\n\ndef lines(events):\n    return [json.dumps(e) for e in events]\n\n\ndef clean_text():\n    return \"\".join(line + \"\\n\" for line in lines(EVENTS))\n\n\ndef test_a_log_without_damage_is_counted_as_before(tmp_path):\n    stats = run_stats(make_run(tmp_path, \"clean\", clean_text()))\n    assert stats[\"tokens\"] == 200 and stats[\"transient_errors\"] == 1\n    assert stats[\"reply_truncated\"] == 1 and stats[\"resume\"] == 1 and stats[\"invalid_tool_call\"] == 0\n    assert stats[\"attempts\"] == 2 and stats[\"llm_calls\"] == 3 and stats[\"usd_billed\"] == 0.123\n\n\ndef test_a_line_cut_short_in_the_middle_is_skipped(tmp_path):\n    damaged = lines(EVENTS[:2]) + [CUT] + lines(EVENTS[2:])\n    stats = run_stats(make_run(tmp_path, \"damaged\", \"\".join(line + \"\\n\" for line in damaged)))\n    assert stats == run_stats(make_run(tmp_path, \"clean\", clean_text()))\n    assert stats[\"tokens\"] == 200 and stats[\"transient_errors\"] == 1 and stats[\"resume\"] == 1\n\n\ndef test_a_last_line_cut_short_without_a_newline_is_skipped(tmp_path):\n    stats = run_stats(make_run(tmp_path, \"tail\", clean_text() + CUT))\n    assert stats == run_stats(make_run(tmp_path, \"clean\", clean_text()))\n    assert stats[\"tokens\"] == 200\n\n\ndef test_every_line_that_is_not_json_is_skipped_and_blank_lines_too(tmp_path):\n    text = \"garbage\\n\" + CUT + \"\\n\\n\" + clean_text() + \"\\nnot json {\\n\"\n    stats = run_stats(make_run(tmp_path, \"noisy\", text))\n    assert stats == run_stats(make_run(tmp_path, \"clean\", clean_text()))\n    assert stats[\"tokens\"] == 200 and stats[\"reply_truncated\"] == 1\n"
+    }
+  ],
+  "unverifiable": [
+    "a line that is valid JSON but not an object (for example 123) is neither required nor tested: harness.events.parse_lines passes it through, and run_stats would then fail on it; that is outside this task",
+    "that independent_checks, honesty, score and aggregate in evals/score.py were left alone: the writable scope is the whole file, so a reviewer must read the diff",
+    "readability of the change"
+  ]
+}
