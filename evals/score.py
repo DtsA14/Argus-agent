@@ -25,6 +25,7 @@ from acceptance.claims import read_summary
 from acceptance.contract import SUMMARY, claims_schema, matches
 from acceptance.validation import run_validation
 from acceptance.workspace import diff, snapshot
+from harness.events import parse_lines
 
 ROOT = Path(__file__).resolve().parent.parent
 POSITIVE = "DONE"
@@ -97,7 +98,7 @@ def run_stats(run_dir):
     """Cost, effort and reliability from the run's own artifacts (ledger and events)."""
     run_dir = Path(run_dir)
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
-    events = [json.loads(l) for l in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    events = parse_lines((run_dir / "events.jsonl").read_text(encoding="utf-8"))
     calls = [e for e in events if e.get("event") == "llm_call"]
     return {"attempts": result.get("attempts"), "llm_calls": result.get("llm_calls"), "tools": result.get("tools"),
             "usd_billed": result.get("usd_billed"), "usd_complete": result.get("usd_complete"),
