@@ -24,9 +24,8 @@ from runner import load_config
 ROOT = Path(__file__).resolve().parent.parent
 CUT = '{"ts": 2.5, "event": "llm_ca'                           # what a process killed mid-write leaves behind
 
-# what the scripts printed before this change, captured from them (a run -> {"audit": text, "trace": text}), and the audit of a blocked run
-DATA = json.loads((Path(__file__).resolve().parent / "data" / "run_inspectors_golden.json").read_text(encoding="utf-8"))
-GOLDEN, BLOCKED_AUDIT = DATA["golden"], DATA["blocked_audit"]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_run_inspectors_data import BLOCKED_AUDIT, GOLDEN  # noqa: E402  (what the scripts printed before this change: data, no tests)
 
 
 def build(root, base):
