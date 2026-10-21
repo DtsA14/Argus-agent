@@ -11,9 +11,11 @@ Definitions (nothing is guessed from what the files do not hold):
                   a NO_RESULT run is neither a success nor a failure
   done            status is DONE (the pilot's own verdict, agent-completed or not, is a human decision and not computed here)
   cost known      evals.score.cost_is_known on result.json (usd_billed present and usd_complete true); NO_RESULT: never
-  cost_per_success  the cost of every run whose cost is known (failed runs included) divided by the number of DONE runs among
-                  them; null when there is none. When some cost is unknown, cost_complete is false and the cost figures
-                  cover only the runs whose cost is known (usd_unknown_runs says how many are left out)
+  usd_known_total  the cost of the runs whose cost is known, failed runs included; null when none is known (a sum over nothing
+                  is not a cost)
+  cost_per_success  usd_known_total divided by the number of DONE runs among those runs; null when there is none. When some
+                  cost is unknown, cost_complete is false and the cost figures cover only the runs whose cost is known
+                  (usd_unknown_runs says how many are left out)
 Exit codes: 0 report printed, 2 refused (an argument is not a run directory, or the supervision file is not valid)."""
 import argparse
 import json
@@ -78,7 +80,7 @@ def summarize(rows):
     return {
         "runs": len(rows), "done": len(done), "no_result": len(rows) - len(finished),
         "success_rate": round(len(done) / len(finished), 6) if finished else None,
-        "usd_known_total": round(total, 6), "usd_unknown_runs": len(rows) - len(known),
+        "usd_known_total": round(total, 6) if known else None, "usd_unknown_runs": len(rows) - len(known),
         "cost_per_success": round(total / len(known_done), 6) if known_done else None,
         "cost_complete": len(known) == len(rows),
         "attempts": {"mean": round(statistics.mean(attempts), 6) if attempts else None,
