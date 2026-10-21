@@ -27,9 +27,9 @@ Agen menaruh seluruh validasi langsung di `is_peak` (tanpa fungsi `_checked` ter
   (bool dan float ditolak)"; subclass `int` tidak disebut dan tidak diuji. Dampak praktis nol (jendela berasal dari YAML: `int` biasa); dicatat sebagai pengamatan.
 - Pesan galat menyebut masalah dan nilai yang salah, seperti diminta.
 
-## Yang masih berjalan / belum
+## Yang belum
 
-- `verify.sh` penuh atas "main (`1bb9b12`) + patch agen" sedang dijalankan (hasil menyusul sebagai bukti terpisah).
+- `verify.sh` penuh atas "main (`1bb9b12`) + patch agen" (working tree bersih): **1210 lulus, 0 skip sandbox**, `RESULT: PASS` (`verification/verify-m6-pilot5a-agent-patch-20261021T181631Z-aarch64.log`). Patch belum diterapkan ke `main`; itu PR terpisah setelah keputusan reviewer.
 - Patch dibaca manusia karena menyentuh kode harga: bagian di atas adalah hasil bacaan saya dan uji pembeda, belum review reviewer.
 
 ## Satu sampel
