@@ -11,4 +11,3 @@ audit_run.py and failure_trace.py must read events, result and memo through it (
  a. An undecodable line of events.jsonl is skipped wherever it is (a killed process leaves one, mid-file after a resume). The output is that of the log without it, plus a last line 'events skipped: N', only when N > 0.
  b. audit_run.py on a run with no model call (for example BLOCKED, whose result has 'tools': null) does not crash: it prints 'effective tools None', 'llm_call_started 0, llm_call 0 (ok 0, refused 0)', 'prompt_hash checked 0, mismatches 0', then the notable events and the result line, exit 0.
  c. failure_trace.py on a directory without result.json prints '##### <name>: no result.json' and goes on with the next argument.
-A result.json that is missing still stops audit_run.py (that tool audits a finished run).
