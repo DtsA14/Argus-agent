@@ -1,5 +1,8 @@
-"""Data of tests/test_run_inspectors.py (pilot 3a): the output of audit_run.py and failure_trace.py, captured from the scripts as they were
-before the change, for each synthetic run (GOLDEN), and the audit of a run blocked before any model call (BLOCKED_AUDIT). No tests here."""
+"""Pilot 3a. (1) The data of tests/test_run_inspectors.py: the output of audit_run.py and failure_trace.py, captured from the scripts as they
+were before the change, for each synthetic run (GOLDEN), and the audit of a run blocked before any model call (BLOCKED_AUDIT).
+(2) The contract of evals/runlog.py, the shared reader of a run directory, at the end of this file."""
+import json
+import sqlite3
 
 GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
                  'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
@@ -160,3 +163,35 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                    '  it0 s3 ok      in   500 | Finish()\n'
                    '        text: ok\n'}}
 BLOCKED_AUDIT = "effective tools None\nllm_call_started 0, llm_call 0 (ok 0, refused 0)\nprompt_hash checked 0, mismatches 0\n  {'event': 'status', 'old': None, 'new': 'BLOCKED', 'reason': 'sandbox unavailable: no sandbox', 'blocked_reason': 'sandbox_unavailable'}\nresult {'status': 'BLOCKED', 'stop_reason': 'sandbox unavailable: no sandbox', 'blocked_reason': 'sandbox_unavailable', 'attempts': 0, 'usd_billed': 0.0, 'llm_calls': 0, 'llm_calls_unknown': 0, 'tools': None}\n"
+
+
+def reader():
+    import importlib
+    return importlib.import_module("evals.runlog")
+
+
+def test_events_are_read_with_the_number_of_lines_that_did_not_decode(tmp_path):
+    (tmp_path / "events.jsonl").write_text('{"event": "a"}
+
+{"event": "b", "n": 2}
+not json
+{"event": "c', encoding="utf-8")
+    events, skipped = reader().read_events(tmp_path)
+    assert events == [{"event": "a"}, {"event": "b", "n": 2}] and skipped == 2     # a blank line is not a skipped one
+    (tmp_path / "events.jsonl").write_text('{"event": "a"}
+', encoding="utf-8")
+    assert reader().read_events(tmp_path) == ([{"event": "a"}], 0)
+
+
+def test_result_memo_and_the_skipped_line_are_read_as_the_inspectors_need_them(tmp_path):
+    rl = reader()
+    assert rl.read_result(tmp_path) is None                              # a run that never got a result.json
+    (tmp_path / "result.json").write_text(json.dumps({"status": "DONE", "attempts": 1}), encoding="utf-8")
+    assert rl.read_result(tmp_path) == {"status": "DONE", "attempts": 1}
+    db = sqlite3.connect(tmp_path / "memo.sqlite")
+    db.execute("create table memo (key text primary key, value text)")
+    db.execute("insert into memo values (?, ?)", (json.dumps(["llm", "c", 0, 0, 1]), json.dumps({"content": "x"})))
+    db.commit()
+    db.close()
+    assert rl.read_memo(tmp_path) == {json.dumps(["llm", "c", 0, 0, 1]): {"content": "x"}}
+    assert rl.skipped_line(0) is None and rl.skipped_line(3) == "events skipped: 3"
