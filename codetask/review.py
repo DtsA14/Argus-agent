@@ -79,7 +79,7 @@ class Checks:
         self.items = []
 
     def add(self, id, ok, detail=""):
-        self.items.append({"id": id, "ok": bool(ok), "detail": detail})
+        self.items.append({"id": id, "ok": bool(ok), "detail": "" if ok else detail})   # a passing check says nothing
         return bool(ok)
 
     def skip(self, id, why):
