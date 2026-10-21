@@ -670,8 +670,8 @@ def build(root, base):
         return runs / name
 
     f5c = copy("f5", "f5c")                                         # f5 with a line cut by a crash in the middle of its log
-    lines = (f5c / "events.jsonl").read_text(encoding="utf-8").splitlines()
-    (f5c / "events.jsonl").write_text("\n".join(lines[:3] + [CUT] + lines[3:]) + "\n", encoding="utf-8")
+    lines = (f5c / "events.jsonl").read_text(encoding="utf-8").splitlines()                    # (and a blank line: not a skipped one)
+    (f5c / "events.jsonl").write_text("\n".join(lines[:3] + [CUT, ""] + lines[3:]) + "\n", encoding="utf-8")
     out["f5c"] = f5c
     for name, change in (("f6a", {"usd_billed": 0.05, "usd_complete": False}),      # a partial total
                          ("f6b", {"usd_billed": None}),                              # no usd_billed at all

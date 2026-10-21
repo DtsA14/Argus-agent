@@ -1,0 +1,73 @@
+{
+  "task": "fix_run_report",
+  "draft_sha256": "cd1648e294a08c2cf97cd59e43f1528d4c03dddfa4c39665e26f0e0fb8c77827",
+  "unverifiable": [
+    "the other four scripts (analyze_series.py, sim_admission.py, dry_feedback.py, measure_context.py) are protected and untouched; they need Docker or historical data that is not in the snapshot",
+    "that the protected files were left alone: they are protected, but a reviewer must read the diff",
+    "the wording of the refusal messages beyond the 'refused:' prefix and the words the tests look for",
+    "readability and where the shared reader lives beyond the file name the contract fixes (evals/runlog.py)"
+  ],
+  "ok": true,
+  "contract_sha256": "be0ae11c374a14103dc1fcdec185ee4564415cdec77741f02c9ef9d113609a9e",
+  "added": {
+    "tests/test_run_report.py": "8ee7b493adf2620fdc0a520d137a4377c932c71ac451375a1668dd96925ae170"
+  },
+  "baseline": {
+    "inspectors": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_run_report.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else": "FAIL",
+        "tests/test_run_report.py::test_a_run_blocked_before_any_model_call_is_audited": "FAIL",
+        "tests/test_run_report.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced": "FAIL"
+      },
+      "failures": 3,
+      "errors": 0
+    },
+    "aggregator": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_run_report.py::test_the_report_over_every_fixture_with_supervision_is_exactly_this": "FAIL",
+        "tests/test_run_report.py::test_without_a_supervision_file_the_minutes_are_null_never_zero": "FAIL",
+        "tests/test_run_report.py::test_with_no_done_run_the_cost_per_success_and_the_attempt_statistics_are_null": "FAIL",
+        "tests/test_run_report.py::test_when_no_cost_is_known_nothing_is_counted_as_zero": "FAIL",
+        "tests/test_run_report.py::test_a_report_over_done_runs_only_is_complete": "FAIL",
+        "tests/test_run_report.py::test_a_cut_line_is_counted_in_events_skipped": "FAIL",
+        "tests/test_run_report.py::test_a_run_given_with_a_trailing_slash_keeps_its_id_and_an_unused_supervision_entry_is_ignored": "FAIL",
+        "tests/test_run_report.py::test_an_argument_that_is_not_a_run_is_refused": "FAIL",
+        "tests/test_run_report.py::test_a_supervision_file_that_is_not_valid_is_refused": "FAIL"
+      },
+      "failures": 9,
+      "errors": 0
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too": "ok",
+        "tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete": "ok",
+        "tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known": "ok",
+        "tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before": "ok",
+        "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped": "ok",
+        "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too": "ok"
+      },
+      "failures": 0,
+      "errors": 0
+    }
+  },
+  "reference": {
+    "changed": {
+      "added": [
+        "evals/runlog.py",
+        "scripts/pilot_report.py"
+      ],
+      "removed": [],
+      "modified": [
+        "scripts/audit_run.py",
+        "scripts/failure_trace.py"
+      ]
+    },
+    "inspectors": "pass",
+    "aggregator": "pass",
+    "regression": "pass"
+  },
+  "problems": []
+}
