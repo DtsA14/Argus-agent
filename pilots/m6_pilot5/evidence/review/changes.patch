@@ -1,0 +1,215 @@
+diff --git a/models/pricing.py b/models/pricing.py
+index e8cd1c96f089dde5cc626b6b69ebb08c3636aca5..c78fd4e9316e603a853b80e6fb36c1d8b36cc5cb 100644
+--- a/models/pricing.py
++++ b/models/pricing.py
+@@ -1,15 +1,46 @@
+ from datetime import datetime, timezone
+ 
+ 
++class WindowError(ValueError):
++    """A peak window, or a time, that cannot be interpreted safely. It is refused, never read as a default (not peak)."""
++
++
++def _checked(window):
++    """The window if it is well formed; WindowError naming the problem and the value otherwise. Every part is checked."""
++    if not isinstance(window, dict):
++        raise WindowError(f"a peak window must be a dict, got {window!r}")
++    if "utc_hours" not in window:
++        raise WindowError(f"a peak window needs 'utc_hours', got {window!r}")
++    hours = window["utc_hours"]
++    if not isinstance(hours, (list, tuple)):
++        raise WindowError(f"'utc_hours' must be a list of [start, end] pairs, got {hours!r}")
++    for item in hours:
++        if not (isinstance(item, (list, tuple)) and len(item) == 2 and all(type(x) is int for x in item)):
++            raise WindowError(f"each 'utc_hours' item must be [start, end], two integers, got {item!r}")
++        start, end = item
++        if not (0 <= start <= 23 and 0 <= end <= 24):
++            raise WindowError(f"'utc_hours' item {item!r} is out of range: start must be 0..23 and end 0..24")
++    if "weekdays_only" in window and type(window["weekdays_only"]) is not bool:
++        raise WindowError(f"'weekdays_only' must be true or false, got {window['weekdays_only']!r}")
++    return window
++
++
+ def is_peak(window, now):
+-    """True if `now` falls inside a provider's peak-price window (UTC hours, end exclusive)."""
++    """True if `now` falls inside a provider's peak-price window (UTC hours, end exclusive; a window may cross midnight).
++
++    `now` must carry a time zone (a naive datetime would be read in the machine's zone, so the answer would depend on the machine):
++    it is converted to UTC. A window that is not well formed (see WindowError) is refused, not read as "not peak".
++    No window (None, empty) is not an error: that provider has no peak window."""
+     if not window:
+         return False
++    _checked(window)
++    if now.tzinfo is None or now.utcoffset() is None:
++        raise WindowError(f"'now' must be a timezone-aware datetime, got a naive one: {now!r}")
+     now = now.astimezone(timezone.utc)
+     if window.get("weekdays_only") and now.weekday() >= 5:
+         return False
+     hour = now.hour
+-    for start, end in window.get("utc_hours") or []:
++    for start, end in window["utc_hours"]:
+         if start < end:
+             if start <= hour < end:
+                 return True
+diff --git a/tests/test_peak_window_strict.py b/tests/test_peak_window_strict.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..31d12cc885c70af7675c3eefbca79d0f59fdd476
+--- /dev/null
++++ b/tests/test_peak_window_strict.py
+@@ -0,0 +1,156 @@
++"""models/pricing.py is_peak: a peak window that cannot be read safely is refused, never read as "not peak" (M6 pilot 5).
++
++Today a window without 'utc_hours' (or with an out-of-range hour, a wrong type, a 'weekdays_only' that is a string) is quietly read as "not peak", and a
++naive datetime is read in the machine's own time zone. Both can under-bill without any error. The contract:
++
++- WindowError (a ValueError, defined in models/pricing.py) is raised, with a message that names the problem and shows the wrong value, for a window
++  that is not falsy and is not well formed:
++    V1 not a dict; V2 no 'utc_hours'; V3 'utc_hours' not a list or tuple; V4 an item that is not [start, end] of two integers (bool and float are
++    refused); V5 start not in 0..23 or end not in 0..24; V6 'weekdays_only' present but not a bool (None included).
++  V7: `now` must carry a time zone; a naive datetime is refused.
++- Every part of the window is checked before the hours are evaluated: a bad item behind an item that matches is still refused.
++- No window (None, {}) is not an error: the provider has no peak window, and the answer is False.
++- Everything that was valid stays valid and gives the same answer: [] (no hours), start == end (empty), end 24, a window across midnight, several
++  windows, weekdays_only on the UTC date of `now`, a time in another zone, extra keys (ignored), and the windows of config.yaml.
++- The refusal comes from is_peak and so also from multiplier() and cost_usd().
++"""
++from datetime import datetime, timedelta, timezone
++from pathlib import Path
++
++import pytest
++import yaml
++
++from models.pricing import cost_usd, is_peak, multiplier
++
++try:
++    from models.pricing import WindowError
++except ImportError:          # the class does not exist before the change: collect anyway, so every test below fails by its own assertion
++    WindowError = type("WindowErrorIsMissing", (Exception,), {})
++
++PRICE = {"input": 1.0, "output": 1.0, "peak_multiplier": 2}
++FRI = datetime(2026, 10, 23, tzinfo=timezone.utc)          # 2026-10-23 is a Friday
++NOW = FRI + timedelta(hours=2)
++GOOD = {"utc_hours": [[1, 4]]}
++JAKARTA, NEW_YORK = timezone(timedelta(hours=7)), timezone(timedelta(hours=-5))
++
++
++def refused(window, now=NOW, *, shows=None):
++    with pytest.raises(WindowError) as e:
++        is_peak(window, now)
++    assert isinstance(e.value, ValueError)
++    if shows is not None:
++        assert shows in str(e.value), (shows, str(e.value))
++
++
++# ---- what must be refused (these fail until is_peak checks the window) -----------------------------------------------
++
++def test_v1_a_window_that_is_not_a_dict_is_refused():
++    for window in ([[22, 4]], "1-4", 5, ("utc_hours",)):
++        refused(window, shows=repr(window))
++
++
++def test_v2_a_window_without_utc_hours_is_refused():
++    refused({"weekdays_only": True}, shows="utc_hours")
++    refused({"utc_hour": [[1, 4]]}, shows="utc_hour")             # a misspelled key is not "no hours"
++
++
++def test_v3_utc_hours_that_is_not_a_list_is_refused():
++    for hours in ("1-4", 5, None, {"a": 1}):
++        refused({"utc_hours": hours}, shows=repr(hours))
++
++
++def test_v4_an_item_that_is_not_two_integers_is_refused():
++    for item in ([1], [1, 2, 3], ["1", 4], [1, "4"], [1.5, 4], [1, 4.0], [True, 4], [1, False], None, 5, "ab", {"s": 1, "e": 4}):
++        refused({"utc_hours": [item]}, shows=repr(item))
++
++
++def test_v5_an_hour_out_of_range_is_refused():
++    for item in ([24, 4], [-1, 4], [1, 25], [1, -1], [100, 100], [30, 0]):
++        refused({"utc_hours": [item]}, shows=repr(item))
++
++
++def test_v6_weekdays_only_that_is_not_a_bool_is_refused():
++    for flag in ("false", "true", 1, 0, None):
++        refused({"utc_hours": [[1, 4]], "weekdays_only": flag}, shows="weekdays_only")
++
++
++def test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not():
++    naive = datetime(2026, 10, 23, 2, 0)
++    refused(GOOD, naive, shows="naive")
++    assert is_peak(GOOD, NOW) is True                                              # UTC
++    assert is_peak(GOOD, datetime(2026, 10, 23, 9, 0, tzinfo=JAKARTA)) is True      # 09:00 +07:00 = 02:00 UTC
++    assert is_peak(GOOD, datetime(2026, 10, 22, 21, 0, tzinfo=NEW_YORK)) is True    # 21:00 -05:00 = 02:00 UTC
++    assert is_peak(GOOD, datetime(2026, 10, 23, 2, 0, tzinfo=JAKARTA)) is False     # 02:00 +07:00 = 19:00 UTC the day before
++
++
++def test_a_bad_item_behind_an_item_that_matches_is_still_refused():
++    refused({"utc_hours": [[1, 4], [99, 5]]}, NOW, shows="[99, 5]")                # 02:00 matches [1, 4]; the rest is checked anyway
++    refused({"utc_hours": [[1, 4]], "weekdays_only": "yes"}, NOW, shows="weekdays_only")
++
++
++def test_the_refusal_also_comes_from_multiplier_and_cost_usd():
++    bad = {"weekdays_only": True}
++    with pytest.raises(WindowError):
++        multiplier(PRICE, bad, NOW)
++    with pytest.raises(WindowError):
++        cost_usd(PRICE, input_tokens=1000, output_tokens=1000, window=bad, now=NOW)
++    with pytest.raises(WindowError):
++        cost_usd(PRICE, input_tokens=1000, output_tokens=1000, window=GOOD, now=datetime(2026, 10, 23, 2, 0))
++
++
++# ---- what was valid stays valid and gives the same answer (these pass before the change too) -------------------------
++
++def test_no_window_is_not_an_error():
++    assert is_peak(None, NOW) is False and is_peak({}, NOW) is False
++    assert is_peak(None, datetime(2026, 10, 23, 2, 0)) is False                      # `now` is not even looked at when there is no window
++
++
++def test_the_valid_edge_cases_are_still_valid():
++    assert is_peak({"utc_hours": []}, NOW) is False                                   # no hours: never peak
++    assert not any(is_peak({"utc_hours": [[5, 5]]}, FRI + timedelta(hours=h)) for h in range(24))   # start == end: empty
++    assert is_peak({"utc_hours": [[20, 24]]}, FRI + timedelta(hours=23, minutes=59)) is True       # end 24
++    assert is_peak({"utc_hours": [[22, 4]]}, FRI + timedelta(hours=23)) is True                      # across midnight
++    assert is_peak({"utc_hours": [[22, 4]]}, FRI + timedelta(days=1, hours=3)) is True
++    assert is_peak({"utc_hours": [[22, 4], [6, 10]]}, FRI + timedelta(hours=7)) is True              # several windows
++    assert is_peak({"utc_hours": [[1, 4]], "colour": "red", "weekdays_only": False}, NOW) is True   # extra keys are ignored
++    assert is_peak({"utc_hours": [[1, 4]], "weekdays_only": True}, NOW + timedelta(days=1)) is False  # Saturday
++
++
++def test_the_windows_of_config_yaml_are_still_valid_and_unchanged():
++    cfg = yaml.safe_load((Path(__file__).resolve().parent.parent / "config.yaml").read_text(encoding="utf-8"))
++    window = cfg["peak_windows"]["deepseek"]
++    assert is_peak(window, datetime(2026, 10, 12, 2, tzinfo=timezone.utc)) is True       # Monday 02:00 UTC
++    assert is_peak(window, datetime(2026, 10, 12, 4, tzinfo=timezone.utc)) is False      # end exclusive
++    assert is_peak(window, datetime(2026, 10, 12, 7, tzinfo=timezone.utc)) is True
++    assert is_peak(window, datetime(2026, 10, 17, 2, tzinfo=timezone.utc)) is False      # Saturday
++
++
++def _before(window, now):
++    """The answer of is_peak for a well formed window, before this change (the reference for the grid below)."""
++    now = now.astimezone(timezone.utc)
++    if window.get("weekdays_only") and now.weekday() >= 5:
++        return False
++    return any(s <= now.hour < e if s <= e else (now.hour >= s or now.hour < e) for s, e in window["utc_hours"])
++
++
++def test_every_valid_window_gives_the_same_answer_as_before():
++    cases = 0
++    for start in range(0, 24):
++        for end in range(0, 25):
++            for weekdays_only in (False, True):
++                window = {"utc_hours": [[start, end]], "weekdays_only": weekdays_only}
++                for day in range(7):
++                    for hour in range(24):
++                        for zone in (timezone.utc, JAKARTA):
++                            now = (FRI + timedelta(days=day, hours=hour)).astimezone(zone)
++                            assert is_peak(window, now) == _before(window, now), (window, now)
++                            cases += 1
++    assert cases == 24 * 25 * 2 * 7 * 24 * 2
++
++
++def test_every_hour_pair_outside_the_valid_ranges_is_refused():
++    for start in range(-3, 28):
++        for end in range(-3, 28):
++            if 0 <= start <= 23 and 0 <= end <= 24:
++                continue
++            refused({"utc_hours": [[start, end]]}, shows=f"[{start}, {end}]")

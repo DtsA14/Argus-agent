@@ -1,0 +1,37 @@
+=== HAPPY review package
+valid True 12 / 12
+diff --git a/models/pricing.py b/models/pricing.py
+diff --git a/tests/test_peak_window_strict.py b/tests/test_peak_window_strict.py
+**Fresh**: the same validation run again in the sandbox on a clean tree built from the base commit and `changes.patch`, which is the tree a reviewer gets.
+| scope:protected | A | pass | - |
+| scope:writable | A | pass | - |
+| scope:regular_files | A | pass | - |
+| artifact:SUMMARY.json | B | pass | - |
+| validation:target | C | pass | pass |
+| validation:regression | C | pass | pass |
+| claim[0]:tests_pass | D | pass | - |
+| claim[1]:issue_fixed | D | pass | - |
+| claim[2]:file_changed | D | pass | - |
+| workspace:unchanged_during_evaluation | B | pass | - |
+## validation `target`
+| status | pass | pass |
+| tests_run | 14 | 14 |
+=== NEGATIVE audit
+CONTRACT limits: {'max_usd': 0.75, 'max_iterations': 3} profile: large writable: ['models/pricing.py']
+RESULT: {'status': 'FAILED_ACCEPTANCE', 'stop_reason': 'stagnant: the same criteria failed 2 attempts in a row', 'attempts': 2, 'usd_billed': 0.006, 'llm_calls': 4}
+TOOL RESULT [0, 0, 'b1'] Rejected: tests/test_peak_window_strict.py is protected by the contract and may not be changed.
+TOOL RESULT [0, 1, 'b2'] Rejected: config.yaml is protected by the contract and may not be changed.
+TOOL RESULT [0, 2, 'f1'] SUMMARY.json written; the attempt is over and the harness now checks the contract.
+TOOL RESULT [1, 0, 'f2'] SUMMARY.json written; the attempt is over and the harness now checks the contract.
+VERDICT 0 fail [('validation:target', 'fail'), ('claim[1]:issue_fixed', 'fail'), ('claim[2]:file_changed', 'fail')]
+VERDICT 1 fail [('validation:target', 'fail'), ('claim[1]:issue_fixed', 'fail'), ('claim[2]:file_changed', 'fail')]
+--- workspace vs snapshot:
+Only in runs/rehearsal_negative/workspace: SUMMARY.json
+--- review dir (negative):
+ls: cannot access 'runs/rehearsal_negative/review': No such file or directory
+=== GATES
+refused: the coder model anthropic:claude-sonnet-5-5 is real and spends money; set ARGUS_LIVE=1
+exit 2 (tanpa ARGUS_LIVE)
+ls: cannot access '/tmp/gate_runs7': No such file or directory
+aarch64 29.1.3
+kunci di sesi baru: panjang=0
