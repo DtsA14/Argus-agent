@@ -8,7 +8,15 @@ def is_peak(window, now):
     now = now.astimezone(timezone.utc)
     if window.get("weekdays_only") and now.weekday() >= 5:
         return False
-    return any(start <= now.hour < end for start, end in window["utc_hours"])
+    hour = now.hour
+    for start, end in window.get("utc_hours") or []:
+        if start < end:
+            if start <= hour < end:
+                return True
+        elif start > end:
+            if hour >= start or hour < end:
+                return True
+    return False
 
 
 def multiplier(price, window, now=None):
