@@ -1,0 +1,232 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "models/pricing.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json"
+          ],
+          "removed": [],
+          "modified": [
+            "models/pricing.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "aee69d3e83626806b7af566a41d8ec9a83c2a41dce8c12e6e7f00387157aa179"
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_peak_window_strict.py"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 14,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused": "ok",
+          "tests/test_peak_window_strict.py::test_v2_a_window_without_utc_hours_is_refused": "ok",
+          "tests/test_peak_window_strict.py::test_v3_utc_hours_that_is_not_a_list_is_refused": "ok",
+          "tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused": "ok",
+          "tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused": "ok",
+          "tests/test_peak_window_strict.py::test_v6_weekdays_only_that_is_not_a_bool_is_refused": "ok",
+          "tests/test_peak_window_strict.py::test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not": "ok",
+          "tests/test_peak_window_strict.py::test_a_bad_item_behind_an_item_that_matches_is_still_refused": "ok",
+          "tests/test_peak_window_strict.py::test_the_refusal_also_comes_from_multiplier_and_cost_usd": "ok",
+          "tests/test_peak_window_strict.py::test_every_hour_pair_outside_the_valid_ranges_is_refused": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 14 items\n\ntests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused PASSED\ntests/test_peak_window_strict.py::test_v2_a_window_without_utc_hours_is_refused PASSED\ntests/test_peak_window_strict.py::test_v3_utc_hours_that_is_not_a_list_is_refused PASSED\ntests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused PASSED\ntests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused PASSED\ntests/test_peak_window_strict.py::test_v6_weekdays_only_that_is_not_a_bool_is_refused PASSED\ntests/test_peak_window_strict.py::test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not PASSED\ntests/test_peak_window_strict.py::test_a_bad_item_behind_an_item_that_matches_is_still_refused PASSED\ntests/test_peak_window_strict.py::test_the_refusal_also_comes_from_multiplier_and_cost_usd PASSED\ntests/test_peak_window_strict.py::test_no_window_is_not_an_error PASSED\ntests/test_peak_window_strict.py::test_the_valid_edge_cases_are_still_valid PASSED\ntests/test_peak_window_strict.py::test_the_windows_of_config_yaml_are_still_valid_and_unchanged PASSED\ntests/test_peak_window_strict.py::test_every_valid_window_gives_the_same_answer_as_before PASSED\ntests/test_peak_window_strict.py::test_every_hour_pair_outside_the_valid_ranges_is_refused PASSED\n\n============================== 14 passed in 1.61s ==============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 14,
+        "deselected": 0,
+        "stderr_tail": "",
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "validation:regression",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_peak_window.py",
+          "tests/test_models.py",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 30,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_peak_window.py::test_the_evening_part_of_a_window_across_midnight_is_peak": "ok",
+          "tests/test_peak_window.py::test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight": "ok",
+          "tests/test_peak_window.py::test_no_window_is_never_peak": "ok",
+          "tests/test_models.py::test_cost_of_a_plain_call": "ok",
+          "tests/test_models.py::test_unknown_price_is_none_not_a_guess": "ok",
+          "tests/test_models.py::test_deepseek_peak_windows": "ok",
+          "tests/test_models.py::test_peak_doubles_the_price": "ok",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek": "ok",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak": "ok"
+        },
+        "output_tail": "onverted_to_utc PASSED\ntests/test_peak_window.py::test_the_multiplier_and_the_cost_follow_a_window_across_midnight PASSED\ntests/test_peak_window.py::test_hours_outside_a_window_across_midnight_are_not_peak_and_the_end_is_exclusive PASSED\ntests/test_peak_window.py::test_an_ordinary_window_is_start_inclusive_and_end_exclusive PASSED\ntests/test_peak_window.py::test_two_ordinary_windows_and_weekends PASSED\ntests/test_peak_window.py::test_a_window_whose_start_equals_its_end_is_empty PASSED\ntests/test_peak_window.py::test_no_window_is_never_peak PASSED\ntests/test_peak_window.py::test_an_end_of_24_runs_to_midnight PASSED\ntests/test_peak_window.py::test_the_cost_outside_any_window_is_the_plain_price PASSED\ntests/test_models.py::test_default_roles_build_without_network PASSED\ntests/test_models.py::test_deepseek_role_builds PASSED\ntests/test_models.py::test_missing_key_names_the_env_var PASSED\ntests/test_models.py::test_swap_model_for_a_role_leaves_original_untouched PASSED\ntests/test_models.py::test_override_errors_are_clear PASSED\ntests/test_models.py::test_new_openai_style_provider_needs_no_code PASSED\ntests/test_models.py::test_new_provider_kind_can_be_registered PASSED\ntests/test_models.py::test_warns_when_evaluator_shares_the_workers_provider PASSED\ntests/test_models.py::test_cost_of_a_plain_call PASSED\ntests/test_models.py::test_unknown_price_is_none_not_a_guess PASSED\ntests/test_models.py::test_cached_tokens_use_the_cache_rate PASSED\ntests/test_models.py::test_deepseek_peak_windows PASSED\ntests/test_models.py::test_peak_doubles_the_price PASSED\ntests/test_models.py::test_message_cost_reads_usage_and_cache_from_the_message PASSED\ntests/test_models.py::test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries PASSED\ntests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek PASSED\ntests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak PASSED\n\n============================== 30 passed in 4.50s ==============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 30,
+        "deselected": 0,
+        "stderr_tail": "",
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "models/pricing.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:regression"
+        }
+      }
+    },
+    {
+      "id": "claim[3]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:target"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "02a2e18255131a1dc335249d61651e796606af087f877b8c8fb8b75877e2ddaa",
+  "summary_sha256": "aee69d3e83626806b7af566a41d8ec9a83c2a41dce8c12e6e7f00387157aa179",
+  "verdict_sha256": "9e9985f2e588705fdcbb8956c79b7641296557e95095aca9650a7a339856424f"
+}

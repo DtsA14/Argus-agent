@@ -1,0 +1,5 @@
+valid grid: 403200 cases, 0 disagreements
+invalid/odd inputs: 1301 cases, 0 disagreements
+bad item behind a match: agent ('WindowError',) | ref ('WindowError',)
+falsy window + naive now: agent ('value', False) | ref ('value', False)
+IntEnum hours [H.ONE, H.FOUR]: agent ('value', True) | ref ('WindowError',)
