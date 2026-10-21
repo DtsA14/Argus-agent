@@ -43,6 +43,25 @@ def parse_overrides(items):
     return out
 
 
+IMPL_NODES = ("orchestrator", "worker", "synthesize", "evaluator")
+IMPL_KINDS = ("fake", "llm")
+
+
+def parse_impl(items):
+    """['worker=llm', ...] -> {'worker': 'llm'}; the last item for a node wins. Raises ConfigError if invalid."""
+    out = {}
+    for item in items or []:
+        node, sep, kind = item.partition("=")
+        if not sep or not node or not kind:
+            raise ConfigError(f"--impl must look like 'node=kind' (kind 'fake' or 'llm'), got {item!r}")
+        if node not in IMPL_NODES:
+            raise ConfigError(f"unknown node {node!r}; nodes are {', '.join(IMPL_NODES)}")
+        if kind not in IMPL_KINDS:
+            raise ConfigError(f"node {node!r}: impl {kind!r} is not valid; use 'fake' or 'llm'")
+        out[node] = kind
+    return out
+
+
 def apply_overrides(cfg, overrides):
     """Return a copy of cfg with role -> model replaced; the original is untouched."""
     out = copy.deepcopy(cfg)
