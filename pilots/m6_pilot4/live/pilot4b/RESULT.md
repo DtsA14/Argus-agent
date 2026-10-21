@@ -35,3 +35,11 @@ reviewer. Bukti: folder ini.
   `temperature`) tampak menghasilkan hasil yang sama sampai byte. Itu menjawab pertanyaan konsistensi untuk task ini, bukan keberhasilan umum: pada 3a yang jauh lebih besar
   hasilnya gagal. Run 3 menambah satu sampel yang sama jenisnya.
 - Biaya per run hampir sama ($0,0289), jauh di bawah batas ($0,75) dan di bawah perkiraan ($0,15).
+
+## Penutupan (keputusan reviewer, 2026-10-21)
+
+- Validasi `pilot4b` **ditutup**. Patch run 2 diperiksa dan **sesuai patch run 1** (`models/pricing.py` dan `changes.patch` byte-identik; sha256 di atas), yang sudah ada di `main` lewat PR #109.
+- `verify.sh` pada `main` (`d83c2d9`, berisi patch) selesai bersih: **1196 lulus, 0 skip sandbox, PASS** (`verification/verify-m6-pilot4-main-d83c2d9-20261021T163656Z-aarch64.log`).
+- **`pilot4c` tidak dijalankan** dengan kontrak yang sama: dua run menghasilkan patch identik dengan biaya hampir sama, jadi run ketiga memberi sedikit informasi baru. Hasil Pilot 4: **2 dari 2 `DONE`**
+  (satu attempt, ±$0,029 masing-masing, patch byte-identik); ini indikasi konsistensi pada task kecil, bukan tingkat keberhasilan umum.
+- Langkah berikutnya: task `utc_hours` gagal-tertutup (aturan lebih ketat; acceptance, tes pembeda, dan patch referensi dibekukan sebelum coder dijalankan).
