@@ -8,8 +8,25 @@ scripts as subprocesses:
   and each was a crash: a line of events.jsonl that does not decode is skipped wherever it is (and one line "events skipped: N"
   ends the output, only when N is not 0), audit_run.py audits a run that made no model call, and failure_trace.py reports a
   directory that has no result.json and goes on.
-  scripts/pilot_report.py: a JSON report over runs, defined in the issue of the task. The tests compare the parsed report (keys
-  in this order, numbers within 1e-6), never the text."""
+  scripts/pilot_report.py RUN_DIR [RUN_DIR ...] [--supervision FILE.json]: one JSON object {"runs": [...], "summary": {...}}
+  (indent 2), exit 0. FILE.json maps a run id (the directory's name, also given with a trailing slash) to minutes of
+  supervision (a number, 0 or more); a run it does not name has none, a name that matches no run is ignored. The tests compare
+  the parsed report (keys in this order, numbers within 1e-6), never the text. Nothing is guessed from what the files do not hold.
+  Per run, in the order of the arguments: run_id; status (result.json's status, or "NO_RESULT" without a result.json); done
+  (status is "DONE"); attempts, llm_calls, usd_billed (from result.json, null without one); cost_known
+  (evals.score.cost_is_known on result.json, to be used and never redefined; false for NO_RESULT); events_skipped (result.json's
+  value when it has one, else the number of undecodable lines counted by the reader); supervision_minutes (null when none, never 0).
+  Summary, in this order: runs; done; no_result; success_rate = done / (runs - no_result), null when that is 0 (a NO_RESULT run
+  is neither a success nor a failure); usd_known_total = sum of usd_billed over the runs whose cost is known, failed runs
+  included, null when no cost is known; usd_unknown_runs = runs whose cost is not known (NO_RESULT ones included);
+  cost_per_success = usd_known_total / number of DONE runs among those with a known cost, null when there is none; cost_complete
+  = usd_unknown_runs == 0; attempts = {mean, median over the DONE runs, null when there is none; distribution: {"<attempts>":
+  number of runs} over the runs that have a result.json, keys as strings in increasing order}; supervision_minutes =
+  {runs_with_data, total, mean} over the runs that have a value, total and mean null when there is none; events_skipped = sum
+  over the runs. An unknown cost is never 0. Numbers are rounded to 6 decimals.
+  The command is refused ("refused: <reason>" on stderr, nothing on stdout, exit 2) when an argument has no events.jsonl (the
+  reason says "not a run directory") or when the supervision file cannot be read, is not a JSON object, or has a value that
+  is not a number of 0 or more (a boolean, a string, null, a negative number; the reason mentions "supervision")."""
 import json
 import os
 import shutil
