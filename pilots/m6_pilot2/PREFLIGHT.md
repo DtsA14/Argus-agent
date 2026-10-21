@@ -16,6 +16,8 @@ Hanya `main.py` dan `models/registry.py` writable. 13 tes: 7 wajib (merah di bas
 | **Jalur bahagia**: intake → draf → `--approve` (latihan) → run scripted → `build_review.py` | `DONE`, 1 attempt, 8 panggilan scripted, 1m47s. Paket **valid**, 12 cek ok, validasi ulang `target` (13 tes) dan `regression` (18 tes) lulus. `changes.patch` mengubah `main.py`, `models/registry.py`, dan menambah tes yang disetujui (`evidence/happy/`) |
 | **Jalur negatif**: agen mencoba mengedit tes yang dilindungi dan `graph.py` (keduanya ditolak), lalu mengklaim sukses | `FAILED_ACCEPTANCE` (stagnan setelah 2 attempt), tidak ada paket review ("not DONE"), workspace tidak berubah selain `SUMMARY.json` (`evidence/negative/`) |
 
+Bukti 18/18 dan 13/13 dari keluaran mentah sandbox (bukan hanya `must_pass` di `check_report.json`): `evidence/validation_raw.txt`.
+
 Catatan: patch latihan sama dengan patch referensi kecuali satu komentar di akhir baris `IMPL_NODES` (skrip latihan tidak
 menyalinnya); secara fungsi identik. Paket latihan mencatat `argus.dirty: true` karena worktree latihan punya file yang
 di-stage; run live harus dari checkout bersih (`dirty: false`). Validasi pilot ini lebih lama dari pilot 1 (tes menjalankan
