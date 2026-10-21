@@ -1,6 +1,6 @@
 {
   "task": "fix_run_report",
-  "draft_sha256": "cd1648e294a08c2cf97cd59e43f1528d4c03dddfa4c39665e26f0e0fb8c77827",
+  "draft_sha256": "820a4b4892107583b4c1fb83594b1a6fc7c522e9f91cf12ee0ed063fee4cb014",
   "unverifiable": [
     "the other four scripts (analyze_series.py, sim_admission.py, dry_feedback.py, measure_context.py) are protected and untouched; they need Docker or historical data that is not in the snapshot",
     "that the protected files were left alone: they are protected, but a reviewer must read the diff",
@@ -8,9 +8,9 @@
     "readability and where the shared reader lives beyond the file name the contract fixes (evals/runlog.py)"
   ],
   "ok": true,
-  "contract_sha256": "be0ae11c374a14103dc1fcdec185ee4564415cdec77741f02c9ef9d113609a9e",
+  "contract_sha256": "8f130e1b24a4cd5264376b438f5830badbc463452fb9c43e0159fe8652b2c53a",
   "added": {
-    "tests/test_run_report.py": "8ee7b493adf2620fdc0a520d137a4377c932c71ac451375a1668dd96925ae170"
+    "tests/test_run_report.py": "eb9917f7d39d28d583a6d1e4e889907a98fdd6f78af89893abd2315435dc0b45"
   },
   "baseline": {
     "inspectors": {
