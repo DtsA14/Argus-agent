@@ -1,0 +1,9 @@
+=== typical
+{"status": "FAILED_ACCEPTANCE", "attempts": 1, "attempt_ends": ["finished"], "tokens_per_attempt": {"0": 32361}, "usd_estimate": 0.0672} typical 45000
+   attempt 0 steps: [(0, 'ok', 2244, 23), (1, 'ok', 4062, 58), (2, 'ok', 8301, 116), (3, 'ok', 8439, 29), (4, 'ok', 9010, 79)]
+=== read_all
+{"status": "FAILED_ACCEPTANCE", "attempts": 1, "attempt_ends": ["reservation_exhausted"], "tokens_per_attempt": {"0": 34646}, "usd_estimate": 0.0707} read_all 45000
+   attempt 0 steps: [(0, 'ok', 2244, 29), (1, 'ok', 2967, 46), (2, 'ok', 4987, 30), (3, 'ok', 11029, 32), (4, 'ok', 13248, 34), (5, 'refused', 18084, None)]
+=== read_all_batched
+{"status": "FAILED_ACCEPTANCE", "attempts": 1, "attempt_ends": ["reservation_exhausted"], "tokens_per_attempt": {"0": 40056}, "usd_estimate": 0.0823} read_all_batched 45000
+   attempt 0 steps: [(0, 'ok', 2244, 29), (1, 'ok', 2967, 125), (2, 'ok', 34575, 116), (3, 'refused', 34713, None)]
