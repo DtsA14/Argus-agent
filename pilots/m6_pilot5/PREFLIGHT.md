@@ -74,7 +74,21 @@ Yang baru bisa diperiksa setelah merge dan approval resmi: `verify.sh` pada `mai
 | 3 | Cek ulang hash kontrak dan intake (draft check identik dengan `check_report.json`) | |
 | 4 | `approve_draft.py ... --max-usd 0.75 --max-iterations 3 --approve` pada checkout bersih; sha256 kontrak `a05548186f86…` | Atha, eksplisit |
 | 5 | PR record task; checkout live bersih | |
-| 6 | Keputusan live **terpisah**; satu run (`pilot5a`) lewat skrip pembantu di home VM (di luar repo; `~/go_live.sh` sekarang masih terikat ke kontrak dan config Pilot 4 dan akan disesuaikan ke kontrak dan config Pilot 5 sebelum dipakai), kunci diketik Atha | Atha, "go live" eksplisit |
+| 6 | Keputusan live **terpisah**; satu run (`pilot5a`) lewat `pilots/m6_pilot5/go_live.sh` (di repo, direview di PR; lihat bagian 7), kunci diketik Atha | Atha, "go live" eksplisit |
 
 Aturan henti: `FAILED_ACCEPTANCE`, `BLOCKED`, `FAILED_BUDGET`, `reservation_exhausted` dicatat sebagai hasil jujur; tanpa kenaikan cap, profil, atau pengulangan otomatis. `--resume` hanya untuk run yang mati
 sebelum selesai. Patch yang `DONE` dibaca manusia karena menyentuh kode harga (termasuk uji pembeda terhadap referensi).
+
+## 7. Skrip pembantu `pilots/m6_pilot5/go_live.sh` (jalur operasional, diikat ke Pilot 5)
+
+Sebelumnya `~/go_live.sh` di VM terikat ke kontrak Pilot 4 dan berada di luar repo. Sekarang skrip ada di repo, nilai yang diharapkan tertulis di dalamnya (bukan dibaca dari lingkungan), dan `~/go_live.sh` lama
+dinonaktifkan (`~/go_live_pilot4_retired.sh`, tanpa izin eksekusi). Perintah: `bash pilots/m6_pilot5/go_live.sh --check-only` (semua gerbang, tidak meminta kunci, tidak ada run) dan
+`bash pilots/m6_pilot5/go_live.sh pilot5a` (gerbang, lalu meminta kunci dan menjalankan SATU run).
+
+Gerbang (semua harus lolos, kalau tidak, tidak ada yang dimulai): checkout live bersih; kontrak `fix_window_strict` dengan sha256 `a05548186f86…`, profil `large`, batas $0,75 dan 3 iterasi, writable hanya `models/pricing.py`;
+`config_pilot5.yaml` sha256 `6bb6703d…` dan berbeda dari `config.yaml` **hanya** pada `budget.max_usd` 0,5 → 0,75; batas efektif (profil `large`, 45.000 token, $0,45 per attempt, cap $0,75, 3 attempt);
+tanpa `ARGUS_LIVE=1` runner menolak dan tidak membuat direktori run; id run berbentuk `pilot5<huruf>` dan belum ada; kunci tidak kosong.
+
+Diuji di worktree buangan (`evidence/go_live_tests.txt`): lolos pada keadaan benar (dua kali) dan **menolak** hash kontrak yang salah, profil yang salah, cap config `$1,00`, `config.yaml` yang diubah di tempat lain
+(config pilot utuh), tree kotor, id run yang sudah ada, id run salah bentuk (termasuk percobaan injeksi), kunci kosong (tanpa run), dan tanpa argumen. Draft check ulang di commit terbaru: `ok: true`,
+identik dengan `check_report.json`.
