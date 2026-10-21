@@ -5,7 +5,6 @@ check each ledger prompt_hash against it, and list calls, tool calls, refusals a
 """
 import hashlib
 import json
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 import harness.llm as hl
 from codetask.agent import feedback_from, system_prompt, task_prompt
 from codetask.tools import offered
+from evals import runlog
 from harness.llm import is_truncated
 from harness.steps import llm_step_key, message_from_json
 from runner import load_config
@@ -22,20 +22,22 @@ run_dir = Path(sys.argv[1])
 cfg = load_config()
 contract = json.loads((run_dir / "contract.json").read_text())
 result = json.loads((run_dir / "result.json").read_text())
-tools = offered(result["tools"])
-sp = system_prompt(tools)
 print("effective tools", result["tools"])
-print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
-memo = {k: json.loads(v) for k, v in sqlite3.connect(run_dir / "memo.sqlite").execute("select key, value from memo")}
-events = [json.loads(l) for l in (run_dir / "events.jsonl").read_text().splitlines()]
+tools = sp = None
+if result["tools"] is not None:                      # a run blocked at setup froze no tools (and made no model call)
+    tools = offered(result["tools"])
+    sp = system_prompt(tools)
+    print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
+memo = runlog.read_memo(run_dir)
+events, skipped = runlog.read_events(run_dir)
 calls = [e for e in events if e["event"] == "llm_call"]
-ref = hl.ModelRef.parse(calls[0]["model"])          # the model the run used (the ledger records it)
+ref = hl.ModelRef.parse(calls[0]["model"]) if calls else None   # the model the run used (the ledger records it)
 started = [e for e in events if e["event"] == "llm_call_started"]
 print(f"llm_call_started {len(started)}, llm_call {len(calls)} "
       f"(ok {sum(e['status'] == 'ok' for e in calls)}, refused {sum(e['status'] == 'refused' for e in calls)})")
 
 mismatch, checked = 0, 0
-for it in range(contract["limits"].get("max_iterations", 5)):
+for it in range(contract["limits"].get("max_iterations", 5) if calls else 0):
     feedback = None
     if it > 0:
         prev = run_dir / f"verdict_{it - 1}.json"
@@ -81,3 +83,5 @@ for e in events:
         print(" ", {k: v for k, v in e.items() if k not in ("ts",)})
 print("result", {k: result.get(k) for k in ("status", "stop_reason", "blocked_reason", "attempts", "usd_billed",
                                            "llm_calls", "llm_calls_unknown", "tools")})
+if runlog.skipped_line(skipped):
+    print(runlog.skipped_line(skipped))
