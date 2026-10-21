@@ -64,11 +64,9 @@ def test_a_cut_final_line_is_never_a_skipped_cost(tmp_path):
 
 
 def test_a_cut_started_line_means_no_request_was_sent_and_nothing_is_charged(tmp_path):
-    events, skipped = read_event_log(write_log(tmp_path / "e.jsonl", ['{"ts": 1, "event": "llm_call_star', *one_call("b", 4000)]))
+    events, skipped = read_event_log(write_log(tmp_path / "e.jsonl", ['{"ts": 1, "event": "llm_call_star']))
     totals = ledger_totals(events)
-    assert skipped == 1 and (totals["calls"], totals["unknown_after_crash"]) == (0, 0) or totals["calls"] == 0
-    # the final line of a call whose start line is missing is not a call of its own: nothing to charge
-    assert totals["usd_nano"] == 0
+    assert skipped == 1 and (totals["calls"], totals["unknown_after_crash"], totals["usd_nano"]) == (0, 0, 0)
 
 
 # ---- a real run, a real crash, a real resume ----------------------------------------------------------------------
@@ -107,9 +105,9 @@ def test_a_resume_after_a_cut_line_writes_the_same_result_as_one_without(tmp_pat
     result = result_of(run_dir)
     assert {k: result[k] for k in FIGURES} == {k: control[k] for k in FIGURES}
     assert (control["events_skipped"], result["events_skipped"]) == (0, 1)
-    assert CUT in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()    # in the middle: not the last line
-    assert (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1].startswith('{"ts"') and \
-        json.loads((run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])["event"] == "run_end"
+    lines = (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    assert CUT in lines and lines.index(CUT) < len(lines) - 1               # in the middle, not the last line
+    assert json.loads(lines[-1])["event"] == "run_end"
 
 
 def test_a_run_whose_graph_finished_but_has_no_result_is_recovered_by_a_plain_resume(tmp_path):
