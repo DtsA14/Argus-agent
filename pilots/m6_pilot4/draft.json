@@ -1,0 +1,103 @@
+{
+  "draft_version": 1,
+  "base": "argus_p4",
+  "plan": {
+    "files": [
+      "models/pricing.py"
+    ],
+    "steps": [
+      "in is_peak, match a window with start > end when hour >= start or hour < end; keep start < end as it is; start == end stays empty"
+    ],
+    "risks": [
+      "the config peak windows (none crosses midnight) must keep their exact behaviour; weekdays_only stays on the UTC date of now"
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "models/pricing.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "config.yaml",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "tools/**",
+        "nodes/**",
+        "evals/**",
+        "scripts/**",
+        "runner.py",
+        "graph.py",
+        "main.py",
+        "models/__init__.py",
+        "models/registry.py",
+        "models/fake.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_peak_window.py"
+        ],
+        "timeout_s": 240,
+        "min_tests": 13,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_peak_window.py::test_the_evening_part_of_a_window_across_midnight_is_peak",
+          "tests/test_peak_window.py::test_the_early_morning_part_of_a_window_across_midnight_is_peak",
+          "tests/test_peak_window.py::test_two_windows_one_of_them_across_midnight",
+          "tests/test_peak_window.py::test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight",
+          "tests/test_peak_window.py::test_a_time_in_another_zone_is_converted_to_utc",
+          "tests/test_peak_window.py::test_the_multiplier_and_the_cost_follow_a_window_across_midnight"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_models.py",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "timeout_s": 240,
+        "min_tests": 17,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_models.py::test_cost_of_a_plain_call",
+          "tests/test_models.py::test_unknown_price_is_none_not_a_guess",
+          "tests/test_models.py::test_deepseek_peak_windows",
+          "tests/test_models.py::test_peak_doubles_the_price",
+          "tests/test_models.py::test_message_cost_reads_usage_and_cache_from_the_message",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "tools": [
+      "search_files",
+      "edit_file"
+    ],
+    "budget_profile": "default"
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_peak_window.py",
+      "content": "\"\"\"models/pricing.py is_peak: a peak window that crosses midnight (M6 pilot 4).\n\nA window is [start, end) in UTC hours, end exclusive. [1, 4] is 01:00 up to 04:00. A window with start > end crosses midnight: [22, 4]\nis 22:00 up to midnight and midnight up to 04:00. Today such a window never matches, so a provider whose peak price runs through the night\nwould be billed at the off-peak price.\n\nRules the tests pin down:\n- start < end: as before, start <= hour < end.\n- start > end: hour >= start or hour < end (end exclusive).\n- start == end: an empty window, never peak (not \"all day\").\n- weekdays_only is judged on the UTC date of `now`, also for a window that crosses midnight (Saturday 01:00 UTC is not peak even though\n  the window began on Friday evening).\n- several windows: peak when any matches; a `now` in another time zone is converted to UTC; no window (None, empty): never peak.\n\"\"\"\nfrom datetime import datetime, timedelta, timezone\n\nimport pytest\n\nfrom models.pricing import cost_usd, is_peak, multiplier\n\nNIGHT = {\"utc_hours\": [[22, 4]]}\nNIGHT_WEEKDAYS = {\"utc_hours\": [[22, 4]], \"weekdays_only\": True}\nPRICE = {\"input\": 1.0, \"output\": 1.0, \"peak_multiplier\": 2}\nFRI, SAT, SUN, MON = (datetime(2026, 10, d, tzinfo=timezone.utc) for d in (23, 24, 25, 26))   # 2026-10-26 is a Monday\n\n\ndef at(day, hour, minute=0):\n    return day + timedelta(hours=hour, minutes=minute)\n\n\n# ---- a window that crosses midnight (these fail until is_peak handles it) --------------------------------------------\n\ndef test_the_evening_part_of_a_window_across_midnight_is_peak():\n    assert is_peak(NIGHT, at(FRI, 22))\n    assert is_peak(NIGHT, at(FRI, 23, 59))\n\n\ndef test_the_early_morning_part_of_a_window_across_midnight_is_peak():\n    assert is_peak(NIGHT, at(SAT, 0))\n    assert is_peak(NIGHT, at(SAT, 1))\n    assert is_peak(NIGHT, at(SAT, 3, 59))\n\n\ndef test_two_windows_one_of_them_across_midnight():\n    two = {\"utc_hours\": [[22, 4], [6, 10]]}\n    assert is_peak(two, at(FRI, 23)) and is_peak(two, at(SAT, 2)) and is_peak(two, at(FRI, 7))\n    assert not is_peak(two, at(FRI, 5)) and not is_peak(two, at(FRI, 12))\n\n\ndef test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight():\n    assert is_peak(NIGHT_WEEKDAYS, at(FRI, 23))\n    assert is_peak(NIGHT_WEEKDAYS, at(MON, 1))           # Monday 01:00 UTC: a weekday, although the window began on Sunday\n    assert not is_peak(NIGHT_WEEKDAYS, at(SAT, 1))       # Saturday 01:00 UTC: a weekend date, although the window began on Friday\n    assert not is_peak(NIGHT_WEEKDAYS, at(SAT, 23))\n    assert not is_peak(NIGHT_WEEKDAYS, at(SUN, 23))\n\n\ndef test_a_time_in_another_zone_is_converted_to_utc():\n    seven_am_in_jakarta = datetime(2026, 10, 24, 6, 0, tzinfo=timezone(timedelta(hours=7)))   # 2026-10-23 23:00 UTC\n    assert is_peak(NIGHT, seven_am_in_jakarta)\n\n\ndef test_the_multiplier_and_the_cost_follow_a_window_across_midnight():\n    kw = dict(input_tokens=1_000_000, output_tokens=1_000_000, window=NIGHT)\n    assert multiplier(PRICE, NIGHT, at(FRI, 23)) == 2 and multiplier(PRICE, NIGHT, at(SAT, 2)) == 2\n    assert cost_usd(PRICE, now=at(FRI, 23), **kw) == pytest.approx(4.0)\n    assert cost_usd(PRICE, now=at(SAT, 12), **kw) == pytest.approx(2.0)\n\n\n# ---- what is true today and must stay true (these pass before the change too) ----------------------------------------\n\ndef test_hours_outside_a_window_across_midnight_are_not_peak_and_the_end_is_exclusive():\n    for hour in (4, 5, 12, 21):\n        assert not is_peak(NIGHT, at(FRI, hour))\n    assert not is_peak(NIGHT, at(FRI, 21, 59))\n\n\ndef test_an_ordinary_window_is_start_inclusive_and_end_exclusive():\n    w = {\"utc_hours\": [[1, 4]]}\n    assert is_peak(w, at(FRI, 1)) and is_peak(w, at(FRI, 3, 59))\n    assert not is_peak(w, at(FRI, 0, 59)) and not is_peak(w, at(FRI, 4))\n\n\ndef test_two_ordinary_windows_and_weekends():\n    w = {\"utc_hours\": [[1, 4], [6, 10]], \"weekdays_only\": True}\n    assert is_peak(w, at(FRI, 2)) and is_peak(w, at(FRI, 9)) and not is_peak(w, at(FRI, 5)) and not is_peak(w, at(FRI, 10))\n    assert not is_peak(w, at(SAT, 2)) and not is_peak(w, at(SUN, 7))\n\n\ndef test_a_window_whose_start_equals_its_end_is_empty():\n    for window in ({\"utc_hours\": [[5, 5]]}, {\"utc_hours\": [[22, 22]]}, {\"utc_hours\": [[0, 0]]}):\n        assert not any(is_peak(window, at(FRI, h)) for h in range(24))\n\n\ndef test_no_window_is_never_peak():\n    assert not is_peak(None, at(FRI, 23)) and not is_peak({}, at(FRI, 23))\n\n\ndef test_an_end_of_24_runs_to_midnight():\n    w = {\"utc_hours\": [[20, 24]]}\n    assert is_peak(w, at(FRI, 20)) and is_peak(w, at(FRI, 23, 59))\n    assert not is_peak(w, at(FRI, 19, 59)) and not is_peak(w, at(SAT, 0))\n\n\ndef test_the_cost_outside_any_window_is_the_plain_price():\n    kw = dict(input_tokens=1_000_000, output_tokens=0, window={\"utc_hours\": [[1, 4]]})\n    assert cost_usd(PRICE, now=at(FRI, 2), **kw) == pytest.approx(2.0)\n    assert cost_usd(PRICE, now=at(FRI, 5), **kw) == pytest.approx(1.0)\n"
+    }
+  ],
+  "unverifiable": [
+    "that config.yaml and the other protected files were left alone: they are protected, but a reviewer must read the diff",
+    "that the production peak windows are not affected: none crosses midnight today, so no billed amount changes; the regression nodes and the guard tests show the non-crossing cases unchanged",
+    "readability and the exact form of the condition (the contract fixes the behaviour)"
+  ]
+}
