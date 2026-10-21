@@ -1,7 +1,8 @@
 # M6 pilot 3a: hasil live run (2026-10-21)
 
 Status: **`FAILED_ACCEPTANCE`** (`stagnant: the same criteria failed 2 attempts in a row`), dicatat sebagai hasil. Tidak ada run ulang,
-tidak ada kenaikan cap. Klasifikasi pilot (`failed` / `human-assisted`) adalah keputusan reviewer. Bukti: `evidence/live/`.
+tidak ada kenaikan cap. **Klasifikasi pilot (keputusan reviewer): `failed`**, bukan `human-assisted`: agen tidak menghasilkan patch yang
+lolos acceptance dan tidak ada intervensi manusia pada kodenya selama run (diagnosis sesudah run tidak mengubah hasil). Bukti: `evidence/live/`.
 
 ## Fakta
 
@@ -40,10 +41,12 @@ tidak ada kenaikan cap. Klasifikasi pilot (`failed` / `human-assisted`) adalah k
    sesuai arah itu (tidak muat), dengan penyebab tambahan di atas.
 5. Alat yang dibangun di pilot ini bekerja: `failure_trace.py` dan `audit_run.py` (versi lama) membaca run live tanpa masalah.
 
-## Keputusan yang diperlukan (tidak diambil otomatis)
+## Keputusan reviewer (2026-10-21)
 
-Tidak ada run ulang dan tidak ada kenaikan cap atau profil tanpa persetujuan baru. Opsi untuk dipertimbangkan reviewer: (a) catat
-sebagai `failed` dan lanjut; (b) task yang lebih kecil dengan bacaan wajib lebih sedikit (mis. modul data lebih kecil atau dipecah per
-skrip); (c) apakah `Finish` yang gagal karena reservasi sebaiknya membawa umpan balik yang lebih berguna ke attempt berikutnya
-(attempt 1 memulai dari workspace yang sudah diedit, tetapi menghabiskan 4 dari 5 langkahnya untuk membaca ulang dan menjelajah).
-Waktu supervisi: belum dicatat (perlu angka dari Atha).
+- Klasifikasi: **`failed`**. PR ini dimerge sebagai catatan hasil.
+- Task yang sama **tidak diulang** dengan budget lebih besar: yang habis adalah reservasi token per attempt, bukan uang ($0,20 dari $0,75).
+- Pilot berikutnya: task lebih kecil dengan bacaan wajib minimal, dan pertimbangkan umpan balik yang secara eksplisit mengarahkan agen
+  memperbaiki kegagalan validasi lebih dulu saat attempt berikutnya mulai. Tujuannya mengukur apakah perubahan kecil pada ukuran task
+  dan umpan balik benar-benar meningkatkan keberhasilan.
+- **3b tidak dimulai**: 3a belum terbukti selesai lewat agen, dan 3b bergantung padanya.
+- Waktu supervisi: **unknown** (tidak diingat; tidak diisi dengan angka karangan).
