@@ -50,3 +50,9 @@ lolos acceptance dan tidak ada intervensi manusia pada kodenya selama run (diagn
   dan umpan balik benar-benar meningkatkan keberhasilan.
 - **3b tidak dimulai**: 3a belum terbukti selesai lewat agen, dan 3b bergantung padanya.
 - Waktu supervisi: **unknown** (tidak diingat; tidak diisi dengan angka karangan).
+
+## Tambahan untuk persiapan pilot berikutnya (permintaan Atha, 2026-10-21)
+
+Simulasi token harus memasukkan skenario **"agen membaca semua berkas tes yang ada"** (semua berkas di `tests/` yang disentuh task,
+termasuk modul data), bukan hanya bacaan yang kita anggap perlu. Di 3a bacaan ekstra itu yang membuat attempt 0 tidak muat. Aturan
+praktis: batas muat dihitung dari skenario terburuk yang wajar, dan task hanya diajukan bila skenario itu muat di reservasi profilnya.
