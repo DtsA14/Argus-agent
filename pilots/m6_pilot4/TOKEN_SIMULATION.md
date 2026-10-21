@@ -36,3 +36,7 @@ Task: satu fungsi di `models/pricing.py` (1,3 KB); berkas tes baru 5 KB (`tests/
 
 Rekomendasi saya: `large` + cap pilot $0,75, karena 3a menunjukkan bahwa agen cenderung membaca lebih dari yang dibutuhkan dan satu bacaan ekstra saja
 sudah menolak attempt di `default`. Biaya nyatanya tetap kecil (di bawah $0,15 per run). Ini keputusan reviewer.
+
+## Keputusan reviewer (2026-10-21)
+
+Profil `large` dengan cap khusus pilot $0,75 (`config_pilot4.yaml`); skenario "baca semua pemakai" dicatat sebagai risiko tanpa kenaikan budget otomatis.

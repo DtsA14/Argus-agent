@@ -1,13 +1,13 @@
 {
   "task": "fix_is_peak",
-  "draft_sha256": "bb32520c1393858c1934c81d2e7fe1d04cb7e29a6668d7c5146f73757c1dbd21",
+  "draft_sha256": "8650bfa56617fc0370a4bcfc7df1c0490a94f0057b5baa551612f1c56b2f2d49",
   "unverifiable": [
     "that config.yaml and the other protected files were left alone: they are protected, but a reviewer must read the diff",
     "that the production peak windows are not affected: none crosses midnight today, so no billed amount changes; the regression nodes and the guard tests show the non-crossing cases unchanged",
     "readability and the exact form of the condition (the contract fixes the behaviour)"
   ],
   "ok": true,
-  "contract_sha256": "4b048c564572c0964caa08d71b75c94cd08995b4954b237dfd2e989f0e629c6a",
+  "contract_sha256": "1c3a063a3ab2c08da3a64bdea2d73c45415be3d3802fa210e75e33506dd901b5",
   "added": {
     "tests/test_peak_window.py": "fd49b6527fb602fe38fa7694ac5162ace246a27757fb9bc9a71161e2636d214f"
   },
