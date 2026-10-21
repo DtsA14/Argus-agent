@@ -63,7 +63,7 @@ def test_an_unknown_cost_stops_the_scripted_modes_too(tmp_path, monkeypatch):
 
 
 def test_known_costs_keep_the_eval_going_and_the_total_is_complete(tmp_path, monkeypatch):
-    report, started, ids = eval_with_results(tmp_path, monkeypatch, [{"usd_billed": 0.1, "usd_complete": True}] * 5)
+    report, started, ids = eval_with_results(tmp_path, monkeypatch, [{"usd_billed": 0.1, "usd_complete": True}] * 50)
     assert len(started) == len(ids) and report["stopped"] is None
     assert report["usd_spent"] == pytest.approx(0.1 * len(ids)) and report["usd_complete"] is True
 
