@@ -1,0 +1,107 @@
+{
+  "draft_version": 1,
+  "base": "argus_p2",
+  "plan": {
+    "files": [
+      "main.py",
+      "models/registry.py"
+    ],
+    "steps": [
+      "add a parser for --impl items next to parse_overrides in models/registry.py that raises ConfigError",
+      "call it in main.py inside the try block that already turns ConfigError into 'config error: ...'",
+      "keep graph.py, runner.py and config.yaml as they are"
+    ],
+    "risks": [
+      "--model and valid --impl must behave exactly as before; the check must happen before the run directory is created"
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "main.py",
+        "models/registry.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "graph.py",
+        "runner.py",
+        "config.yaml",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "tools/**",
+        "nodes/**",
+        "evals/**",
+        "models/__init__.py",
+        "models/fake.py",
+        "models/pricing.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_impl_flag.py"
+        ],
+        "timeout_s": 240,
+        "min_tests": 13,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs",
+          "tests/test_impl_flag.py::test_a_second_mistyped_node_is_refused_too",
+          "tests/test_impl_flag.py::test_an_empty_node_is_refused",
+          "tests/test_impl_flag.py::test_an_item_without_equals_is_refused_cleanly",
+          "tests/test_impl_flag.py::test_an_empty_kind_is_refused_cleanly",
+          "tests/test_impl_flag.py::test_a_kind_other_than_fake_or_llm_is_refused_cleanly",
+          "tests/test_impl_flag.py::test_a_refused_flag_starts_nothing_and_the_corrected_command_runs"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_models.py",
+          "tests/test_milestone1.py::test_pass_first_try",
+          "tests/test_milestone1.py::test_fail_then_pass_uses_feedback",
+          "tests/test_milestone1.py::test_iteration_budget"
+        ],
+        "timeout_s": 240,
+        "min_tests": 18,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_models.py::test_override_errors_are_clear",
+          "tests/test_models.py::test_swap_model_for_a_role_leaves_original_untouched",
+          "tests/test_models.py::test_default_roles_build_without_network",
+          "tests/test_milestone1.py::test_pass_first_try",
+          "tests/test_milestone1.py::test_fail_then_pass_uses_feedback",
+          "tests/test_milestone1.py::test_iteration_budget"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "tools": [
+      "search_files",
+      "edit_file"
+    ],
+    "budget_profile": "default"
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_impl_flag.py",
+      "content": "\"\"\"main.py --impl: an argument that is not valid is refused before a run exists (M6 pilot 2).\n\n--impl node=kind switches a node of the pipeline between its fake and its llm implementation. Today a mistyped node\n(evalutor=llm) is ignored and the run goes on with the fake evaluator; a missing '=', an empty node or kind, or another\nkind fails late, inside the graph, with a traceback, after the run directory and its checkpoint already exist (so the\ncorrected command with the same --run-id is refused as an existing run). The contract: every such argument is refused\nat once as 'config error: ...' (exit 1, no traceback, like --model), and nothing is created.\n\nBlack-box: main.py runs as a subprocess with --runs-dir in a temporary directory; the default pipeline uses fake nodes,\nso nothing is spent and no API key is needed.\"\"\"\nimport subprocess\nimport sys\nfrom pathlib import Path\n\nROOT = Path(__file__).resolve().parent.parent\nNODES = (\"orchestrator\", \"worker\", \"synthesize\", \"evaluator\")\n\n\ndef run_main(tmp_path, *flags):\n    return subprocess.run([sys.executable, \"main.py\", \"--quiet\", \"--scenario\", \"pass\", \"--runs-dir\", str(tmp_path),\n                           \"--run-id\", \"p\", *flags], cwd=ROOT, capture_output=True, text=True, timeout=120)\n\n\ndef assert_refused(r, tmp_path, *words):\n    assert r.returncode == 1, (r.returncode, r.stdout[-300:], r.stderr[-300:])\n    assert \"config error:\" in r.stderr, r.stderr[-400:]\n    assert \"Traceback\" not in r.stderr, r.stderr[-400:]\n    for w in words:\n        assert w in r.stderr, (w, r.stderr[-400:])\n    assert not (tmp_path / \"p\").exists(), \"a refused argument must not leave a run directory\"\n\n\ndef assert_runs(r):\n    assert r.returncode == 0, (r.returncode, r.stderr[-400:])\n    assert \"DONE\" in r.stdout, r.stdout[-300:]\n\n\n# ---- arguments that must be refused, before anything is created ---------------------------------------------------\n\ndef test_a_mistyped_node_is_refused_before_anything_runs(tmp_path):\n    r = run_main(tmp_path, \"--impl\", \"evalutor=llm\")\n    assert_refused(r, tmp_path, \"unknown node 'evalutor'\", *NODES)\n\n\ndef test_a_second_mistyped_node_is_refused_too(tmp_path):\n    r = run_main(tmp_path, \"--impl\", \"synthesise=fake\")\n    assert_refused(r, tmp_path, \"unknown node 'synthesise'\", *NODES)\n\n\ndef test_an_empty_node_is_refused(tmp_path):\n    assert_refused(run_main(tmp_path, \"--impl\", \"=llm\"), tmp_path, \"=llm\")\n\n\ndef test_an_item_without_equals_is_refused_cleanly(tmp_path):\n    assert_refused(run_main(tmp_path, \"--impl\", \"evaluator\"), tmp_path, \"evaluator\")\n\n\ndef test_an_empty_kind_is_refused_cleanly(tmp_path):\n    assert_refused(run_main(tmp_path, \"--impl\", \"evaluator=\"), tmp_path, \"evaluator=\")\n\n\ndef test_a_kind_other_than_fake_or_llm_is_refused_cleanly(tmp_path):\n    for kind in (\"llmm\", \"LLM\"):\n        r = run_main(tmp_path, \"--impl\", f\"worker={kind}\")\n        assert_refused(r, tmp_path, \"worker\", repr(kind), \"'fake' or 'llm'\")\n\n\ndef test_a_refused_flag_starts_nothing_and_the_corrected_command_runs(tmp_path):\n    first = run_main(tmp_path, \"--impl\", \"evalutor=llm\")\n    assert_refused(first, tmp_path, \"evalutor\")\n    assert_runs(run_main(tmp_path, \"--impl\", \"evaluator=fake\"))       # same --run-id: it was never taken\n\n\n# ---- what already works and must not change (they pass before the change too) ----------------------------------\n\ndef test_a_valid_impl_flag_runs_as_before(tmp_path):\n    assert_runs(run_main(tmp_path, \"--impl\", \"worker=fake\"))\n\n\ndef test_all_four_nodes_can_be_set(tmp_path):\n    assert_runs(run_main(tmp_path, *[x for n in NODES for x in (\"--impl\", f\"{n}=fake\")]))\n\n\ndef test_no_impl_flag_runs_as_before(tmp_path):\n    assert_runs(run_main(tmp_path))\n\n\ndef test_the_last_impl_for_a_node_wins(tmp_path):\n    assert_runs(run_main(tmp_path, \"--impl\", \"worker=llm\", \"--impl\", \"worker=fake\"))\n\n\ndef test_an_unknown_model_role_is_still_a_config_error(tmp_path):\n    r = run_main(tmp_path, \"--model\", \"janitor=anthropic:x\")\n    assert r.returncode == 1 and \"config error: unknown role 'janitor'\" in r.stderr, r.stderr[-300:]\n\n\ndef test_a_model_override_without_equals_is_still_a_config_error(tmp_path):\n    r = run_main(tmp_path, \"--model\", \"worker\")\n    assert r.returncode == 1 and \"config error: override must look like\" in r.stderr, r.stderr[-300:]\n"
+    }
+  ],
+  "unverifiable": [
+    "a mistyped node under impl: in a config file is ignored too; that is a separate change and is not tested",
+    "the exact wording of the error messages beyond the key words the tests look for",
+    "that graph.py, runner.py and config.yaml were left alone: they are protected, but a reviewer must read the diff",
+    "readability and where the validation lives (the contract fixes the behaviour, not the code layout)"
+  ]
+}
