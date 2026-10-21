@@ -171,15 +171,10 @@ def reader():
 
 
 def test_events_are_read_with_the_number_of_lines_that_did_not_decode(tmp_path):
-    (tmp_path / "events.jsonl").write_text('{"event": "a"}
-
-{"event": "b", "n": 2}
-not json
-{"event": "c', encoding="utf-8")
+    (tmp_path / "events.jsonl").write_text('{"event": "a"}\n\n{"event": "b", "n": 2}\nnot json\n{"event": "c', encoding="utf-8")
     events, skipped = reader().read_events(tmp_path)
     assert events == [{"event": "a"}, {"event": "b", "n": 2}] and skipped == 2     # a blank line is not a skipped one
-    (tmp_path / "events.jsonl").write_text('{"event": "a"}
-', encoding="utf-8")
+    (tmp_path / "events.jsonl").write_text('{"event": "a"}\n', encoding="utf-8")
     assert reader().read_events(tmp_path) == ([{"event": "a"}], 0)
 
 
