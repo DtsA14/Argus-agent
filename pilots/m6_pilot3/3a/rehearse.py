@@ -95,8 +95,9 @@ def main(argv=None):
     ap.add_argument("kind", choices=["happy", "negative", "admission"])
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--task", default="fix_run_inspectors")
+    ap.add_argument("--config", default=str(PILOT_CONFIG), help="default: the pilot config; config.yaml shows the stock cap")
     a = ap.parse_args(argv)
-    cfg = load_config(PILOT_CONFIG)
+    cfg = load_config(a.config)
     setup_sandbox(cfg)
     contract_path = ROOT / "fixtures" / "contracts" / f"{a.task}.json"
     if a.kind == "admission":
