@@ -35,9 +35,9 @@ return False
   menjadi "bukan puncak" secara diam-diam alih-alih error (gagal terbuka); ini perlu keputusan reviewer apakah diterima atau dicatat sebagai catatan.
 - Bentuk lebih panjang dari referensi (loop 9 baris vs satu ekspresi); komentar docstring tidak diperbarui. Kosmetik.
 
-## Yang masih berjalan / belum
+## Yang belum
 
-- `verify.sh` penuh atas "main + patch agen" sedang dijalankan (hasil menyusul sebagai bukti terpisah).
+- `verify.sh` penuh atas "main (`3c76fff`) + patch agen" (working tree bersih): **1196 lulus, 0 skip sandbox**, `RESULT: PASS` (`verification/verify-m6-pilot4a-agent-patch-20261021T155359Z-aarch64.log`).
 - Patch dibaca manusia karena menyentuh kode harga: bagian di atas adalah hasil bacaan saya, belum review reviewer.
 
 ## Satu sampel
