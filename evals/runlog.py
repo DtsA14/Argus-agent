@@ -19,6 +19,11 @@ def read_events(run_dir):
     return events, sum(1 for line in text.splitlines() if line.strip()) - len(events)
 
 
+def is_run(run_dir):
+    """True when <run_dir> holds the log of a run (every run writes events.jsonl first)."""
+    return (Path(run_dir) / "events.jsonl").is_file()
+
+
 def read_result(run_dir):
     """<run_dir>/result.json as a dict, or None when the run has none (it was never finished)."""
     path = Path(run_dir) / "result.json"

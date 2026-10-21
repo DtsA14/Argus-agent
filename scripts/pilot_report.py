@@ -51,7 +51,7 @@ def load_supervision(path):
 
 def run_row(run_dir, supervision):
     run_dir = Path(run_dir)
-    if not (run_dir / "events.jsonl").is_file():
+    if not runlog.is_run(run_dir):
         raise Refused(f"{run_dir} is not a run directory (no events.jsonl)")
     result = runlog.read_result(run_dir)
     events, skipped = runlog.read_events(run_dir)

@@ -21,7 +21,9 @@ from runner import load_config
 run_dir = Path(sys.argv[1])
 cfg = load_config()
 contract = json.loads((run_dir / "contract.json").read_text())
-result = json.loads((run_dir / "result.json").read_text())
+result = runlog.read_result(run_dir)
+if result is None:
+    raise FileNotFoundError(run_dir / "result.json")      # as before: this tool audits a finished run
 print("effective tools", result["tools"])
 tools = sp = None
 if result["tools"] is not None:                      # a run blocked at setup froze no tools (and made no model call)
