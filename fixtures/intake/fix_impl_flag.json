@@ -1,0 +1,52 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "fix_impl_flag",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "cc8a2fda4b29b9e862d8f1a2d0e3a750d2a35c95",
+  "tree": "99feeb0c95e88faaee7d5ad10d21904611ec794d",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_p2",
+    "commit": "cc8a2fda4b29b9e862d8f1a2d0e3a750d2a35c95",
+    "tree": "99feeb0c95e88faaee7d5ad10d21904611ec794d",
+    "snapshot_sha256": "363964f8f392c72efca0a4911acfd64d288b4dcfe726c029ac5c21271b3ac2a8"
+  },
+  "added": {
+    "tests/test_impl_flag.py": "2bbf1ae706ec55b6e61e42e00b2017fc9b7bb8bb1786f0e1a99b486ed0d9f6e7"
+  },
+  "files": 380,
+  "snapshot_sha256": "8f0b3c86ba8f7a20fe9b7c103f5e272eab79ad8b08a81154e4322c09ed7669e6",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "295e95147779c5e8fa0526600afb5cc6f0195f2f54a9d4e5c0d36bf8eef9d23e",
+  "draft_sha256": "150a0b6a247f3ff5eb8f8f752c84cccf00b987259ccaa219ac75ed297addd83d",
+  "plan": {
+    "files": [
+      "main.py",
+      "models/registry.py"
+    ],
+    "steps": [
+      "add a parser for --impl items next to parse_overrides in models/registry.py that raises ConfigError",
+      "call it in main.py inside the try block that already turns ConfigError into 'config error: ...'",
+      "keep graph.py, runner.py and config.yaml as they are"
+    ],
+    "risks": [
+      "--model and valid --impl must behave exactly as before; the check must happen before the run directory is created"
+    ]
+  },
+  "unverifiable": [
+    "a mistyped node under impl: in a config file is ignored too; that is a separate change and is not tested",
+    "the exact wording of the error messages beyond the key words the tests look for",
+    "that graph.py, runner.py and config.yaml were left alone: they are protected, but a reviewer must read the diff",
+    "readability and where the validation lives (the contract fixes the behaviour, not the code layout)"
+  ],
+  "approved_at": "2026-10-21T01:36:30Z"
+}
