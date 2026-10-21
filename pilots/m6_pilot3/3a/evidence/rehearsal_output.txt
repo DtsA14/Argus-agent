@@ -1,0 +1,87 @@
+=== happy
+{
+ "status": "DONE",
+ "stop_reason": "all criteria passed",
+ "blocked_reason": null,
+ "attempts": 1,
+ "usd_billed": 0.012,
+ "llm_calls": 8,
+ "tools": [
+  "list_files",
+  "read_file",
+  "write_file",
+  "run_validation",
+  "search_files",
+  "edit_file"
+ ],
+ "budget_profile": {
+  "name": "large",
+  "attempt_tokens": 45000,
+  "max_output_tokens": 8192
+ }
+}
+=== negative
+{
+ "status": "FAILED_ACCEPTANCE",
+ "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+ "blocked_reason": null,
+ "attempts": 2,
+ "usd_billed": 0.006,
+ "llm_calls": 4,
+ "tools": [
+  "list_files",
+  "read_file",
+  "write_file",
+  "run_validation",
+  "search_files",
+  "edit_file"
+ ],
+ "budget_profile": {
+  "name": "large",
+  "attempt_tokens": 45000,
+  "max_output_tokens": 8192
+ }
+}
+=== admission
+{
+ "status": "FAILED_ACCEPTANCE",
+ "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+ "blocked_reason": null,
+ "attempts": 2,
+ "usd_billed": 0.198986,
+ "llm_calls": 9,
+ "tools": [
+  "list_files",
+  "read_file",
+  "write_file",
+  "run_validation",
+  "search_files",
+  "edit_file"
+ ],
+ "budget_profile": {
+  "name": "large",
+  "attempt_tokens": 45000,
+  "max_output_tokens": 8192
+ },
+ "usd_per_attempt": {
+  "0": 0.109056,
+  "1": 0.08993
+ },
+ "admission": {
+  "pilot_config": {
+   "config": "/home/ubuntu/p3a_rehearse/pilots/m6_pilot3/3a/config_pilot3a.yaml",
+   "cap_usd": 0.75,
+   "reservation_usd": 0.45,
+   "attempt_tokens": 45000,
+   "attempts_admitted_if_each_spends_like_the_clean_path": 3
+  },
+  "config_yaml": {
+   "config": "/home/ubuntu/p3a_rehearse/config.yaml",
+   "cap_usd": 0.5,
+   "reservation_usd": 0.45,
+   "attempt_tokens": 45000,
+   "attempts_admitted_if_each_spends_like_the_clean_path": 1
+  }
+ },
+ "spend_per_attempt_used_usd": 0.109056
+}
