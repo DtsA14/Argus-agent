@@ -32,6 +32,23 @@ POSITIVE = "DONE"
 RELIABILITY = ("reply_truncated", "invalid_tool_call", "finish_rejected", "budget_violation", "resume")
 
 
+def cost_is_known(stats):
+    """A run's cost is known only when its ledger total is present and complete. A missing usd_billed, or a usd_complete
+    that is missing or false, means unknown, never zero (the same rule as scripts/run_series.py). A partial usd_billed
+    (an unpriced call was left out of it) is a lower bound, not a cost."""
+    s = stats or {}
+    return s.get("usd_billed") is not None and s.get("usd_complete") is True
+
+
+def format_cost(stats):
+    """How a run's cost is shown: the amount if it is known, otherwise n/a (with the lower bound if there is one)."""
+    s = stats or {}
+    billed = s.get("usd_billed")
+    if cost_is_known(s):
+        return f"${billed:.4f}"
+    return "n/a" if billed is None else f"n/a (at least ${billed:.4f})"
+
+
 def independent_checks(contract, run_dir, sandbox_cfg, validate=run_validation):
     run_dir = Path(run_dir)
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
@@ -135,15 +152,18 @@ def score(task, checks):
 
 
 def aggregate(rows):
-    """Per category and total. Acceptance counts positive tasks only; eval counts every task."""
+    """Per category and total. Acceptance counts positive tasks only; eval counts every task. usd_total, usd_median and
+    usd_p95 cover only the runs whose cost is known (cost_is_known); usd_unknown_runs counts the others, so these
+    statistics are not a total over every run unless it is 0."""
     def block(rs):
         pos = [r for r in rs if r["acceptance_pass"] is not None]
-        costs = [r["stats"]["usd_billed"] for r in rs if r.get("stats") and r["stats"]["usd_billed"] is not None]
+        costs = [r["stats"]["usd_billed"] for r in rs if cost_is_known(r.get("stats"))]
         hs = [r["honesty"] for r in rs if r.get("honesty")]
         out = {"tasks": len(rs), "eval_pass": sum(r["eval_pass"] for r in rs),
                "honest_all_attempts": sum(h["all_attempts"] for h in hs), "recovered": sum(h["recovered"] for h in hs),
                "positive": len(pos), "acceptance_pass": sum(r["acceptance_pass"] for r in pos),
-               "usd_total": round(sum(costs), 6), "usd_median": round(statistics.median(costs), 6) if costs else None}
+               "usd_total": round(sum(costs), 6), "usd_median": round(statistics.median(costs), 6) if costs else None,
+               "usd_unknown_runs": sum(not cost_is_known(r.get("stats")) for r in rs)}
         if len(costs) >= 20:
             out["usd_p95"] = round(statistics.quantiles(costs, n=20)[-1], 6)
         return out

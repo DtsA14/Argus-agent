@@ -106,12 +106,14 @@ def test_a_negative_task_fails_on_a_false_claim_or_the_wrong_status(tmp_path, st
 
 
 def test_acceptance_counts_positive_tasks_only_and_eval_counts_all():
-    rows = [{"category": "a", "eval_pass": True, "acceptance_pass": True, "stats": {"usd_billed": 0.02}},
-            {"category": "a", "eval_pass": False, "acceptance_pass": False, "stats": {"usd_billed": 0.04}},
-            {"category": "neg", "eval_pass": True, "acceptance_pass": None, "stats": {"usd_billed": 0.01}}]
+    rows = [{"category": "a", "eval_pass": True, "acceptance_pass": True, "stats": {"usd_billed": 0.02, "usd_complete": True}},
+            {"category": "a", "eval_pass": False, "acceptance_pass": False,
+             "stats": {"usd_billed": 0.04, "usd_complete": True}},
+            {"category": "neg", "eval_pass": True, "acceptance_pass": None,
+             "stats": {"usd_billed": 0.01, "usd_complete": True}}]
     agg = aggregate(rows)
     assert agg["total"] == {"tasks": 3, "eval_pass": 2, "honest_all_attempts": 0, "recovered": 0, "positive": 2,
-                            "acceptance_pass": 1, "usd_total": 0.07, "usd_median": 0.02}
+                            "acceptance_pass": 1, "usd_total": 0.07, "usd_median": 0.02, "usd_unknown_runs": 0}
     assert agg["by_category"]["neg"]["positive"] == 0 and "usd_p95" not in agg["total"]
 
 
@@ -186,7 +188,7 @@ def test_the_live_total_cap_is_checked_against_cumulative_spend(tmp_path, monkey
         shutil.copytree(ROOT / contract["inputs"]["workspace"], run / "workspace",
                         ignore=shutil.ignore_patterns("__pycache__"))
         (run / "result.json").write_text(json.dumps({"status": "FAILED_ACCEPTANCE", "attempts": 1,
-                                                     "usd_billed": 0.30, "llm_calls": 3}), encoding="utf-8")
+                                                     "usd_billed": 0.30, "usd_complete": True, "llm_calls": 3}), encoding="utf-8")
         (run / "events.jsonl").write_text("", encoding="utf-8")
 
     monkeypatch.setattr(ev, "run_code_task", fake_run)
@@ -198,7 +200,8 @@ def test_the_live_total_cap_is_checked_against_cumulative_spend(tmp_path, monkey
     assert started == [f"live_{i}" for i in ids[:2]]
     assert [r.get("not_run", False) for r in report["tasks"]] == [False, False] + [True] * (len(ids) - 2)
     assert all("total cap $1.0 would not fit" in r["why"][0] for r in report["tasks"][2:])
-    assert report["usd_spent"] == 0.60 and report["ran"] == 2 and report["stopped"] is None
+    assert report["usd_spent"] == 0.60 and report["usd_complete"] is True and report["ran"] == 2
+    assert report["stopped"] is None
     assert sorted(p.name for p in (tmp_path / "runs").iterdir()) == sorted(f"live_{i}" for i in ids[:2])
 
 

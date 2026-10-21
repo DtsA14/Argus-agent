@@ -34,8 +34,10 @@ Reproducible check from scratch (fresh venv, pinned versions, full suite):
   further calls are refused, and the run ends `FAILED_BUDGET`. Detected and reported, but **not an
   absolute financial cap**.
 - **Unpriced models** are refused whenever `max_usd` is finite (`allow_unpriced` only applies with
-  `max_usd: null`). Their cost is recorded as unknown (`null`), never as $0, and `result.json` shows
-  `usd_complete: false`.
+  `max_usd: null`). Their cost is recorded as unknown (`null`) per call, never as $0. A run's total `usd_billed` is then the sum of the
+  priced calls only (a lower bound), and `result.json` shows `usd_complete: false`. Whatever adds costs up (the eval
+  runner, `scripts/run_series.py`) treats a run whose `usd_billed` is missing, or whose `usd_complete` is not true, as
+  unknown, stops, and reports the amount as a lower bound, never as a total.
 - **Ledger lifecycle:** `llm_call_started` (with a `call_id` and the worst case) is written before each
   request, the final `llm_call` after it, and only then is the reservation charged (even if writing the
   ledger fails). A started call with no final event, because the process died mid-request, is
