@@ -179,6 +179,7 @@ def test_a_done_run_gets_a_complete_valid_package(proj):
     assert p["patch"]["files"] == [{"path": "src/shop.py", "change": "M", "approved_test": False}]
     assert p["patch"]["sha256"] == hashlib.sha256((run_dir / "review" / "changes.patch").read_bytes()).hexdigest()
     assert p["validation_fresh"] == {"target": "pass"}
+    assert all(c["detail"] == "" for c in p["checks"]), "a check that passed must not carry a failure message"
     assert "NOT READY" not in (run_dir / "review" / "PR.md").read_text()
 
 
