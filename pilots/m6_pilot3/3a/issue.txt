@@ -1,0 +1,14 @@
+Tools for looking at a code-task run directory (contract.json, result.json, memo.sqlite, events.jsonl, verdict_<i>.json). Change only evals/runlog.py (new), scripts/audit_run.py and scripts/failure_trace.py; the tests are protected.
+
+1. Shared reader. evals/runlog.py is the one place that reads a run's events, result and memo:
+ - read_events(run_dir) -> (events, skipped): the records of events.jsonl that decode (use harness.events.parse_lines, which skips an undecodable line wherever it is) and the number of non-blank lines that did not (a blank line is not a skipped one).
+ - read_result(run_dir): result.json as a dict, or None when the run has none.
+ - read_memo(run_dir): {key: value} of memo.sqlite, key and value both decoded from JSON.
+ - skipped_line(skipped): 'events skipped: N', or None when N is 0.
+audit_run.py and failure_trace.py must read events, result and memo through it (contract.json and verdict_<i>.json may stay as they are).
+
+2. Keep what the two inspectors print. For a run that finished normally, audit_run.py RUN_DIR and failure_trace.py RUN_DIR... must print exactly what they print today, byte for byte. Only three things change, each a crash today:
+ a. An undecodable line of events.jsonl is skipped wherever it is (a killed process leaves one, mid-file after a resume). The output is that of the log without it, plus a last line 'events skipped: N', only when N > 0.
+ b. audit_run.py on a run with no model call (for example BLOCKED, whose result has 'tools': null) does not crash: it prints 'effective tools None', 'llm_call_started 0, llm_call 0 (ok 0, refused 0)', 'prompt_hash checked 0, mismatches 0', then the notable events and the result line, exit 0.
+ c. failure_trace.py on a directory without result.json prints '##### <name>: no result.json' and goes on with the next argument.
+A result.json that is missing still stops audit_run.py (that tool audits a finished run).
