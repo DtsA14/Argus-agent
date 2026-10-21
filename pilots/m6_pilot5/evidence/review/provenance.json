@@ -1,0 +1,142 @@
+{
+  "argus": {
+    "commit": "87c4dd48d699009c556fdbf47835a28a2878eee1",
+    "dirty": false
+  },
+  "attempts": 1,
+  "base": {
+    "commit": "716d1dd22787cbb98b1c7213f7ad8ec2c66a2d03",
+    "repo": "https://github.com/DtsA14/Argus-agent.git",
+    "tree": "6d80ac376f12e722c34ba33f91052a901c848c5b"
+  },
+  "checks": [
+    {
+      "detail": "",
+      "id": "contract_frozen",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "verdict_passed",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "summary_bound",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "input_unchanged",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "base_commit",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "changes_in_scope",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "changes_match_verdict",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "patch_made",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "patch_applies",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "final_state_identical",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "revalidation_matches",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "workspace_stable",
+      "ok": true
+    }
+  ],
+  "contract": {
+    "name": "fix_window_strict",
+    "sha256": "a05548186f86ec8c740950e16e6aeff6489c9f4d0c72832fcddcfece0320eb9c"
+  },
+  "cost": {
+    "calls": 6,
+    "unknown_after_crash": 0,
+    "usd": 0.009,
+    "usd_complete": true,
+    "usd_nano": 9000000
+  },
+  "input": {
+    "intake": {
+      "added": {
+        "tests/test_peak_window_strict.py": "86914af840cd322a2d8569e167018bc7516e72a25a77e644d22c14fc7404b501"
+      },
+      "base": {
+        "commit": "716d1dd22787cbb98b1c7213f7ad8ec2c66a2d03",
+        "name": "argus_p5",
+        "snapshot_sha256": "f11324aa0368fe534ff1e4811b6202397c119cb206fdbd372345289db8b587dd",
+        "tree": "6d80ac376f12e722c34ba33f91052a901c848c5b"
+      },
+      "commit": "716d1dd22787cbb98b1c7213f7ad8ec2c66a2d03",
+      "contract_sha256": "a05548186f86ec8c740950e16e6aeff6489c9f4d0c72832fcddcfece0320eb9c",
+      "exclude": [
+        "verification",
+        "pilots"
+      ],
+      "kind": "task",
+      "name": "fix_window_strict",
+      "repo": "https://github.com/DtsA14/Argus-agent.git",
+      "tree": "6d80ac376f12e722c34ba33f91052a901c848c5b"
+    },
+    "snapshot_sha256": "66f9dfbbc5091796f2182288430e9f6e8352eff38c9dc1ac2595ab736e00be50",
+    "workspace": "fixtures/repos/fix_window_strict"
+  },
+  "models": [
+    "fake:scripted"
+  ],
+  "package_version": 1,
+  "patch": {
+    "bytes": 11487,
+    "files": [
+      {
+        "approved_test": false,
+        "change": "M",
+        "path": "models/pricing.py"
+      },
+      {
+        "approved_test": true,
+        "change": "A",
+        "path": "tests/test_peak_window_strict.py"
+      }
+    ],
+    "sha256": "a7f1d9fd8dc7055757d1c32fd6d6be6d70dbc75fbfddf29f4d5ca6550b0fe896"
+  },
+  "problems": [],
+  "run_id": "rehearsal_happy",
+  "valid": true,
+  "validation_fresh": {
+    "regression": "pass",
+    "target": "pass"
+  },
+  "verdict": {
+    "outcome": "pass",
+    "verdict_sha256": "693de8bd031e4b078f3de203ea8ee0bd02ebcc37903792bf80ee6452da754cf4",
+    "workspace_digest": "49f7488cbdcb46169583cec3b8d0922ef0c7e3cdb54d87add9c7f003bd126f7c"
+  }
+}

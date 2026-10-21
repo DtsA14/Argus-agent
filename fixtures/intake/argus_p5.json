@@ -1,0 +1,20 @@
+{
+  "intake_version": 1,
+  "name": "argus_p5",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "716d1dd22787cbb98b1c7213f7ad8ec2c66a2d03",
+  "tree": "6d80ac376f12e722c34ba33f91052a901c848c5b",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "files": 395,
+  "snapshot_sha256": "f11324aa0368fe534ff1e4811b6202397c119cb206fdbd372345289db8b587dd",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "created_at": "2026-10-21T16:59:57Z"
+}
