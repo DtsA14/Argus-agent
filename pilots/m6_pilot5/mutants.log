@@ -1,0 +1,30 @@
+KILLED   v1_no_dict_check: FAILED tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused
+KILLED   v2_missing_key_not_checked: FAILED tests/test_peak_window_strict.py::test_v2_a_window_without_utc_hours_is_refused
+KILLED   v2_missing_key_is_empty_hours: FAILED tests/test_peak_window_strict.py::test_v2_a_window_without_utc_hours_is_refused
+KILLED   v3_hours_type_not_checked: FAILED tests/test_peak_window_strict.py::test_v3_utc_hours_that_is_not_a_list_is_refused
+KILLED   v4_bool_accepted: FAILED tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused
+KILLED   v4_float_accepted: FAILED tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused
+KILLED   v4_length_not_checked: FAILED tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused
+KILLED   v4_items_not_checked: FAILED tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused
+KILLED   v5_start_up_to_24: FAILED tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused
+KILLED   v5_end_up_to_25: FAILED tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused
+KILLED   v5_negative_start_accepted: FAILED tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused
+KILLED   v5_range_not_checked: FAILED tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused
+KILLED   v5_end_24_refused: FAILED tests/test_peak_window_strict.py::test_the_valid_edge_cases_are_still_valid
+KILLED   v6_flag_not_checked: FAILED tests/test_peak_window_strict.py::test_v6_weekdays_only_that_is_not_a_bool_is_refused
+KILLED   v6_none_flag_accepted: FAILED tests/test_peak_window_strict.py::test_v6_weekdays_only_that_is_not_a_bool_is_refused
+KILLED   v7_naive_not_checked: FAILED tests/test_peak_window_strict.py::test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not
+KILLED   v7_naive_checked_for_empty_window_too: FAILED tests/test_peak_window_strict.py::test_no_window_is_not_an_error - mod...
+KILLED   whole_window_not_checked_before_the_hours: FAILED tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused
+KILLED   empty_hours_refused: FAILED tests/test_peak_window_strict.py::test_the_valid_edge_cases_are_still_valid
+KILLED   start_equals_end_refused: FAILED tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused
+KILLED   falsy_window_checked: FAILED tests/test_peak_window_strict.py::test_no_window_is_not_an_error - mod...
+KILLED   message_does_not_show_the_value: FAILED tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused
+KILLED   error_is_not_a_value_error: FAILED tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused
+KILLED   zone_replaced_not_converted: FAILED tests/test_peak_window_strict.py::test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not
+KILLED   multiplier_swallows_the_error: FAILED tests/test_peak_window_strict.py::test_the_refusal_also_comes_from_multiplier_and_cost_usd
+KILLED   cost_usd_swallows_the_error: FAILED tests/test_peak_window_strict.py::test_the_refusal_also_comes_from_multiplier_and_cost_usd
+KILLED   across_midnight_broken: FAILED tests/test_peak_window_strict.py::test_the_valid_edge_cases_are_still_valid
+KILLED   end_inclusive: FAILED tests/test_peak_window_strict.py::test_the_windows_of_config_yaml_are_still_valid_and_unchanged
+KILLED   weekend_check_dropped: FAILED tests/test_peak_window_strict.py::test_the_valid_edge_cases_are_still_valid
+29/29 mutants killed
