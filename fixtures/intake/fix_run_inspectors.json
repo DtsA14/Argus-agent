@@ -1,0 +1,53 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "fix_run_inspectors",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+  "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_p3",
+    "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+    "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8",
+    "snapshot_sha256": "7520a7ca36444db364bf48897d28374659d7c94f75703266de6c2044978204a8"
+  },
+  "added": {
+    "tests/test_run_inspectors.py": "0940ff44311576698cfd8108653cda42cf0e706656b06cab3ee0262702da2651",
+    "tests/test_run_inspectors_data.py": "d8272ca0a0bd6c0f234ba9761acfd93868f1eb440c0c68599b8326bd7be053a2"
+  },
+  "files": 388,
+  "snapshot_sha256": "179a4b553bac25eb4b0f9f95e3d252a72501b13a886031ca88b1c84494c980eb",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "0826ee93de656dec5788c8a711dfe3128301bcf3551ca16a5b92958943f8eef2",
+  "draft_sha256": "878d2fc79013aa7f8887c3cac1fa7060f2d08ca9015dcbc37df7d09916d14fed",
+  "plan": {
+    "files": [
+      "evals/runlog.py",
+      "scripts/audit_run.py",
+      "scripts/failure_trace.py"
+    ],
+    "steps": [
+      "add evals/runlog.py: one reader of a run directory (events with the number of undecodable lines, result.json or None, memo)",
+      "move scripts/audit_run.py and scripts/failure_trace.py onto it, keeping their output byte for byte, and fix the three crashes named in the issue"
+    ],
+    "risks": [
+      "the output of the two inspectors for a run that finished normally must not change by one character"
+    ]
+  },
+  "unverifiable": [
+    "the other four scripts (analyze_series.py, sim_admission.py, dry_feedback.py, measure_context.py) are protected and untouched; they need Docker or historical data that is not in the snapshot",
+    "that the protected files were left alone: they are protected, but a reviewer must read the diff",
+    "that audit_run.py and failure_trace.py read events, result and memo through evals.runlog (the tests see the output, not the code path)",
+    "readability and the internal layout of evals/runlog.py beyond the four functions the issue names"
+  ],
+  "approved_at": "2026-10-21T08:35:28Z"
+}
