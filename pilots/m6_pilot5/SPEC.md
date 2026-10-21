@@ -61,3 +61,19 @@ Berkas baru `tests/test_peak_window_strict.py` (target ≤ 7 KB, tanpa modul dat
 - **Penjaga (lulus di baseline):** semua kasus sah di atas; tes lama tetap lulus (validasi regresi).
 
 Setelah D1..D5 diputuskan: tes, patch referensi, mutan, simulasi token (dengan skenario "baca semua tes"), draft check, `verify.sh`; baru lalu preflight dan keputusan live. Tidak ada coder sebelum itu.
+
+## 6. Keputusan reviewer (2026-10-21) dan rumusan yang dikunci
+
+- **D1** setuju: `WindowError(ValueError)` di `models/pricing.py`, pesan menyebut masalah dan nilai yang salah; bukan `ConfigError` (siklus impor).
+- **D2** setuju: `utc_hours: []` sah dan berarti tidak ada jam puncak; tidak diubah menjadi error.
+- **D3** setuju: `now` tanpa zona waktu ditolak (V7, `WindowError`), kewajiban zona waktu didokumentasikan di docstring; waktu UTC dan zona eksplisit tetap benar. Temuan pemeriksaan kontrak: docstring
+  `is_peak` sekarang tidak menyebut zona waktu; semua pemanggil produksi dan tes sudah memberi `now` berzona; `astimezone` pada waktu naive memakai zona waktu mesin (di mesin UTC+7,
+  `23:00` naive menjadi `16:00 UTC`), jadi hasil bergantung pada mesin tanpa error.
+- **D4** setuju: `start` bilangan bulat 0..23, `end` bilangan bulat 0..24; bool dan float ditolak. Perilaku valid yang ada dipertahankan: lintas tengah malam, beberapa jendela, `end == 24`, `start == end` kosong.
+- **D5** belum diputuskan; menunggu simulasi token. Profil tidak dinaikkan otomatis; bila reservasi mengurangi jumlah attempt efektif, itu dilaporkan.
+
+Rumusan tambahan yang saya pakai (tinggal dibantah reviewer bila tidak sesuai):
+1. Jendela falsy (`None`, `{}`) tetap `False` tanpa memeriksa `now` (perilaku yang ada; tidak diperluas). `now` hanya diperiksa untuk jendela tidak-falsy.
+2. **Semua** elemen `utc_hours` dan `weekdays_only` divalidasi sebelum dievaluasi: jendela salah di belakang jendela yang sudah cocok tetap ditolak (tanpa hubung singkat), supaya konfigurasi salah tidak lolos hanya karena jamnya kebetulan cocok.
+3. `weekdays_only` yang ada tetapi bukan bool (termasuk `None`) ditolak; tidak ada kunci berarti `False` seperti sekarang.
+4. Kunci tambahan yang tidak dikenal tetap diabaikan.
