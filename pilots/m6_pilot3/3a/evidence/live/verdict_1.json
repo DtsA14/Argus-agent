@@ -1,0 +1,184 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "evals/runlog.py"
+          ],
+          "removed": [],
+          "modified": [
+            "scripts/audit_run.py",
+            "scripts/failure_trace.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "evals/runlog.py"
+          ],
+          "removed": [],
+          "modified": [
+            "scripts/audit_run.py",
+            "scripts/failure_trace.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:inspectors",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; pytest outcome FAILED; required test tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else is 'FAIL'; required test tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_run_inspectors.py",
+          "tests/test_run_inspectors_data.py"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 16,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 7,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else": "FAIL",
+          "tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited": "FAIL",
+          "tests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced": "ok",
+          "tests/test_run_inspectors_data.py::test_events_are_read_with_the_number_of_lines_that_did_not_decode": "ok",
+          "tests/test_run_inspectors_data.py::test_result_memo_and_the_skipped_line_are_read_as_the_inspectors_need_them": "ok"
+        },
+        "output_tail": "code=1, stdout='', stderr='Traceback (most recent call last):\\n  File \"/workspace/scripts/audit_run.py\", line 24, in <module>\\n    result = read_result(run_dir)\\n             ^^^^^^^^^^^\\nNameError: name \\'read_result\\' is not defined\\n').returncode\n_ test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else _\ntests/test_run_inspectors.py:138: in test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else\n    assert (audit.returncode, trace.returncode) == (0, 0), (audit.stderr[-400:], trace.stderr[-400:])\nE   AssertionError: ('Traceback (most recent call last):\nE       File \"/workspace/scripts/audit_run.py\", line 24, in <module>\nE         result = read_result(run_dir)\nE                  ^^^^^^^^^^^\nE     NameError: name \\'read_result\\' is not defined\nE     ', '')\nE   assert (1, 0) == (0, 0)\nE     \nE     At index 0 diff: 1 != 0\nE     \nE     Full diff:\nE       (\nE     -     0,\nE     ?     ^...\nE     \nE     ...Full output truncated (4 lines hidden), use '-vv' to show\n_____________ test_a_run_blocked_before_any_model_call_is_audited ______________\ntests/test_run_inspectors.py:146: in test_a_run_blocked_before_any_model_call_is_audited\n    assert audit.returncode == 0, audit.stderr[-500:]\nE   AssertionError: Traceback (most recent call last):\nE       File \"/workspace/scripts/audit_run.py\", line 24, in <module>\nE         result = read_result(run_dir)\nE                  ^^^^^^^^^^^\nE     NameError: name 'read_result' is not defined\nE     \nE   assert 1 == 0\nE    +  where 1 = CompletedProcess(args=['/usr/bin/python3', '/workspace/scripts/audit_run.py', '/tmp/pytest-of-nobody/pytest-0/runs0/b/runs/f4'], returncode=1, stdout='', stderr='Traceback (most recent call last):\\n  File \"/workspace/scripts/audit_run.py\", line 24, in <module>\\n    result = read_result(run_dir)\\n             ^^^^^^^^^^^\\nNameError: name \\'read_result\\' is not defined\\n').returncode\n========================= 7 failed, 9 passed in 33.44s =========================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 16,
+        "deselected": 0,
+        "stderr_tail": "",
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "validation:regression",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_eval_cost.py",
+          "tests/test_run_stats.py"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 14,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too": "ok",
+          "tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete": "ok",
+          "tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known": "ok",
+          "tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before": "ok",
+          "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped": "ok",
+          "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 14 items\n\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost0-0.0] PASSED\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost1-0.0] PASSED\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost2-0.05] PASSED\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost3-0.3] PASSED\ntests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too PASSED\ntests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete PASSED\ntests/test_eval_cost.py::test_a_blocked_run_still_stops_the_eval_with_its_own_reason_when_its_cost_is_known PASSED\ntests/test_eval_cost.py::test_costs_are_aggregated_over_the_runs_whose_cost_is_known_and_the_others_are_counted PASSED\ntests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known PASSED\ntests/test_eval_cost.py::test_run_eval_prints_n_a_and_says_the_total_is_incomplete PASSED\ntests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before PASSED\ntests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped PASSED\ntests/test_run_stats.py::test_a_last_line_cut_short_without_a_newline_is_skipped PASSED\ntests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too PASSED\n\n============================== 14 passed in 1.50s ==============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 14,
+        "deselected": 0,
+        "stderr_tail": "",
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "41b051c07334de8d30c9ff927de0a7122c4740ad1f8a2d6d0b900f3a58c398ae",
+  "summary_sha256": null,
+  "verdict_sha256": "f05f3a61198d3be5fe47f02224abf30e9d426ac2a81f97a68bc420274a0e7893"
+}
