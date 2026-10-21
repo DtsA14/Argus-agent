@@ -1,0 +1,258 @@
+diff --git a/evals/runlog.py b/evals/runlog.py
+new file mode 100644
+index 0000000..a2d7f3d
+--- /dev/null
++++ b/evals/runlog.py
+@@ -0,0 +1,36 @@
++"""The one reader of a code-task run directory (M6 pilot 3): the files a run leaves behind, read the same way by every tool
++that looks at a run (scripts/audit_run.py, scripts/failure_trace.py, scripts/pilot_report.py).
++
++events.jsonl is read like everywhere else (harness.events.parse_lines): a line that is not valid JSON is skipped wherever it
++is, and the number of such lines is returned so a tool can say it. A run that crashed, or that never got a result.json, is read
++as far as it goes; nothing here guesses a value the files do not hold."""
++import json
++import sqlite3
++from pathlib import Path
++
++from harness.events import parse_lines
++
++
++def read_events(run_dir):
++    """(events, skipped): every record of <run_dir>/events.jsonl that decodes, and how many non-blank lines did not."""
++    path = Path(run_dir) / "events.jsonl"
++    text = path.read_text(encoding="utf-8") if path.exists() else ""
++    events = parse_lines(text)
++    return events, sum(1 for line in text.splitlines() if line.strip()) - len(events)
++
++
++def read_result(run_dir):
++    """<run_dir>/result.json as a dict, or None when the run has none (it was never finished)."""
++    path = Path(run_dir) / "result.json"
++    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
++
++
++def read_memo(run_dir):
++    """{key: value} of <run_dir>/memo.sqlite, both decoded from JSON."""
++    db = sqlite3.connect(Path(run_dir) / "memo.sqlite")
++    return {k: json.loads(v) for k, v in db.execute("select key, value from memo")}
++
++
++def skipped_line(skipped):
++    """The line a tool prints last when it had to skip lines of the event log; nothing when none were skipped."""
++    return f"events skipped: {skipped}" if skipped else None
+diff --git a/scripts/audit_run.py b/scripts/audit_run.py
+index 95fafeb..4c487a1 100644
+--- a/scripts/audit_run.py
++++ b/scripts/audit_run.py
+@@ -5,7 +5,6 @@ check each ledger prompt_hash against it, and list calls, tool calls, refusals a
+ """
+ import hashlib
+ import json
+-import sqlite3
+ import sys
+ from pathlib import Path
+ 
+@@ -14,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+ import harness.llm as hl
+ from codetask.agent import feedback_from, system_prompt, task_prompt
+ from codetask.tools import offered
++from evals import runlog
+ from harness.llm import is_truncated
+ from harness.steps import llm_step_key, message_from_json
+ from runner import load_config
+@@ -22,20 +22,22 @@ run_dir = Path(sys.argv[1])
+ cfg = load_config()
+ contract = json.loads((run_dir / "contract.json").read_text())
+ result = json.loads((run_dir / "result.json").read_text())
+-tools = offered(result["tools"])
+-sp = system_prompt(tools)
+ print("effective tools", result["tools"])
+-print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
+-memo = {k: json.loads(v) for k, v in sqlite3.connect(run_dir / "memo.sqlite").execute("select key, value from memo")}
+-events = [json.loads(l) for l in (run_dir / "events.jsonl").read_text().splitlines()]
++tools = sp = None
++if result["tools"] is not None:                      # a run blocked at setup froze no tools (and made no model call)
++    tools = offered(result["tools"])
++    sp = system_prompt(tools)
++    print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
++memo = runlog.read_memo(run_dir)
++events, skipped = runlog.read_events(run_dir)
+ calls = [e for e in events if e["event"] == "llm_call"]
+-ref = hl.ModelRef.parse(calls[0]["model"])          # the model the run used (the ledger records it)
++ref = hl.ModelRef.parse(calls[0]["model"]) if calls else None   # the model the run used (the ledger records it)
+ started = [e for e in events if e["event"] == "llm_call_started"]
+ print(f"llm_call_started {len(started)}, llm_call {len(calls)} "
+       f"(ok {sum(e['status'] == 'ok' for e in calls)}, refused {sum(e['status'] == 'refused' for e in calls)})")
+ 
+ mismatch, checked = 0, 0
+-for it in range(contract["limits"].get("max_iterations", 5)):
++for it in range(contract["limits"].get("max_iterations", 5) if calls else 0):
+     feedback = None
+     if it > 0:
+         prev = run_dir / f"verdict_{it - 1}.json"
+@@ -81,3 +83,5 @@ for e in events:
+         print(" ", {k: v for k, v in e.items() if k not in ("ts",)})
+ print("result", {k: result.get(k) for k in ("status", "stop_reason", "blocked_reason", "attempts", "usd_billed",
+                                            "llm_calls", "llm_calls_unknown", "tools")})
++if runlog.skipped_line(skipped):
++    print(runlog.skipped_line(skipped))
+diff --git a/scripts/failure_trace.py b/scripts/failure_trace.py
+index 7f1aa0e..e582454 100644
+--- a/scripts/failure_trace.py
++++ b/scripts/failure_trace.py
+@@ -1,22 +1,26 @@
+ """For each failing run: per attempt and step, the input tokens, the tool calls, and the model's own text, from the
+-ledger and the memo. Run from the repository root on the VM with PYTHONPATH=.: failure_trace.py <run_dir>..."""
++ledger and the memo. Run from the repository root on the VM with PYTHONPATH=.: failure_trace.py <run_dir>...
++A directory with no result.json is reported as such; a line of the event log that does not decode is skipped and counted."""
+ import json
+-import sqlite3
+ import sys
+ from pathlib import Path
+ 
++from evals import runlog
+ from harness.steps import message_from_json
+ 
+ for rd in sys.argv[1:]:
+-    run = next(Path(rd).rglob("result.json")).parent
+-    evs = [json.loads(l) for l in (run / "events.jsonl").read_text().splitlines()]
++    found = next(Path(rd).rglob("result.json"), None)
++    if found is None:
++        print(f"##### {Path(rd).name}: no result.json")
++        continue
++    run = found.parent
++    evs, skipped = runlog.read_events(run)
+     calls = {(e["iteration"], e["step"]): e for e in evs if e["event"] == "llm_call"}
+-    memo = sqlite3.connect(run / "memo.sqlite")
+     llm = {}
+-    for k, v in memo.execute("select key, value from memo"):
++    for k, v in runlog.read_memo(run).items():
+         key = json.loads(k)
+         if key[0] == "llm":
+-            llm[(key[3], key[4])] = message_from_json(json.loads(v))
++            llm[(key[3], key[4])] = message_from_json(v)
+     print(f"##### {Path(rd).name}")
+     for (it, st), e in sorted(calls.items()):
+         msg = llm.get((it, st))
+@@ -31,3 +35,5 @@ for rd in sys.argv[1:]:
+         print(f"  it{it} s{st} {e['status']:<7} in {tok:>5} | {' '.join(tools)[:150]}")
+         if text.strip():
+             print(f"        text: {' '.join(text.split())[:400]}")
++    if runlog.skipped_line(skipped):
++        print(runlog.skipped_line(skipped))
+diff --git a/scripts/pilot_report.py b/scripts/pilot_report.py
+new file mode 100644
+index 0000000..943d6a3
+--- /dev/null
++++ b/scripts/pilot_report.py
+@@ -0,0 +1,110 @@
++"""Report over code-task runs (M6 pilot 3): per run and in total, how many are DONE, what they cost, how many attempts they
++took, and how long a human supervised them. One JSON object on stdout.
++
++  python scripts/pilot_report.py RUN_DIR [RUN_DIR ...] [--supervision FILE.json]
++
++The runs are read through evals.runlog (the files a run leaves behind). FILE.json maps a run id (the directory's name) to the
++minutes of supervision (a number, 0 or more); a run it does not name has none (null, never 0).
++
++Definitions (nothing is guessed from what the files do not hold):
++  status          result.json's status, or NO_RESULT when the run has no result.json (it was never finished);
++                  a NO_RESULT run is neither a success nor a failure
++  done            status is DONE (the pilot's own verdict, agent-completed or not, is a human decision and not computed here)
++  cost known      evals.score.cost_is_known on result.json (usd_billed present and usd_complete true); NO_RESULT: never
++  usd_known_total  the cost of the runs whose cost is known, failed runs included; null when none is known (a sum over nothing
++                  is not a cost)
++  cost_per_success  usd_known_total divided by the number of DONE runs among those runs; null when there is none. When some
++                  cost is unknown, cost_complete is false and the cost figures cover only the runs whose cost is known
++                  (usd_unknown_runs says how many are left out)
++Exit codes: 0 report printed, 2 refused (an argument is not a run directory, or the supervision file is not valid)."""
++import argparse
++import json
++import statistics
++import sys
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parent.parent
++sys.path.insert(0, str(ROOT))
++
++from evals import runlog  # noqa: E402
++from evals.score import cost_is_known  # noqa: E402
++
++
++class Refused(Exception):
++    pass
++
++
++def load_supervision(path):
++    if path is None:
++        return {}
++    try:
++        data = json.loads(Path(path).read_text(encoding="utf-8"))
++    except (OSError, ValueError) as e:
++        raise Refused(f"the supervision file {path} cannot be read: {e}")
++    bad = isinstance(data, dict) and [k for k, v in data.items()
++                                      if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0]
++    if not isinstance(data, dict) or bad:
++        raise Refused(f"the supervision file {path} must map run ids to minutes (a number, 0 or more)"
++                      + (f"; not valid for {sorted(bad)}" if bad else ""))
++    return data
++
++
++def run_row(run_dir, supervision):
++    run_dir = Path(run_dir)
++    if not (run_dir / "events.jsonl").is_file():
++        raise Refused(f"{run_dir} is not a run directory (no events.jsonl)")
++    result = runlog.read_result(run_dir)
++    events, skipped = runlog.read_events(run_dir)
++    status = result["status"] if result else "NO_RESULT"
++    return {"run_id": run_dir.name, "status": status, "done": status == "DONE",
++            "attempts": result.get("attempts") if result else None,
++            "llm_calls": result.get("llm_calls") if result else None,
++            "usd_billed": result.get("usd_billed") if result else None,
++            "cost_known": bool(result) and cost_is_known(result),
++            "events_skipped": result["events_skipped"] if result and "events_skipped" in result else skipped,
++            "supervision_minutes": supervision.get(run_dir.name)}
++
++
++def summarize(rows):
++    done = [r for r in rows if r["done"]]
++    finished = [r for r in rows if r["status"] != "NO_RESULT"]
++    known = [r for r in rows if r["cost_known"]]
++    known_done = [r for r in known if r["done"]]
++    total = sum(r["usd_billed"] for r in known)
++    watched = [r["supervision_minutes"] for r in rows if r["supervision_minutes"] is not None]
++    attempts = [r["attempts"] for r in done if r["attempts"] is not None]
++    dist = {}
++    for r in finished:
++        if r["attempts"] is not None:
++            dist[r["attempts"]] = dist.get(r["attempts"], 0) + 1
++    return {
++        "runs": len(rows), "done": len(done), "no_result": len(rows) - len(finished),
++        "success_rate": round(len(done) / len(finished), 6) if finished else None,
++        "usd_known_total": round(total, 6) if known else None, "usd_unknown_runs": len(rows) - len(known),
++        "cost_per_success": round(total / len(known_done), 6) if known_done else None,
++        "cost_complete": len(known) == len(rows),
++        "attempts": {"mean": round(statistics.mean(attempts), 6) if attempts else None,
++                     "median": statistics.median(attempts) if attempts else None,
++                     "distribution": {str(k): dist[k] for k in sorted(dist)}},
++        "supervision_minutes": {"runs_with_data": len(watched), "total": round(sum(watched), 6) if watched else None,
++                                "mean": round(statistics.mean(watched), 6) if watched else None},
++        "events_skipped": sum(r["events_skipped"] for r in rows)}
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
++    ap.add_argument("runs", nargs="+", metavar="RUN_DIR")
++    ap.add_argument("--supervision", metavar="FILE.json")
++    a = ap.parse_args(argv)
++    try:
++        supervision = load_supervision(a.supervision)
++        rows = [run_row(r, supervision) for r in a.runs]
++    except Refused as e:
++        print(f"refused: {e}", file=sys.stderr)
++        return 2
++    print(json.dumps({"runs": rows, "summary": summarize(rows)}, indent=2))
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
