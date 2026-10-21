@@ -1,0 +1,67 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "295e95147779c5e8fa0526600afb5cc6f0195f2f54a9d4e5c0d36bf8eef9d23e",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "9d0424523d9ed99e1bff04777fb379d8f45b9066fb2b825efcd30496754f8514"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "finished",
+    "steps": 7
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "search_files",
+    "edit_file"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/fix_impl_flag",
+      "snapshot_sha256": "8f0b3c86ba8f7a20fe9b7c103f5e272eab79ad8b08a81154e4322c09ed7669e6",
+      "intake": {
+        "name": "fix_impl_flag",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "cc8a2fda4b29b9e862d8f1a2d0e3a750d2a35c95",
+        "tree": "99feeb0c95e88faaee7d5ad10d21904611ec794d",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "argus_p2",
+          "commit": "cc8a2fda4b29b9e862d8f1a2d0e3a750d2a35c95",
+          "tree": "99feeb0c95e88faaee7d5ad10d21904611ec794d",
+          "snapshot_sha256": "363964f8f392c72efca0a4911acfd64d288b4dcfe726c029ac5c21271b3ac2a8"
+        },
+        "added": {
+          "tests/test_impl_flag.py": "2bbf1ae706ec55b6e61e42e00b2017fc9b7bb8bb1786f0e1a99b486ed0d9f6e7"
+        },
+        "contract_sha256": "295e95147779c5e8fa0526600afb5cc6f0195f2f54a9d4e5c0d36bf8eef9d23e"
+      }
+    },
+    "argus": {
+      "commit": "66a32d0d0c235ac4fcdaaa711cc9cfd53055f613",
+      "dirty": true
+    }
+  },
+  "budget_profile": {
+    "name": "default",
+    "attempt_tokens": 30000,
+    "max_output_tokens": 4096
+  },
+  "run_id": "rehearsal_happy",
+  "attempts": 1,
+  "usd_billed": 0.012,
+  "usd_complete": true,
+  "llm_calls": 8,
+  "llm_calls_unknown": 0
+}
