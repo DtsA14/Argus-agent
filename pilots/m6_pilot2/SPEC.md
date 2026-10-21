@@ -1,7 +1,7 @@
 # M6 pilot 2 (kandidat): validasi `--impl` di `main.py`: reproduksi dan spesifikasi acceptance
 
-Status 2026-10-21: **untuk review. Belum ada draf, tes final, patch referensi, atau panggilan coder.** Pilihan: kandidat 1
-dari opsi B (hanya `--impl`; skrip audit sengaja tidak digabung). Pertanyaan eksperimen: seberapa baik coder menyelesaikan
+Status 2026-10-21: **spesifikasi disetujui (GPT); tes, patch referensi, mutan, dan cek draf di sandbox sudah ada; belum
+di-approve, belum ada panggilan coder.** Pilihan: kandidat 1 dari opsi B (hanya `--impl`; skrip audit sengaja tidak digabung). Pertanyaan eksperimen: seberapa baik coder menyelesaikan
 perubahan lintas berkas yang kecil tapi punya keputusan desain, dengan acceptance deterministik.
 
 ## 1. Reproduksi (VM, `main.py` pada `1b0780f`, pipeline default dengan node palsu: tanpa biaya)
@@ -50,7 +50,7 @@ Hanya perilaku `main.py` dari luar; lokasi kode dan nama fungsi dibiarkan pada c
 diabaikan diam-diam, tetapi itu perubahan terpisah); apakah `llm` butuh kunci; `--scenario`, `--max-iter`; pesan persis
 selain kata kunci di atas; ketahanan `graph.py` terhadap config buatan tangan.
 
-## 3. Tes acceptance yang diusulkan (belum ditulis; subprocess `main.py` dengan `--runs-dir` di tmp)
+## 3. Tes acceptance (inventaris final: **7 wajib + 6 penjaga = 13 tes** di `tests/test_impl_flag.py`; subprocess `main.py` dengan `--runs-dir` di tmp)
 
 Wajib (**harus gagal di baseline** karena assertion, bukan error):
 
@@ -64,13 +64,15 @@ Wajib (**harus gagal di baseline** karena assertion, bukan error):
 | `test_an_unknown_kind_is_refused_cleanly` (`evaluator=llmm`) dan `worker=LLM` | kontrak 3 | traceback |
 | `test_a_refused_flag_starts_nothing_and_the_corrected_command_runs_with_the_same_run_id` | kontrak 4 | typo menghasilkan `DONE` (baris pertama gagal); untuk kind salah, direktori run tertinggal |
 
-Penjaga (lulus di baseline dan harus tetap lulus; tidak masuk `must_pass` karena aturan baseline merah W2a, tetapi
-dijalankan bersama file target): `--impl worker=fake` `DONE`; keempat node `fake` `DONE`; tanpa flag `DONE`;
-`--impl worker=llm --impl worker=fake` `DONE` (yang terakhir menang); `--model janitor=anthropic:x` tetap
-`config error: unknown role`; `--model worker` tetap `config error: override must look like`.
+**Enam penjaga** (lulus di baseline dan harus tetap lulus; tidak masuk `must_pass` karena aturan baseline merah W2a, tetapi
+dijalankan bersama file target): (1) `--impl worker=fake` `DONE`; (2) keempat node `fake` `DONE`; (3) tanpa flag `DONE`;
+(4) `--impl worker=llm --impl worker=fake` `DONE` (yang terakhir menang); (5) `--model janitor=anthropic:x` tetap
+`config error: unknown role`; (6) `--model worker` tetap `config error: override must look like`.
+Ringkasan sebelumnya yang menyebut empat penjaga salah; inventaris di atas yang berlaku.
 
-Regresi dari tes yang ada: `tests/test_models.py` (`parse_overrides`, `apply_overrides`, `ModelRef`) harus tetap lulus
-tanpa diubah.
+Regresi dari tes yang ada (validasi `regression`, 18 tes): seluruh `tests/test_models.py` (15 tes) dan tiga alur `main.py` di
+`tests/test_milestone1.py` (`test_pass_first_try`, `test_fail_then_pass_uses_feedback`, `test_iteration_budget`), tanpa diubah.
+Satu tes di file lain yang membaca `verification/` tidak ikut (tidak ada di snapshot).
 
 ## 4. Bukti bahwa tes membedakan implementasi benar dari yang hanya membuat tes hijau
 
@@ -102,12 +104,22 @@ implementasi salah harus membuat minimal satu tes gagal; yang lolos berarti cela
   pemulihan sama dengan pilot 1 (`pilots/m6_pilot1/PREFLIGHT.md`).
 - Cek `.gitattributes` (tidak ada di Argus) dan batas patch dari `REVIEW_M6_W3.md` tetap berlaku.
 
-## 6. Keputusan yang diminta dari review
+## 6. Keputusan (GPT, 2026-10-21)
 
-1. `LLM` (huruf besar) ditolak (usulan) atau dinormalkan?
-2. `--impl` berulang untuk node yang sama: tetap "yang terakhir menang" (usulan) atau ditolak?
-3. Salah ketik node di file config: di luar scope (usulan) atau ikut?
-4. Penjaga di bagian 3 tetap tidak masuk `must_pass` (aturan W2a), tetapi dijalankan di file target: setuju?
+1. `LLM` huruf besar **ditolak**; kind harus tepat `fake` atau `llm`; tidak ada normalisasi diam-diam.
+2. `--impl` berulang untuk node yang sama: **yang terakhir menang** (perilaku yang ada dipertahankan).
+3. Salah ketik node di `impl:` pada file config: **di luar scope**.
+4. Penjaga tidak masuk `must_pass` (aturan baseline merah W2a) tetapi dijalankan di file target.
 
-Setelah ini disetujui: bekukan kriteria, tulis tes dan patch referensi, jalankan mutan atas tabel bagian 4, lalu
-`approve_draft.py` (cek baseline merah dan hijau di sandbox), dan baru lanjut ke langkah approval dan preflight seperti pilot 1.
+## 7. Hasil artefak (VM, sandbox `argus`; tidak ada panggilan model)
+
+| Artefak | Hasil |
+|---|---|
+| `new_test.txt` / `draft.json` | 13 tes: 7 wajib, 6 penjaga |
+| Baseline (host, tes ditambah tanpa perbaikan) | 7 gagal (persis tujuh tes wajib), 6 lulus |
+| `reference.patch` | dua berkas, +22/-4 baris (`main.py`, `models/registry.py`); dengan patch: 13/13 lulus, regresi 18/18 lulus |
+| Mutan (`mutants.log`) | **11/11 tertangkap**; 11 mutan memetakan sembilan baris tabel bagian 4 (baris "hanya kind atau hanya node" dan "tolak semua atau telan error" masing-masing dua mutan) |
+| `check_report.json` (`approve_draft.py`, tanpa `--approve`, sandbox `argus`) | `ok: true`; baseline `target`: 7 gagal, 0 error; baseline `regression`: lulus; patch referensi: `target` dan `regression` lulus, hanya `main.py` dan `models/registry.py` berubah |
+| Hash | intake `argus_p2`: commit `cc8a2fda…`, tree `99feeb0c…`, 379 file, snapshot `363964f8…`; sha256 kontrak `295e9514…` (hanya perkiraan sampai approval resmi) |
+
+Belum dilakukan (menunggu review): `--approve`, latihan model palsu, preflight, dan run coder.
