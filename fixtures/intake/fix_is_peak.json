@@ -1,0 +1,48 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "fix_is_peak",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "983a4ee1d633b860fe873183d1669c653abcb16b",
+  "tree": "3a423d6fd589864bd4d103e1096b4a054ab7aff5",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_p4",
+    "commit": "983a4ee1d633b860fe873183d1669c653abcb16b",
+    "tree": "3a423d6fd589864bd4d103e1096b4a054ab7aff5",
+    "snapshot_sha256": "ffae1c0dd347bdac364079646d0ab489d11c41cf238feb90108924ecbbece76d"
+  },
+  "added": {
+    "tests/test_peak_window.py": "fd49b6527fb602fe38fa7694ac5162ace246a27757fb9bc9a71161e2636d214f"
+  },
+  "files": 391,
+  "snapshot_sha256": "a8d452a2fc207efb2c0834b9cefcbd9d9d2f3eee0280a45d377724692d5c15c1",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "1c3a063a3ab2c08da3a64bdea2d73c45415be3d3802fa210e75e33506dd901b5",
+  "draft_sha256": "8650bfa56617fc0370a4bcfc7df1c0490a94f0057b5baa551612f1c56b2f2d49",
+  "plan": {
+    "files": [
+      "models/pricing.py"
+    ],
+    "steps": [
+      "in is_peak, match a window with start > end when hour >= start or hour < end; keep start < end as it is; start == end stays empty"
+    ],
+    "risks": [
+      "the config peak windows (none crosses midnight) must keep their exact behaviour; weekdays_only stays on the UTC date of now"
+    ]
+  },
+  "unverifiable": [
+    "that config.yaml and the other protected files were left alone: they are protected, but a reviewer must read the diff",
+    "that the production peak windows are not affected: none crosses midnight today, so no billed amount changes; the regression nodes and the guard tests show the non-crossing cases unchanged",
+    "readability and the exact form of the condition (the contract fixes the behaviour)"
+  ],
+  "approved_at": "2026-10-21T13:59:52Z"
+}
