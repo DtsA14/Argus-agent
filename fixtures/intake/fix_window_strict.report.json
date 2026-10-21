@@ -1,0 +1,164 @@
+{
+  "task": "fix_window_strict",
+  "draft_sha256": "55a6306763a2def60b57ee3c48e96645eb28fb7e7aa54f1b4dfacd59213438a9",
+  "unverifiable": [
+    "that config.yaml and the other protected files were left alone: they are protected, but a reviewer must read the diff",
+    "that harness/llm.py refuses before sending when a window is invalid: the code path was read (LLMCaller._output_cap calls multiplier before the request), it is not exercised by these tests",
+    "the exact wording of the messages beyond naming the problem and showing the wrong value",
+    "the behaviour of a falsy window with a naive `now` (the issue says: not checked, False)"
+  ],
+  "ok": true,
+  "contract": {
+    "contract": "fix_window_strict",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/fix_window_strict",
+      "issue": "models/pricing.py: is_peak(window, now) reads a peak window that it cannot interpret safely as \"not peak\", and reads a datetime without a time zone in the machine's own zone. Both can under-bill without any error. Refuse them instead: add class WindowError(ValueError) to models/pricing.py and raise it from is_peak (so also from multiplier() and cost_usd()), with a message that names the problem and shows the wrong value.\n\nA window that is falsy (None, {}) is not an error: the provider has no peak window, the answer is False (do not check `now` then). For any other window raise WindowError when: V1 it is not a dict; V2 it has no 'utc_hours' key; V3 'utc_hours' is not a list or tuple; V4 an item is not [start, end] of two integers (bool and float are refused); V5 start is not in 0..23 or end is not in 0..24; V6 'weekdays_only' is present but is not a bool (None included). V7: `now` has no time zone (naive): raise WindowError; a time with an explicit zone is converted to UTC as before. Check every item and 'weekdays_only' before evaluating the hours, so a bad item behind an item that matches is still refused. State in the docstring that `now` must be timezone-aware.\n\nEverything that was valid keeps its answer: 'utc_hours': [] (never peak), start == end (empty window), end 24, a window across midnight (start > end: hour >= start or hour < end), several windows, weekdays_only judged on the UTC date of `now`, unknown extra keys (ignored), and the windows of config.yaml.\n\nChange only models/pricing.py; the tests are protected. Only is_peak (and the new class) needs to change."
+    },
+    "scope": {
+      "writable": [
+        "models/pricing.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "config.yaml",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "tools/**",
+        "nodes/**",
+        "evals/**",
+        "scripts/**",
+        "runner.py",
+        "graph.py",
+        "main.py",
+        "models/__init__.py",
+        "models/registry.py",
+        "models/fake.py"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_peak_window_strict.py"
+        ],
+        "timeout_s": 240,
+        "min_tests": 14,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused",
+          "tests/test_peak_window_strict.py::test_v2_a_window_without_utc_hours_is_refused",
+          "tests/test_peak_window_strict.py::test_v3_utc_hours_that_is_not_a_list_is_refused",
+          "tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused",
+          "tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused",
+          "tests/test_peak_window_strict.py::test_v6_weekdays_only_that_is_not_a_bool_is_refused",
+          "tests/test_peak_window_strict.py::test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not",
+          "tests/test_peak_window_strict.py::test_a_bad_item_behind_an_item_that_matches_is_still_refused",
+          "tests/test_peak_window_strict.py::test_the_refusal_also_comes_from_multiplier_and_cost_usd",
+          "tests/test_peak_window_strict.py::test_every_hour_pair_outside_the_valid_ranges_is_refused"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_peak_window.py",
+          "tests/test_models.py",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "timeout_s": 240,
+        "min_tests": 30,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_peak_window.py::test_the_evening_part_of_a_window_across_midnight_is_peak",
+          "tests/test_peak_window.py::test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight",
+          "tests/test_peak_window.py::test_no_window_is_never_peak",
+          "tests/test_models.py::test_cost_of_a_plain_call",
+          "tests/test_models.py::test_unknown_price_is_none_not_a_guess",
+          "tests/test_models.py::test_deepseek_peak_windows",
+          "tests/test_models.py::test_peak_doubles_the_price",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.75,
+      "max_iterations": 3
+    },
+    "tools": [
+      "search_files",
+      "edit_file"
+    ],
+    "budget_profile": "large"
+  },
+  "contract_sha256": "a05548186f86ec8c740950e16e6aeff6489c9f4d0c72832fcddcfece0320eb9c",
+  "added": {
+    "tests/test_peak_window_strict.py": "86914af840cd322a2d8569e167018bc7516e72a25a77e644d22c14fc7404b501"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused": "FAIL",
+        "tests/test_peak_window_strict.py::test_v2_a_window_without_utc_hours_is_refused": "FAIL",
+        "tests/test_peak_window_strict.py::test_v3_utc_hours_that_is_not_a_list_is_refused": "FAIL",
+        "tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused": "FAIL",
+        "tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused": "FAIL",
+        "tests/test_peak_window_strict.py::test_v6_weekdays_only_that_is_not_a_bool_is_refused": "FAIL",
+        "tests/test_peak_window_strict.py::test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not": "FAIL",
+        "tests/test_peak_window_strict.py::test_a_bad_item_behind_an_item_that_matches_is_still_refused": "FAIL",
+        "tests/test_peak_window_strict.py::test_the_refusal_also_comes_from_multiplier_and_cost_usd": "FAIL",
+        "tests/test_peak_window_strict.py::test_every_hour_pair_outside_the_valid_ranges_is_refused": "FAIL"
+      },
+      "failures": 10,
+      "errors": 0
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_peak_window.py::test_the_evening_part_of_a_window_across_midnight_is_peak": "ok",
+        "tests/test_peak_window.py::test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight": "ok",
+        "tests/test_peak_window.py::test_no_window_is_never_peak": "ok",
+        "tests/test_models.py::test_cost_of_a_plain_call": "ok",
+        "tests/test_models.py::test_unknown_price_is_none_not_a_guess": "ok",
+        "tests/test_models.py::test_deepseek_peak_windows": "ok",
+        "tests/test_models.py::test_peak_doubles_the_price": "ok",
+        "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek": "ok",
+        "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak": "ok"
+      },
+      "failures": 0,
+      "errors": 0
+    }
+  },
+  "reference": {
+    "changed": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        "models/pricing.py"
+      ]
+    },
+    "target": "pass",
+    "regression": "pass"
+  },
+  "problems": []
+}
