@@ -19,7 +19,7 @@ from codetask.run import run_code_task
 from codetask.tools import offered
 from models.fake import ScriptedChatModel, item_from_json
 
-from .score import aggregate, independent_checks, run_stats, score
+from .score import aggregate, cost_is_known, independent_checks, run_stats, score
 
 ROOT = Path(__file__).resolve().parent.parent
 MODES = ("reference", "wrong", "live")
@@ -78,7 +78,10 @@ def load_manifest(path):
 
 def run_eval(manifest_path, mode, runs_dir, cfg, *, tasks=None, max_total_usd=None, validate=None):
     """Run the tasks, score them, and return the report. live needs max_total_usd: a task starts only if what the
-    eval has spent so far plus that task's contract cap still fits."""
+    eval has spent so far plus that task's contract cap still fits.
+
+    A run whose cost is not known (evals.score.cost_is_known) stops the eval in every mode, and the tasks after it are not
+    run. usd_spent is then a lower bound and usd_complete is false: it is never presented as a complete total."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     if mode == "live" and max_total_usd is None:
@@ -92,7 +95,7 @@ def run_eval(manifest_path, mode, runs_dir, cfg, *, tasks=None, max_total_usd=No
         role = cfg["code_task"]["role"]
         cfg = {**cfg, "roles": {**cfg["roles"], role: {**cfg["roles"][role], "model": "fake:scripted"}}}
     runs_dir = Path(runs_dir)
-    rows, spent, stopped = [], 0.0, None
+    rows, spent, stopped, cost_complete = [], 0.0, None, True
 
     def not_run(t, why):
         return {"id": t["id"], "category": t["category"], "expected": t["expected"], "status": None,
@@ -101,7 +104,8 @@ def run_eval(manifest_path, mode, runs_dir, cfg, *, tasks=None, max_total_usd=No
 
     for t in selected:
         if stopped:
-            rows.append(not_run(t, f"the eval stopped after {stopped['task']} ended {stopped['status']}"))
+            rows.append(not_run(t, stopped.get("why") or
+                                f"the eval stopped after {stopped['task']} ended {stopped['status']}"))
             continue
         contract = json.loads((ROOT / t["contract"]).read_text(encoding="utf-8"))
         if mode == "live" and spent + float(contract["limits"]["max_usd"]) > max_total_usd + 1e-12:
@@ -123,14 +127,24 @@ def run_eval(manifest_path, mode, runs_dir, cfg, *, tasks=None, max_total_usd=No
             row["benchmark_ok"] = not row["eval_pass"]     # a wrong or cheating script must never pass
         elif mode == "reference":
             row["benchmark_ok"] = row["eval_pass"]
-        spent += row["stats"]["usd_billed"] or 0.0
+        # What was spent is only ever added up from what the ledger reported: a missing cost adds nothing (it is not
+        # invented as zero) and a partial total adds the part it holds, a lower bound. Either one means the cost is unknown,
+        # and the total cap cannot be enforced without a known cost, so the eval stops (as scripts/run_series.py does).
+        if row["stats"]["usd_billed"] is not None:
+            spent += row["stats"]["usd_billed"]
+        known = cost_is_known(row["stats"])
+        cost_complete = cost_complete and known
         rows.append(row)
         if row["status"] in STOP_ON:
             stopped = {"task": t["id"], "status": row["status"], "blocked_reason": checks["blocked_reason"]}
+        elif not known:
+            stopped = {"task": t["id"], "status": row["status"], "blocked_reason": None,
+                       "reason": "the run's cost is unknown (no complete ledger cost in its report)",
+                       "why": f"the eval stopped after {t['id']}: the run's cost is unknown"}
     report = {"benchmark": m["version"], "benchmark_sha256": benchmark_hash(manifest_path), "mode": mode,
               "agent": agent_version(cfg), "tasks": rows, "stopped": stopped,
               "ran": sum(not r.get("not_run") for r in rows), "not_run": sum(bool(r.get("not_run")) for r in rows),
-              "usd_spent": round(spent, 6), "summary": aggregate([r for r in rows if not r.get("not_run")])}
+              "usd_spent": round(spent, 6), "usd_complete": cost_complete, "summary": aggregate([r for r in rows if not r.get("not_run")])}
     if mode != "live":
         report["benchmark_valid"] = all(r.get("benchmark_ok") for r in rows)
     return report
