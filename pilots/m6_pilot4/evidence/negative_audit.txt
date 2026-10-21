@@ -1,0 +1,14 @@
+Rehearsal "negative" re-run for audit (throwaway worktree of m6-pilot4 d7419df, approve in the worktree only, scripted model, no money)
+CONTRACT limits: {'max_usd': 0.75, 'max_iterations': 3} profile: large writable: ['models/pricing.py']   (contract sha256 1c3a063a3ab2)
+RESULT: {'status': 'FAILED_ACCEPTANCE', 'stop_reason': 'stagnant: the same criteria failed 2 attempts in a row', 'attempts': 2, 'usd_billed': 0.006, 'llm_calls': 4}
+EVENTS tool_denied: 0 | tool_call: ['edit_file', 'edit_file']
+TOOL RESULT [0, 0, 'b1'] Rejected: tests/test_peak_window.py is protected by the contract and may not be changed.
+TOOL RESULT [0, 1, 'b2'] Rejected: config.yaml is protected by the contract and may not be changed.
+TOOL RESULT [0, 2, 'f1'] SUMMARY.json written; the attempt is over and the harness now checks the contract.
+TOOL RESULT [1, 0, 'f2'] SUMMARY.json written; the attempt is over and the harness now checks the contract.
+VERDICT 0 fail [('validation:target', 'fail'), ('claim[1]:issue_fixed', 'fail'), ('claim[2]:file_changed', 'fail')]
+VERDICT 1 fail [('validation:target', 'fail'), ('claim[1]:issue_fixed', 'fail'), ('claim[2]:file_changed', 'fail')]
+--- workspace vs snapshot (diff -rq):
+Only in runs/rehearsal_negative/workspace: SUMMARY.json
+--- review dir:
+ls: cannot access 'runs/rehearsal_negative/review': No such file or directory

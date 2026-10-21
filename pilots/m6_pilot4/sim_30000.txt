@@ -1,0 +1,18 @@
+=== search_first
+{"status": "FAILED_ACCEPTANCE", "attempts": 2, "attempt_ends": ["finished", "finished"], "tokens_per_attempt": {"0": 10192, "1": 11023}, "usd_estimate": 0.0465} search_first 30000
+   attempt 0 steps: [(0, 'ok', 2244, 30), (1, 'ok', 2282, 116), (2, 'ok', 2421, 29), (3, 'ok', 2991, 79)]
+=== minimal
+{"status": "FAILED_ACCEPTANCE", "attempts": 2, "attempt_ends": ["finished", "finished"], "tokens_per_attempt": {"0": 16153, "1": 17055}, "usd_estimate": 0.0707} minimal 30000
+   attempt 0 steps: [(0, 'ok', 2244, 46), (1, 'ok', 4264, 116), (2, 'ok', 4402, 29), (3, 'ok', 4973, 79)]
+=== typical
+{"status": "FAILED_ACCEPTANCE", "attempts": 2, "attempt_ends": ["reservation_exhausted", "reservation_exhausted"], "tokens_per_attempt": {"0": 23272, "1": 24142}, "usd_estimate": 0.0984} typical 30000
+   attempt 0 steps: [(0, 'ok', 2244, 23), (1, 'ok', 4062, 58), (2, 'ok', 8301, 116), (3, 'ok', 8439, 29), (4, 'refused', 9010, None)]
+=== minimal_one_fix
+{"status": "FAILED_ACCEPTANCE", "attempts": 2, "attempt_ends": ["finished", "finished"], "tokens_per_attempt": {"0": 27215, "1": 29082}, "usd_estimate": 0.1188} minimal_one_fix 30000
+   attempt 0 steps: [(0, 'ok', 2244, 46), (1, 'ok', 4264, 92), (2, 'ok', 4379, 29), (3, 'ok', 5013, 116), (4, 'ok', 5145, 29), (5, 'ok', 5779, 79)]
+=== read_all
+{"status": "FAILED_ACCEPTANCE", "attempts": 2, "attempt_ends": ["reservation_exhausted", "reservation_exhausted"], "tokens_per_attempt": {"0": 21364, "1": 22208}, "usd_estimate": 0.0893} read_all 30000
+   attempt 0 steps: [(0, 'ok', 2244, 29), (1, 'ok', 2967, 46), (2, 'ok', 4987, 30), (3, 'ok', 11029, 32), (4, 'refused', 13248, None)]
+=== read_all_batched
+{"status": "FAILED_ACCEPTANCE", "attempts": 2, "attempt_ends": ["reservation_exhausted", "reservation_exhausted"], "tokens_per_attempt": {"0": 5365, "1": 5787}, "usd_estimate": 0.0248} read_all_batched 30000
+   attempt 0 steps: [(0, 'ok', 2244, 29), (1, 'ok', 2967, 125), (2, 'refused', 34575, None)]
