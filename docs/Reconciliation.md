@@ -135,3 +135,50 @@ adalah batas kemampuan coder, dengan task multi-file di Argus sebagai langkah pe
    (4) Claude mengusulkan maksimal tiga kandidat pilot multi-file, tanpa implementasi; (5) pilih satu dan bekukan
    acceptance criteria sebelum membuat draf.
 
+
+## 9. Pembaruan setelah pilot 2–5 (2026-10-22)
+
+Bagian 1–8 di atas adalah laporan 2026-10-21 dan tidak ditulis ulang. Bagian ini mencatat apa yang berubah sejak itu. Sumber: `PENDING.md`, `pilots/*/`, dan `verification/`.
+
+### 9.1 Pilot M6 yang sudah dijalankan (semuanya Argus sendiri, model Sonnet 5.5)
+
+| Pilot | Task | Hasil | Biaya live | Catatan |
+|---|---|---|---|---|
+| 1 | `run_stats` melewati baris bukan-JSON | `agent-completed` | $0,0575 | 1 attempt, patch identik dengan referensi |
+| 2 | validasi `--impl` di `main.py` (2 file) | `agent-completed` | $0,0795 | 2 attempt; attempt 1 `reservation_exhausted` di profil `default`, pulih lewat umpan balik |
+| 3a | pembaca run bersama + refactor 2 skrip (3 file) | **`failed`** | $0,2000 | 2 attempt, keduanya `reservation_exhausted`; 9 dari 16 tes lulus; satu impor yang kurang menggagalkan dua tes wajib |
+| 4 | `is_peak` melewati tengah malam (1 fungsi) | 2 dari 2 `DONE` (`pilot4c` sengaja tidak dijalankan) | $0,0289 + $0,0289 | patch **byte-identik** di dua run; diterapkan di PR #109 |
+| 5a | `is_peak` gagal tertutup (1 fungsi, spesifikasi lebih ketat) | `DONE` | $0,0426 | 1 attempt; patch menunggu merge di PR #115 |
+
+Total biaya live pilot 1–5a ±$0,44. Waktu supervisi: ~10 menit (estimasi) untuk pilot 1 dan 2; **unknown** untuk 3a–5a (tidak dicatat saat berjalan).
+
+### 9.2 Yang kini terbukti, dan yang belum
+
+**Lebih kuat dari sebelumnya (tetap sampel kecil, bukan tingkat sukses):**
+- Task satu fungsi dengan acceptance deterministik: tiga run berturut-turut (4a, 4b, 5a) `DONE` di attempt pertama, masing-masing 3 panggilan dan di bawah $0,05; pada pilot 4 hasilnya byte-identik antar run.
+- Acceptance dibekukan sebelum coder (tes merah di baseline karena assertion, tes pembeda, patch referensi, mutan, `verify.sh`) membuat hasil agen bisa dinilai tanpa bergantung pada kesan: patch agen dibandingkan dengan referensi pada ratusan ribu kasus.
+- Kegagalan jujur dan terbaca: 3a gagal dengan jejak lengkap (`failure_trace.py`, `audit_run.py`), tanpa klaim palsu, dan penyebabnya (reservasi token yang dimakan bacaan ekstra) sesuai dengan arah simulasi.
+
+**Pelajaran dari 3a yang berubah menjadi praktik:**
+- Simulasi token wajib memasukkan skenario "agen membaca semua berkas yang terkait"; satu bacaan ekstra (modul data emas 15 KB yang saya anggap tidak dibaca) mengubah hasil 3a.
+- Task yang terlalu besar untuk satu attempt dipecah, bukan diberi budget lebih besar; cap pilot ($0,75) dan profil `large` dipakai hanya per pilot, `config.yaml` tetap $0,50; `reservation_exhausted` dicatat sebagai hasil, tidak dikejar dengan menaikkan budget.
+- Jalur operasional (skrip go-live) diikat ke kontrak, hash, config, dan batas, diuji, dan berada di repo.
+- Celah spesifikasi menjadi pilihan model, bukan acak: `utc_hours` yang hilang diisi `False` pada dua run identik; Pilot 5 menutupnya dengan aturan eksplisit.
+
+**Belum terbukti:**
+- Tingkat sukses umum; batas ukuran task. Antara satu fungsi (3 dari 3 `DONE`) dan tiga file (gagal) belum ada titik ukur; Pilot 2 (dua file) `DONE` di attempt kedua.
+- Dua hipotesis harness yang muncul dari 3a dan **belum diuji**: umpan balik yang mengarahkan perbaikan kegagalan validasi lebih dulu (di 3a agen melihat `NameError` dua kali dan tidak memperbaikinya), dan `ReadFile` dengan rentang baris untuk berkas besar. Hanya ada satu pengamatan; perubahan harness inti baru layak bila pola itu terulang.
+- Repo selain Argus (Athena butuh image sandbox per proyek; JS belum bisa divalidasi); drafter model (W2b); M4/M7+.
+
+### 9.3 Utang yang ditutup dan yang masih terbuka
+
+Ditutup sejak laporan: biaya tak diketahui di jalur eval (PR #96), `Checks.add` (PR #94), crash `runner.py` saat resume (PR #98), `is_peak` melewati tengah malam (Pilot 4, PR #109), `is_peak` gagal tertutup (Pilot 5; PR #115).
+Masih terbuka: judul `PR.md` terpotong di tengah kata (kosmetik; berkas `codetask/review.py` 30 KB, jadi juga kandidat uji "berkas besar"); `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task; skrip offline lain yang masih memakai `json.loads` per baris
+(dipersempit menjadi `audit_run.py` dan `failure_trace.py`, yang dicakup 3a); tes eval di sandbox yang membuat `verify.sh` makin lama (kini ±13 menit); perluasan benchmark dari kegagalan nyata.
+
+### 9.4 Arah berikutnya (usulan; keputusan di reviewer dan Atha)
+
+1. Merge PR #115 (patch Pilot 5a, byte-identik) setelah reviewer membaca diff.
+2. Satu pilot untuk mengukur batas ukuran task, bukan menaikkan budget: kandidat terdekat adalah "3a-lite" (pembaca run bersama + `failure_trace.py` saja, dua file; acceptance 3a sudah ada dan hanya dipersempit), dengan simulasi token yang sama ketatnya.
+3. Menunda perubahan harness (umpan balik, rentang baris) sampai ada pola kegagalan yang terulang.
+4. Mulai mencatat waktu supervisi saat run berjalan.
