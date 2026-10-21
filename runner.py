@@ -6,7 +6,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from graph import build_graph
 from harness.errors import BudgetExceeded, EstimateExceeded
-from harness.events import EventLog
+from harness.events import EventLog, parse_lines
 from harness.llm import reconcile_ledger
 from models.registry import role_warnings
 
@@ -22,23 +22,30 @@ class RunExists(Exception):
     """A fresh run was asked for an id that already has state; resume it or pick a new id."""
 
 
-def actual_spend(events_path):
-    """Tokens of work actually performed, including work redone after a crash (sum of body_done)."""
-    total = 0
-    for line in Path(events_path).read_text(encoding="utf-8").splitlines():
-        e = json.loads(line)
-        if e["event"] == "body_done":
-            total += e.get("tokens", 0)
-    return total
+def read_event_log(events_path):
+    """(events, skipped): every record of the log that can be decoded, and how many non-blank lines could not be.
+
+    The same tolerance as EventLog.read (harness.events.parse_lines): a line that is not valid JSON is skipped wherever it
+    is. A process killed while writing an event leaves one, and after a resume it stands in the middle of the file. Skipping
+    a line is never skipping a cost: a call whose final llm_call line was cut is still seen as llm_call_started without an
+    end, which reconcile_ledger charges at its worst case (unknown_after_crash)."""
+    text = Path(events_path).read_text(encoding="utf-8")
+    events = parse_lines(text)
+    return events, sum(1 for line in text.splitlines() if line.strip()) - len(events)
 
 
 def read_events(events_path):
-    return [json.loads(l) for l in Path(events_path).read_text(encoding="utf-8").splitlines()]
+    return read_event_log(events_path)[0]
 
 
-def ledger_totals(events_path):
+def actual_spend(events):
+    """Tokens of work actually performed, including work redone after a crash (sum of body_done)."""
+    return sum(e.get("tokens", 0) for e in events if e["event"] == "body_done")
+
+
+def ledger_totals(events):
     """Reconciled model spend: every attempt, plus calls cut off by a crash at their worst case."""
-    return reconcile_ledger(read_events(events_path))[1]
+    return reconcile_ledger(events)[1]
 
 
 def fail_budget(graph, config, reason):
@@ -114,16 +121,20 @@ def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
     result["run_id"] = run_id
     # tokens_used: what the run accounts for (each node run once).
     # tokens_spent: work actually performed; higher only if a crash forced work to be redone.
-    result["tokens_spent"] = actual_spend(run_dir / "events.jsonl")
+    events, skipped = read_event_log(run_dir / "events.jsonl")     # read once: every figure below is from the same log
+    result["tokens_spent"] = actual_spend(events)
     # usd_used: accounted USD in state; usd_billed: sum of every model call attempt in the ledger
     # (llm_call events), including failed attempts and work redone after a crash.
     result["usd_used"] = final.get("usd_used", 0.0) or 0.0
-    totals = ledger_totals(run_dir / "events.jsonl")
+    totals = ledger_totals(events)
     result["usd_billed"] = totals["usd"]                 # full precision, reconciled
     result["usd_complete"] = totals["usd_complete"]       # False if an unpriced model was used
     result["llm_calls"] = totals["calls"]
     result["llm_calls_unknown"] = totals["unknown_after_crash"]
-    result["budget_violations"] = sum(e["event"] == "budget_violation" for e in read_events(run_dir / "events.jsonl"))
+    result["budget_violations"] = sum(e["event"] == "budget_violation" for e in events)
+    # Lines of the log that could not be decoded (0 for an intact log). tokens_spent and budget_violations are counted
+    # from the lines that could be, so when this is not 0 they may be short; the money is not (see read_event_log).
+    result["events_skipped"] = skipped
     (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     log.emit("run_end", **result)
     return result
