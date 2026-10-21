@@ -1,0 +1,7 @@
+Differential test (VM, no model): is_peak of the agent's patch vs the reference is_peak, same inputs.
+Inputs: 625 single windows (start, end each 0..24) + 3 two-window lists, weekdays_only on/off, 7 days x 24 hours, 3 time zones (UTC, +07:00, -05:00).
+cases: 633024 disagreements: 0
+window None agent False ref False
+window {} agent False ref False
+window {'utc_hours': []} agent False ref False
+window without utc_hours: agent -> False | reference -> KeyError
