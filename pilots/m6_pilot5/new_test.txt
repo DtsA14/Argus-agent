@@ -102,6 +102,7 @@ def test_the_refusal_also_comes_from_multiplier_and_cost_usd():
 
 def test_no_window_is_not_an_error():
     assert is_peak(None, NOW) is False and is_peak({}, NOW) is False
+    assert is_peak(None, datetime(2026, 10, 23, 2, 0)) is False                      # `now` is not even looked at when there is no window
 
 
 def test_the_valid_edge_cases_are_still_valid():
