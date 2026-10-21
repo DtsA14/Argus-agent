@@ -3,8 +3,8 @@ report over runs.
 
 Synthetic runs (a scripted model, an injected validation: no Docker, no money) are built once and then looked at by the
 scripts as subprocesses:
-  scripts/audit_run.py and scripts/failure_trace.py: for runs that finished normally (f1, f2, f3, f5, the last after a crash and
-  a resume) their output is the one the scripts printed before this change, byte for byte (GOLDEN). Only three things change,
+  scripts/audit_run.py and scripts/failure_trace.py: for runs that finished normally (f1, f2, f3, f5, f8, the fifth after a crash and
+  a resume; wrap is a directory that holds a run, which failure_trace.py finds) their output is the one the scripts printed before this change, byte for byte (GOLDEN). Only three things change,
   and each was a crash: a line of events.jsonl that does not decode is skipped wherever it is (and one line "events skipped: N"
   ends the output, only when N is not 0), audit_run.py audits a run that made no model call, and failure_trace.py reports a
   directory that has no result.json and goes on.
@@ -156,7 +156,51 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  '  it0 s0 ok      in   500 | WriteFile(src/calc.py)\n'
                  '        text: ok\n'
                  '  it0 s1 ok      in   500 | Finish()\n'
-                 '        text: ok\n'}}
+                 '        text: ok\n'},
+ 'f8': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
+                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
+                 'llm_call_started 3, llm_call 3 (ok 3, refused 0)\n'
+                 '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
+                 '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd0.py"}\n'
+                 '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd1.py"}\n'
+                 '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd2.py"}\n'
+                 '  it 0 step  1 ok       hash ok in 500 out 60 usd 0.0008 \n'
+                 '      -> WriteFile {"content": "\\"\\"\\"Small arithmetic helpers.\\"\\"\\"\\n\\n\\ndef add(a, '
+                 'b):\\n    return a + b\\n\\n\\ndef subtract(a, b):\\n    return a - b\\n\\n\\ndef multiply(a, '
+                 'b):\\n  \n'
+                 '  it 0 step  2 ok       hash ok in 500 out 60 usd 0.0008 \n'
+                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
+                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
+                 'prompt_hash checked 3, mismatches 0\n'
+                 "  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
+                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 2, 'node': 'agent', 'task': 'fix_divide', "
+                 "'iteration': 0}\n"
+                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', "
+                 "'blocked_reason': None}\n"
+                 "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
+                 "1, 'usd_billed': 0.0024, 'llm_calls': 3, 'llm_calls_unknown': 0, 'tools': ['list_files', "
+                 "'read_file', 'write_file', 'run_validation']}\n",
+        'trace': '##### f8\n'
+                 '  it0 s0 ok      in   500 | ReadFile(src/ddddddddddddddddddddddddddddddddddddddddddddd0.py) '
+                 'ReadFile(src/ddddddddddddddddddddddddddddddddddddddddddddd1.py) ReadFile(src/ddddddddd\n'
+                 '        text: word word word word word word word word word word word word word word word word word '
+                 'word word word word word word word word word word word word word word word word word word word word '
+                 'word word word word word word word word word word word word word word word word word word word word '
+                 'word word word word word word word word word word word word word word word word word word word word '
+                 'word word word \n'
+                 '  it0 s1 ok      in   500 | WriteFile(src/calc.py)\n'
+                 '        text: ok\n'
+                 '  it0 s2 ok      in   500 | Finish()\n'
+                 '        text: ok\n'},
+ 'wrap': {'trace': '##### wrap\n'
+                   '  it0 s0 ok      in   500 | ReadFile(src/calc.py)\n'
+                   '        text: ok\n'
+                   '  it0 s1 ok      in   500 | WriteFile(src/calc.py)\n'
+                   '        text: ok\n'
+                   '  it0 s2 ok      in   500 | RunValidation(target)\n'
+                   '        text: ok\n'
+                   '  it0 s3 ok      in   500 | Finish()\n'
+                   '        text: ok\n'}}
 BLOCKED_AUDIT = "effective tools None\nllm_call_started 0, llm_call 0 (ok 0, refused 0)\nprompt_hash checked 0, mismatches 0\n  {'event': 'status', 'old': None, 'new': 'BLOCKED', 'reason': 'sandbox unavailable: no sandbox', 'blocked_reason': 'sandbox_unavailable'}\nresult {'status': 'BLOCKED', 'stop_reason': 'sandbox unavailable: no sandbox', 'blocked_reason': 'sandbox_unavailable', 'attempts': 0, 'usd_billed': 0.0, 'llm_calls': 0, 'llm_calls_unknown': 0, 'tools': None}\n"
 REPORTS = {'all': '{\n'
         '  "runs": [\n'
@@ -626,6 +670,8 @@ def build(root, base):
     check = call("RunValidation", {"id": "target"}, "v1")
     finish = call("Finish", {"claims": claims, "summary": "divide raises on zero"}, "f1")
     lazy = call("Finish", {"claims": claims, "summary": "fixed"}, "f0")
+    many = reply("word " * 140, input_tokens=500, output_tokens=60,           # a long text and several long paths in one reply
+                 tool_calls=[{"name": "ReadFile", "args": {"path": "src/" + "d" * 45 + f"{i}.py"}, "id": f"m{i}"} for i in range(3)])
 
     def validate(spec, workspace, sandbox_cfg, log=None):
         ws = Path(workspace)
@@ -652,6 +698,7 @@ def build(root, base):
     run("f1", [read, write, check, finish])                         # DONE at once
     run("f2", [lazy, write, finish])                                # DONE in the second attempt
     run("f3", [lazy, lazy])                                         # FAILED_ACCEPTANCE (stagnant)
+    run("f8", [many, write, finish])                                # DONE; its trace has texts and tool lists that get cut
     run("f4", [], preflight=lambda: (False, "no sandbox"))          # BLOCKED before any model call
 
     def die(messages):
@@ -663,7 +710,7 @@ def build(root, base):
     run("f5", [write, finish], resume=True)                         # and the run is resumed: DONE
 
     runs = base / "runs"
-    out = {n: runs / n for n in ("f1", "f2", "f3", "f4", "f5")}
+    out = {n: runs / n for n in ("f1", "f2", "f3", "f4", "f5", "f8")}
 
     def copy(src, name):
         shutil.copytree(runs / src, runs / name)
@@ -685,6 +732,9 @@ def build(root, base):
                 result[k] = v
         (d / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         out[name] = d
+    (runs / "wrap").mkdir()                                         # a directory that holds a run: failure_trace.py finds it
+    shutil.copytree(runs / "f1", runs / "wrap" / "inner")
+    out["wrap"] = runs / "wrap"
     f7 = copy("f1", "f7")                                           # a run that never got a result
     (f7 / "result.json").unlink()
     out["f7"] = f7
@@ -727,14 +777,14 @@ def assert_report(text, expected):
 
 # ---- the two inspectors keep printing what they always printed ----------------------------------------------------
 
-@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5"])
+@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5", "f8"])
 def test_audit_run_still_prints_what_it_always_printed(runs, name):
     r = script("audit_run.py", runs[name])
     assert r.returncode == 0, r.stderr[-500:]
     assert r.stdout == GOLDEN[name]["audit"]
 
 
-@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5"])
+@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5", "f8", "wrap"])
 def test_failure_trace_still_prints_what_it_always_printed(runs, name):
     r = script("failure_trace.py", runs[name])
     assert r.returncode == 0, r.stderr[-500:]
@@ -800,8 +850,8 @@ def test_a_report_over_done_runs_only_is_complete(runs):
 
 
 def test_a_cut_line_is_counted_in_events_skipped(runs):
-    data = json.loads(report(runs["f5"], runs["f5c"]))
-    assert [r["events_skipped"] for r in data["runs"]] == [0, 1] and data["summary"]["events_skipped"] == 1
+    data = json.loads(report(runs["f5"], runs["f5c"], runs["f5c"]))
+    assert [r["events_skipped"] for r in data["runs"]] == [0, 1, 1] and data["summary"]["events_skipped"] == 2
 
 
 def test_a_run_given_with_a_trailing_slash_keeps_its_id_and_an_unused_supervision_entry_is_ignored(runs, tmp_path):
