@@ -41,12 +41,12 @@
       "ok": true
     },
     {
-      "detail": "the verdict lists {'added': [], 'removed': [], 'modified': ['main.py', 'models/registry.py']}, the workspace differs by ['main.py', 'models/registry.py']",
+      "detail": "",
       "id": "changes_match_verdict",
       "ok": true
     },
     {
-      "detail": "the patch is empty",
+      "detail": "",
       "id": "patch_made",
       "ok": true
     },
@@ -56,7 +56,7 @@
       "ok": true
     },
     {
-      "detail": "base commit + patch differs from the final workspace: {\"added\": [], \"modified\": [], \"removed\": []}",
+      "detail": "",
       "id": "final_state_identical",
       "ok": true
     },
@@ -66,7 +66,7 @@
       "ok": true
     },
     {
-      "detail": "the workspace changed while the package was being built",
+      "detail": "",
       "id": "workspace_stable",
       "ok": true
     }
