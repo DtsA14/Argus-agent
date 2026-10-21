@@ -1,9 +1,9 @@
 diff --git a/evals/runlog.py b/evals/runlog.py
 new file mode 100644
-index 0000000..a2d7f3d
+index 0000000..99be4d1
 --- /dev/null
 +++ b/evals/runlog.py
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,41 @@
 +"""The one reader of a code-task run directory (M6 pilot 3): the files a run leaves behind, read the same way by every tool
 +that looks at a run (scripts/audit_run.py, scripts/failure_trace.py, scripts/pilot_report.py).
 +
@@ -25,6 +25,11 @@ index 0000000..a2d7f3d
 +    return events, sum(1 for line in text.splitlines() if line.strip()) - len(events)
 +
 +
++def is_run(run_dir):
++    """True when <run_dir> holds the log of a run (every run writes events.jsonl first)."""
++    return (Path(run_dir) / "events.jsonl").is_file()
++
++
 +def read_result(run_dir):
 +    """<run_dir>/result.json as a dict, or None when the run has none (it was never finished)."""
 +    path = Path(run_dir) / "result.json"
@@ -41,7 +46,7 @@ index 0000000..a2d7f3d
 +    """The line a tool prints last when it had to skip lines of the event log; nothing when none were skipped."""
 +    return f"events skipped: {skipped}" if skipped else None
 diff --git a/scripts/audit_run.py b/scripts/audit_run.py
-index 95fafeb..4c487a1 100644
+index 95fafeb..95f17f3 100644
 --- a/scripts/audit_run.py
 +++ b/scripts/audit_run.py
 @@ -5,7 +5,6 @@ check each ledger prompt_hash against it, and list calls, tool calls, refusals a
@@ -60,12 +65,16 @@ index 95fafeb..4c487a1 100644
  from harness.llm import is_truncated
  from harness.steps import llm_step_key, message_from_json
  from runner import load_config
-@@ -22,20 +22,22 @@ run_dir = Path(sys.argv[1])
+@@ -21,21 +21,25 @@ from runner import load_config
+ run_dir = Path(sys.argv[1])
  cfg = load_config()
  contract = json.loads((run_dir / "contract.json").read_text())
- result = json.loads((run_dir / "result.json").read_text())
+-result = json.loads((run_dir / "result.json").read_text())
 -tools = offered(result["tools"])
 -sp = system_prompt(tools)
++result = runlog.read_result(run_dir)
++if result is None:
++    raise FileNotFoundError(run_dir / "result.json")      # as before: this tool audits a finished run
  print("effective tools", result["tools"])
 -print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
 -memo = {k: json.loads(v) for k, v in sqlite3.connect(run_dir / "memo.sqlite").execute("select key, value from memo")}
@@ -90,7 +99,7 @@ index 95fafeb..4c487a1 100644
      feedback = None
      if it > 0:
          prev = run_dir / f"verdict_{it - 1}.json"
-@@ -81,3 +83,5 @@ for e in events:
+@@ -81,3 +85,5 @@ for e in events:
          print(" ", {k: v for k, v in e.items() if k not in ("ts",)})
  print("result", {k: result.get(k) for k in ("status", "stop_reason", "blocked_reason", "attempts", "usd_billed",
                                             "llm_calls", "llm_calls_unknown", "tools")})
@@ -142,7 +151,7 @@ index 7f1aa0e..e582454 100644
 +        print(runlog.skipped_line(skipped))
 diff --git a/scripts/pilot_report.py b/scripts/pilot_report.py
 new file mode 100644
-index 0000000..943d6a3
+index 0000000..d889456
 --- /dev/null
 +++ b/scripts/pilot_report.py
 @@ -0,0 +1,110 @@
@@ -199,7 +208,7 @@ index 0000000..943d6a3
 +
 +def run_row(run_dir, supervision):
 +    run_dir = Path(run_dir)
-+    if not (run_dir / "events.jsonl").is_file():
++    if not runlog.is_run(run_dir):
 +        raise Refused(f"{run_dir} is not a run directory (no events.jsonl)")
 +    result = runlog.read_result(run_dir)
 +    events, skipped = runlog.read_events(run_dir)
