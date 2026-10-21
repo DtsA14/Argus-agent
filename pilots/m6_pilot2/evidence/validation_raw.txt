@@ -1,0 +1,198 @@
+# Ringkasan terhitung (parse_pytest; "consistent" berarti baris per tes menjelaskan ringkasan persis)
+
+| Pohon | Validasi | Exit | tests_run / collected | Status per tes | Ringkasan pytest |
+|---|---|---|---|---|---|
+| baseline | `regression` | 0 | 18 / 18 | 18 ok (15 di `tests/test_models.py`, 3 di `tests/test_milestone1.py`) | `18 passed in 4.46s` |
+| baseline | `target` | 1 | 13 / 13 | 7 FAIL, 6 ok | `7 failed, 6 passed in 35.52s` |
+| dengan perubahan | `regression` | 0 | 18 / 18 | 18 ok (15 + 3) | `18 passed in 4.43s` |
+| dengan perubahan | `target` | 0 | 13 / 13 | 13 ok | `13 passed in 41.50s` |
+
+Semua: errors 0, skipped 0, timed_out false, truncated false, consistent true.
+`check_report.json` hanya menyimpan node wajib (`must_pass`) dan hitungan gagal/error per validasi; jumlah tes yang
+berjalan dijaga oleh `min_tests` di kontrak (target 13, regression 18) dan dibuktikan di sini dari keluaran mentah.
+
+# Keluaran mentah
+
+##### baseline :: regression
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /workspace
+plugins: anyio-4.15.1, langsmith-0.14.11
+collecting ... collected 18 items
+
+tests/test_models.py::test_default_roles_build_without_network PASSED
+tests/test_models.py::test_deepseek_role_builds PASSED
+tests/test_models.py::test_missing_key_names_the_env_var PASSED
+tests/test_models.py::test_swap_model_for_a_role_leaves_original_untouched PASSED
+tests/test_models.py::test_override_errors_are_clear PASSED
+tests/test_models.py::test_new_openai_style_provider_needs_no_code PASSED
+tests/test_models.py::test_new_provider_kind_can_be_registered PASSED
+tests/test_models.py::test_warns_when_evaluator_shares_the_workers_provider PASSED
+tests/test_models.py::test_cost_of_a_plain_call PASSED
+tests/test_models.py::test_unknown_price_is_none_not_a_guess PASSED
+tests/test_models.py::test_cached_tokens_use_the_cache_rate PASSED
+tests/test_models.py::test_deepseek_peak_windows PASSED
+tests/test_models.py::test_peak_doubles_the_price PASSED
+tests/test_models.py::test_message_cost_reads_usage_and_cache_from_the_message PASSED
+tests/test_models.py::test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries PASSED
+tests/test_milestone1.py::test_pass_first_try PASSED
+tests/test_milestone1.py::test_fail_then_pass_uses_feedback PASSED
+tests/test_milestone1.py::test_iteration_budget PASSED
+
+============================== 18 passed in 4.46s ==============================
+
+##### baseline :: target
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /workspace
+plugins: anyio-4.15.1, langsmith-0.14.11
+collecting ... collected 13 items
+
+tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs FAILED
+tests/test_impl_flag.py::test_a_second_mistyped_node_is_refused_too FAILED
+tests/test_impl_flag.py::test_an_empty_node_is_refused FAILED
+tests/test_impl_flag.py::test_an_item_without_equals_is_refused_cleanly FAILED
+tests/test_impl_flag.py::test_an_empty_kind_is_refused_cleanly FAILED
+tests/test_impl_flag.py::test_a_kind_other_than_fake_or_llm_is_refused_cleanly FAILED
+tests/test_impl_flag.py::test_a_refused_flag_starts_nothing_and_the_corrected_command_runs FAILED
+tests/test_impl_flag.py::test_a_valid_impl_flag_runs_as_before PASSED
+tests/test_impl_flag.py::test_all_four_nodes_can_be_set PASSED
+tests/test_impl_flag.py::test_no_impl_flag_runs_as_before PASSED
+tests/test_impl_flag.py::test_the_last_impl_for_a_node_wins PASSED
+tests/test_impl_flag.py::test_an_unknown_model_role_is_still_a_config_error PASSED
+tests/test_impl_flag.py::test_a_model_override_without_equals_is_still_a_config_error PASSED
+
+=================================== FAILURES ===================================
+_____________ test_a_mistyped_node_is_refused_before_anything_runs _____________
+tests/test_impl_flag.py:42: in test_a_mistyped_node_is_refused_before_anything_runs
+    assert_refused(r, tmp_path, "unknown node 'evalutor'", *NODES)
+tests/test_impl_flag.py:25: in assert_refused
+    assert r.returncode == 1, (r.returncode, r.stdout[-300:], r.stderr[-300:])
+E   AssertionError: (0, '
+E     => DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_a_mistyped_node_is_refuse0/p/events.jsonl
+E     ', '')
+E   assert 0 == 1
+E    +  where 0 = CompletedProcess(args=['/usr/bin/python3', 'main.py', '--quiet', '--scenario', 'pass', '--runs-dir', '/tmp/pytest-of-nobody/pytest-0/test_a_mistyped_node_is_refuse0', '--run-id', 'p', '--impl', 'evalutor=llm'], returncode=0, stdout='\n=> DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_a_mistyped_node_is_refuse0/p/events.jsonl\n', stderr='').returncode
+__________________ test_a_second_mistyped_node_is_refused_too __________________
+tests/test_impl_flag.py:47: in test_a_second_mistyped_node_is_refused_too
+    assert_refused(r, tmp_path, "unknown node 'synthesise'", *NODES)
+tests/test_impl_flag.py:25: in assert_refused
+    assert r.returncode == 1, (r.returncode, r.stdout[-300:], r.stderr[-300:])
+E   AssertionError: (0, '
+E     => DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_a_second_mistyped_node_is0/p/events.jsonl
+E     ', '')
+E   assert 0 == 1
+E    +  where 0 = CompletedProcess(args=['/usr/bin/python3', 'main.py', '--quiet', '--scenario', 'pass', '--runs-dir', '/tmp/pytest-of-nobody/pytest-0/test_a_second_mistyped_node_is0', '--run-id', 'p', '--impl', 'synthesise=fake'], returncode=0, stdout='\n=> DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_a_second_mistyped_node_is0/p/events.jsonl\n', stderr='').returncode
+________________________ test_an_empty_node_is_refused _________________________
+tests/test_impl_flag.py:51: in test_an_empty_node_is_refused
+    assert_refused(run_main(tmp_path, "--impl", "=llm"), tmp_path, "=llm")
+tests/test_impl_flag.py:25: in assert_refused
+    assert r.returncode == 1, (r.returncode, r.stdout[-300:], r.stderr[-300:])
+E   AssertionError: (0, '
+E     => DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_an_empty_node_is_refused0/p/events.jsonl
+E     ', '')
+E   assert 0 == 1
+E    +  where 0 = CompletedProcess(args=['/usr/bin/python3', 'main.py', '--quiet', '--scenario', 'pass', '--runs-dir', '/tmp/pytest-of-nobody/pytest-0/test_an_empty_node_is_refused0', '--run-id', 'p', '--impl', '=llm'], returncode=0, stdout='\n=> DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_an_empty_node_is_refused0/p/events.jsonl\n', stderr='').returncode
+________________ test_an_item_without_equals_is_refused_cleanly ________________
+tests/test_impl_flag.py:55: in test_an_item_without_equals_is_refused_cleanly
+    assert_refused(run_main(tmp_path, "--impl", "evaluator"), tmp_path, "evaluator")
+tests/test_impl_flag.py:26: in assert_refused
+    assert "config error:" in r.stderr, r.stderr[-400:]
+E   AssertionError: ace/graph.py", line 133, in build_graph
+E         judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)
+E                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       File "/workspace/graph.py", line 86, in make_judge_for
+E         raise ConfigError(f"impl.evaluator must be 'fake' or 'llm', got {impl!r}")
+E     models.registry.ConfigError: impl.evaluator must be 'fake' or 'llm', got ''
+E     
+E   assert 'config error:' in 'Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 133, in build_graph\n    judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 86, in make_judge_for\n    raise ConfigError(f"impl.evaluator must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.evaluator must be \'fake\' or \'llm\', got \'\'\n'
+E    +  where 'Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 133, in build_graph\n    judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 86, in make_judge_for\n    raise ConfigError(f"impl.evaluator must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.evaluator must be \'fake\' or \'llm\', got \'\'\n' = CompletedProcess(args=['/usr/bin/python3', 'main.py', '--quiet', '--scenario', 'pass', '--runs-dir', '/tmp/pytest-of-nobody/pytest-0/test_an_item_without_equals_is0', '--run-id', 'p', '--impl', 'evaluator'], returncode=1, stdout='', stderr='Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 133, in build_graph\n    judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 86, in make_judge_for\n    raise ConfigError(f"impl.evaluator must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.evaluator must be \'fake\' or \'llm\', got \'\'\n').stderr
+____________________ test_an_empty_kind_is_refused_cleanly _____________________
+tests/test_impl_flag.py:59: in test_an_empty_kind_is_refused_cleanly
+    assert_refused(run_main(tmp_path, "--impl", "evaluator="), tmp_path, "evaluator=")
+tests/test_impl_flag.py:26: in assert_refused
+    assert "config error:" in r.stderr, r.stderr[-400:]
+E   AssertionError: ace/graph.py", line 133, in build_graph
+E         judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)
+E                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       File "/workspace/graph.py", line 86, in make_judge_for
+E         raise ConfigError(f"impl.evaluator must be 'fake' or 'llm', got {impl!r}")
+E     models.registry.ConfigError: impl.evaluator must be 'fake' or 'llm', got ''
+E     
+E   assert 'config error:' in 'Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 133, in build_graph\n    judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 86, in make_judge_for\n    raise ConfigError(f"impl.evaluator must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.evaluator must be \'fake\' or \'llm\', got \'\'\n'
+E    +  where 'Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 133, in build_graph\n    judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 86, in make_judge_for\n    raise ConfigError(f"impl.evaluator must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.evaluator must be \'fake\' or \'llm\', got \'\'\n' = CompletedProcess(args=['/usr/bin/python3', 'main.py', '--quiet', '--scenario', 'pass', '--runs-dir', '/tmp/pytest-of-nobody/pytest-0/test_an_empty_kind_is_refused_0', '--run-id', 'p', '--impl', 'evaluator='], returncode=1, stdout='', stderr='Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 133, in build_graph\n    judge = make_judge_for(cfg, log, memo, est, usd_est, models, crasher)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 86, in make_judge_for\n    raise ConfigError(f"impl.evaluator must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.evaluator must be \'fake\' or \'llm\', got \'\'\n').stderr
+____________ test_a_kind_other_than_fake_or_llm_is_refused_cleanly _____________
+tests/test_impl_flag.py:65: in test_a_kind_other_than_fake_or_llm_is_refused_cleanly
+    assert_refused(r, tmp_path, "worker", repr(kind), "'fake' or 'llm'")
+tests/test_impl_flag.py:26: in assert_refused
+    assert "config error:" in r.stderr, r.stderr[-400:]
+E   AssertionError:  = make_worker_node(cfg, log, worker_gate, memo, est, usd_est, models, crasher, run_dir)
+E                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       File "/workspace/graph.py", line 52, in make_worker_node
+E         raise ConfigError(f"impl.worker must be 'fake' or 'llm', got {impl!r}")
+E     models.registry.ConfigError: impl.worker must be 'fake' or 'llm', got 'llmm'
+E     
+E   assert 'config error:' in 'Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 124, in build_graph\n    worker = make_worker_node(cfg, log, worker_gate, memo, est, usd_est, models, crasher, run_dir)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 52, in make_worker_node\n    raise ConfigError(f"impl.worker must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.worker must be \'fake\' or \'llm\', got \'llmm\'\n'
+E    +  where 'Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 124, in build_graph\n    worker = make_worker_node(cfg, log, worker_gate, memo, est, usd_est, models, crasher, run_dir)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 52, in make_worker_node\n    raise ConfigError(f"impl.worker must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.worker must be \'fake\' or \'llm\', got \'llmm\'\n' = CompletedProcess(args=['/usr/bin/python3', 'main.py', '--quiet', '--scenario', 'pass', '--runs-dir', '/tmp/pytest-of-nobody/pytest-0/test_a_kind_other_than_fake_or0', '--run-id', 'p', '--impl', 'worker=llmm'], returncode=1, stdout='', stderr='Traceback (most recent call last):\n  File "/workspace/main.py", line 52, in <module>\n    main()\n  File "/workspace/main.py", line 40, in main\n    result = run_task(\n             ^^^^^^^^^\n  File "/workspace/runner.py", line 79, in run_task\n    graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 124, in build_graph\n    worker = make_worker_node(cfg, log, worker_gate, memo, est, usd_est, models, crasher, run_dir)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/graph.py", line 52, in make_worker_node\n    raise ConfigError(f"impl.worker must be \'fake\' or \'llm\', got {impl!r}")\nmodels.registry.ConfigError: impl.worker must be \'fake\' or \'llm\', got \'llmm\'\n').stderr
+______ test_a_refused_flag_starts_nothing_and_the_corrected_command_runs _______
+tests/test_impl_flag.py:70: in test_a_refused_flag_starts_nothing_and_the_corrected_command_runs
+    assert_refused(first, tmp_path, "evalutor")
+tests/test_impl_flag.py:25: in assert_refused
+    assert r.returncode == 1, (r.returncode, r.stdout[-300:], r.stderr[-300:])
+E   AssertionError: (0, '
+E     => DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_a_refused_flag_starts_not0/p/events.jsonl
+E     ', '')
+E   assert 0 == 1
+E    +  where 0 = CompletedProcess(args=['/usr/bin/python3', 'main.py', '--quiet', '--scenario', 'pass', '--runs-dir', '/tmp/pytest-of-nobody/pytest-0/test_a_refused_flag_starts_not0', '--run-id', 'p', '--impl', 'evalutor=llm'], returncode=0, stdout='\n=> DONE | iterations=1 | tokens=11500 (spent 11500) | log: /tmp/pytest-of-nobody/pytest-0/test_a_refused_flag_starts_not0/p/events.jsonl\n', stderr='').returncode
+========================= 7 failed, 6 passed in 35.52s =========================
+
+##### with the change :: regression
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /workspace
+plugins: anyio-4.15.1, langsmith-0.14.11
+collecting ... collected 18 items
+
+tests/test_models.py::test_default_roles_build_without_network PASSED
+tests/test_models.py::test_deepseek_role_builds PASSED
+tests/test_models.py::test_missing_key_names_the_env_var PASSED
+tests/test_models.py::test_swap_model_for_a_role_leaves_original_untouched PASSED
+tests/test_models.py::test_override_errors_are_clear PASSED
+tests/test_models.py::test_new_openai_style_provider_needs_no_code PASSED
+tests/test_models.py::test_new_provider_kind_can_be_registered PASSED
+tests/test_models.py::test_warns_when_evaluator_shares_the_workers_provider PASSED
+tests/test_models.py::test_cost_of_a_plain_call PASSED
+tests/test_models.py::test_unknown_price_is_none_not_a_guess PASSED
+tests/test_models.py::test_cached_tokens_use_the_cache_rate PASSED
+tests/test_models.py::test_deepseek_peak_windows PASSED
+tests/test_models.py::test_peak_doubles_the_price PASSED
+tests/test_models.py::test_message_cost_reads_usage_and_cache_from_the_message PASSED
+tests/test_models.py::test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries PASSED
+tests/test_milestone1.py::test_pass_first_try PASSED
+tests/test_milestone1.py::test_fail_then_pass_uses_feedback PASSED
+tests/test_milestone1.py::test_iteration_budget PASSED
+
+============================== 18 passed in 4.43s ==============================
+
+##### with the change :: target
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /workspace
+plugins: anyio-4.15.1, langsmith-0.14.11
+collecting ... collected 13 items
+
+tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs PASSED
+tests/test_impl_flag.py::test_a_second_mistyped_node_is_refused_too PASSED
+tests/test_impl_flag.py::test_an_empty_node_is_refused PASSED
+tests/test_impl_flag.py::test_an_item_without_equals_is_refused_cleanly PASSED
+tests/test_impl_flag.py::test_an_empty_kind_is_refused_cleanly PASSED
+tests/test_impl_flag.py::test_a_kind_other_than_fake_or_llm_is_refused_cleanly PASSED
+tests/test_impl_flag.py::test_a_refused_flag_starts_nothing_and_the_corrected_command_runs PASSED
+tests/test_impl_flag.py::test_a_valid_impl_flag_runs_as_before PASSED
+tests/test_impl_flag.py::test_all_four_nodes_can_be_set PASSED
+tests/test_impl_flag.py::test_no_impl_flag_runs_as_before PASSED
+tests/test_impl_flag.py::test_the_last_impl_for_a_node_wins PASSED
+tests/test_impl_flag.py::test_an_unknown_model_role_is_still_a_config_error PASSED
+tests/test_impl_flag.py::test_a_model_override_without_equals_is_still_a_config_error PASSED
+
+============================= 13 passed in 41.50s ==============================
