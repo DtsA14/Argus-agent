@@ -1,0 +1,42 @@
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_is_peak/SUMMARY.json runs/pilot4a/workspace/SUMMARY.json
+--- fixtures/repos/fix_is_peak/SUMMARY.json	1970-01-01 00:00:00.000000000 +0000
++++ runs/pilot4a/workspace/SUMMARY.json	2026-10-21 15:52:50.217913724 +0000
+@@ -0,0 +1,17 @@
++{
++  "claims": [
++    {
++      "claim": "file_changed",
++      "path": "models/pricing.py"
++    },
++    {
++      "claim": "issue_fixed",
++      "evidence": "validation:target"
++    },
++    {
++      "claim": "tests_pass",
++      "evidence": "validation:regression"
++    }
++  ],
++  "summary": "is_peak now handles windows crossing midnight (hour >= start or hour < end), treats start == end as empty, and keeps the UTC conversion and weekdays_only check."
++}
+\ No newline at end of file
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_is_peak/models/pricing.py runs/pilot4a/workspace/models/pricing.py
+--- fixtures/repos/fix_is_peak/models/pricing.py	2026-10-21 11:20:49.910926613 +0000
++++ runs/pilot4a/workspace/models/pricing.py	2026-10-21 15:52:36.815224446 +0000
+@@ -8,7 +8,15 @@
+     now = now.astimezone(timezone.utc)
+     if window.get("weekdays_only") and now.weekday() >= 5:
+         return False
+-    return any(start <= now.hour < end for start, end in window["utc_hours"])
++    hour = now.hour
++    for start, end in window.get("utc_hours") or []:
++        if start < end:
++            if start <= hour < end:
++                return True
++        elif start > end:
++            if hour >= start or hour < end:
++                return True
++    return False
+ 
+ 
+ def multiplier(price, window, now=None):
