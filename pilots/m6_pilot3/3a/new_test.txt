@@ -253,6 +253,9 @@ def build(root, base):
     lines = (f5c / "events.jsonl").read_text(encoding="utf-8").splitlines()                    # (and a blank line: not a skipped one)
     (f5c / "events.jsonl").write_text("\n".join(lines[:3] + [CUT, ""] + lines[3:]) + "\n", encoding="utf-8")
     out["f5c"] = f5c
+    (runs / "wrap").mkdir()                                         # a directory that holds a run: failure_trace.py finds it
+    shutil.copytree(runs / "f1", runs / "wrap" / "inner")
+    out["wrap"] = runs / "wrap"
     f7 = copy("f1", "f7")                                           # a run that never got a result
     (f7 / "result.json").unlink()
     out["f7"] = f7
