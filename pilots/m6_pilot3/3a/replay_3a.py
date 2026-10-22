@@ -5,11 +5,15 @@ the token usage the provider reported; the pre-send token estimate is the one th
 (the sandbox runs the tests). If the harness reaches the same outcome, the outcome is determined by (the replies, the budget), not by anything that happened
 at the provider.
 
-  PYTHONPATH=. python pilots/m6_pilot3/3a/replay_3a.py runs/pilot3a <runs_dir> <run_id> [--config pilots/m6_pilot3/3a/config_pilot3a.yaml] [--d1]
+  PYTHONPATH=. python pilots/m6_pilot3/3a/replay_3a.py runs/pilot3a <runs_dir> <run_id> [--config pilots/m6_pilot3/3a/config_pilot3a.yaml] [--d1] [--d3]
 
 --d1 (docs/reviews/DESIGN_ATTEMPT_USD.md, section 7): for this replay only, the contract's profile `large` gets the values of
 `large_usd` from config.yaml and budget.max_tokens becomes 1,200,000 (K3). The call the live run had refused (it0 s3) must then be
 sent; its reply was never recorded, so the replay stops there (llm_failed), which shows where the limit moved without a model call.
+
+--d3 (docs/reviews/DESIGN_AUTO_VALIDATION.md, section 7): auto-validation on. After the step that wrote (it0 s2) the contract's
+validations run in the real sandbox on the same workspace as live, and their message is printed (auto_messages). The next request
+was never made live, so the replay leaves the recorded path there.
 """
 import json
 import os
@@ -47,6 +51,8 @@ cfg["code_task"]["feedback_error_excerpt"] = False       # pilot3a ran before D2
 if "--d1" in sys.argv:
     cfg["code_task"]["profiles"]["large"] = dict(load_config()["code_task"]["profiles"]["large_usd"])
     cfg["budget"]["max_tokens"] = 1_200_000
+if "--d3" in sys.argv:
+    cfg["code_task"]["auto_validate"], cfg["code_task"]["auto_validate_max"] = True, 4
 cfg["sandbox"] = {**(cfg.get("sandbox") or {}), "kind": "docker"}
 for name in cfg["sandbox"].get("environments") or {}:
     var, path = f"ARGUS_SANDBOX_IMAGE_{name.upper()}", ROOT / f".sandbox_image_{name}"
@@ -107,5 +113,11 @@ out = {
     "refused_replay": [(e["iteration"], e["step"], e["est_input"], e.get("reason")) for e in new_calls if e["status"] == "refused"],
     "sent_replay": [(e["iteration"], e["step"], e["est_input"], e["max_tokens"]) for e in new if e["event"] == "llm_call_started"],
     "budget_profile_replay": r.get("budget_profile"),
+    "loop_policy_replay": r.get("loop_policy"),
+    "auto_validations": [(e["iteration"], e["step"], e.get("validated"), e.get("limit_notice")) for e in new if e["event"] == "after_step"],
+    "sandbox_runs_replay": [(e.get("origin"), e.get("validation"), e.get("duration_s")) for e in new if e["event"] == "sandbox_run"],
 }
+mdb = sqlite3.connect(runs_dir / run_id / "memo.sqlite")
+out["auto_messages"] = {k: json.loads(v)["content"] for k, v in mdb.execute("select key, value from memo")
+                        if json.loads(k)[0] == "after_step" and json.loads(v).get("content")}
 print(json.dumps(out, indent=1))
