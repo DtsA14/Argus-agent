@@ -34,7 +34,7 @@ from pathlib import Path
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
-from harness.events import EventLog
+from harness.events import parse_lines
 from harness.llm import reconcile_ledger, to_nano
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,14 +43,15 @@ BASE, TASK = "base", "task"                 # the intake and the task inside a j
 
 NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL = "NEW", "DRAFTING", "DRAFT_FAILED", "AWAITING_APPROVAL"
 AGENT_RUNNING, AGENT_FAILED, REVIEW_READY, REVIEW_INVALID = "AGENT_RUNNING", "AGENT_FAILED", "REVIEW_READY", "REVIEW_INVALID"
-REJECTED, BLOCKED = "REJECTED", "BLOCKED"
+REJECTED, BLOCKED, ABANDONED = "REJECTED", "BLOCKED", "ABANDONED"
 LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
          (DRAFTING, AWAITING_APPROVAL), (DRAFTING, DRAFT_FAILED), (DRAFTING, BLOCKED),
          (DRAFT_FAILED, DRAFTING), (DRAFT_FAILED, REJECTED), (DRAFT_FAILED, BLOCKED),
          (AWAITING_APPROVAL, AGENT_RUNNING), (AWAITING_APPROVAL, REJECTED), (AWAITING_APPROVAL, DRAFTING),
          (AWAITING_APPROVAL, BLOCKED),
          (AGENT_RUNNING, REVIEW_READY), (AGENT_RUNNING, REVIEW_INVALID), (AGENT_RUNNING, AGENT_FAILED),
-         (AGENT_RUNNING, BLOCKED)}
+         (AGENT_RUNNING, BLOCKED)} | \
+        {(s, ABANDONED) for s in (NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL, AGENT_RUNNING, AGENT_FAILED, BLOCKED)}
 JOB_ID = re.compile(r"^j[0-9a-z_]{1,40}$")
 KEY_SHAPE = {"anthropic": "sk-ant-"}
 
@@ -141,12 +142,13 @@ def open_job(job_id, jobs_dir=JOBS):
 # ---- money -------------------------------------------------------------------------------------------------------
 
 def spent_nano(job):
-    """Everything the job's stage runs have spent, from their ledgers (cut-off calls at their worst case)."""
+    """Everything the job's stage runs have spent, from their ledgers (cut-off calls at their worst case). Read only:
+    an EventLog would repair a log's cut last line, and a stage may be writing that log at this moment."""
     total = 0
     for stage in (job.data.get("stages") or {}).values():
         log = job.runs / stage["run_id"] / "events.jsonl"
         if log.exists():
-            total += reconcile_ledger(EventLog(log).read())[1]["usd_nano"]
+            total += reconcile_ledger(parse_lines(log.read_text(encoding="utf-8")))[1]["usd_nano"]
     return total
 
 
@@ -225,6 +227,12 @@ def _limits_text(job, title, lines):
 
 # ---- commands ----------------------------------------------------------------------------------------------------
 
+def running(job, what, run_id):
+    """What the human sees while a stage runs (it prints nothing else): how long, and how to continue if it stops."""
+    return (f"{what} running in {run_id} (usually 1-3 minutes; it prints nothing until it ends). Do not start "
+            f"another job for this task: if this stops or the terminal closes, continue it with `argus resume {job.id}`.")
+
+
 def new_job_id():
     return "j" + datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + secrets.token_hex(2)
 
@@ -287,11 +295,13 @@ def _draft(job, cfg, deps, n):
             job.move(DRAFTING, deps, stage=sid)
         run_id = job.data["stages"][sid]["run_id"]
         again = (job.runs / run_id / "checkpoints.sqlite").exists()
+        deps.echo(running(job, "drafter", run_id))
         r = run_drafter(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job.data["inputs"]["issue"],
                         max_usd=cap, resume=again, models=deps.models, validate=deps.validate,
                         preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root)
     st = job.data["stages"][sid]
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
+    deps.echo(f"drafter finished: {r['status']} (${r['usd_billed']:.4f})")
     if r["status"] == DRAFTED:
         st["draft_sha256"] = draft_sha(job.runs / run_id / "draft.json")
         job.move(AWAITING_APPROVAL, deps, stage=sid)
@@ -382,10 +392,12 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False):
     profile = contract.get("budget_profile")
     acfg = stage_config(cfg, st["cap_usd"])                 # the cap it started with, never recomputed
     again = (job.runs / st["run_id"] / "checkpoints.sqlite").exists()
+    deps.echo(running(job, "agent", st["run_id"]))
     r = ctrun.run_code_task(contract_path=contract_path, run_id=st["run_id"], runs_dir=job.runs, cfg=acfg,
                             resume=again, models=deps.models, validate=deps.validate, preflight=deps.preflight,
                             env_preflight=deps.env_preflight, root=job.root)
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"], profile=profile)
+    deps.echo(f"agent finished: {r['status']} (${r['usd_billed']:.4f})")
     if r["status"] != "DONE":
         job.move(AGENT_FAILED, deps, stage=sid, reason=r.get("stop_reason"))
         return r
@@ -426,6 +438,17 @@ def redraft(job_id, *, cfg, deps, jobs_dir=JOBS):
         n = 1 + max(int(k[1:]) for k, s in job.data["stages"].items() if s["kind"] == "draft")
         job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"))
         return job, _draft(job, cfg, deps, n)
+
+
+def abandon(job_id, reason, *, deps, jobs_dir=JOBS):
+    """Close a job that will not be continued (e.g. a stage stopped and a new job was started instead). It takes the
+    lock, so a job whose stage is still running cannot be abandoned under it."""
+    job = open_job(job_id, jobs_dir)
+    with job.lock():
+        if job.data["state"] in (REVIEW_READY, REVIEW_INVALID, REJECTED, ABANDONED):
+            raise Refused(f"job {job.id} is {job.data['state']}: there is nothing to abandon")
+        job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"))
+        return job
 
 
 def reject(job_id, reason, *, deps, jobs_dir=JOBS):

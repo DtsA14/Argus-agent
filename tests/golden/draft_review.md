@@ -37,7 +37,7 @@ Protected: `tests/**`
 - `regression`: `python -m pytest tests/test_old.py`, at least 1 tests, environment `argus`; required new tests: 0, required existing tests: 1
   - existing: `tests/test_old.py::test_total_plain`
 
-Budget profile for the agent: `large`
+Budget profile for the agent: `large_usd`
 
 Tools added for the agent: none (it rewrites whole files with WriteFile)
 

@@ -56,7 +56,7 @@ class Env:
         self.repo, self.jobs = make_repo(tmp_path), tmp_path / "jobs"
         self.drafter = StrictScriptedChatModel(script=list(draft or [td.SUBMIT]))
         self.coder = StrictScriptedChatModel(script=list(agent or [WRITE, FINISH]))
-        self.confirms = []
+        self.confirms, self.said = [], []
         self.cfg = config or cfg()
 
         def yes(text):
@@ -65,7 +65,7 @@ class Env:
         self.deps = rj.Deps(confirm=confirm or yes, get_key=lambda: "unused", isatty=lambda: True,
                             models={"drafter": self.drafter, "coder": self.coder}, validate=td.fake_validate,
                             preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"),
-                            clock=lambda: "2026-10-23T00:00:00Z", echo=lambda *a: None)
+                            clock=lambda: "2026-10-23T00:00:00Z", echo=self.said.append)
 
     def code(self, job_id="jtest", **kw):
         return rj.start_code(repo=self.repo, commit="HEAD", issue=td.ISSUE, cfg=self.cfg, deps=self.deps,
@@ -153,7 +153,7 @@ def test_the_agent_cap_is_the_lower_of_its_profile_and_what_the_job_has_left(env
     env.code()
     left = rj.left_usd(env.job())
     job, _ = env.approve()
-    assert job.data["approval"]["max_usd"] == round(min(0.50, left), 6) == job.data["stages"]["a1"]["cap_usd"]
+    assert job.data["approval"]["max_usd"] == round(min(0.75, left), 6) == job.data["stages"]["a1"]["cap_usd"]
     contract = json.loads((job.root / "fixtures" / "contracts" / "task.json").read_text())
     assert contract["limits"]["max_usd"] == job.data["approval"]["max_usd"]
 
@@ -383,3 +383,65 @@ def test_the_cli_runs_a_job_and_prints_the_approve_command(env, capsys):
                        "--issue-file", str(issue)], deps=env.deps)
     out = capsys.readouterr().out
     assert rc == 0 and "AWAITING_APPROVAL" in out and "argus approve j" in out
+
+
+
+# ---- after router pilot #1 ----------------------------------------------------------------------------------------
+
+def test_each_stage_says_it_is_running_and_how_to_continue_it(env):
+    env.code()
+    env.approve()
+    running = [m for m in env.said if "running in" in m]
+    assert len(running) == 2 and all("argus resume jtest" in m and "Do not start another job" in m for m in running)
+    assert any(m.startswith("drafter finished: DRAFTED") for m in env.said)
+    assert any(m.startswith("agent finished: DONE") for m in env.said)
+
+
+def test_status_and_the_job_ledger_never_change_a_log(env):
+    env.code()
+    job = env.job()
+    log = job.runs / "jtest-d1" / "events.jsonl"
+    log.write_bytes(log.read_bytes() + b'{"event": "llm_call_started", "call_id": "cut", "wor')   # a stage mid-write
+    before = log.read_bytes()
+    rj.status("jtest", jobs_dir=env.jobs)
+    rj.spent_nano(job)
+    assert log.read_bytes() == before
+
+
+def test_a_stale_job_is_abandoned_and_then_cannot_be_continued(env, monkeypatch):
+    def stop(**kw):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(cdr, "run_drafter", stop)
+    with pytest.raises(KeyboardInterrupt):
+        env.code()
+    assert env.job().data["state"] == rj.DRAFTING
+    with env.job().lock():                                 # still running somewhere: not under its feet
+        with pytest.raises(rj.JobBusy):
+            rj.abandon("jtest", "started again", deps=env.deps, jobs_dir=env.jobs)
+    job = rj.abandon("jtest", "started again by mistake", deps=env.deps, jobs_dir=env.jobs)
+    assert job.data["state"] == rj.ABANDONED and job.data["log"][-1]["reason"] == "started again by mistake"
+    monkeypatch.undo()
+    with pytest.raises(rj.Refused, match="nothing to resume"):
+        rj.resume("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    with pytest.raises(rj.Refused, match="nothing to abandon"):
+        rj.abandon("jtest", "again", deps=env.deps, jobs_dir=env.jobs)
+
+
+def test_a_finished_job_cannot_be_abandoned(env):
+    env.code()
+    env.approve()
+    with pytest.raises(rj.Refused, match="nothing to abandon"):
+        rj.abandon("jtest", "x", deps=env.deps, jobs_dir=env.jobs)
+
+
+def test_an_interrupted_command_says_how_to_continue(env, capsys, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("argus_cli2", ROOT / "scripts" / "argus.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, "load_config", lambda path=None: cfg())
+    monkeypatch.setattr(rj, "resume", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt()))
+    rc = mod.main(["--jobs-dir", str(env.jobs), "resume", "jtest"], deps=env.deps)
+    err = capsys.readouterr().err
+    assert rc == 130 and "argus resume jtest" in err and "Do not start a new job" in err

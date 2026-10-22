@@ -123,6 +123,9 @@ drafter:
   max_input_tokens: 64000
   max_steps: 16
   max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
+  # The profiles a draft may give the agent. Not `large` (45,000 tokens per attempt): an agent's input is re-sent at
+  # every step, and in router pilot #1 reading a 23 KB file used it up before any edit (2026-10-23).
+  agent_profiles: [default, large_usd]
   environment: argus       # the sandbox environment of every drafted validation (K4: python -m pytest <paths> only)
   validation_timeout_s: 300
 
@@ -133,7 +136,7 @@ drafter:
 router:
   job_max_usd: 1.00
   draft_max_usd: 0.75
-  agent_max_usd: {default: 0.50, large: 0.50, large_usd: 0.75}   # by the profile the drafter chose
+  agent_max_usd: {default: 0.50, large_usd: 0.75}   # by the profile the drafter chose (drafter.agent_profiles)
   overrides:
     budget.max_tokens: 1200000
     drafter.attempt_tokens: 400000

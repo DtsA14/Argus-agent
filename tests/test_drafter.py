@@ -38,7 +38,7 @@ ARGS = {"plan": {"files": ["src/shop.py"], "steps": ["floor the total at 0"], "r
         "validation": [{"id": "target", "paths": ["tests/test_new.py"], "must_pass": [NEW_NODE], "min_tests": 1},
                        {"id": "regression", "paths": ["tests/test_old.py"], "must_pass": [OLD_NODE], "min_tests": 1}],
         "new_tests": [{"path": "tests/test_new.py", "content": NEW_TEST}],
-        "unverifiable": ["the error message reads well"], "budget_profile": "large"}
+        "unverifiable": ["the error message reads well"], "budget_profile": "large_usd"}
 
 
 def args_with(test=None, **over):
@@ -310,7 +310,7 @@ def test_a_changed_source_copy_blocks_the_run(root, tmp_path, monkeypatch):
     assert not (d / "draft.json").exists()
 
 
-POLICY = {"environment": "argus", "validation_timeout_s": 300, "profiles": ["default", "large"], "max_submits": 3}
+POLICY = {"environment": "argus", "validation_timeout_s": 300, "profiles": ["default", "large_usd"], "max_submits": 3}
 
 
 @pytest.mark.parametrize("change, why", [
@@ -345,7 +345,7 @@ def test_the_model_sets_only_what_a_drafter_may_set(change, why):
 def test_the_harness_sets_the_base_the_version_and_each_validations_command():
     draft, problems = dt.draft_from_args(ARGS, base="shop", policy=POLICY)
     assert problems == [] and draft["base"] == "shop" and draft["draft_version"] == dr.VERSION
-    assert draft["contract"]["budget_profile"] == "large"
+    assert draft["contract"]["budget_profile"] == "large_usd"
     assert [v["args"] for v in draft["contract"]["validation"]] == [["-m", "pytest", "tests/test_new.py"],
                                                                      ["-m", "pytest", "tests/test_old.py"]]
     assert {v["environment"] for v in draft["contract"]["validation"]} == {"argus"}
@@ -580,13 +580,22 @@ def test_the_drafter_is_offered_the_read_tools_of_its_allowlist_and_both_submit_
 def test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_one(root, tmp_path):
     r, model, d = run(root, tmp_path, [SUBMIT])
     prompt = model.calls[0]["messages"][1].content
-    profiles = load_config()["code_task"]["profiles"]
-    assert "budget_profile, required" in prompt
-    for name, p in profiles.items():
+    c = load_config()
+    assert "budget_profile, required" in prompt and c["drafter"]["agent_profiles"] == ["default", "large_usd"]
+    for name in c["drafter"]["agent_profiles"]:
+        p = c["code_task"]["profiles"][name]
         assert f"  - {name}: " in prompt and f"output up to {p['max_output_tokens']:,} per call" in prompt
+    assert "  - large: " not in prompt                                         # not offered (router pilot #1)
     assert "$0.45 per attempt, input up to 40,000 per call" in prompt                 # large_usd, in USD
-    assert json.loads((d / "draft.json").read_text())["contract"]["budget_profile"] == "large"
-    assert "Budget profile for the agent: `large`" in (d / "DRAFT_REVIEW.md").read_text()
+    assert "every file it has read is paid again at every later step" in prompt
+    assert json.loads((d / "draft.json").read_text())["contract"]["budget_profile"] == "large_usd"
+    assert "Budget profile for the agent: `large_usd`" in (d / "DRAFT_REVIEW.md").read_text()
+
+
+def test_a_profile_not_offered_to_the_drafter_is_refused(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [call("SubmitDraft", dict(ARGS, budget_profile="large"), "s0"), SUBMIT])
+    assert "budget_profile is required and must be one of ['default', 'large_usd']" in tool_texts(model, 1)[0]
+    assert r["status"] == dt.DRAFTED and len(vlog()) == 2                     # the refused one ran nothing
 
 
 
@@ -594,6 +603,7 @@ def tiny(**drafter):
     """A config with a profile whose output cannot hold even src/shop.py (63 bytes, about 15 tokens)."""
     c = cfg(**drafter)
     c["code_task"]["profiles"]["tiny"] = {"attempt_tokens": 30000, "max_output_tokens": 5}
+    c["drafter"]["agent_profiles"].append("tiny")
     return c
 
 
@@ -610,7 +620,7 @@ def test_a_writable_file_too_large_to_rewrite_in_one_call_is_refused_without_edi
 
 
 def test_a_file_that_fits_one_call_needs_no_edit_file(root, tmp_path, vlog):
-    r, model, d = run(root, tmp_path, [SUBMIT])                               # large: 8,192 tokens of output
+    r, model, d = run(root, tmp_path, [SUBMIT])                               # large_usd: 8,192 tokens of output
     assert r["status"] == dt.DRAFTED and "tools" not in json.loads((d / "draft.json").read_text())["contract"]
     assert "Tools added for the agent: none" in (d / "DRAFT_REVIEW.md").read_text()
 
