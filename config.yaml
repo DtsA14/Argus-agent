@@ -126,6 +126,20 @@ drafter:
   environment: argus       # the sandbox environment of every drafted validation (K4: python -m pytest <paths> only)
   validation_timeout_s: 300
 
+# Router v0 (docs/reviews/SPEC_ROUTER_V0.md): `argus code` runs a code task as one job with one cap. job_max_usd: from the
+# W2b ledger (worst drafter run $0.29 + one `large` agent attempt $0.45 = $0.74, room for one median redraft). Each stage
+# is capped by what is left of the job, recorded when it starts. overrides: applied to every stage's config (the setup
+# the W2b pilots ran with); shown before each live stage.
+router:
+  job_max_usd: 1.00
+  draft_max_usd: 0.75
+  agent_max_usd: {default: 0.50, large: 0.50, large_usd: 0.75}   # by the profile the drafter chose
+  overrides:
+    budget.max_tokens: 1200000
+    drafter.attempt_tokens: 400000
+    code_task.auto_validate: true
+    llm.prompt_cache.enabled: true
+
 retry:
   attempts: 3
   base_delay: 0.05       # seconds, doubles each attempt
