@@ -1,0 +1,48 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "pr_title",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "3b5d26e1fdd662d8421740223f398d978ebd1e59",
+  "tree": "4267f4f19d13297d0f4be66ef9fb08e248f93c03",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_p7",
+    "commit": "3b5d26e1fdd662d8421740223f398d978ebd1e59",
+    "tree": "4267f4f19d13297d0f4be66ef9fb08e248f93c03",
+    "snapshot_sha256": "3fe0c22f85b09678c28c83678917e6a383757453ba8b93be7d5d9069727a2784"
+  },
+  "added": {
+    "tests/test_pr_title.py": "fc85d212bfbcdc55df97a6d59e37d9881de4f03e6a3a2b99cb38974af931fbfd"
+  },
+  "files": 437,
+  "snapshot_sha256": "0bc75bc3c2263dbc8bfc8e7807ad1a4e1fb9a9994430fea6a9b116e7557ff4e3",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "c9535a0c7b3e59b2777d7c05a9e8161d16e1e009142c29623bf91dbf9f240b2b",
+  "draft_sha256": "4829e54b7fae78957f46c545ba289f01013ec9fcde98ae1fb26a63abf6c4e1d9",
+  "plan": {
+    "files": [
+      "codetask/review.py"
+    ],
+    "steps": [
+      "In render_pr, replace the [:80] slice of the issue's first line with a helper that applies the word-boundary rule and appends '...'.",
+      "Keep the contract-name prefix, cell(title, 120), and the rest of PR.md unchanged."
+    ],
+    "risks": [
+      "Off-by-one: the cut uses the first 81 characters, so a space at index 80 keeps the whole 80-character word.",
+      "Trailing spaces must be removed before appending '...'.",
+      "The existing cell(title, 120) must still be applied to the whole heading."
+    ]
+  },
+  "unverifiable": [],
+  "feasibility": "unproven",
+  "approved_at": "2026-10-22T17:44:00Z"
+}

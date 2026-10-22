@@ -131,3 +131,15 @@ ada. Prompt task mencantumkan setiap profil dengan batasnya (USD atau token per 
 panggilan; dibekukan di policy run sebagai `profile_info`), ditambah satu kalimat cara memilih. `DRAFT_REVIEW.md`
 menampilkan profil yang dipilih. Mutan `verification/mutants-w2b-profile-20261023-17cd3d4.log`: 4/4. `verify.sh` lulus
 di `17cd3d4`.
+
+## 8. Tool agen dan cek kelayakan tulis ulang (2026-10-23)
+
+Pilot W2b-2 (`pilots/m6_w2b/w2b2/live/w2b2d1/RESULT.md`) menyetujui kontrak yang praktis mustahil: agen hanya punya
+`WriteFile` untuk berkas 30 KB, sedangkan output profil `default` hanya 4.096 token. Sekarang:
+- `SubmitDraft`/`ReviseDraft` boleh menambah `tools` dari `CONTRACT_TOOLS` (`edit_file`, `search_files`); nama lain atau
+  duplikat ditolak. Prompt task menyebut tool agen (dibekukan di policy sebagai `agent_tools`).
+- `rewrite_problems`: sebelum sandbox, setiap berkas yang ada, cocok writable, dan tidak protected, yang perkiraan
+  ukurannya (byte/4) melebihi output satu panggilan di profil terpilih, membuat draf ditolak, kecuali `edit_file`
+  diberikan.
+- Mutan `verification/mutants-w2b-tools-20261023-b551506.log`: 4/4. Tidak dites: berkas yang writable sekaligus
+  protected tidak dihitung (aturan scope yang sama dengan acceptance).

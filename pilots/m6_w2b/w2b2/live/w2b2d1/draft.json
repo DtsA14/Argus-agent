@@ -1,0 +1,61 @@
+{
+  "draft_version": 1,
+  "base": "argus_p7",
+  "plan": {
+    "files": [
+      "codetask/review.py"
+    ],
+    "steps": [
+      "In render_pr, replace the [:80] slice of the issue's first line with a helper that applies the word-boundary rule and appends '...'.",
+      "Keep the contract-name prefix, cell(title, 120), and the rest of PR.md unchanged."
+    ],
+    "risks": [
+      "Off-by-one: the cut uses the first 81 characters, so a space at index 80 keeps the whole 80-character word.",
+      "Trailing spaces must be removed before appending '...'.",
+      "The existing cell(title, 120) must still be applied to the whole heading."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "codetask/review.py"
+      ],
+      "protected": [
+        "tests/**",
+        "acceptance/**",
+        "harness/**",
+        "scripts/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_pr_title.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_pr_title.py::test_cut_before_last_space",
+          "tests/test_pr_title.py::test_space_at_index_80_keeps_word",
+          "tests/test_pr_title.py::test_one_long_word",
+          "tests/test_pr_title.py::test_multiple_spaces_removed",
+          "tests/test_pr_title.py::test_only_first_line_used"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "budget_profile": "default"
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_pr_title.py",
+      "content": "from codetask import review\n\n\nclass _Ck:\n    valid = True\n    problems = []\n\n\ndef _prov():\n    return {\n        \"patch\": {\"files\": [], \"sha256\": \"0\" * 64},\n        \"validation_fresh\": {},\n        \"checks\": [],\n        \"base\": {\"repo\": \"r\", \"commit\": \"c\" * 40},\n        \"argus\": {\"commit\": \"a\" * 40, \"dirty\": False},\n        \"contract\": {\"name\": \"fix_x\", \"sha256\": \"f\" * 64},\n        \"models\": [],\n        \"cost\": {\"calls\": 0, \"usd\": 0.0, \"usd_complete\": True},\n        \"run_id\": \"run\",\n        \"attempts\": 1,\n    }\n\n\ndef _heading(issue, name=\"fix_x\"):\n    contract = {\"contract\": name, \"inputs\": {\"issue\": issue}}\n    out = review.render_pr(_prov(), contract, None, None, _Ck())\n    return out.splitlines()[0]\n\n\ndef test_exactly_80_chars_unchanged():\n    line = \"abcdefghi \" * 7 + \"abcdefghij\"\n    assert len(line) == 80\n    assert _heading(line) == \"# fix_x: \" + line\n\n\ndef test_short_line_unchanged():\n    assert _heading(\"Short title\\n\\nbody\") == \"# fix_x: Short title\"\n\n\ndef test_cut_before_last_space():\n    line = \"The title of a review package's pull request draft is cut in the middle of a word and more text\"\n    assert _heading(line) == \"# fix_x: The title of a review package's pull request draft is cut in the middle of a...\"\n\n\ndef test_space_at_index_80_keeps_word():\n    first = \"abcdefghi \" * 7 + \"abcdefghij\"\n    assert len(first) == 80\n    assert _heading(first + \" tail of the line\") == \"# fix_x: \" + first + \"...\"\n\n\ndef test_one_long_word():\n    assert _heading(\"x\" * 100) == \"# fix_x: \" + \"x\" * 80 + \"...\"\n\n\ndef test_multiple_spaces_removed():\n    line = \"a\" * 70 + \"  \" + \"b\" * 30\n    assert _heading(line) == \"# fix_x: \" + \"a\" * 70 + \"...\"\n\n\ndef test_only_first_line_used():\n    line = \"word \" * 30\n    issue = \"  \\n\" + line + \"\\nsecond line\"\n    assert _heading(issue) == \"# fix_x: \" + (\"word \" * 16).rstrip() + \"...\"\n\n\ndef test_heading_still_cut_to_120():\n    name = \"n\" * 50\n    line = \"word \" * 30\n    full = name + \": \" + (\"word \" * 16).rstrip() + \"...\"\n    assert len(full) > 120\n    assert _heading(line, name) == \"# \" + full[:117] + \"...\"\n"
+    }
+  ],
+  "unverifiable": []
+}

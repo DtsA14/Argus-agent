@@ -1,0 +1,6 @@
+HEAD b551506 tests: tests/test_drafter.py tests/test_draft.py tests/test_review.py
+KILLED  rewrite check off
+KILLED  edit_file not honoured
+KILLED  tools not put into the contract
+KILLED  any tool accepted
+RESULT: 4/4 killed
