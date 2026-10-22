@@ -199,7 +199,8 @@ def test_an_attempt_without_a_policy_runs_without_auto_validation(tmp_path, monk
         return lambda contract, box, iteration, feedback=None, policy=None: attempt(contract, box, iteration, feedback)
     monkeypatch.setattr(run_module, "make_attempt", without_policy)
     r, model, v, d = run(tmp_path, [write_bad(1), WRITE, FINISH])          # config says on
-    assert v.by("auto") == [] and all(LABEL not in texts(c) for c in model.calls)
+    assert v.by("auto") == [] and all(LABEL not in texts(c) and LIMIT not in texts(c) for c in model.calls)
+    assert not [e for e in events(d, "step_committed") if e["kind"] == "after_step"]       # nothing decided at all
 
 
 def test_run_validation_and_acceptance_tag_their_sandbox_runs(tmp_path):
@@ -339,9 +340,9 @@ def test_real_sandbox_auto_validation_leaves_the_workspace_unchanged_and_is_time
     d = tmp_path / "runs" / "rc"
     assert json.loads((d / "result.json").read_text())["status"] == "DONE"
     runs = events(d, "sandbox_run")
-    assert [(e["origin"], e["validation"]) for e in runs] == [("auto", "unit"), ("auto", "target"),
+    assert [(e.get("origin"), e["validation"]) for e in runs] == [("auto", "unit"), ("auto", "target"),
                                                              ("acceptance", "unit"), ("acceptance", "target")]
-    assert all(isinstance(e["duration_s"], float) and e["duration_s"] > 0 for e in runs)
+    assert all(isinstance(e.get("duration_s"), float) and e["duration_s"] > 0 for e in runs)
     after = [e for e in events(d, "after_step")]
     assert [(e["step"], e["validated"]) for e in after] == [(0, True), (1, False)]
     assert after[0]["digest"] == after[1]["digest"]                     # the validation changed nothing in the workspace
@@ -357,7 +358,7 @@ def test_a_crash_around_the_auto_validation_across_processes(tmp_path, image, po
     result = json.loads((d / "result.json").read_text())
     assert result["status"] == "DONE" and result["llm_calls"] == 3 and result["llm_calls_unknown"] == 0
     assert _model_calls(tmp_path) == 3                                 # as many model calls as without a crash
-    autos = [e for e in events(d, "sandbox_run") if e["origin"] == "auto"]
+    autos = [e for e in events(d, "sandbox_run") if e.get("origin") == "auto"]
     assert len(autos) == (4 if point == "agent@after_auto_validation" else 2)   # uncommitted: run again; committed: not
     committed = [e for e in events(d, "step_committed") if e["kind"] == "after_step"]
     assert [(e["iteration"], e["step"]) for e in committed] == [(0, 0), (0, 1)]
