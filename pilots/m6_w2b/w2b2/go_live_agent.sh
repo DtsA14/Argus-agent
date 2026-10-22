@@ -89,7 +89,7 @@ lim = ctrun.settings(cfg, contract)
 with tempfile.TemporaryDirectory() as d:
     blocker = ctrun.admission(EventLog(Path(d) / "e.jsonl"), lim)
 e = {"applied_profile": cfg["code_task"]["applied_profile"], "attempt_tokens": lim["attempt_tokens"],
-     "attempt_usd": lim["attempt_usd"], "max_input_tokens": lim["max_input_tokens"],
+     "attempt_usd": round(lim["attempt_usd"], 9), "max_input_tokens": lim["max_input_tokens"],
      "coder_max_output_tokens": cfg["roles"]["coder"]["max_output_tokens"], "coder_model": cfg["roles"]["coder"]["model"],
      "cap_usd": lim["max_usd"], "run_max_tokens": lim["max_tokens"], "max_iterations": lim["max_iterations"],
      "max_steps": lim["max_steps"], "auto_validate": cfg["code_task"]["auto_validate"],
