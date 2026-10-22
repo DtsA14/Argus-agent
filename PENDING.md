@@ -41,7 +41,8 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [ ] `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task (membandingkan dengan tree commit tanpa tes yang
   disetujui); tanpa `--repo` benar
 - [ ] Judul `PR.md` (paket review) dipotong 80 karakter di tengah kata; kosmetik
-- [ ] **W2b** drafter model (tool read-only + SubmitDraft): prioritas rendah, karena W2a tetap mewajibkan patch referensi manusia
+- [~] **W2b** drafter model (`docs/reviews/REVIEW_M6_W2B.md`): kode dan tes selesai, patch referensi opsional (K1). Berikutnya
+  pilot **W2b-1** (ulang issue 3b di `argus_p6`, cek bocoran di preflight), lalu **W2b-2** end-to-end di task baru (spec bagian 7)
 - [ ] **D4** batas ListFiles + daftar berkas di issue: **ditunda** (2026-10-22); dibuka bila ada task yang kehabisan anggaran dengan caching
   menyala
 - Pengamatan, belum tindakan: di `pilot3b1` agen memanggil `RunValidation` di balasan yang sama dengan tulisannya, sebelum validasi otomatis
