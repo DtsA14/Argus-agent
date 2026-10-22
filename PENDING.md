@@ -23,8 +23,12 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di Reconciliation bagian 7.
 
-- [ ] **Ukur waktu supervisi manusia** di setiap pilot (M5/M6): sejak pilot 3a tercatat `unknown`. Catat di laporan pilot dan di berkas
-  supervisi `scripts/pilot_report.py`
+- [ ] **Supervisi manusia per pilot, versi ringan** (diputuskan Atha 2026-10-22; M5/M6), mulai pilot berikutnya:
+  1. **jumlah titik keputusan manusia** (jawaban spesifikasi, approve, go live, merge, intervensi tak terduga), dihitung Claude dari PR dan
+     alur pilot;
+  2. **waktu terminal** dicatat otomatis oleh `go_live.sh` (mulai, kunci diketik, run selesai), ke log di luar repo;
+  3. **menit kerja Atha opsional**: ditanya sekali di akhir pilot, satu angka kasar; "skip" dicatat `unknown`.
+  Tujuannya: apakah Argus menghemat waktu manusia, bukan hanya biaya model. Pilot 3a–3b tetap `unknown`
 - [ ] **Repo selain Argus** (M6): semua pilot di repo Argus. Athena butuh image sandbox per proyek; JS (bulking-app) belum bisa divalidasi
 - [ ] **Pertanyaan B dari D5:** apakah ≥ 2 putaran perbaikan muat dalam satu attempt. `pilot3a5` dan `pilot3b1` tidak membutuhkannya; perlu
   task yang memang menuntut beberapa putaran
