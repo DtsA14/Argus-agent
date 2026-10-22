@@ -1,0 +1,54 @@
+HEAD: 2f2be1e D2: the feedback between attempts carries the error lines of each failing validation
+== 1. D2 tests + code-task tests, with Docker
+........................................................................ [ 81%]
+................                                                         [100%]
+88 passed in 12.27s
+== 2. mutants_d2.py
+killed   the excerpt is not rendered in the prompt  <- tests/test_feedback_excerpt.py::test_the_feedback_carries_the_error_lines_of_a_failing_validation
+killed   a block cut by the start of the tail is used  <- tests/test_feedback_excerpt.py::test_a_tail_that_starts_inside_a_cut_block_still_yields_every_distinct_error
+killed   the outer exception is a block's error, not the innermost  <- tests/test_feedback_excerpt.py::test_a_tail_that_starts_inside_a_cut_block_still_yields_every_distinct_error
+killed   no deduplication of blocks  <- tests/test_feedback_excerpt.py::test_one_block_per_distinct_error
+killed   no 800-character limit  <- tests/test_feedback_excerpt.py::test_the_excerpt_is_bounded_per_validation_and_per_line
+killed   no per-line limit  <- tests/test_feedback_excerpt.py::test_the_excerpt_is_bounded_per_validation_and_per_line
+killed   a passing validation gets an excerpt  <- tests/test_feedback_excerpt.py::test_the_feedback_carries_the_error_lines_of_a_failing_validation
+killed   no limit of three validations  <- tests/test_feedback_excerpt.py::test_at_most_three_failing_validations_and_never_a_passing_one
+killed   timings are not normalized  <- tests/test_feedback_excerpt.py::test_a_tail_that_starts_inside_a_cut_block_still_yields_every_distinct_error
+killed   the label no longer says the excerpt is data, not instructions  <- tests/test_feedback_excerpt.py::test_the_feedback_carries_the_error_lines_of_a_failing_validation
+killed   the config flag is ignored  <- tests/test_feedback_excerpt.py::test_the_excerpt_can_be_switched_off_for_replays_of_older_runs
+killed   an empty list of excerpts renders the label  <- tests/test_feedback_excerpt.py::test_feedback_without_excerpts_renders_exactly_as_before
+killed   audit_run does not try the feedback without excerpts  <- tests/test_feedback_excerpt.py::test_audit_run_reproduces_every_prompt_hash_with_and_without_the_excerpt
+killed   a long block loses its innermost error  <- tests/test_feedback_excerpt.py::test_the_innermost_error_of_a_long_block_is_kept
+killed   pytest's comparison explanation is kept  <- tests/test_feedback_excerpt.py::test_the_feedback_carries_the_error_lines_of_a_failing_validation
+killed   unittest: the first traceback instead of the last  <- tests/test_feedback_excerpt.py::test_a_unittest_tail_gives_its_last_traceback
+killed   pytest's summary line is dropped  <- tests/test_feedback_excerpt.py::test_the_excerpt_is_bounded_per_validation_and_per_line
+unmutated code: 88 passed in 11.29s
+17 of 17 mutants killed
+tree after mutants: []
+== 3. audit_run.py (D2) over the live runs
+-- pilot3a
+llm_call_started 7, llm_call 9 (ok 7, refused 2)
+  it 1: feedback without error excerpts
+prompt_hash checked 9, mismatches 0
+-- pilot3a2
+llm_call_started 6, llm_call 8 (ok 6, refused 2)
+  it 1: feedback without error excerpts
+prompt_hash checked 8, mismatches 0
+-- pilot4a
+llm_call_started 3, llm_call 3 (ok 3, refused 0)
+prompt_hash checked 3, mismatches 0
+-- pilot4b
+llm_call_started 3, llm_call 3 (ok 3, refused 0)
+prompt_hash checked 3, mismatches 0
+-- pilot5a
+llm_call_started 3, llm_call 3 (ok 3, refused 0)
+prompt_hash checked 3, mismatches 0
+== 4. replay of pilot3a with the D2 code (excerpts switched off by replay_3a.py)
+  "usd_billed": 0.200014,
+  "usd_billed": 0.200014,
+ "same_sequence_of_calls (iteration, step, status, prompt_hash, tokens)": true,
+ "verdict_0_workspace_digest_live": "41b051c07334de8d",
+ "verdict_0_workspace_digest_replay": "41b051c07334de8d",
+ "verdict_1_workspace_digest_live": "41b051c07334de8d",
+ "verdict_1_workspace_digest_replay": "41b051c07334de8d",
+ "requests_the_live_run_never_made": 0
+tree before verify: []

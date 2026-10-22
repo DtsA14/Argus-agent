@@ -82,6 +82,9 @@ code_task:
   attempt_tokens: 30000
   max_steps: 12
   stagnation_rounds: 2     # the same failing criteria this many attempts in a row ends the run (FAILED_ACCEPTANCE)
+  # D2: the feedback to the next attempt carries the error lines of each failing validation (from the verdict's
+  # output_tail, bounded). false gives the feedback as it was before D2: replays of older runs (replay_3a.py) use it.
+  feedback_error_excerpt: true
   # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
   # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
   # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room

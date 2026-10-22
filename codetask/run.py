@@ -304,7 +304,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if stop:
             return move(state, st.FAILED_ACCEPTANCE, reason=stop, verdict=summary, failures=history)
         return move(state, st.RUNNING, iteration=i + 1, verdict=summary, failures=history,
-                    feedback=feedback_from(v))
+                    feedback=feedback_from(v, excerpts=bool(cfg["code_task"].get("feedback_error_excerpt", True))))
 
     g = StateGraph(State)
     lim = settings(cfg)

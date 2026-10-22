@@ -39,6 +39,7 @@ for k, v in db.execute("select key, value from memo"):
         reply_by_step[(key[3], key[4])] = json.loads(v)
 
 cfg = load_config(config_path)
+cfg["code_task"]["feedback_error_excerpt"] = False       # pilot3a ran before D2: its attempt-1 prompt had no excerpts
 cfg["sandbox"] = {**(cfg.get("sandbox") or {}), "kind": "docker"}
 for name in cfg["sandbox"].get("environments") or {}:
     var, path = f"ARGUS_SANDBOX_IMAGE_{name.upper()}", ROOT / f".sandbox_image_{name}"
