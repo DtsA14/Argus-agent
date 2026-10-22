@@ -47,8 +47,10 @@ def test_no_wrong_or_cheating_script_passes_the_eval(tmp_path, image):
 
 def test_a_wrong_script_that_passes_is_reported_as_a_broken_benchmark(tmp_path, image):
     # A fixture whose "wrong" script is really a correct solution is a broken benchmark: the runner must say so
-    # (benchmark_valid false, exit code 1) instead of counting it as a detected cheat.
+    # (benchmark_valid false, exit code 1) instead of counting it as a detected cheat. Two tasks show it; the whole
+    # manifest (every task's real scripts) is covered by the two tests above, so this one no longer grows per task.
     m = json.loads((ROOT / "evals" / "v1" / "manifest.json").read_text(encoding="utf-8"))
+    m["tasks"] = m["tasks"][:2]
     for t in m["tasks"]:
         t["wrong"] = t["reference"]
     broken = tmp_path / "broken_manifest.json"
@@ -59,7 +61,7 @@ def test_a_wrong_script_that_passes_is_reported_as_a_broken_benchmark(tmp_path, 
                        timeout=900)
     report = json.loads((tmp_path / "w" / "report.json").read_text())
     assert r.returncode == 1 and report["benchmark_valid"] is False, (r.stdout[-1500:], r.stderr[-1500:])
-    assert all(t["eval_pass"] and t["benchmark_ok"] is False for t in report["tasks"])
+    assert len(report["tasks"]) == 2 and all(t["eval_pass"] and t["benchmark_ok"] is False for t in report["tasks"])
     assert "BROKEN" in r.stdout
 
 
@@ -79,11 +81,12 @@ def test_running_an_eval_again_into_the_same_runs_never_reuses_the_old_run(tmp_p
         ev.run_eval(manifest, "reference", tmp_path / "runs", cfg, tasks=["fix_divide"])
 
 
-def _script_eval(tmp_path, image, first_script):
-    """Mode reference over the real manifest, with the first task's script replaced."""
+def _script_eval(tmp_path, image, first_script, tasks=None):
+    """Mode reference over the real manifest (its first `tasks` tasks), with the first task's script replaced."""
     from evals import runner as ev
     from runner import load_config
     m = json.loads((ROOT / "evals" / "v1" / "manifest.json").read_text(encoding="utf-8"))
+    m["tasks"] = m["tasks"][:tasks] if tasks else m["tasks"]
     m["tasks"][0]["reference"] = first_script
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(m), encoding="utf-8")
@@ -114,9 +117,10 @@ def test_failed_acceptance_is_data_and_never_stops_the_eval(tmp_path, image):
                                                                    "evidence": "validation:unit"}],
                                                        "summary": "done"}, "id": "f1"}],
             "usage": {"input_tokens": 500, "output_tokens": 60}}
-    m, report = _script_eval(tmp_path, image, [lazy, lazy])
+    m, report = _script_eval(tmp_path, image, [lazy, lazy], tasks=3)        # the eval goes on to the other two
     assert report["tasks"][0]["status"] == "FAILED_ACCEPTANCE" and report["stopped"] is None
-    assert report["not_run"] == 0 and report["ran"] == len(m["tasks"])
+    assert report["not_run"] == 0 and report["ran"] == len(m["tasks"]) == 3
+    assert all(t["eval_pass"] for t in report["tasks"][1:])
 
 
 # ---- the search-value experiment (evals/search_v1, outside Eval Set v1) ------------------------------------------

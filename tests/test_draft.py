@@ -47,6 +47,10 @@ DRAFT = {"draft_version": 1, "base": "shop",
 
 @pytest.fixture
 def root(tmp_path):
+    return make_root(tmp_path)
+
+
+def make_root(tmp_path):
     repo = tmp_path / "shop_repo"
     (repo / "src").mkdir(parents=True)
     (repo / "tests").mkdir()
@@ -96,6 +100,17 @@ def run_check(root, ref, scfg, draft=None, **over):
     kw = {"task": "fix_shop", "issue": "the total can go negative", "max_usd": 0.5, "max_iterations": 3,
           "reference_patch": ref, "sandbox_cfg": scfg, "root": root, **over}
     return dr.check(draft or DRAFT, **kw)
+
+
+@pytest.fixture(scope="module")
+def good_report(tmp_path_factory, scfg):
+    """The check of the default draft with the reference fix, run once for the module (two sandbox runs, ~12 s).
+    check() reads only the content of the root (intake record and snapshot, draft, patch), never its path, and every
+    `root` is built with the same content; approve() then checks the intake of the test's own root. So this report is
+    the one each test's own check would give. Tests that change what is checked still run their own check.
+    Use it through copy.deepcopy: some tests tamper with the report."""
+    tmp = tmp_path_factory.mktemp("good")
+    return run_check(make_root(tmp), patch(tmp, {"src/shop.py": FIXED}), scfg)
 
 
 # ---- the draft's shape and what it may not set (no sandbox) ---------------------------------------------------
@@ -155,8 +170,8 @@ def test_a_draft_on_no_intake_is_refused(root, tmp_path):
 
 # ---- baseline red and reference green, in the sandbox -----------------------------------------------------------
 
-def test_a_good_draft_is_ok_and_approval_publishes_a_task_bound_to_its_contract(root, tmp_path, scfg):
-    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+def test_a_good_draft_is_ok_and_approval_publishes_a_task_bound_to_its_contract(root, good_report):
+    r = copy.deepcopy(good_report)
     assert r["ok"], r["problems"]
     assert r["baseline"]["target"]["must_pass"] == {NEW_NODE: "FAIL"} and r["baseline"]["regression"]["status"] == "pass"
     assert r["reference"]["target"] == r["reference"]["regression"] == "pass"
@@ -243,25 +258,25 @@ def test_a_reference_patch_that_does_not_apply_is_refused(root, tmp_path, scfg):
 
 # ---- approval -------------------------------------------------------------------------------------------------
 
-def test_only_an_ok_report_is_approved_and_approval_never_overwrites(root, tmp_path, scfg):
+def test_only_an_ok_report_is_approved_and_approval_never_overwrites(root, good_report):
     with pytest.raises(dr.DraftError, match="only a report"):
         dr.approve({"ok": False, "task": "fix_shop"}, DRAFT, root=root)
-    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+    r = copy.deepcopy(good_report)
     dr.approve(r, DRAFT, root=root)
     with pytest.raises(dr.DraftError, match="never overwrites"):
         dr.approve(r, DRAFT, root=root)
 
 
-def test_tests_changed_between_check_and_approval_are_refused(root, tmp_path, scfg):
-    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+def test_tests_changed_between_check_and_approval_are_refused(root, good_report):
+    r = copy.deepcopy(good_report)
     other = with_new_test(NEW_TEST.replace("[1], 5", "[2], 9"))
     with pytest.raises(dr.DraftError, match="differs from the one that was checked"):
         dr.approve(r, other, root=root)
     assert not (root / "fixtures" / "repos" / "fix_shop").exists()
 
 
-def test_a_stop_before_the_task_repository_leaves_a_record_that_setup_refuses(root, tmp_path, scfg, monkeypatch):
-    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+def test_a_stop_before_the_task_repository_leaves_a_record_that_setup_refuses(root, good_report, monkeypatch):
+    r = copy.deepcopy(good_report)
     real = os.replace
     monkeypatch.setattr(dr.os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("stop"))
                         if os.path.basename(str(d)) == "fix_shop" else real(s, d))
@@ -271,8 +286,8 @@ def test_a_stop_before_the_task_repository_leaves_a_record_that_setup_refuses(ro
     assert rec is not None and "missing" in intake.check(rec, root / "fixtures" / "repos" / "fix_shop")[0]
 
 
-def test_an_approved_task_changed_afterwards_fails_its_check(root, tmp_path, scfg):
-    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+def test_an_approved_task_changed_afterwards_fails_its_check(root, good_report):
+    r = copy.deepcopy(good_report)
     rec = dr.approve(r, DRAFT, root=root)
     test = root / "fixtures" / "repos" / "fix_shop" / "tests" / "test_new.py"
     test.write_text(NEW_TEST.replace("== 0", "== -4"))                 # the approved test is edited later
@@ -303,9 +318,9 @@ def change_draft(r, d):
     (change_draft, "the draft differs from the one that was checked"),
 ])
 def test_a_report_or_draft_changed_between_check_and_approval_is_refused_and_publishes_nothing(
-        root, tmp_path, scfg, tamper, why):
+        root, good_report, tamper, why):
     # review of #79: approve() publishes exactly what check() checked, whoever calls it
-    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+    r = copy.deepcopy(good_report)
     assert r["ok"] and r["contract_sha256"] == ct.freeze(r["contract"])[1]
     d = copy.deepcopy(DRAFT)
     tamper(r, d)
@@ -321,8 +336,8 @@ def test_the_contract_never_shares_objects_with_the_draft():
     assert DRAFT["contract"]["scope"]["writable"] == ["src/*.py"] and DRAFT["contract"]["validation"][0]["must_pass"]
 
 
-def test_an_intake_changed_between_check_and_approval_is_refused(root, tmp_path, scfg):
-    r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+def test_an_intake_changed_between_check_and_approval_is_refused(root, good_report):
+    r = copy.deepcopy(good_report)
     (root / "fixtures" / "repos" / "shop" / "src" / "shop.py").write_text(FIXED)
     with pytest.raises(dr.DraftError, match="changed since the check"):
         dr.approve(r, DRAFT, root=root)
