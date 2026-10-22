@@ -45,10 +45,18 @@ for it in range(contract["limits"].get("max_iterations", 5)):
         feedback = feedback_from(verdict)
         first = [e for e in calls if e.get("iteration") == it and e.get("step") == 0]
         legacy = [f"{c['id']}: {c['reason'][:300]}" for c in verdict["criteria"] if c["status"] != "pass"][:10]
-        if first and hl.prompt_hash([SystemMessage(sp), HumanMessage(task_prompt(contract, legacy))], tools) \
-                == first[0]["prompt_hash"]:
-            feedback = legacy               # a run from before the feedback carried the harness's checks
-            print(f"  it {it}: feedback in the older form (failing criteria only)")
+
+        def matches(fb):
+            return bool(first) and hl.prompt_hash([SystemMessage(sp), HumanMessage(task_prompt(contract, fb))],
+                                                  tools) == first[0]["prompt_hash"]
+        if not matches(feedback):
+            plain = feedback_from(verdict, excerpts=False)
+            if matches(plain):
+                feedback = plain            # a run from before D2, or with code_task.feedback_error_excerpt: false
+                print(f"  it {it}: feedback without error excerpts")
+            elif matches(legacy):
+                feedback = legacy           # a run from before the feedback carried the harness's checks
+                print(f"  it {it}: feedback in the older form (failing criteria only)")
     messages = [SystemMessage(sp), HumanMessage(task_prompt(contract, feedback))]
     for step in range(64):
         led = [e for e in calls if e.get("iteration") == it and e.get("step") == step]

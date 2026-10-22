@@ -1,0 +1,12 @@
+# audit_run.py (with D2) over the two live runs of the archive (runs/ is not in the repo).
+# Only the result lines are kept here: the full output lists the model's tool calls, which stay out of the public repo.
+
+## runs/pilot3a
+llm_call_started 7, llm_call 9 (ok 7, refused 2)
+  it 1: feedback without error excerpts
+prompt_hash checked 9, mismatches 0
+
+## runs/pilot3a2
+llm_call_started 6, llm_call 8 (ok 6, refused 2)
+  it 1: feedback without error excerpts
+prompt_hash checked 8, mismatches 0
