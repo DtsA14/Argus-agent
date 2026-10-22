@@ -343,6 +343,7 @@ def test_the_runs_cap_is_the_lower_of_the_config_and_the_run(root, tmp_path):
     r, _, d = run(root, tmp_path, [READ, SUBMIT], max_usd=0.9, config=c)
     assert r["max_usd"] == 0.2
     assert dt.drafter_settings({**c, "budget": {**c["budget"], "max_usd": 0.2}})["attempt_usd"] == 0.2
+    assert dt.drafter_settings({**c, "budget": {**c["budget"], "max_tokens": 1000}})["attempt_tokens"] == 1000
     started = [e for e in events(d) if e["event"] == "llm_call_started"]
     assert started and all(e["node"] == "drafter" and e["task"] == "draft:shop" for e in started)
 
@@ -482,3 +483,7 @@ def test_a_crash_anywhere_resumes_without_redoing_what_was_committed(root, tmp_p
     assert not nodes & {e["node"] for e in after if e["event"] == "node_start"}
     assert len([e for e in evs if e["event"] == "llm_call" and e.get("status") == "ok"]) == model_calls
     assert len((tmp_path / "validate.log").read_text().splitlines()) == checks
+    redrafted = any(e["event"] == "node_start" and e["node"] == "draft" for e in after)
+    if redrafted and any(e["event"] == "llm_call" for e in before):   # the resumed loop starts with what was spent
+        restored = [e for e in after if e["event"] == "reservation_restored" and e["node"] == "drafter"]
+        assert restored and restored[0]["calls"] >= 1, restored
