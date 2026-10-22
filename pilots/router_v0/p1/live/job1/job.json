@@ -1,0 +1,50 @@
+{
+  "job": "j20261022_193403_3beb",
+  "kind": "code",
+  "state": "DRAFTING",
+  "created_at": "2026-10-22T19:34:03Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/pilot3a_live",
+    "commit": "HEAD",
+    "issue": "argus has no way to see all jobs: status needs a job id the user must already know.\n\nAdd a read-only command `argus list` (scripts/argus.py, with its logic in router/job.py) that prints one line per job\nin the jobs directory (--jobs-dir, default jobs/), sorted by job id:\n\n  <job id> <state> spent $<spent with 4 decimals> of $<cap with 2 decimals>\n\nwhere state and cap come from the job's job.json (\"state\", \"max_usd\") and spent is what the job's stage runs have\nspent, computed the same way status computes it. Rules:\n- only directories that contain a job.json are jobs; any other entry is ignored;\n- a job.json that cannot be read or is not valid JSON gives the line \"<directory name> unreadable\" instead, and the\n  other jobs are still listed;\n- when the jobs directory does not exist or holds no job, it prints exactly \"no jobs\";\n- it never takes a job's lock and never changes anything; it exits 0.",
+    "exclude": [
+      "verification",
+      "pilots"
+    ]
+  },
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261022_193403_3beb-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-22T19:34:18Z"
+    }
+  },
+  "approval": null,
+  "log": [
+    {
+      "at": "2026-10-22T19:34:03Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-22T19:34:04Z",
+      "what": "intaken",
+      "files": 450
+    },
+    {
+      "at": "2026-10-22T19:34:18Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    }
+  ],
+  "intake": {
+    "commit": "9ceb6ca6edb8342e55cb8292d660cd6697090614",
+    "tree": "db3e41375abd37c456c8aae9b8dd7b3d848f34e3",
+    "files": 450,
+    "snapshot_sha256": "1c45633709d53f1c61d41c905fc5a4eb44f05d12308d541b41f12f9debaff374"
+  }
+}
