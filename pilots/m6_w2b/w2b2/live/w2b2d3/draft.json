@@ -1,0 +1,61 @@
+{
+  "draft_version": 1,
+  "base": "argus_p7",
+  "plan": {
+    "files": [
+      "codetask/review.py"
+    ],
+    "steps": [
+      "In render_pr, replace the [:80] cut of the issue's first line with the rule: L unchanged if len<=80; else cut the first 81 characters before their last space, rstrip, append '...'; if there is no space or nothing remains, use L[:80] + '...'.",
+      "Keep the contract-name prefix, the cell(title, 120) cleaning and everything else in PR.md unchanged."
+    ],
+    "risks": [
+      "Off-by-one: the cut must look at 81 characters (so a word ending exactly at 80 is kept whole), not 80.",
+      "Changing the stripping of the issue or the cell() call would alter other output.",
+      "An empty issue must still give 'name: ' without an error."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "codetask/review.py"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_review_pr_title.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 9,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word",
+          "tests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters",
+          "tests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed",
+          "tests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters",
+          "tests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "budget_profile": "default",
+    "tools": [
+      "edit_file"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_review_pr_title.py",
+      "content": "\"\"\"The title of review/PR.md: the issue part is cut at a word, with '...', not in the middle of a word.\"\"\"\nimport pytest\n\nfrom codetask import review\n\n\ndef pr_title(issue, name=\"fix_x\"):\n    prov = {\"patch\": {\"files\": [], \"sha256\": \"0\" * 64}, \"validation_fresh\": {}, \"checks\": [],\n            \"base\": {\"commit\": \"c\" * 40, \"repo\": \"r\"}, \"argus\": {\"commit\": \"a\" * 40, \"dirty\": False},\n            \"contract\": {\"name\": name, \"sha256\": \"0\" * 64}, \"models\": [],\n            \"cost\": {\"calls\": 0, \"usd\": 0.0, \"usd_complete\": True}, \"run_id\": \"r1\", \"attempts\": 1}\n    contract = {\"contract\": name, \"inputs\": {\"issue\": issue}}\n    text = review.render_pr(prov, contract, None, None, review.Checks())\n    return text.splitlines()[0]\n\n\ndef test_the_issues_own_example_is_cut_at_a_word():\n    issue = \"The title of a review package's pull request draft is cut in the middle of a word.\"\n    assert pr_title(issue) == \"# fix_x: The title of a review package's pull request draft is cut in the middle of a...\"\n\n\ndef test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters():\n    issue = \"x\" * 40 + \" \" + \"y\" * 50 + \"\\nsecond line\"\n    assert pr_title(issue) == \"# fix_x: \" + \"x\" * 40 + \"...\"\n\n\ndef test_spaces_before_the_cut_are_removed():\n    issue = \"a\" * 30 + \"   \" + \"b\" * 60\n    assert pr_title(issue) == \"# fix_x: \" + \"a\" * 30 + \"...\"\n\n\ndef test_one_long_word_is_cut_at_80_characters():\n    assert pr_title(\"z\" * 100) == \"# fix_x: \" + \"z\" * 80 + \"...\"\n\n\ndef test_a_word_ending_exactly_at_character_80_is_kept_whole():\n    issue = \"a\" * 70 + \" \" + \"b\" * 9 + \" \" + \"c\" * 5\n    assert len(issue.split(\" \")[0]) + 1 + 9 == 80\n    assert pr_title(issue) == \"# fix_x: \" + \"a\" * 70 + \" \" + \"b\" * 9 + \"...\"\n\n\n@pytest.mark.parametrize(\"length\", [1, 79, 80])\ndef test_a_first_line_of_at_most_80_characters_is_used_as_it_is(length):\n    line = (\"w\" * 9 + \" \") * 8\n    line = (line + \"v\" * 80)[:length].rstrip() if length < 80 else (line[:79] + \"v\")\n    assert len(line) <= 80\n    assert pr_title(line + \"\\nmore\") == \"# fix_x: \" + line\n\n\ndef test_the_heading_is_still_cleaned_and_limited_to_120_characters():\n    title = pr_title(\"short issue\", name=\"n\" * 130)\n    assert title == \"# \" + \"n\" * 117 + \"...\"\n"
+    }
+  ],
+  "unverifiable": []
+}

@@ -1,0 +1,125 @@
+HEAD 87749a4 W2b-2 agent gate: compare the attempt's USD rounded (0.30000000000000004)
+### T0 --check-only on the correct state (must pass)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile default (30,000 tokens per attempt, reserved as $0.30; output 4,096), cap $0.50, run tokens 200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.20
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
+ls: cannot access 'runs': No such file or directory
+
+### T1 wrong contract hash in the record (must refuse)
+REFUSED: contract sha256 'deadbeef0000', expected '4de6373c659a'
+[exit 1]
+
+### T2 profile large instead of default (must refuse)
+REFUSED: profile 'large', expected 'default'
+[exit 1]
+
+### T3 contract cap 1.00 (must refuse)
+REFUSED: limits {'max_usd': 1.0, 'max_iterations': 3}
+[exit 1]
+
+### T4 pilot config edited (cap 1.00): its hash changes (must refuse)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+REFUSED: config_w2b2_agent.yaml sha256 484c39c137ada4ae3a347fb51d29e96327bfd0aa9ea23b703223d0e165304918, expected a890003e7c1b4607bc60d8dbf37e61f0950ad83c1a1a4505c0fe11d1129ecd7d
+[exit 1]
+
+### T5 config.yaml changed elsewhere: a third difference (must refuse)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+REFUSED: the pilot config must differ from config.yaml only in [('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)], found [('/budget/max_workers', 4, 3), ('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)]
+[exit 1]
+
+### T6 config.yaml turns auto_validate on: only one difference left (must refuse)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+REFUSED: the pilot config must differ from config.yaml only in [('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)], found [('/llm/prompt_cache/enabled', False, True)]
+[exit 1]
+
+### T7 the default profile changed in both configs (45,000 tokens) and the expected config hash with them: gate 3 must refuse
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+REFUSED: the effective limits are not the reviewed ones: {"attempt_tokens": [45000, 30000], "attempt_usd": [0.45, 0.3]}
+[exit 1]
+
+### T7b config.yaml turns prompt caching on: only one difference left (must refuse)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+REFUSED: the pilot config must differ from config.yaml only in [('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)], found [('/code_task/auto_validate', False, True)]
+[exit 1]
+
+### T7c the Sonnet read price back to 0.20 in both configs, expected hash updated: gate 3 must refuse
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+REFUSED: the effective limits are not the reviewed ones: {"coder_prices": [{"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write_5m": 2.5, "cache_write_1h": 4.0}, {"input": 2.0, "output": 10.0, "cache_read": 0.1, "cache_write_5m": 2.5, "cache_write_1h": 4.0}]}
+[exit 1]
+
+### T8 dirty tree (must refuse)
+REFUSED: the live checkout is not clean (git status must be empty)
+[exit 1]
+
+### T9 run id exists (must refuse)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile default (30,000 tokens per attempt, reserved as $0.30; output 4,096), cap $0.50, run tokens 200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.20
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+REFUSED: run w2b2a1 already exists (use a new id; --resume only for a run that died)
+[exit 1]
+
+### T10 bad run ids (must refuse): the two earlier runs, another pilot, an injection
+REFUSED: run id must look like w2b2a1 (got 'w2b2d3')
+[exit 1]
+REFUSED: run id must look like w2b2a1 (got 'w2b2a0')
+[exit 1]
+REFUSED: run id must look like w2b2a1 (got 'pilot3b1')
+[exit 1]
+REFUSED: run id must look like w2b2a1 (got 'w2b2a1; echo hacked')
+[exit 1]
+
+### T11 empty key (must refuse and start nothing)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile default (30,000 tokens per attempt, reserved as $0.30; output 4,096), cap $0.50, run tokens 200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.20
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+
+REFUSED: the key is empty; nothing was started
+[exit 1]
+
+### T11b a key of another shape (must refuse and start nothing; fake strings, never a real key)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile default (30,000 tokens per attempt, reserved as $0.30; output 4,096), cap $0.50, run tokens 200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.20
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+
+REFUSED: the key does not start with sk-ant-; nothing was started
+[exit 1]
+
+### T11c a key pasted twice on one line, with a space (must refuse)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile default (30,000 tokens per attempt, reserved as $0.30; output 4,096), cap $0.50, run tokens 200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.20
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+
+REFUSED: the key contains whitespace (pasted twice?); nothing was started
+[exit 1]
+
+### T11d a key pasted twice on one line, no space (must refuse)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile default (30,000 tokens per attempt, reserved as $0.30; output 4,096), cap $0.50, run tokens 200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.20
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+
+REFUSED: the key contains sk-ant- more than once (pasted twice?); nothing was started
+[exit 1]
+runs after T11b-d: []
+
+### T12 no argument (must refuse)
+REFUSED: usage: go_live_agent.sh --check-only | go_live_agent.sh <run-id>   (run id like w2b2a1)
+[exit 1]
+
+### T13 correct state again (must pass)
+gate 1 ok: contract pr_title2, sha256 4de6373c659a... profile default, limits $0.50 / 3 iterations, one writable file, edit_file added, approved without a reference patch (feasibility unproven)
+gate 2 ok: config_w2b2_agent.yaml is the reviewed file; it differs from config.yaml only in code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile default (30,000 tokens per attempt, reserved as $0.30; output 4,096), cap $0.50, run tokens 200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.20
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
+GLTEST DONE
