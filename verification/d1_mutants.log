@@ -1,4 +1,4 @@
-HEAD 995da3d tests: tests/test_attempt_usd.py tests/test_codetask.py tests/test_feedback_excerpt.py tests/test_budget_experiment.py tests/test_llm_audit_2a.py tests/test_llm_wrapper.py
+HEAD 534e71d tests: tests/test_attempt_usd.py tests/test_codetask.py tests/test_feedback_excerpt.py tests/test_budget_experiment.py tests/test_llm_audit_2a.py tests/test_llm_wrapper.py
 == the new tests on the code before D1 (main 954fb80) ==
 FAILED tests/test_attempt_usd.py::test_the_configured_large_usd_profile_is_the_decided_one
 FAILED tests/test_attempt_usd.py::test_a_declared_attempt_usd_is_the_attempt_reservation_whatever_the_price
@@ -9,7 +9,7 @@ FAILED tests/test_attempt_usd.py::test_a_call_over_the_input_limit_is_refused_be
 FAILED tests/test_attempt_usd.py::test_admission_with_large_usd_at_a_75_cent_cap
 FAILED tests/test_attempt_usd.py::test_large_usd_with_the_default_token_limit_stops_before_any_model_call
 FAILED tests/test_attempt_usd.py::test_the_agent_node_is_guarded_with_the_profile_values
-9 failed, 2 passed in 1.27s
+9 failed, 2 passed in 1.26s
 == mutants ==
 KILLED  prices swapped in the worst case: ['FAILED tests/test_attempt_usd.py::test_attempt_usd_bounds_every_call_before_it_is_sent']
 KILLED  input term dropped from the worst case: ['FAILED tests/test_attempt_usd.py::test_attempt_usd_bounds_every_call_before_it_is_sent']
