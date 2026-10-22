@@ -152,7 +152,8 @@ def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validat
         e = v.get("evidence") or {}
         # output_tail (W2b): the test output, for the drafter's feedback and the human's review; data, never a criterion
         seen[spec["id"]] = {"status": v["status"], "must_pass": e.get("must_pass"), "failures": e.get("failures"),
-                            "errors": e.get("errors"), "output_tail": (e.get("output_tail") or "")[-2000:]}
+                            "errors": e.get("errors"), "output_tail": (e.get("output_tail") or "")[-2000:],
+                            "failed_nodes": e.get("failed_nodes")}
         new = _new_nodes(spec, new_paths)
         if v["status"] == "blocked":
             problems.append(f"validation {spec['id']} could not run: {v['reason']}")
@@ -172,8 +173,10 @@ def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validat
             if n not in new and got != "ok":
                 problems.append(f"existing test {n} must pass on the baseline, is {got!r}")
         if e.get("errors") or e.get("failures") != len(new):
+            extra = [n for n in e.get("failed_nodes") or [] if n not in new]      # W2b: name them, so a fix can be exact
             problems.append(f"validation {spec['id']}: {e.get('failures')} failures and {e.get('errors')} errors on the "
-                            f"baseline; exactly the {len(new)} new required tests may fail, and nothing may error")
+                            f"baseline; exactly the {len(new)} new required tests may fail, and nothing may error"
+                            + (f" (failing or erroring but not required: {', '.join(extra)})" if extra else ""))
     return problems, seen
 
 

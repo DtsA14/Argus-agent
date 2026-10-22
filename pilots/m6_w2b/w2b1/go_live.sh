@@ -13,9 +13,9 @@ LIVE_DIR="${LIVE_DIR:-$HOME/pilot3a_live}"
 INTAKE=argus_p6
 ISSUE="pilots/m6_w2b/w2b1/issue.txt"
 CONFIG="pilots/m6_w2b/w2b1/config_w2b1.yaml"
-MAX_USD=0.50
+MAX_USD=0.75
 EXPECT_ISSUE_SHA="56460216a6720e72aeb053f707ec9966af525505c171287d36b41ce5d4c10584"     # sha256 of the issue (line ends normalised)
-EXPECT_CONFIG_SHA="668c395bddf21774f1da2da8c3a92a4140ae669e4f6a740ce40027a6fe7a2b54"    # sha256 of the pilot config (line ends normalised)
+EXPECT_CONFIG_SHA="8e936d0ff6da337eb1333d9f6c7875a5ae86e16651e2163def29132988138b61"    # sha256 of the pilot config (line ends normalised)
 PY="${PY:-$HOME/Argus-agent/.venv-verify/bin/python}"
 SUPLOG="$HOME/argus-supervision.log"
 
@@ -52,7 +52,7 @@ if bad:
 print(f"gate 1 ok: intake {name} unchanged ({rec['files']} files, commit {rec['commit'][:12]}); no 3b test, script or pilots/ in it")
 PYEOF
 
-# 2. the issue and the config: exactly the reviewed files; the config differs from config.yaml only in the three reviewed keys
+# 2. the issue and the config: exactly the reviewed files; the config differs from config.yaml only in the four reviewed keys
 GOT_ISSUE_SHA="$(tr -d '\r' < "$ISSUE" | sha256sum | cut -d' ' -f1)"
 [ "$GOT_ISSUE_SHA" = "$EXPECT_ISSUE_SHA" ] || fail "issue.txt sha256 $GOT_ISSUE_SHA, expected $EXPECT_ISSUE_SHA"
 GOT_CONFIG_SHA="$(tr -d '\r' < "$CONFIG" | sha256sum | cut -d' ' -f1)"
@@ -68,13 +68,14 @@ def walk(x, y, path=""):
     elif x != y:
         diffs.append((path, x, y))
 walk(a, b)
-want = [("/budget/max_tokens", 200000, 1200000), ("/drafter/attempt_tokens", 200000, 400000),
+want = [("/budget/max_tokens", 200000, 1200000), ("/budget/max_usd", 0.5, 0.75), ("/drafter/attempt_tokens", 200000, 400000),
         ("/llm/prompt_cache/enabled", False, True)]
 if diffs != want:
     print("REFUSED: the pilot config must differ from config.yaml only in " + repr(want) + ", found " + repr(diffs), file=sys.stderr)
     sys.exit(1)
 print("gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens"
-      " (200,000 -> 1,200,000), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)")
+      " (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and"
+      " llm.prompt_cache.enabled (false -> true)")
 PYEOF
 
 # 3. effective limits and policy, computed by the functions a drafter run uses (cap = min(budget.max_usd, --max-usd))
@@ -94,7 +95,7 @@ e = {"cap_usd": cap, **lim, "max_submits": cfg["drafter"]["max_submits"], "envir
      "validation_timeout_s": cfg["drafter"]["validation_timeout_s"], "model": str(ref),
      "max_output_tokens": cfg["roles"][role]["max_output_tokens"], "tools": cfg["tools"][role],
      "prompt_cache": prompt_cache_for(cfg, role, ref), "prices": cfg["prices"][str(ref)]}
-want = {"cap_usd": 0.5, "attempt_tokens": 400000, "attempt_usd": 0.45, "max_input_tokens": 40000, "max_steps": 16, "max_usd": 0.5,
+want = {"cap_usd": 0.75, "attempt_tokens": 400000, "attempt_usd": 0.7, "max_input_tokens": 64000, "max_steps": 16, "max_usd": 0.75,
         "max_submits": 3, "environment": "argus", "validation_timeout_s": 300, "model": "anthropic:claude-sonnet-5-5",
         "max_output_tokens": 16384, "tools": ["list_files", "search_files", "read_file"], "prompt_cache": True,
         "prices": {"input": 2.0, "output": 10.0, "cache_read": 0.1, "cache_write_5m": 2.5, "cache_write_1h": 4.0}}
@@ -102,7 +103,7 @@ if e != want:
     print("REFUSED: the effective limits are not the reviewed ones: " + json.dumps({k: (e.get(k), want[k]) for k in want if e.get(k) != want[k]}),
           file=sys.stderr)
     raise SystemExit(1)
-print("gate 3 ok: Sonnet 5.5, one attempt of $0.45 (cap $0.50), input <= 40,000 per call, output 16,384, 16 steps, 3 submits,"
+print("gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits,"
       " read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)")
 PYEOF
 

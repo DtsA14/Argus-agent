@@ -116,8 +116,11 @@ code_task:
 drafter:
   role: drafter
   attempt_tokens: 200000
-  attempt_usd: 0.45
-  max_input_tokens: 40000
+  # 0.70 and 64,000 since pilot w2b1d2 (Atha 2026-10-22): a corrected submit after a rejected one carries the first
+  # draft in its input (~45,000) and needs ~12,700 output; at 0.45 / 40,000 it was refused before sending. The default
+  # budget.max_usd (0.50) still caps a run below this; a pilot raises the cap in its own config.
+  attempt_usd: 0.70
+  max_input_tokens: 64000
   max_steps: 16
   max_submits: 3
   environment: argus       # the sandbox environment of every drafted validation (K4: python -m pytest <paths> only)

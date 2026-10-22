@@ -204,6 +204,13 @@ def test_without_a_reference_patch_the_baseline_is_still_checked_and_the_task_is
     assert not bad["ok"] and any("not a failure by assertion" in p for p in bad["problems"])
 
 
+def test_a_test_that_fails_on_the_baseline_without_being_required_is_named(root, scfg):
+    r = run_check(root, None, scfg, draft=with_new_test(NEW_TEST + "\n\ndef test_also_failing():\n    assert False\n"))
+    assert not r["ok"]
+    assert any("not required: tests/test_new.py::test_also_failing" in p for p in r["problems"]), r["problems"]
+    assert r["baseline"]["target"]["failed_nodes"] == ["tests/test_new.py::test_also_failing", NEW_NODE]
+
+
 @pytest.mark.parametrize("ref", [[], ["--reference-patch", "x.patch", "--no-reference"]])
 def test_approve_draft_needs_exactly_one_of_a_reference_patch_or_no_reference(ref, capsys):
     import importlib.util

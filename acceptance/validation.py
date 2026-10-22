@@ -42,6 +42,7 @@ PYTEST_FIXED = ["-p", "no:cacheprovider", "-o", "addopts=", "-o", "console_outpu
 TEST_LINE = re.compile(r"^(\w+) \(([\w.]+)\)(?: (.*))?$")
 RAN = re.compile(r"^Ran (\d+) tests? in ")
 FINAL = re.compile(r"^(OK|FAILED)(?: \((.*)\))?$")
+MAX_NODES = 50                  # failed_nodes kept in the evidence
 
 
 def kind(spec):
@@ -248,8 +249,10 @@ def judge_result(spec, r):
                 "failures": parsed["failures"], "errors": parsed["errors"], "must_pass": must,
                 "output_tail": ((r.get("stdout") or "") if pytest else (r.get("stderr") or ""))[-2000:]}
     if pytest:
+        # failed_nodes (W2b): every node that failed or errored, required or not, so a check can name the unexpected ones
         evidence.update(runner="pytest", consistent=parsed["consistent"], collected=parsed["collected"],
-                        deselected=parsed["deselected"], stderr_tail=(r.get("stderr") or "")[-500:])
+                        deselected=parsed["deselected"], stderr_tail=(r.get("stderr") or "")[-500:],
+                        failed_nodes=sorted(n for n, s in parsed["tests"].items() if s in ("FAIL", "ERROR"))[:MAX_NODES])
     if spec.get("environment"):
         evidence["environment"] = spec["environment"]
     problems = []

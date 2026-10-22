@@ -123,7 +123,8 @@ def fake_validate(spec, workspace, sandbox_cfg, log=None):
     return {"id": f"validation:{spec['id']}", "layer": "C", "status": "pass" if ok else "fail",
             "reason": "" if ok else "exit code 1",
             "evidence": {"must_pass": must, "tests_run": len(statuses), "failures": failures, "errors": errors,
-                         "skipped": 0, "consistent": True, "output_tail": "\n".join(tail)}}
+                         "skipped": 0, "consistent": True, "output_tail": "\n".join(tail),
+                         "failed_nodes": sorted(n for n, s in statuses.items() if s == "FAIL")}}
 
 
 def cfg(**drafter):
@@ -208,6 +209,64 @@ def test_submits_beyond_the_limit_run_nothing_and_the_run_ends_without_a_draft(r
     assert len(vlog()) == 4 and len(model.calls) == 3                  # two checks of two validations; none after
     assert [e["event"] for e in events(d)].count("draft_submit_refused") == 1     # the third: refused, not checked
     assert not (d / "draft.json").exists() and "No draft passed its check" in (d / "DRAFT_REVIEW.md").read_text()
+
+
+# ---- ReviseDraft, and naming what fails without being required ---------------------------------------------------
+
+def revise(args, id="v1"):
+    return call("ReviseDraft", args, id)
+
+
+def test_revise_changes_only_the_fields_it_gives_and_is_checked_like_a_submit(root, tmp_path, vlog):
+    green = call("SubmitDraft", args_with(GREEN_TEST), "s0")
+    r, model, d = run(root, tmp_path, [green, revise({"new_tests": ARGS["new_tests"]})])
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2 and len(vlog()) == 4
+    want, _ = dt.draft_from_args(ARGS, base="shop", policy=POLICY)
+    assert json.loads((d / "draft.json").read_text()) == want                 # everything else as first submitted
+    assert "call ReviseDraft with only the fields that change" in tool_texts(model, 1)[0]
+    assert [e.get("revise") for e in events(d) if e["event"] == "draft_submitted"] == [False, True]
+
+
+def test_a_test_that_fails_without_being_required_is_named_and_one_revision_fixes_it(root, tmp_path, vlog):
+    extra = NEW_TEST + "\n\ndef test_also_floored():\n    assert total([2], 9) == 0\n"
+    first = call("SubmitDraft", args_with(extra), "s0")
+    both = copy.deepcopy(ARGS["validation"])
+    both[0]["must_pass"] = [NEW_NODE, "tests/test_new.py::test_also_floored"]
+    r, model, d = run(root, tmp_path, [first, revise({"validation": both})])
+    seen = tool_texts(model, 1)[0]
+    assert "failing or erroring but not required: tests/test_new.py::test_also_floored" in seen
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
+    draft = json.loads((d / "draft.json").read_text())
+    assert draft["new_tests"][0]["content"] == extra and len(draft["contract"]["validation"][0]["must_pass"]) == 2
+
+
+def test_revise_without_a_submitted_draft_runs_nothing_and_counts(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [revise({"unverifiable": []}), SUBMIT])
+    assert tool_texts(model, 1)[0].startswith("Rejected: there is no submitted draft to revise")
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2 and vlog() == ["target", "regression"]
+
+
+def test_revise_cannot_set_what_a_drafter_may_not_set(root, tmp_path, vlog):
+    green = call("SubmitDraft", args_with(GREEN_TEST), "s0")
+    r, model, d = run(root, tmp_path, [green, revise({"base": "other", "new_tests": ARGS["new_tests"]}), SUBMIT])
+    assert "unknown argument 'base'" in tool_texts(model, 2)[1] and len(vlog()) == 4     # the bad revision ran nothing
+    assert json.loads((d / "draft.json").read_text())["base"] == "shop"
+
+
+def test_revisions_count_toward_the_submit_limit(root, tmp_path, vlog):
+    green = call("SubmitDraft", args_with(GREEN_TEST), "s0")
+    still = revise({"plan": ARGS["plan"]})
+    r, model, d = run(root, tmp_path, [green, still, revise({"plan": ARGS["plan"]}, "v2"), SUBMIT],
+                      config=cfg(max_submits=2))
+    assert r["status"] == dt.NO_DRAFT and r["stop_reason"] == "submits_exhausted" and len(vlog()) == 4
+
+
+def test_revisedraft_with_another_call_runs_nothing(root, tmp_path, vlog):
+    both = reply(tool_calls=[{"name": "ReadFile", "args": {"path": "src/shop.py"}, "id": "r"},
+                             {"name": "ReviseDraft", "args": {"plan": ARGS["plan"]}, "id": "v"}],
+                 input_tokens=500, output_tokens=60)
+    r, model, _ = run(root, tmp_path, [both, SUBMIT])
+    assert all("must be the only tool call" in t for t in tool_texts(model, 1)) and r["drafting"]["submits"] == 1
 
 
 # ---- read-only, and what the model may not set ---------------------------------------------------------------------
@@ -487,3 +546,20 @@ def test_a_crash_anywhere_resumes_without_redoing_what_was_committed(root, tmp_p
     if redrafted and any(e["event"] == "llm_call" for e in before):   # the resumed loop starts with what was spent
         restored = [e for e in after if e["event"] == "reservation_restored" and e["node"] == "drafter"]
         assert restored and restored[0]["calls"] >= 1, restored
+
+
+def test_a_crash_after_a_revision_resumes_from_the_draft_it_revised(root, tmp_path):
+    """The arguments a ReviseDraft starts from come from the committed record of the submit before it, so a resumed
+    loop revises the same draft (were they lost, the revision would be refused as having nothing to revise)."""
+    script = [_script_reply("SubmitDraft", args_with(GREEN_TEST), "s1"),
+              _script_reply("ReviseDraft", {"new_tests": ARGS["new_tests"]}, "v1")]
+    (tmp_path / "script.json").write_text(json.dumps(script))
+    r1 = _spawn(tmp_path, root, "drafter@after_tool:ReviseDraft", "0")
+    assert r1.returncode == 42, (r1.stdout[-2000:], r1.stderr[-2000:])
+    r2 = _spawn(tmp_path, root, "-", "1")
+    assert r2.returncode == 0, (r2.stdout[-2000:], r2.stderr[-2000:])
+    d = tmp_path / "runs" / "rc"
+    assert json.loads((d / "result.json").read_text())["drafting"]["submits"] == 2
+    want, _ = dt.draft_from_args(ARGS, base="shop", policy=POLICY)
+    assert json.loads((d / "draft.json").read_text()) == want
+    assert len((tmp_path / "validate.log").read_text().splitlines()) == 6      # submit, revision, revision again
