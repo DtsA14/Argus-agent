@@ -123,7 +123,7 @@ def admitted_after(limits, spends, tmp_path):
 # ---- the profile (K1, K2) -------------------------------------------------------------------------------------
 
 def test_the_configured_large_usd_profile_is_the_decided_one():
-    assert load_config()["code_task"]["profiles"]["large_usd"] == LARGE_USD
+    assert load_config()["code_task"]["profiles"].get("large_usd") == LARGE_USD
 
 
 def test_a_declared_attempt_usd_is_the_attempt_reservation_whatever_the_price():
