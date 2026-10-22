@@ -1,0 +1,12 @@
+HEAD 59eee91 tests: tests/test_drafter.py tests/test_draft.py tests/test_review.py
+== mutants ==
+KILLED  revision does not start from the last submit: ['FAILED tests/test_drafter.py::test_revise_changes_only_the_fields_it_gives_and_is_checked_like_a_submit']
+KILLED  revision overridden by the old draft: ['FAILED tests/test_drafter.py::test_revise_changes_only_the_fields_it_gives_and_is_checked_like_a_submit']
+KILLED  revision without a submit accepted: ['FAILED tests/test_drafter.py::test_revise_without_a_submitted_draft_runs_nothing_and_counts']
+KILLED  revision taken as a whole draft: ['FAILED tests/test_drafter.py::test_revise_changes_only_the_fields_it_gives_and_is_checked_like_a_submit']
+KILLED  revision allowed with other calls: ['FAILED tests/test_drafter.py::test_revisedraft_with_another_call_runs_nothing']
+KILLED  ReviseDraft not offered: ['FAILED tests/test_drafter.py::test_the_drafter_is_offered_the_read_tools_of_its_allowlist_and_both_submit_tools']
+KILLED  extra failures not named: ['FAILED tests/test_drafter.py::test_a_test_that_fails_without_being_required_is_named_and_one_revision_fixes_it']
+KILLED  failed nodes not recorded: ['FAILED tests/test_draft.py::test_a_test_that_fails_on_the_baseline_without_being_required_is_named']
+KILLED  failed nodes not in the baseline evidence: ['FAILED tests/test_draft.py::test_a_test_that_fails_on_the_baseline_without_being_required_is_named']
+RESULT: 9/9 killed

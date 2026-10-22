@@ -81,3 +81,28 @@ bila kasus terburuknya (input dengan tarif tulis, ditambah output yang tersisa) 
 - **Langkah:** merge PR ini; checkout live ke `main`; `go_live.sh --check-only`; lalu
   `bash ~/pilot3a_live/pilots/m6_w2b/w2b1/go_live.sh w2b1d2` setelah **"go live"** dari Atha. Run id `w2b1d1` sudah ada
   dan ditolak gerbang.
+
+## 7. Run ketiga `w2b1d3` (Atha 2026-10-22: "1+2+revisedraft"; ditulis sebelum run)
+
+`w2b1d2` gagal (`live/w2b1d2/RESULT.md`). Submit 1 nyaris lolos, tetapi satu tes gagal tanpa diwajibkan. Kiriman
+ulangnya butuh input sekitar 45.000, sehingga ditolak oleh batas 40.000. Perubahan untuk run ketiga:
+
+1. **Penolakan menyebut tes yang gagal atau error di luar `must_pass`.** Bukti validasi pytest kini memuat
+   `failed_nodes`, dan pesan cek baseline mencantumkannya.
+2. **`ReviseDraft`:** mengubah hanya field yang diberikan dari draf yang terakhir dikirim. Setiap field yang diberikan
+   menggantikan field itu seluruhnya. Hasilnya dicek seperti `SubmitDraft` dan ikut dihitung ke `max_submits` (3).
+   Perbaikan kecil, seperti satu node `must_pass`, tidak lagi menuntut kirim ulang tes 10 KB.
+3. **Uang dan konteks (naik, disetujui Atha):**
+   - `drafter.attempt_usd` 0,45 → **0,70**;
+   - `drafter.max_input_tokens` 40.000 → **64.000**;
+   - config pilot `budget.max_usd` 0,50 → **0,75**, dan `--max-usd 0.75`.
+
+   Config pilot kini berbeda dari `config.yaml` di **empat** kunci. Gate 2 dan gate 3 serta tes gerbangnya sudah
+   diperbarui.
+
+- **Ekspektasi:** langkah baca dan submit 1 seperti `w2b1d2` (±$0,22). Bila submit 1 ditolak, ReviseDraft murah
+  (input ±45.000, sebagian besar cache read; output thinking ditambah argumen kecil), ±$0,05–0,15. Total
+  **$0,25–0,45**; batas keras $0,70 per attempt dan $0,75 per run.
+- **Kriteria:** sama dengan bagian 4, tanpa perubahan.
+- **Langkah:** merge PR; checkout live ke `main`; `go_live.sh --check-only`; lalu
+  `bash ~/pilot3a_live/pilots/m6_w2b/w2b1/go_live.sh w2b1d3` setelah **"go live"**.

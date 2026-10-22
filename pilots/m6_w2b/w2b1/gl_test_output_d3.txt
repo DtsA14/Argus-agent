@@ -1,0 +1,126 @@
+HEAD 59eee91 W2b tests: offered tools
+### T0 --check-only on the correct state (must pass)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits, read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)
+gate 4 ok: without ARGUS_LIVE=1 the drafter refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
+ls: cannot access 'runs': No such file or directory
+
+### T1 the intake changed after it was taken in (must refuse)
+REFUSED: files differ from the intake of f37aaba03a19 (423 files now, 423 at intake)
+[exit 1]
+
+### T2 the answer of 3b put into the intake (must refuse)
+REFUSED: files differ from the intake of f37aaba03a19 (424 files now, 423 at intake); tests/test_pilot_report.py is in the intake: the drafter could read the answer
+[exit 1]
+
+### T3 the issue edited (must refuse)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+REFUSED: issue.txt sha256 4550a96f338b79c2b9ed63f3260ac13ba6be8356d0db48d73bf40abca981fb55, expected 56460216a6720e72aeb053f707ec9966af525505c171287d36b41ce5d4c10584
+[exit 1]
+
+### T4 the pilot config edited (cap 1.00): its hash changes (must refuse)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+REFUSED: config_w2b1.yaml sha256 21ae466129f33110101923e9e079990a6813a704ab55b41213c53468c9072ac9, expected 8e936d0ff6da337eb1333d9f6c7875a5ae86e16651e2163def29132988138b61
+[exit 1]
+
+### T5 config.yaml changed elsewhere: a fourth difference (must refuse)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+REFUSED: the pilot config must differ from config.yaml only in [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/drafter/attempt_tokens', 200000, 400000), ('/llm/prompt_cache/enabled', False, True)], found [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/budget/max_workers', 4, 3), ('/drafter/attempt_tokens', 200000, 400000), ('/llm/prompt_cache/enabled', False, True)]
+[exit 1]
+
+### T6 config.yaml turns prompt caching on: only three differences left (must refuse)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+REFUSED: the pilot config must differ from config.yaml only in [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/drafter/attempt_tokens', 200000, 400000), ('/llm/prompt_cache/enabled', False, True)], found [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/drafter/attempt_tokens', 200000, 400000)]
+[exit 1]
+
+### T7 drafter attempt_usd 0.74 in both configs, expected hash updated: gate 3 must refuse
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+REFUSED: the effective limits are not the reviewed ones: {"attempt_usd": [0.74, 0.7]}
+[exit 1]
+
+### T8 the drafter may write, in both configs, expected hash updated: gate 3 must refuse
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+REFUSED: the effective limits are not the reviewed ones: {"tools": [["list_files", "search_files", "read_file", "write_file"], ["list_files", "search_files", "read_file"]]}
+[exit 1]
+
+### T9 four submits in both configs, expected hash updated: gate 3 must refuse
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+REFUSED: the effective limits are not the reviewed ones: {"max_submits": [4, 3]}
+[exit 1]
+
+### T10 dirty tree (must refuse)
+REFUSED: the live checkout is not clean (git status must be empty)
+[exit 1]
+
+### T11 run id exists (must refuse)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits, read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)
+gate 4 ok: without ARGUS_LIVE=1 the drafter refuses and creates no run directory
+REFUSED: run w2b1d1 already exists (use a new id; --resume only for a run that died)
+[exit 1]
+
+### T12 bad run ids (must refuse): another pilot's, zero, an injection
+REFUSED: run id must look like w2b1d1 (got 'pilot3b1')
+[exit 1]
+REFUSED: run id must look like w2b1d1 (got 'w2b1d0')
+[exit 1]
+REFUSED: run id must look like w2b1d1 (got 'w2b1d1; echo hacked')
+[exit 1]
+
+### T13 empty key (must refuse and start nothing)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits, read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)
+gate 4 ok: without ARGUS_LIVE=1 the drafter refuses and creates no run directory
+
+REFUSED: the key is empty; nothing was started
+[exit 1]
+
+### T13b a key of another shape (must refuse; fake strings, never a real key)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits, read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)
+gate 4 ok: without ARGUS_LIVE=1 the drafter refuses and creates no run directory
+
+REFUSED: the key does not start with sk-ant-; nothing was started
+[exit 1]
+
+### T13c a key pasted twice, with a space (must refuse)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits, read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)
+gate 4 ok: without ARGUS_LIVE=1 the drafter refuses and creates no run directory
+
+REFUSED: the key contains whitespace (pasted twice?); nothing was started
+[exit 1]
+
+### T13d a key pasted twice, no space (must refuse)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits, read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)
+gate 4 ok: without ARGUS_LIVE=1 the drafter refuses and creates no run directory
+
+REFUSED: the key contains sk-ant- more than once (pasted twice?); nothing was started
+[exit 1]
+runs after T13-T13d: []; supervision log: 4 lines (gates_passed only)
+0
+
+### T14 no argument (must refuse)
+REFUSED: usage: go_live.sh --check-only | go_live.sh <run-id>   (run id like w2b1d1)
+[exit 1]
+
+### T15 correct state again (must pass)
+gate 1 ok: intake argus_p6 unchanged (423 files, commit f37aaba03a19); no 3b test, script or pilots/ in it
+gate 2 ok: issue.txt and config_w2b1.yaml are the reviewed files; the config differs from config.yaml only in budget.max_tokens (200,000 -> 1,200,000), budget.max_usd (0.50 -> 0.75), drafter.attempt_tokens (200,000 -> 400,000) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits, read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)
+gate 4 ok: without ARGUS_LIVE=1 the drafter refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
+GLTEST DONE
