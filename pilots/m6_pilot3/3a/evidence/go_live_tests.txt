@@ -1,0 +1,67 @@
+### T0 --check-only on the correct state (must pass)
+gate 1 ok: contract fix_run_inspectors, sha256 0826ee93de65... profile large, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a.yaml is the reviewed file and differs from config.yaml only in budget.max_usd (0.50 -> 0.75)
+gate 3 ok: effective profile large, reservation $0.45 (45,000 tokens), cap $0.75, at most 3 attempts
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
+ls: cannot access 'runs': No such file or directory
+
+### T1 wrong contract hash (must refuse)
+REFUSED: contract sha256 'deadbeef0000', expected '0826ee93de65'
+[exit 1]
+
+### T2 wrong profile (must refuse)
+REFUSED: profile 'default', expected 'large'
+[exit 1]
+
+### T3 pilot config with cap 1.00 (must refuse)
+gate 1 ok: contract fix_run_inspectors, sha256 0826ee93de65... profile large, limits $0.75 / 3 iterations, three writable files
+REFUSED: config_pilot3a.yaml sha256 482dd16c13e5475e8963b1252ebcecb99ecb24a86a6592ff98a9f86c579298a1, expected 46e9d99f97dcccd8365f60c8540d03fed561842e35bac7f15ca0468dfd66c655
+[exit 1]
+
+### T4 config.yaml changed elsewhere (must refuse)
+gate 1 ok: contract fix_run_inspectors, sha256 0826ee93de65... profile large, limits $0.75 / 3 iterations, three writable files
+REFUSED: the pilot config must differ from config.yaml only in budget.max_usd 0.5 -> 0.75, found [('/budget/max_usd', 0.5, 0.75), ('/budget/max_workers', 4, 3)]
+[exit 1]
+
+### T5 dirty tree (must refuse)
+REFUSED: the live checkout is not clean (git status must be empty)
+[exit 1]
+
+### T6 run id exists (must refuse)
+gate 1 ok: contract fix_run_inspectors, sha256 0826ee93de65... profile large, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a.yaml is the reviewed file and differs from config.yaml only in budget.max_usd (0.50 -> 0.75)
+gate 3 ok: effective profile large, reservation $0.45 (45,000 tokens), cap $0.75, at most 3 attempts
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+REFUSED: run pilot3a2 already exists (use a new id; --resume only for a run that died)
+[exit 1]
+
+### T7 bad run ids (must refuse): the old run id, another pilot, an injection
+REFUSED: run id must look like pilot3a2 (got 'pilot3a')
+[exit 1]
+REFUSED: run id must look like pilot3a2 (got 'pilot5a')
+[exit 1]
+REFUSED: run id must look like pilot3a2 (got 'pilot3a2; echo hacked')
+[exit 1]
+
+### T8 empty key (must refuse and start nothing)
+gate 1 ok: contract fix_run_inspectors, sha256 0826ee93de65... profile large, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a.yaml is the reviewed file and differs from config.yaml only in budget.max_usd (0.50 -> 0.75)
+gate 3 ok: effective profile large, reservation $0.45 (45,000 tokens), cap $0.75, at most 3 attempts
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+
+REFUSED: the key is empty; nothing was started
+[exit 1]
+
+### T9 no argument (must refuse)
+REFUSED: usage: go_live.sh --check-only | go_live.sh <run-id>   (run id like pilot3a2)
+[exit 1]
+
+### T10 correct state again (must pass)
+gate 1 ok: contract fix_run_inspectors, sha256 0826ee93de65... profile large, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a.yaml is the reviewed file and differs from config.yaml only in budget.max_usd (0.50 -> 0.75)
+gate 3 ok: effective profile large, reservation $0.45 (45,000 tokens), cap $0.75, at most 3 attempts
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
