@@ -1,0 +1,10 @@
+it step status   in(est)  out  prompt_hash   |   pilot3a2: status in(est) out prompt_hash   same?
+(0, 0, 'ok', 3097, 139, 'e3db344e') | (0, 0, 'ok', 3097, 139, 'e3db344e') | SAME
+(0, 1, 'ok', 12657, 172, '5969cc80') | (0, 1, 'ok', 12657, 172, 'bb844247') | different
+(0, 2, 'ok', 23840, 3046, '46330eb3') | (0, 2, 'ok', 23840, 170, 'd4e901a2') | different
+(0, 3, 'refused', 27252, None, 'f643ba0c') | (0, 3, 'refused', 24103, None, 'e72c80b8') | different
+(1, 0, 'ok', 3983, 216, 'd9ddeca6') | (1, 0, 'ok', 3957, 139, '70e932a1') | different
+(1, 1, 'ok', 8424, 210, '6a3cf1eb') | (1, 1, 'ok', 13517, 172, '7263e7ea') | different
+(1, 2, 'ok', 8808, 114, '6b816a36') | (1, 2, 'ok', 24700, 2222, '19d09f59') | different
+(1, 3, 'ok', 18743, 194, 'f460d572') | (1, 3, 'refused', 27060, None, '444dc32f') | different
+(1, 4, 'refused', 18971, None, '890459b0') | None | different
