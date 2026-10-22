@@ -1,0 +1,46 @@
+== 1. the ledger: every model call of the run
+it step status    est_in      in    out max_tok used_before left_before
+ 0    0 ok          3097    3097    139    8192           0       45000
+ 0    1 ok         12657   12657    172    8192        3236       41764
+ 0    2 ok         23840   23840   3046    5095       16065       28935
+ 0    3 refused    27252       0      0  -25203       42951        2049
+      refused: est_in 27252 + at least min_output would need 27316, left 2049
+ 1    0 ok          3983    3983    216    8192           0       45000
+ 1    1 ok          8424    8424    210    8192        4199       40801
+ 1    2 ok          8808    8808    114    8192       12833       32167
+ 1    3 ok         18743   18743    194    4502       21755       23245
+ 1    4 refused    18971       0      0  -14663       40692        4308
+      refused: est_in 18971 + at least min_output would need 19035, left 4308
+
+== 2. what each tool result added to the context (characters -> tokens at ~0.3186 per character + 407 per call)
+  it0 s0 toolu_01JyDHxqktvhcfbN2dVkde7a   4517 chars (~ 1439 tokens)  '"""Audit of one live code-task run: rebuild every model call from the '
+  it0 s0 toolu_01UQhh1xbVsQBJEMABmbsdkD  12997 chars (~ 4141 tokens)  '.gitignore AGENTS.md BACKLOG.md PENDING.md README.md acceptance/__init'
+  it0 s0 toolu_01VsdSuGSSmYe7LJvUPSCoiX   1552 chars (~  494 tokens)  '"""For each failing run: per attempt and step, the input tokens, the t'
+  it0 s1 toolu_014fQqC4qJLoMF8xNE1vh9Vh   8479 chars (~ 2701 tokens)  '"""M6 pilot 3a: one reader of a code-task run directory and two inspec'
+  it0 s1 toolu_01A1bDwzP39iCddx2iCgckfh  15120 chars (~ 4817 tokens)  '"""Pilot 3a. (1) The data of tests/test_run_inspectors.py: the output '
+  it0 s1 toolu_01PZdsaMsMgKRZBkVqCbrkpX   1913 chars (~  609 tokens)  'import json import threading import time from pathlib import Path   de'
+  it0 s2 toolu_019RqXT4cXx8AagWZg15rSbB     57 chars (~   18 tokens)  'evals/runlog.py now has 1311 bytes (sha256 ab8ffa7d51c8).'
+  it0 s2 toolu_01AaLNRLgkssEuFRidrMAh7a    100 chars (~   32 tokens)  'scripts/failure_trace.py edited: 1 occurrence replaced; it now has 159'
+  it0 s2 toolu_01JjdagJLh4vaiAoHXYBJCTr     96 chars (~   31 tokens)  'scripts/audit_run.py edited: 1 occurrence replaced; it now has 4438 by'
+  it0 s2 toolu_01NZjBK5cipfskdeNAVE5Lg7     96 chars (~   31 tokens)  'scripts/audit_run.py edited: 1 occurrence replaced; it now has 4495 by'
+  it0 s2 toolu_01QFRcAg4XB6RThpGUW7MSuK    100 chars (~   32 tokens)  'scripts/failure_trace.py edited: 1 occurrence replaced; it now has 165'
+  it1 s0 toolu_016KdMyFq7jaDiPLPRVrK4mt   4495 chars (~ 1432 tokens)  '"""Audit of one live code-task run: rebuild every model call from the '
+  it1 s0 toolu_01G3ECfiwJnt71YNaVEFgGFJ   1311 chars (~  418 tokens)  '"""The one reader of a code-task run directory (events.jsonl, result.j'
+  it1 s0 toolu_01GSXdbgfgZJzv5AZbeJ3Nkj   1657 chars (~  528 tokens)  '"""For each failing run: per attempt and step, the input tokens, the t'
+  it1 s0 toolu_01KP3hQo6QqCCavNBi8UDNii   2502 chars (~  797 tokens)  '{"errors": 0, "failures": 7, "must_pass": {"tests/test_run_inspectors.'
+  it1 s1 toolu_01Jx6FTxUSUo3NqtSBkWaKPi     43 chars (~   14 tokens)  'codetask/tools.py:90: def offered(allowed):'
+  it1 s1 toolu_01McWby8yBeXYb5afoGPTX21    210 chars (~   67 tokens)  'tests/test_codetask.py:348: def test_a_contract_granting_another_tool_'
+  it1 s2 toolu_01CfxwS4NV6TjY5iu5eLFLY9   8479 chars (~ 2701 tokens)  '"""M6 pilot 3a: one reader of a code-task run directory and two inspec'
+  it1 s2 toolu_01E3PCsR8oSS3xF2wRFd6L8b  17732 chars (~ 5649 tokens)  '"""The agent\'s tools for a code task. Every path goes through the path'
+  it1 s3 toolu_01KBEiD2iSFadtMLshHbWsJ9     65 chars (~   21 tokens)  "Rejected: 'tests/test_run_inspectors_data.py' is not a directory."
+
+== 3. what the agent was told when attempt 1 started (task prompt with the feedback of verdict_0)
+  prompt length 5314 chars; the feedback part:
+  previous attempt did not meet the contract. Acceptance criteria not met:
+    - artifact:SUMMARY.json: SUMMARY.json is missing
+    - validation:inspectors: exit code 1; pytest outcome FAILED; required test tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else is 'FAIL'; required test tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited is 'FAIL'
+    - claims: no valid SUMMARY.json, so no completion claim can be checked
+  The harness's checks of the workspace as the previous attempt left it (the workspace is kept between attempts; the harness runs every check again after Finish):
+    - validation:inspectors: fail (16 tests run, 7 failures, 0 errors, 0 skipped); required tests: tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else FAIL, tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited FAIL, tests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced ok, tests/test_run_inspectors_data.py::test_events_are_read_with_the_number_of_lines_that_did_not_decode ok, tests/test_run_inspectors_data.py::test_result_memo_and_the_skipped_line_are_read_as_the_inspectors_need_them ok
+    - validation:regression: pass (14 tests run, 0 failures, 0 errors, 0 skipped); required tests: tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too ok, tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete ok, tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known ok, tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before ok, tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped ok, tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too ok
+    - files changed from the original: evals/runlog.py (added), scripts/audit_run.py (modified), scripts/failure_trace.py (modified)

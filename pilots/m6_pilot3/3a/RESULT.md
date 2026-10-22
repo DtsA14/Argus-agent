@@ -56,3 +56,8 @@ lolos acceptance dan tidak ada intervensi manusia pada kodenya selama run (diagn
 Simulasi token harus memasukkan skenario **"agen membaca semua berkas tes yang ada"** (semua berkas di `tests/` yang disentuh task,
 termasuk modul data), bukan hanya bacaan yang kita anggap perlu. Di 3a bacaan ekstra itu yang membuat attempt 0 tidak muat. Aturan
 praktis: batas muat dihitung dari skenario terburuk yang wajar, dan task hanya diajukan bila skenario itu muat di reservasi profilnya.
+
+## Investigasi lanjutan (2026-10-22)
+
+Penyebab kegagalan dan reproduksinya (replay tanpa biaya, identik sampai hash) ada di `INVESTIGATION.md`. Dua koreksi atas catatan di atas: (1) penyebab utama attempt 0 adalah bentuk trajektori (konteks yang tumbuh kuadratik,
+`ListFiles` 4.141 token dan modul data 4.817 token ikut terkirim ulang tiap langkah); menghilangkan modul data saja tidak cukup; (2) agen melihat `NameError` satu kali (di hasil `RunValidation` attempt 1), dan umpan balik di prompt attempt 1 tidak memuat traceback.
