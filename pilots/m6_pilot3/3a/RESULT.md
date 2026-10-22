@@ -61,3 +61,11 @@ praktis: batas muat dihitung dari skenario terburuk yang wajar, dan task hanya d
 
 Penyebab kegagalan dan reproduksinya (replay tanpa biaya, identik sampai hash) ada di `INVESTIGATION.md`. Dua koreksi atas catatan di atas: (1) penyebab utama attempt 0 adalah bentuk trajektori (konteks yang tumbuh kuadratik,
 `ListFiles` 4.141 token dan modul data 4.817 token ikut terkirim ulang tiap langkah); menghilangkan modul data saja tidak cukup; (2) agen melihat `NameError` satu kali (di hasil `RunValidation` attempt 1), dan umpan balik di prompt attempt 1 tidak memuat traceback.
+
+## Koreksi (2026-10-22): bukan satu kesalahan
+
+Baris "Penyebab kegagalan tes: satu kesalahan" di tabel fakta di atas tidak benar. `NameError` itu memang kegagalan pertama, tetapi `audit_run.py` tulisan agen memakai tiga
+fungsi `runlog` tanpa mengimpornya (`read_result`, `read_events`, `read_memo`), dan setelah ketiganya diimpor `pilot3a` masih gagal di 2 tes wajib (`TypeError` pada run yang diblokir
+sebelum panggilan model; `events skipped` tidak dicetak); `pilot3a2` gagal di 3. Ditemukan di `CONTEXT_DESIGN.md` bagian 7 (PR #122) dan direproduksi di sandbox Argus
+(`evidence/context_sim/import_fix_check_argus_sandbox.txt`, skrip `import_fix_check.py`). Akibatnya: proyeksi "satu putaran perbaikan" terlalu optimistis; run live 3a berikutnya
+menunggu D1, D2, dan D3 (K4).
