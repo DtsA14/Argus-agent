@@ -4,7 +4,8 @@ For every request:
   1. count input tokens over the full context, including assistant tool calls and tool results
      (exact via the provider's counting API when available, otherwise a conservative heuristic);
   2. derive the output cap from what is left of the node's reservation, in tokens AND in USD;
-  3. refuse before sending when not even `min_output_tokens` would fit (nothing is billed);
+  3. refuse before sending when not even `min_output_tokens` would fit, or when the input is over the
+     reservation's per-call limit `max_input` (reason input_limit); nothing is billed;
   4. write `llm_call_started` (call_id, worst case) to the ledger, then send with max_tokens = cap;
   5. write the final `llm_call` event (same call_id), then charge the reservation;
   6. charge actual usage, or the worst case when usage is missing or the attempt failed.
