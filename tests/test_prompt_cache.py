@@ -280,3 +280,15 @@ def test_a_call_cut_off_by_a_crash_is_charged_at_the_write_rate(tmp_path):      
     assert started["worst_usd_nano"] == to_nano((10000 * 1.25 + cap * 5.0) / 1e6)
     _, totals = reconcile_ledger(log.read())
     assert totals["unknown_after_crash"] == 1 and totals["usd_nano"] == started["worst_usd_nano"]
+
+
+def test_the_result_totals_cache_tokens_and_estimates_the_saving():                      # section 4
+    from codetask.run import cache_totals
+    c = load_config()
+    actual = to_nano((1000 * 2.00 + 3000 * 2.50 + 6000 * 0.10 + 500 * 10.00) / 1e6)
+    evs = [{"event": "llm_call", "status": "ok", "model": "anthropic:claude-sonnet-5-5", "ts": 1792660000.0,
+            "input_tokens": 10000, "output_tokens": 500, "cache_read": 6000, "cache_creation": 3000, "usd_nano": actual},
+           {"event": "llm_call", "status": "refused", "model": "anthropic:claude-sonnet-5-5", "ts": 1792660001.0}]
+    t = cache_totals(evs, c)
+    plain = to_nano((10000 * 2.00 + 500 * 10.00) / 1e6)
+    assert t == {"cache_read_tokens": 6000, "cache_creation_tokens": 3000, "usd_saved_estimate": (plain - actual) / 1e9}
