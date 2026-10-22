@@ -5,7 +5,11 @@ the token usage the provider reported; the pre-send token estimate is the one th
 (the sandbox runs the tests). If the harness reaches the same outcome, the outcome is determined by (the replies, the budget), not by anything that happened
 at the provider.
 
-  PYTHONPATH=. python pilots/m6_pilot3/3a/replay_3a.py runs/pilot3a <runs_dir> <run_id> [--config pilots/m6_pilot3/3a/config_pilot3a.yaml]
+  PYTHONPATH=. python pilots/m6_pilot3/3a/replay_3a.py runs/pilot3a <runs_dir> <run_id> [--config pilots/m6_pilot3/3a/config_pilot3a.yaml] [--d1]
+
+--d1 (docs/reviews/DESIGN_ATTEMPT_USD.md, section 7): for this replay only, the contract's profile `large` gets the values of
+`large_usd` from config.yaml and budget.max_tokens becomes 1,200,000 (K3). The call the live run had refused (it0 s3) must then be
+sent; its reply was never recorded, so the replay stops there (llm_failed), which shows where the limit moved without a model call.
 """
 import json
 import os
@@ -40,6 +44,9 @@ for k, v in db.execute("select key, value from memo"):
 
 cfg = load_config(config_path)
 cfg["code_task"]["feedback_error_excerpt"] = False       # pilot3a ran before D2: its attempt-1 prompt had no excerpts
+if "--d1" in sys.argv:
+    cfg["code_task"]["profiles"]["large"] = dict(load_config()["code_task"]["profiles"]["large_usd"])
+    cfg["budget"]["max_tokens"] = 1_200_000
 cfg["sandbox"] = {**(cfg.get("sandbox") or {}), "kind": "docker"}
 for name in cfg["sandbox"].get("environments") or {}:
     var, path = f"ARGUS_SANDBOX_IMAGE_{name.upper()}", ROOT / f".sandbox_image_{name}"
@@ -96,5 +103,9 @@ out = {
     "verdict_1_workspace_digest_live": v_old["workspace_digest"][:16] if v_old else None,
     "verdict_1_workspace_digest_replay": v_new["workspace_digest"][:16] if v_new else None,
     "requests_the_live_run_never_made": len(missing),
+    "refused_live": [(e["iteration"], e["step"], e["est_input"]) for e in calls if e["status"] == "refused"],
+    "refused_replay": [(e["iteration"], e["step"], e["est_input"], e.get("reason")) for e in new_calls if e["status"] == "refused"],
+    "sent_replay": [(e["iteration"], e["step"], e["est_input"], e["max_tokens"]) for e in new if e["event"] == "llm_call_started"],
+    "budget_profile_replay": r.get("budget_profile"),
 }
 print(json.dumps(out, indent=1))
