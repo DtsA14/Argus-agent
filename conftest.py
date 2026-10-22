@@ -30,6 +30,7 @@ def uses_sandbox(path):
     return _sandbox_modules[path]
 
 
+@pytest.hookimpl(tryfirst=True)      # before xdist's own hook, which turns the marker into the node id's @group
 def pytest_collection_modifyitems(config, items):
     for item in items:
         if uses_sandbox(item.fspath):

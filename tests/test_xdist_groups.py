@@ -28,6 +28,13 @@ def test_the_hook_marks_sandbox_items_with_the_loadgroup_marker():
     assert items[1].markers == []
 
 
+def test_the_hook_runs_before_xdist_reads_the_groups():
+    # xdist's worker hook appends "@<group>" to each node id from the xdist_group markers; a marker added after it is
+    # ignored and the sandbox tests run at the same time (3 runs on 2026-10-22: 3 to 6 failures each).
+    opts = getattr(conftest.pytest_collection_modifyitems, "pytest_impl", None) or {}
+    assert opts.get("tryfirst") is True
+
+
 def test_verify_sh_runs_the_suite_with_loadgroup():
     text = (ROOT / "scripts" / "verify.sh").read_text(encoding="utf-8")
     assert '-n "$WORKERS" --dist loadgroup' in text
