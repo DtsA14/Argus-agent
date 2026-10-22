@@ -15,7 +15,7 @@ ISSUE="pilots/m6_w2b/w2b1/issue.txt"
 CONFIG="pilots/m6_w2b/w2b1/config_w2b1.yaml"
 MAX_USD=0.50
 EXPECT_ISSUE_SHA="56460216a6720e72aeb053f707ec9966af525505c171287d36b41ce5d4c10584"     # sha256 of the issue (line ends normalised)
-EXPECT_CONFIG_SHA="5085ae8b2e772fdace6089b5bba6c7beea44e2531c88d52eb67bd68b3f808c3c"    # sha256 of the pilot config (line ends normalised)
+EXPECT_CONFIG_SHA="668c395bddf21774f1da2da8c3a92a4140ae669e4f6a740ce40027a6fe7a2b54"    # sha256 of the pilot config (line ends normalised)
 PY="${PY:-$HOME/Argus-agent/.venv-verify/bin/python}"
 SUPLOG="$HOME/argus-supervision.log"
 
@@ -96,13 +96,13 @@ e = {"cap_usd": cap, **lim, "max_submits": cfg["drafter"]["max_submits"], "envir
      "prompt_cache": prompt_cache_for(cfg, role, ref), "prices": cfg["prices"][str(ref)]}
 want = {"cap_usd": 0.5, "attempt_tokens": 400000, "attempt_usd": 0.45, "max_input_tokens": 40000, "max_steps": 16, "max_usd": 0.5,
         "max_submits": 3, "environment": "argus", "validation_timeout_s": 300, "model": "anthropic:claude-sonnet-5-5",
-        "max_output_tokens": 8192, "tools": ["list_files", "search_files", "read_file"], "prompt_cache": True,
+        "max_output_tokens": 16384, "tools": ["list_files", "search_files", "read_file"], "prompt_cache": True,
         "prices": {"input": 2.0, "output": 10.0, "cache_read": 0.1, "cache_write_5m": 2.5, "cache_write_1h": 4.0}}
 if e != want:
     print("REFUSED: the effective limits are not the reviewed ones: " + json.dumps({k: (e.get(k), want[k]) for k in want if e.get(k) != want[k]}),
           file=sys.stderr)
     raise SystemExit(1)
-print("gate 3 ok: Sonnet 5.5, one attempt of $0.45 (cap $0.50), input <= 40,000 per call, output 8,192, 16 steps, 3 submits,"
+print("gate 3 ok: Sonnet 5.5, one attempt of $0.45 (cap $0.50), input <= 40,000 per call, output 16,384, 16 steps, 3 submits,"
       " read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)")
 PYEOF
 
