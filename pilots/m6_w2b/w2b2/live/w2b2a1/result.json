@@ -1,0 +1,75 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "4de6373c659a82a8a3bddd8fd4dec4dc34abed3e4ce08ea9a788235a47afa7f0",
+  "verdict": {
+    "iteration": 1,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "602cd619a2cad32b3b7057f58dbe31cf69c49974afccc124348b8383c11df1f4"
+  },
+  "attempt": {
+    "iteration": 1,
+    "end": "finished",
+    "steps": 1
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "edit_file"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/pr_title2",
+      "snapshot_sha256": "c48bca9d89501e258b39abe7421cbf79e3d888f5d01192752179b7c9ca79c21c",
+      "intake": {
+        "name": "pr_title2",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "3b5d26e1fdd662d8421740223f398d978ebd1e59",
+        "tree": "4267f4f19d13297d0f4be66ef9fb08e248f93c03",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "argus_p7",
+          "commit": "3b5d26e1fdd662d8421740223f398d978ebd1e59",
+          "tree": "4267f4f19d13297d0f4be66ef9fb08e248f93c03",
+          "snapshot_sha256": "3fe0c22f85b09678c28c83678917e6a383757453ba8b93be7d5d9069727a2784"
+        },
+        "added": {
+          "tests/test_review_pr_title.py": "9391a8823b237745b607af3f532a954e1a6a38f11901b1e361b3da04751fc7a7"
+        },
+        "contract_sha256": "4de6373c659a82a8a3bddd8fd4dec4dc34abed3e4ce08ea9a788235a47afa7f0"
+      }
+    },
+    "argus": {
+      "commit": "b4ba73e272f00ec15bd9daa82f133558fb2d2ac8",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "default",
+    "attempt_tokens": 30000,
+    "max_output_tokens": 4096
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4
+  },
+  "cache": {
+    "cache_read_tokens": 6068,
+    "cache_creation_tokens": 26407,
+    "usd_saved_estimate": -0.0016743
+  },
+  "run_id": "w2b2a1",
+  "attempts": 2,
+  "usd_billed": 0.0777983,
+  "usd_complete": true,
+  "llm_calls": 4,
+  "llm_calls_unknown": 0
+}

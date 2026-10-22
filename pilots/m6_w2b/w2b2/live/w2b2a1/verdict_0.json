@@ -1,0 +1,123 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": [
+            "codetask/review.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": [
+            "codetask/review.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_review_pr_title.py"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 9,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word": "ok",
+          "tests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters": "ok",
+          "tests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed": "ok",
+          "tests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters": "ok",
+          "tests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 9 items\n\ntests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word PASSED\ntests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters PASSED\ntests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed PASSED\ntests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters PASSED\ntests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole PASSED\ntests/test_review_pr_title.py::test_a_first_line_of_at_most_80_characters_is_used_as_it_is[1] PASSED\ntests/test_review_pr_title.py::test_a_first_line_of_at_most_80_characters_is_used_as_it_is[79] PASSED\ntests/test_review_pr_title.py::test_a_first_line_of_at_most_80_characters_is_used_as_it_is[80] PASSED\ntests/test_review_pr_title.py::test_the_heading_is_still_cleaned_and_limited_to_120_characters PASSED\n\n============================== 9 passed in 0.07s ===============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 9,
+        "deselected": 0,
+        "stderr_tail": "",
+        "failed_nodes": [],
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "3805e985c5d94233f5514431a8b16fefb9f9e7a94201b28c57bd9d6a51934250",
+  "summary_sha256": null,
+  "verdict_sha256": "8abbf66eaf49c5726b466318b9a008fc80557b2c35e96ec222eb27c5a415f324"
+}
