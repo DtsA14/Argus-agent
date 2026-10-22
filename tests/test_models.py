@@ -161,6 +161,17 @@ def test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries(keys):
     # M6 W0: without a timeout a hung request would stall a code task forever; SDK retries would be billed outside
     # the ledger. The harness retries timeouts itself (harness/llm.py) and charges each at its worst case.
     cfg = load_config()
-    model = build_chat_model(cfg, "coder")
-    assert cfg["roles"]["coder"]["timeout_s"] == 90
-    assert model.default_request_timeout == 90 and model.max_retries == 0
+    for role in ("coder", "drafter"):
+        model = build_chat_model(cfg, role)
+        timeout = getattr(model, "default_request_timeout", None) or getattr(model, "request_timeout", None)
+        assert timeout == cfg["roles"][role]["timeout_s"] > 0 and model.max_retries == 0, role
+
+
+def test_the_coder_and_drafter_run_deepseek_without_thinking(keys):
+    # 2026-10-23: DeepSeek V4.1 Flash. In thinking mode with tools DeepSeek requires every earlier reasoning_content to
+    # be sent back (HTTP 400 otherwise); the agent and drafter loops do not keep it, so thinking must be off.
+    cfg = load_config()
+    for role in ("coder", "drafter"):
+        assert cfg["roles"][role]["model"] == "deepseek:deepseek-flash"
+        model = build_chat_model(cfg, role)
+        assert model.extra_body == {"thinking": {"type": "disabled"}}, role
