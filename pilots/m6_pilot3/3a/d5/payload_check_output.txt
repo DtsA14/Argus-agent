@@ -1,0 +1,4 @@
+ok  first request: markers at ['.messages[0].content[0]', '.system[0]']; last block type text; 7 tools; messages kept unmarked: True
+ok  after a tool step: markers at ['.messages[2].content[1]', '.system[0]']; last block type tool_result; 7 tools; messages kept unmarked: True
+ok  after an auto-validation message (D3): markers at ['.messages[2].content[1]', '.system[0]']; last block type text; 7 tools; messages kept unmarked: True
+RESULT: ok
