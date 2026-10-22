@@ -1,0 +1,100 @@
+{
+  "plan": {
+    "files": [
+      "scripts/pilot_report.py"
+    ],
+    "risks": [
+      "The script runs from scripts/, so evals and harness are not importable unless the repo root is added to sys.path; the tests set PYTHONPATH to the root, but the script should not depend on that.",
+      "Cost must never turn unknown into zero: runs with an incomplete or missing ledger are excluded from usd_known_total and counted in usd_unknown_runs.",
+      "attempts_distribution keys must sort numerically ('10' after '3'), not lexically.",
+      "Float summing must go through round(x*1e9) integers to avoid drift.",
+      "A supervision value of 0 must be reported as 0, not null; bool values must be rejected even though bool is an int.",
+      "Error paths must print exactly one stderr line (no traceback) and nothing on stdout, even when an earlier run was already read."
+    ],
+    "steps": [
+      "Create scripts/pilot_report.py: parse argv (run dirs plus optional --supervision FILE); put the repository root on sys.path so evals and harness import when run as python scripts/pilot_report.py.",
+      "Validate the arguments first: no run dirs gives 'no run directory given'; a non-directory or a directory without events.jsonl gives '<arg>: not a run directory'. Load and validate the supervision file (JSON object, each value int/float and not bool, finite, >= 0, each key a given run_id). On any failure print exactly one stderr line, leave stdout empty, exit 2.",
+      "For each run read events and skipped count with evals.runlog.read_events and the result with read_result. Build the per-run entry in the specified key order, with status NO_RESULT, usd_billed null and cost_known false when there is no result.json, and cost_known from evals.score.cost_is_known(result).",
+      "Compute the aggregates in the specified key order: counts, success_rate, usd_known_total through integer nano-dollars, usd_unknown_runs, cost_per_success, cost_complete, attempts mean/median over done runs, attempts_distribution with numerically ordered keys, supervision summary, events_skipped sum.",
+      "Print json.dumps(obj, indent=2, ensure_ascii=False) + newline and exit 0."
+    ]
+  },
+  "scope": {
+    "protected": [
+      "tests/**",
+      "evals/**",
+      "harness/**",
+      "acceptance/**",
+      "codetask/**",
+      "nodes/**",
+      "models/**",
+      "tools/**",
+      "fixtures/**",
+      "docs/**",
+      "conftest.py",
+      "runner.py",
+      "main.py",
+      "graph.py",
+      "state.py",
+      "dataset.py",
+      "config.yaml",
+      "requirements.txt",
+      "AGENTS.md",
+      "README.md",
+      "BACKLOG.md",
+      "PENDING.md"
+    ],
+    "writable": [
+      "scripts/pilot_report.py"
+    ]
+  },
+  "validation": [
+    {
+      "id": "target",
+      "min_tests": 29,
+      "must_pass": [
+        "tests/test_pilot_report.py::test_output_is_canonical_json_text",
+        "tests/test_pilot_report.py::test_top_level_key_order",
+        "tests/test_pilot_report.py::test_run_entries_in_argument_order_with_key_order",
+        "tests/test_pilot_report.py::test_full_report_without_supervision",
+        "tests/test_pilot_report.py::test_attempts_distribution_keys_in_numeric_order",
+        "tests/test_pilot_report.py::test_full_report_with_supervision",
+        "tests/test_pilot_report.py::test_all_runs_without_result",
+        "tests/test_pilot_report.py::test_done_run_with_unknown_cost",
+        "tests/test_pilot_report.py::test_non_ascii_run_id_is_not_escaped",
+        "tests/test_pilot_report.py::test_valid_supervision_int_float_and_zero",
+        "tests/test_pilot_report.py::test_no_run_directory",
+        "tests/test_pilot_report.py::test_supervision_without_runs",
+        "tests/test_pilot_report.py::test_bad_run_argument[missing]",
+        "tests/test_pilot_report.py::test_bad_run_argument[file]",
+        "tests/test_pilot_report.py::test_bad_run_argument[no_events]",
+        "tests/test_pilot_report.py::test_bad_run_after_good_one",
+        "tests/test_pilot_report.py::test_bad_supervision_file[missing]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[empty]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[invalid_json]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[list]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[bool]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[string]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[null]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[negative]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[nan]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[infinity]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[overflow]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[unknown_key]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[one_bad_among_good]"
+      ],
+      "paths": [
+        "tests/test_pilot_report.py"
+      ]
+    },
+    {
+      "id": "regression",
+      "min_tests": 5,
+      "must_pass": [],
+      "paths": [
+        "tests/test_eval_cost.py",
+        "tests/test_run_series.py"
+      ]
+    }
+  ]
+}

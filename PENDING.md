@@ -43,6 +43,9 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [ ] Judul `PR.md` (paket review) dipotong 80 karakter di tengah kata; kosmetik
 - [~] **W2b** drafter model (`docs/reviews/REVIEW_M6_W2B.md`): kode dan tes selesai, patch referensi opsional (K1). Berikutnya
   pilot **W2b-1** (ulang issue 3b di `argus_p6`, cek bocoran di preflight), lalu **W2b-2** end-to-end di task baru (spec bagian 7)
+  - **W2b-1 `w2b1d1` gagal** (2026-10-22, $0,16): `SubmitDraft` terpotong di output 8.192, 6.108 di antaranya thinking; isi tes
+    belum tertulis (`pilots/m6_w2b/w2b1/live/w2b1d1/RESULT.md`). Keputusan berikutnya menunggu Atha (output lebih besar, thinking
+    dibatasi, atau tes lewat tool terpisah)
 - [ ] **D4** batas ListFiles + daftar berkas di issue: **ditunda** (2026-10-22); dibuka bila ada task yang kehabisan anggaran dengan caching
   menyala
 - Pengamatan, belum tindakan: di `pilot3b1` agen memanggil `RunValidation` di balasan yang sama dengan tulisannya, sebelum validasi otomatis

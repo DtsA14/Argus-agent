@@ -1,0 +1,52 @@
+{"ts": 1792684755.992, "event": "run_start", "run_id": "w2b1d1", "kind": "drafter", "intake": "argus_p6", "max_usd": 0.5}
+{"ts": 1792684756.01, "event": "node_start", "node": "setup"}
+{"ts": 1792684756.265, "event": "drafter_policy", "max_steps": 16, "max_submits": 3, "environment": "argus", "validation_timeout_s": 300, "profiles": ["default", "large", "large_usd"], "tools": ["list_files", "search_files", "read_file"]}
+{"ts": 1792684756.266, "event": "status", "new": "RUNNING", "reason": null, "blocked_reason": null}
+{"ts": 1792684756.266, "event": "body_done", "node": "setup", "tokens": 0}
+{"ts": 1792684756.271, "event": "result_committed", "node": "setup"}
+{"ts": 1792684756.271, "event": "node_end", "node": "setup", "seconds": 0.261, "tokens": 0}
+{"ts": 1792684756.277, "event": "node_start", "node": "draft"}
+{"ts": 1792684756.679, "event": "llm_call_started", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 0, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "e2839f48dd8015c1", "call_id": "e1618de57524", "attempt": 1, "est_input": 2858, "max_tokens": 8192, "worst_tokens": 11050, "worst_usd_nano": 89065000, "worst_usd": 0.089065}
+{"ts": 1792684758.533, "event": "llm_call", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 0, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "e2839f48dd8015c1", "call_id": "e1618de57524", "status": "ok", "attempt": 1, "est_input": 2858, "max_tokens": 8192, "input_tokens": 2858, "output_tokens": 28, "cache_read": 0, "cache_creation": 2854, "tokens": 2886, "usd_nano": 7423000, "usd": 0.007423, "charged": "actual", "latency_s": 1.854, "truncated": false, "reasoning_tokens": 0, "stop_reason": "tool_use"}
+{"ts": 1792684758.538, "event": "step_committed", "kind": "llm", "step": 0, "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684758.538, "event": "tool_call", "role": "drafter", "tool": "list_files"}
+{"ts": 1792684758.583, "event": "step_committed", "kind": "tool", "step": 0, "tool": "ListFiles", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684758.89, "event": "llm_call_started", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 1, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "cffde4bd400035a3", "call_id": "dd7ff4f23192", "attempt": 1, "est_input": 10461, "max_tokens": 8192, "worst_tokens": 18653, "worst_usd_nano": 108072500, "worst_usd": 0.1080725}
+{"ts": 1792684761.198, "event": "llm_call", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 1, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "cffde4bd400035a3", "call_id": "dd7ff4f23192", "status": "ok", "attempt": 1, "est_input": 10461, "max_tokens": 8192, "input_tokens": 10461, "output_tokens": 215, "cache_read": 2854, "cache_creation": 7605, "tokens": 10676, "usd_nano": 21451900, "usd": 0.0214519, "charged": "actual", "latency_s": 2.308, "truncated": false, "reasoning_tokens": 0, "stop_reason": "tool_use"}
+{"ts": 1792684761.203, "event": "step_committed", "kind": "llm", "step": 1, "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684761.203, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684761.207, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684761.207, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684761.211, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684761.211, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684761.215, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684761.216, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684761.22, "event": "step_committed", "kind": "tool", "step": 1, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684761.533, "event": "llm_call_started", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 2, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8ee7f330815ebc6f", "call_id": "d1508039c560", "attempt": 1, "est_input": 18458, "max_tokens": 8192, "worst_tokens": 26650, "worst_usd_nano": 128065000, "worst_usd": 0.128065}
+{"ts": 1792684764.915, "event": "llm_call", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 2, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "8ee7f330815ebc6f", "call_id": "d1508039c560", "status": "ok", "attempt": 1, "est_input": 18458, "max_tokens": 8192, "input_tokens": 18458, "output_tokens": 364, "cache_read": 10459, "cache_creation": 7997, "tokens": 18822, "usd_nano": 24682400, "usd": 0.0246824, "charged": "actual", "latency_s": 3.382, "truncated": false, "reasoning_tokens": 86, "stop_reason": "tool_use"}
+{"ts": 1792684764.919, "event": "step_committed", "kind": "llm", "step": 2, "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684764.92, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684764.924, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684764.925, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684764.929, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684764.929, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684764.933, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684764.933, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684764.937, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684764.938, "event": "tool_call", "role": "drafter", "tool": "read_file"}
+{"ts": 1792684764.942, "event": "step_committed", "kind": "tool", "step": 2, "tool": "ReadFile", "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684765.25, "event": "llm_call_started", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 3, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "6fe2d9b856275652", "call_id": "83ab32c8117a", "attempt": 1, "est_input": 27387, "max_tokens": 8192, "worst_tokens": 35579, "worst_usd_nano": 150387500, "worst_usd": 0.1503875}
+{"ts": 1792684829.057, "event": "llm_call", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 3, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "6fe2d9b856275652", "call_id": "83ab32c8117a", "status": "ok", "attempt": 1, "est_input": 27387, "max_tokens": 8192, "input_tokens": 27387, "output_tokens": 8192, "cache_read": 18456, "cache_creation": 8929, "tokens": 35579, "usd_nano": 106092100, "usd": 0.1060921, "charged": "actual", "latency_s": 63.807, "truncated": true, "reasoning_tokens": 6108, "stop_reason": "max_tokens"}
+{"ts": 1792684829.058, "event": "output_truncated", "node": "drafter", "task": "draft:argus_p6", "iteration": 0, "step": 3, "role": "drafter", "model": "anthropic:claude-sonnet-5-5", "prompt_hash": "6fe2d9b856275652", "call_id": "83ab32c8117a", "max_tokens": 8192, "output_tokens": 8192}
+{"ts": 1792684829.063, "event": "step_committed", "kind": "llm", "step": 3, "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684829.063, "event": "reply_truncated", "step": 3, "tools": ["SubmitDraft"], "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684829.064, "event": "drafting_end", "reason": "output_truncated", "steps": 3, "submits": 0, "node": "drafter", "task": "draft:argus_p6", "iteration": 0}
+{"ts": 1792684829.064, "event": "status", "new": "NO_DRAFT", "reason": "output_truncated", "blocked_reason": null}
+{"ts": 1792684829.064, "event": "body_done", "node": "draft", "tokens": 67963}
+{"ts": 1792684829.066, "event": "result_committed", "node": "draft"}
+{"ts": 1792684829.067, "event": "node_end", "node": "draft", "seconds": 72.79, "tokens": 67963}
+{"ts": 1792684829.071, "event": "node_start", "node": "finalize"}
+{"ts": 1792684829.115, "event": "body_done", "node": "finalize", "tokens": 0}
+{"ts": 1792684829.118, "event": "result_committed", "node": "finalize"}
+{"ts": 1792684829.118, "event": "node_end", "node": "finalize", "seconds": 0.046, "tokens": 0}
+{"ts": 1792684829.125, "event": "run_end", "status": "NO_DRAFT", "stop_reason": "output_truncated", "blocked_reason": null, "drafting": {"end": "output_truncated", "steps": 3, "submits": 0}, "source_unchanged": true, "run_id": "w2b1d1", "intake": "argus_p6", "max_usd": 0.5, "draft": false, "cache": {"cache_read_tokens": 31769, "cache_creation_tokens": 27385, "usd_saved_estimate": 0.0466686}, "usd_billed": 0.1596494, "usd_complete": true, "llm_calls": 4, "llm_calls_unknown": 0}
