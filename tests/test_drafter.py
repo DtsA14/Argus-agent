@@ -563,3 +563,9 @@ def test_a_crash_after_a_revision_resumes_from_the_draft_it_revised(root, tmp_pa
     want, _ = dt.draft_from_args(ARGS, base="shop", policy=POLICY)
     assert json.loads((d / "draft.json").read_text()) == want
     assert len((tmp_path / "validate.log").read_text().splitlines()) == 6      # submit, revision, revision again
+
+
+def test_the_drafter_is_offered_the_read_tools_of_its_allowlist_and_both_submit_tools():
+    names = [t.__name__ for t in dt.offered({"list_files", "search_files", "read_file", "write_file"})]
+    assert names == ["ListFiles", "SearchFiles", "ReadFile", "SubmitDraft", "ReviseDraft"]
+    assert [t.__name__ for t in dt.offered({"read_file"})] == ["ReadFile", "SubmitDraft", "ReviseDraft"]
