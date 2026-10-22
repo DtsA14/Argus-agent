@@ -73,3 +73,12 @@ Semua perubahan harness mengikuti aturan inti (tes yang gagal di kode lama, muta
 - Sisi harness: identik (replay).
 - Sisi model: **ya**, dengan satu run live ulang (kontrak, config, dan batas sama; `live/pilot3a2/RESULT.md`): langkah 0 identik, langkah 1 identik dalam isi (token dan alat sama), kegagalan yang sama (`reservation_exhausted` di kedua attempt, tidak sampai `Finish`), biaya $0,1937,
   dan kesalahan impor `read_result` yang sama di `audit_run.py`. Model menyimpang mulai langkah ketiga (menulis vs mencari), tetapi anggaran sudah habis lebih dulu. Catatan: hash prompt langkah ke-1 dan seterusnya berbeda antar run karena id pemanggilan alat dari provider acak, jadi perbandingan memakai token dan alat, bukan hash.
+
+## 8. Koreksi laju token dan tindak lanjut (2026-10-22)
+
+`CONTEXT_DESIGN.md` (simulasi kebijakan konteks dari buku besar dan memo kedua run, `simulate_context.py`) memfit laju token per jenis isi ke buku besar. Hasilnya mengoreksi taksiran di bagian 2 dan 3 dokumen ini, yang memakai laju kasar
+0,3186 token/karakter: `ListFiles` ±7.070 token (bukan 4.141) dan modul data ±7.050 (bukan 4.817). Jumlah per langkah di buku besar tidak berubah (itu angka provider); yang berubah hanya pembagian per jenis isi, yang di sana lemah teridentifikasi
+(6 parameter untuk 9 transisi; kesimpulan tahan uji ±15%). Kesimpulan bagian 1 dan 5 tetap: bentuk trajektori yang mengikat, bukan satu bacaan.
+
+Verifikasi independen: `simulate_context.py` dijalankan ulang di VM pada `runs/pilot3a` dan `runs/pilot3a2` (arsip run asli) dan keluarannya identik dengan `evidence/context_sim/simulation_output.txt` (85 baris).
+Usulan perubahan harness (D1–D5) ada di `CONTEXT_DESIGN.md`; spesifikasi D2 di `docs/reviews/DESIGN_FEEDBACK_TRACEBACK.md`.
