@@ -19,7 +19,7 @@ tes lama. Itu ditunda ke "W2a-ext: changed_tests" (W2b-3).
 | | |
 |---|---|
 | Basis | intake **`argus_p7`** = `main` `3b5d26e` (436 berkas, snapshot `3fe0c22f85b0…`; exclude `verification`, `pilots`), `fixtures/intake/argus_p7.json` |
-| Issue | `w2b2/issue.txt`, ditulis Claude, 1.120 karakter (batas 2.000). Definisi pemotongan dibuat persis supaya bisa dites: ≤ 80 karakter apa adanya; selain itu 81 karakter pertama dipotong sebelum spasi terakhir, lalu `...`; tanpa spasi (atau hasil kosong), 80 karakter lalu `...` |
+| Issue | `w2b2/issue.txt`, ditulis Claude, 1.121 karakter (batas 2.000). Definisi pemotongan dibuat persis supaya bisa dites: ≤ 80 karakter apa adanya; selain itu 81 karakter pertama dipotong sebelum spasi terakhir, lalu `...`; tanpa spasi (atau hasil kosong), 80 karakter lalu `...` |
 | Kesesuaian dengan W2a | tidak ada tes lama yang mengunci judul `PR.md` (dicek: `tests/test_review.py` hanya memeriksa isi lain), jadi tes baru saja cukup |
 | Config drafter | `w2b2/config_w2b2_draft.yaml`: isi sama dengan config terakhir W2b-1 (`w2b1d3`), empat selisih dari `config.yaml`; attempt $0,70, cap $0,75, input 64.000, output 16.384, 3 submit, caching menyala; **drafter wajib memilih profil** (PR #155) |
 | Gerbang drafter | `w2b2/go_live_draft.sh`: sama dengan W2b-1, dengan intake `argus_p7`, issue dan config baru, run id `w2b2d[1-9]`; cek bocoran diganti cek bahwa `pilots/` dan `verification/` tidak ada di intake (tidak ada jawaban yang bisa bocor) |
