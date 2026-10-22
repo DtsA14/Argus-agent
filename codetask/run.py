@@ -167,10 +167,11 @@ def admission(log, lim):
 
 
 def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None,
-                env_preflight=None, root=ROOT):
+                env_preflight=None, root=None):
     """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox).
-    root: where the contract's input repository and its intake record live (a router job has its own)."""
-    run_dir, root = Path(run_dir), Path(root)
+    root: where the contract's input repository and its intake record live (a router job has its own); None is this
+    checkout (ROOT, read when called)."""
+    run_dir, root = Path(run_dir), Path(ROOT if root is None else root)
     ws = run_dir / WORKSPACE
     memo = Memo(run_dir / "memo.sqlite")
     crasher = Crasher(crash_at, str(run_dir / ".crashed"), log)
@@ -362,7 +363,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
 
 
 def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_at=None, models=None,
-                  validate=None, preflight=None, env_preflight=None, echo=False, root=ROOT):
+                  validate=None, preflight=None, env_preflight=None, echo=False, root=None):
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
