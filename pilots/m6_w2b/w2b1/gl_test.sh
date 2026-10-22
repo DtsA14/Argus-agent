@@ -31,13 +31,13 @@ $GL --check-only; echo "[exit $?]"; reset
 echo; echo "### T3 the issue edited (must refuse)"
 echo "Also add a --json flag." >> pilots/m6_w2b/w2b1/issue.txt; t t3; $GL --check-only; echo "[exit $?]"; reset
 echo; echo "### T4 the pilot config edited (cap 1.00): its hash changes (must refuse)"
-sed -i 's/^  max_usd: 0.50 /  max_usd: 1.00 /' $C; t t4; $GL --check-only; echo "[exit $?]"; reset
+sed -i 's/^  max_usd: 0.75 /  max_usd: 1.00 /' $C; t t4; $GL --check-only; echo "[exit $?]"; reset
 echo; echo "### T5 config.yaml changed elsewhere: a fourth difference (must refuse)"
 sed -i 's/max_workers: 3 /max_workers: 4 /' config.yaml; t t5; $GL --check-only; echo "[exit $?]"; reset
-echo; echo "### T6 config.yaml turns prompt caching on: only two differences left (must refuse)"
+echo; echo "### T6 config.yaml turns prompt caching on: only three differences left (must refuse)"
 sed -i 's/^  prompt_cache: {enabled: false, ttl: 5m}$/  prompt_cache: {enabled: true, ttl: 5m}/' config.yaml; t t6; $GL --check-only; echo "[exit $?]"; reset
-echo; echo "### T7 drafter attempt_usd 0.60 in both configs, expected hash updated: gate 3 must refuse"
-sed -i 's/^  attempt_usd: 0.45$/  attempt_usd: 0.60/' config.yaml $C; rehash; t t7; $GL --check-only; echo "[exit $?]"; reset
+echo; echo "### T7 drafter attempt_usd 0.74 in both configs, expected hash updated: gate 3 must refuse"
+sed -i 's/^  attempt_usd: 0.70$/  attempt_usd: 0.74/' config.yaml $C; rehash; t t7; $GL --check-only; echo "[exit $?]"; reset
 echo; echo "### T8 the drafter may write, in both configs, expected hash updated: gate 3 must refuse"
 sed -i 's/^  drafter: \[list_files, search_files, read_file\]/  drafter: [list_files, search_files, read_file, write_file]/' config.yaml $C
 rehash; t t8; $GL --check-only; echo "[exit $?]"; reset

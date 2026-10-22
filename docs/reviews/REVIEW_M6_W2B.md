@@ -102,3 +102,23 @@ terhadap `tests/test_drafter.py`, `tests/test_draft.py` (sandbox), dan `tests/te
 | W2a dan paket review | tanpa referensi dianggap `proven`; record selalu `proven`; flag referensi opsional; `PR.md` salah untuk task lama, atau tidak pernah menyebut `unproven` |
 
 Tes baru dijalankan juga di `main` sebelum W2b (`4170356`): gagal saat import (`ImportError`, modulnya belum ada).
+
+## 6. Tambahan setelah pilot W2b-1 (2026-10-22)
+
+`w2b1d1` (output 8.192, thinking 6.108) dan `w2b1d2` (submit 1 kurang satu node; kiriman ulang melewati batas input)
+menghasilkan tiga perubahan, yang disetujui Atha ("1+2+revisedraft"):
+
+- **`failed_nodes`** di bukti validasi pytest (`acceptance/validation.py`, maksimal 50). Cek baseline W2a menyebut tes
+  yang gagal atau error padahal tidak diwajibkan.
+- **`ReviseDraft`** (`codetask/drafter.py`): field yang diberikan menggantikan field yang sama di argumen submit
+  terakhir. Argumen itu disimpan di record tool yang di-commit (`args`), jadi run yang di-resume merevisi draf yang
+  sama. Hasilnya dicek dan dihitung seperti `SubmitDraft`. Tanpa submit sebelumnya, revisi ditolak tanpa menjalankan
+  apa pun. Field tak dikenal ditolak dengan namanya. Harus sendirian di balasannya.
+- **Config:** output drafter 16.384 (PR #151), `attempt_usd` 0,70, dan `max_input_tokens` 64.000. Cap run tetap
+  `min(budget.max_usd, --max-usd)`.
+
+Bukti: tes baru di `tests/test_drafter.py` (revisi, penyebutan tes, revisi tanpa submit, field terlarang, batas submit,
+revisi bersama tool lain, crash setelah revisi, dan tool yang ditawarkan) serta `tests/test_draft.py` (sandbox).
+Mutan: `verification/mutants-w2b-revise-20261022-59eee91.log`, **9/9 tertangkap**. Satu mutan tidak dimasukkan karena
+ekuivalen dalam perilaku: menggabungkan field tak dikenal ke draf lama tetap ditolak `draft_from_args` dengan nama
+yang sama.

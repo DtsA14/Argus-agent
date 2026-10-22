@@ -1,14 +1,14 @@
-# M6 W2b pilot W2b-1 (pilots/m6_w2b/w2b1/PREFLIGHT.md): config.yaml with exactly three changes, checked by go_live.sh:
-# budget.max_tokens 200000 -> 1200000, drafter.attempt_tokens 200000 -> 400000 (a ceiling; the USD reservation binds),
-# llm.prompt_cache.enabled false -> true. The run's cap is --max-usd 0.50 (= budget.max_usd); one attempt of $0.45.
-# Regenerated for run w2b1d2 after config.yaml raised roles.drafter.max_output_tokens to 16384 (option A).
+# M6 W2b pilot W2b-1 (pilots/m6_w2b/w2b1/PREFLIGHT.md): config.yaml with exactly four changes, checked by go_live.sh:
+# budget.max_tokens 200000 -> 1200000, budget.max_usd 0.50 -> 0.75, drafter.attempt_tokens 200000 -> 400000 (a
+# ceiling; the USD reservation binds), llm.prompt_cache.enabled false -> true. The run's cap is --max-usd 0.75; one
+# attempt of $0.70. Regenerated for run w2b1d3 (ReviseDraft, named extra failures, attempt $0.70, input 64,000).
 budget:
   max_iterations: 5
   max_tokens: 1200000     # hard limit: an iteration only starts if its worst-case cost fits
   max_seconds: 600       # soft limit: summed node time, checked between iterations
   stagnation_rounds: 2   # stop if the evaluator score has not improved for N rounds
   max_workers: 3         # an orchestrator plan with more parallel tasks is rejected
-  max_usd: 0.50          # hard limit, reserved like tokens: an iteration starts only if its worst case fits
+  max_usd: 0.75          # hard limit, reserved like tokens: an iteration starts only if its worst case fits
   allow_unpriced: false  # refuse models that have no entry in 'prices' (their cost could not be capped)
 
 # Node implementations. fake = deterministic stand-in (no model calls); llm = real model via harness/llm.py.
@@ -120,8 +120,11 @@ code_task:
 drafter:
   role: drafter
   attempt_tokens: 400000
-  attempt_usd: 0.45
-  max_input_tokens: 40000
+  # 0.70 and 64,000 since pilot w2b1d2 (Atha 2026-10-22): a corrected submit after a rejected one carries the first
+  # draft in its input (~45,000) and needs ~12,700 output; at 0.45 / 40,000 it was refused before sending. The default
+  # budget.max_usd (0.50) still caps a run below this; a pilot raises the cap in its own config.
+  attempt_usd: 0.70
+  max_input_tokens: 64000
   max_steps: 16
   max_submits: 3
   environment: argus       # the sandbox environment of every drafted validation (K4: python -m pytest <paths> only)
