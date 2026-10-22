@@ -145,7 +145,7 @@ def test_an_attempt_runs_past_45k_tokens_while_its_usd_fits(tmp_path, counter): 
     r, model, d = run(tmp_path, reads(5) + [WRITE, FINISH], contract=contract("large_usd"), config=cfg())
     assert r["status"] == st.DONE and len(model.calls) == 7 and r["attempts"] == 1
     assert ends(d) == [(0, "finished", 6)] and not events(d, "estimate_overrun")
-    assert r["attempt"]["tokens_used"] == 63700 > 45000
+    assert sum(e["tokens"] for e in events(d, "llm_call")) == 63700 > 45000
     assert r["budget_profile"] == {"name": "large_usd", **LARGE_USD}
 
 
@@ -165,7 +165,9 @@ def test_attempt_usd_bounds_every_call_before_it_is_sent(tmp_path, counter):    
     refused = [e for e in events(d, "llm_call") if e["status"] == "refused"]
     assert len(refused) == 1 and refused[0]["step"] == 2 and refused[0].get("reason") != "input_limit"
     assert ends(d) == [(0, "reservation_exhausted", 2)]
-    assert sum(e["worst_usd_nano"] for e in started) <= 0.02 * 1e9
+    billed = [e["usd_nano"] for e in events(d, "llm_call") if e["status"] == "ok"]
+    assert started[0]["worst_usd_nano"] <= 0.02e9 and started[1]["worst_usd_nano"] <= 0.02e9 - billed[0]
+    assert sum(billed) <= 0.02e9
 
 
 # ---- the input limit (T3, K5) -----------------------------------------------------------------------------------
