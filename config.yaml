@@ -48,6 +48,10 @@ llm:
   base_delay: 1.0                   # seconds; exponential with jitter, Retry-After wins when present
   min_output_tokens: 64
   input_margin: 1.2                 # safety factor on heuristic input counts (Anthropic counts exactly)
+  # D5: Anthropic prompt caching (markers added only to what is sent; hashes and memo keys unchanged). Off by default,
+  # turned on explicitly for a pilot; a role may override it (roles.<role>.prompt_cache). Only ttl 5m; Haiku 5.5 is
+  # not cached in D5. While on, every input token is reserved at the dearer of input and 5-minute write: no hit is assumed.
+  prompt_cache: {enabled: false, ttl: 5m}
   failed_attempt_charge: worst_case # a failed attempt is charged input + max_tokens, since it may be billed
 
 logging:
@@ -82,6 +86,28 @@ code_task:
   attempt_tokens: 30000
   max_steps: 12
   stagnation_rounds: 2     # the same failing criteria this many attempts in a row ends the run (FAILED_ACCEPTANCE)
+  # D2: the feedback to the next attempt carries the error lines of each failing validation (from the verdict's
+  # output_tail, bounded). false gives the feedback as it was before D2: replays of older runs (replay_3a.py) use it.
+  feedback_error_excerpt: true
+  # D3 (docs/reviews/DESIGN_AUTO_VALIDATION.md): after a step that changed the workspace, run every validation and show
+  # the result to the agent in the same attempt, at most auto_validate_max times per attempt. Off here (verify.sh time,
+  # comparable evals); on in a pilot config. Frozen per run at setup, so a resume decides as the run did.
+  auto_validate: false
+  auto_validate_max: 4
+  # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
+  # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
+  # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room
+  # for practically one attempt; a higher cap is a per-run config approved in a preflight, never implied by a
+  # profile. `default` is what a contract without a profile gets (kept equal to the values above by a test).
+  profiles:
+    default: {attempt_tokens: 30000, max_output_tokens: 4096}
+    large: {attempt_tokens: 45000, max_output_tokens: 8192}
+    # D1 (docs/reviews/DESIGN_ATTEMPT_USD.md): the attempt is reserved in USD, not as tokens priced as output. Each call
+    # is still refused before sending when its worst case does not fit the USD left; max_input_tokens caps the input
+    # of one call (refused: input_limit, the attempt ends context_limit). attempt_tokens is only a safety ceiling:
+    # 400,000 tokens cost at least $0.80 at Sonnet's input price, so the USD limit binds first. It needs
+    # budget.max_tokens >= 400,000 (a pilot config sets 1,200,000); with the 200,000 above it never starts.
+    large_usd: {attempt_tokens: 400000, attempt_usd: 0.45, max_input_tokens: 40000, max_output_tokens: 8192}
 
 retry:
   attempts: 3
@@ -158,17 +184,23 @@ roles:
 # Price catalog, USD per 1M tokens, from public pages checked mid-Oct 2026. Verify before relying on them.
 # A missing entry (e.g. OpenAI below) means cost is reported as "n/a" instead of a guess.
 # cache_read is the discounted rate for cached input tokens; without it cached tokens are billed as normal input.
+# cache_write_5m / cache_write_1h: writes to the prompt cache (D5, docs/reviews/SPEC_D5_prompt_caching.md). Without a
+# write rate a write has no known cost (null); caching an Anthropic model without cache_write_5m is a ConfigError.
 # ---------------------------------------------------------------------------
-# Anthropic input/output and Sonnet/Opus cache_read re-checked 2026-10-14 against Anthropic's model table.
+# Anthropic prices, cache reads and writes checked 2026-10-22 on Anthropic's pricing page
+# (platform.claude.com/docs/en/about-claude/pricing): reads are 0.05x input on Opus 5.5 and Sonnet 5.5 (Sonnet was
+# wrongly 0.20 here), 0.1x on Haiku 5.5; writes 1.25x (5 minutes) and 2x (1 hour).
 # Haiku 5.5 bills $0.50/$2.50 for prompts over 100K tokens; that tier is not modelled, which is safe only
 # while every node's token estimate stays far below 100K (a reservation then cannot fit such a prompt).
 prices:
-  "anthropic:claude-haiku-5-5":  {input: 0.10, output: 0.50, cache_read: 0.01}
-  "anthropic:claude-sonnet-5-5": {input: 2.00, output: 10.00, cache_read: 0.20}
-  "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00, cache_read: 0.20}
+  "anthropic:claude-haiku-5-5":  {input: 0.10, output: 0.50, cache_read: 0.01, cache_write_5m: 0.125, cache_write_1h: 0.20,
+                                  long_context_above: 100000}   # x5 on every rate above it (not modelled: refused)
+  "anthropic:claude-sonnet-5-5": {input: 2.00, output: 10.00, cache_read: 0.10, cache_write_5m: 2.50, cache_write_1h: 4.00}
+  "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00, cache_read: 0.20, cache_write_5m: 5.00, cache_write_1h: 8.00}
   "deepseek:deepseek-flash":     {input: 0.15, output: 0.60, cache_read: 0.003, peak_multiplier: 2}
   "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
-  "fake:scripted":               {input: 1.00, output: 5.00}   # made-up price so tests exercise USD limits
+  "fake:scripted":               {input: 1.00, output: 5.00, cache_read: 0.10, cache_write_5m: 1.25, cache_write_1h: 2.00}
+                                 # made-up prices so tests exercise USD limits
 
 # DeepSeek charges double during these UTC windows on weekdays (Chinese public holidays are off-peak;
 # that exception is not modelled here). 01-04 and 06-10 UTC = 08-11 and 13-17 WIB.
@@ -216,3 +248,10 @@ sandbox:
   kill_after_output_bytes: 16777216  # total output after which the container is killed early
   cleanup_timeout_s: 15              # total budget for kill/remove after a timeout; failure is logged
   allow_unpinned: false
+  # Named environments (M6 W1): a contract's validation may name one ("environment": "argus") to run in its image
+  # instead of the default one, with the same isolation flags. An unknown name blocks the run before any model call.
+  # The image is set by its build script (git-ignored file) and ARGUS_SANDBOX_IMAGE_<NAME>; never by
+  # ARGUS_SANDBOX_IMAGE.
+  environments:
+    argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
+      image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker

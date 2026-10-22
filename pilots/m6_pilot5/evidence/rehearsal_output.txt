@@ -1,0 +1,150 @@
+== intake
+{"name":"argus_p5","commit":"716d1dd22787cbb98b1c7213f7ad8ec2c66a2d03","problems":[]}
+== approve (rehearsal only, throwaway worktree)
+approved: fixtures/contracts/fix_window_strict.json, fixtures/repos/fix_window_strict (contract sha256 a05548186f86)
+== effective
+{
+ "pilot_config": {
+  "config": "/home/ubuntu/p5_rehearse/pilots/m6_pilot5/config_pilot5.yaml",
+  "contract_profile": "large",
+  "applied_profile": "large",
+  "attempt_tokens": 45000,
+  "coder_max_output_tokens": 8192,
+  "config_budget_max_usd": 0.75,
+  "contract_limits": {
+   "max_usd": 0.75,
+   "max_iterations": 3
+  },
+  "cap_usd": 0.75,
+  "reservation_usd": 0.45,
+  "max_iterations": 3,
+  "attempts_possible": {
+   "each attempt spends $0.06": 3,
+   "each attempt spends $0.11": 3,
+   "each attempt spends $0.20": 2,
+   "each attempt spends $0.30": 2,
+   "each attempt spends $0.45": 1
+  }
+ },
+ "config_yaml": {
+  "config": "/home/ubuntu/p5_rehearse/config.yaml",
+  "contract_profile": "large",
+  "applied_profile": "large",
+  "attempt_tokens": 45000,
+  "coder_max_output_tokens": 8192,
+  "config_budget_max_usd": 0.5,
+  "contract_limits": {
+   "max_usd": 0.75,
+   "max_iterations": 3
+  },
+  "cap_usd": 0.5,
+  "reservation_usd": 0.45,
+  "max_iterations": 3,
+  "attempts_possible": {
+   "each attempt spends $0.06": 1,
+   "each attempt spends $0.11": 1,
+   "each attempt spends $0.20": 1,
+   "each attempt spends $0.30": 1,
+   "each attempt spends $0.45": 1
+  }
+ }
+}
+== happy
+{
+ "status": "DONE",
+ "stop_reason": "all criteria passed",
+ "blocked_reason": null,
+ "attempts": 1,
+ "usd_billed": 0.009,
+ "llm_calls": 6,
+ "tools": [
+  "list_files",
+  "read_file",
+  "write_file",
+  "run_validation",
+  "search_files",
+  "edit_file"
+ ],
+ "budget_profile": {
+  "name": "large",
+  "attempt_tokens": 45000,
+  "max_output_tokens": 8192
+ }
+}
+== negative
+{
+ "status": "FAILED_ACCEPTANCE",
+ "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+ "blocked_reason": null,
+ "attempts": 2,
+ "usd_billed": 0.006,
+ "llm_calls": 4,
+ "tools": [
+  "list_files",
+  "read_file",
+  "write_file",
+  "run_validation",
+  "search_files",
+  "edit_file"
+ ],
+ "budget_profile": {
+  "name": "large",
+  "attempt_tokens": 45000,
+  "max_output_tokens": 8192
+ }
+}
+== admission
+{
+ "status": "FAILED_ACCEPTANCE",
+ "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+ "blocked_reason": null,
+ "attempts": 2,
+ "usd_billed": 0.149516,
+ "llm_calls": 8,
+ "tools": [
+  "list_files",
+  "read_file",
+  "write_file",
+  "run_validation",
+  "search_files",
+  "edit_file"
+ ],
+ "budget_profile": {
+  "name": "large",
+  "attempt_tokens": 45000,
+  "max_output_tokens": 8192
+ },
+ "usd_per_attempt": {
+  "0": 0.07159,
+  "1": 0.077926
+ },
+ "effective_limits_of_this_run": {
+  "config": "/home/ubuntu/p5_rehearse/pilots/m6_pilot5/config_pilot5.yaml",
+  "contract_profile": "large",
+  "applied_profile": "large",
+  "attempt_tokens": 45000,
+  "coder_max_output_tokens": 8192,
+  "config_budget_max_usd": 0.75,
+  "contract_limits": {
+   "max_usd": 0.75,
+   "max_iterations": 3
+  },
+  "cap_usd": 0.75,
+  "reservation_usd": 0.45,
+  "max_iterations": 3,
+  "attempts_possible": {
+   "each attempt spends $0.06": 3,
+   "each attempt spends $0.11": 3,
+   "each attempt spends $0.20": 2,
+   "each attempt spends $0.30": 2,
+   "each attempt spends $0.45": 1
+  }
+ }
+}
+== admission_stock
+{'status': 'FAILED_ACCEPTANCE', 'stop_reason': 'max_usd', 'attempts': 1, 'usd_billed': 0.07159, 'usd_per_attempt': {'0': 0.07159}}
+== build_review (happy)
+  "valid": true,
+  "problems": [],
+  "dir": "runs/rehearsal_happy/review"
+}

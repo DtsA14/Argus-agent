@@ -1,0 +1,150 @@
+{
+  "task": "fix_is_peak",
+  "draft_sha256": "8650bfa56617fc0370a4bcfc7df1c0490a94f0057b5baa551612f1c56b2f2d49",
+  "unverifiable": [
+    "that config.yaml and the other protected files were left alone: they are protected, but a reviewer must read the diff",
+    "that the production peak windows are not affected: none crosses midnight today, so no billed amount changes; the regression nodes and the guard tests show the non-crossing cases unchanged",
+    "readability and the exact form of the condition (the contract fixes the behaviour)"
+  ],
+  "ok": true,
+  "contract": {
+    "contract": "fix_is_peak",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/fix_is_peak",
+      "issue": "models/pricing.py: is_peak(window, now) never matches a peak window that crosses midnight, so a provider whose peak price runs through the night would be billed at the off-peak price. A window is [start, end) in UTC hours with the end excluded, for example [1, 4] is 01:00 up to 04:00. A window with start greater than end crosses midnight: [22, 4] is 22:00 up to midnight and midnight up to 04:00 (hour >= start or hour < end). Today only start <= hour < end is checked.\n\nChange is_peak so that: a window with start < end behaves as before; a window with start > end matches as described; start == end is an empty window that never matches (it is not \"all day\"); several windows match when any of them matches; weekdays_only is still judged on the UTC date of `now`, also for a window that crosses midnight (Saturday 01:00 UTC is not peak even though a window began on Friday evening); `now` in another time zone is still converted to UTC; no window (None or empty) is never peak. multiplier() and cost_usd() use is_peak, so they follow.\n\nChange only models/pricing.py; do not change config.yaml or any other file, the tests are protected. Only the function is_peak needs to change; no other file needs to be read."
+    },
+    "scope": {
+      "writable": [
+        "models/pricing.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "config.yaml",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "tools/**",
+        "nodes/**",
+        "evals/**",
+        "scripts/**",
+        "runner.py",
+        "graph.py",
+        "main.py",
+        "models/__init__.py",
+        "models/registry.py",
+        "models/fake.py"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_peak_window.py"
+        ],
+        "timeout_s": 240,
+        "min_tests": 13,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_peak_window.py::test_the_evening_part_of_a_window_across_midnight_is_peak",
+          "tests/test_peak_window.py::test_the_early_morning_part_of_a_window_across_midnight_is_peak",
+          "tests/test_peak_window.py::test_two_windows_one_of_them_across_midnight",
+          "tests/test_peak_window.py::test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight",
+          "tests/test_peak_window.py::test_a_time_in_another_zone_is_converted_to_utc",
+          "tests/test_peak_window.py::test_the_multiplier_and_the_cost_follow_a_window_across_midnight"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_models.py",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "timeout_s": 240,
+        "min_tests": 17,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_models.py::test_cost_of_a_plain_call",
+          "tests/test_models.py::test_unknown_price_is_none_not_a_guess",
+          "tests/test_models.py::test_deepseek_peak_windows",
+          "tests/test_models.py::test_peak_doubles_the_price",
+          "tests/test_models.py::test_message_cost_reads_usage_and_cache_from_the_message",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.75,
+      "max_iterations": 3
+    },
+    "tools": [
+      "search_files",
+      "edit_file"
+    ],
+    "budget_profile": "large"
+  },
+  "contract_sha256": "1c3a063a3ab2c08da3a64bdea2d73c45415be3d3802fa210e75e33506dd901b5",
+  "added": {
+    "tests/test_peak_window.py": "fd49b6527fb602fe38fa7694ac5162ace246a27757fb9bc9a71161e2636d214f"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_peak_window.py::test_the_evening_part_of_a_window_across_midnight_is_peak": "FAIL",
+        "tests/test_peak_window.py::test_the_early_morning_part_of_a_window_across_midnight_is_peak": "FAIL",
+        "tests/test_peak_window.py::test_two_windows_one_of_them_across_midnight": "FAIL",
+        "tests/test_peak_window.py::test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight": "FAIL",
+        "tests/test_peak_window.py::test_a_time_in_another_zone_is_converted_to_utc": "FAIL",
+        "tests/test_peak_window.py::test_the_multiplier_and_the_cost_follow_a_window_across_midnight": "FAIL"
+      },
+      "failures": 6,
+      "errors": 0
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_models.py::test_cost_of_a_plain_call": "ok",
+        "tests/test_models.py::test_unknown_price_is_none_not_a_guess": "ok",
+        "tests/test_models.py::test_deepseek_peak_windows": "ok",
+        "tests/test_models.py::test_peak_doubles_the_price": "ok",
+        "tests/test_models.py::test_message_cost_reads_usage_and_cache_from_the_message": "ok",
+        "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek": "ok",
+        "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak": "ok"
+      },
+      "failures": 0,
+      "errors": 0
+    }
+  },
+  "reference": {
+    "changed": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        "models/pricing.py"
+      ]
+    },
+    "target": "pass",
+    "regression": "pass"
+  },
+  "problems": []
+}

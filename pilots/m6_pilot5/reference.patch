@@ -1,0 +1,53 @@
+diff --git a/models/pricing.py b/models/pricing.py
+index e8cd1c9..c78fd4e 100644
+--- a/models/pricing.py
++++ b/models/pricing.py
+@@ -1,15 +1,46 @@
+ from datetime import datetime, timezone
+ 
+ 
++class WindowError(ValueError):
++    """A peak window, or a time, that cannot be interpreted safely. It is refused, never read as a default (not peak)."""
++
++
++def _checked(window):
++    """The window if it is well formed; WindowError naming the problem and the value otherwise. Every part is checked."""
++    if not isinstance(window, dict):
++        raise WindowError(f"a peak window must be a dict, got {window!r}")
++    if "utc_hours" not in window:
++        raise WindowError(f"a peak window needs 'utc_hours', got {window!r}")
++    hours = window["utc_hours"]
++    if not isinstance(hours, (list, tuple)):
++        raise WindowError(f"'utc_hours' must be a list of [start, end] pairs, got {hours!r}")
++    for item in hours:
++        if not (isinstance(item, (list, tuple)) and len(item) == 2 and all(type(x) is int for x in item)):
++            raise WindowError(f"each 'utc_hours' item must be [start, end], two integers, got {item!r}")
++        start, end = item
++        if not (0 <= start <= 23 and 0 <= end <= 24):
++            raise WindowError(f"'utc_hours' item {item!r} is out of range: start must be 0..23 and end 0..24")
++    if "weekdays_only" in window and type(window["weekdays_only"]) is not bool:
++        raise WindowError(f"'weekdays_only' must be true or false, got {window['weekdays_only']!r}")
++    return window
++
++
+ def is_peak(window, now):
+-    """True if `now` falls inside a provider's peak-price window (UTC hours, end exclusive)."""
++    """True if `now` falls inside a provider's peak-price window (UTC hours, end exclusive; a window may cross midnight).
++
++    `now` must carry a time zone (a naive datetime would be read in the machine's zone, so the answer would depend on the machine):
++    it is converted to UTC. A window that is not well formed (see WindowError) is refused, not read as "not peak".
++    No window (None, empty) is not an error: that provider has no peak window."""
+     if not window:
+         return False
++    _checked(window)
++    if now.tzinfo is None or now.utcoffset() is None:
++        raise WindowError(f"'now' must be a timezone-aware datetime, got a naive one: {now!r}")
+     now = now.astimezone(timezone.utc)
+     if window.get("weekdays_only") and now.weekday() >= 5:
+         return False
+     hour = now.hour
+-    for start, end in window.get("utc_hours") or []:
++    for start, end in window["utc_hours"]:
+         if start < end:
+             if start <= hour < end:
+                 return True

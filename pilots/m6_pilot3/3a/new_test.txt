@@ -1,0 +1,155 @@
+"""M6 pilot 3a: one reader of a code-task run directory and two inspectors that must keep printing what they always printed.
+
+Synthetic runs (a scripted model, an injected validation: no Docker, no money) are built once and then looked at by the
+scripts as subprocesses:
+  scripts/audit_run.py and scripts/failure_trace.py: for runs that finished normally (f1, f2, f3; f5 after a crash and a resume;
+  f8 with long texts; wrap, a directory that holds a run, which failure_trace.py finds) their output is the one the scripts
+  printed before this change, byte for byte (GOLDEN). Only three things change,
+  and each was a crash: a line of events.jsonl that does not decode is skipped wherever it is (and one line "events skipped: N"
+  ends the output, only when N is not 0), audit_run.py audits a run that made no model call, and failure_trace.py reports a
+  directory that has no result.json and goes on."""
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from codetask.run import run_code_task
+from models.fake import CallableChatModel, StrictScriptedChatModel, reply
+from runner import load_config
+
+ROOT = Path(__file__).resolve().parent.parent
+CUT = '{"ts": 2.5, "event": "llm_ca'                           # what a process killed mid-write leaves behind
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_run_inspectors_data import BLOCKED_AUDIT, GOLDEN  # noqa: E402  (what the scripts printed before this change: data, no tests)
+
+
+def build(root, base):
+    """Build the fixtures below `base` (a directory that does not exist yet). Returns {name: run directory}."""
+    root, base = Path(root), Path(base)
+    contract = json.loads((root / "fixtures" / "contracts" / "fix_divide.json").read_text(encoding="utf-8"))
+    calc = (root / "fixtures" / "repos" / "calc" / "src" / "calc.py").read_text(encoding="utf-8")
+    test = (root / "fixtures" / "repos" / "calc" / "tests" / "test_calc.py").read_text(encoding="utf-8")
+    fixed = calc.replace("    if b == 0:\n        return 0\n", "")
+    claims = [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": "issue_fixed", "evidence": "validation:target"},
+              {"claim": "file_changed", "path": "src/calc.py"}]
+
+    def call(name, args, id):
+        return reply(tool_calls=[{"name": name, "args": args, "id": id}], input_tokens=500, output_tokens=60)
+
+    read = call("ReadFile", {"path": "src/calc.py"}, "r1")
+    write = call("WriteFile", {"path": "src/calc.py", "content": fixed}, "w1")
+    check = call("RunValidation", {"id": "target"}, "v1")
+    finish = call("Finish", {"claims": claims, "summary": "divide raises on zero"}, "f1")
+    lazy = call("Finish", {"claims": claims, "summary": "fixed"}, "f0")
+    many = reply("word " * 140, input_tokens=500, output_tokens=60,           # a long text and several long paths in one reply
+                 tool_calls=[{"name": "ReadFile", "args": {"path": "src/" + "d" * 45 + f"{i}.py"}, "id": f"m{i}"} for i in range(3)])
+
+    def validate(spec, workspace, sandbox_cfg, log=None):
+        ws = Path(workspace)
+        ok = (ws / "src" / "calc.py").read_text() == fixed and (ws / "tests" / "test_calc.py").read_text() == test
+        must = {t: "ok" if ok else "FAIL" for t in spec.get("must_pass", [])}
+        return {"id": f"validation:{spec['id']}", "layer": "C", "status": "pass" if ok else "fail",
+                "reason": "" if ok else "exit code 1; unittest outcome FAILED",
+                "evidence": {"must_pass": must, "tests_run": 7, "failures": 0 if ok else 1, "output_tail": ""}}
+
+    class Crash(BaseException):
+        pass
+
+    base.mkdir(parents=True)
+    path = base / "contract.json"
+    path.write_text(json.dumps(contract), encoding="utf-8")
+
+    def run(name, script, *, preflight=lambda: (True, "ok"), model=None, resume=False):
+        cfg = load_config()
+        cfg["roles"]["coder"]["model"] = "fake:scripted"
+        return run_code_task(contract_path=path, run_id=name, runs_dir=base / "runs", cfg=cfg,
+                             models={"coder": model or StrictScriptedChatModel(script=list(script))},
+                             validate=validate, preflight=preflight, resume=resume)
+
+    run("f1", [read, write, check, finish])                         # DONE at once
+    run("f2", [lazy, write, finish])                                # DONE in the second attempt
+    run("f3", [lazy, lazy])                                         # FAILED_ACCEPTANCE (stagnant)
+    run("f8", [many, write, finish])                                # DONE; its trace has texts and tool lists that get cut
+    run("f4", [], preflight=lambda: (False, "no sandbox"))          # BLOCKED before any model call
+
+    def die(messages):
+        raise Crash()
+    try:
+        run("f5", [], model=CallableChatModel(respond=die))         # the process dies in the first model call
+    except Crash:
+        pass
+    run("f5", [write, finish], resume=True)                         # and the run is resumed: DONE
+
+    runs = base / "runs"
+    out = {n: runs / n for n in ("f1", "f2", "f3", "f4", "f5", "f8")}
+
+    def copy(src, name):
+        shutil.copytree(runs / src, runs / name)
+        return runs / name
+
+    f5c = copy("f5", "f5c")                                         # f5 with a line cut by a crash in the middle of its log
+    lines = (f5c / "events.jsonl").read_text(encoding="utf-8").splitlines()                    # (and a blank line: not a skipped one)
+    (f5c / "events.jsonl").write_text("\n".join(lines[:3] + [CUT, ""] + lines[3:]) + "\n", encoding="utf-8")
+    out["f5c"] = f5c
+    (runs / "wrap").mkdir()                                         # a directory that holds a run: failure_trace.py finds it
+    shutil.copytree(runs / "f1", runs / "wrap" / "inner")
+    out["wrap"] = runs / "wrap"
+    f7 = copy("f1", "f7")                                           # a run that never got a result
+    (f7 / "result.json").unlink()
+    out["f7"] = f7
+    return out
+
+
+@pytest.fixture(scope="module")
+def runs(tmp_path_factory):
+    return build(ROOT, tmp_path_factory.mktemp("runs") / "b")
+
+
+def script(name, *args):
+    return subprocess.run([sys.executable, str(ROOT / "scripts" / name), *map(str, args)], cwd=ROOT,
+                          env={**os.environ, "PYTHONPATH": str(ROOT)}, capture_output=True, text=True, timeout=300)
+
+
+# ---- the two inspectors keep printing what they always printed ----------------------------------------------------
+
+@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5", "f8"])
+def test_audit_run_still_prints_what_it_always_printed(runs, name):
+    r = script("audit_run.py", runs[name])
+    assert r.returncode == 0, r.stderr[-500:]
+    assert r.stdout == GOLDEN[name]["audit"]
+
+
+@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5", "f8", "wrap"])
+def test_failure_trace_still_prints_what_it_always_printed(runs, name):
+    r = script("failure_trace.py", runs[name])
+    assert r.returncode == 0, r.stderr[-500:]
+    assert r.stdout == GOLDEN[name]["trace"]
+
+
+# ---- what changes: each of these was a crash ------------------------------------------------------------------------
+
+def test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else(runs):
+    audit, trace = script("audit_run.py", runs["f5c"]), script("failure_trace.py", runs["f5c"])
+    assert (audit.returncode, trace.returncode) == (0, 0), (audit.stderr[-400:], trace.stderr[-400:])
+    assert audit.stdout == GOLDEN["f5"]["audit"] + "events skipped: 1\n"
+    assert trace.stdout == GOLDEN["f5"]["trace"].replace("##### f5\n", "##### f5c\n", 1) + "events skipped: 1\n"
+    assert CUT in (runs["f5c"] / "events.jsonl").read_text(encoding="utf-8").splitlines()[:-1]        # in the middle
+
+
+def test_a_run_blocked_before_any_model_call_is_audited(runs):
+    audit, trace = script("audit_run.py", runs["f4"]), script("failure_trace.py", runs["f4"])
+    assert audit.returncode == 0, audit.stderr[-500:]
+    assert audit.stdout == BLOCKED_AUDIT
+    assert (trace.returncode, trace.stdout) == (0, "##### f4\n")
+
+
+def test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced(runs):
+    alone = script("failure_trace.py", runs["f7"])
+    assert (alone.returncode, alone.stdout) == (0, "##### f7: no result.json\n"), alone.stderr[-400:]
+    both = script("failure_trace.py", runs["f7"], runs["f1"])
+    assert both.returncode == 0 and both.stdout == "##### f7: no result.json\n" + GOLDEN["f1"]["trace"]

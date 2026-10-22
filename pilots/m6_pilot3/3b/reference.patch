@@ -1,0 +1,116 @@
+diff --git a/scripts/pilot_report.py b/scripts/pilot_report.py
+new file mode 100644
+index 0000000..1bbd3e7
+--- /dev/null
++++ b/scripts/pilot_report.py
+@@ -0,0 +1,110 @@
++"""One JSON report over several code-task run directories (pilot 3b, pilots/m6_pilot3/3b/SPEC.md section 3).
++
++  PYTHONPATH=. python scripts/pilot_report.py RUN_DIR [RUN_DIR ...] [--supervision FILE.json]
++
++Reads each run through evals.runlog; cost is known only as evals.score.cost_is_known says. Exit 2, with one line on stderr and
++nothing on stdout, when there is no run, an argument is not a run directory (no events.jsonl), or the supervision file is
++not valid.
++"""
++import argparse
++import json
++import math
++import statistics
++import sys
++from pathlib import Path
++
++from evals.runlog import read_events, read_result
++from evals.score import cost_is_known
++
++
++class Refused(Exception):
++    pass
++
++
++def nano(usd):
++    return round(usd * 1e9)
++
++
++def load_supervision(path, run_ids):
++    try:
++        data = json.loads(Path(path).read_text(encoding="utf-8"))
++    except (OSError, ValueError) as e:
++        raise Refused(f"supervision file {path}: {e}")
++    if not isinstance(data, dict):
++        raise Refused(f"supervision file {path}: must be an object {{run_id: minutes}}")
++    for k, v in data.items():
++        if k not in run_ids:
++            raise Refused(f"supervision file {path}: unknown run {k!r}")
++        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0:
++            raise Refused(f"supervision file {path}: minutes for {k!r} must be a number >= 0, got {v!r}")
++    return data
++
++
++def run_row(run_dir, supervision):
++    result = read_result(run_dir)
++    _, skipped = read_events(run_dir)
++    run_id = run_dir.name
++    if result is None:
++        return {"run_id": run_id, "status": "NO_RESULT", "done": False, "attempts": None, "llm_calls": None,
++                "usd_billed": None, "cost_known": False, "events_skipped": skipped,
++                "supervision_minutes": supervision.get(run_id)}
++    return {"run_id": run_id, "status": result.get("status"), "done": result.get("status") == "DONE",
++            "attempts": result.get("attempts"), "llm_calls": result.get("llm_calls"), "usd_billed": result.get("usd_billed"),
++            "cost_known": cost_is_known(result), "events_skipped": skipped, "supervision_minutes": supervision.get(run_id)}
++
++
++def report(run_dirs, supervision):
++    rows = [run_row(d, supervision) for d in run_dirs]
++    total, no_result = len(rows), sum(r["status"] == "NO_RESULT" for r in rows)
++    done = [r for r in rows if r["done"]]
++    known = [r for r in rows if r["cost_known"]]
++    usd_known = sum(nano(r["usd_billed"]) for r in known) / 1e9
++    done_known = sum(r["done"] for r in known)
++    attempts_done = [r["attempts"] for r in done]
++    dist = {}
++    for r in rows:
++        if r["status"] != "NO_RESULT":
++            dist[r["attempts"]] = dist.get(r["attempts"], 0) + 1
++    minutes = [r["supervision_minutes"] for r in rows if r["supervision_minutes"] is not None]
++    return {
++        "runs": rows,
++        "runs_total": total,
++        "done": len(done),
++        "no_result": no_result,
++        "success_rate": round(len(done) / (total - no_result), 4) if total - no_result else None,
++        "usd_known_total": round(usd_known, 6),
++        "usd_unknown_runs": total - len(known),
++        "cost_per_success": round(usd_known / done_known, 6) if done_known else None,
++        "cost_complete": total - len(known) == 0,
++        "attempts": ({"mean": round(statistics.mean(attempts_done), 3), "median": statistics.median(attempts_done)}
++                     if attempts_done else None),
++        "attempts_distribution": {str(k): dist[k] for k in sorted(dist)},
++        "supervision": {"runs_with_data": len(minutes),
++                        "total": sum(minutes) if minutes else None,
++                        "mean": round(statistics.mean(minutes), 2) if minutes else None},
++        "events_skipped": sum(r["events_skipped"] for r in rows),
++    }
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
++    ap.add_argument("runs", nargs="*")
++    ap.add_argument("--supervision")
++    a = ap.parse_args(argv)
++    try:
++        if not a.runs:
++            raise Refused("no run directory given")
++        dirs = [Path(r) for r in a.runs]
++        for d in dirs:
++            if not d.is_dir() or not (d / "events.jsonl").is_file():
++                raise Refused(f"{d} is not a run directory (no events.jsonl)")
++        supervision = load_supervision(a.supervision, {d.name for d in dirs}) if a.supervision else {}
++        print(json.dumps(report(dirs, supervision), indent=2, ensure_ascii=False))
++        return 0
++    except Refused as e:
++        print(f"refused: {e}", file=sys.stderr)
++        return 2
++
++
++if __name__ == "__main__":
++    sys.exit(main())

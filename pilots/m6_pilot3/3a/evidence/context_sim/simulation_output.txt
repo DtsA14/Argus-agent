@@ -1,0 +1,85 @@
+== 0. baseline reproduces every recorded est_input of both runs (17 calls, ok and refused): yes
+== 1. token rates fitted to the ledger (tokens per character; per_call in tokens)
+   list 0.5400, code 0.3708, data 0.4633, valid 0.5018, small 0.2432, per_call 50.5
+   pilot3a   it0 s0->s1  ledger +  9560  fit +    9560  error    -0
+   pilot3a   it0 s1->s2  ledger + 11183  fit +   11183  error    +0
+   pilot3a   it0 s2->s3  ledger +  3412  fit +    3408  error    -4
+   pilot3a   it1 s0->s1  ledger +  4441  fit +    4441  error    -0
+   pilot3a   it1 s1->s2  ledger +   384  fit +     373  error   -11
+   pilot3a   it1 s2->s3  ledger +  9935  fit +    9935  error    -0
+   pilot3a   it1 s3->s4  ledger +   228  fit +     260  error   +32
+   pilot3a2  it0 s2->s3  ledger +   263  fit +     275  error   +12
+   pilot3a2  it1 s2->s3  ledger +  2360  fit +    2360  error    +0
+   largest error 32 tokens; 9 distinct transitions for 6 parameters (near-exact by construction: read the sensitivity rows, not the fit)
+   projection inputs: failing validation 2502 chars (pilot3a it1 s0, the real output on attempt 0's workspace); passing validation 1744 chars (regression output_tail); audit_run.py 4495 chars
+   projected outputs (assumed): {'validate': 150, 'read': 120, 'edit': 200, 'finish': 250}; cache multipliers (assumed): read x0.1, write x1.25
+   cross-check: pilot3a attempt 0 + one validation + Finish = 99311 tokens (INVESTIGATION.md section 3: about 98-99 thousand)
+
+== 2. writer attempts projected to Finish: what each policy needs, and where 45,000 tokens stops it
+   policy                        calls   needs  x45k peak in     USD USD cached  first 3 calls  with the 45,000 reservation
+-- A: pilot3a attempt 0 (wrote 1 file + 4 edits at s2; NameError left)
+   baseline                          7  158700  3.53   30057  0.3503     0.1412          42951  refused at call 3 (27252 in, 2049 left)      USD-only $0.45: finishes at $0.3503
+   list_cap                          7  123067  2.73   24119  0.2790     0.1204          31073  refused at call 3 (21313 in, 13927 left)     USD-only $0.45: finishes at $0.2790
+   elide_safe                        8  125469  2.79   19403  0.2848     0.1677          35957  refused at call 3 (16109 in, 9043 left)      USD-only $0.45: finishes at $0.2848
+   list_cap+elide_safe               8  119530  2.66   19403  0.2729     0.1529          30018  refused at call 3 (16109 in, 14982 left)     USD-only $0.45: finishes at $0.2729
+   list_cap+read_cap+elide_safe      8   98670  2.19   15926  0.2312     0.1327          26541  refused at call 4 (14089 in, 5676 left)      USD-only $0.45: finishes at $0.2312
+   elide_age2                        8   91014  2.02   23840  0.2158     0.1633          42951  refused at call 3 (16109 in, 2049 left)      USD-only $0.45: finishes at $0.2158
+   auto_validate                     5  101716  2.26   29757  0.2339     0.1261          42951  refused at call 3 (28558 in, 2049 left)      USD-only $0.45: finishes at $0.2339
+   list_cap+auto_validate            5   77961  1.73   23819  0.1864     0.1077          31073  refused at call 3 (22619 in, 13927 left)     USD-only $0.45: finishes at $0.1864
+-- B: pilot3a2 attempt 1 (wrote 1 file + 1 edit at s2; same NameError)
+   baseline                          7  159688  3.55   29865  0.3456     0.1328          44707  refused at call 3 (27060 in, 293 left)       USD-only $0.45: finishes at $0.3456
+   list_cap                          7  124055  2.76   23927  0.2744     0.1120          32829  refused at call 3 (21121 in, 12171 left)     USD-only $0.45: finishes at $0.2744
+   elide_safe                        8  133627  2.97   20683  0.2945     0.1642          37713  refused at call 3 (17390 in, 7287 left)      USD-only $0.45: finishes at $0.2945
+   list_cap+elide_safe               8  127688  2.84   20683  0.2826     0.1493          31774  refused at call 3 (17390 in, 13226 left)     USD-only $0.45: finishes at $0.2826
+   list_cap+read_cap+elide_safe      8  106829  2.37   17207  0.2409     0.1292          28297  refused at call 4 (15369 in, 2640 left)      USD-only $0.45: finishes at $0.2409
+   elide_age2                        8   96411  2.14   24700  0.2200     0.1572          44707  refused at call 3 (16839 in, 293 left)       USD-only $0.45: finishes at $0.2200
+   auto_validate                     5  103088  2.29   29565  0.2300     0.1179          44707  refused at call 3 (28366 in, 293 left)       USD-only $0.45: finishes at $0.2300
+   list_cap+auto_validate            5   79333  1.76   23627  0.1825     0.0994          32829  refused at call 3 (22427 in, 12171 left)     USD-only $0.45: finishes at $0.1825
+
+== 3. sensitivity of 'needs' to the fitted rates (only the removed part is estimated)
+   A baseline                      x0.85  157997   fit  158700   x1.15  159404
+   A list_cap                      x0.85  127709   fit  123067   x1.15  118425
+   A elide_safe                    x0.85  132522   fit  125469   x1.15  118417
+   A list_cap+elide_safe           x0.85  127474   fit  119530   x1.15  111587
+   A list_cap+read_cap+elide_safe  x0.85  109742   fit   98670   x1.15   87599
+   A elide_age2                    x0.85  103328   fit   91014   x1.15   78701
+   A auto_validate                 x0.85  101205   fit  101716   x1.15  102228
+   A list_cap+auto_validate        x0.85   81013   fit   77961   x1.15   74909
+   B baseline                      x0.85  158985   fit  159688   x1.15  160392
+   B list_cap                      x0.85  128697   fit  124055   x1.15  119413
+   B elide_safe                    x0.85  140249   fit  133627   x1.15  127008
+   B list_cap+elide_safe           x0.85  135201   fit  127688   x1.15  120178
+   B list_cap+read_cap+elide_safe  x0.85  117470   fit  106829   x1.15   96189
+   B elide_age2                    x0.85  108693   fit   96411   x1.15   84131
+   B auto_validate                 x0.85  102577   fit  103088   x1.15  103600
+   B list_cap+auto_validate        x0.85   82385   fit   79333   x1.15   76281
+
+== 4. explorer attempts: the recorded steps (and the refused one) under each policy, 45,000 reservation
+-- C: pilot3a attempt 1 (explored after seeing the NameError; never edited); 5 calls recorded, the last refused
+   baseline                      refused at call 4 (18971 in, 4308 left)
+   list_cap                      refused at call 4 (18971 in, 4308 left)
+   elide_safe                    refused at call 4 (18971 in, 4308 left)
+   list_cap+elide_safe           refused at call 4 (18971 in, 4308 left)
+   list_cap+read_cap+elide_safe  refused at call 4 (15184 in, 8095 left)
+   elide_age2                    refused at call 4 (16267 in, 7001 left)
+   auto_validate                 refused at call 4 (18971 in, 4308 left)
+   list_cap+auto_validate        refused at call 4 (18971 in, 4308 left)
+-- D: pilot3a2 attempt 0 (searched at s2; never wrote); 4 calls recorded, the last refused
+   baseline                      refused at call 3 (24103 in, 4925 left)
+   list_cap                      refused at call 3 (18164 in, 16803 left)
+   elide_safe                    refused at call 3 (17109 in, 11919 left)
+   list_cap+elide_safe           all 4 admitted, 599 left
+   list_cap+read_cap+elide_safe  all 4 admitted, 7553 left
+   elide_age2                    refused at call 3 (14908 in, 4925 left)
+   auto_validate                 refused at call 3 (24103 in, 4925 left)
+   list_cap+auto_validate        refused at call 3 (18164 in, 16803 left)
+
+Policies:
+   baseline                      the harness as it is
+   list_cap                      ListFiles capped at 2000 chars
+   elide_safe                    stub: ListFiles after 1 step, a read once its file is written or read again, write/edit arguments once the write succeeded, a validation output once a newer one exists
+   list_cap+elide_safe           both
+   list_cap+read_cap+elide_safe  plus ReadFile capped at 8000 chars
+   elide_age2                    every tool result older than 2 steps, write arguments after success (aggressive)
+   auto_validate                 after a step that writes, the harness runs the validations itself and appends the results to that step's tool results; the model never spends a call asking for a validation
+   list_cap+auto_validate        both

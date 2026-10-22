@@ -7,25 +7,30 @@ Shape (docs/reviews/ACCEPTANCE_GENERAL.md section 5):
   inputs: {workspace, issue}    workspace: repository directory, relative to the project root, under fixtures/repos/
   scope: {writable, protected}  globs relative to the workspace; protected wins, and no input file may match both
   artifacts: [{path, type, schema}]   slice 1: exactly SUMMARY.json, json, claims_v1 or claims_v2
-  validation: [{id, executable, args, timeout_s, min_tests, max_skipped, must_pass?}]
+  validation: [{id, executable, args, timeout_s, min_tests, max_skipped, must_pass?, environment?}]
+                must_pass: dotted unittest ids, or pytest node ids for a pytest command. environment: the name of a
+                sandbox environment in the config (its image); without it the default sandbox image runs it
   judge: []                     slice 1 has no subjective criteria
   limits: {max_usd, max_iterations}
+  budget_profile?: str          the name of a budget profile in the config (attempt reservation and output cap only;
+                                never the cost cap)
 """
 import hashlib
 import json
 import math
 import re
 
-from .validation import validate_command
+from .validation import PYTEST_NODE, kind, validate_command
 
 ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
 KEYS = {"contract", "version", "inputs", "scope", "artifacts", "validation", "judge", "limits"}
-OPTIONAL_KEYS = {"tools"}
+OPTIONAL_KEYS = {"tools", "budget_profile"}
 # Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
 # Only these, and only by adding: a contract can never grant anything else, nor remove a configured tool.
 CONTRACT_TOOLS = {"search_files", "edit_file"}
-VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass"}
+VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass", "environment"}
+OPTIONAL_VALIDATION_KEYS = {"must_pass", "environment"}
 MAX_TIMEOUT_S = 600
 ID = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 TEST_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")
@@ -69,6 +74,11 @@ def glob_regex(g):
             out.append(re.escape(g[i]))
             i += 1
     return re.compile("^" + "".join(out) + "$")
+
+
+def environments(c):
+    """The sandbox environments this (valid) contract's validations name, in order, without duplicates."""
+    return list(dict.fromkeys(v["environment"] for v in c["validation"] if v.get("environment")))
 
 
 def contract_tools(c):
@@ -135,7 +145,7 @@ def validate(c):
                 errors.append(f"{where} must be an object")
                 continue
             errors += [f"{where}: unknown key {k!r}" for k in sorted(set(v) - VALIDATION_KEYS)]
-            errors += [f"{where}: missing key {k!r}" for k in sorted(VALIDATION_KEYS - {"must_pass"} - set(v))]
+            errors += [f"{where}: missing key {k!r}" for k in sorted(VALIDATION_KEYS - OPTIONAL_VALIDATION_KEYS - set(v))]
             if not ID.match(str(v.get("id", ""))):
                 errors.append(f"{where}: id must be a lower-case name")
             elif v["id"] in seen:
@@ -150,8 +160,14 @@ def validate(c):
             if not _int(v.get("max_skipped")) or v.get("max_skipped", -1) < 0:
                 errors.append(f"{where}: max_skipped must be an integer >= 0")
             mp = v.get("must_pass", [])
-            if not isinstance(mp, list) or not all(isinstance(x, str) and TEST_ID.match(x) for x in mp):
-                errors.append(f"{where}: must_pass must be a list of dotted test ids")
+            node = PYTEST_NODE if kind(v) == "pytest" else TEST_ID
+            if not isinstance(mp, list) or not all(isinstance(x, str) and node.match(x) for x in mp):
+                errors.append(f"{where}: must_pass must be a list of "
+                              + ("pytest node ids (path.py::name)" if kind(v) == "pytest" else "dotted test ids"))
+            elif len(set(mp)) != len(mp):
+                errors.append(f"{where}: must_pass has duplicates")
+            if "environment" in v and not (isinstance(v["environment"], str) and ID.match(v["environment"])):
+                errors.append(f"{where}: environment must be a lower-case name")
 
     if "tools" in c:
         t = c["tools"]
@@ -162,6 +178,9 @@ def validate(c):
                        for x in t if x not in CONTRACT_TOOLS]
             if len(set(t)) != len(t):
                 errors.append("tools: duplicate tool names")
+
+    if "budget_profile" in c and not (isinstance(c["budget_profile"], str) and ID.match(c["budget_profile"])):
+        errors.append("budget_profile must be a lower-case name")
 
     if c["judge"] != []:
         errors.append("judge must be [] in slice 1 (no subjective criteria)")

@@ -1,0 +1,51 @@
+HEAD 68c24c7 tests: tests/test_auto_validation.py tests/test_codetask.py tests/test_feedback_excerpt.py tests/test_attempt_usd.py
+== the new tests on the code before D3 (main c6fd9a3) ==
+E        +    where <built-in method get of dict object at 0xf1fef7f60580> = {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'contract_sha': '13ed3993fa85d3c76ccf0298d41b6be7d67868641f2e98fb7ef7e2f5521a68b2', ...}.get
+E        +    where <built-in method get of dict object at 0xf1fef7f3b300> = {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'contract_sha': '13ed3993fa85d3c76ccf0298d41b6be7d67868641f2e98fb7ef7e2f5521a68b2', ...}.get
+E       AssertionError: ('{"status": "DONE", "stop_reason": "all criteria passed", "blocked_reason": null, "attempts": 1, "usd_billed": 0.0024, "llm_calls": 3}
+E        +  where 0 = CompletedProcess(args=['/home/ubuntu/Argus-agent/.venv-verify/bin/python', 'scripts/run_code_task.py', '--config', '/t...on": "all criteria passed", "blocked_reason": null, "attempts": 1, "usd_billed": 0.0024, "llm_calls": 3}\n', stderr='').returncode
+E       AssertionError: ('{"status": "DONE", "stop_reason": "all criteria passed", "blocked_reason": null, "attempts": 1, "usd_billed": 0.0024, "llm_calls": 3}
+E        +  where 0 = CompletedProcess(args=['/home/ubuntu/Argus-agent/.venv-verify/bin/python', 'scripts/run_code_task.py', '--config', '/t...on": "all criteria passed", "blocked_reason": null, "attempts": 1, "usd_billed": 0.0024, "llm_calls": 3}\n', stderr='').returncode
+FAILED tests/test_auto_validation.py::test_config_yaml_has_it_off_with_a_limit_of_four
+FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request
+FAILED tests/test_auto_validation.py::test_no_auto_validation_without_a_change_or_after_finish
+FAILED tests/test_auto_validation.py::test_a_read_after_a_validated_write_is_not_validated_again
+FAILED tests/test_auto_validation.py::test_at_most_the_limit_per_attempt_then_one_notice
+FAILED tests/test_auto_validation.py::test_a_blocked_validation_is_reported_and_the_attempt_goes_on
+FAILED tests/test_auto_validation.py::test_switched_off_nothing_changes - Ass...
+FAILED tests/test_auto_validation.py::test_the_policy_is_recorded - Assertion...
+FAILED tests/test_auto_validation.py::test_run_validation_and_acceptance_tag_their_sandbox_runs
+FAILED tests/test_auto_validation.py::test_a_committed_auto_validation_is_not_run_again_on_resume
+FAILED tests/test_auto_validation.py::test_a_crash_during_the_auto_validation_runs_it_again
+FAILED tests/test_auto_validation.py::test_a_resume_after_a_later_write_takes_earlier_decisions_from_the_record
+FAILED tests/test_auto_validation.py::test_another_sandbox_image_does_not_reuse_the_result
+FAILED tests/test_auto_validation.py::test_the_policy_is_frozen_in_the_checkpoint
+FAILED tests/test_auto_validation.py::test_real_sandbox_auto_validation_leaves_the_workspace_unchanged_and_is_timed
+FAILED tests/test_auto_validation.py::test_a_crash_around_the_auto_validation_across_processes[agent@after_auto_validation]
+FAILED tests/test_auto_validation.py::test_a_crash_around_the_auto_validation_across_processes[agent@auto_validation_committed]
+17 failed, 1 passed in 10.27s
+error kinds: ['E       AssertionError']
+== mutants ==
+KILLED  trigger without the digest check: ['FAILED tests/test_auto_validation.py::test_no_auto_validation_without_a_change_or_after_finish']
+KILLED  trigger after Finish: ['FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request']
+KILLED  last digest not updated: ['FAILED tests/test_auto_validation.py::test_a_read_after_a_validated_write_is_not_validated_again']
+KILLED  limit ignored: ['FAILED tests/test_auto_validation.py::test_at_most_the_limit_per_attempt_then_one_notice']
+KILLED  limit off by one: ['FAILED tests/test_auto_validation.py::test_at_most_the_limit_per_attempt_then_one_notice']
+KILLED  limit notice repeated: ['FAILED tests/test_auto_validation.py::test_at_most_the_limit_per_attempt_then_one_notice']
+KILLED  label without 'not instructions': ['FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request']
+KILLED  error excerpt dropped: ['FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request']
+KILLED  RunValidation reminder dropped: ['FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request']
+KILLED  blocked reason dropped: ['FAILED tests/test_auto_validation.py::test_a_blocked_validation_is_reported_and_the_attempt_goes_on']
+KILLED  key without the image version: ['FAILED tests/test_auto_validation.py::test_another_sandbox_image_does_not_reuse_the_result']
+KILLED  record not committed: ['FAILED tests/test_auto_validation.py::test_a_committed_auto_validation_is_not_run_again_on_resume']
+KILLED  record not read on resume (recomputed from the workspace): ['FAILED tests/test_auto_validation.py::test_a_committed_auto_validation_is_not_run_again_on_resume']
+KILLED  attempt-start digest recomputed on resume: ['FAILED tests/test_auto_validation.py::test_a_crash_during_the_auto_validation_runs_it_again']
+KILLED  no policy treated as on: ['FAILED tests/test_auto_validation.py::test_an_attempt_without_a_policy_runs_without_auto_validation']
+KILLED  policy from this process's config, not the checkpoint: ['FAILED tests/test_auto_validation.py::test_at_most_the_limit_per_attempt_then_one_notice']
+KILLED  validations in reverse order: ['FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request']
+KILLED  auto runs tagged as tool: ['FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request']
+KILLED  acceptance runs not tagged: ['FAILED tests/test_auto_validation.py::test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request']
+KILLED  sandbox_run without duration: ['FAILED tests/test_auto_validation.py::test_real_sandbox_auto_validation_leaves_the_workspace_unchanged_and_is_timed']
+KILLED  auto_validate on by default in config.yaml: ['FAILED tests/test_auto_validation.py::test_config_yaml_has_it_off_with_a_limit_of_four']
+RESULT: 21/21 killed
+DONE

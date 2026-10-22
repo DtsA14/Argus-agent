@@ -1,0 +1,28 @@
+HEAD 534e71d tests: tests/test_attempt_usd.py tests/test_codetask.py tests/test_feedback_excerpt.py tests/test_budget_experiment.py tests/test_llm_audit_2a.py tests/test_llm_wrapper.py
+== the new tests on the code before D1 (main 954fb80) ==
+FAILED tests/test_attempt_usd.py::test_the_configured_large_usd_profile_is_the_decided_one
+FAILED tests/test_attempt_usd.py::test_a_declared_attempt_usd_is_the_attempt_reservation_whatever_the_price
+FAILED tests/test_attempt_usd.py::test_a_profile_without_attempt_usd_keeps_the_old_formula
+FAILED tests/test_attempt_usd.py::test_an_attempt_runs_past_45k_tokens_while_its_usd_fits
+FAILED tests/test_attempt_usd.py::test_attempt_usd_bounds_every_call_before_it_is_sent
+FAILED tests/test_attempt_usd.py::test_a_call_over_the_input_limit_is_refused_before_sending_and_ends_the_attempt
+FAILED tests/test_attempt_usd.py::test_admission_with_large_usd_at_a_75_cent_cap
+FAILED tests/test_attempt_usd.py::test_large_usd_with_the_default_token_limit_stops_before_any_model_call
+FAILED tests/test_attempt_usd.py::test_the_agent_node_is_guarded_with_the_profile_values
+9 failed, 2 passed in 1.26s
+== mutants ==
+KILLED  prices swapped in the worst case: ['FAILED tests/test_attempt_usd.py::test_attempt_usd_bounds_every_call_before_it_is_sent']
+KILLED  input term dropped from the worst case: ['FAILED tests/test_attempt_usd.py::test_attempt_usd_bounds_every_call_before_it_is_sent']
+KILLED  attempt_usd ignored (old formula): ['FAILED tests/test_attempt_usd.py::test_a_declared_attempt_usd_is_the_attempt_reservation_whatever_the_price']
+KILLED  input limit off by one: ['FAILED tests/test_attempt_usd.py::test_a_call_over_the_input_limit_is_refused_before_sending_and_ends_the_attempt']
+KILLED  input_limit refusal not logged: ['FAILED tests/test_attempt_usd.py::test_a_call_over_the_input_limit_is_refused_before_sending_and_ends_the_attempt']
+KILLED  admission uses the old formula: ['FAILED tests/test_attempt_usd.py::test_an_attempt_runs_past_45k_tokens_while_its_usd_fits']
+KILLED  guard uses 45,000: ['FAILED tests/test_attempt_usd.py::test_an_attempt_runs_past_45k_tokens_while_its_usd_fits']
+KILLED  max_input not passed to the attempt: ['FAILED tests/test_attempt_usd.py::test_a_call_over_the_input_limit_is_refused_before_sending_and_ends_the_attempt']
+KILLED  max_input dropped by reservation_from_ledger: ['FAILED tests/test_attempt_usd.py::test_a_call_over_the_input_limit_is_refused_before_sending_and_ends_the_attempt']
+KILLED  context_limit end replaced by reservation_exhausted: ['FAILED tests/test_attempt_usd.py::test_a_call_over_the_input_limit_is_refused_before_sending_and_ends_the_attempt']
+KILLED  profile keys leak into the next profile: ['FAILED tests/test_attempt_usd.py::test_a_profile_without_attempt_usd_keeps_the_old_formula']
+KILLED  profile keys not applied: ['FAILED tests/test_attempt_usd.py::test_a_declared_attempt_usd_is_the_attempt_reservation_whatever_the_price']
+KILLED  budget record omits the D1 keys: ['FAILED tests/test_attempt_usd.py::test_an_attempt_runs_past_45k_tokens_while_its_usd_fits']
+KILLED  large_usd attempt_usd 0.50 in config: ['FAILED tests/test_attempt_usd.py::test_the_configured_large_usd_profile_is_the_decided_one']
+RESULT: 14/14 killed

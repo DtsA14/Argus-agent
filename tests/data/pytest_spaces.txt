@@ -1,0 +1,19 @@
+exit 0
+--- stdout
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /workspace
+plugins: anyio-4.15.1, langsmith-0.14.11
+collecting ... collected 7 items
+
+tests/test_parse_subtests.py::test_a_failing_subtest_in_every_printed_form_makes_the_test_fail[self.subTest(i=1)-FAIL] PASSED
+tests/test_parse_subtests.py::test_a_failing_subtest_in_every_printed_form_makes_the_test_fail[self.subTest("case a")-FAIL] PASSED
+tests/test_parse_subtests.py::test_a_failing_subtest_in_every_printed_form_makes_the_test_fail[self.subTest("case a", i=1)-FAIL] PASSED
+tests/test_parse_subtests.py::test_a_failing_subtest_in_every_printed_form_makes_the_test_fail[self.subTest("a (b) ... c [d]")-FAIL] PASSED
+tests/test_parse_subtests.py::test_a_failing_subtest_in_every_printed_form_makes_the_test_fail[self.subTest(msg="m", i="x ... y")-FAIL] PASSED
+tests/test_parse_subtests.py::test_an_erroring_message_subtest_wins_over_a_failing_one PASSED
+tests/test_parse_subtests.py::test_passing_message_subtests_leave_the_test_ok PASSED
+
+============================== 7 passed in 1.92s ===============================
+--- stderr
+

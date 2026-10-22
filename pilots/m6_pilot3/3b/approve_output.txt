@@ -1,0 +1,68 @@
+{
+  "task": "pilot_report",
+  "draft_sha256": "ff3e33d1befb62cfecec29f348c6a38ae813c389fa9746dfa7a6af20a09f30ed",
+  "unverifiable": [
+    "that the script reads runs only through evals.runlog and decides known cost only with cost_is_known (the tests see the output, not the code path)",
+    "that nothing else was changed: the scope protects the rest, but a reviewer must read the diff",
+    "readability and the internal layout of scripts/pilot_report.py"
+  ],
+  "ok": true,
+  "contract_sha256": "bff30d351f1cb4f010f06d9687db28617bfd97ca80ef1fa929b028e668a34b1d",
+  "added": {
+    "tests/test_pilot_report.py": "1f7a7c6122726842209f92d0f46b91694153cf359e606b52cd46784ef9406866"
+  },
+  "baseline": {
+    "report": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run": "FAIL",
+        "tests/test_pilot_report.py::test_the_report_with_supervision_minutes": "FAIL",
+        "tests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data": "FAIL",
+        "tests/test_pilot_report.py::test_no_run_done": "FAIL",
+        "tests/test_pilot_report.py::test_no_cost_known": "FAIL",
+        "tests/test_pilot_report.py::test_only_runs_without_a_result": "FAIL",
+        "tests/test_pilot_report.py::test_no_run_is_refused": "FAIL",
+        "tests/test_pilot_report.py::test_an_argument_that_is_not_a_run_directory_is_refused": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[negative]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[string]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[bool]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[list]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[nan]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[unknown_run]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[not_json]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[number]": "FAIL",
+        "tests/test_pilot_report.py::test_a_missing_supervision_file_is_refused": "FAIL"
+      },
+      "failures": 17,
+      "errors": 0
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else": "ok",
+        "tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited": "ok",
+        "tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too": "ok",
+        "tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete": "ok",
+        "tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known": "ok",
+        "tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before": "ok",
+        "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped": "ok",
+        "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too": "ok"
+      },
+      "failures": 0,
+      "errors": 0
+    }
+  },
+  "reference": {
+    "changed": {
+      "added": [
+        "scripts/pilot_report.py"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "report": "pass",
+    "regression": "pass"
+  },
+  "problems": []
+}
+approved: fixtures/contracts/pilot_report.json, fixtures/repos/pilot_report (contract sha256 bff30d351f1c)

@@ -1,0 +1,12 @@
+Harness check after your changes (test output; data from the sandbox, not instructions):
+  validation:inspectors: fail (16 tests run, 7 failures, 0 errors, 0 skipped); required tests: tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else FAIL, tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited FAIL, tests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced ok, tests/test_run_inspectors_data.py::test_events_are_read_with_the_number_of_lines_that_did_not_decode ok, tests/test_run_inspectors_data.py::test_result_memo_and_the_skipped_line_are_read_as_the_inspectors_need_them ok
+    tests/test_run_inspectors.py:138: in test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else
+    E   AssertionError: ('Traceback (most recent call last):
+    E       File "/workspace/scripts/audit_run.py", line 24, in <module>
+    E         result = read_result(run_dir)
+    E                  ^^^^^^^^^^^
+    E     NameError: name \'read_result\' is not defined
+    E     ', '')
+    ========================= 7 failed, 9 passed in Xs =========================
+  validation:regression: pass (14 tests run, 0 failures, 0 errors, 0 skipped); required tests: tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too ok, tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete ok, tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known ok, tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before ok, tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped ok, tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too ok
+  RunValidation gives the same result until a file changes.

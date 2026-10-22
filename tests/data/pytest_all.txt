@@ -1,0 +1,41 @@
+exit 1
+--- stdout
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /workspace
+plugins: anyio-4.15.1, langsmith-0.14.11
+collecting ... collected 13 items
+
+tests/test_demo.py::test_add PASSED
+tests/test_demo.py::test_add_param[1-2-3] PASSED
+tests/test_demo.py::test_add_param[2-2-4] PASSED
+tests/test_demo.py::TestDiv::test_div PASSED
+tests/test_demo.py::test_fails FAILED
+tests/test_demo.py::test_skipped SKIPPED (not on this platform)
+tests/test_demo.py::test_xfail XFAIL (known)
+tests/test_demo.py::test_xpass XPASS (known)
+tests/test_demo.py::test_setup_error ERROR
+tests/test_demo.py::test_teardown_error PASSED
+tests/test_demo.py::test_teardown_error ERROR
+tests/test_isolation.py::test_no_network PASSED
+tests/test_isolation.py::test_workspace_is_read_only PASSED
+tests/test_isolation.py::test_runs_as_nobody PASSED
+
+==================================== ERRORS ====================================
+______________________ ERROR at setup of test_setup_error ______________________
+tests/test_demo.py:42: in broken_setup
+    raise RuntimeError("setup broke")
+E   RuntimeError: setup broke
+___________________ ERROR at teardown of test_teardown_error ___________________
+tests/test_demo.py:52: in broken_teardown
+    raise RuntimeError("teardown broke")
+E   RuntimeError: teardown broke
+=================================== FAILURES ===================================
+__________________________________ test_fails __________________________________
+tests/test_demo.py:23: in test_fails
+    assert add(2, 2) == 5
+E   assert 4 == 5
+E    +  where 4 = add(2, 2)
+==== 1 failed, 8 passed, 1 skipped, 1 xfailed, 1 xpassed, 2 errors in 0.07s ====
+--- stderr
+

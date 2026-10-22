@@ -1,0 +1,23 @@
+diff --git a/models/pricing.py b/models/pricing.py
+index 6d1a8e6..0d99beb 100644
+--- a/models/pricing.py
++++ b/models/pricing.py
+@@ -2,13 +2,16 @@ from datetime import datetime, timezone
+ 
+ 
+ def is_peak(window, now):
+-    """True if `now` falls inside a provider's peak-price window (UTC hours, end exclusive)."""
++    """True if `now` falls inside a provider's peak-price window (UTC hours, end exclusive; a window may cross midnight)."""
+     if not window:
+         return False
+     now = now.astimezone(timezone.utc)
+     if window.get("weekdays_only") and now.weekday() >= 5:
+         return False
+-    return any(start <= now.hour < end for start, end in window["utc_hours"])
++    # start < end: start <= hour < end. start > end crosses midnight (22-4 is 22:00 to 04:00): hour >= start or hour < end.
++    # start == end is an empty window.
++    return any(start <= now.hour < end if start <= end else (now.hour >= start or now.hour < end)
++               for start, end in window["utc_hours"])
+ 
+ 
+ def multiplier(price, window, now=None):

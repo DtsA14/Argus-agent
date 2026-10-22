@@ -1,0 +1,31 @@
+CAUGHT  an error counts as red: 1 failed, 22 passed in 33.74s
+CAUGHT  a node not collected counts as red: 1 failed, 21 passed in 27.17s
+CAUGHT  other failures in a red validation allowed: 1 failed, 24 passed in 53.44s
+CAUGHT  a validation without new tests need not pass: 1 failed, 27 passed in 65.53s (0:01:05)
+CAUGHT  existing required tests need not pass on the baseline: 1 failed, 25 passed in 59.40s
+CAUGHT  the reference patch may change tests: 1 failed, 28 passed in 72.02s (0:01:12)
+CAUGHT  the reference patch need not make validations pass: 1 failed, 32 passed in 97.13s (0:01:37)
+CAUGHT  a new test may be writable: 1 failed, 12 passed in 0.79s
+CAUGHT  a new test may replace an existing file: 1 failed, 15 passed in 0.86s
+CAUGHT  a new test needs no required node: 1 failed, 14 passed in 0.90s
+CAUGHT  a failed report can be approved: 1 failed, 34 passed in 104.28s (0:01:44)
+MISSED  tests changed after the check can be approved: 116 passed in 217.38s (0:03:37)
+CAUGHT  the task repository is published before its record: 1 failed, 36 passed in 142.84s (0:02:22)
+CAUGHT  the draft may set the limits or inputs: 1 failed, 2 passed in 0.71s
+CAUGHT  setup does not check the approved contract: 1 failed, 114 passed in 218.48s (0:03:38)
+CAUGHT  the baseline is not required to be consistent: 1 failed, 26 passed in 53.27s
+CAUGHT  approval does not compare the draft: 1 failed, 35 passed in 131.95s (0:02:11)
+CAUGHT  approval does not compare the contract hash: 1 failed, 38 passed in 170.37s (0:02:50)
+CAUGHT  approval does not rebuild the contract from the draft: 1 failed, 39 passed in 179.66s (0:02:59)
+CAUGHT  approval does not re-check the intake: 1 failed, 42 passed in 199.03s (0:03:19)
+CAUGHT  the contract shares the draft's scope: 1 failed, 40 passed in 174.75s (0:02:54)
+tree clean: True
+MUTANTS_MISSED 1
+VERIFY_EXIT=0
+commit: 744c8b89232db48657bdcaac433b89f19281b606
+working tree: clean
+1097 passed in 738.69s (0:12:18)
+== sandbox tests skipped: 0
+RESULT: PASS
+evidence saved to verification/verify-20261020T152148Z-aarch64.log
+CHAIN_DONE

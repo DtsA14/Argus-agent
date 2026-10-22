@@ -1,0 +1,74 @@
+{
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+  "blocked_reason": null,
+  "contract_sha": "0826ee93de656dec5788c8a711dfe3128301bcf3551ca16a5b92958943f8eef2",
+  "verdict": {
+    "iteration": 1,
+    "outcome": "fail",
+    "failing": [
+      "claim[1]:issue_fixed",
+      "claim[2]:file_changed",
+      "claim[3]:file_changed",
+      "claim[4]:file_changed",
+      "validation:inspectors"
+    ],
+    "workspace_digest": "77f7cb472e30a51674e205fa620e180a1fea22ae73775ea0f235971a29b0218c"
+  },
+  "attempt": {
+    "iteration": 1,
+    "end": "finished",
+    "steps": 0
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "search_files",
+    "edit_file"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/fix_run_inspectors",
+      "snapshot_sha256": "179a4b553bac25eb4b0f9f95e3d252a72501b13a886031ca88b1c84494c980eb",
+      "intake": {
+        "name": "fix_run_inspectors",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+        "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "argus_p3",
+          "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+          "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8",
+          "snapshot_sha256": "7520a7ca36444db364bf48897d28374659d7c94f75703266de6c2044978204a8"
+        },
+        "added": {
+          "tests/test_run_inspectors.py": "0940ff44311576698cfd8108653cda42cf0e706656b06cab3ee0262702da2651",
+          "tests/test_run_inspectors_data.py": "d8272ca0a0bd6c0f234ba9761acfd93868f1eb440c0c68599b8326bd7be053a2"
+        },
+        "contract_sha256": "0826ee93de656dec5788c8a711dfe3128301bcf3551ca16a5b92958943f8eef2"
+      }
+    },
+    "argus": {
+      "commit": "92eee463b24eecfbf112e4e8b189b15371dbafad",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large",
+    "attempt_tokens": 45000,
+    "max_output_tokens": 8192
+  },
+  "run_id": "rehearsal_negative",
+  "attempts": 2,
+  "usd_billed": 0.006,
+  "usd_complete": true,
+  "llm_calls": 4,
+  "llm_calls_unknown": 0
+}

@@ -1,0 +1,49 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "fix_run_stats",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+  "tree": "816b1bf34f7bf95865224e3111e5aecbe0ae3488",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_m6",
+    "commit": "5ff64d0bd49f60ae9d8ac0ed06e2ec13504ab9d2",
+    "tree": "816b1bf34f7bf95865224e3111e5aecbe0ae3488",
+    "snapshot_sha256": "3c975a90fb176f9812636b665d781d10beb1547e7dd6c3a2cba741bc1e9c846a"
+  },
+  "added": {
+    "tests/test_run_stats.py": "ab5ce9d552ec5165bb99385ce70ec1e8438a5d4d8e3dc1990983c2dab75d6c90"
+  },
+  "files": 374,
+  "snapshot_sha256": "e34d76d4074b676cbea10fb0fa20d293fa9481a028eeba5ca311bbfc9bb5162a",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "c75cecee3c1ee69d5e6b685a94caadfb402d1f766d5298282b7bc7b736ae7901",
+  "draft_sha256": "f41def826bee9f3c78206667679e74728d83db42446aa12e37be41262f662b70",
+  "plan": {
+    "files": [
+      "evals/score.py"
+    ],
+    "steps": [
+      "import parse_lines from harness.events in evals/score.py",
+      "in run_stats, read events.jsonl with parse_lines instead of json.loads per line"
+    ],
+    "risks": [
+      "run_stats feeds the live eval report only; independent_checks, honesty, score and aggregate must stay as they are"
+    ]
+  },
+  "unverifiable": [
+    "a line that is valid JSON but not an object (for example 123) is neither required nor tested: harness.events.parse_lines passes it through, and run_stats would then fail on it; that is outside this task",
+    "that independent_checks, honesty, score and aggregate in evals/score.py were left alone: the writable scope is the whole file, so a reviewer must read the diff",
+    "readability of the change"
+  ],
+  "approved_at": "2026-10-20T17:40:11Z"
+}

@@ -1,0 +1,6 @@
+# full suite without Docker (sandbox tests skip; scripts/verify.sh with a sandbox image is still required)
+# counts below are report lines, not tests; every skip reason is SANDBOX NOT AVAILABLE (Docker), none other
+Python 3.13.16
+     47 SANDBOX NOT AVAILABLE: no sandbox image configured (sandbox.image or ARGUS_SANDBOX_IMAGE)
+     18 SANDBOX NOT AVAILABLE: sandbox environment 'argus' has no image configured (sandbox.environments.argus.image or ARGUS_SANDBOX_IMAGE_ARGUS)
+      1 1047 passed, 87 skipped in 103.42s (0:01:43)

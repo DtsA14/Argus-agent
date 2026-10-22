@@ -16,6 +16,7 @@ cd "$(dirname "$0")/.."
 VENV="${VENV:-.venv-verify}"
 export CRASH_REPEATS="${CRASH_REPEATS:-5}"
 export CRASH_STRESS="${CRASH_STRESS:-50}"
+WORKERS="${XDIST_WORKERS:-4}"        # pytest-xdist workers; the sandbox tests stay serial in one group (conftest.py)
 if [ -z "${ARGUS_SANDBOX_IMAGE:-}" ] && [ -f .sandbox_image ]; then
   export ARGUS_SANDBOX_IMAGE="$(tr -d '[:space:]' < .sandbox_image)"
 fi
@@ -33,6 +34,12 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
   echo "python: $("$VENV/bin/python" --version 2>&1)"
   echo "CRASH_REPEATS=$CRASH_REPEATS CRASH_STRESS=$CRASH_STRESS"
   echo "sandbox image: ${ARGUS_SANDBOX_IMAGE:-<none>}"
+  # M6 W1: the argus environment's image, built offline from this fresh venv (same pinned requirements)
+  if [ -z "${ARGUS_SANDBOX_IMAGE_ARGUS:-}" ] && docker version >/dev/null 2>&1; then
+    bash scripts/build_argus_sandbox_image.sh "$VENV"
+    export ARGUS_SANDBOX_IMAGE_ARGUS="$(tr -d '[:space:]' < .sandbox_image_argus)"
+  fi
+  echo "sandbox image (argus environment): ${ARGUS_SANDBOX_IMAGE_ARGUS:-<none>}"
   echo "docker: $(docker version --format 'client {{.Client.Version}} / server {{.Server.Version}} ({{.Server.Os}}/{{.Server.Arch}})' 2>/dev/null || echo 'not available')"
   echo "== pip freeze"
   "$VENV/bin/pip" freeze
@@ -42,7 +49,9 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
     | LC_ALL=C sort | xargs sha256sum
   echo "== pytest"
   set +e
-  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider 2>&1 | tee /dev/stderr > .verify-pytest.out
+  echo "workers: $WORKERS (--dist loadgroup; sandbox tests serial in one group)"
+  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider --durations=25 -n "$WORKERS" --dist loadgroup 2>&1 \
+    | tee /dev/stderr > .verify-pytest.out
   rc=${PIPESTATUS[0]}
   set -e
   skipped_sandbox=$(grep -c "SANDBOX NOT AVAILABLE" .verify-pytest.out || true)

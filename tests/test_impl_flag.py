@@ -1,0 +1,99 @@
+"""main.py --impl: an argument that is not valid is refused before a run exists (M6 pilot 2).
+
+--impl node=kind switches a node of the pipeline between its fake and its llm implementation. Today a mistyped node
+(evalutor=llm) is ignored and the run goes on with the fake evaluator; a missing '=', an empty node or kind, or another
+kind fails late, inside the graph, with a traceback, after the run directory and its checkpoint already exist (so the
+corrected command with the same --run-id is refused as an existing run). The contract: every such argument is refused
+at once as 'config error: ...' (exit 1, no traceback, like --model), and nothing is created.
+
+Black-box: main.py runs as a subprocess with --runs-dir in a temporary directory; the default pipeline uses fake nodes,
+so nothing is spent and no API key is needed."""
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+NODES = ("orchestrator", "worker", "synthesize", "evaluator")
+
+
+def run_main(tmp_path, *flags):
+    return subprocess.run([sys.executable, "main.py", "--quiet", "--scenario", "pass", "--runs-dir", str(tmp_path),
+                           "--run-id", "p", *flags], cwd=ROOT, capture_output=True, text=True, timeout=120)
+
+
+def assert_refused(r, tmp_path, *words):
+    assert r.returncode == 1, (r.returncode, r.stdout[-300:], r.stderr[-300:])
+    assert "config error:" in r.stderr, r.stderr[-400:]
+    assert "Traceback" not in r.stderr, r.stderr[-400:]
+    for w in words:
+        assert w in r.stderr, (w, r.stderr[-400:])
+    assert not (tmp_path / "p").exists(), "a refused argument must not leave a run directory"
+
+
+def assert_runs(r):
+    assert r.returncode == 0, (r.returncode, r.stderr[-400:])
+    assert "DONE" in r.stdout, r.stdout[-300:]
+
+
+# ---- arguments that must be refused, before anything is created ---------------------------------------------------
+
+def test_a_mistyped_node_is_refused_before_anything_runs(tmp_path):
+    r = run_main(tmp_path, "--impl", "evalutor=llm")
+    assert_refused(r, tmp_path, "unknown node 'evalutor'", *NODES)
+
+
+def test_a_second_mistyped_node_is_refused_too(tmp_path):
+    r = run_main(tmp_path, "--impl", "synthesise=fake")
+    assert_refused(r, tmp_path, "unknown node 'synthesise'", *NODES)
+
+
+def test_an_empty_node_is_refused(tmp_path):
+    assert_refused(run_main(tmp_path, "--impl", "=llm"), tmp_path, "=llm")
+
+
+def test_an_item_without_equals_is_refused_cleanly(tmp_path):
+    assert_refused(run_main(tmp_path, "--impl", "evaluator"), tmp_path, "evaluator")
+
+
+def test_an_empty_kind_is_refused_cleanly(tmp_path):
+    assert_refused(run_main(tmp_path, "--impl", "evaluator="), tmp_path, "evaluator=")
+
+
+def test_a_kind_other_than_fake_or_llm_is_refused_cleanly(tmp_path):
+    for kind in ("llmm", "LLM"):
+        r = run_main(tmp_path, "--impl", f"worker={kind}")
+        assert_refused(r, tmp_path, "worker", repr(kind), "'fake' or 'llm'")
+
+
+def test_a_refused_flag_starts_nothing_and_the_corrected_command_runs(tmp_path):
+    first = run_main(tmp_path, "--impl", "evalutor=llm")
+    assert_refused(first, tmp_path, "evalutor")
+    assert_runs(run_main(tmp_path, "--impl", "evaluator=fake"))       # same --run-id: it was never taken
+
+
+# ---- what already works and must not change (they pass before the change too) ----------------------------------
+
+def test_a_valid_impl_flag_runs_as_before(tmp_path):
+    assert_runs(run_main(tmp_path, "--impl", "worker=fake"))
+
+
+def test_all_four_nodes_can_be_set(tmp_path):
+    assert_runs(run_main(tmp_path, *[x for n in NODES for x in ("--impl", f"{n}=fake")]))
+
+
+def test_no_impl_flag_runs_as_before(tmp_path):
+    assert_runs(run_main(tmp_path))
+
+
+def test_the_last_impl_for_a_node_wins(tmp_path):
+    assert_runs(run_main(tmp_path, "--impl", "worker=llm", "--impl", "worker=fake"))
+
+
+def test_an_unknown_model_role_is_still_a_config_error(tmp_path):
+    r = run_main(tmp_path, "--model", "janitor=anthropic:x")
+    assert r.returncode == 1 and "config error: unknown role 'janitor'" in r.stderr, r.stderr[-300:]
+
+
+def test_a_model_override_without_equals_is_still_a_config_error(tmp_path):
+    r = run_main(tmp_path, "--model", "worker")
+    assert r.returncode == 1 and "config error: override must look like" in r.stderr, r.stderr[-300:]

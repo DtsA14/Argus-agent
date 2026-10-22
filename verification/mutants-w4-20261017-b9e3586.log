@@ -1,0 +1,16 @@
+CAUGHT  snapshot hash not compared: 1 failed, 2 passed in 0.63s
+CAUGHT  executable bits not compared: 1 failed, 8 passed in 1.02s
+CAUGHT  exclusions ignored: 1 failed in 0.54s
+CAUGHT  an exclusion that matches nothing is accepted: 1 failed, 14 passed in 0.84s
+CAUGHT  symlinks and submodules accepted: 1 failed, 9 passed in 0.78s
+CAUGHT  modes not kept: 1 failed, 8 passed in 0.75s
+CAUGHT  intake overwrites: 1 failed, 16 passed in 0.93s
+CAUGHT  credentials kept in the remote url: 1 failed, 17 passed in 0.94s
+CAUGHT  check against the repository always clean: 1 failed, 2 passed in 0.56s
+CAUGHT  setup does not check the intake: 1 failed, 74 passed in 9.10s
+CAUGHT  provenance not in result.json: 1 failed, 73 passed in 8.93s
+CAUGHT  intake commit not recorded in provenance: 1 failed, 73 passed in 8.95s
+CAUGHT  workspace published before its record (the #77 finding): 1 failed, 19 passed in 1.02s
+CAUGHT  a missing workspace passes the check: 1 failed, 19 passed in 0.98s
+tree clean: True
+MUTANTS_MISSED 0

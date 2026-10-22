@@ -1,0 +1,78 @@
+{
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "max_usd",
+  "blocked_reason": null,
+  "contract_sha": "ca8a521eb8b7e2e0a0c65638fbac914f05a27a79c62aabcb1d1452eba806adcd",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "fail",
+    "failing": [
+      "artifact:SUMMARY.json",
+      "claims",
+      "validation:inspectors"
+    ],
+    "workspace_digest": "05233e2f82836966b058865936f2b55e7b230e785b861b56ca5bb2cfe36974f4"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "reservation_exhausted",
+    "steps": 8
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "search_files",
+    "edit_file"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/fix_run_inspectors_v2",
+      "snapshot_sha256": "179a4b553bac25eb4b0f9f95e3d252a72501b13a886031ca88b1c84494c980eb",
+      "intake": {
+        "name": "fix_run_inspectors_v2",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+        "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "argus_p3",
+          "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+          "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8",
+          "snapshot_sha256": "7520a7ca36444db364bf48897d28374659d7c94f75703266de6c2044978204a8"
+        },
+        "added": {
+          "tests/test_run_inspectors.py": "0940ff44311576698cfd8108653cda42cf0e706656b06cab3ee0262702da2651",
+          "tests/test_run_inspectors_data.py": "d8272ca0a0bd6c0f234ba9761acfd93868f1eb440c0c68599b8326bd7be053a2"
+        },
+        "contract_sha256": "ca8a521eb8b7e2e0a0c65638fbac914f05a27a79c62aabcb1d1452eba806adcd"
+      }
+    },
+    "argus": {
+      "commit": "7b2708c36b86879ad8887dffa7f03dd5dd98313f",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large_usd",
+    "attempt_tokens": 400000,
+    "max_output_tokens": 8192,
+    "attempt_usd": 0.45,
+    "max_input_tokens": 40000
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4
+  },
+  "run_id": "pilot3a4",
+  "attempts": 1,
+  "usd_billed": 0.394736,
+  "usd_complete": true,
+  "llm_calls": 8,
+  "llm_calls_unknown": 0
+}

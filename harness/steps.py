@@ -42,6 +42,12 @@ def tool_step_key(node, task, iteration, step, tool_call_id, name, args, version
     return json.dumps(["tool", node, task, iteration, step, tool_call_id, _sha([name, args, parent]), version])
 
 
+def after_step_key(node, task, iteration, step, version, parent):
+    """D3: the record of what the harness decided after a step's tools ran (workspace digest, auto-validation and its
+    message). parent: the key of the step's LLM reply; version: the sandbox images, as for RunValidation."""
+    return json.dumps(["after_step", node, task, iteration, step, _sha([parent]), version])
+
+
 def invalid_calls(msg):
     """Tool calls the provider returned but whose arguments could not be parsed (LangChain's invalid_tool_calls).
     They are never treated as valid calls, but they are still tool calls: each must be answered."""
@@ -84,13 +90,13 @@ def message_from_json(d):
     return AIMessage(**kw)
 
 
-def reservation_from_ledger(log, *, tokens, usd, node, task, iteration):
+def reservation_from_ledger(log, *, tokens, usd, node, task, iteration, max_input=None):
     """A fresh reservation for one node run, already charged with what this same node run spent in
     earlier processes (all attempts, plus calls cut off by a crash at worst case)."""
     mine = [e for e in log.read()
             if e.get("event") in ("llm_call_started", "llm_call") and e.get("status") != "refused"
             and e.get("node") == node and e.get("task") == task and e.get("iteration") == iteration]
-    res = Reservation(tokens=tokens, usd=usd)
+    res = Reservation(tokens=tokens, usd=usd, max_input=max_input)
     if mine:
         _, totals = reconcile_ledger(mine)
         res.charge(totals["tokens"], totals["usd_nano"])

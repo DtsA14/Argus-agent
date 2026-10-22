@@ -1,0 +1,22 @@
+effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files', 'edit_file']
+effective system prompt sha256 0542517b3d317806c55cb092500dfe8bf2b888f9e744d30d6b16f8aef2978080
+llm_call_started 4, llm_call 4 (ok 4, refused 0)
+  it 0 step  0 ok       hash ok in 3465 out 134 usd 0.0100005 
+      -> ListFiles {}
+      -> ReadFile {"path": "evals/runlog.py"}
+      -> SearchFiles {"text": "def cost_is_known"}
+  it 0 step  1 ok       hash ok in 11969 out 166 usd 0.0232751 
+      -> ReadFile {"path": "tests/test_pilot_report.py"}
+      -> ReadFile {"path": "evals/score.py"}
+      -> ReadFile {"path": "scripts/audit_run.py"}
+  it 0 step  2 ok       hash ok in 22068 out 3170 usd 0.0581482 
+      -> WriteFile {"content": "\"\"\"One JSON report over several code-task run directories.\n\n  PYTHONPATH=. python scripts/pilot_report.py RUN_DIR... [--supervision FILE]\n\nF
+      -> RunValidation {"id": "report"}
+      (harness check after the step: validated)
+  it 0 step  3 ok       hash ok in 27774 out 243 usd 0.0189046 
+      -> Finish {"claims": [{"claim": "file_changed", "path": "scripts/pilot_report.py"}, {"claim": "tests_pass", "evidence": "validation:report"}, {"claim": "tests_pass", "evi
+prompt_hash checked 4, mismatches 0
+  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}
+  {'event': 'attempt_end', 'reason': 'finished', 'steps': 3, 'node': 'agent', 'task': 'pilot_report', 'iteration': 0}
+  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', 'blocked_reason': None}
+result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': 1, 'usd_billed': 0.1103284, 'llm_calls': 4, 'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation', 'search_files', 'edit_file']}

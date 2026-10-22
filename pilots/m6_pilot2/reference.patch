@@ -1,0 +1,57 @@
+diff --git a/main.py b/main.py
+index 9128eab..9cf30f5 100644
+--- a/main.py
++++ b/main.py
+@@ -2,7 +2,7 @@ import argparse
+ import sys
+ import time
+ 
+-from models.registry import ConfigError, apply_overrides, parse_overrides
++from models.registry import ConfigError, apply_overrides, parse_impl_overrides, parse_overrides
+ from runner import RunExists, load_config, run_task
+ 
+ 
+@@ -26,11 +26,10 @@ def main():
+ 
+     try:
+         cfg = apply_overrides(load_config(a.config), parse_overrides(a.model))
++        impl = parse_impl_overrides(a.impl)
+     except ConfigError as e:
+         sys.exit(f"config error: {e}")
+-    for item in a.impl or []:
+-        node, _, kind = item.partition("=")
+-        cfg.setdefault("impl", {})[node] = kind
++    cfg.setdefault("impl", {}).update(impl)
+     if a.max_iter:
+         cfg["budget"]["max_iterations"] = a.max_iter
+     if a.max_tokens:
+diff --git a/models/registry.py b/models/registry.py
+index 12b1b0e..253dee5 100644
+--- a/models/registry.py
++++ b/models/registry.py
+@@ -43,6 +43,25 @@ def parse_overrides(items):
+     return out
+ 
+ 
++IMPL_NODES = ("orchestrator", "worker", "synthesize", "evaluator")     # the nodes graph.py can build either way
++IMPL_KINDS = ("fake", "llm")
++
++
++def parse_impl_overrides(items):
++    """['evaluator=llm', ...] -> {'evaluator': 'llm'}. The last item for a node wins, as with --model."""
++    out = {}
++    for item in items or []:
++        node, sep, kind = item.partition("=")
++        if not sep or not node or not kind:
++            raise ConfigError(f"impl override must look like 'node=kind', got {item!r}")
++        if node not in IMPL_NODES:
++            raise ConfigError(f"unknown node {node!r}; nodes are {list(IMPL_NODES)}")
++        if kind not in IMPL_KINDS:
++            raise ConfigError(f"node {node!r} must be 'fake' or 'llm', got {kind!r}")
++        out[node] = kind
++    return out
++
++
+ def apply_overrides(cfg, overrides):
+     """Return a copy of cfg with role -> model replaced; the original is untouched."""
+     out = copy.deepcopy(cfg)

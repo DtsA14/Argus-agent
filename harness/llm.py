@@ -2,15 +2,20 @@
 
 For every request:
   1. count input tokens over the full context, including assistant tool calls and tool results
-     (exact via the provider's counting API when available, otherwise a conservative heuristic);
+     (exact via the provider's counting API when available, otherwise a conservative heuristic); a failed
+     count is `llm_count_failed` (nothing sent), retried like a call when transient, else LLMCallFailed;
   2. derive the output cap from what is left of the node's reservation, in tokens AND in USD;
-  3. refuse before sending when not even `min_output_tokens` would fit (nothing is billed);
+  3. refuse before sending when not even `min_output_tokens` would fit, or when the input is over the
+     reservation's per-call limit `max_input` (reason input_limit); nothing is billed;
   4. write `llm_call_started` (call_id, worst case) to the ledger, then send with max_tokens = cap;
   5. write the final `llm_call` event (same call_id), then charge the reservation;
   6. charge actual usage, or the worst case when usage is missing or the attempt failed.
 
 Ledger lifecycle, per call_id:
-  refused                                -> one `llm_call` with status refused, nothing sent
+  refused                                -> one `llm_call` with status refused, nothing sent. Two shapes:
+                                            budget: est_input, max_tokens (the cap), tokens_left, usd_left;
+                                            reason "input_limit" (D1): est_input, max_input, and no
+                                            max_tokens / tokens_left / usd_left. Readers use .get().
   llm_call_started + llm_call (final)    -> ok / transient_error / error, charged as recorded
   llm_call_started without a final event -> unknown_after_crash: the process died mid-request;
                                             reconcile_ledger() charges it at worst case
@@ -34,9 +39,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from models.pricing import cost_usd, multiplier
-from models.registry import ConfigError, ModelRef, build_chat_model, price_for, usage_from_message, window_for
+from models.registry import (ConfigError, ModelRef, build_chat_model, cache_usage, price_for, usage_from_message,
+                             window_for)
 
-from .errors import LLMCallFailed, ReservationExhausted, TransientError
+from .errors import InputLimitExceeded, LLMCallFailed, ReservationExhausted, TransientError
 
 TRANSIENT_STATUS = {408, 409, 425, 429}
 # Context a node may attach to ledger events. Anything else is rejected, so meta can never
@@ -47,6 +53,52 @@ META_KEYS = {"run_id", "node", "task", "iteration", "step", "tool_call_id"}
 def usd_limit(cfg):
     v = (cfg.get("budget") or {}).get("max_usd")
     return math.inf if v is None else float(v)
+
+
+def prompt_cache_for(cfg, role, ref):
+    """D5: whether this role's calls carry cache markers. Only Anthropic (and the scripted fake, for tests); only the
+    5-minute TTL; not Haiku 5.5; a cached model must have a write price while the budget is finite."""
+    pc = {**((cfg.get("llm") or {}).get("prompt_cache") or {}), **((cfg["roles"][role].get("prompt_cache")) or {})}
+    if not pc.get("enabled"):
+        return False
+    kind = ((cfg.get("providers") or {}).get(ref.provider) or {}).get("kind")
+    if kind not in ("anthropic", "fake"):
+        return False                              # other providers cache by themselves, without a write price
+    if str(pc.get("ttl", "5m")) != "5m":
+        raise ConfigError(f"role {role!r}: prompt_cache.ttl must be 5m (D5 does not use {pc.get('ttl')!r})")
+    if str(ref) == "anthropic:claude-haiku-5-5":
+        raise ConfigError(f"role {role!r}: prompt caching is not used for {ref} in D5")
+    price = price_for(cfg, ref)
+    if math.isfinite(usd_limit(cfg)) and (price is None or price.get("cache_write_5m") is None):
+        raise ConfigError(f"role {role!r} caches prompts of {ref}, which has no cache_write_5m price: a cache write "
+                          "could not be priced (add it to 'prices' or turn llm.prompt_cache off)")
+    return True
+
+
+def check_long_context(cfg, ref, max_input, what):
+    """K2 (D5): a model priced higher above a prompt size (Haiku 5.5: x5 above 100,000 tokens, cache included) is refused
+    when one call's input may exceed it; that tier is not modelled. Applies with or without caching."""
+    above = (price_for(cfg, ref) or {}).get("long_context_above")
+    if above is not None and max_input > int(above):
+        raise ConfigError(f"{what}: {ref} is billed at a higher rate above {int(above):,} input tokens, and one call "
+                          f"may send {max_input:,}; set max_input_tokens to {int(above):,} or less")
+
+
+def with_cache_markers(messages):
+    """D5: copies of the messages with a 5-minute cache marker on the last block of the system message (tools and system
+    render before it, so both are cached) and of the last message (the rolling prefix). Never stored, never hashed."""
+    out = list(messages)
+    for i in sorted({0, len(out) - 1} if out and type(out[0]).__name__ == "SystemMessage" else {len(out) - 1}):
+        if i < 0:
+            continue
+        m = out[i]
+        blocks = [{"type": "text", "text": m.content}] if isinstance(m.content, str) else [
+            dict(b) if isinstance(b, dict) else {"type": "text", "text": str(b)} for b in m.content]
+        if not blocks or (blocks[-1].get("type") == "text" and not blocks[-1].get("text")):
+            continue                              # nothing to mark (an empty text block is rejected by the API)
+        blocks[-1] = {**blocks[-1], "cache_control": {"type": "ephemeral"}}
+        out[i] = m.model_copy(update={"content": blocks})
+    return out
 
 
 def check_priced(cfg, ref, what):
@@ -75,6 +127,7 @@ class Reservation:
     Spend is kept in integer nano-dollars; `used_usd` is derived from it."""
     tokens: int
     usd: float
+    max_input: int | None = None     # per-call input limit (D1); None: only tokens and USD bound a call
     used_tokens: int = 0
     used_nano: int = 0
     violated: bool = False
@@ -253,6 +306,7 @@ class LLMCaller:
         self.base_delay = float(llm.get("base_delay", 1.0))
         self.failed_charge = llm.get("failed_attempt_charge", "worst_case")
         self.window = window_for(cfg, self.ref.provider)
+        self.cache = prompt_cache_for(cfg, role, self.ref)       # D5; raises ConfigError before anything is sent
         self.model = model if model is not None else build_chat_model(cfg, role)
         if counter is not None:
             self.count, self.exact = counter, True
@@ -273,12 +327,19 @@ class LLMCaller:
     def _now(self):
         return self.now() if callable(self.now) else (self.now or datetime.now(timezone.utc))
 
-    def _usd(self, tin, tout, cached=0):
+    def _usd(self, tin, tout, cached=0, write_5m=0, write_1h=0):
         """USD of a call, or None when the model is unpriced (never reported as $0)."""
         if self.price is None:
             return None
         return cost_usd(self.price, input_tokens=tin, output_tokens=tout, cache_read_tokens=cached,
-                        window=self.window, now=self._now())
+                        cache_write_tokens=write_5m, cache_write_1h_tokens=write_1h, window=self.window, now=self._now())
+
+    def _worst_usd(self, tin, tout):
+        """The most a call can cost: no cache hit, and with caching on every input token may be written (D5)."""
+        plain = self._usd(tin, tout)
+        if not self.cache or plain is None:
+            return plain
+        return max(plain, self._usd(tin, tout, write_5m=tin))
 
     def _output_cap(self, est_in, res):
         """Largest max_tokens that keeps tokens and USD within the reservation (worst case: no cache hits)."""
@@ -286,7 +347,7 @@ class LLMCaller:
         if self.price is not None:
             mult = multiplier(self.price, self.window, self._now())
             out_rate = self.price["output"] * mult / 1_000_000
-            usd_after_input = res.usd_left - self._usd(est_in, 0)
+            usd_after_input = res.usd_left - self._worst_usd(est_in, 0)
             cap = min(cap, int(usd_after_input / out_rate) if out_rate > 0 else cap)
         return cap
 
@@ -310,7 +371,25 @@ class LLMCaller:
         for attempt in range(1, self.attempts + 1):
             # A violated reservation needs no special case: its tokens or USD left are negative, so the
             # output cap below is negative and the call is refused before sending.
-            est_in = self.count(messages, tools)
+            try:
+                est_in = self.count(messages, tools)
+            except Exception as exc:  # the provider's counting API failed: nothing was sent, nothing is charged
+                transient = is_transient(exc)
+                emit("llm_count_failed", attempt=attempt, transient=transient, http_status=http_status(exc),
+                     error=f"{type(exc).__name__}: {str(exc)[:200]}")
+                if not transient:
+                    raise LLMCallFailed(f"{self.role}: counting the input failed: {type(exc).__name__}: {exc}") from exc
+                if attempt == self.attempts:
+                    raise LLMCallFailed(f"{self.role}: counting the input still failing after {attempt} attempts: "
+                                        f"{exc}") from exc
+                wait = retry_after_seconds(exc)
+                self.sleep(self.base_delay * 2 ** (attempt - 1) * (0.5 + random.random()) if wait is None else wait)
+                continue
+            if reservation.max_input is not None and est_in > reservation.max_input:
+                emit("llm_call", status="refused", reason="input_limit", attempt=attempt, est_input=est_in,
+                     max_input=reservation.max_input)
+                raise InputLimitExceeded(f"{self.role}: {est_in} input tokens, the limit per call is "
+                                         f"{reservation.max_input}")
             cap = self._output_cap(est_in, reservation)
             if cap < self.min_output:
                 emit("llm_call", status="refused", attempt=attempt, est_input=est_in, max_tokens=cap,
@@ -320,7 +399,7 @@ class LLMCaller:
                     f"(left: {reservation.tokens_left} tokens, ${reservation.usd_left:.6f})")
 
             call_id = uuid.uuid4().hex[:12]
-            worst_tokens, worst_nano = est_in + cap, to_nano(self._usd(est_in, cap))
+            worst_tokens, worst_nano = est_in + cap, to_nano(self._worst_usd(est_in, cap))
             if self.full_prompts:
                 emit("llm_prompt", call_id=call_id, messages=[{"type": type(m).__name__, "text": _text(m)}
                                                                for m in messages])
@@ -331,7 +410,7 @@ class LLMCaller:
 
             t0 = time.monotonic()
             try:
-                msg = model.invoke(messages, max_tokens=cap)
+                msg = model.invoke(with_cache_markers(messages) if self.cache else messages, max_tokens=cap)
             except Exception as exc:  # classify below; every attempt is recorded, then charged
                 latency = round(time.monotonic() - t0, 3)
                 transient = is_transient(exc)
@@ -360,18 +439,21 @@ class LLMCaller:
 
             latency = round(time.monotonic() - t0, 3)
             tin, tout, cached = usage_from_message(msg)
+            cu = cache_usage(msg)
             if tin == 0 and tout == 0:
                 tok, nano, charged = worst_tokens, worst_nano, "worst_case_no_usage"
             else:
-                tok, nano, charged = tin + tout, to_nano(self._usd(tin, tout, cached)), "actual"
+                tok, nano, charged = tin + tout, to_nano(self._usd(tin, tout, cached, cu["write_5m"], cu["write_1h"])), "actual"
             truncated = is_truncated(msg)
             try:
                 emit("llm_call", call_id=call_id, status="ok", attempt=attempt, est_input=est_in, max_tokens=cap,
-                     input_tokens=tin, output_tokens=tout, cache_read=cached, tokens=tok,
+                     input_tokens=tin, output_tokens=tout, cache_read=cached, cache_creation=cu["creation"], tokens=tok,
                      usd_nano=nano, usd=_usd(nano), charged=charged, latency_s=latency, truncated=truncated,
                      **reply_details(msg))
             finally:
                 reservation.charge(tok, nano)
+            if cu["write_1h"]:                   # D5 asks only for 5 minutes: priced at the 1-hour rate, and reported
+                emit("cache_ttl_unexpected", call_id=call_id, ephemeral_1h_input_tokens=cu["write_1h"])
             if truncated:
                 emit("output_truncated", call_id=call_id, max_tokens=cap, output_tokens=tout)
             if tin > est_in:

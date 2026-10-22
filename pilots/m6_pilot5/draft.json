@@ -1,0 +1,113 @@
+{
+  "draft_version": 1,
+  "base": "argus_p5",
+  "plan": {
+    "files": [
+      "models/pricing.py"
+    ],
+    "steps": [
+      "add WindowError(ValueError) and a check of the whole window and of `now` that is_peak runs before it evaluates the hours",
+      "document in the docstring that `now` must be timezone-aware; keep every valid window's answer unchanged"
+    ],
+    "risks": [
+      "is_peak is on the billing path: every valid window (incl. across midnight, end 24, start == end, empty hours, config.yaml's) must keep its answer",
+      "the refusal must come before any request is sent: LLMCaller._output_cap calls multiplier before sending"
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "models/pricing.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "config.yaml",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "tools/**",
+        "nodes/**",
+        "evals/**",
+        "scripts/**",
+        "runner.py",
+        "graph.py",
+        "main.py",
+        "models/__init__.py",
+        "models/registry.py",
+        "models/fake.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_peak_window_strict.py"
+        ],
+        "timeout_s": 240,
+        "min_tests": 14,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_peak_window_strict.py::test_v1_a_window_that_is_not_a_dict_is_refused",
+          "tests/test_peak_window_strict.py::test_v2_a_window_without_utc_hours_is_refused",
+          "tests/test_peak_window_strict.py::test_v3_utc_hours_that_is_not_a_list_is_refused",
+          "tests/test_peak_window_strict.py::test_v4_an_item_that_is_not_two_integers_is_refused",
+          "tests/test_peak_window_strict.py::test_v5_an_hour_out_of_range_is_refused",
+          "tests/test_peak_window_strict.py::test_v6_weekdays_only_that_is_not_a_bool_is_refused",
+          "tests/test_peak_window_strict.py::test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not",
+          "tests/test_peak_window_strict.py::test_a_bad_item_behind_an_item_that_matches_is_still_refused",
+          "tests/test_peak_window_strict.py::test_the_refusal_also_comes_from_multiplier_and_cost_usd",
+          "tests/test_peak_window_strict.py::test_every_hour_pair_outside_the_valid_ranges_is_refused"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_peak_window.py",
+          "tests/test_models.py",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "timeout_s": 240,
+        "min_tests": 30,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_peak_window.py::test_the_evening_part_of_a_window_across_midnight_is_peak",
+          "tests/test_peak_window.py::test_weekdays_only_follows_the_utc_date_of_now_also_across_midnight",
+          "tests/test_peak_window.py::test_no_window_is_never_peak",
+          "tests/test_models.py::test_cost_of_a_plain_call",
+          "tests/test_models.py::test_unknown_price_is_none_not_a_guess",
+          "tests/test_models.py::test_deepseek_peak_windows",
+          "tests/test_models.py::test_peak_doubles_the_price",
+          "tests/test_llm_wrapper.py::test_peak_hours_halve_the_output_cap_for_deepseek",
+          "tests/test_llm_wrapper.py::test_node_usd_estimates_use_the_dearer_rate_and_peak"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "tools": [
+      "search_files",
+      "edit_file"
+    ],
+    "budget_profile": "large"
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_peak_window_strict.py",
+      "content": "\"\"\"models/pricing.py is_peak: a peak window that cannot be read safely is refused, never read as \"not peak\" (M6 pilot 5).\n\nToday a window without 'utc_hours' (or with an out-of-range hour, a wrong type, a 'weekdays_only' that is a string) is quietly read as \"not peak\", and a\nnaive datetime is read in the machine's own time zone. Both can under-bill without any error. The contract:\n\n- WindowError (a ValueError, defined in models/pricing.py) is raised, with a message that names the problem and shows the wrong value, for a window\n  that is not falsy and is not well formed:\n    V1 not a dict; V2 no 'utc_hours'; V3 'utc_hours' not a list or tuple; V4 an item that is not [start, end] of two integers (bool and float are\n    refused); V5 start not in 0..23 or end not in 0..24; V6 'weekdays_only' present but not a bool (None included).\n  V7: `now` must carry a time zone; a naive datetime is refused.\n- Every part of the window is checked before the hours are evaluated: a bad item behind an item that matches is still refused.\n- No window (None, {}) is not an error: the provider has no peak window, and the answer is False.\n- Everything that was valid stays valid and gives the same answer: [] (no hours), start == end (empty), end 24, a window across midnight, several\n  windows, weekdays_only on the UTC date of `now`, a time in another zone, extra keys (ignored), and the windows of config.yaml.\n- The refusal comes from is_peak and so also from multiplier() and cost_usd().\n\"\"\"\nfrom datetime import datetime, timedelta, timezone\nfrom pathlib import Path\n\nimport pytest\nimport yaml\n\nfrom models.pricing import cost_usd, is_peak, multiplier\n\ntry:\n    from models.pricing import WindowError\nexcept ImportError:          # the class does not exist before the change: collect anyway, so every test below fails by its own assertion\n    WindowError = type(\"WindowErrorIsMissing\", (Exception,), {})\n\nPRICE = {\"input\": 1.0, \"output\": 1.0, \"peak_multiplier\": 2}\nFRI = datetime(2026, 10, 23, tzinfo=timezone.utc)          # 2026-10-23 is a Friday\nNOW = FRI + timedelta(hours=2)\nGOOD = {\"utc_hours\": [[1, 4]]}\nJAKARTA, NEW_YORK = timezone(timedelta(hours=7)), timezone(timedelta(hours=-5))\n\n\ndef refused(window, now=NOW, *, shows=None):\n    with pytest.raises(WindowError) as e:\n        is_peak(window, now)\n    assert isinstance(e.value, ValueError)\n    if shows is not None:\n        assert shows in str(e.value), (shows, str(e.value))\n\n\n# ---- what must be refused (these fail until is_peak checks the window) -----------------------------------------------\n\ndef test_v1_a_window_that_is_not_a_dict_is_refused():\n    for window in ([[22, 4]], \"1-4\", 5, (\"utc_hours\",)):\n        refused(window, shows=repr(window))\n\n\ndef test_v2_a_window_without_utc_hours_is_refused():\n    refused({\"weekdays_only\": True}, shows=\"utc_hours\")\n    refused({\"utc_hour\": [[1, 4]]}, shows=\"utc_hour\")             # a misspelled key is not \"no hours\"\n\n\ndef test_v3_utc_hours_that_is_not_a_list_is_refused():\n    for hours in (\"1-4\", 5, None, {\"a\": 1}):\n        refused({\"utc_hours\": hours}, shows=repr(hours))\n\n\ndef test_v4_an_item_that_is_not_two_integers_is_refused():\n    for item in ([1], [1, 2, 3], [\"1\", 4], [1, \"4\"], [1.5, 4], [1, 4.0], [True, 4], [1, False], None, 5, \"ab\", {\"s\": 1, \"e\": 4}):\n        refused({\"utc_hours\": [item]}, shows=repr(item))\n\n\ndef test_v5_an_hour_out_of_range_is_refused():\n    for item in ([24, 4], [-1, 4], [1, 25], [1, -1], [100, 100], [30, 0]):\n        refused({\"utc_hours\": [item]}, shows=repr(item))\n\n\ndef test_v6_weekdays_only_that_is_not_a_bool_is_refused():\n    for flag in (\"false\", \"true\", 1, 0, None):\n        refused({\"utc_hours\": [[1, 4]], \"weekdays_only\": flag}, shows=\"weekdays_only\")\n\n\ndef test_v7_a_time_without_a_zone_is_refused_and_a_time_with_a_zone_is_not():\n    naive = datetime(2026, 10, 23, 2, 0)\n    refused(GOOD, naive, shows=\"naive\")\n    assert is_peak(GOOD, NOW) is True                                              # UTC\n    assert is_peak(GOOD, datetime(2026, 10, 23, 9, 0, tzinfo=JAKARTA)) is True      # 09:00 +07:00 = 02:00 UTC\n    assert is_peak(GOOD, datetime(2026, 10, 22, 21, 0, tzinfo=NEW_YORK)) is True    # 21:00 -05:00 = 02:00 UTC\n    assert is_peak(GOOD, datetime(2026, 10, 23, 2, 0, tzinfo=JAKARTA)) is False     # 02:00 +07:00 = 19:00 UTC the day before\n\n\ndef test_a_bad_item_behind_an_item_that_matches_is_still_refused():\n    refused({\"utc_hours\": [[1, 4], [99, 5]]}, NOW, shows=\"[99, 5]\")                # 02:00 matches [1, 4]; the rest is checked anyway\n    refused({\"utc_hours\": [[1, 4]], \"weekdays_only\": \"yes\"}, NOW, shows=\"weekdays_only\")\n\n\ndef test_the_refusal_also_comes_from_multiplier_and_cost_usd():\n    bad = {\"weekdays_only\": True}\n    with pytest.raises(WindowError):\n        multiplier(PRICE, bad, NOW)\n    with pytest.raises(WindowError):\n        cost_usd(PRICE, input_tokens=1000, output_tokens=1000, window=bad, now=NOW)\n    with pytest.raises(WindowError):\n        cost_usd(PRICE, input_tokens=1000, output_tokens=1000, window=GOOD, now=datetime(2026, 10, 23, 2, 0))\n\n\n# ---- what was valid stays valid and gives the same answer (these pass before the change too) -------------------------\n\ndef test_no_window_is_not_an_error():\n    assert is_peak(None, NOW) is False and is_peak({}, NOW) is False\n    assert is_peak(None, datetime(2026, 10, 23, 2, 0)) is False                      # `now` is not even looked at when there is no window\n\n\ndef test_the_valid_edge_cases_are_still_valid():\n    assert is_peak({\"utc_hours\": []}, NOW) is False                                   # no hours: never peak\n    assert not any(is_peak({\"utc_hours\": [[5, 5]]}, FRI + timedelta(hours=h)) for h in range(24))   # start == end: empty\n    assert is_peak({\"utc_hours\": [[20, 24]]}, FRI + timedelta(hours=23, minutes=59)) is True       # end 24\n    assert is_peak({\"utc_hours\": [[22, 4]]}, FRI + timedelta(hours=23)) is True                      # across midnight\n    assert is_peak({\"utc_hours\": [[22, 4]]}, FRI + timedelta(days=1, hours=3)) is True\n    assert is_peak({\"utc_hours\": [[22, 4], [6, 10]]}, FRI + timedelta(hours=7)) is True              # several windows\n    assert is_peak({\"utc_hours\": [[1, 4]], \"colour\": \"red\", \"weekdays_only\": False}, NOW) is True   # extra keys are ignored\n    assert is_peak({\"utc_hours\": [[1, 4]], \"weekdays_only\": True}, NOW + timedelta(days=1)) is False  # Saturday\n\n\ndef test_the_windows_of_config_yaml_are_still_valid_and_unchanged():\n    cfg = yaml.safe_load((Path(__file__).resolve().parent.parent / \"config.yaml\").read_text(encoding=\"utf-8\"))\n    window = cfg[\"peak_windows\"][\"deepseek\"]\n    assert is_peak(window, datetime(2026, 10, 12, 2, tzinfo=timezone.utc)) is True       # Monday 02:00 UTC\n    assert is_peak(window, datetime(2026, 10, 12, 4, tzinfo=timezone.utc)) is False      # end exclusive\n    assert is_peak(window, datetime(2026, 10, 12, 7, tzinfo=timezone.utc)) is True\n    assert is_peak(window, datetime(2026, 10, 17, 2, tzinfo=timezone.utc)) is False      # Saturday\n\n\ndef _before(window, now):\n    \"\"\"The answer of is_peak for a well formed window, before this change (the reference for the grid below).\"\"\"\n    now = now.astimezone(timezone.utc)\n    if window.get(\"weekdays_only\") and now.weekday() >= 5:\n        return False\n    return any(s <= now.hour < e if s <= e else (now.hour >= s or now.hour < e) for s, e in window[\"utc_hours\"])\n\n\ndef test_every_valid_window_gives_the_same_answer_as_before():\n    cases = 0\n    for start in range(0, 24):\n        for end in range(0, 25):\n            for weekdays_only in (False, True):\n                window = {\"utc_hours\": [[start, end]], \"weekdays_only\": weekdays_only}\n                for day in range(7):\n                    for hour in range(24):\n                        for zone in (timezone.utc, JAKARTA):\n                            now = (FRI + timedelta(days=day, hours=hour)).astimezone(zone)\n                            assert is_peak(window, now) == _before(window, now), (window, now)\n                            cases += 1\n    assert cases == 24 * 25 * 2 * 7 * 24 * 2\n\n\ndef test_every_hour_pair_outside_the_valid_ranges_is_refused():\n    for start in range(-3, 28):\n        for end in range(-3, 28):\n            if 0 <= start <= 23 and 0 <= end <= 24:\n                continue\n            refused({\"utc_hours\": [[start, end]]}, shows=f\"[{start}, {end}]\")\n"
+    }
+  ],
+  "unverifiable": [
+    "that config.yaml and the other protected files were left alone: they are protected, but a reviewer must read the diff",
+    "that harness/llm.py refuses before sending when a window is invalid: the code path was read (LLMCaller._output_cap calls multiplier before the request), it is not exercised by these tests",
+    "the exact wording of the messages beyond naming the problem and showing the wrong value",
+    "the behaviour of a falsy window with a naive `now` (the issue says: not checked, False)"
+  ]
+}

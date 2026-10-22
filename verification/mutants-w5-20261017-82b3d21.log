@@ -1,0 +1,12 @@
+CAUGHT  a profile raises the cost cap: 1 failed, 57 passed in 8.54s
+CAUGHT  a profile does not set the output cap: 1 failed, 57 passed in 8.44s
+CAUGHT  the profile is never applied: 1 failed, 64 passed in 8.73s
+CAUGHT  an unknown profile is not refused: 1 failed, 66 passed in 8.79s
+CAUGHT  setup does not compare the frozen profile: 1 failed, 68 passed in 9.30s
+CAUGHT  the agent node does not compare the frozen profile: 1 failed, 69 passed in 9.46s
+CAUGHT  the profile name is not validated: 1 failed, 70 passed in 9.30s
+CAUGHT  budget_profile missing from the result: 1 failed, 63 passed in 8.63s
+CAUGHT  the large profile in the config is changed: 1 failed, 56 passed in 8.51s
+CAUGHT  default drifts from the values a contract without profile gets: 1 failed, 56 passed in 8.33s
+tree clean: True
+MUTANTS_MISSED 0

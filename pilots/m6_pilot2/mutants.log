@@ -1,0 +1,12 @@
+KILLED   hardcode_the_typo [hardcode evalutor]: FAILED tests/test_impl_flag.py::test_a_second_mistyped_node_is_refused_too - ...
+KILLED   validate_after_the_run_dir_exists [late validation]: FAILED tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs
+KILLED   check_the_kind_only [kind only or node only]: FAILED tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs
+KILLED   check_the_node_only [kind only or node only]: FAILED tests/test_impl_flag.py::test_a_kind_other_than_fake_or_llm_is_refused_cleanly
+KILLED   reject_every_impl [reject all or swallow]: FAILED tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs
+KILLED   swallow_the_error [reject all or swallow]: FAILED tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs
+KILLED   normalise_the_kind [normalise LLM]: FAILED tests/test_impl_flag.py::test_a_kind_other_than_fake_or_llm_is_refused_cleanly
+KILLED   no_list_of_valid_nodes [message without the valid nodes]: FAILED tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs
+KILLED   print_but_go_on [catch but continue]: FAILED tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs
+KILLED   change_the_model_message [change --model]: FAILED tests/test_impl_flag.py::test_a_model_override_without_equals_is_still_a_config_error
+KILLED   reject_repeated_nodes [reject duplicates]: FAILED tests/test_impl_flag.py::test_the_last_impl_for_a_node_wins - Assertio...
+11/11 mutants killed

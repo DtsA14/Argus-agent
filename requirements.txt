@@ -10,3 +10,5 @@ anthropic==1.13.0
 openai==3.30.0
 PyYAML==6.0.3
 pytest==9.1.1
+pytest-xdist==3.8.0     # scripts/verify.sh: -n 4 --dist loadgroup (conftest.py groups the sandbox tests)
+execnet==2.1.2

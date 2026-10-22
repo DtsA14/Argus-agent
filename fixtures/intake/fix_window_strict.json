@@ -1,0 +1,51 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "fix_window_strict",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "716d1dd22787cbb98b1c7213f7ad8ec2c66a2d03",
+  "tree": "6d80ac376f12e722c34ba33f91052a901c848c5b",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_p5",
+    "commit": "716d1dd22787cbb98b1c7213f7ad8ec2c66a2d03",
+    "tree": "6d80ac376f12e722c34ba33f91052a901c848c5b",
+    "snapshot_sha256": "f11324aa0368fe534ff1e4811b6202397c119cb206fdbd372345289db8b587dd"
+  },
+  "added": {
+    "tests/test_peak_window_strict.py": "86914af840cd322a2d8569e167018bc7516e72a25a77e644d22c14fc7404b501"
+  },
+  "files": 396,
+  "snapshot_sha256": "66f9dfbbc5091796f2182288430e9f6e8352eff38c9dc1ac2595ab736e00be50",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "a05548186f86ec8c740950e16e6aeff6489c9f4d0c72832fcddcfece0320eb9c",
+  "draft_sha256": "55a6306763a2def60b57ee3c48e96645eb28fb7e7aa54f1b4dfacd59213438a9",
+  "plan": {
+    "files": [
+      "models/pricing.py"
+    ],
+    "steps": [
+      "add WindowError(ValueError) and a check of the whole window and of `now` that is_peak runs before it evaluates the hours",
+      "document in the docstring that `now` must be timezone-aware; keep every valid window's answer unchanged"
+    ],
+    "risks": [
+      "is_peak is on the billing path: every valid window (incl. across midnight, end 24, start == end, empty hours, config.yaml's) must keep its answer",
+      "the refusal must come before any request is sent: LLMCaller._output_cap calls multiplier before sending"
+    ]
+  },
+  "unverifiable": [
+    "that config.yaml and the other protected files were left alone: they are protected, but a reviewer must read the diff",
+    "that harness/llm.py refuses before sending when a window is invalid: the code path was read (LLMCaller._output_cap calls multiplier before the request), it is not exercised by these tests",
+    "the exact wording of the messages beyond naming the problem and showing the wrong value",
+    "the behaviour of a falsy window with a naive `now` (the issue says: not checked, False)"
+  ],
+  "approved_at": "2026-10-21T18:11:42Z"
+}

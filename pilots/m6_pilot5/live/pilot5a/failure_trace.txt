@@ -1,0 +1,4 @@
+##### pilot5a
+  it0 s0 ok      in  3150 | ReadFile(models/pricing.py)
+  it0 s1 ok      in  3738 | EditFile(models/pricing.py) RunValidation(target) RunValidation(regression)
+  it0 s2 ok      in  7338 | Finish()

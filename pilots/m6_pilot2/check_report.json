@@ -1,0 +1,57 @@
+{
+  "task": "fix_impl_flag",
+  "draft_sha256": "150a0b6a247f3ff5eb8f8f752c84cccf00b987259ccaa219ac75ed297addd83d",
+  "unverifiable": [
+    "a mistyped node under impl: in a config file is ignored too; that is a separate change and is not tested",
+    "the exact wording of the error messages beyond the key words the tests look for",
+    "that graph.py, runner.py and config.yaml were left alone: they are protected, but a reviewer must read the diff",
+    "readability and where the validation lives (the contract fixes the behaviour, not the code layout)"
+  ],
+  "ok": true,
+  "contract_sha256": "295e95147779c5e8fa0526600afb5cc6f0195f2f54a9d4e5c0d36bf8eef9d23e",
+  "added": {
+    "tests/test_impl_flag.py": "2bbf1ae706ec55b6e61e42e00b2017fc9b7bb8bb1786f0e1a99b486ed0d9f6e7"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_impl_flag.py::test_a_mistyped_node_is_refused_before_anything_runs": "FAIL",
+        "tests/test_impl_flag.py::test_a_second_mistyped_node_is_refused_too": "FAIL",
+        "tests/test_impl_flag.py::test_an_empty_node_is_refused": "FAIL",
+        "tests/test_impl_flag.py::test_an_item_without_equals_is_refused_cleanly": "FAIL",
+        "tests/test_impl_flag.py::test_an_empty_kind_is_refused_cleanly": "FAIL",
+        "tests/test_impl_flag.py::test_a_kind_other_than_fake_or_llm_is_refused_cleanly": "FAIL",
+        "tests/test_impl_flag.py::test_a_refused_flag_starts_nothing_and_the_corrected_command_runs": "FAIL"
+      },
+      "failures": 7,
+      "errors": 0
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_models.py::test_override_errors_are_clear": "ok",
+        "tests/test_models.py::test_swap_model_for_a_role_leaves_original_untouched": "ok",
+        "tests/test_models.py::test_default_roles_build_without_network": "ok",
+        "tests/test_milestone1.py::test_pass_first_try": "ok",
+        "tests/test_milestone1.py::test_fail_then_pass_uses_feedback": "ok",
+        "tests/test_milestone1.py::test_iteration_budget": "ok"
+      },
+      "failures": 0,
+      "errors": 0
+    }
+  },
+  "reference": {
+    "changed": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        "main.py",
+        "models/registry.py"
+      ]
+    },
+    "target": "pass",
+    "regression": "pass"
+  },
+  "problems": []
+}

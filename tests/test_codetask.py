@@ -469,3 +469,362 @@ def test_required_test_statuses_are_reported_as_the_parser_recorded_them():
     assert "test_ok ok" in line and "test_fail FAIL" in line and "test_missing did not run" in line
     assert "test_subtests not ok (no single status in the unittest output)" in line
     assert "test_subtests did not run" not in line
+
+
+# ---- named sandbox environments (M6 W1) -----------------------------------------------------------------------
+
+def with_environment(name):
+    c = copy.deepcopy(CONTRACT)
+    c["validation"][0]["environment"] = name
+    return c
+
+
+def env_cfg(**budget):
+    c = cfg(**budget)
+    c["sandbox"] = {**c["sandbox"], "environments": {"argus": {"image": "sha256:" + "b" * 64}}}
+    return c
+
+
+def test_an_unknown_environment_blocks_the_run_before_any_model_call(tmp_path):
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=with_environment("nosuch"), config=env_cfg(), model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract"
+    assert "unknown sandbox environment" in r["stop_reason"] and len(model.calls) == 0
+    assert not (d / "verdict_0.json").exists()
+
+
+def test_an_environment_whose_image_is_unavailable_blocks_before_any_model_call(tmp_path):
+    seen = []
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    path = tmp_path / "contract.json"
+    path.write_text(json.dumps(with_environment("argus")), encoding="utf-8")
+    r = run_code_task(contract_path=path, run_id="t", runs_dir=tmp_path / "runs", cfg=env_cfg(),
+                      models={"coder": model}, validate=fake_validate, preflight=lambda: (True, "ok"),
+                      env_preflight=lambda name: (seen.append(name), (False, "image not found"))[1])
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "sandbox_unavailable" and len(model.calls) == 0
+    assert seen == ["argus"] and "argus" in r["stop_reason"]
+
+
+def test_a_validation_in_an_environment_reaches_the_validator_with_its_environment(tmp_path):
+    specs = []
+
+    def validate(spec, workspace, sandbox_cfg, log=None):
+        specs.append(spec)
+        return fake_validate(spec, workspace, sandbox_cfg, log)
+    path = tmp_path / "contract.json"
+    path.write_text(json.dumps(with_environment("argus")), encoding="utf-8")
+    r = run_code_task(contract_path=path, run_id="t", runs_dir=tmp_path / "runs", cfg=env_cfg(),
+                      models={"coder": StrictScriptedChatModel(script=[WRITE, FINISH])}, validate=validate,
+                      preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"))
+    assert r["status"] == st.DONE
+    assert {s["id"]: s.get("environment") for s in specs} == {"unit": "argus", "target": None}
+
+
+# ---- malformed, cut-off and timed-out replies (M6 W0) -------------------------------------------------------
+# Handled in codetask/agent.py (invalid_call_errors, is_truncated) and harness/llm.py (transient errors); these lock
+# that handling in the code-task loop itself. The strict model raises HTTP 400 if any tool call id is left unanswered.
+
+def malformed_write(id="bad1"):
+    """A WriteFile whose arguments could not be parsed, as LangChain reports it (invalid_tool_calls)."""
+    return reply("", input_tokens=500, output_tokens=60,
+                 invalid_tool_calls=[{"name": "WriteFile", "id": id, "error": "Expecting ',' delimiter",
+                                      "args": '{"path": "src/calc.py", "content": "BROKEN'}])
+
+
+def answer_to(model, call_no, id):
+    return next(m for m in model.calls[call_no]["messages"] if getattr(m, "tool_call_id", None) == id).content
+
+
+def test_a_malformed_tool_call_is_answered_runs_nothing_and_the_attempt_goes_on(tmp_path):
+    r, model, d = run(tmp_path, [malformed_write(), WRITE, FINISH])
+    assert r["status"] == st.DONE and r["attempts"] == 1 and len(model.calls) == 3
+    assert not any(c.get("rejected") for c in model.calls)              # every id answered: no HTTP 400
+    assert answer_to(model, 1, "bad1").startswith("Rejected:")
+    (bad,) = [e for e in events(d) if e["event"] == "invalid_tool_call"]
+    assert bad["step"] == 0 and bad["tools"] == ["WriteFile"]
+    assert not [e for e in events(d) if e["event"] == "step_committed" and e["kind"] == "tool" and e["step"] == 0]
+
+
+def test_a_malformed_call_alone_never_changes_the_workspace(tmp_path):
+    lazy = call("Finish", {"claims": CLAIMS, "summary": "x"}, "f1")
+    r, model, d = run(tmp_path, [malformed_write(), lazy, malformed_write("bad2"), lazy])
+    assert r["status"] == st.FAILED_ACCEPTANCE
+    assert (d / "workspace" / "src" / "calc.py").read_text() == CALC
+
+
+def test_a_reply_with_a_valid_and_a_malformed_call_runs_neither_and_answers_both(tmp_path):
+    both = reply("", input_tokens=500, output_tokens=60,
+                 tool_calls=[{"name": "WriteFile", "args": {"path": "src/calc.py", "content": FIXED}, "id": "w0"}],
+                 invalid_tool_calls=[{"name": "ReadFile", "id": "bad0", "error": "Expecting value", "args": '{"pa'}])
+    lazy = call("Finish", {"claims": CLAIMS, "summary": "x"}, "f1")
+    r, model, d = run(tmp_path, [both, lazy, lazy])
+    assert r["status"] == st.FAILED_ACCEPTANCE and not any(c.get("rejected") for c in model.calls)
+    assert answer_to(model, 1, "w0").startswith("Rejected:") and answer_to(model, 1, "bad0").startswith("Rejected:")
+    assert (d / "workspace" / "src" / "calc.py").read_text() == CALC     # the valid WriteFile did not run either
+
+
+def cut_off(msg, how):
+    msg.response_metadata = {"stop_reason": "max_tokens"} if how == "anthropic" else {"finish_reason": "length"}
+    return msg
+
+
+@pytest.mark.parametrize("how", ["anthropic", "openai"])
+def test_a_cut_off_reply_runs_none_of_its_tool_calls_and_ends_the_attempt(tmp_path, how):
+    r, model, d = run(tmp_path, [cut_off(call("WriteFile", {"path": "src/calc.py", "content": FIXED}, "w0"), how),
+                                 WRITE, FINISH])
+    assert r["status"] == st.DONE and r["attempts"] == 2                  # the fix came in the next attempt
+    ends = [(e["iteration"], e["reason"]) for e in events(d) if e["event"] == "attempt_end"]
+    assert ends == [(0, "output_truncated"), (1, "finished")]
+    assert json.loads((d / "verdict_0.json").read_text())["outcome"] == "fail"   # attempt 0 wrote nothing
+    assert [e["tools"] for e in events(d) if e["event"] == "reply_truncated"] == [["WriteFile"]]
+
+
+def test_a_cut_off_finish_is_not_accepted(tmp_path):
+    r, model, d = run(tmp_path, [WRITE, cut_off(call("Finish", {"claims": CLAIMS, "summary": "x"}, "f0"), "anthropic"),
+                                 FINISH])
+    assert r["status"] == st.DONE and r["attempts"] == 2
+    assert json.loads((d / "verdict_0.json").read_text())["outcome"] == "fail"   # no SUMMARY.json from it
+
+
+def timeout():
+    import anthropic
+    import httpx
+    return anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+
+
+def no_wait(**budget):
+    c = cfg(**budget)
+    c["llm"]["base_delay"] = 0
+    return c
+
+
+def test_model_timeouts_are_retried_charged_at_worst_case_then_block_the_run(tmp_path):
+    r, model, d = run(tmp_path, [timeout(), timeout(), timeout()], config=no_wait())
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "provider_failed"
+    assert len(model.calls) == 3                                         # llm.attempts, then no further attempt
+    calls = [e for e in events(d) if e["event"] == "llm_call"]
+    assert [(e["status"], e["delivery"], e["charged"]) for e in calls] == [("transient_error", "unknown", "worst_case")] * 3
+    started = [e for e in events(d) if e["event"] == "llm_call_started"]
+    assert [e["worst_usd_nano"] for e in started] == [e["usd_nano"] for e in calls]   # charged exactly the worst case
+    assert r["llm_calls"] == 3 and r["usd_billed"] == pytest.approx(sum(e["usd"] for e in calls))
+    assert (d / "verdict_0.json").exists() and (d / "workspace" / "src" / "calc.py").read_text() == CALC
+
+
+def test_a_timeout_then_an_answer_goes_on_and_the_lost_call_stays_charged(tmp_path):
+    r, model, d = run(tmp_path, [timeout(), WRITE, FINISH], config=no_wait())
+    assert r["status"] == st.DONE and r["attempts"] == 1 and len(model.calls) == 3
+    first = [e for e in events(d) if e["event"] == "llm_call"][0]
+    assert first["status"] == "transient_error" and first["usd_nano"] > 0
+    assert r["usd_billed"] >= first["usd"]
+
+
+# ---- intake and provenance (M6 W4) -----------------------------------------------------------------------------
+
+def calc_record(**over):
+    from acceptance import intake
+    from acceptance.workspace import digest, snapshot
+    calc = ROOT / "fixtures" / "repos" / "calc"
+    snap = snapshot(calc, skip_cache=True)
+    return {"intake_version": 1, "name": "calc", "repo": "https://example.invalid/calc.git", "commit": "c" * 40,
+            "tree": "d" * 40, "exclude": [], "files": len(snap), "snapshot_sha256": digest(snap),
+            "executable": intake.executables(calc), **over}
+
+
+def test_an_input_taken_in_by_intake_is_recorded_in_the_result(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: calc_record())
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    assert r["status"] == st.DONE
+    p = json.loads((d / "result.json").read_text())["provenance"]
+    assert p["input"]["intake"] == {"name": "calc", "repo": "https://example.invalid/calc.git", "commit": "c" * 40,
+                                    "tree": "d" * 40, "exclude": []}
+    assert p["input"]["workspace"] == "fixtures/repos/calc" and p["input"]["snapshot_sha256"] == calc_record()["snapshot_sha256"]
+    assert len(p["argus"]["commit"]) == 40 and isinstance(p["argus"]["dirty"], bool)
+
+
+def test_an_input_that_changed_since_intake_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: calc_record(snapshot_sha256="0" * 64))
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "changed since intake" in r["stop_reason"]
+
+
+def test_an_input_without_intake_is_recorded_as_such(tmp_path):
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    p = json.loads((d / "result.json").read_text())["provenance"]
+    assert p["input"]["intake"] is None and p["input"]["workspace"] == "fixtures/repos/calc"
+    assert len(p["input"]["snapshot_sha256"]) == 64
+
+
+def test_a_record_whose_workspace_is_missing_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    c = copy.deepcopy(CONTRACT)
+    c["inputs"]["workspace"] = "fixtures/repos/ghost"
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: calc_record(name="ghost"))
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=c, model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "changed since intake" in r["stop_reason"] and "missing" in r["stop_reason"]
+
+
+# ---- budget profiles (M6 W5) -----------------------------------------------------------------------------------
+
+def with_profile(name, **limits):
+    c = copy.deepcopy(CONTRACT)
+    c["budget_profile"] = name
+    c["limits"].update(limits)
+    return c
+
+
+def started(run_dir):
+    return [e for e in events(run_dir) if e["event"] == "llm_call_started"]
+
+
+def test_the_default_profile_is_exactly_what_a_contract_without_profile_gets():
+    c = load_config()
+    assert c["code_task"]["profiles"]["default"] == {
+        "attempt_tokens": c["code_task"]["attempt_tokens"],
+        "max_output_tokens": c["roles"][c["code_task"]["role"]]["max_output_tokens"]}
+    assert c["code_task"]["profiles"]["large"] == {"attempt_tokens": 45000, "max_output_tokens": 8192}
+
+
+def test_a_profile_changes_only_the_attempt_reservation_and_the_output_cap():
+    from codetask.run import apply_profile
+    base = load_config()
+    out = apply_profile(base, "large")
+    assert out["code_task"]["attempt_tokens"] == 45000 and out["roles"]["coder"]["max_output_tokens"] == 8192
+    strip = lambda c: {**c, "code_task": {k: v for k, v in c["code_task"].items()     # noqa: E731
+                                          if k not in ("attempt_tokens", "applied_profile")},
+                       "roles": {**c["roles"], "coder": {k: v for k, v in c["roles"]["coder"].items()
+                                                         if k != "max_output_tokens"}}}
+    assert strip(out) == strip(base) and out["budget"] == base["budget"]
+    assert base["code_task"]["attempt_tokens"] == 30000                               # the input is not mutated
+
+
+@pytest.mark.parametrize("contract_cap", [0.5, 1.0, 5.0])
+def test_choosing_a_profile_never_changes_the_cost_cap(contract_cap):
+    from codetask.run import apply_profile
+    base = cfg()
+    plain = settings(base, with_profile("large", max_usd=contract_cap))
+    large = settings(apply_profile(base, "large"), with_profile("large", max_usd=contract_cap))
+    assert large["max_usd"] == plain["max_usd"] == min(0.5, contract_cap)
+    assert large["attempt_tokens"] == 45000 and plain["attempt_tokens"] == 30000
+
+
+def sonnet_limits(config_cap, contract_cap):
+    from codetask.run import apply_profile
+    c = load_config()
+    c["roles"]["coder"]["model"] = "anthropic:claude-sonnet-5-5"
+    c["budget"]["max_usd"] = config_cap
+    return settings(apply_profile(c, "large"), with_profile("large", max_usd=contract_cap))
+
+
+def admitted_after(limits, spends, tmp_path):
+    log = EventLog(tmp_path / f"e{len(list(tmp_path.iterdir()))}.jsonl")
+    for i, usd in enumerate(spends):
+        log.emit("llm_call_started", call_id=f"c{i}", node="agent", task="x", iteration=i, step=0,
+                 worst_tokens=1, worst_usd_nano=round(usd * 1e9))
+        log.emit("llm_call", call_id=f"c{i}", status="ok", node="agent", task="x", iteration=i, step=0,
+                 tokens=1000, usd_nano=round(usd * 1e9))
+    return admission(log, limits) is None
+
+
+def test_large_at_the_default_cap_leaves_room_for_practically_one_attempt(tmp_path):
+    lim = sonnet_limits(0.50, 0.50)                    # docs/reviews/M6_PLAN.md W5: $0.45 per attempt at $10/M
+    assert lim["attempt_usd"] == pytest.approx(0.45) and lim["max_usd"] == 0.50
+    assert admitted_after(lim, [], tmp_path)
+    assert admitted_after(lim, [0.05], tmp_path) and not admitted_after(lim, [0.06], tmp_path)
+
+
+def test_large_at_a_preflight_approved_one_dollar_cap(tmp_path):
+    lim = sonnet_limits(1.00, 1.00)                    # a per-run config approved in a preflight, not the default
+    assert admitted_after(lim, [0.55], tmp_path) and not admitted_after(lim, [0.56], tmp_path)
+    # any further attempt, the third too, needs spend so far + $0.45 <= $1.00
+    assert admitted_after(lim, [0.30, 0.25], tmp_path) and not admitted_after(lim, [0.30, 0.26], tmp_path)
+
+
+@pytest.mark.parametrize("profile, out_cap", [(None, 4096), ("default", 4096), ("large", 8192)])
+def test_the_profile_reaches_the_model_call_and_the_result(tmp_path, profile, out_cap):
+    c = with_profile(profile) if profile else copy.deepcopy(CONTRACT)
+    if profile is None:
+        c.pop("budget_profile", None)
+    r, model, d = run(tmp_path, [WRITE, FINISH], contract=c)
+    assert r["status"] == st.DONE
+    assert {e["max_tokens"] for e in started(d)} == {out_cap}
+    tokens = 45000 if profile == "large" else 30000
+    assert r["budget_profile"] == {"name": profile, "attempt_tokens": tokens, "max_output_tokens": out_cap}
+
+
+def test_an_unknown_profile_blocks_before_any_model_call(tmp_path):
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=with_profile("huge"), model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "unknown budget profile 'huge'" in r["stop_reason"]
+
+
+def test_a_contract_that_cannot_fund_one_large_attempt_stops_before_any_model_call(tmp_path):
+    # fake:scripted output is $5/M: one large attempt reserves $0.225
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], contract=with_profile("large", max_usd=0.2), model=model)
+    assert r["status"] == st.FAILED_BUDGET and len(model.calls) == 0 and r["llm_calls"] == 0
+    (tmp_path / "small").mkdir()
+    r2, model2, d2 = run(tmp_path / "small", [WRITE, FINISH], contract=with_profile("default", max_usd=0.2))
+    assert r2["status"] == st.DONE                                     # the same cap funds a default attempt ($0.15)
+
+
+def test_a_profile_applied_that_the_frozen_contract_does_not_name_blocks_in_setup(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module, "contract_profile", lambda path: "large")      # the file changed after reading
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "contract_changed" and len(model.calls) == 0
+    # in setup itself, before admission is computed with the wrong profile: the run never becomes RUNNING
+    assert statuses_seen(d) == [(None, "BLOCKED")]
+
+
+def test_a_resume_configured_with_another_profile_blocks_before_any_model_call(tmp_path, monkeypatch):
+    seen = []
+
+    def respond(messages):
+        seen.append(1)
+        raise Crash()
+    with pytest.raises(Crash):
+        run(tmp_path, [], model=CallableChatModel(respond=respond))
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module, "contract_profile", lambda path: "large")
+    r, model, d = run(tmp_path, [WRITE, FINISH], resume=True)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "contract_changed" and len(model.calls) == 0
+    assert "budget profile" in r["stop_reason"]
+
+
+def test_a_profile_name_must_be_a_lower_case_name():
+    from acceptance import contract as ct
+    for bad in ("Large", "", 3, "../x"):
+        assert "budget_profile must be a lower-case name" in ct.validate(with_profile(bad))
+    assert ct.validate(with_profile("large")) == []
+
+
+# ---- approved tasks (M6 W2a) -----------------------------------------------------------------------------------
+
+def test_a_task_run_with_a_contract_other_than_the_approved_one_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from codetask import run as run_module
+    monkeypatch.setattr(run_module.intake, "record_for",
+                        lambda workspace, root: calc_record(kind="task", contract_sha256="0" * 64))
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], model=model)
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
+    assert "not the one approved" in r["stop_reason"]
+
+
+def test_a_task_run_with_its_approved_contract_runs_and_records_the_task(tmp_path, monkeypatch):
+    from acceptance import contract as ct
+    from codetask import run as run_module
+    added = {"tests/test_new.py": "e" * 64}
+    rec = calc_record(kind="task", contract_sha256=ct.freeze(CONTRACT)[1], added=added)
+    monkeypatch.setattr(run_module.intake, "record_for", lambda workspace, root: rec)
+    r, model, d = run(tmp_path, [WRITE, FINISH])
+    assert r["status"] == st.DONE
+    p = json.loads((d / "result.json").read_text())["provenance"]["input"]["intake"]
+    assert p["kind"] == "task" and p["added"] == added and p["contract_sha256"] == rec["contract_sha256"]

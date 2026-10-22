@@ -1,0 +1,2260 @@
+{
+ "rates": {
+  "list": 0.5400417200074386,
+  "code": 0.370837573800637,
+  "data": 0.4633459922881301,
+  "valid": 0.5017931576749965,
+  "small": 0.2431771199727256,
+  "per_call": 50.488176555751025
+ },
+ "fit_max_error": 32.294689353978185,
+ "projection": {
+  "valid_fail_chars": 2502,
+  "valid_pass_chars": 1744,
+  "audit_chars": 4495
+ },
+ "writers": [
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "baseline",
+   "calls": 13,
+   "needs": 358767,
+   "usd": 0.75879,
+   "usd_cached": 0.2034510173689309,
+   "first3": 42951,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 42951,
+    "usd": 0.112758,
+    "usd_cached": 0.09632080000000001
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 8,
+    "used": 189893,
+    "usd": 0.413442,
+    "usd_cached": 0.14988602835797674
+   },
+   "needs_at_rates_x0.85": 354047,
+   "needs_at_rates_x1.15": 363488,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 12657,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 23840,
+     "left": 999999983935,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 27252,
+     "left": 999999957049,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 28708,
+     "left": 999999929647,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 28982,
+     "left": 999999900739,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 6,
+     "est_input": 30438,
+     "left": 999999871607,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 30712,
+     "left": 999999840969,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 8,
+     "est_input": 32168,
+     "left": 999999810107,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 9,
+     "est_input": 32441,
+     "left": 999999777739,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 10,
+     "est_input": 33897,
+     "left": 999999745148,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 11,
+     "est_input": 34171,
+     "left": 999999711051,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 12,
+     "est_input": 35247,
+     "left": 999999676730,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "list_cap",
+   "calls": 13,
+   "needs": 287501,
+   "usd": 0.616258,
+   "usd_cached": 0.17553863888045246,
+   "first3": 31073,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 31073,
+    "usd": 0.089002,
+    "usd_cached": 0.08028512922832015
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 10,
+    "used": 201402,
+    "usd": 0.43926,
+    "usd_cached": 0.1459561022873173
+   },
+   "needs_at_rates_x0.85": 293471,
+   "needs_at_rates_x1.15": 281532,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 6718,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 17901,
+     "left": 999999989874,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 21313,
+     "left": 999999968927,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 22769,
+     "left": 999999947464,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 23043,
+     "left": 999999924495,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 6,
+     "est_input": 24499,
+     "left": 999999901302,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 24773,
+     "left": 999999876603,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 8,
+     "est_input": 26229,
+     "left": 999999851680,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 9,
+     "est_input": 26503,
+     "left": 999999825251,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 10,
+     "est_input": 27959,
+     "left": 999999798598,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 11,
+     "est_input": 28232,
+     "left": 999999770439,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 12,
+     "est_input": 29308,
+     "left": 999999742057,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "elide_safe",
+   "calls": 14,
+   "needs": 238246,
+   "usd": 0.518708,
+   "usd_cached": 0.21254434775410497,
+   "first3": 35957,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 35957,
+    "usd": 0.09877,
+    "usd_cached": 0.10050410000000001
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 12,
+    "used": 200335,
+    "usd": 0.439686,
+    "usd_cached": 0.19791889271981805
+   },
+   "needs_at_rates_x0.85": 252448,
+   "needs_at_rates_x1.15": 224045,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 12657,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 16846,
+     "left": 999999983935,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 16109,
+     "left": 999999964043,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 17565,
+     "left": 999999947784,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 19403,
+     "left": 999999930099,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 17860,
+     "left": 999999910496,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 18085,
+     "left": 999999892486,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 18184,
+     "left": 999999874201,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 18410,
+     "left": 999999855867,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 18508,
+     "left": 999999837257,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 18734,
+     "left": 999999818599,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 18833,
+     "left": 999999799665,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 18678,
+     "left": 999999780682,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "list_cap+elide_safe",
+   "calls": 14,
+   "needs": 232307,
+   "usd": 0.50683,
+   "usd_cached": 0.19769684775410495,
+   "first3": 30018,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 30018,
+    "usd": 0.086892,
+    "usd_cached": 0.0856566
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 12,
+    "used": 194396,
+    "usd": 0.427808,
+    "usd_cached": 0.18307139271981804
+   },
+   "needs_at_rates_x0.85": 247400,
+   "needs_at_rates_x1.15": 217215,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 6718,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 16846,
+     "left": 999999989874,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 16109,
+     "left": 999999969982,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 17565,
+     "left": 999999953723,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 19403,
+     "left": 999999936038,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 17860,
+     "left": 999999916435,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 18085,
+     "left": 999999898425,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 18184,
+     "left": 999999880140,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 18410,
+     "left": 999999861806,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 18508,
+     "left": 999999843196,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 18734,
+     "left": 999999824538,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 18833,
+     "left": 999999805604,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 18678,
+     "left": 999999786621,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "list_cap+read_cap+elide_safe",
+   "calls": 14,
+   "needs": 190587,
+   "usd": 0.42339,
+   "usd_cached": 0.1733599050017707,
+   "first3": 26541,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 39324,
+    "usd": 0.106704,
+    "usd_cached": 0.10243017719392176
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 14,
+    "used": 190587,
+    "usd": 0.42339,
+    "usd_cached": 0.1733599050017707
+   },
+   "needs_at_rates_x0.85": 211939,
+   "needs_at_rates_x1.15": 169237,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 6718,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 13369,
+     "left": 999999989874,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 12633,
+     "left": 999999973459,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 14089,
+     "left": 999999960676,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 15926,
+     "left": 999999946467,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 14383,
+     "left": 999999930341,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 14609,
+     "left": 999999915808,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 14707,
+     "left": 999999900999,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 14933,
+     "left": 999999886142,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 15032,
+     "left": 999999871009,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 15257,
+     "left": 999999855827,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 15356,
+     "left": 999999840370,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 15201,
+     "left": 999999824864,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "elide_age2",
+   "calls": 14,
+   "needs": 139199,
+   "usd": 0.32061400000000007,
+   "usd_cached": 0.20581540327224887,
+   "first3": 42951,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 42951,
+    "usd": 0.112758,
+    "usd_cached": 0.09632080000000001
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 14,
+    "used": 139199,
+    "usd": 0.32061400000000007,
+    "usd_cached": 0.20581540327224887
+   },
+   "needs_at_rates_x0.85": 168575,
+   "needs_at_rates_x1.15": 109823,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 12657,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 23840,
+     "left": 999999983935,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 16109,
+     "left": 999999957049,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 6781,
+     "left": 999999940790,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 8634,
+     "left": 999999933889,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 8733,
+     "left": 999999925055,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 7317,
+     "left": 999999916172,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 7417,
+     "left": 999999908655,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 7643,
+     "left": 999999901088,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 7743,
+     "left": 999999893245,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 7968,
+     "left": 999999885352,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 8069,
+     "left": 999999877184,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 7914,
+     "left": 999999868965,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "auto_validate",
+   "calls": 8,
+   "needs": 202209,
+   "usd": 0.439674,
+   "usd_cached": 0.16301431283389536,
+   "first3": 42951,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 42951,
+    "usd": 0.112758,
+    "usd_cached": 0.09632080000000001
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 8,
+    "used": 202209,
+    "usd": 0.439674,
+    "usd_cached": 0.16301431283389536
+   },
+   "needs_at_rates_x0.85": 199407,
+   "needs_at_rates_x1.15": 205011,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 12657,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 23840,
+     "left": 999999983935,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile,RunValidation"
+    },
+    {
+     "step": 3,
+     "est_input": 28558,
+     "left": 999999957049,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 4,
+     "est_input": 30138,
+     "left": 999999928291,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 31718,
+     "left": 999999897953,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 33297,
+     "left": 999999866035,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 34497,
+     "left": 999999832538,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "A",
+   "run": "pilot3a",
+   "attempt": 0,
+   "policy": "list_cap+auto_validate",
+   "calls": 8,
+   "needs": 160637,
+   "usd": 0.35653,
+   "usd_cached": 0.1410402882038162,
+   "first3": 31073,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 31073,
+    "usd": 0.089002,
+    "usd_cached": 0.08028512922832015
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 8,
+    "used": 160637,
+    "usd": 0.35653,
+    "usd_cached": 0.1410402882038162
+   },
+   "needs_at_rates_x0.85": 164071,
+   "needs_at_rates_x1.15": 157204,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3097,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 6718,
+     "left": 999999996764,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 17901,
+     "left": 999999989874,
+     "status": "ok",
+     "output": 3046,
+     "what": "WriteFile,EditFile,EditFile,EditFile,EditFile,RunValidation"
+    },
+    {
+     "step": 3,
+     "est_input": 22619,
+     "left": 999999968927,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 4,
+     "est_input": 24199,
+     "left": 999999946108,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 25779,
+     "left": 999999921709,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 27359,
+     "left": 999999895730,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 28558,
+     "left": 999999868171,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "baseline",
+   "calls": 13,
+   "needs": 358603,
+   "usd": 0.7518699999999999,
+   "usd_cached": 0.19480712798253982,
+   "first3": 44707,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 44707,
+    "usd": 0.109678,
+    "usd_cached": 0.09057480000000001
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 8,
+    "used": 190689,
+    "usd": 0.40844199999999997,
+    "usd_cached": 0.14148652196402514
+   },
+   "needs_at_rates_x0.85": 353883,
+   "needs_at_rates_x1.15": 363324,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 13517,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 24700,
+     "left": 999999982215,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 27060,
+     "left": 999999955293,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 28516,
+     "left": 999999928083,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 28790,
+     "left": 999999899367,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 6,
+     "est_input": 30246,
+     "left": 999999870427,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 30520,
+     "left": 999999839981,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 8,
+     "est_input": 31976,
+     "left": 999999809311,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 9,
+     "est_input": 32249,
+     "left": 999999777135,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 10,
+     "est_input": 33705,
+     "left": 999999744736,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 11,
+     "est_input": 33979,
+     "left": 999999710831,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 12,
+     "est_input": 35055,
+     "left": 999999676702,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "list_cap",
+   "calls": 13,
+   "needs": 287337,
+   "usd": 0.6093379999999999,
+   "usd_cached": 0.16689474949406147,
+   "first3": 32829,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 32829,
+    "usd": 0.085922,
+    "usd_cached": 0.07453912922832015
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 10,
+    "used": 201814,
+    "usd": 0.433492,
+    "usd_cached": 0.13745884269639
+   },
+   "needs_at_rates_x0.85": 293307,
+   "needs_at_rates_x1.15": 281368,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 7578,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 18761,
+     "left": 999999988154,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 21121,
+     "left": 999999967171,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 22577,
+     "left": 999999945900,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 22851,
+     "left": 999999923123,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 6,
+     "est_input": 24307,
+     "left": 999999900122,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 24581,
+     "left": 999999875615,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 8,
+     "est_input": 26037,
+     "left": 999999850884,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 9,
+     "est_input": 26311,
+     "left": 999999824647,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 10,
+     "est_input": 27767,
+     "left": 999999798186,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 11,
+     "est_input": 28040,
+     "left": 999999770219,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 12,
+     "est_input": 29116,
+     "left": 999999742029,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "elide_safe",
+   "calls": 14,
+   "needs": 254087,
+   "usd": 0.5437980000000001,
+   "usd_cached": 0.21047566373483848,
+   "first3": 37713,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 37713,
+    "usd": 0.09569,
+    "usd_cached": 0.0947581
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 11,
+    "used": 193402,
+    "usd": 0.41762800000000005,
+    "usd_cached": 0.18561057641332424
+   },
+   "needs_at_rates_x0.85": 267340,
+   "needs_at_rates_x1.15": 240837,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 13517,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 17706,
+     "left": 999999982215,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 17390,
+     "left": 999999962287,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 18846,
+     "left": 999999944747,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 20683,
+     "left": 999999925781,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 19140,
+     "left": 999999904898,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 19366,
+     "left": 999999885608,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 19465,
+     "left": 999999866042,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 19690,
+     "left": 999999846427,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 19789,
+     "left": 999999826537,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 20014,
+     "left": 999999806598,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 20113,
+     "left": 999999786384,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 19958,
+     "left": 999999766121,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "list_cap+elide_safe",
+   "calls": 14,
+   "needs": 248148,
+   "usd": 0.5319200000000001,
+   "usd_cached": 0.19562816373483846,
+   "first3": 31774,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 31774,
+    "usd": 0.083812,
+    "usd_cached": 0.0799106
+   },
+   "with_usd_only": {
+    "end": "usd_exhausted",
+    "at_step": 12,
+    "used": 207677,
+    "usd": 0.4477780000000001,
+    "usd_cached": 0.18051414550440484
+   },
+   "needs_at_rates_x0.85": 262292,
+   "needs_at_rates_x1.15": 234007,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 7578,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 17706,
+     "left": 999999988154,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 17390,
+     "left": 999999968226,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 18846,
+     "left": 999999950686,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 20683,
+     "left": 999999931720,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 19140,
+     "left": 999999910837,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 19366,
+     "left": 999999891547,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 19465,
+     "left": 999999871981,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 19690,
+     "left": 999999852366,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 19789,
+     "left": 999999832476,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 20014,
+     "left": 999999812537,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 20113,
+     "left": 999999792323,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 19958,
+     "left": 999999772060,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "list_cap+read_cap+elide_safe",
+   "calls": 14,
+   "needs": 206429,
+   "usd": 0.448482,
+   "usd_cached": 0.17129372098250437,
+   "first3": 28297,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 42360,
+    "usd": 0.106184,
+    "usd_cached": 0.09790617719392178
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 14,
+    "used": 206429,
+    "usd": 0.448482,
+    "usd_cached": 0.17129372098250437
+   },
+   "needs_at_rates_x0.85": 226831,
+   "needs_at_rates_x1.15": 186028,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 7578,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 14229,
+     "left": 999999988154,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 13913,
+     "left": 999999971703,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 15369,
+     "left": 999999957640,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 17207,
+     "left": 999999942151,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 15664,
+     "left": 999999924744,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 15889,
+     "left": 999999908930,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 15988,
+     "left": 999999892841,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 16213,
+     "left": 999999876703,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 16312,
+     "left": 999999860290,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 16538,
+     "left": 999999843828,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 16637,
+     "left": 999999827090,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 16482,
+     "left": 999999810303,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "elide_age2",
+   "calls": 14,
+   "needs": 148957,
+   "usd": 0.333538,
+   "usd_cached": 0.2004547506181264,
+   "first3": 44707,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 44707,
+    "usd": 0.109678,
+    "usd_cached": 0.09057480000000001
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 14,
+    "used": 148957,
+    "usd": 0.333538,
+    "usd_cached": 0.2004547506181264
+   },
+   "needs_at_rates_x0.85": 178239,
+   "needs_at_rates_x1.15": 119678,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 13517,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 24700,
+     "left": 999999982215,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile"
+    },
+    {
+     "step": 3,
+     "est_input": 16839,
+     "left": 999999955293,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 4,
+     "est_input": 7511,
+     "left": 999999938304,
+     "status": "projected",
+     "output": 120,
+     "what": "read"
+    },
+    {
+     "step": 5,
+     "est_input": 9361,
+     "left": 999999930673,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 9460,
+     "left": 999999921112,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 7,
+     "est_input": 8044,
+     "left": 999999911502,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 8,
+     "est_input": 8144,
+     "left": 999999903258,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 9,
+     "est_input": 8369,
+     "left": 999999894964,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 10,
+     "est_input": 8470,
+     "left": 999999886395,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 11,
+     "est_input": 8695,
+     "left": 999999877775,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 12,
+     "est_input": 8796,
+     "left": 999999868880,
+     "status": "projected",
+     "output": 150,
+     "what": "validate"
+    },
+    {
+     "step": 13,
+     "est_input": 8641,
+     "left": 999999859934,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "auto_validate",
+   "calls": 8,
+   "needs": 203005,
+   "usd": 0.434674,
+   "usd_cached": 0.15461480643994377,
+   "first3": 44707,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 44707,
+    "usd": 0.109678,
+    "usd_cached": 0.09057480000000001
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 8,
+    "used": 203005,
+    "usd": 0.434674,
+    "usd_cached": 0.15461480643994377
+   },
+   "needs_at_rates_x0.85": 200203,
+   "needs_at_rates_x1.15": 205807,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 13517,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 24700,
+     "left": 999999982215,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile,RunValidation"
+    },
+    {
+     "step": 3,
+     "est_input": 28366,
+     "left": 999999955293,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 4,
+     "est_input": 29946,
+     "left": 999999926727,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 31526,
+     "left": 999999896581,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 33105,
+     "left": 999999864855,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 34305,
+     "left": 999999831550,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  },
+  {
+   "case": "B",
+   "run": "pilot3a2",
+   "attempt": 1,
+   "policy": "list_cap+auto_validate",
+   "calls": 8,
+   "needs": 161433,
+   "usd": 0.35153,
+   "usd_cached": 0.13264078180986463,
+   "first3": 32829,
+   "with_reservation": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 32829,
+    "usd": 0.085922,
+    "usd_cached": 0.07453912922832015
+   },
+   "with_usd_only": {
+    "end": "finished",
+    "at_step": 8,
+    "used": 161433,
+    "usd": 0.35153,
+    "usd_cached": 0.13264078180986463
+   },
+   "needs_at_rates_x0.85": 164867,
+   "needs_at_rates_x1.15": 158000,
+   "rows": [
+    {
+     "step": 0,
+     "est_input": 3957,
+     "left": 1000000000000,
+     "status": "ok",
+     "output": 139,
+     "what": "ListFiles,ReadFile,ReadFile"
+    },
+    {
+     "step": 1,
+     "est_input": 7578,
+     "left": 999999995904,
+     "status": "ok",
+     "output": 172,
+     "what": "ReadFile,ReadFile,ReadFile"
+    },
+    {
+     "step": 2,
+     "est_input": 18761,
+     "left": 999999988154,
+     "status": "ok",
+     "output": 2222,
+     "what": "WriteFile,EditFile,RunValidation"
+    },
+    {
+     "step": 3,
+     "est_input": 22427,
+     "left": 999999967171,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 4,
+     "est_input": 24007,
+     "left": 999999944544,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 5,
+     "est_input": 25587,
+     "left": 999999920337,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 6,
+     "est_input": 27167,
+     "left": 999999894550,
+     "status": "projected",
+     "output": 200,
+     "what": "edit"
+    },
+    {
+     "step": 7,
+     "est_input": 28366,
+     "left": 999999867183,
+     "status": "projected",
+     "output": 250,
+     "what": "finish"
+    }
+   ]
+  }
+ ],
+ "explorers": [
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "baseline",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 40692,
+    "usd": 0.087256,
+    "usd_cached": 0.05846694962173142
+   }
+  },
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "list_cap",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 40692,
+    "usd": 0.087256,
+    "usd_cached": 0.05846694962173142
+   }
+  },
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "elide_safe",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 40692,
+    "usd": 0.087256,
+    "usd_cached": 0.05846694962173142
+   }
+  },
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "list_cap+elide_safe",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 40692,
+    "usd": 0.087256,
+    "usd_cached": 0.05846694962173142
+   }
+  },
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "list_cap+read_cap+elide_safe",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 36905,
+    "usd": 0.079682,
+    "usd_cached": 0.04899944962173142
+   }
+  },
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "elide_age2",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 37999,
+    "usd": 0.08187,
+    "usd_cached": 0.0623087
+   }
+  },
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "auto_validate",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 40692,
+    "usd": 0.087256,
+    "usd_cached": 0.05846694962173142
+   }
+  },
+  {
+   "case": "C",
+   "run": "pilot3a",
+   "attempt": 1,
+   "policy": "list_cap+auto_validate",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 4,
+    "used": 40692,
+    "usd": 0.087256,
+    "usd_cached": 0.05846694962173142
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "baseline",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 40075,
+    "usd": 0.08399799999999999,
+    "usd_cached": 0.0675608
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "list_cap",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 28197,
+    "usd": 0.060242000000000004,
+    "usd_cached": 0.05152512922832014
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "elide_safe",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 33081,
+    "usd": 0.07000999999999999,
+    "usd_cached": 0.0717441
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "list_cap+elide_safe",
+   "outcome": {
+    "end": "recorded_steps_done",
+    "at_step": 4,
+    "used": 44401,
+    "usd": 0.09385,
+    "usd_cached": 0.06242312114035437
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "list_cap+read_cap+elide_safe",
+   "outcome": {
+    "end": "recorded_steps_done",
+    "at_step": 4,
+    "used": 37447,
+    "usd": 0.079942,
+    "usd_cached": 0.05303442686512095
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "elide_age2",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 40075,
+    "usd": 0.08399799999999999,
+    "usd_cached": 0.0675608
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "auto_validate",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 40075,
+    "usd": 0.08399799999999999,
+    "usd_cached": 0.0675608
+   }
+  },
+  {
+   "case": "D",
+   "run": "pilot3a2",
+   "attempt": 0,
+   "policy": "list_cap+auto_validate",
+   "outcome": {
+    "end": "reservation_exhausted",
+    "at_step": 3,
+    "used": 28197,
+    "usd": 0.060242000000000004,
+    "usd_cached": 0.05152512922832014
+   }
+  }
+ ]
+}

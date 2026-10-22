@@ -1,0 +1,48 @@
+KILLED   mirror_keeps_deleted_files: FAILED tests/test_review.py::test_new_changed_deleted_ignored_binary_and_crlf_files_all_reach_the_patch
+KILLED   mirror_add_without_force: FAILED tests/test_review.py::test_new_changed_deleted_ignored_binary_and_crlf_files_all_reach_the_patch
+KILLED   mirror_attributes_on: FAILED tests/test_review.py::test_new_changed_deleted_ignored_binary_and_crlf_files_all_reach_the_patch
+KILLED   apply_attributes_on: FAILED tests/test_review.py::test_new_changed_deleted_ignored_binary_and_crlf_files_all_reach_the_patch
+KILLED   diff_without_binary: FAILED tests/test_review.py::test_new_changed_deleted_ignored_binary_and_crlf_files_all_reach_the_patch
+KILLED   summary_in_patch: FAILED tests/test_review.py::test_a_done_run_gets_a_complete_valid_package - ...
+KILLED   verdict_digest_unchecked: FAILED tests/test_review.py::test_a_workspace_changed_after_the_verdict_is_refused
+KILLED   verdict_outcome_unchecked: FAILED tests/test_review.py::test_a_verdict_that_did_not_pass_is_not_packaged_as_ready
+KILLED   input_intake_check_skipped: FAILED tests/test_review.py::test_an_input_that_differs_from_its_intake_record_is_refused_even_if_the_run_recorded_the_new_hash
+KILLED   input_run_hash_skipped: FAILED tests/test_review.py::test_an_input_that_is_not_what_the_run_started_from_is_refused_even_if_it_matches_its_record
+KILLED   commit_tree_unchecked: FAILED tests/test_review.py::test_a_repository_whose_commit_is_not_the_intake_tree_is_refused
+KILLED   approved_tests_not_overlaid: FAILED tests/test_review.py::test_a_tasks_approved_tests_are_in_the_patch_as_new_files_and_marked
+KILLED   base_vs_input_unchecked: FAILED tests/test_review.py::test_a_task_record_that_does_not_match_the_input_is_refused
+KILLED   summary_in_input_allowed: FAILED tests/test_review.py::test_an_input_that_already_has_a_summary_file_is_refused
+KILLED   protected_unchecked: FAILED tests/test_review.py::test_a_change_outside_the_scope_is_refused_even_if_the_verdict_says_pass[tests/test_old.py-protected]
+KILLED   writable_unchecked: FAILED tests/test_review.py::test_a_change_outside_the_scope_is_refused_even_if_the_verdict_says_pass[README.md-outside the writable scope]
+KILLED   excluded_unchecked: FAILED tests/test_review.py::test_a_path_the_intake_excluded_is_refused - ass...
+KILLED   git_dir_unchecked: FAILED tests/test_review.py::test_a_workspace_with_a_git_directory_is_refused_and_does_not_touch_the_mirror
+KILLED   special_files_unchecked: FAILED tests/test_review.py::test_a_symlink_in_the_workspace_is_refused_even_when_the_verdict_file_was_edited_to_pass
+KILLED   verdict_list_unchecked: FAILED tests/test_review.py::test_a_mode_change_alone_is_refused_because_the_verdict_cannot_see_it
+KILLED   no_changes_accepted: FAILED tests/test_review.py::test_a_workspace_that_changed_nothing_is_not_a_package
+KILLED   empty_patch_accepted: FAILED tests/test_review.py::test_a_patch_that_comes_out_empty_is_refused_as_such_before_it_is_applied
+KILLED   identical_only_for_changed_files: FAILED tests/test_review.py::test_a_patch_that_changes_a_file_the_agent_did_not_is_caught
+KILLED   identical_unchecked: FAILED tests/test_review.py::test_a_patch_that_forgets_a_deleted_file_is_caught_by_the_whole_tree_comparison
+KILLED   git_dir_left_in_applied_tree: FAILED tests/test_review.py::test_a_done_run_gets_a_complete_valid_package - ...
+KILLED   revalidate_the_run_workspace: FAILED tests/test_review.py::test_every_validation_is_run_again_on_the_patched_tree_not_on_the_runs_workspace
+KILLED   fresh_failure_unchecked: FAILED tests/test_review.py::test_a_validation_that_fails_or_is_blocked_fresh_is_refused
+KILLED   no_evidence_compared: FAILED tests/test_review.py::test_a_fresh_result_that_differs_from_the_verdict_is_refused
+KILLED   must_pass_not_compared: FAILED tests/test_review.py::test_a_fresh_run_in_which_a_required_test_did_not_run_is_refused
+KILLED   not_done_gets_a_package: FAILED tests/test_review.py::test_a_run_that_is_not_done_gets_no_package[RUNNING]
+KILLED   package_overwritten: FAILED tests/test_review.py::test_a_package_is_never_overwritten_and_a_failed_build_leaves_nothing_behind
+KILLED   failed_build_leaves_stage: FAILED tests/test_review.py::test_a_package_is_never_overwritten_and_a_failed_build_leaves_nothing_behind
+KILLED   fence_can_be_closed: FAILED tests/test_review.py::test_the_agent_summary_cannot_close_its_fence_or_add_table_cells
+KILLED   pipe_not_escaped: FAILED tests/test_review.py::test_cells_with_a_pipe_in_a_path_or_a_claim_keep_the_table_intact
+KILLED   unverifiable_dropped_from_claims: FAILED tests/test_review.py::test_what_was_never_verified_is_listed_and_never_a_criterion
+KILLED   unverifiable_dropped_from_pr: FAILED tests/test_review.py::test_what_was_never_verified_is_listed_and_never_a_criterion
+KILLED   approved_flag_lost: FAILED tests/test_review.py::test_a_tasks_approved_tests_are_in_the_patch_as_new_files_and_marked
+KILLED   models_dropped: FAILED tests/test_review.py::test_a_done_run_gets_a_complete_valid_package - ...
+KILLED   cost_dropped: FAILED tests/test_review.py::test_a_done_run_gets_a_complete_valid_package - ...
+KILLED   rebuild_ignores_exclusions: FAILED tests/test_review.py::test_a_path_the_intake_excluded_is_refused - Ass...
+KILLED   executable_bit_ignored: FAILED tests/test_review.py::test_a_mode_change_alone_is_refused_because_the_verdict_cannot_see_it
+KILLED   frozen_contract_unchecked: FAILED tests/test_review.py::test_a_frozen_contract_changed_after_the_run_is_refused
+KILLED   summary_counts_as_change: FAILED tests/test_review.py::test_a_done_run_gets_a_complete_valid_package - ...
+KILLED   no_intake_record_ok: FAILED tests/test_review.py::test_an_input_without_an_intake_record_has_no_base_commit_and_is_refused
+KILLED   package_valid_flag_always_true: FAILED tests/test_review.py::test_a_verdict_that_did_not_pass_is_not_packaged_as_ready
+KILLED   not_ready_banner_dropped: FAILED tests/test_review.py::test_a_verdict_that_did_not_pass_is_not_packaged_as_ready
+KILLED   returned_valid_always_true: FAILED tests/test_review.py::test_a_mode_change_alone_is_refused_because_the_verdict_cannot_see_it
+47/47 mutants killed

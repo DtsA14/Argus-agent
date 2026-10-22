@@ -2,7 +2,7 @@ import argparse
 import sys
 import time
 
-from models.registry import ConfigError, apply_overrides, parse_overrides
+from models.registry import ConfigError, apply_overrides, parse_impl, parse_overrides
 from runner import RunExists, load_config, run_task
 
 
@@ -25,11 +25,11 @@ def main():
     a = ap.parse_args()
 
     try:
+        impl = parse_impl(a.impl)
         cfg = apply_overrides(load_config(a.config), parse_overrides(a.model))
     except ConfigError as e:
         sys.exit(f"config error: {e}")
-    for item in a.impl or []:
-        node, _, kind = item.partition("=")
+    for node, kind in impl.items():
         cfg.setdefault("impl", {})[node] = kind
     if a.max_iter:
         cfg["budget"]["max_iterations"] = a.max_iter

@@ -1,0 +1,44 @@
+HEAD 60e58e6 tests: tests/test_prompt_cache.py tests/test_llm_wrapper.py tests/test_llm_audit_2a.py tests/test_codetask.py tests/test_attempt_usd.py tests/test_budget_experiment.py
+== the new tests on the code before the fix (main 8ee3c69) ==
+E            +    where <built-in method get of dict object at 0xfb0fdeaa2740> = {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'contract_sha': 'fbba7c2ff4ffb8691c4e9ab13477a12b5708bd79b49ce2521fe147ca5ee636fd', ...}.get
+FAILED tests/test_prompt_cache.py::test_the_configured_anthropic_prices_are_the_verified_ones
+FAILED tests/test_prompt_cache.py::test_cost_prices_fresh_write_read_and_output_each_at_its_own_rate
+FAILED tests/test_prompt_cache.py::test_the_output_cap_prices_every_input_token_as_a_write
+FAILED tests/test_prompt_cache.py::test_caching_an_anthropic_model_without_a_write_price_is_a_config_error
+FAILED tests/test_prompt_cache.py::test_caching_haiku_or_a_one_hour_ttl_is_refused_in_d5[anthropic:claude-haiku-5-5-5m]
+FAILED tests/test_prompt_cache.py::test_caching_haiku_or_a_one_hour_ttl_is_refused_in_d5[anthropic:claude-sonnet-5-5-1h]
+FAILED tests/test_prompt_cache.py::test_a_haiku_coder_whose_calls_may_exceed_100k_input_is_a_config_error
+FAILED tests/test_prompt_cache.py::test_the_ledger_records_reads_and_writes_apart_and_charges_them
+FAILED tests/test_prompt_cache.py::test_the_generic_creation_count_without_a_ttl_breakdown_is_a_5_minute_write
+FAILED tests/test_prompt_cache.py::test_a_one_hour_write_is_priced_as_one_and_reported
+FAILED tests/test_prompt_cache.py::test_cache_creation_is_null_where_the_provider_has_no_such_thing
+FAILED tests/test_prompt_cache.py::test_usage_parsed_from_a_langchain_anthropic_response_is_not_counted_twice
+FAILED tests/test_prompt_cache.py::test_markers_go_on_the_system_message_and_the_last_message_of_what_is_sent
+FAILED tests/test_prompt_cache.py::test_caching_changes_neither_prompt_hashes_nor_memo_keys
+FAILED tests/test_prompt_cache.py::test_a_call_cut_off_by_a_crash_is_charged_at_the_write_rate
+FAILED tests/test_prompt_cache.py::test_the_result_totals_cache_tokens_and_estimates_the_saving
+16 failed in 2.24s
+error kinds: ['E           AssertionError', 'E       AssertionError']
+== mutants ==
+KILLED  write priced as input: ['FAILED tests/test_prompt_cache.py::test_cost_prices_fresh_write_read_and_output_each_at_its_own_rate']
+KILLED  writes not taken out of the fresh input: ['FAILED tests/test_prompt_cache.py::test_cost_prices_fresh_write_read_and_output_each_at_its_own_rate']
+KILLED  a write without a rate costs 0: ['FAILED tests/test_prompt_cache.py::test_cost_prices_fresh_write_read_and_output_each_at_its_own_rate']
+KILLED  1-hour write priced as 5-minute: ['FAILED tests/test_prompt_cache.py::test_cost_prices_fresh_write_read_and_output_each_at_its_own_rate']
+KILLED  output cap at the input rate: ['FAILED tests/test_prompt_cache.py::test_the_output_cap_prices_every_input_token_as_a_write']
+KILLED  worst case at the input rate: ['FAILED tests/test_prompt_cache.py::test_a_call_cut_off_by_a_crash_is_charged_at_the_write_rate']
+KILLED  worst case ignores caching: ['FAILED tests/test_prompt_cache.py::test_the_output_cap_prices_every_input_token_as_a_write']
+KILLED  missing write price allowed: ['FAILED tests/test_prompt_cache.py::test_caching_an_anthropic_model_without_a_write_price_is_a_config_error']
+KILLED  haiku cached: ['FAILED tests/test_prompt_cache.py::test_caching_haiku_or_a_one_hour_ttl_is_refused_in_d5[anthropic:claude-haiku-5-5-5m]']
+KILLED  ttl not checked: ['FAILED tests/test_prompt_cache.py::test_caching_haiku_or_a_one_hour_ttl_is_refused_in_d5[anthropic:claude-sonnet-5-5-1h]']
+KILLED  no markers sent: ['FAILED tests/test_prompt_cache.py::test_markers_go_on_the_system_message_and_the_last_message_of_what_is_sent']
+KILLED  markers written into the caller's messages: ['FAILED tests/test_prompt_cache.py::test_markers_go_on_the_system_message_and_the_last_message_of_what_is_sent']
+KILLED  system message not marked: ['FAILED tests/test_prompt_cache.py::test_markers_go_on_the_system_message_and_the_last_message_of_what_is_sent']
+KILLED  creation 0 where unknown: ['FAILED tests/test_prompt_cache.py::test_cache_creation_is_null_where_the_provider_has_no_such_thing']
+KILLED  TTL breakdown ignored: ['FAILED tests/test_prompt_cache.py::test_a_one_hour_write_is_priced_as_one_and_reported']
+KILLED  1-hour write not reported: ['FAILED tests/test_prompt_cache.py::test_a_one_hour_write_is_priced_as_one_and_reported']
+KILLED  ledger without cache_creation: ['FAILED tests/test_prompt_cache.py::test_the_ledger_records_reads_and_writes_apart_and_charges_them']
+KILLED  long-context check off by one: ['FAILED tests/test_prompt_cache.py::test_a_haiku_coder_whose_calls_may_exceed_100k_input_is_a_config_error']
+KILLED  long-context check without the attempt bound: ['FAILED tests/test_prompt_cache.py::test_a_haiku_coder_whose_calls_may_exceed_100k_input_is_a_config_error']
+KILLED  saving not computed: ['FAILED tests/test_prompt_cache.py::test_the_result_totals_cache_tokens_and_estimates_the_saving']
+KILLED  sonnet read back to 0.20: ['FAILED tests/test_prompt_cache.py::test_the_configured_anthropic_prices_are_the_verified_ones']
+RESULT: 21/21 killed

@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from evals.runner import MODES, run_eval  # noqa: E402
+from evals.score import format_cost  # noqa: E402
 from runner import load_config  # noqa: E402
 
 
@@ -56,18 +57,23 @@ def main(argv=None):
     for r in report["tasks"]:
         st = r.get("stats") or {}
         print(f"  {'PASS' if r['eval_pass'] else 'fail'}  {r['id']:<24} {r['category']:<14} {str(r['status']):<18} "
-              f"expected {r['expected']:<18} ${st.get('usd_billed') or 0:.4f} calls {st.get('llm_calls')}"
+              f"expected {r['expected']:<18} {format_cost(st)} calls {st.get('llm_calls')}"
               + (f"  honest-all {'yes' if r['honesty']['all_attempts'] else 'NO'}" if r.get("honesty") else "")
               + (f"  benchmark {'ok' if r['benchmark_ok'] else 'BROKEN'}" if 'benchmark_ok' in r else "")
               + (f"  ({'; '.join(r['why'])})" if r["why"] else ""))
     if report["stopped"]:
         st = report["stopped"]
-        print(f"STOPPED after {st['task']} ended {st['status']}"
+        head = (f"STOPPED after {st['task']}: {st['reason']}" if st.get("reason")
+                else f"STOPPED after {st['task']} ended {st['status']}")
+        print(head
               + (f" ({st['blocked_reason']})" if st.get("blocked_reason") else "") + f"; {report['not_run']} task(s) not run")
     t = report["summary"]["total"]
     print(f"ran {report['ran']}, not run {report['not_run']}; eval pass {t['eval_pass']}/{t['tasks']}, "
           f"acceptance {t['acceptance_pass']}/{t['positive']}, honest in every attempt "
-          f"{t['honest_all_attempts']}/{t['tasks']} (recovered {t['recovered']}), ${t['usd_total']} total")
+          f"{t['honest_all_attempts']}/{t['tasks']} (recovered {t['recovered']}), ${t['usd_total']} total"
+          + (f" (excludes {t['usd_unknown_runs']} run(s) with unknown cost)" if t.get("usd_unknown_runs") else ""))
+    if report.get("usd_complete") is False:
+        print(f"cost is incomplete: spent at least ${report['usd_spent']}, not a total")
     print(f"report: {runs_dir / 'report.json'}")
     if a.mode == "live":
         return 0 if not any(r.get("not_run") for r in report["tasks"]) else 1

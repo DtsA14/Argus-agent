@@ -1,0 +1,43 @@
+(char 21)
+E     ')
+E   assert (1, 1) == (0, 0)
+E     
+E     At index 0 diff: 1 != 0
+E     
+E     Full diff:
+E       (
+E     -     0,
+E     ?     ^...
+E     
+E     ...Full output truncated (7 lines hidden), use '-vv' to show
+_____________ test_a_run_blocked_before_any_model_call_is_audited ______________
+tests/test_run_inspectors.py:146: in test_a_run_blocked_before_any_model_call_is_audited
+    assert audit.returncode == 0, audit.stderr[-500:]
+E   AssertionError: Traceback (most recent call last):
+E       File "/workspace/scripts/audit_run.py", line 24, in <module>
+E         result = read_result(run_dir)
+E                  ^^^^^^^^^^^
+E     NameError: name 'read_result' is not defined
+E     
+E   assert 1 == 0
+E    +  where 1 = CompletedProcess(args=['/usr/bin/python3', '/workspace/scripts/audit_run.py', '/tmp/pytest-of-nobody/pytest-0/runs0/b/runs/f4'], returncode=1, stdout='', stderr='Traceback (most recent call last):\n  File "/workspace/scripts/audit_run.py", line 24, in <module>\n    result = read_result(run_dir)\n             ^^^^^^^^^^^\nNameError: name \'read_result\' is not defined\n').returncode
+_ test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced _
+tests/test_run_inspectors.py:153: in test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced
+    assert (alone.returncode, alone.stdout) == (0, "##### f7: no result.json\n"), alone.stderr[-400:]
+E   AssertionError: Traceback (most recent call last):
+E       File "/workspace/scripts/failure_trace.py", line 11, in <module>
+E         run = next(Path(rd).rglob("result.json")).parent
+E               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E     StopIteration
+E     
+E   assert (1, '') == (0, '##### f7...esult.json\n')
+E     
+E     At index 0 diff: 1 != 0
+E     
+E     Full diff:
+E       (
+E     -     0,
+E     ?     ^...
+E     
+E     ...Full output truncated (5 lines hidden), use '-vv' to show
+========================= 8 failed, 8 passed in 30.45s =========================

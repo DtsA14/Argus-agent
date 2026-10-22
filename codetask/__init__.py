@@ -1,5 +1,5 @@
 """General tasks, slice 1 part B: an agent works on a copy of a repository under a frozen, human-written contract,
-and the harness decides the outcome from evidence (acceptance/). See docs/reviews/REVIEW_M4_SLICE1B.md.
+and the harness decides the outcome from evidence (acceptance/). See docs/reviews/REVIEW_GENERAL_TASK_1B.md.
 
   status   run statuses and the only legal transitions between them
   frozen   the contract as frozen at setup; every later node checks it is unchanged

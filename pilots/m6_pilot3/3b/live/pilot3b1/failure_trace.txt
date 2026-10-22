@@ -1,0 +1,5 @@
+##### pilot3b1
+  it0 s0 ok      in  3465 | ListFiles() ReadFile(evals/runlog.py) SearchFiles(def cost_is_known)
+  it0 s1 ok      in 11969 | ReadFile(tests/test_pilot_report.py) ReadFile(evals/score.py) ReadFile(scripts/audit_run.py)
+  it0 s2 ok      in 22068 | WriteFile(scripts/pilot_report.py) RunValidation(report)
+  it0 s3 ok      in 27774 | Finish()
