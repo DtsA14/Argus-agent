@@ -37,6 +37,8 @@ Protected: `tests/**`
 - `regression`: `python -m pytest tests/test_old.py`, at least 1 tests, environment `argus`; required new tests: 0, required existing tests: 1
   - existing: `tests/test_old.py::test_total_plain`
 
+Budget profile for the agent: `large`
+
 ## New tests
 
 ### `tests/test_new.py`

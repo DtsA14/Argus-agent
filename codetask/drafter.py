@@ -98,7 +98,8 @@ class SubmitDraft(BaseModel):
     new_tests: List[NewTest] = Field(description="At least one new test file that shows the issue")
     unverifiable: List[str] = Field(description="What the issue asks that no test can check (for the reviewer); "
                                                 "may be empty")
-    budget_profile: Optional[str] = Field(default=None, description="Optional: a budget profile for the agent")
+    budget_profile: str = Field(description="The agent's budget profile, one of those listed in the task: large "
+                                            "enough for one attempt to read what the fix needs and write it")
 
 
 class ReviseDraft(BaseModel):
@@ -153,9 +154,21 @@ def task_prompt(inputs, files, policy):
         f"Repository: intake {inputs['intake']!r}, {files} files, read-only.",
         f"Each validation runs `python -m pytest <paths>` in the sandbox environment {policy['environment']!r} "
         f"(timeout {policy['validation_timeout_s']} s). You give the paths and the required node ids.",
-        "Budget profiles the agent may be given (budget_profile, optional; without one: default): "
-        + ", ".join(policy["profiles"]),
+        "Budget profiles (budget_profile, required; one attempt of the agent each, every model call inside it):",
+        *[f"  - {name}: {_profile_text(p)}" for name, p in (policy.get("profile_info") or {}).items()],
+        "Choose by the work one attempt needs: the files the agent must read to understand the issue, plus every "
+        "file it writes (output). A new file of about 100 lines or more, or changes to several files, needs more "
+        "than the smallest profile.",
         f"SubmitDraft and ReviseDraft are checked at most {policy['max_submits']} times together."])
+
+
+def _profile_text(p):
+    out = [f"${p['attempt_usd']:.2f} per attempt" if p.get("attempt_usd") is not None
+           else f"{p['attempt_tokens']:,} tokens per attempt"]
+    if p.get("max_input_tokens") is not None:
+        out.append(f"input up to {p['max_input_tokens']:,} per call")
+    out.append(f"output up to {p['max_output_tokens']:,} per call")
+    return ", ".join(out)
 
 
 def draft_from_args(args, *, base, policy):
@@ -181,13 +194,11 @@ def draft_from_args(args, *, base, policy):
                       "timeout_s": policy["validation_timeout_s"], "min_tests": v["min_tests"], "max_skipped": 0,
                       "must_pass": v["must_pass"], "environment": policy["environment"]})
     profile = args.get("budget_profile")
-    if profile is not None and profile not in policy["profiles"]:
-        problems.append(f"budget_profile must be one of {policy['profiles']} (or left out)")
+    if profile not in policy["profiles"]:            # required: a draft without one would give the agent `default`
+        problems.append(f"budget_profile is required and must be one of {policy['profiles']}")
     if problems:
         return None, problems
-    contract = {"scope": args.get("scope"), "validation": specs}
-    if profile is not None:
-        contract["budget_profile"] = profile
+    contract = {"scope": args.get("scope"), "validation": specs, "budget_profile": profile}
     draft = {"draft_version": dr.VERSION, "base": base, "plan": args.get("plan"), "contract": contract,
              "new_tests": args.get("new_tests"), "unverifiable": args.get("unverifiable")}
     return draft, [f"draft: {e}" for e in dr.validate_draft(draft)]
@@ -510,6 +521,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         policy = {"max_steps": lim["max_steps"], "max_submits": int(cfg["drafter"]["max_submits"]), "environment": env,
                   "validation_timeout_s": cfg["drafter"]["validation_timeout_s"],
                   "profiles": sorted((cfg.get("code_task") or {}).get("profiles") or {}),
+                  "profile_info": {k: v for k, v in sorted(((cfg.get("code_task") or {}).get("profiles") or {}).items())},
                   "tools": list((cfg.get("tools") or {}).get(role, []))}
         log.emit("drafter_policy", **policy)
         log.emit("status", new=RUNNING, reason=None, blocked_reason=None)

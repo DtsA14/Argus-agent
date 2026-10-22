@@ -38,7 +38,7 @@ ARGS = {"plan": {"files": ["src/shop.py"], "steps": ["floor the total at 0"], "r
         "validation": [{"id": "target", "paths": ["tests/test_new.py"], "must_pass": [NEW_NODE], "min_tests": 1},
                        {"id": "regression", "paths": ["tests/test_old.py"], "must_pass": [OLD_NODE], "min_tests": 1}],
         "new_tests": [{"path": "tests/test_new.py", "content": NEW_TEST}],
-        "unverifiable": ["the error message reads well"]}
+        "unverifiable": ["the error message reads well"], "budget_profile": "large"}
 
 
 def args_with(test=None, **over):
@@ -325,7 +325,9 @@ POLICY = {"environment": "argus", "validation_timeout_s": 300, "profiles": ["def
     (lambda a: a["validation"][0].update(paths=["/etc/test_x.py"]), "no options"),
     (lambda a: a["validation"][0].update(paths=[]), "no options"),
     (lambda a: a.update(validation=[]), "validation must be a non-empty list"),
-    (lambda a: a.update(budget_profile="huge"), "budget_profile must be one of"),
+    (lambda a: a.update(budget_profile="huge"), "budget_profile is required and must be one of"),
+    (lambda a: a.pop("budget_profile"), "budget_profile is required and must be one of"),
+    (lambda a: a.update(budget_profile=None), "budget_profile is required and must be one of"),
     (lambda a: a.update(new_tests=[]), "at least one new test"),
     (lambda a: a["plan"].pop("risks"), "plan must have"),
 ])
@@ -337,7 +339,7 @@ def test_the_model_sets_only_what_a_drafter_may_set(change, why):
 
 
 def test_the_harness_sets_the_base_the_version_and_each_validations_command():
-    draft, problems = dt.draft_from_args(dict(ARGS, budget_profile="large"), base="shop", policy=POLICY)
+    draft, problems = dt.draft_from_args(ARGS, base="shop", policy=POLICY)
     assert problems == [] and draft["base"] == "shop" and draft["draft_version"] == dr.VERSION
     assert draft["contract"]["budget_profile"] == "large"
     assert [v["args"] for v in draft["contract"]["validation"]] == [["-m", "pytest", "tests/test_new.py"],
@@ -569,3 +571,15 @@ def test_the_drafter_is_offered_the_read_tools_of_its_allowlist_and_both_submit_
     names = [t.__name__ for t in dt.offered({"list_files", "search_files", "read_file", "write_file"})]
     assert names == ["ListFiles", "SearchFiles", "ReadFile", "SubmitDraft", "ReviseDraft"]
     assert [t.__name__ for t in dt.offered({"read_file"})] == ["ReadFile", "SubmitDraft", "ReviseDraft"]
+
+
+def test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_one(root, tmp_path):
+    r, model, d = run(root, tmp_path, [SUBMIT])
+    prompt = model.calls[0]["messages"][1].content
+    profiles = load_config()["code_task"]["profiles"]
+    assert "budget_profile, required" in prompt
+    for name, p in profiles.items():
+        assert f"  - {name}: " in prompt and f"output up to {p['max_output_tokens']:,} per call" in prompt
+    assert "$0.45 per attempt, input up to 40,000 per call" in prompt                 # large_usd, in USD
+    assert json.loads((d / "draft.json").read_text())["contract"]["budget_profile"] == "large"
+    assert "Budget profile for the agent: `large`" in (d / "DRAFT_REVIEW.md").read_text()
