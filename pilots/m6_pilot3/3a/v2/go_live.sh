@@ -15,7 +15,7 @@ TASK=fix_run_inspectors_v2
 CONTRACT="fixtures/contracts/$TASK.json"
 RECORD="fixtures/intake/$TASK.json"
 CONFIG="pilots/m6_pilot3/3a/v2/config_pilot3a_v2.yaml"
-EXPECT_CONTRACT_SHA="SET_AFTER_APPROVAL"                                                  # sha256 prefix of the approved contract
+EXPECT_CONTRACT_SHA="ca8a521eb8b7"                                                        # sha256 prefix of the approved contract
 EXPECT_CONFIG_SHA="ed3c277747dbee74bb77a67fe897b3416825e5a7ba1bb0792b06d41411888e06"      # sha256 of the pilot config (line ends normalised)
 PY="${PY:-$HOME/Argus-agent/.venv-verify/bin/python}"
 
