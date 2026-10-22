@@ -133,3 +133,13 @@ Sumber: halaman harga resmi Anthropic, `https://platform.claude.com/docs/en/abou
    off untuk Haiku di D5 (pilot memakai Sonnet).
 3. **K3:** bagian 4 "field tidak dilaporkan → `null`": untuk provider yang tidak punya konsep cache write (DeepSeek), `cache_creation` = `null`;
    untuk Anthropic dengan caching mati, API melaporkan 0, dicatat 0.
+
+## 11. Keputusan (Atha/GPT, 2026-10-22)
+
+1. **K1:** disetujui, masuk PR implementasi. `fresh = input_tokens − cache_read − cache_write` (LangChain `input_tokens` sudah termasuk keduanya).
+   Kedua kesalahan belum pernah berdampak (selama caching mati, read dan write selalu 0), tetapi harus beres sebelum caching dinyalakan.
+2. **K2:** caching Haiku 5.5 mati di D5, **ditambah** cek config yang berlaku selalu (tidak bergantung pada caching): role ber-model Haiku 5.5
+   dengan batas masukan per panggilan di atas 100.000 → `ConfigError` (tarif ×5 berlaku juga untuk input biasa). Satu tes, satu mutan.
+3. **K3:** disetujui (`null` bila provider tidak mengenal cache write, `0` bila Anthropic melaporkan 0). **Tambahan untuk tes 7:** D5 hanya meminta
+   TTL 5 menit; `ephemeral_1h_input_tokens > 0` berarti ada yang salah di request. Token itu dihargai dengan tarif write 1 jam (kasus terburuk) dan
+   dicatat sebagai event peringatan, tidak dihargai tarif 5 menit diam-diam.
