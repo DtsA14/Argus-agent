@@ -1,0 +1,158 @@
+{
+  "argus": {
+    "commit": "ea05e989e8939c0edff908e24c11507f3346be57",
+    "dirty": false
+  },
+  "attempts": 1,
+  "base": {
+    "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+    "repo": "https://github.com/DtsA14/Argus-agent.git",
+    "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8"
+  },
+  "checks": [
+    {
+      "detail": "",
+      "id": "contract_frozen",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "verdict_passed",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "summary_bound",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "input_unchanged",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "base_commit",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "changes_in_scope",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "changes_match_verdict",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "patch_made",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "patch_applies",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "final_state_identical",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "revalidation_matches",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "workspace_stable",
+      "ok": true
+    }
+  ],
+  "contract": {
+    "name": "fix_run_inspectors_v2",
+    "sha256": "ca8a521eb8b7e2e0a0c65638fbac914f05a27a79c62aabcb1d1452eba806adcd"
+  },
+  "cost": {
+    "calls": 8,
+    "unknown_after_crash": 0,
+    "usd": 0.1501432,
+    "usd_complete": true,
+    "usd_nano": 150143200
+  },
+  "input": {
+    "intake": {
+      "added": {
+        "tests/test_run_inspectors.py": "0940ff44311576698cfd8108653cda42cf0e706656b06cab3ee0262702da2651",
+        "tests/test_run_inspectors_data.py": "d8272ca0a0bd6c0f234ba9761acfd93868f1eb440c0c68599b8326bd7be053a2"
+      },
+      "base": {
+        "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+        "name": "argus_p3",
+        "snapshot_sha256": "7520a7ca36444db364bf48897d28374659d7c94f75703266de6c2044978204a8",
+        "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8"
+      },
+      "commit": "a0075a915b83287f6b19253cd5925b5b50e28c62",
+      "contract_sha256": "ca8a521eb8b7e2e0a0c65638fbac914f05a27a79c62aabcb1d1452eba806adcd",
+      "exclude": [
+        "verification",
+        "pilots"
+      ],
+      "kind": "task",
+      "name": "fix_run_inspectors_v2",
+      "repo": "https://github.com/DtsA14/Argus-agent.git",
+      "tree": "736fdb9a0e3fafbb2974cb5f86f8dc4e79316ac8"
+    },
+    "snapshot_sha256": "179a4b553bac25eb4b0f9f95e3d252a72501b13a886031ca88b1c84494c980eb",
+    "workspace": "fixtures/repos/fix_run_inspectors_v2"
+  },
+  "models": [
+    "anthropic:claude-sonnet-5-5"
+  ],
+  "package_version": 1,
+  "patch": {
+    "bytes": 31526,
+    "files": [
+      {
+        "approved_test": false,
+        "change": "A",
+        "path": "evals/runlog.py"
+      },
+      {
+        "approved_test": false,
+        "change": "M",
+        "path": "scripts/audit_run.py"
+      },
+      {
+        "approved_test": false,
+        "change": "M",
+        "path": "scripts/failure_trace.py"
+      },
+      {
+        "approved_test": true,
+        "change": "A",
+        "path": "tests/test_run_inspectors.py"
+      },
+      {
+        "approved_test": true,
+        "change": "A",
+        "path": "tests/test_run_inspectors_data.py"
+      }
+    ],
+    "sha256": "51d9046abaf10195c49c110a7f05faf2e2367763484a252ee4e93ab35cf3696a"
+  },
+  "problems": [],
+  "run_id": "pilot3a5",
+  "valid": true,
+  "validation_fresh": {
+    "inspectors": "pass",
+    "regression": "pass"
+  },
+  "verdict": {
+    "outcome": "pass",
+    "verdict_sha256": "7daaba744d873298877a3445fa76c5bc828a3b70cdb57d7db2e807ddae90623e",
+    "workspace_digest": "93dc66c79751c4522d8f15c7b967124b6d1b046b11d1bfa780c13bcba6837152"
+  }
+}

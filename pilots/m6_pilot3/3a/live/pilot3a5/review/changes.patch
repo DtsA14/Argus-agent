@@ -1,0 +1,517 @@
+diff --git a/evals/runlog.py b/evals/runlog.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..57610dd333f9026df3c2d439be5fba69439e730a
+--- /dev/null
++++ b/evals/runlog.py
+@@ -0,0 +1,42 @@
++"""The one reader of a code-task run directory: its events, its result and its memo."""
++import json
++import sqlite3
++from pathlib import Path
++
++from harness.events import parse_lines
++
++
++def read_events(run_dir):
++    """(events, skipped): the records of events.jsonl that decode, and the number of non-blank lines that did not."""
++    path = Path(run_dir) / "events.jsonl"
++    if not path.exists():
++        return [], 0
++    text = path.read_text(encoding="utf-8")
++    events = parse_lines(text)
++    nonblank = sum(1 for line in text.splitlines() if line.strip())
++    return events, nonblank - len(events)
++
++
++def read_result(run_dir):
++    """result.json as a dict, or None when the run has none."""
++    path = Path(run_dir) / "result.json"
++    if not path.exists():
++        return None
++    return json.loads(path.read_text(encoding="utf-8"))
++
++
++def read_memo(run_dir):
++    """{key: value} of memo.sqlite, both decoded from JSON."""
++    path = Path(run_dir) / "memo.sqlite"
++    if not path.exists():
++        return {}
++    db = sqlite3.connect(path)
++    try:
++        return {k: json.loads(v) for k, v in db.execute("select key, value from memo")}
++    finally:
++        db.close()
++
++
++def skipped_line(skipped):
++    """'events skipped: N', or None when N is 0."""
++    return f"events skipped: {skipped}" if skipped else None
+diff --git a/scripts/audit_run.py b/scripts/audit_run.py
+index 95fafebabc80fb651bd23988feabdd05f100b2ce..914ece5e0c86f59816b96b71e276639006d55e2b 100644
+--- a/scripts/audit_run.py
++++ b/scripts/audit_run.py
+@@ -5,7 +5,6 @@ check each ledger prompt_hash against it, and list calls, tool calls, refusals a
+ """
+ import hashlib
+ import json
+-import sqlite3
+ import sys
+ from pathlib import Path
+ 
+@@ -14,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+ import harness.llm as hl
+ from codetask.agent import feedback_from, system_prompt, task_prompt
+ from codetask.tools import offered
++from evals.runlog import read_events, read_memo, read_result, skipped_line
+ from harness.llm import is_truncated
+ from harness.steps import llm_step_key, message_from_json
+ from runner import load_config
+@@ -21,21 +21,23 @@ from runner import load_config
+ run_dir = Path(sys.argv[1])
+ cfg = load_config()
+ contract = json.loads((run_dir / "contract.json").read_text())
+-result = json.loads((run_dir / "result.json").read_text())
+-tools = offered(result["tools"])
+-sp = system_prompt(tools)
++result = read_result(run_dir)
++tools = offered(result["tools"]) if result["tools"] is not None else []
+ print("effective tools", result["tools"])
+-print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
+-memo = {k: json.loads(v) for k, v in sqlite3.connect(run_dir / "memo.sqlite").execute("select key, value from memo")}
+-events = [json.loads(l) for l in (run_dir / "events.jsonl").read_text().splitlines()]
++sp = None
++if result["tools"] is not None:
++    sp = system_prompt(tools)
++    print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
++memo = read_memo(run_dir)
++events, skipped = read_events(run_dir)
+ calls = [e for e in events if e["event"] == "llm_call"]
+-ref = hl.ModelRef.parse(calls[0]["model"])          # the model the run used (the ledger records it)
++ref = hl.ModelRef.parse(calls[0]["model"]) if calls else None   # the model the run used (the ledger records it)
+ started = [e for e in events if e["event"] == "llm_call_started"]
+ print(f"llm_call_started {len(started)}, llm_call {len(calls)} "
+       f"(ok {sum(e['status'] == 'ok' for e in calls)}, refused {sum(e['status'] == 'refused' for e in calls)})")
+ 
+ mismatch, checked = 0, 0
+-for it in range(contract["limits"].get("max_iterations", 5)):
++for it in range(contract["limits"].get("max_iterations", 5) if calls and sp is not None else 0):
+     feedback = None
+     if it > 0:
+         prev = run_dir / f"verdict_{it - 1}.json"
+@@ -65,7 +67,7 @@ for it in range(contract["limits"].get("max_iterations", 5)):
+         key = llm_step_key("agent", contract["contract"], it, step, messages, tools, ref)
+         if key not in memo:
+             break
+-        msg = message_from_json(memo[key])
++        msg = message_from_json(memo[key])              # memo values are already decoded
+         messages.append(msg)
+         if is_truncated(msg):                   # the harness ran none of its tool calls and ended the attempt
+             print(f"      (reply cut off at max_tokens: {[c['name'] for c in msg.tool_calls or []]} not run)")
+@@ -81,3 +83,5 @@ for e in events:
+         print(" ", {k: v for k, v in e.items() if k not in ("ts",)})
+ print("result", {k: result.get(k) for k in ("status", "stop_reason", "blocked_reason", "attempts", "usd_billed",
+                                            "llm_calls", "llm_calls_unknown", "tools")})
++if skipped_line(skipped):
++    print(skipped_line(skipped))
+diff --git a/scripts/failure_trace.py b/scripts/failure_trace.py
+index 7f1aa0e67ded08b5198f00346abb754fcaff2999..302b6ba27e75e60d1e3c33690ba436e06657123e 100644
+--- a/scripts/failure_trace.py
++++ b/scripts/failure_trace.py
+@@ -1,22 +1,25 @@
+ """For each failing run: per attempt and step, the input tokens, the tool calls, and the model's own text, from the
+ ledger and the memo. Run from the repository root on the VM with PYTHONPATH=.: failure_trace.py <run_dir>..."""
+ import json
+-import sqlite3
+ import sys
+ from pathlib import Path
+ 
++from evals.runlog import read_events, read_memo, read_result, skipped_line
+ from harness.steps import message_from_json
+ 
+ for rd in sys.argv[1:]:
+-    run = next(Path(rd).rglob("result.json")).parent
+-    evs = [json.loads(l) for l in (run / "events.jsonl").read_text().splitlines()]
++    found = next(Path(rd).rglob("result.json"), None)
++    run = found.parent if found is not None else Path(rd)
++    if found is None or read_result(run) is None:
++        print(f"##### {Path(rd).name}: no result.json")
++        continue
++    evs, skipped = read_events(run)
+     calls = {(e["iteration"], e["step"]): e for e in evs if e["event"] == "llm_call"}
+-    memo = sqlite3.connect(run / "memo.sqlite")
+     llm = {}
+-    for k, v in memo.execute("select key, value from memo"):
++    for k, v in read_memo(run).items():
+         key = json.loads(k)
+         if key[0] == "llm":
+-            llm[(key[3], key[4])] = message_from_json(json.loads(v))
++            llm[(key[3], key[4])] = message_from_json(v)
+     print(f"##### {Path(rd).name}")
+     for (it, st), e in sorted(calls.items()):
+         msg = llm.get((it, st))
+@@ -31,3 +34,6 @@ for rd in sys.argv[1:]:
+         print(f"  it{it} s{st} {e['status']:<7} in {tok:>5} | {' '.join(tools)[:150]}")
+         if text.strip():
+             print(f"        text: {' '.join(text.split())[:400]}")
++    line = skipped_line(skipped)
++    if line:
++        print(line)
+diff --git a/tests/test_run_inspectors.py b/tests/test_run_inspectors.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c2903a5a5afc6cbaef5bc21e5f66d4535c302981
+--- /dev/null
++++ b/tests/test_run_inspectors.py
+@@ -0,0 +1,155 @@
++"""M6 pilot 3a: one reader of a code-task run directory and two inspectors that must keep printing what they always printed.
++
++Synthetic runs (a scripted model, an injected validation: no Docker, no money) are built once and then looked at by the
++scripts as subprocesses:
++  scripts/audit_run.py and scripts/failure_trace.py: for runs that finished normally (f1, f2, f3; f5 after a crash and a resume;
++  f8 with long texts; wrap, a directory that holds a run, which failure_trace.py finds) their output is the one the scripts
++  printed before this change, byte for byte (GOLDEN). Only three things change,
++  and each was a crash: a line of events.jsonl that does not decode is skipped wherever it is (and one line "events skipped: N"
++  ends the output, only when N is not 0), audit_run.py audits a run that made no model call, and failure_trace.py reports a
++  directory that has no result.json and goes on."""
++import json
++import os
++import shutil
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++from codetask.run import run_code_task
++from models.fake import CallableChatModel, StrictScriptedChatModel, reply
++from runner import load_config
++
++ROOT = Path(__file__).resolve().parent.parent
++CUT = '{"ts": 2.5, "event": "llm_ca'                           # what a process killed mid-write leaves behind
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++from test_run_inspectors_data import BLOCKED_AUDIT, GOLDEN  # noqa: E402  (what the scripts printed before this change: data, no tests)
++
++
++def build(root, base):
++    """Build the fixtures below `base` (a directory that does not exist yet). Returns {name: run directory}."""
++    root, base = Path(root), Path(base)
++    contract = json.loads((root / "fixtures" / "contracts" / "fix_divide.json").read_text(encoding="utf-8"))
++    calc = (root / "fixtures" / "repos" / "calc" / "src" / "calc.py").read_text(encoding="utf-8")
++    test = (root / "fixtures" / "repos" / "calc" / "tests" / "test_calc.py").read_text(encoding="utf-8")
++    fixed = calc.replace("    if b == 0:\n        return 0\n", "")
++    claims = [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": "issue_fixed", "evidence": "validation:target"},
++              {"claim": "file_changed", "path": "src/calc.py"}]
++
++    def call(name, args, id):
++        return reply(tool_calls=[{"name": name, "args": args, "id": id}], input_tokens=500, output_tokens=60)
++
++    read = call("ReadFile", {"path": "src/calc.py"}, "r1")
++    write = call("WriteFile", {"path": "src/calc.py", "content": fixed}, "w1")
++    check = call("RunValidation", {"id": "target"}, "v1")
++    finish = call("Finish", {"claims": claims, "summary": "divide raises on zero"}, "f1")
++    lazy = call("Finish", {"claims": claims, "summary": "fixed"}, "f0")
++    many = reply("word " * 140, input_tokens=500, output_tokens=60,           # a long text and several long paths in one reply
++                 tool_calls=[{"name": "ReadFile", "args": {"path": "src/" + "d" * 45 + f"{i}.py"}, "id": f"m{i}"} for i in range(3)])
++
++    def validate(spec, workspace, sandbox_cfg, log=None):
++        ws = Path(workspace)
++        ok = (ws / "src" / "calc.py").read_text() == fixed and (ws / "tests" / "test_calc.py").read_text() == test
++        must = {t: "ok" if ok else "FAIL" for t in spec.get("must_pass", [])}
++        return {"id": f"validation:{spec['id']}", "layer": "C", "status": "pass" if ok else "fail",
++                "reason": "" if ok else "exit code 1; unittest outcome FAILED",
++                "evidence": {"must_pass": must, "tests_run": 7, "failures": 0 if ok else 1, "output_tail": ""}}
++
++    class Crash(BaseException):
++        pass
++
++    base.mkdir(parents=True)
++    path = base / "contract.json"
++    path.write_text(json.dumps(contract), encoding="utf-8")
++
++    def run(name, script, *, preflight=lambda: (True, "ok"), model=None, resume=False):
++        cfg = load_config()
++        cfg["roles"]["coder"]["model"] = "fake:scripted"
++        return run_code_task(contract_path=path, run_id=name, runs_dir=base / "runs", cfg=cfg,
++                             models={"coder": model or StrictScriptedChatModel(script=list(script))},
++                             validate=validate, preflight=preflight, resume=resume)
++
++    run("f1", [read, write, check, finish])                         # DONE at once
++    run("f2", [lazy, write, finish])                                # DONE in the second attempt
++    run("f3", [lazy, lazy])                                         # FAILED_ACCEPTANCE (stagnant)
++    run("f8", [many, write, finish])                                # DONE; its trace has texts and tool lists that get cut
++    run("f4", [], preflight=lambda: (False, "no sandbox"))          # BLOCKED before any model call
++
++    def die(messages):
++        raise Crash()
++    try:
++        run("f5", [], model=CallableChatModel(respond=die))         # the process dies in the first model call
++    except Crash:
++        pass
++    run("f5", [write, finish], resume=True)                         # and the run is resumed: DONE
++
++    runs = base / "runs"
++    out = {n: runs / n for n in ("f1", "f2", "f3", "f4", "f5", "f8")}
++
++    def copy(src, name):
++        shutil.copytree(runs / src, runs / name)
++        return runs / name
++
++    f5c = copy("f5", "f5c")                                         # f5 with a line cut by a crash in the middle of its log
++    lines = (f5c / "events.jsonl").read_text(encoding="utf-8").splitlines()                    # (and a blank line: not a skipped one)
++    (f5c / "events.jsonl").write_text("\n".join(lines[:3] + [CUT, ""] + lines[3:]) + "\n", encoding="utf-8")
++    out["f5c"] = f5c
++    (runs / "wrap").mkdir()                                         # a directory that holds a run: failure_trace.py finds it
++    shutil.copytree(runs / "f1", runs / "wrap" / "inner")
++    out["wrap"] = runs / "wrap"
++    f7 = copy("f1", "f7")                                           # a run that never got a result
++    (f7 / "result.json").unlink()
++    out["f7"] = f7
++    return out
++
++
++@pytest.fixture(scope="module")
++def runs(tmp_path_factory):
++    return build(ROOT, tmp_path_factory.mktemp("runs") / "b")
++
++
++def script(name, *args):
++    return subprocess.run([sys.executable, str(ROOT / "scripts" / name), *map(str, args)], cwd=ROOT,
++                          env={**os.environ, "PYTHONPATH": str(ROOT)}, capture_output=True, text=True, timeout=300)
++
++
++# ---- the two inspectors keep printing what they always printed ----------------------------------------------------
++
++@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5", "f8"])
++def test_audit_run_still_prints_what_it_always_printed(runs, name):
++    r = script("audit_run.py", runs[name])
++    assert r.returncode == 0, r.stderr[-500:]
++    assert r.stdout == GOLDEN[name]["audit"]
++
++
++@pytest.mark.parametrize("name", ["f1", "f2", "f3", "f5", "f8", "wrap"])
++def test_failure_trace_still_prints_what_it_always_printed(runs, name):
++    r = script("failure_trace.py", runs[name])
++    assert r.returncode == 0, r.stderr[-500:]
++    assert r.stdout == GOLDEN[name]["trace"]
++
++
++# ---- what changes: each of these was a crash ------------------------------------------------------------------------
++
++def test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else(runs):
++    audit, trace = script("audit_run.py", runs["f5c"]), script("failure_trace.py", runs["f5c"])
++    assert (audit.returncode, trace.returncode) == (0, 0), (audit.stderr[-400:], trace.stderr[-400:])
++    assert audit.stdout == GOLDEN["f5"]["audit"] + "events skipped: 1\n"
++    assert trace.stdout == GOLDEN["f5"]["trace"].replace("##### f5\n", "##### f5c\n", 1) + "events skipped: 1\n"
++    assert CUT in (runs["f5c"] / "events.jsonl").read_text(encoding="utf-8").splitlines()[:-1]        # in the middle
++
++
++def test_a_run_blocked_before_any_model_call_is_audited(runs):
++    audit, trace = script("audit_run.py", runs["f4"]), script("failure_trace.py", runs["f4"])
++    assert audit.returncode == 0, audit.stderr[-500:]
++    assert audit.stdout == BLOCKED_AUDIT
++    assert (trace.returncode, trace.stdout) == (0, "##### f4\n")
++
++
++def test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced(runs):
++    alone = script("failure_trace.py", runs["f7"])
++    assert (alone.returncode, alone.stdout) == (0, "##### f7: no result.json\n"), alone.stderr[-400:]
++    both = script("failure_trace.py", runs["f7"], runs["f1"])
++    assert both.returncode == 0 and both.stdout == "##### f7: no result.json\n" + GOLDEN["f1"]["trace"]
+diff --git a/tests/test_run_inspectors_data.py b/tests/test_run_inspectors_data.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..1f86056a61cf76ad43b16a2585586be0f7d9bcd6
+--- /dev/null
++++ b/tests/test_run_inspectors_data.py
+@@ -0,0 +1,192 @@
++"""Pilot 3a. (1) The data of tests/test_run_inspectors.py: the output of audit_run.py and failure_trace.py, captured from the scripts as they
++were before the change, for each synthetic run (GOLDEN), and the audit of a run blocked before any model call (BLOCKED_AUDIT).
++(2) The contract of evals/runlog.py, the shared reader of a run directory, at the end of this file."""
++import json
++import sqlite3
++
++GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
++                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
++                 'llm_call_started 4, llm_call 4 (ok 4, refused 0)\n'
++                 '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> ReadFile {"path": "src/calc.py"}\n'
++                 '  it 0 step  1 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> WriteFile {"content": "\\"\\"\\"Small arithmetic helpers.\\"\\"\\"\\n\\n\\ndef add(a, '
++                 'b):\\n    return a + b\\n\\n\\ndef subtract(a, b):\\n    return a - b\\n\\n\\ndef multiply(a, '
++                 'b):\\n  \n'
++                 '  it 0 step  2 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> RunValidation {"id": "target"}\n'
++                 '  it 0 step  3 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
++                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
++                 'prompt_hash checked 4, mismatches 0\n'
++                 "  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
++                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 3, 'node': 'agent', 'task': 'fix_divide', "
++                 "'iteration': 0}\n"
++                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', "
++                 "'blocked_reason': None}\n"
++                 "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
++                 "1, 'usd_billed': 0.0032, 'llm_calls': 4, 'llm_calls_unknown': 0, 'tools': ['list_files', "
++                 "'read_file', 'write_file', 'run_validation']}\n",
++        'trace': '##### f1\n'
++                 '  it0 s0 ok      in   500 | ReadFile(src/calc.py)\n'
++                 '        text: ok\n'
++                 '  it0 s1 ok      in   500 | WriteFile(src/calc.py)\n'
++                 '        text: ok\n'
++                 '  it0 s2 ok      in   500 | RunValidation(target)\n'
++                 '        text: ok\n'
++                 '  it0 s3 ok      in   500 | Finish()\n'
++                 '        text: ok\n'},
++ 'f2': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
++                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
++                 'llm_call_started 3, llm_call 3 (ok 3, refused 0)\n'
++                 '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
++                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
++                 '  it 1 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> WriteFile {"content": "\\"\\"\\"Small arithmetic helpers.\\"\\"\\"\\n\\n\\ndef add(a, '
++                 'b):\\n    return a + b\\n\\n\\ndef subtract(a, b):\\n    return a - b\\n\\n\\ndef multiply(a, '
++                 'b):\\n  \n'
++                 '  it 1 step  1 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
++                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
++                 'prompt_hash checked 3, mismatches 0\n'
++                 "  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
++                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 0, 'node': 'agent', 'task': 'fix_divide', "
++                 "'iteration': 0}\n"
++                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
++                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 1, 'node': 'agent', 'task': 'fix_divide', "
++                 "'iteration': 1}\n"
++                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', "
++                 "'blocked_reason': None}\n"
++                 "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
++                 "2, 'usd_billed': 0.0024, 'llm_calls': 3, 'llm_calls_unknown': 0, 'tools': ['list_files', "
++                 "'read_file', 'write_file', 'run_validation']}\n",
++        'trace': '##### f2\n'
++                 '  it0 s0 ok      in   500 | Finish()\n'
++                 '        text: ok\n'
++                 '  it1 s0 ok      in   500 | WriteFile(src/calc.py)\n'
++                 '        text: ok\n'
++                 '  it1 s1 ok      in   500 | Finish()\n'
++                 '        text: ok\n'},
++ 'f3': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
++                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
++                 'llm_call_started 2, llm_call 2 (ok 2, refused 0)\n'
++                 '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
++                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
++                 '  it 1 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
++                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
++                 'prompt_hash checked 2, mismatches 0\n'
++                 "  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
++                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 0, 'node': 'agent', 'task': 'fix_divide', "
++                 "'iteration': 0}\n"
++                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
++                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 0, 'node': 'agent', 'task': 'fix_divide', "
++                 "'iteration': 1}\n"
++                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'FAILED_ACCEPTANCE', 'reason': 'stagnant: the same "
++                 "criteria failed 2 attempts in a row', 'blocked_reason': None}\n"
++                 "result {'status': 'FAILED_ACCEPTANCE', 'stop_reason': 'stagnant: the same criteria failed 2 attempts "
++                 "in a row', 'blocked_reason': None, 'attempts': 2, 'usd_billed': 0.0016, 'llm_calls': 2, "
++                 "'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation']}\n",
++        'trace': '##### f3\n'
++                 '  it0 s0 ok      in   500 | Finish()\n'
++                 '        text: ok\n'
++                 '  it1 s0 ok      in   500 | Finish()\n'
++                 '        text: ok\n'},
++ 'f5': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
++                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
++                 'llm_call_started 3, llm_call 2 (ok 2, refused 0)\n'
++                 '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> WriteFile {"content": "\\"\\"\\"Small arithmetic helpers.\\"\\"\\"\\n\\n\\ndef add(a, '
++                 'b):\\n    return a + b\\n\\n\\ndef subtract(a, b):\\n    return a - b\\n\\n\\ndef multiply(a, '
++                 'b):\\n  \n'
++                 '  it 0 step  1 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
++                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
++                 'prompt_hash checked 2, mismatches 0\n'
++                 "  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
++                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 1, 'node': 'agent', 'task': 'fix_divide', "
++                 "'iteration': 0}\n"
++                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', "
++                 "'blocked_reason': None}\n"
++                 "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
++                 "1, 'usd_billed': 0.023389, 'llm_calls': 3, 'llm_calls_unknown': 1, 'tools': ['list_files', "
++                 "'read_file', 'write_file', 'run_validation']}\n",
++        'trace': '##### f5\n'
++                 '  it0 s0 ok      in   500 | WriteFile(src/calc.py)\n'
++                 '        text: ok\n'
++                 '  it0 s1 ok      in   500 | Finish()\n'
++                 '        text: ok\n'},
++ 'f8': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
++                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
++                 'llm_call_started 3, llm_call 3 (ok 3, refused 0)\n'
++                 '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd0.py"}\n'
++                 '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd1.py"}\n'
++                 '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd2.py"}\n'
++                 '  it 0 step  1 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> WriteFile {"content": "\\"\\"\\"Small arithmetic helpers.\\"\\"\\"\\n\\n\\ndef add(a, '
++                 'b):\\n    return a + b\\n\\n\\ndef subtract(a, b):\\n    return a - b\\n\\n\\ndef multiply(a, '
++                 'b):\\n  \n'
++                 '  it 0 step  2 ok       hash ok in 500 out 60 usd 0.0008 \n'
++                 '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
++                 '"issue_fixed", "evidence": "validation:target"}, {"claim": "file_changed", "path":\n'
++                 'prompt_hash checked 3, mismatches 0\n'
++                 "  {'event': 'status', 'old': None, 'new': 'RUNNING', 'reason': None, 'blocked_reason': None}\n"
++                 "  {'event': 'attempt_end', 'reason': 'finished', 'steps': 2, 'node': 'agent', 'task': 'fix_divide', "
++                 "'iteration': 0}\n"
++                 "  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', "
++                 "'blocked_reason': None}\n"
++                 "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
++                 "1, 'usd_billed': 0.0024, 'llm_calls': 3, 'llm_calls_unknown': 0, 'tools': ['list_files', "
++                 "'read_file', 'write_file', 'run_validation']}\n",
++        'trace': '##### f8\n'
++                 '  it0 s0 ok      in   500 | ReadFile(src/ddddddddddddddddddddddddddddddddddddddddddddd0.py) '
++                 'ReadFile(src/ddddddddddddddddddddddddddddddddddddddddddddd1.py) ReadFile(src/ddddddddd\n'
++                 '        text: word word word word word word word word word word word word word word word word word '
++                 'word word word word word word word word word word word word word word word word word word word word '
++                 'word word word word word word word word word word word word word word word word word word word word '
++                 'word word word word word word word word word word word word word word word word word word word word '
++                 'word word word \n'
++                 '  it0 s1 ok      in   500 | WriteFile(src/calc.py)\n'
++                 '        text: ok\n'
++                 '  it0 s2 ok      in   500 | Finish()\n'
++                 '        text: ok\n'},
++ 'wrap': {'trace': '##### wrap\n'
++                   '  it0 s0 ok      in   500 | ReadFile(src/calc.py)\n'
++                   '        text: ok\n'
++                   '  it0 s1 ok      in   500 | WriteFile(src/calc.py)\n'
++                   '        text: ok\n'
++                   '  it0 s2 ok      in   500 | RunValidation(target)\n'
++                   '        text: ok\n'
++                   '  it0 s3 ok      in   500 | Finish()\n'
++                   '        text: ok\n'}}
++BLOCKED_AUDIT = "effective tools None\nllm_call_started 0, llm_call 0 (ok 0, refused 0)\nprompt_hash checked 0, mismatches 0\n  {'event': 'status', 'old': None, 'new': 'BLOCKED', 'reason': 'sandbox unavailable: no sandbox', 'blocked_reason': 'sandbox_unavailable'}\nresult {'status': 'BLOCKED', 'stop_reason': 'sandbox unavailable: no sandbox', 'blocked_reason': 'sandbox_unavailable', 'attempts': 0, 'usd_billed': 0.0, 'llm_calls': 0, 'llm_calls_unknown': 0, 'tools': None}\n"
++
++
++def reader():
++    import importlib
++    return importlib.import_module("evals.runlog")
++
++
++def test_events_are_read_with_the_number_of_lines_that_did_not_decode(tmp_path):
++    (tmp_path / "events.jsonl").write_text('{"event": "a"}\n\n{"event": "b", "n": 2}\nnot json\n{"event": "c', encoding="utf-8")
++    events, skipped = reader().read_events(tmp_path)
++    assert events == [{"event": "a"}, {"event": "b", "n": 2}] and skipped == 2     # a blank line is not a skipped one
++    (tmp_path / "events.jsonl").write_text('{"event": "a"}\n', encoding="utf-8")
++    assert reader().read_events(tmp_path) == ([{"event": "a"}], 0)
++
++
++def test_result_memo_and_the_skipped_line_are_read_as_the_inspectors_need_them(tmp_path):
++    rl = reader()
++    assert rl.read_result(tmp_path) is None                              # a run that never got a result.json
++    (tmp_path / "result.json").write_text(json.dumps({"status": "DONE", "attempts": 1}), encoding="utf-8")
++    assert rl.read_result(tmp_path) == {"status": "DONE", "attempts": 1}
++    db = sqlite3.connect(tmp_path / "memo.sqlite")
++    db.execute("create table memo (key text primary key, value text)")
++    db.execute("insert into memo values (?, ?)", (json.dumps(["llm", "c", 0, 0, 1]), json.dumps({"content": "x"})))
++    db.commit()
++    db.close()
++    assert rl.read_memo(tmp_path) == {json.dumps(["llm", "c", 0, 0, 1]): {"content": "x"}}
++    assert rl.skipped_line(0) is None and rl.skipped_line(3) == "events skipped: 3"

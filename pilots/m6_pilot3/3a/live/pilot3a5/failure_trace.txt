@@ -1,0 +1,9 @@
+##### pilot3a5
+  it0 s0 ok      in  3097 | ListFiles() ReadFile(scripts/audit_run.py) ReadFile(scripts/failure_trace.py)
+  it0 s1 ok      in 12657 | ReadFile(tests/test_run_inspectors.py) ReadFile(tests/test_run_inspectors_data.py) ReadFile(harness/events.py)
+  it0 s2 ok      in 23840 | SearchFiles(runlog)
+  it0 s3 ok      in 24131 | SearchFiles(def offered)
+  it0 s4 ok      in 24526 | ReadFile(codetask/tools.py)
+  it0 s5 ok      in 30887 | WriteFile(evals/runlog.py)
+  it0 s6 ok      in 32822 | WriteFile(scripts/failure_trace.py) EditFile(scripts/audit_run.py) EditFile(scripts/audit_run.py) EditFile(scripts/audit_run.py) EditFile(scripts/audi
+  it0 s7 ok      in 36070 | Finish()
