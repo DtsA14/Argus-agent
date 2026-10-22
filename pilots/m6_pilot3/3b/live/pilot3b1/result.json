@@ -1,0 +1,78 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "bff30d351f1cb4f010f06d9687db28617bfd97ca80ef1fa929b028e668a34b1d",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "bd6b708bc2256202c6ca5cebae1b49c523273d4f1306e89f642aa7d089d486ab"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "finished",
+    "steps": 3
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "search_files",
+    "edit_file"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/pilot_report",
+      "snapshot_sha256": "da284adb727aaeaa863f0783d6704ba70f6b61833b8084b39850c5004a6be42f",
+      "intake": {
+        "name": "pilot_report",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "f37aaba03a19cb7f84d42a4f3f0b3b755f7b020d",
+        "tree": "2a51cbb6b5f63edf7591fcde1c4657c36dd5c983",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "argus_p6",
+          "commit": "f37aaba03a19cb7f84d42a4f3f0b3b755f7b020d",
+          "tree": "2a51cbb6b5f63edf7591fcde1c4657c36dd5c983",
+          "snapshot_sha256": "6954b618bf78bd04a8ac55d97dddaa30059a2ab46c3ca370d240c748afcab17f"
+        },
+        "added": {
+          "tests/test_pilot_report.py": "1f7a7c6122726842209f92d0f46b91694153cf359e606b52cd46784ef9406866"
+        },
+        "contract_sha256": "bff30d351f1cb4f010f06d9687db28617bfd97ca80ef1fa929b028e668a34b1d"
+      }
+    },
+    "argus": {
+      "commit": "400f3a58a6ad6f8203d8048e0ce5ee8c19780302",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large_usd",
+    "attempt_tokens": 400000,
+    "max_output_tokens": 8192,
+    "attempt_usd": 0.45,
+    "max_input_tokens": 40000
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4
+  },
+  "cache": {
+    "cache_read_tokens": 37494,
+    "cache_creation_tokens": 27770,
+    "usd_saved_estimate": 0.0573536
+  },
+  "run_id": "pilot3b1",
+  "attempts": 1,
+  "usd_billed": 0.1103284,
+  "usd_complete": true,
+  "llm_calls": 4,
+  "llm_calls_unknown": 0
+}

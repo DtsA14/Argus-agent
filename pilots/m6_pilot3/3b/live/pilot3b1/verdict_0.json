@@ -1,0 +1,236 @@
+{
+  "outcome": "pass",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json",
+            "scripts/pilot_report.py"
+          ],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [
+            "SUMMARY.json",
+            "scripts/pilot_report.py"
+          ],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": "e3a39a9d62639d11340cd6fe059bbc197ab36bc3f50b6097d73bb3a960b1becc"
+      }
+    },
+    {
+      "id": "validation:report",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_pilot_report.py"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 17,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run": "ok",
+          "tests/test_pilot_report.py::test_the_report_with_supervision_minutes": "ok",
+          "tests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data": "ok",
+          "tests/test_pilot_report.py::test_no_run_done": "ok",
+          "tests/test_pilot_report.py::test_no_cost_known": "ok",
+          "tests/test_pilot_report.py::test_only_runs_without_a_result": "ok",
+          "tests/test_pilot_report.py::test_no_run_is_refused": "ok",
+          "tests/test_pilot_report.py::test_an_argument_that_is_not_a_run_directory_is_refused": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[negative]": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[string]": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[bool]": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[list]": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[nan]": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[unknown_run]": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[not_json]": "ok",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[number]": "ok",
+          "tests/test_pilot_report.py::test_a_missing_supervision_file_is_refused": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 17 items\n\ntests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run PASSED\ntests/test_pilot_report.py::test_the_report_with_supervision_minutes PASSED\ntests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data PASSED\ntests/test_pilot_report.py::test_no_run_done PASSED\ntests/test_pilot_report.py::test_no_cost_known PASSED\ntests/test_pilot_report.py::test_only_runs_without_a_result PASSED\ntests/test_pilot_report.py::test_no_run_is_refused PASSED\ntests/test_pilot_report.py::test_an_argument_that_is_not_a_run_directory_is_refused PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[negative] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[string] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[bool] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[list] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[nan] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[unknown_run] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[not_json] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[number] PASSED\ntests/test_pilot_report.py::test_a_missing_supervision_file_is_refused PASSED\n\n============================== 17 passed in 6.15s ==============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 17,
+        "deselected": 0,
+        "stderr_tail": "",
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "validation:regression",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_run_inspectors.py",
+          "tests/test_run_inspectors_data.py",
+          "tests/test_eval_cost.py",
+          "tests/test_run_stats.py"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 30,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else": "ok",
+          "tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited": "ok",
+          "tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too": "ok",
+          "tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete": "ok",
+          "tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known": "ok",
+          "tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before": "ok",
+          "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped": "ok",
+          "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too": "ok"
+        },
+        "output_tail": "_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else PASSED\ntests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited PASSED\ntests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced PASSED\ntests/test_run_inspectors_data.py::test_events_are_read_with_the_number_of_lines_that_did_not_decode PASSED\ntests/test_run_inspectors_data.py::test_result_memo_and_the_skipped_line_are_read_as_the_inspectors_need_them PASSED\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost0-0.0] PASSED\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost1-0.0] PASSED\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost2-0.05] PASSED\ntests/test_eval_cost.py::test_a_run_whose_cost_is_unknown_stops_the_eval_and_is_never_counted_as_zero[cost3-0.3] PASSED\ntests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too PASSED\ntests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete PASSED\ntests/test_eval_cost.py::test_a_blocked_run_still_stops_the_eval_with_its_own_reason_when_its_cost_is_known PASSED\ntests/test_eval_cost.py::test_costs_are_aggregated_over_the_runs_whose_cost_is_known_and_the_others_are_counted PASSED\ntests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known PASSED\ntests/test_eval_cost.py::test_run_eval_prints_n_a_and_says_the_total_is_incomplete PASSED\ntests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before PASSED\ntests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped PASSED\ntests/test_run_stats.py::test_a_last_line_cut_short_without_a_newline_is_skipped PASSED\ntests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too PASSED\n\n============================= 30 passed in 32.38s ==============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 30,
+        "deselected": 0,
+        "stderr_tail": "",
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "claim[0]:file_changed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "file_changed",
+          "path": "scripts/pilot_report.py"
+        }
+      }
+    },
+    {
+      "id": "claim[1]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:report"
+        }
+      }
+    },
+    {
+      "id": "claim[2]:tests_pass",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "tests_pass",
+          "evidence": "validation:regression"
+        }
+      }
+    },
+    {
+      "id": "claim[3]:issue_fixed",
+      "layer": "D",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "claim": {
+          "claim": "issue_fixed",
+          "evidence": "validation:report"
+        }
+      }
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "bd6b708bc2256202c6ca5cebae1b49c523273d4f1306e89f642aa7d089d486ab",
+  "summary_sha256": "e3a39a9d62639d11340cd6fe059bbc197ab36bc3f50b6097d73bb3a960b1becc",
+  "verdict_sha256": "a9db5d5881082a6a2fc01a4cd2fc51da7a974db31cac1a237882429b0820f7ef"
+}
