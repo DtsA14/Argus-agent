@@ -104,6 +104,12 @@ def sonnet(c, cap):
     return c
 
 
+def applied(c, name):
+    """apply_profile, asserting first that the profile exists (on the code before D1 a test fails here, not with KeyError)."""
+    assert name in c["code_task"]["profiles"], f"no profile {name!r}"
+    return apply_profile(c, name)
+
+
 def admitted_after(limits, spends, tmp_path):
     log = EventLog(tmp_path / f"e{len(list(tmp_path.iterdir()))}.jsonl")
     for i, usd in enumerate(spends):
@@ -124,7 +130,7 @@ def test_a_declared_attempt_usd_is_the_attempt_reservation_whatever_the_price():
     for model in ("fake:scripted", "anthropic:claude-sonnet-5-5"):
         c = load_config()
         c["roles"]["coder"]["model"] = model
-        lim = settings(apply_profile(c, "large_usd"))
+        lim = settings(applied(c, "large_usd"))
         assert lim["attempt_usd"] == 0.45 and lim["attempt_tokens"] == 400000 and lim["max_input_tokens"] == 40000
 
 
@@ -134,7 +140,7 @@ def test_a_profile_without_attempt_usd_keeps_the_old_formula():   # T6
     assert settings(c)["attempt_usd"] == pytest.approx(30000 * 10 / 1e6)
     assert settings(apply_profile(c, "large"))["attempt_usd"] == pytest.approx(45000 * 10 / 1e6)
     # applying another profile drops what large_usd declared: nothing leaks from one profile into the next
-    again = settings(apply_profile(apply_profile(c, "large_usd"), "default"))
+    again = settings(applied(applied(c, "large_usd"), "default"))
     assert again["attempt_usd"] == pytest.approx(30000 * 10 / 1e6) and again["max_input_tokens"] is None
 
 
@@ -197,7 +203,7 @@ def test_without_an_input_limit_the_same_call_is_sent(tmp_path, counter):
 def test_admission_with_large_usd_at_a_75_cent_cap(tmp_path):
     c = sonnet(load_config(), 0.75)
     c["budget"]["max_tokens"] = 1_200_000
-    lim = settings(apply_profile(c, "large_usd"), contract("large_usd", max_usd=0.75))
+    lim = settings(applied(c, "large_usd"), contract("large_usd", max_usd=0.75))
     assert lim["attempt_usd"] == 0.45 and lim["max_usd"] == 0.75
     assert admitted_after(lim, [], tmp_path)
     # a second attempt only after a first one of at most $0.30 (K2), to the nano-dollar

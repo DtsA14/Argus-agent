@@ -11,7 +11,10 @@ For every request:
   6. charge actual usage, or the worst case when usage is missing or the attempt failed.
 
 Ledger lifecycle, per call_id:
-  refused                                -> one `llm_call` with status refused, nothing sent
+  refused                                -> one `llm_call` with status refused, nothing sent. Two shapes:
+                                            budget: est_input, max_tokens (the cap), tokens_left, usd_left;
+                                            reason "input_limit" (D1): est_input, max_input, and no
+                                            max_tokens / tokens_left / usd_left. Readers use .get().
   llm_call_started + llm_call (final)    -> ok / transient_error / error, charged as recorded
   llm_call_started without a final event -> unknown_after_crash: the process died mid-request;
                                             reconcile_ledger() charges it at worst case
