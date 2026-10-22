@@ -172,6 +172,7 @@ Urutan disarankan, karena saling bergantung.
   3. `test_argus_tests_run_in_the_argus_environment` menyalin seluruh repo untuk dua berkas tes.
   4. `pytest-xdist` untuk tes non-sandbox, hanya setelah poin 1, dan setelah tes crash-resume/Docker dipastikan aman dijalankan paralel.
   Tes non-sandbox paling lambat (tanpa Docker): `test_milestone1.py` 27 detik, `test_impl_flag.py` 19, `test_calibration.py` 18.
+  Log verify D3 (`verification/verify-d3-auto-validate-9096eea-aarch64.log`, `--durations=25`, 1.254 tes, 822 detik): empat tes `test_eval_sandbox.py` 32–39 detik (±2,3 menit); **`tests/test_draft.py` penyumbang kedua** (±10 tes ±12 detik dan ±7 tes ±6 detik, ±2,7 menit, sandbox), belum ada di daftar di atas. Tugas terpisah **setelah run live 3a v2**.
 - [x] `models/pricing.py::is_peak` gagal tertutup untuk jendela dan waktu yang tidak bisa dibaca (diselesaikan oleh Pilot 5, lihat entri di atas; patch agen dalam PR #115)
 - [ ] `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task (membandingkan dengan tree commit tanpa tes yang disetujui); tanpa `--repo` benar
 - [ ] Judul `PR.md` (paket review) dipotong 80 karakter di tengah kata; kosmetik
