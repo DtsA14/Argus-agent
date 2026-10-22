@@ -5,7 +5,7 @@ Its value is in the guarantees below; review changes against them first.
 
 How to verify: `bash scripts/verify.sh` (fresh venv, pinned deps, full suite incl. crash-resume
 repeats and stress). Evidence logs are kept in `verification/`. Open work is in `PENDING.md`,
-the current plan in `docs/MILESTONE2_PLAN.md`, review briefs in `docs/reviews/`.
+the status of milestones and ADRs in `docs/Reconciliation.md`, review briefs in `docs/reviews/`.
 
 ## Code Review Rules
 
