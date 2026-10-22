@@ -1,0 +1,97 @@
+HEAD 6919af1 3a D5 pilot preparation: config (four differences), gate, gate tests, offline payload check, preflight
+### T0 --check-only on the correct state (must pass)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a_d5.yaml is the reviewed file; it differs from config.yaml only in budget.max_usd (0.50 -> 0.75), budget.max_tokens (200,000 -> 1,200,000), code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile large_usd ($0.45 per attempt, input <= 40,000 per call, output 8,192), cap $0.75, run tokens 1,200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.30
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
+ls: cannot access 'runs': No such file or directory
+
+### T1 wrong contract hash in the record (must refuse)
+REFUSED: contract sha256 'deadbeef0000', expected 'ca8a521eb8b7'
+[exit 1]
+
+### T2 profile large instead of large_usd (must refuse)
+REFUSED: profile 'large', expected 'large_usd'
+[exit 1]
+
+### T3 contract cap 1.00 (must refuse)
+REFUSED: limits {'max_usd': 1.0, 'max_iterations': 3}
+[exit 1]
+
+### T4 pilot config edited (cap 1.00): its hash changes (must refuse)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+REFUSED: config_pilot3a_d5.yaml sha256 8a847a5a1e3343c44c3c39e4b166e8c1fcb00f11529e7b6071831c81668d0d21, expected 29a04cb32ced23300f1615a403dcf827866fcbf8989382c3939d002fa6d7c6ef
+[exit 1]
+
+### T5 config.yaml changed elsewhere: a fourth difference (must refuse)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+REFUSED: the pilot config must differ from config.yaml only in [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)], found [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/budget/max_workers', 4, 3), ('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)]
+[exit 1]
+
+### T6 config.yaml turns auto_validate on: only two differences left (must refuse)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+REFUSED: the pilot config must differ from config.yaml only in [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)], found [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/llm/prompt_cache/enabled', False, True)]
+[exit 1]
+
+### T7 large_usd changed in both configs (attempt_usd 0.50) and the expected config hash with them: gate 3 must refuse
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a_d5.yaml is the reviewed file; it differs from config.yaml only in budget.max_usd (0.50 -> 0.75), budget.max_tokens (200,000 -> 1,200,000), code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+REFUSED: the effective limits are not the reviewed ones: {"attempt_usd": [0.5, 0.45]}
+[exit 1]
+
+### T7b config.yaml turns prompt caching on: only three differences left (must refuse)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+REFUSED: the pilot config must differ from config.yaml only in [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/code_task/auto_validate', False, True), ('/llm/prompt_cache/enabled', False, True)], found [('/budget/max_tokens', 200000, 1200000), ('/budget/max_usd', 0.5, 0.75), ('/code_task/auto_validate', False, True)]
+[exit 1]
+
+### T7c the Sonnet read price back to 0.20 in both configs, expected hash updated: gate 3 must refuse
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a_d5.yaml is the reviewed file; it differs from config.yaml only in budget.max_usd (0.50 -> 0.75), budget.max_tokens (200,000 -> 1,200,000), code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+REFUSED: the effective limits are not the reviewed ones: {"coder_prices": [{"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write_5m": 2.5, "cache_write_1h": 4.0}, {"input": 2.0, "output": 10.0, "cache_read": 0.1, "cache_write_5m": 2.5, "cache_write_1h": 4.0}]}
+[exit 1]
+
+### T8 dirty tree (must refuse)
+REFUSED: the live checkout is not clean (git status must be empty)
+[exit 1]
+
+### T9 run id exists (must refuse)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a_d5.yaml is the reviewed file; it differs from config.yaml only in budget.max_usd (0.50 -> 0.75), budget.max_tokens (200,000 -> 1,200,000), code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile large_usd ($0.45 per attempt, input <= 40,000 per call, output 8,192), cap $0.75, run tokens 1,200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.30
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+REFUSED: run pilot3a5 already exists (use a new id; --resume only for a run that died)
+[exit 1]
+
+### T10 bad run ids (must refuse): the two earlier runs, another pilot, an injection
+REFUSED: run id must look like pilot3a5 (got 'pilot3a'; pilot3a to pilot3a4 are the earlier runs)
+[exit 1]
+REFUSED: run id must look like pilot3a5 (got 'pilot3a4'; pilot3a to pilot3a4 are the earlier runs)
+[exit 1]
+REFUSED: run id must look like pilot3a5 (got 'pilot5a'; pilot3a to pilot3a4 are the earlier runs)
+[exit 1]
+REFUSED: run id must look like pilot3a5 (got 'pilot3a5; echo hacked'; pilot3a to pilot3a4 are the earlier runs)
+[exit 1]
+
+### T11 empty key (must refuse and start nothing)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a_d5.yaml is the reviewed file; it differs from config.yaml only in budget.max_usd (0.50 -> 0.75), budget.max_tokens (200,000 -> 1,200,000), code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile large_usd ($0.45 per attempt, input <= 40,000 per call, output 8,192), cap $0.75, run tokens 1,200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.30
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+
+REFUSED: the key is empty; nothing was started
+[exit 1]
+
+### T12 no argument (must refuse)
+REFUSED: usage: go_live.sh --check-only | go_live.sh <run-id>   (run id like pilot3a5)
+[exit 1]
+
+### T13 correct state again (must pass)
+gate 1 ok: contract fix_run_inspectors_v2, sha256 ca8a521eb8b7... profile large_usd, limits $0.75 / 3 iterations, three writable files
+gate 2 ok: config_pilot3a_d5.yaml is the reviewed file; it differs from config.yaml only in budget.max_usd (0.50 -> 0.75), budget.max_tokens (200,000 -> 1,200,000), code_task.auto_validate (false -> true) and llm.prompt_cache.enabled (false -> true)
+gate 3 ok: profile large_usd ($0.45 per attempt, input <= 40,000 per call, output 8,192), cap $0.75, run tokens 1,200,000, 3 attempts, 12 steps, auto-validation on (4 per attempt), prompt caching on (Sonnet 5.5: every input token reserved at the $2.50/M write rate, reads $0.10/M); a second attempt only if the first spent <= $0.30
+gate 4 ok: without ARGUS_LIVE=1 the runner refuses and creates no run directory
+check-only: every gate holds. Nothing was started.
+[exit 0]
+GLTEST DONE
