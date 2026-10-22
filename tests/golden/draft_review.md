@@ -39,6 +39,8 @@ Protected: `tests/**`
 
 Budget profile for the agent: `large`
 
+Tools added for the agent: none (it rewrites whole files with WriteFile)
+
 ## New tests
 
 ### `tests/test_new.py`

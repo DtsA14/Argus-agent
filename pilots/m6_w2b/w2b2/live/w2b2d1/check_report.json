@@ -1,0 +1,89 @@
+{
+  "task": "drafted_task",
+  "draft_sha256": "4829e54b7fae78957f46c545ba289f01013ec9fcde98ae1fb26a63abf6c4e1d9",
+  "unverifiable": [],
+  "ok": true,
+  "feasibility": "unproven",
+  "contract": {
+    "contract": "drafted_task",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/drafted_task",
+      "issue": "The title of a review package's pull request draft is cut in the middle of a word.\n\ncodetask/review.py, render_pr: the first line of review/PR.md is \"# \" followed by the contract name, \": \" and the first\nline of the task's issue cut to its first 80 characters. A long first line therefore ends mid-word, for example\n\"fix_x: The title of a review package's pull request draft is cut in the middle of a wor\".\n\nWanted, for the issue part of the title only (call the issue's stripped first line L):\n- if L has at most 80 characters, it is used as it is, with nothing added;\n- otherwise take L's first 81 characters and cut them just before their last space; if that leaves something, remove\n  trailing spaces and append \"...\" (three dots, no space before them);\n- if those 81 characters contain no space (one long word), or the cut leaves nothing, use L's first 80 characters\n  followed by \"...\".\n\nEverything else stays as it is: the contract name and \": \" before it, the cleaning of the whole heading for the\nMarkdown table cell (the existing cell(title, 120)), the rest of PR.md, and every other file of the review package."
+    },
+    "scope": {
+      "writable": [
+        "codetask/review.py"
+      ],
+      "protected": [
+        "tests/**",
+        "acceptance/**",
+        "harness/**",
+        "scripts/**"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_pr_title.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_pr_title.py::test_cut_before_last_space",
+          "tests/test_pr_title.py::test_space_at_index_80_keeps_word",
+          "tests/test_pr_title.py::test_one_long_word",
+          "tests/test_pr_title.py::test_multiple_spaces_removed",
+          "tests/test_pr_title.py::test_only_first_line_used"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.5,
+      "max_iterations": 1
+    },
+    "budget_profile": "default"
+  },
+  "contract_sha256": "ba3bb22e105ab2104ac72905bed2f265dc7fe26e732aa96211ce1072dc56ec04",
+  "added": {
+    "tests/test_pr_title.py": "fc85d212bfbcdc55df97a6d59e37d9881de4f03e6a3a2b99cb38974af931fbfd"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_pr_title.py::test_cut_before_last_space": "FAIL",
+        "tests/test_pr_title.py::test_space_at_index_80_keeps_word": "FAIL",
+        "tests/test_pr_title.py::test_one_long_word": "FAIL",
+        "tests/test_pr_title.py::test_multiple_spaces_removed": "FAIL",
+        "tests/test_pr_title.py::test_only_first_line_used": "FAIL"
+      },
+      "failures": 5,
+      "errors": 0,
+      "output_tail": "abcdefghi abcdefghi abcdefghi abcdefghij\n______________________________ test_one_long_word ______________________________\ntests/test_pr_title.py:52: in test_one_long_word\n    assert _heading(\"x\" * 100) == \"# fix_x: \" + \"x\" * 80 + \"...\"\nE   AssertionError: assert '# fix_x: xxx...xxxxxxxxxxxxx' == '# fix_x: xxx...xxxxxxxxxx...'\nE     \nE     - # fix_x: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...\nE     ?                                                                                          ---\nE     + # fix_x: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n_________________________ test_multiple_spaces_removed _________________________\ntests/test_pr_title.py:57: in test_multiple_spaces_removed\n    assert _heading(line) == \"# fix_x: \" + \"a\" * 70 + \"...\"\nE   AssertionError: assert '# fix_x: aaa...aaaa bbbbbbbb' == '# fix_x: aaa...aaaaaaaaaa...'\nE     \nE     - # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\nE     ?                                                                                ^^^\nE     + # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbb\nE     ?                                                                                ^^^^^^^^^\n__________________________ test_only_first_line_used ___________________________\ntests/test_pr_title.py:63: in test_only_first_line_used\n    assert _heading(issue) == \"# fix_x: \" + (\"word \" * 16).rstrip() + \"...\"\nE   AssertionError: assert '# fix_x: wor...ord word word' == '# fix_x: wor... word word...'\nE     \nE     - # fix_x: word word word word word word word word word word word word word word word word...\nE     ?                                                                                         ---\nE     + # fix_x: word word word word word word word word word word word word word word word word\n========================= 5 failed, 3 passed in 0.12s ==========================\n",
+      "failed_nodes": [
+        "tests/test_pr_title.py::test_cut_before_last_space",
+        "tests/test_pr_title.py::test_multiple_spaces_removed",
+        "tests/test_pr_title.py::test_one_long_word",
+        "tests/test_pr_title.py::test_only_first_line_used",
+        "tests/test_pr_title.py::test_space_at_index_80_keeps_word"
+      ]
+    }
+  },
+  "reference": null,
+  "problems": []
+}

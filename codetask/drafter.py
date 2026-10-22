@@ -32,6 +32,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 
+from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
 from acceptance.validation import run_validation
@@ -62,6 +63,7 @@ CHECK_TASK, CHECK_USD, CHECK_ITERATIONS = "drafted_task", 0.5, 1
 RUNNING, DRAFTED, NO_DRAFT, BLOCKED, FAILED_BUDGET = "RUNNING", "DRAFTED", "NO_DRAFT", "BLOCKED", "FAILED_BUDGET"
 BLOCKED_REASONS = {"invalid_input", "sandbox_unavailable", "provider_failed", "source_changed"}
 NODE_ID = re.compile(r"^[^\s-][^\s]*$")
+BYTES_PER_TOKEN = 4              # a rough estimate of a source file's size in tokens, for the rewrite check below
 
 
 class PlanArgs(BaseModel):
@@ -100,6 +102,7 @@ class SubmitDraft(BaseModel):
                                                 "may be empty")
     budget_profile: str = Field(description="The agent's budget profile, one of those listed in the task: large "
                                             "enough for one attempt to read what the fix needs and write it")
+    tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, search_files)")
 
 
 class ReviseDraft(BaseModel):
@@ -112,11 +115,12 @@ class ReviseDraft(BaseModel):
     new_tests: Optional[List[NewTest]] = None
     unverifiable: Optional[List[str]] = None
     budget_profile: Optional[str] = None
+    tools: Optional[List[str]] = None
 
 
 SUBMITS = ("SubmitDraft", "ReviseDraft")       # each one is checked, and counts toward max_submits
 READ_TOOLS = [ListFiles, SearchFiles, ReadFile]
-SUBMIT_KEYS = {"plan", "scope", "validation", "new_tests", "unverifiable", "budget_profile"}
+SUBMIT_KEYS = {"plan", "scope", "validation", "new_tests", "unverifiable", "budget_profile", "tools"}
 VALIDATION_ARG_KEYS = {"id", "paths", "must_pass", "min_tests"}
 # Never written by the drafter: the task repository's own files are read in a copy, and nothing here writes.
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
@@ -159,6 +163,10 @@ def task_prompt(inputs, files, policy):
         "Choose by the work one attempt needs: the files the agent must read to understand the issue, plus every "
         "file it writes (output). A new file of about 100 lines or more, or changes to several files, needs more "
         "than the smallest profile.",
+        "The agent's tools: " + ", ".join(policy.get("agent_tools") or []) + ". WriteFile replaces a whole file, so "
+        "without edit_file every change rewrites the whole file within one call's output. `tools` may add "
+        + " and ".join(sorted(ct.CONTRACT_TOOLS)) + " (edit_file replaces one exact piece of text); a draft whose "
+        "writable files are too large to rewrite in one call is refused unless it adds edit_file.",
         f"SubmitDraft and ReviseDraft are checked at most {policy['max_submits']} times together."])
 
 
@@ -196,12 +204,37 @@ def draft_from_args(args, *, base, policy):
     profile = args.get("budget_profile")
     if profile not in policy["profiles"]:            # required: a draft without one would give the agent `default`
         problems.append(f"budget_profile is required and must be one of {policy['profiles']}")
+    tools = args.get("tools")
+    if tools is not None and not (isinstance(tools, list) and len(set(tools)) == len(tools)
+                                  and all(t in ct.CONTRACT_TOOLS for t in tools)):
+        problems.append(f"tools must be a list of distinct names from {sorted(ct.CONTRACT_TOOLS)}")
     if problems:
         return None, problems
     contract = {"scope": args.get("scope"), "validation": specs, "budget_profile": profile}
+    if tools:
+        contract["tools"] = list(tools)
     draft = {"draft_version": dr.VERSION, "base": base, "plan": args.get("plan"), "contract": contract,
              "new_tests": args.get("new_tests"), "unverifiable": args.get("unverifiable")}
     return draft, [f"draft: {e}" for e in dr.validate_draft(draft)]
+
+
+def rewrite_problems(draft, policy, source):
+    """Writable files the agent could only rewrite whole (no edit_file) that do not fit one call's output in the chosen
+    profile: such a contract cannot be met, whatever the tests say. Sizes are estimated (BYTES_PER_TOKEN)."""
+    c = draft["contract"]
+    if "edit_file" in (c.get("tools") or []):
+        return []
+    cap = int(((policy.get("profile_info") or {}).get(c["budget_profile"]) or {}).get("max_output_tokens") or 0)
+    out = []
+    for path in sorted(snapshot(source)):
+        if ct.matches(path, c["scope"]["writable"]) and not ct.matches(path, c["scope"]["protected"]):
+            size = os.path.getsize(Path(source) / path)
+            if size // BYTES_PER_TOKEN > cap:
+                out.append(f"{path} is {size} bytes (about {size // BYTES_PER_TOKEN} tokens): without edit_file the "
+                           f"agent must rewrite it whole with WriteFile, which does not fit the output of one call in "
+                           f"profile {c['budget_profile']!r} ({cap} tokens); add edit_file to tools, or choose a profile "
+                           f"with a larger output")
+    return out
 
 
 def _evidence(report):
@@ -216,7 +249,7 @@ def _evidence(report):
     return out
 
 
-def make_submit(*, inputs, policy, scfg, root, log, validate):
+def make_submit(*, inputs, policy, scfg, root, log, validate, source):
     def submit(args, n, last=None, revise=False):
         """One SubmitDraft, or one ReviseDraft over `last` (the arguments of the previous submit): the draft built from
         the arguments and checked without a reference patch. The record keeps the arguments it used ("args"), so the
@@ -235,6 +268,8 @@ def make_submit(*, inputs, policy, scfg, root, log, validate):
             # Unknown fields are not merged: the draft is built from them alone, so they are refused by name.
             args = given if set(given) - SUBMIT_KEYS else {**last, **given}
         draft, problems = draft_from_args(args, base=inputs["intake"], policy=policy)
+        if not problems:                       # before the sandbox: a contract the agent cannot meet is not checked
+            problems = rewrite_problems(draft, policy, source)
         report = None
         if not problems:
             try:
@@ -423,6 +458,8 @@ def review_text(run_id, inputs, state, cost):
             out += [f"  - new: `{cell(n, 300)}`" for n in new] + [f"  - existing: `{cell(n, 300)}`" for n in old]
         if c.get("budget_profile"):
             out += ["", f"Budget profile for the agent: `{c['budget_profile']}`"]
+        out += ["", "Tools added for the agent: " + (", ".join(f"`{t}`" for t in c["tools"]) if c.get("tools")
+                                                     else "none (it rewrites whole files with WriteFile)")]
         out += ["", "## New tests"]
         for t in draft["new_tests"]:
             out += ["", f"### `{t['path']}`", ""]
@@ -522,6 +559,9 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
                   "validation_timeout_s": cfg["drafter"]["validation_timeout_s"],
                   "profiles": sorted((cfg.get("code_task") or {}).get("profiles") or {}),
                   "profile_info": {k: v for k, v in sorted(((cfg.get("code_task") or {}).get("profiles") or {}).items())},
+                  "agent_tools": [t for t in ("ListFiles", "SearchFiles", "ReadFile", "WriteFile", "EditFile",
+                                              "RunValidation")
+                                  if GATED[t] in ((cfg.get("tools") or {}).get((cfg.get("code_task") or {}).get("role", "coder")) or [])],
                   "tools": list((cfg.get("tools") or {}).get(role, []))}
         log.emit("drafter_policy", **policy)
         log.emit("status", new=RUNNING, reason=None, blocked_reason=None)
@@ -532,7 +572,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         policy = state["policy"]
         box = Toolbox(str(source), READ_ONLY, scfg, policy["tools"], log, validate=validate, crasher=crasher,
                       role=role)
-        submit = make_submit(inputs=inputs, policy=policy, scfg=scfg, root=root, log=log, validate=validate)
+        submit = make_submit(inputs=inputs, policy=policy, scfg=scfg, root=root, log=log, validate=validate,
+                             source=source)
         run = make_drafting(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"]}, tool_versions=versions,
                             submit=submit, crasher=crasher)
         a = run(task_id, box, task_prompt(inputs, state["files"], policy))
