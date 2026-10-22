@@ -42,6 +42,12 @@ def tool_step_key(node, task, iteration, step, tool_call_id, name, args, version
     return json.dumps(["tool", node, task, iteration, step, tool_call_id, _sha([name, args, parent]), version])
 
 
+def after_step_key(node, task, iteration, step, version, parent):
+    """D3: the record of what the harness decided after a step's tools ran (workspace digest, auto-validation and its
+    message). parent: the key of the step's LLM reply; version: the sandbox images, as for RunValidation."""
+    return json.dumps(["after_step", node, task, iteration, step, _sha([parent]), version])
+
+
 def invalid_calls(msg):
     """Tool calls the provider returned but whose arguments could not be parsed (LangChain's invalid_tool_calls).
     They are never treated as valid calls, but they are still tool calls: each must be answered."""

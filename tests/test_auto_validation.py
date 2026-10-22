@@ -149,6 +149,12 @@ def test_no_auto_validation_without_a_change_or_after_finish(tmp_path):         
     assert r["status"] == st.DONE
 
 
+def test_a_read_after_a_validated_write_is_not_validated_again(tmp_path):
+    r, model, v, d = run(tmp_path, [write_bad(1), READ, WRITE, FINISH])
+    assert v.by("auto") == ["unit", "target"] * 2                      # after each write, not after the read
+    assert LABEL not in last_text(model.calls[2])
+
+
 def test_at_most_the_limit_per_attempt_then_one_notice(tmp_path):                              # T3
     r, model, v, d = run(tmp_path, [write_bad(1), write_bad(2), write_bad(3), write_bad(4), WRITE, FINISH],
                          config=cfg(limit=2))
@@ -169,12 +175,12 @@ def test_switched_off_nothing_changes(tmp_path):                                
     r, model, v, d = run(tmp_path, [write_bad(1), WRITE, FINISH], config=cfg(auto=False))
     assert all(LABEL not in texts(c) for c in model.calls) and v.by("auto") == []
     assert not [e for e in events(d, "step_committed") if e["kind"] == "after_step"]
-    assert r["loop_policy"] == {"auto_validate": False, "auto_validate_max": 4}
+    assert r.get("loop_policy") == {"auto_validate": False, "auto_validate_max": 4}
 
 
 def test_the_policy_is_recorded(tmp_path):
     r, model, v, d = run(tmp_path, [WRITE, FINISH])
-    assert r["loop_policy"] == {"auto_validate": True, "auto_validate_max": 4}
+    assert r.get("loop_policy") == {"auto_validate": True, "auto_validate_max": 4}
     assert [{k: e[k] for k in ("auto_validate", "auto_validate_max")} for e in events(d, "loop_policy")] == \
         [{"auto_validate": True, "auto_validate_max": 4}]
 
@@ -266,7 +272,7 @@ def test_the_policy_is_frozen_in_the_checkpoint(tmp_path):                      
     v2 = Validations()
     r, model2, _, d = run(tmp_path, [WRITE, FINISH], validate=v2, resume=True, config=cfg(auto=False))
     assert v2.by("auto") == ["unit", "target"] and LABEL in last_text(model2.calls[1])
-    assert r["loop_policy"]["auto_validate"] is True
+    assert (r.get("loop_policy") or {}).get("auto_validate") is True
 
 
 # ---- the real sandbox, and crashes across processes ----------------------------------------------------------------

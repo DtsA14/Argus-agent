@@ -17,6 +17,20 @@ def parse_lines(text):
     return out
 
 
+class TaggedLog:
+    """A view of a log that adds fixed fields (tags) to every event it emits, e.g. origin="auto" on the sandbox runs
+    of one caller. Reads go to the underlying log."""
+
+    def __init__(self, log, **tags):
+        self.log, self.tags = log, tags
+
+    def emit(self, event, **fields):
+        self.log.emit(event, **fields, **self.tags)
+
+    def read(self):
+        return self.log.read()
+
+
 class EventLog:
     """Append-only JSONL event log; thread-safe because workers run in parallel.
 

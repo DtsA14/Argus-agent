@@ -34,7 +34,7 @@ from acceptance.verdict import evaluate
 from acceptance.workspace import digest, prepare
 from harness.crash import Crasher
 from harness.errors import EstimateExceeded
-from harness.events import EventLog
+from harness.events import EventLog, TaggedLog
 from harness.guard import guard
 from harness.llm import LLMCaller, reconcile_ledger, to_nano
 from harness.memo import Memo
@@ -79,6 +79,7 @@ class State(TypedDict, total=False):
     tools: list                  # the effective tool allowlist of this run (config + frozen contract)
     provenance: dict             # input (workspace, snapshot hash, intake record) and the Argus commit, at setup
     budget_profile: dict         # the profile the run was configured with: name, attempt_tokens, max_output_tokens
+    loop_policy: dict            # D3, frozen at setup: auto_validate, auto_validate_max (absent: a run from before D3)
     tokens_used: Annotated[int, operator.add]
     usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
@@ -248,8 +249,11 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                   "max_output_tokens": int(cfg["roles"][cfg["code_task"]["role"]].get("max_output_tokens", 2048)),
                   **{k: cfg["code_task"][k] for k in USD_PROFILE_KEYS if cfg["code_task"].get(k) is not None}}
         log.emit("budget_profile", **budget)
+        policy = {"auto_validate": bool(cfg["code_task"].get("auto_validate", False)),
+                  "auto_validate_max": int(cfg["code_task"].get("auto_validate_max", 4))}
+        log.emit("loop_policy", **policy)
         return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[],
-                    tools=effective_tools(contract), provenance=provenance, budget_profile=budget)
+                    tools=effective_tools(contract), provenance=provenance, budget_profile=budget, loop_policy=policy)
 
     def agent(state):
         try:
@@ -273,7 +277,9 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         versions["RunValidation"] = f"1:{tool_version(scfg, ct.environments(contract))}"
         box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate, journal=run_dir / "tool_journal.jsonl",
                       crasher=crasher)
-        a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None)
+        # The policy frozen at setup, not this process's config: a resume must decide every step as the run did.
+        a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None,
+                       policy=state.get("loop_policy"))
         return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"]},
                 "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}
 
@@ -283,7 +289,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         except frozen.ContractChanged as e:
             return move(state, st.BLOCKED, reason=str(e), blocked="contract_changed")
         i = state["iteration"]
-        v = evaluate(contract, str(ws), state["before"], scfg, log, run=validate)
+        v = evaluate(contract, str(ws), state["before"], scfg, log,
+                     run=lambda spec, w, c, lg=None: validate(spec, w, c, lg and TaggedLog(lg, origin="acceptance")))
         path = run_dir / f"verdict_{i}.json"
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(v, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
@@ -385,7 +392,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
-                                        "attempt", "tools", "provenance", "budget_profile")}
+                                        "attempt", "tools", "provenance", "budget_profile", "loop_policy")}
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
                   llm_calls_unknown=totals["unknown_after_crash"])

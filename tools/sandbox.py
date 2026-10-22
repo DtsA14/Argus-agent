@@ -302,6 +302,7 @@ def _run(cfg, make_args, stdin_bytes, log, meta):
         if sum(r.total for r in readers) > kill_after:
             flood.set()
 
+    started = time.monotonic()
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     readers.extend([_BoundedReader(proc.stdout, limit, on_total), _BoundedReader(proc.stderr, limit, on_total)])
     feeder = threading.Thread(target=_feed, args=(proc.stdin, stdin_bytes), daemon=True)
@@ -347,5 +348,6 @@ def _run(cfg, make_args, stdin_bytes, log, meta):
     if log is not None:
         log.emit("sandbox_run", container=name, exit_code=exit_code, timed_out=timed_out,
                  killed=result["killed"], truncated=result["truncated"], output_limit_exceeded=output_limit,
-                 stdout_bytes=out.total, stderr_bytes=err.total, cleanup_failed=cleanup_failed, **(meta or {}))
+                 stdout_bytes=out.total, stderr_bytes=err.total, cleanup_failed=cleanup_failed,
+                 duration_s=round(time.monotonic() - started, 3), **(meta or {}))
     return result

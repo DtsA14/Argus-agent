@@ -18,6 +18,8 @@ from pydantic import BaseModel, Field
 from acceptance.claims import schema_problems
 from acceptance.contract import SUMMARY, claims_schema, matches
 from acceptance.validation import run_validation
+from acceptance.workspace import digest, snapshot
+from harness.events import TaggedLog
 from acceptance.workspace import snapshot
 from tools.fs import PathEscape, PathJail
 
@@ -236,12 +238,21 @@ class Toolbox:
         spec = specs.get(args.get("id"))
         if spec is None:
             return f"Unknown validation {args.get('id')!r}. Available: {sorted(specs)}."
-        v = self.validate(spec, self.workspace, self.sandbox_cfg, self.log)
+        v = self.validate(spec, self.workspace, self.sandbox_cfg, TaggedLog(self.log, origin="tool"))
         ev = v.get("evidence") or {}
         out = {"status": v["status"], "reason": v["reason"],
                **{k: ev.get(k) for k in ("tests_run", "failures", "errors", "skipped", "must_pass") if k in ev},
                "output_tail": TIMING.sub("in Xs", (ev.get("output_tail") or "")[-1500:])}
         return json.dumps(out, ensure_ascii=False, sort_keys=True)
+
+    def digest(self):
+        """The workspace's digest, computed as the verdict computes it."""
+        return digest(snapshot(self.workspace))
+
+    def validate_all(self):
+        """D3: every validation of the contract, in contract order, as RunValidation runs one (read-only sandbox)."""
+        log = TaggedLog(self.log, origin="auto")
+        return [self.validate(spec, self.workspace, self.sandbox_cfg, log) for spec in self.contract["validation"]]
 
     def finish(self, args):
         doc = claims_doc(args)
