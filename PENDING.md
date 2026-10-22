@@ -43,6 +43,13 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - Pengamatan, belum tindakan: di `pilot3b1` agen memanggil `RunValidation` di balasan yang sama dengan tulisannya, sebelum validasi otomatis
   jalan (validasi dijalankan dua kali, ±9 detik). Prompt sistem sengaja tidak menyebut validasi otomatis (D3 K4). Satu pengamatan
 
+## Selesai, belum masuk arsip
+
+- [x] **Pilot `argus_self_3`** (2026-10-17, PR #72; `pilots/argus_self_contract/README.md`, validasi `must_pass`, $0.1797): gagal jujur,
+  workspace tidak berubah. Thinking memakai **100%** output di langkah ketiga (4.096 dan 2.954), tanpa tool call; batas output terkunci
+  oleh sisa reservasi attempt (±4,5 ribu setelah input 15 ribu). Keputusan yang dibukanya ("profil task besar, batasi thinking, atau
+  berhenti") terjawab oleh pekerjaan sesudahnya: profil `large` (M6 W5, keluaran 8.192) dan `large_usd` (D1)
+
 ## Pekerjaan operasional (Atha, di luar repo)
 
 - [ ] Cabut kunci API yang dipakai untuk pilot 3a v2, D5, dan 3b di dashboard provider
