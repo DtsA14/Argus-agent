@@ -206,6 +206,21 @@ def usage_from_message(msg):
     return um.get("input_tokens", 0), um.get("output_tokens", 0), details.get("cache_read", 0)
 
 
+def cache_usage(msg):
+    """D5: cache tokens of one reply, as langchain_anthropic reports them in input_token_details: reads, 5-minute and
+    1-hour writes, and creation (their sum; None when the provider reports no such thing). With a TTL breakdown
+    langchain sets the generic cache_creation to 0, so the breakdown wins."""
+    um = getattr(msg, "usage_metadata", None) or {}
+    d = um.get("input_token_details") or {}
+    e5, e1 = d.get("ephemeral_5m_input_tokens"), d.get("ephemeral_1h_input_tokens")
+    if e5 is not None or e1 is not None:
+        w5, w1 = int(e5 or 0), int(e1 or 0)
+    else:
+        w5, w1 = (None if d.get("cache_creation") is None else int(d["cache_creation"])), 0
+    creation = None if w5 is None else w5 + w1
+    return {"read": int(d.get("cache_read") or 0), "write_5m": w5 or 0, "write_1h": w1, "creation": creation}
+
+
 def price_for(cfg, ref):
     return cfg.get("prices", {}).get(str(ref))
 
@@ -216,11 +231,14 @@ def window_for(cfg, provider):
 
 def message_cost(cfg, ref, msg, now=None):
     tin, tout, cached = usage_from_message(msg)
+    c = cache_usage(msg)
     return cost_usd(
         price_for(cfg, ref),
         input_tokens=tin,
         output_tokens=tout,
         cache_read_tokens=cached,
+        cache_write_tokens=c["write_5m"],
+        cache_write_1h_tokens=c["write_1h"],
         window=window_for(cfg, ref.provider),
         now=now,
     )

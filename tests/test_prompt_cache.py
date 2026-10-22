@@ -262,9 +262,8 @@ def test_caching_changes_neither_prompt_hashes_nor_memo_keys(tmp_path):         
             last = model.calls[1]["messages"]
             assert marked(last[0]) and marked(last[-1]) and isinstance(last[-1], ToolMessage)
             assert not any(marked(m) for m in last[1:-1])
-            assert r["cache"]["cache_creation_tokens"] == 0 and r["cache"]["usd_saved_estimate"] == 0
-        else:
-            assert r["cache"]["cache_creation_tokens"] is None                            # fake replies report no writes
+        # the scripted replies report reads (0) but no writes: nothing saved, creation unknown (null, K3)
+        assert r.get("cache") == {"cache_read_tokens": 0, "cache_creation_tokens": None, "usd_saved_estimate": 0.0}
     assert out["on"] == out["off"]
 
 

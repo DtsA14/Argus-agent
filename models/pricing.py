@@ -56,13 +56,20 @@ def multiplier(price, window, now=None):
     return price.get("peak_multiplier", 1) if (price and is_peak(window, now)) else 1
 
 
-def cost_usd(price, *, input_tokens, output_tokens, cache_read_tokens=0, window=None, now=None):
-    """USD cost of one call, or None when the price is unknown (never guess)."""
+def cost_usd(price, *, input_tokens, output_tokens, cache_read_tokens=0, cache_write_tokens=0, cache_write_1h_tokens=0,
+             window=None, now=None):
+    """USD cost of one call, or None when the price is unknown (never guess). input_tokens is the whole prompt, cache
+    reads and writes included (as LangChain reports it); writes are 5-minute unless counted as 1-hour. A write without
+    a write rate has no known cost."""
     if not price or price.get("input") is None or price.get("output") is None:
+        return None
+    if (cache_write_tokens and price.get("cache_write_5m") is None) or (
+            cache_write_1h_tokens and price.get("cache_write_1h") is None):
         return None
     now = now or datetime.now(timezone.utc)
     multiplier = price.get("peak_multiplier", 1) if is_peak(window, now) else 1
     cache_rate = price.get("cache_read", price["input"])
-    fresh = max(input_tokens - cache_read_tokens, 0)
-    usd = (fresh * price["input"] + cache_read_tokens * cache_rate + output_tokens * price["output"]) / 1_000_000
-    return usd * multiplier
+    fresh = max(input_tokens - cache_read_tokens - cache_write_tokens - cache_write_1h_tokens, 0)
+    usd = (fresh * price["input"] + cache_read_tokens * cache_rate + output_tokens * price["output"]
+           + cache_write_tokens * price.get("cache_write_5m", 0) + cache_write_1h_tokens * price.get("cache_write_1h", 0))
+    return usd / 1_000_000 * multiplier
