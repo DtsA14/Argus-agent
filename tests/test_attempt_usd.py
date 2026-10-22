@@ -130,6 +130,7 @@ def test_a_declared_attempt_usd_is_the_attempt_reservation_whatever_the_price():
 
 def test_a_profile_without_attempt_usd_keeps_the_old_formula():   # T6
     c = sonnet(load_config(), 0.5)
+    assert "large_usd" in c["code_task"]["profiles"]
     assert settings(c)["attempt_usd"] == pytest.approx(30000 * 10 / 1e6)
     assert settings(apply_profile(c, "large"))["attempt_usd"] == pytest.approx(45000 * 10 / 1e6)
     # applying another profile drops what large_usd declared: nothing leaks from one profile into the next

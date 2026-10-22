@@ -84,12 +84,17 @@ class State(TypedDict, total=False):
     elapsed_s: Annotated[float, operator.add]
 
 
+USD_PROFILE_KEYS = ("attempt_usd", "max_input_tokens")   # D1: optional in a profile; absent, the run is as before
+
+
 def apply_profile(cfg, name):
     """The config with a budget profile applied: the attempt reservation and the coder's output cap, nothing else.
     The cost cap (budget.max_usd, the contract's limits.max_usd) is never touched. Unknown names raise KeyError."""
     p = cfg["code_task"]["profiles"][name]
     role = cfg["code_task"]["role"]
-    out = {**cfg, "code_task": {**cfg["code_task"], "attempt_tokens": int(p["attempt_tokens"]), "applied_profile": name},
+    task = {k: v for k, v in cfg["code_task"].items() if k not in USD_PROFILE_KEYS}   # nothing leaks from a profile
+    task.update({k: p[k] for k in USD_PROFILE_KEYS if p.get(k) is not None})         # applied before (D1)
+    out = {**cfg, "code_task": {**task, "attempt_tokens": int(p["attempt_tokens"]), "applied_profile": name},
            "roles": {**cfg["roles"], role: {**cfg["roles"][role], "max_output_tokens": int(p["max_output_tokens"])}}}
     return out
 
@@ -115,7 +120,11 @@ def settings(cfg, contract=None):
     tokens = int(c["attempt_tokens"])
     max_usd = cfg["budget"].get("max_usd")
     max_usd = math.inf if max_usd is None else float(max_usd)
-    out = {"attempt_tokens": tokens, "attempt_usd": tokens * rate, "max_steps": int(c["max_steps"]),
+    # D1: a profile may reserve the attempt in USD; otherwise its tokens are priced as if all were output
+    attempt_usd = float(c["attempt_usd"]) if c.get("attempt_usd") is not None else tokens * rate
+    max_input = None if c.get("max_input_tokens") is None else int(c["max_input_tokens"])
+    out = {"attempt_tokens": tokens, "attempt_usd": attempt_usd, "max_input_tokens": max_input,
+           "max_steps": int(c["max_steps"]),
            "stagnation_rounds": int(c.get("stagnation_rounds", 2)),
            "max_tokens": int(cfg["budget"]["max_tokens"]), "max_usd": max_usd, "max_iterations": None}
     if contract is not None:
@@ -155,7 +164,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
     versions = {"ListFiles": "1", "SearchFiles": "1", "ReadFile": "1", "WriteFile": "1", "EditFile": "1", "Finish": "1",
                 "RunValidation": f"1:{tool_version(scfg)}"}
     attempt_fn = make_attempt(caller, memo, log, tokens=lim0["attempt_tokens"], usd=lim0["attempt_usd"],
-                              max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher)
+                              max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher,
+                              max_input=lim0["max_input_tokens"])
     configured = list((cfg.get("tools") or {}).get(cfg["code_task"]["role"], []))
 
     def effective_tools(contract):
@@ -235,7 +245,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                       "argus": argus_provenance()}
         log.emit("provenance", **provenance)
         budget = {"name": profile, "attempt_tokens": lim0["attempt_tokens"],
-                  "max_output_tokens": int(cfg["roles"][cfg["code_task"]["role"]].get("max_output_tokens", 2048))}
+                  "max_output_tokens": int(cfg["roles"][cfg["code_task"]["role"]].get("max_output_tokens", 2048)),
+                  **{k: cfg["code_task"][k] for k in USD_PROFILE_KEYS if cfg["code_task"].get(k) is not None}}
         log.emit("budget_profile", **budget)
         return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[],
                     tools=effective_tools(contract), provenance=provenance, budget_profile=budget)

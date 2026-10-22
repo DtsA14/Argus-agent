@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from models.pricing import cost_usd, multiplier
 from models.registry import ConfigError, ModelRef, build_chat_model, price_for, usage_from_message, window_for
 
-from .errors import LLMCallFailed, ReservationExhausted, TransientError
+from .errors import InputLimitExceeded, LLMCallFailed, ReservationExhausted, TransientError
 
 TRANSIENT_STATUS = {408, 409, 425, 429}
 # Context a node may attach to ledger events. Anything else is rejected, so meta can never
@@ -75,6 +75,7 @@ class Reservation:
     Spend is kept in integer nano-dollars; `used_usd` is derived from it."""
     tokens: int
     usd: float
+    max_input: int | None = None     # per-call input limit (D1); None: only tokens and USD bound a call
     used_tokens: int = 0
     used_nano: int = 0
     violated: bool = False
@@ -311,6 +312,11 @@ class LLMCaller:
             # A violated reservation needs no special case: its tokens or USD left are negative, so the
             # output cap below is negative and the call is refused before sending.
             est_in = self.count(messages, tools)
+            if reservation.max_input is not None and est_in > reservation.max_input:
+                emit("llm_call", status="refused", reason="input_limit", attempt=attempt, est_input=est_in,
+                     max_input=reservation.max_input)
+                raise InputLimitExceeded(f"{self.role}: {est_in} input tokens, the limit per call is "
+                                         f"{reservation.max_input}")
             cap = self._output_cap(est_in, reservation)
             if cap < self.min_output:
                 emit("llm_call", status="refused", attempt=attempt, est_input=est_in, max_tokens=cap,

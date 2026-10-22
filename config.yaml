@@ -93,6 +93,12 @@ code_task:
   profiles:
     default: {attempt_tokens: 30000, max_output_tokens: 4096}
     large: {attempt_tokens: 45000, max_output_tokens: 8192}
+    # D1 (docs/reviews/DESIGN_ATTEMPT_USD.md): the attempt is reserved in USD, not as tokens priced as output. Each call
+    # is still refused before sending when its worst case does not fit the USD left; max_input_tokens caps the input
+    # of one call (refused: input_limit, the attempt ends context_limit). attempt_tokens is only a safety ceiling:
+    # 400,000 tokens cost at least $0.80 at Sonnet's input price, so the USD limit binds first. It needs
+    # budget.max_tokens >= 400,000 (a pilot config sets 1,200,000); with the 200,000 above it never starts.
+    large_usd: {attempt_tokens: 400000, attempt_usd: 0.45, max_input_tokens: 40000, max_output_tokens: 8192}
 
 retry:
   attempts: 3

@@ -12,6 +12,10 @@ class ReservationExhausted(Exception):
     """A request would not fit in what is left of the node's token/USD reservation. Nothing was sent."""
 
 
+class InputLimitExceeded(ReservationExhausted):
+    """A request's input is over the reservation's per-call input limit (max_input). Nothing was sent."""
+
+
 class LLMCallFailed(Exception):
     """A model call failed permanently, or kept failing after the allowed retries."""
 
