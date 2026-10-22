@@ -189,16 +189,21 @@ providers:
 roles:
   coder:
     # General tasks, slice 1 (codetask/). The model for a live run is chosen in its approval; tests use fake:scripted.
-    model: "anthropic:claude-sonnet-5-5"
+    # DeepSeek V4.1 Flash since 2026-10-23 (Atha). Non-thinking: in thinking mode with tools, DeepSeek requires every
+    # earlier reasoning_content to be sent back (else HTTP 400), which the agent loop does not keep.
+    model: "deepseek:deepseek-flash"
     max_output_tokens: 4096
-    timeout_s: 90
+    timeout_s: 120
+    params: {extra_body: {thinking: {type: disabled}}}
   drafter:
     # W2b task drafts (codetask/drafter.py). One SubmitDraft holds the plan, the contract and every new test, plus the
     # model's thinking (on by default): in pilot w2b1d1 it hit 8,192 with 6,108 of them thinking, before any test was
     # written. 16,384 since then (option A, Atha 2026-10-22); the attempt's USD reservation still bounds every call.
-    model: "anthropic:claude-sonnet-5-5"
+    # DeepSeek V4.1 Flash, non-thinking, since 2026-10-23 (as coder).
+    model: "deepseek:deepseek-flash"
     max_output_tokens: 16384
-    timeout_s: 120
+    timeout_s: 180
+    params: {extra_body: {thinking: {type: disabled}}}
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
@@ -239,6 +244,8 @@ prices:
                                   long_context_above: 100000}   # x5 on every rate above it (not modelled: refused)
   "anthropic:claude-sonnet-5-5": {input: 2.00, output: 10.00, cache_read: 0.10, cache_write_5m: 2.50, cache_write_1h: 4.00}
   "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00, cache_read: 0.20, cache_write_5m: 5.00, cache_write_1h: 8.00}
+  # DeepSeek checked 2026-10-23 on api-docs.deepseek.com/quick_start/pricing: deepseek-flash = DeepSeek-V4.1-Flash-1017;
+  # off-peak input $0.15, cache hit $0.003, output $0.60; peak x2 (cache hits too). Caching is automatic, no write cost.
   "deepseek:deepseek-flash":     {input: 0.15, output: 0.60, cache_read: 0.003, peak_multiplier: 2}
   "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
   "fake:scripted":               {input: 1.00, output: 5.00, cache_read: 0.10, cache_write_5m: 1.25, cache_write_1h: 2.00}
