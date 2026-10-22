@@ -167,9 +167,10 @@ def admission(log, lim):
 
 
 def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None,
-                env_preflight=None):
-    """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox)."""
-    run_dir = Path(run_dir)
+                env_preflight=None, root=ROOT):
+    """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox).
+    root: where the contract's input repository and its intake record live (a router job has its own)."""
+    run_dir, root = Path(run_dir), Path(root)
     ws = run_dir / WORKSPACE
     memo = Memo(run_dir / "memo.sqlite")
     crasher = Crasher(crash_at, str(run_dir / ".crashed"), log)
@@ -222,11 +223,11 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                         blocked="contract_changed")
         log.emit("tools_effective", tools=effective_tools(contract), from_contract=ct.contract_tools(contract))
         try:
-            record = intake.record_for(contract["inputs"]["workspace"], ROOT)
+            record = intake.record_for(contract["inputs"]["workspace"], root)
         except intake.IntakeError as e:
             return move(state, st.BLOCKED, reason=str(e), blocked="invalid_contract")
         if record is not None:        # an intake: the input must still be exactly the commit that was taken in
-            problems = intake.check(record, ROOT / contract["inputs"]["workspace"])
+            problems = intake.check(record, root / contract["inputs"]["workspace"])
             if problems:
                 return move(state, st.BLOCKED, reason="input repository changed since intake: " + "; ".join(problems),
                             blocked="invalid_contract")
@@ -237,7 +238,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if ws.exists():
             shutil.rmtree(ws)     # a copy from a setup that crashed before committing; the agent never ran on it
         try:
-            before = prepare(ROOT / contract["inputs"]["workspace"], ws)
+            before = prepare(root / contract["inputs"]["workspace"], ws)
         except (OSError, ValueError, RuntimeError) as e:
             return move(state, st.BLOCKED, reason=f"invalid input repository: {e}", blocked="invalid_contract")
         crasher.point("setup@after_copy")
@@ -361,7 +362,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
 
 
 def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_at=None, models=None,
-                  validate=None, preflight=None, env_preflight=None, echo=False):
+                  validate=None, preflight=None, env_preflight=None, echo=False, root=ROOT):
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
@@ -380,7 +381,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models, validate=validate,
-                            preflight=preflight, env_preflight=env_preflight)
+                            preflight=preflight, env_preflight=env_preflight, root=root)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)

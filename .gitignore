@@ -8,3 +8,5 @@ runs/
 .sandbox_image
 .sandbox_image_*
 .verify-pytest.out
+# router v0 jobs: snapshots of target repositories (may be private code)
+jobs/
