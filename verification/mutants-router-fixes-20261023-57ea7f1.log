@@ -1,0 +1,11 @@
+HEAD 57ea7f1 tests: tests/test_router.py tests/test_drafter.py tests/test_models.py
+KILLED  every profile offered
+KILLED  large offered by config
+KILLED  re-sent inputs not explained
+KILLED  no running notice
+KILLED  notice without resume
+KILLED  ledger read through EventLog
+KILLED  abandon without the lock
+KILLED  finished jobs abandoned
+KILLED  coder thinks
+RESULT: 9/9 killed
