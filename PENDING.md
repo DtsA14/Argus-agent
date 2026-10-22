@@ -52,6 +52,13 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
   - **W2b-1 `w2b1d3` berhasil** ($0,29; ReviseDraft, attempt $0,70, input 64k): `DRAFTED` dalam 2 submit. Tes drafter lulus terhadap
     `scripts/pilot_report.py` di `main` (20/20) dan menangkap 19/20 mutan referensi 3b (manusia 20/20; tanpa run BLOCKED). Draf tanpa
     `budget_profile` dan regresi longgar. W2b-1 total $0,67 untuk 3 run. Berikutnya: drafter memilih profil, lalu W2b-2
+  - **W2b-2 selesai: `pr_title2` agent-completed tanpa patch referensi** (2026-10-23, PR #160): issue → drafter (3 run, $0,47) →
+    approve `--no-reference` → agen (DONE, $0,08) → patch ke `main` tanpa perubahan → `verify.sh` lulus. Total $0,54, ±17 keputusan,
+    5 menit Atha (`pilots/m6_w2b/w2b2/RESULT.md`). Perbaikan yang dipicu: profil wajib (#155), `edit_file` + cek tulis ulang (#157),
+    batas sandbox, petunjuk, 5 submit (#158)
+- [ ] **W2a-ext: `changed_tests`**: draf boleh mengubah tes lama (diff ditampilkan saat approve; tes tidak boleh hilang diam-diam). Task
+    yang mengubah perilaku yang sudah dites (mis. `success_rate` di `pilot_report.py`) tidak bisa diekspresikan tanpa ini. Spek dulu
+- [ ] Drafter masih mencoba regresi yang butuh `git` (w2b2d3) walau prompt menyebut batas sandbox; satu submit terbuang
 - [ ] **D4** batas ListFiles + daftar berkas di issue: **ditunda** (2026-10-22); dibuka bila ada task yang kehabisan anggaran dengan caching
   menyala
 - Pengamatan, belum tindakan: di `pilot3b1` agen memanggil `RunValidation` di balasan yang sama dengan tulisannya, sebelum validasi otomatis

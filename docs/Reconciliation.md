@@ -16,7 +16,7 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | General-task agent (dulu "M4 slice 1") | `[x]` | `codetask/`, `acceptance/`; Eval Set v1 16/16 | Eval Set v1 jenuh: regresi saja, bukan ukuran kemampuan |
 | **M4** multi-agent paralel dengan dependensi | `[ ]` | Graf riset (M1–M2) punya worker paralel lewat fan-out tanpa dependensi (`graph.py`, *dicek*); code task satu agen | Penjadwal dengan dependensi, batas sumber daya, multi-agent untuk code task. Belum ada bukti single-agent menjadi penghalang |
 | **M5** observability dan benchmark | `[~]` | Ledger per panggilan dengan latensi, cache, `duration_s`/`origin` sandbox; `audit_run.py`, `failure_trace.py`, `scripts/pilot_report.py` (agregat lintas run), `evals/runner.py`, `run_series.py` | Tracing/dashboard (*dicek*: tidak ada Langfuse/LangSmith/OTel); benchmark single vs multi (tidak ada multi); **waktu supervisi manusia tidak pernah diukur** (pilot 3a–3b: unknown); eval set 10–20 task yang tidak jenuh |
-| **M6** repo → PR | `[x]` MVP | W0–W5; 10 run live pilot di 6 task (bagian 4), 6 task `agent-completed`; patch agen diterapkan ke `main` di pilot 1, 2, 4, 5, 3a, 3b | W2b drafter ada di kode (`codetask/drafter.py`), belum pernah run live; repo selain Argus; PR tetap dibuka manusia (disengaja); tingkat sukses umum belum ada (sampel kecil, semua task di repo Argus) |
+| **M6** repo → PR | `[x]` MVP | W0–W5; 10 run live pilot di 6 task (bagian 4), 6 task `agent-completed`; patch agen diterapkan ke `main` di pilot 1, 2, 4, 5, 3a, 3b | W2b drafter: satu task `agent-completed` tanpa patch referensi (`pr_title2`, W2b-2); task yang mengubah tes lama belum bisa (W2a-ext); repo selain Argus; PR tetap dibuka manusia (disengaja); tingkat sukses umum belum ada (sampel kecil, semua task di repo Argus) |
 | M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007) |
 | M8 penemuan tool, memori prosedural | `[ ]` | – | Seluruhnya (ADR-003) |
 | M9 deployment terkendali | `[ ]` | – | Seluruhnya |
@@ -39,7 +39,7 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | Kriteria | Status | Bukti |
 |---|---|---|
 | Issue dan repo target ber-scope | ✓ | kontrak (`inputs`, `scope`), intake W4 |
-| Rencana bertipe dan kriteria eksplisit | ~ | draf W2a (rencana, kontrak, tes) ditulis manusia di semua pilot; drafter model (W2b) ada di kode, patch referensi opsional (`feasibility: unproven`), belum live |
+| Rencana bertipe dan kriteria eksplisit | ~ | draf W2a (rencana, kontrak, tes) ditulis manusia di semua pilot; drafter model (W2b): W2b-1 (3 run) dan W2b-2 (`pr_title2` agent-completed tanpa patch referensi, $0,54) |
 | Baca/tulis terbatas workspace | ✓ | path jail (`tools/fs.py`), scope tulis, protected |
 | Kode dan tes terisolasi | ✓ | sandbox Docker, lingkungan `argus` tanpa jaringan |
 | Batas biaya per task dan per run | ✓ | reservasi attempt (token/USD), cap run = min(config, kontrak) |
