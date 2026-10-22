@@ -4,13 +4,17 @@ For every request:
   1. count input tokens over the full context, including assistant tool calls and tool results
      (exact via the provider's counting API when available, otherwise a conservative heuristic);
   2. derive the output cap from what is left of the node's reservation, in tokens AND in USD;
-  3. refuse before sending when not even `min_output_tokens` would fit (nothing is billed);
+  3. refuse before sending when not even `min_output_tokens` would fit, or when the input is over the
+     reservation's per-call limit `max_input` (reason input_limit); nothing is billed;
   4. write `llm_call_started` (call_id, worst case) to the ledger, then send with max_tokens = cap;
   5. write the final `llm_call` event (same call_id), then charge the reservation;
   6. charge actual usage, or the worst case when usage is missing or the attempt failed.
 
 Ledger lifecycle, per call_id:
-  refused                                -> one `llm_call` with status refused, nothing sent
+  refused                                -> one `llm_call` with status refused, nothing sent. Two shapes:
+                                            budget: est_input, max_tokens (the cap), tokens_left, usd_left;
+                                            reason "input_limit" (D1): est_input, max_input, and no
+                                            max_tokens / tokens_left / usd_left. Readers use .get().
   llm_call_started + llm_call (final)    -> ok / transient_error / error, charged as recorded
   llm_call_started without a final event -> unknown_after_crash: the process died mid-request;
                                             reconcile_ledger() charges it at worst case
@@ -36,7 +40,7 @@ from datetime import datetime, timezone
 from models.pricing import cost_usd, multiplier
 from models.registry import ConfigError, ModelRef, build_chat_model, price_for, usage_from_message, window_for
 
-from .errors import LLMCallFailed, ReservationExhausted, TransientError
+from .errors import InputLimitExceeded, LLMCallFailed, ReservationExhausted, TransientError
 
 TRANSIENT_STATUS = {408, 409, 425, 429}
 # Context a node may attach to ledger events. Anything else is rejected, so meta can never
@@ -75,6 +79,7 @@ class Reservation:
     Spend is kept in integer nano-dollars; `used_usd` is derived from it."""
     tokens: int
     usd: float
+    max_input: int | None = None     # per-call input limit (D1); None: only tokens and USD bound a call
     used_tokens: int = 0
     used_nano: int = 0
     violated: bool = False
@@ -311,6 +316,11 @@ class LLMCaller:
             # A violated reservation needs no special case: its tokens or USD left are negative, so the
             # output cap below is negative and the call is refused before sending.
             est_in = self.count(messages, tools)
+            if reservation.max_input is not None and est_in > reservation.max_input:
+                emit("llm_call", status="refused", reason="input_limit", attempt=attempt, est_input=est_in,
+                     max_input=reservation.max_input)
+                raise InputLimitExceeded(f"{self.role}: {est_in} input tokens, the limit per call is "
+                                         f"{reservation.max_input}")
             cap = self._output_cap(est_in, reservation)
             if cap < self.min_output:
                 emit("llm_call", status="refused", attempt=attempt, est_input=est_in, max_tokens=cap,

@@ -1,6 +1,6 @@
 # D1: anggaran attempt dalam USD, dengan batas masukan per panggilan (spesifikasi untuk review)
 
-Status 2026-10-22: **spesifikasi; K1–K6 diputuskan (bagian 8).** Implementasi di PR terpisah. Asal: `pilots/m6_pilot3/3a/CONTEXT_DESIGN.md` (D1, dikoreksi di bagian 7). Menyentuh
+Status 2026-10-22: **spesifikasi; K1–K6 diputuskan (bagian 8); diimplementasikan (PR `d1-attempt-usd`, bukti di `pilots/m6_pilot3/3a/evidence/d1/`).** Asal: `pilots/m6_pilot3/3a/CONTEXT_DESIGN.md` (D1, dikoreksi di bagian 7). Menyentuh
 aturan uang (`AGENTS.md`, "Budget and money"), jadi proses paling ketat: tes yang gagal di kode lama, mutan, `verify.sh` penuh, replay tanpa biaya, baru
 satu run live setelah D3 juga ada (K4 D2).
 

@@ -1,0 +1,87 @@
+{
+ "live": {
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+  "attempts": 2,
+  "usd_billed": 0.200014,
+  "llm_calls": 7
+ },
+ "replay": {
+  "status": "BLOCKED",
+  "stop_reason": "the model provider failed during the attempt",
+  "attempts": 1,
+  "usd_billed": 0.249182,
+  "llm_calls": 4
+ },
+ "attempt_ends_live": [
+  "reservation_exhausted",
+  "reservation_exhausted"
+ ],
+ "attempt_ends_replay": [
+  "llm_failed"
+ ],
+ "same_sequence_of_calls (iteration, step, status, prompt_hash, tokens)": false,
+ "calls_live": 9,
+ "calls_replay": 4,
+ "verdict_0_workspace_digest_live": "41b051c07334de8d",
+ "verdict_0_workspace_digest_replay": "41b051c07334de8d",
+ "verdict_0_failing_live": [
+  "artifact:SUMMARY.json",
+  "validation:inspectors",
+  "claims"
+ ],
+ "verdict_0_failing_replay": [
+  "artifact:SUMMARY.json",
+  "validation:inspectors",
+  "claims"
+ ],
+ "verdict_1_workspace_digest_live": "41b051c07334de8d",
+ "verdict_1_workspace_digest_replay": null,
+ "requests_the_live_run_never_made": 1,
+ "refused_live": [
+  [
+   0,
+   3,
+   27252
+  ],
+  [
+   1,
+   4,
+   18971
+  ]
+ ],
+ "refused_replay": [],
+ "sent_replay": [
+  [
+   0,
+   0,
+   3097,
+   8192
+  ],
+  [
+   0,
+   1,
+   12657,
+   8192
+  ],
+  [
+   0,
+   2,
+   23840,
+   8192
+  ],
+  [
+   0,
+   3,
+   27252,
+   8192
+  ]
+ ],
+ "budget_profile_replay": {
+  "name": "large",
+  "attempt_tokens": 400000,
+  "max_output_tokens": 8192,
+  "attempt_usd": 0.45,
+  "max_input_tokens": 40000
+ }
+}

@@ -15,7 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from acceptance.contract import SUMMARY
 from harness.crash import Crasher
-from harness.errors import LLMCallFailed, ReservationExhausted
+from harness.errors import InputLimitExceeded, LLMCallFailed, ReservationExhausted
 from harness.llm import is_truncated
 from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_from_json, message_to_json,
                            reservation_from_ledger, tool_step_key)
@@ -161,13 +161,13 @@ def task_prompt(contract, feedback=None):
 NUDGE = "Use the tools to work on the issue, then call Finish."
 
 
-def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, crasher=None):
+def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, crasher=None, max_input=None):
     crasher = crasher or Crasher()
 
     def attempt(contract, toolbox, iteration, feedback=None):
         tid = contract["contract"]
         meta = {"node": NODE, "task": tid, "iteration": iteration}
-        res = reservation_from_ledger(log, tokens=tokens, usd=usd, **meta)
+        res = reservation_from_ledger(log, tokens=tokens, usd=usd, max_input=max_input, **meta)
         tools = offered(toolbox.allowed)
 
         def end(reason, steps):
@@ -184,6 +184,8 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
             else:
                 try:
                     msg = caller.call(messages, res, tools=tools, meta={**meta, "step": step})
+                except InputLimitExceeded:
+                    return end("context_limit", step)
                 except ReservationExhausted:
                     return end("reservation_exhausted", step)
                 except LLMCallFailed:
