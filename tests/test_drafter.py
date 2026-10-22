@@ -299,9 +299,9 @@ def test_a_changed_source_copy_blocks_the_run(root, tmp_path, monkeypatch):
     def tampering(**kw):
         submit = real(**kw)
 
-        def wrapped(args, n):
+        def wrapped(args, n, **kw):
             (tmp_path / "runs" / "d" / "source" / "src" / "shop.py").write_text(FIXED)
-            return submit(args, n)
+            return submit(args, n, **kw)
         return wrapped
     monkeypatch.setattr(dt, "make_submit", tampering)
     r, _, d = run(root, tmp_path, [SUBMIT])
