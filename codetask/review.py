@@ -465,6 +465,10 @@ def render_pr(prov, contract, record, doc, ck):
     out += ["", "## Validation", "", "Every validation was run again in the sandbox on the base commit plus "
             "`changes.patch` (see `tests.md`):", ""]
     out += [f"- `{k}`: {v}" for k, v in prov["validation_fresh"].items()] or ["- not run"]
+    if (record or {}).get("feasibility") == "unproven":       # W2b: approved without a reference patch
+        out += ["", "The task was approved without a reference patch (feasibility: unproven): before this run, no "
+                "solution had shown that its criteria can be met, and its new tests were drafted, not proven right. "
+                "Read the tests as well as the change."]
     out += ["", "## Checks on this package", ""]
     out += [f"- {'ok' if c['ok'] else 'FAILED'}: `{c['id']}`" + ("" if c["ok"] else f" - {cell(c['detail'], 300)}")
             for c in prov["checks"]]

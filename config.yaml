@@ -109,6 +109,20 @@ code_task:
     # budget.max_tokens >= 400,000 (a pilot config sets 1,200,000); with the 200,000 above it never starts.
     large_usd: {attempt_tokens: 400000, attempt_usd: 0.45, max_input_tokens: 40000, max_output_tokens: 8192}
 
+# W2b (docs/reviews/SPEC_W2B_DRAFTER.md): the drafter reads an intake (read-only) and submits a W2a task draft; it never
+# approves one (scripts/approve_draft.py, a human). Its one attempt is reserved in USD like large_usd (K6), capped by
+# min(budget.max_usd, the run's --max-usd); attempt_tokens is only a ceiling and is kept within budget.max_tokens.
+# Every SubmitDraft runs the draft's static checks and the baseline in the sandbox; max_submits bounds those runs.
+drafter:
+  role: drafter
+  attempt_tokens: 200000
+  attempt_usd: 0.45
+  max_input_tokens: 40000
+  max_steps: 16
+  max_submits: 3
+  environment: argus       # the sandbox environment of every drafted validation (K4: python -m pytest <paths> only)
+  validation_timeout_s: 300
+
 retry:
   attempts: 3
   base_delay: 0.05       # seconds, doubles each attempt
@@ -119,6 +133,7 @@ tools:
   worker: [read_data, run_python]
   evaluator: []
   coder: [list_files, read_file, write_file, run_validation]   # code tasks (codetask/); Finish is not gated
+  drafter: [list_files, search_files, read_file]   # W2b; read-only. SubmitDraft is not gated (it ends the run, as Finish)
 
 # ---------------------------------------------------------------------------
 # LLM providers. Adding a provider = adding an entry here.
@@ -157,6 +172,11 @@ roles:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 4096
     timeout_s: 90
+  drafter:
+    # W2b task drafts (codetask/drafter.py). A test of 9.4 KB (pilot 3b) is ~3,000 output tokens in one SubmitDraft.
+    model: "anthropic:claude-sonnet-5-5"
+    max_output_tokens: 8192
+    timeout_s: 120
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048

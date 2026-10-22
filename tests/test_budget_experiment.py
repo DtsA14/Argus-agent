@@ -36,6 +36,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["code_task"]["feedback_error_excerpt"]   # D2 (the arms ran before it; absent means on if they are re-run)
     del base["code_task"]["auto_validate"]            # D3 (the arms ran before it; absent means off, as they ran)
     del base["code_task"]["auto_validate_max"]
+    del base["drafter"], base["roles"]["drafter"], base["tools"]["drafter"]   # W2b (a role and section they never used)
     # D5: llm.prompt_cache added after the arms ran (absent means off); cache prices corrected and write rates added
     # after them. Their runs had no cache reads or writes, so their costs are the same under either table; every other
     # rate must still be the one they ran with.
