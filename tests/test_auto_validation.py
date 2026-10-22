@@ -123,6 +123,11 @@ def texts(request):
     return "\n".join(m.content if isinstance(m.content, str) else json.dumps(m.content) for m in request["messages"])
 
 
+def test_config_yaml_has_it_off_with_a_limit_of_four():                                    # K5, K3
+    c = load_config()["code_task"]
+    assert c.get("auto_validate") is False and c.get("auto_validate_max") == 4
+
+
 # ---- what the agent sees -----------------------------------------------------------------------------------------
 
 def test_a_step_that_changes_a_file_is_validated_and_the_result_reaches_the_next_request(tmp_path):   # T1
@@ -183,6 +188,18 @@ def test_the_policy_is_recorded(tmp_path):
     assert r.get("loop_policy") == {"auto_validate": True, "auto_validate_max": 4}
     assert [{k: e[k] for k in ("auto_validate", "auto_validate_max")} for e in events(d, "loop_policy")] == \
         [{"auto_validate": True, "auto_validate_max": 4}]
+
+
+def test_an_attempt_without_a_policy_runs_without_auto_validation(tmp_path, monkeypatch):       # K6
+    from codetask import run as run_module
+    real = run_module.make_attempt
+
+    def without_policy(*a, **kw):          # what the agent node passes for a checkpoint from before D3
+        attempt = real(*a, **kw)
+        return lambda contract, box, iteration, feedback=None, policy=None: attempt(contract, box, iteration, feedback)
+    monkeypatch.setattr(run_module, "make_attempt", without_policy)
+    r, model, v, d = run(tmp_path, [write_bad(1), WRITE, FINISH])          # config says on
+    assert v.by("auto") == [] and all(LABEL not in texts(c) for c in model.calls)
 
 
 def test_run_validation_and_acceptance_tag_their_sandbox_runs(tmp_path):
