@@ -8,6 +8,7 @@
 fake:scripted is priced $1/M input, $5/M output, $1.25/M write (5m), $2/M write (1h), $0.10/M read (config.yaml).
 """
 import copy
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -76,6 +77,18 @@ def ledger(log, kind="llm_call"):
 MSGS = [SystemMessage("system rules"), HumanMessage("the task")]
 
 
+def feature(module, name):
+    """A D5 function, asserted to exist (on the code before D5 a test fails here by assertion, not ImportError)."""
+    assert hasattr(module, name), f"{module.__name__}.{name} does not exist"
+    return getattr(module, name)
+
+
+def cost(price, **kw):
+    """cost_usd, asserting first that it knows cache writes."""
+    assert "cache_write_tokens" in inspect.signature(cost_usd).parameters, "cost_usd does not price cache writes"
+    return cost_usd(price, **kw)
+
+
 # ---- 1. prices and the cost formula (K1) ------------------------------------------------------------------------
 
 def test_the_configured_anthropic_prices_are_the_verified_ones():
@@ -87,9 +100,9 @@ def test_the_configured_anthropic_prices_are_the_verified_ones():
 
 def test_cost_prices_fresh_write_read_and_output_each_at_its_own_rate():                 # T1
     # input_tokens is the total: 1,000 uncached + 3,000 written + 6,000 read
-    usd = cost_usd(SONNET, input_tokens=10000, output_tokens=500, cache_read_tokens=6000, cache_write_tokens=3000)
+    usd = cost(SONNET, input_tokens=10000, output_tokens=500, cache_read_tokens=6000, cache_write_tokens=3000)
     assert to_nano(usd) == to_nano((1000 * 2.00 + 3000 * 2.50 + 6000 * 0.10 + 500 * 10.00) / 1e6) == 15_100_000
-    one_hour = cost_usd(SONNET, input_tokens=10000, output_tokens=0, cache_write_1h_tokens=3000)
+    one_hour = cost(SONNET, input_tokens=10000, output_tokens=0, cache_write_1h_tokens=3000)
     assert to_nano(one_hour) == to_nano((7000 * 2.00 + 3000 * 4.00) / 1e6)
     assert cost_usd({"input": 2.0, "output": 10.0}, input_tokens=10, output_tokens=0, cache_write_tokens=5) is None  # no rate: unknown
 
@@ -111,7 +124,7 @@ def test_the_output_cap_prices_every_input_token_as_a_write(tmp_path):          
 
 def test_caching_an_anthropic_model_without_a_write_price_is_a_config_error(tmp_path):  # T3
     c = cfg(model="anthropic:claude-sonnet-5-5")
-    del c["prices"]["anthropic:claude-sonnet-5-5"]["cache_write_5m"]
+    c["prices"]["anthropic:claude-sonnet-5-5"].pop("cache_write_5m", None)
     model = StrictScriptedChatModel(script=[reply("ok")])
     with pytest.raises(ConfigError, match="cache_write_5m"):
         caller(c, model, tmp=tmp_path)
@@ -188,10 +201,10 @@ def test_usage_parsed_from_a_langchain_anthropic_response_is_not_counted_twice()
                                 "cache_creation": {"ephemeral_5m_input_tokens": 3000, "ephemeral_1h_input_tokens": 0}})
     um = lca._create_usage_metadata(raw)
     assert um["input_tokens"] == 10000                                                   # the total, as section 9b says
-    from models.registry import cache_usage
+    import models.registry as registry
     msg = AIMessage(content="ok", usage_metadata=um)
-    assert cache_usage(msg) == {"read": 6000, "write_5m": 3000, "write_1h": 0, "creation": 3000}
-    usd = cost_usd(SONNET, input_tokens=um["input_tokens"], output_tokens=500, cache_read_tokens=6000,
+    assert feature(registry, "cache_usage")(msg) == {"read": 6000, "write_5m": 3000, "write_1h": 0, "creation": 3000}
+    usd = cost(SONNET, input_tokens=um["input_tokens"], output_tokens=500, cache_read_tokens=6000,
                    cache_write_tokens=3000)
     assert to_nano(usd) == 15_100_000
 
@@ -283,7 +296,8 @@ def test_a_call_cut_off_by_a_crash_is_charged_at_the_write_rate(tmp_path):      
 
 
 def test_the_result_totals_cache_tokens_and_estimates_the_saving():                      # section 4
-    from codetask.run import cache_totals
+    import codetask.run as run_module
+    cache_totals = feature(run_module, "cache_totals")
     c = load_config()
     actual = to_nano((1000 * 2.00 + 3000 * 2.50 + 6000 * 0.10 + 500 * 10.00) / 1e6)
     evs = [{"event": "llm_call", "status": "ok", "model": "anthropic:claude-sonnet-5-5", "ts": 1792660000.0,
