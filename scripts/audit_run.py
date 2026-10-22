@@ -83,6 +83,11 @@ for it in range(contract["limits"].get("max_iterations", 5)):
             tk = [k for k in memo if k.startswith('["tool", "agent"') and json.loads(k)[3] == it
                   and json.loads(k)[4] == step and json.loads(k)[5] == c.get("id")]
             messages.append(ToolMessage(memo[tk[0]]["content"], tool_call_id=c.get("id") or f"call_{step}_{i}"))
+        after = [v for k, v in memo.items() if k.startswith('["after_step", "agent"') and json.loads(k)[3] == it
+                 and json.loads(k)[4] == step and v.get("content")]
+        if after:                               # D3: the auto-validation message the agent got after this step
+            print(f"      (harness check after the step: {'limit notice' if after[0].get('limit_notice') else 'validated'})")
+            messages.append(HumanMessage(after[0]["content"]))
 print(f"prompt_hash checked {checked}, mismatches {mismatch}")
 for e in events:
     if e["event"] in ("attempt_end", "status", "budget_violation", "tools_config_changed", "tool_denied"):

@@ -7,7 +7,6 @@
 
 fixtures/audit/pilot3a4/ is the recorded live run (contract, events, memo, result; no key in any of them).
 """
-import copy
 import json
 import os
 import subprocess
@@ -98,6 +97,16 @@ def test_the_audit_reproduces_every_prompt_of_a_run_with_auto_validation(tmp_pat
 
 # ---- 2. a failed token count ends the run with a status ---------------------------------------------------------
 
+def run_survives(tmp_path, script):
+    """The run, asserting that no exception escaped it (before the fix the count error left the process)."""
+    escaped = None
+    try:
+        return run(tmp_path, script)
+    except Exception as e:                       # noqa: BLE001 - what escapes is the finding
+        escaped = e
+    assert escaped is None, f"the run did not end with a status: {type(escaped).__name__}: {escaped}"
+
+
 def counter_that(fails):
     """A provider counter that raises fails[i] on call i (None: answers 500 tokens)."""
     seen = []
@@ -115,7 +124,7 @@ def counter_that(fails):
 def test_a_count_refused_by_the_provider_blocks_the_run_and_sends_nothing(tmp_path, monkeypatch):
     count, seen = counter_that([FakeHTTPError(401, "invalid x-api-key")])
     monkeypatch.setattr(llm, "provider_counter", lambda model, margin: (count, True))
-    r, d = run(tmp_path, [WRITE, FINISH])                                     # returns: the process did not die
+    r, d = run_survives(tmp_path, [WRITE, FINISH])
     assert r["status"] == st.BLOCKED and r["blocked_reason"] == "provider_failed"
     assert json.loads((d / "result.json").read_text())["status"] == st.BLOCKED
     assert not events(d, "llm_call_started") and r["llm_calls"] == 0 and r["usd_billed"] == 0
@@ -129,7 +138,7 @@ def test_a_count_refused_by_the_provider_blocks_the_run_and_sends_nothing(tmp_pa
 def test_a_transient_count_failure_is_retried_and_the_run_goes_on(tmp_path, monkeypatch):
     count, seen = counter_that([FakeHTTPError(529, "overloaded"), FakeHTTPError(503)])
     monkeypatch.setattr(llm, "provider_counter", lambda model, margin: (count, True))
-    r, d = run(tmp_path, [WRITE, FINISH])
+    r, d = run_survives(tmp_path, [WRITE, FINISH])
     assert r["status"] == st.DONE
     assert [(f["attempt"], f["transient"]) for f in events(d, "llm_count_failed")] == [(1, True), (2, True)]
     assert len(events(d, "llm_call_started")) == 2                           # each model call sent once
@@ -139,7 +148,7 @@ def test_a_transient_count_failure_is_retried_and_the_run_goes_on(tmp_path, monk
 def test_a_count_that_keeps_failing_stops_after_the_allowed_attempts(tmp_path, monkeypatch):
     count, seen = counter_that([FakeHTTPError(503)] * 10)
     monkeypatch.setattr(llm, "provider_counter", lambda model, margin: (count, True))
-    r, d = run(tmp_path, [WRITE, FINISH])
+    r, d = run_survives(tmp_path, [WRITE, FINISH])
     attempts = load_config()["llm"]["attempts"]
     assert r["status"] == st.BLOCKED and r["blocked_reason"] == "provider_failed"
     assert len(seen) == attempts and len(events(d, "llm_count_failed")) == attempts

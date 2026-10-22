@@ -2,7 +2,8 @@
 
 For every request:
   1. count input tokens over the full context, including assistant tool calls and tool results
-     (exact via the provider's counting API when available, otherwise a conservative heuristic);
+     (exact via the provider's counting API when available, otherwise a conservative heuristic); a failed
+     count is `llm_count_failed` (nothing sent), retried like a call when transient, else LLMCallFailed;
   2. derive the output cap from what is left of the node's reservation, in tokens AND in USD;
   3. refuse before sending when not even `min_output_tokens` would fit, or when the input is over the
      reservation's per-call limit `max_input` (reason input_limit); nothing is billed;
@@ -315,7 +316,20 @@ class LLMCaller:
         for attempt in range(1, self.attempts + 1):
             # A violated reservation needs no special case: its tokens or USD left are negative, so the
             # output cap below is negative and the call is refused before sending.
-            est_in = self.count(messages, tools)
+            try:
+                est_in = self.count(messages, tools)
+            except Exception as exc:  # the provider's counting API failed: nothing was sent, nothing is charged
+                transient = is_transient(exc)
+                emit("llm_count_failed", attempt=attempt, transient=transient, http_status=http_status(exc),
+                     error=f"{type(exc).__name__}: {str(exc)[:200]}")
+                if not transient:
+                    raise LLMCallFailed(f"{self.role}: counting the input failed: {type(exc).__name__}: {exc}") from exc
+                if attempt == self.attempts:
+                    raise LLMCallFailed(f"{self.role}: counting the input still failing after {attempt} attempts: "
+                                        f"{exc}") from exc
+                wait = retry_after_seconds(exc)
+                self.sleep(self.base_delay * 2 ** (attempt - 1) * (0.5 + random.random()) if wait is None else wait)
+                continue
             if reservation.max_input is not None and est_in > reservation.max_input:
                 emit("llm_call", status="refused", reason="input_limit", attempt=attempt, est_input=est_in,
                      max_input=reservation.max_input)
