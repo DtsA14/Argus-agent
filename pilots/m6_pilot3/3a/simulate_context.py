@@ -36,6 +36,7 @@ STUB_TOKENS = 25                              # "[ReadFile scripts/audit_run.py:
 LIST_CAP_CHARS = 2_000                        # a capped ListFiles: top directories and file counts
 READ_CAP_CHARS = 8_000                        # a capped ReadFile (the rest by line range)
 KINDS = ["list", "code", "data", "valid", "small"]
+FIX_CYCLES = 1                                # --fix-cycles N: EditFile + validation cycles before the passing one
 PROJECTED_OUTPUT = {"validate": 150, "read": 120, "edit": 200, "finish": 250}   # ASSUMPTION (recorded small steps: 114-216)
 
 
@@ -204,10 +205,10 @@ def segments(steps, s, rates, pol):
 
 # ---------------------------------------------------------------- projection
 
-def projected(steps, run_ref, needs_reread, auto_validate=False):
+def projected(steps, run_ref, needs_reread, auto_validate=False, cycles=None):
     """The recorded ok steps followed by the steps the evidence says a writing attempt still needed. With
     auto_validate, a validation is not a model call: its result joins the tool results of the writing step."""
-    seq = _projected(steps, run_ref, needs_reread)
+    seq = _projected(steps, run_ref, needs_reread, FIX_CYCLES if cycles is None else cycles)
     if not auto_validate:
         return seq
     out = []
@@ -221,15 +222,19 @@ def projected(steps, run_ref, needs_reread, auto_validate=False):
     return out
 
 
-def _projected(steps, run_ref, needs_reread):
+def _projected(steps, run_ref, needs_reread, cycles=1):
+    """`cycles` fix cycles (EditFile, then a validation) after the first failing validation; every validation but
+    the last fails with the recorded failing output (CONTEXT_DESIGN.md section 7: the patches needed more than one)."""
     ok = [dict(st) for st in steps if st["status"] == "ok"]
     vfail, vpass = run_ref["valid_fail_chars"], run_ref["valid_pass_chars"]
     tail = [("validate", [{"name": "RunValidation", "path": None, "chars": vfail, "kind": "valid"}])]
     if needs_reread:
         tail.append(("read", [{"name": "ReadFile", "path": "scripts/audit_run.py", "chars": run_ref["audit_chars"], "kind": "code"}]))
-    tail += [("edit", [{"name": "EditFile", "path": "scripts/audit_run.py", "chars": 96, "kind": "small"}]),
-             ("validate", [{"name": "RunValidation", "path": None, "chars": vpass, "kind": "valid"}]),
-             ("finish", [])]
+    for i in range(cycles):
+        tail += [("edit", [{"name": "EditFile", "path": "scripts/audit_run.py", "chars": 96, "kind": "small"}]),
+                 ("validate", [{"name": "RunValidation", "path": None,
+                                "chars": vpass if i == cycles - 1 else vfail, "kind": "valid"}])]
+    tail += [("finish", [])]
     for what, calls in tail:
         ok.append({"step": len(ok), "est_input": None, "status": "projected", "output": PROJECTED_OUTPUT[what],
                    "reasoning": 0, "calls": calls, "what": what})
@@ -249,12 +254,15 @@ def simulate(steps, base, resid, rates, pol, reservation=RESERVATION, usd_limit=
         est = round(base + sum(t for _, t in seg) + r)
         left = reservation - used
         cap = min(MAX_OUTPUT, left - est)
+        bound = "reservation_exhausted"
         if usd_limit is not None:
             spent = usd_cached if billed_cached else usd
-            cap = min(cap, int((usd_limit - spent - est * PRICE_IN / 1e6) / (PRICE_OUT / 1e6)))
+            usd_cap = int((usd_limit - spent - est * PRICE_IN / 1e6) / (PRICE_OUT / 1e6))
+            if usd_cap < cap:
+                cap, bound = usd_cap, "usd_exhausted"
         if cap < MIN_OUTPUT:
             rows.append({"step": s, "est_input": est, "left": left, "status": "refused"})
-            return rows, {"end": "reservation_exhausted", "at_step": s, "used": used, "usd": usd, "usd_cached": usd_cached}
+            return rows, {"end": bound, "at_step": s, "used": used, "usd": usd, "usd_cached": usd_cached}
         if st["output"] > cap:
             rows.append({"step": s, "est_input": est, "left": left, "status": "truncated"})
             return rows, {"end": "output_truncated", "at_step": s, "used": used, "usd": usd, "usd_cached": usd_cached}
@@ -293,8 +301,15 @@ def residuals(steps, rates):
 # ---------------------------------------------------------------- report
 
 def main():
+    global FIX_CYCLES
     root = Path(sys.argv[1])
     out_json = sys.argv[sys.argv.index("--json") + 1] if "--json" in sys.argv else None
+    if "--fix-cycles" in sys.argv:
+        FIX_CYCLES = int(sys.argv[sys.argv.index("--fix-cycles") + 1])
+        if FIX_CYCLES < 1:
+            sys.exit("--fix-cycles must be at least 1")
+    if FIX_CYCLES != 1:                       # the default output stays byte-identical to evidence/context_sim/
+        print(f"== fix cycles projected after the first failing validation: {FIX_CYCLES}")
     runs = {n: load_run(root / n) for n in ("pilot3a", "pilot3a2")}
     rates, fit = fit_rates(runs.values())
 
@@ -334,7 +349,7 @@ def main():
 
     # cross-check with INVESTIGATION.md section 3 (≈ 98-99k for the recorded steps + one validation + Finish)
     st_a = attempt_steps(p3a, 0)
-    seq = [s for s in _projected(st_a, ref, False) if s.get("what") not in ("edit",)]
+    seq = [s for s in _projected(st_a, ref, False, 1) if s.get("what") not in ("edit",)]
     seq = seq[:4] + [s for s in seq if s.get("what") == "finish"]
     b, res = residuals(st_a, rates)
     chk = simulate(seq, b, res, rates, {}, reservation=None)[1]["used"]
@@ -367,6 +382,10 @@ def main():
                 lim = f"refused at call {o['at_step']} ({rows[-1]['est_input']} in, {rows[-1]['left']} left)"
             ulim = (f"finishes at ${u['usd']:.4f}" if u["end"] == "finished"
                     else f"stops at call {u['at_step']} ({u['end']})")
+            if FIX_CYCLES != 1:
+                _, uc = simulate(seq, base, resid, rates, pol, reservation=None, usd_limit=ATTEMPT_USD, billed_cached=True)
+                ulim += "; billed with cache: " + (f"finishes at ${uc['usd_cached']:.4f}" if uc["end"] == "finished"
+                                                   else f"stops at call {uc['at_step']} ({uc['end']})")
             print(f"   {pname:<29} {len(seq):>5} {free['used']:>7} {free['used'] / RESERVATION:>5.2f} "
                   f"{max(x['est_input'] for x in free_rows):>7} {free['usd']:>7.4f} {free['usd_cached']:>10.4f}"
                   f"  {first3:>13}  {lim:<44} USD-only ${ATTEMPT_USD}: {ulim}")
@@ -386,6 +405,22 @@ def main():
     for w in report["writers"]:
         print(f"   {w['case']} {w['policy']:<29} x0.85 {w['needs_at_rates_x0.85']:>7}   fit {w['needs']:>7}   "
               f"x1.15 {w['needs_at_rates_x1.15']:>7}")
+
+    if FIX_CYCLES != 1:                       # printed only with --fix-cycles, so the default output stays as it was
+        print()
+        print(f"== 3b. USD admission (${ATTEMPT_USD} per attempt, no cache) at rates x0.85 / fit / x1.15: "
+              "fin = finishes, STOP = refused before Finish; USD spent")
+        for label, run_name, it, _ in writers:
+            steps = attempt_steps(runs[run_name], it)
+            for pname, pol in POLICIES.items():
+                seq = projected(steps, ref, needs_reread=write_args_elided(pol), auto_validate=pol.get("auto_validate", False))
+                outs = []
+                for scale in (0.85, 1.0, 1.15):
+                    r = {k: (v * scale if k != "per_call" else v) for k, v in rates.items()}
+                    b2, res2 = residuals(steps, r)
+                    u2 = simulate(seq, b2, res2, r, pol, reservation=None, usd_limit=ATTEMPT_USD)[1]
+                    outs.append(f"{'fin ' if u2['end'] == 'finished' else 'STOP'} ${u2['usd']:.4f}")
+                print(f"   {label} {pname:<29} " + " | ".join(outs))
 
     print()
     print("== 4. explorer attempts: the recorded steps (and the refused one) under each policy, 45,000 reservation")
