@@ -1,0 +1,19 @@
+HEAD f81bbac tests: tests/test_harness_gaps.py tests/test_feedback_excerpt.py tests/test_llm_wrapper.py tests/test_llm_audit_2a.py tests/test_codetask.py
+== the new tests on the code before the fix (main 7b2708c) ==
+FAILED tests/test_harness_gaps.py::test_the_audit_reproduces_every_prompt_of_the_recorded_live_run_pilot3a4
+FAILED tests/test_harness_gaps.py::test_the_audit_reproduces_every_prompt_of_a_run_with_auto_validation
+FAILED tests/test_harness_gaps.py::test_a_count_refused_by_the_provider_blocks_the_run_and_sends_nothing
+FAILED tests/test_harness_gaps.py::test_a_transient_count_failure_is_retried_and_the_run_goes_on
+FAILED tests/test_harness_gaps.py::test_a_count_that_keeps_failing_stops_after_the_allowed_attempts
+5 failed in 2.91s
+error kinds: ['E       AssertionError', "E       assert FakeHTTPError('HTTP 503') is None", "E       assert FakeHTTPError('invalid x-api-key') is None", "E       assert FakeHTTPError('overloaded') is None"]
+== mutants ==
+KILLED  audit: D3 message not inserted: ['FAILED tests/test_harness_gaps.py::test_the_audit_reproduces_every_prompt_of_the_recorded_live_run_pilot3a4']
+KILLED  audit: message of the next step: ['FAILED tests/test_harness_gaps.py::test_the_audit_reproduces_every_prompt_of_the_recorded_live_run_pilot3a4']
+KILLED  audit: records without a message inserted too: ['FAILED tests/test_harness_gaps.py::test_the_audit_reproduces_every_prompt_of_the_recorded_live_run_pilot3a4']
+KILLED  count error not caught: ['FAILED tests/test_harness_gaps.py::test_a_count_refused_by_the_provider_blocks_the_run_and_sends_nothing']
+KILLED  non-transient count error retried: ['FAILED tests/test_harness_gaps.py::test_a_count_refused_by_the_provider_blocks_the_run_and_sends_nothing']
+KILLED  transient count error not retried: ['FAILED tests/test_harness_gaps.py::test_a_transient_count_failure_is_retried_and_the_run_goes_on']
+KILLED  count failure not logged: ['FAILED tests/test_harness_gaps.py::test_a_count_refused_by_the_provider_blocks_the_run_and_sends_nothing']
+KILLED  count retries one past the limit: ['FAILED tests/test_harness_gaps.py::test_a_count_that_keeps_failing_stops_after_the_allowed_attempts']
+RESULT: 8/8 killed
