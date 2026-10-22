@@ -30,9 +30,11 @@ echo; echo "### T5 config.yaml changed elsewhere: a fourth difference (must refu
 sed -i 's/max_workers: 3 /max_workers: 4 /' config.yaml; t t5; $GL --check-only; echo "[exit $?]"; reset
 echo; echo "### T6 config.yaml turns auto_validate on: only two differences left (must refuse)"
 sed -i 's/^  auto_validate: false$/  auto_validate: true/' config.yaml; t t6; $GL --check-only; echo "[exit $?]"; reset
-echo; echo "### T7 large_usd changed in config.yaml (attempt_usd 0.50): effective limits differ (must refuse)"
+echo; echo "### T7 large_usd changed in both configs (attempt_usd 0.50) and the expected config hash with them: gate 3 must refuse"
 sed -i 's/attempt_usd: 0.45, max_input_tokens: 40000/attempt_usd: 0.50, max_input_tokens: 40000/' config.yaml
 sed -i 's/attempt_usd: 0.45, max_input_tokens: 40000/attempt_usd: 0.50, max_input_tokens: 40000/' pilots/m6_pilot3/3a/v2/config_pilot3a_v2.yaml
+NEW=$(tr -d '' < pilots/m6_pilot3/3a/v2/config_pilot3a_v2.yaml | sha256sum | cut -d' ' -f1)
+sed -i "s/^EXPECT_CONFIG_SHA=\"[0-9a-f]*\"/EXPECT_CONFIG_SHA=\"$NEW\"/" pilots/m6_pilot3/3a/v2/go_live.sh
 t t7; $GL --check-only; echo "[exit $?]"; reset
 echo; echo "### T8 dirty tree (must refuse)"; echo x >> dirty.txt; $GL --check-only; echo "[exit $?]"; rm -f dirty.txt
 echo; echo "### T9 run id exists (must refuse)"; mkdir -p runs/pilot3a3; $GL pilot3a3 </dev/null; echo "[exit $?]"; rmdir runs/pilot3a3
