@@ -1,0 +1,48 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "pr_title2",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "3b5d26e1fdd662d8421740223f398d978ebd1e59",
+  "tree": "4267f4f19d13297d0f4be66ef9fb08e248f93c03",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_p7",
+    "commit": "3b5d26e1fdd662d8421740223f398d978ebd1e59",
+    "tree": "4267f4f19d13297d0f4be66ef9fb08e248f93c03",
+    "snapshot_sha256": "3fe0c22f85b09678c28c83678917e6a383757453ba8b93be7d5d9069727a2784"
+  },
+  "added": {
+    "tests/test_review_pr_title.py": "9391a8823b237745b607af3f532a954e1a6a38f11901b1e361b3da04751fc7a7"
+  },
+  "files": 437,
+  "snapshot_sha256": "c48bca9d89501e258b39abe7421cbf79e3d888f5d01192752179b7c9ca79c21c",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "4de6373c659a82a8a3bddd8fd4dec4dc34abed3e4ce08ea9a788235a47afa7f0",
+  "draft_sha256": "6c3a8d6b1a03bb8495f44fead3814c8398df7779ed58a87c8b3b0468d23719e0",
+  "plan": {
+    "files": [
+      "codetask/review.py"
+    ],
+    "steps": [
+      "In render_pr, replace the [:80] cut of the issue's first line with the rule: L unchanged if len<=80; else cut the first 81 characters before their last space, rstrip, append '...'; if there is no space or nothing remains, use L[:80] + '...'.",
+      "Keep the contract-name prefix, the cell(title, 120) cleaning and everything else in PR.md unchanged."
+    ],
+    "risks": [
+      "Off-by-one: the cut must look at 81 characters (so a word ending exactly at 80 is kept whole), not 80.",
+      "Changing the stripping of the issue or the cell() call would alter other output.",
+      "An empty issue must still give 'name: ' without an error."
+    ]
+  },
+  "unverifiable": [],
+  "feasibility": "unproven",
+  "approved_at": "2026-10-22T18:09:36Z"
+}

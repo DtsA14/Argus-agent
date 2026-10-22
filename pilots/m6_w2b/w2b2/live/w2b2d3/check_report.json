@@ -1,0 +1,89 @@
+{
+  "task": "drafted_task",
+  "draft_sha256": "6c3a8d6b1a03bb8495f44fead3814c8398df7779ed58a87c8b3b0468d23719e0",
+  "unverifiable": [],
+  "ok": true,
+  "feasibility": "unproven",
+  "contract": {
+    "contract": "drafted_task",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/drafted_task",
+      "issue": "The title of a review package's pull request draft is cut in the middle of a word.\n\ncodetask/review.py, render_pr: the first line of review/PR.md is \"# \" followed by the contract name, \": \" and the first\nline of the task's issue cut to its first 80 characters. A long first line therefore ends mid-word, for example\n\"fix_x: The title of a review package's pull request draft is cut in the middle of a wor\".\n\nWanted, for the issue part of the title only (call the issue's stripped first line L):\n- if L has at most 80 characters, it is used as it is, with nothing added;\n- otherwise take L's first 81 characters and cut them just before their last space; if that leaves something, remove\n  trailing spaces and append \"...\" (three dots, no space before them);\n- if those 81 characters contain no space (one long word), or the cut leaves nothing, use L's first 80 characters\n  followed by \"...\".\n\nEverything else stays as it is: the contract name and \": \" before it, the cleaning of the whole heading for the\nMarkdown table cell (the existing cell(title, 120)), the rest of PR.md, and every other file of the review package."
+    },
+    "scope": {
+      "writable": [
+        "codetask/review.py"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_review_pr_title.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 9,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word",
+          "tests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters",
+          "tests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed",
+          "tests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters",
+          "tests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.5,
+      "max_iterations": 1
+    },
+    "tools": [
+      "edit_file"
+    ],
+    "budget_profile": "default"
+  },
+  "contract_sha256": "f27a12c982f4bb1e872567b8d14ca1d3051fd8a3097bcfbbabadb7bb694b1f78",
+  "added": {
+    "tests/test_review_pr_title.py": "9391a8823b237745b607af3f532a954e1a6a38f11901b1e361b3da04751fc7a7"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word": "FAIL",
+        "tests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters": "FAIL",
+        "tests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed": "FAIL",
+        "tests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters": "FAIL",
+        "tests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole": "FAIL"
+      },
+      "failures": 5,
+      "errors": 0,
+      "output_tail": "xxxxxxxx...'\nE     \nE     - # fix_x: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...\nE     + # fix_x: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n____________________ test_spaces_before_the_cut_are_removed ____________________\ntests/test_review_pr_title.py:29: in test_spaces_before_the_cut_are_removed\n    assert pr_title(issue) == \"# fix_x: \" + \"a\" * 30 + \"...\"\nE   AssertionError: assert '# fix_x: aaa...bbbbbbbbbbbbb' == '# fix_x: aaa...aaaaaaaaaa...'\nE     \nE     - # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\nE     + # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n__________________ test_one_long_word_is_cut_at_80_characters __________________\ntests/test_review_pr_title.py:33: in test_one_long_word_is_cut_at_80_characters\n    assert pr_title(\"z\" * 100) == \"# fix_x: \" + \"z\" * 80 + \"...\"\nE   AssertionError: assert '# fix_x: zzz...zzzzzzzzzzzzz' == '# fix_x: zzz...zzzzzzzzzz...'\nE     \nE     - # fix_x: zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz...\nE     ?                                                                                          ---\nE     + # fix_x: zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n___________ test_a_word_ending_exactly_at_character_80_is_kept_whole ___________\ntests/test_review_pr_title.py:39: in test_a_word_ending_exactly_at_character_80_is_kept_whole\n    assert pr_title(issue) == \"# fix_x: \" + \"a\" * 70 + \" \" + \"b\" * 9 + \"...\"\nE   AssertionError: assert '# fix_x: aaa...aaa bbbbbbbbb' == '# fix_x: aaa... bbbbbbbbb...'\nE     \nE     - # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbb...\nE     ?                                                                                          ---\nE     + # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbb\n========================= 5 failed, 4 passed in 0.12s ==========================\n",
+      "failed_nodes": [
+        "tests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters",
+        "tests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole",
+        "tests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters",
+        "tests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed",
+        "tests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word"
+      ]
+    }
+  },
+  "reference": null,
+  "problems": []
+}

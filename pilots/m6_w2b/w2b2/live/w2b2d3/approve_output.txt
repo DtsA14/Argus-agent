@@ -1,0 +1,36 @@
+{
+  "task": "pr_title2",
+  "draft_sha256": "6c3a8d6b1a03bb8495f44fead3814c8398df7779ed58a87c8b3b0468d23719e0",
+  "unverifiable": [],
+  "ok": true,
+  "feasibility": "unproven",
+  "contract_sha256": "4de6373c659a82a8a3bddd8fd4dec4dc34abed3e4ce08ea9a788235a47afa7f0",
+  "added": {
+    "tests/test_review_pr_title.py": "9391a8823b237745b607af3f532a954e1a6a38f11901b1e361b3da04751fc7a7"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word": "FAIL",
+        "tests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters": "FAIL",
+        "tests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed": "FAIL",
+        "tests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters": "FAIL",
+        "tests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole": "FAIL"
+      },
+      "failures": 5,
+      "errors": 0,
+      "output_tail": "xxxxxxxx...'\nE     \nE     - # fix_x: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...\nE     + # fix_x: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n____________________ test_spaces_before_the_cut_are_removed ____________________\ntests/test_review_pr_title.py:29: in test_spaces_before_the_cut_are_removed\n    assert pr_title(issue) == \"# fix_x: \" + \"a\" * 30 + \"...\"\nE   AssertionError: assert '# fix_x: aaa...bbbbbbbbbbbbb' == '# fix_x: aaa...aaaaaaaaaa...'\nE     \nE     - # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\nE     + # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n__________________ test_one_long_word_is_cut_at_80_characters __________________\ntests/test_review_pr_title.py:33: in test_one_long_word_is_cut_at_80_characters\n    assert pr_title(\"z\" * 100) == \"# fix_x: \" + \"z\" * 80 + \"...\"\nE   AssertionError: assert '# fix_x: zzz...zzzzzzzzzzzzz' == '# fix_x: zzz...zzzzzzzzzz...'\nE     \nE     - # fix_x: zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz...\nE     ?                                                                                          ---\nE     + # fix_x: zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n___________ test_a_word_ending_exactly_at_character_80_is_kept_whole ___________\ntests/test_review_pr_title.py:39: in test_a_word_ending_exactly_at_character_80_is_kept_whole\n    assert pr_title(issue) == \"# fix_x: \" + \"a\" * 70 + \" \" + \"b\" * 9 + \"...\"\nE   AssertionError: assert '# fix_x: aaa...aaa bbbbbbbbb' == '# fix_x: aaa... bbbbbbbbb...'\nE     \nE     - # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbb...\nE     ?                                                                                          ---\nE     + # fix_x: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbb\n========================= 5 failed, 4 passed in 0.12s ==========================\n",
+      "failed_nodes": [
+        "tests/test_review_pr_title.py::test_a_long_first_line_is_cut_before_the_last_space_of_its_first_81_characters",
+        "tests/test_review_pr_title.py::test_a_word_ending_exactly_at_character_80_is_kept_whole",
+        "tests/test_review_pr_title.py::test_one_long_word_is_cut_at_80_characters",
+        "tests/test_review_pr_title.py::test_spaces_before_the_cut_are_removed",
+        "tests/test_review_pr_title.py::test_the_issues_own_example_is_cut_at_a_word"
+      ]
+    }
+  },
+  "reference": null,
+  "problems": []
+}
+approved: fixtures/contracts/pr_title2.json, fixtures/repos/pr_title2 (contract sha256 4de6373c659a)
