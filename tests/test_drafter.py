@@ -1,0 +1,489 @@
+"""M6 W2b (docs/reviews/SPEC_W2B_DRAFTER.md): a model drafts a task from an issue and an intake, read-only, and every
+SubmitDraft is checked at once (W2a's static checks and baseline red, without a reference patch). Scripted models and
+an injected validation that reads the materialized tree like pytest would (no Docker); crash-resume across processes
+through scripts/draft_task.py's run_drafter in a subprocess. The real sandbox check of a no-reference draft is in
+tests/test_draft.py."""
+import copy
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from acceptance import draft as dr
+from acceptance import intake
+from acceptance.workspace import digest, snapshot
+from codetask import drafter as dt
+from harness.events import EventLog
+from models.fake import StrictScriptedChatModel, reply
+from runner import load_config
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the path jail needs openat; the VM runs these")
+
+ROOT = Path(__file__).resolve().parent.parent
+BUGGY = "def total(prices, discount):\n    return sum(prices) - discount\n"
+FIXED = "def total(prices, discount):\n    return max(sum(prices) - discount, 0)\n"
+OLD_TEST = "from src.shop import total\n\n\ndef test_total_plain():\n    assert total([2, 3], 1) == 4\n"
+NEW_TEST = "from src.shop import total\n\n\ndef test_total_never_negative():\n    assert total([1], 5) == 0\n"
+GREEN_TEST = NEW_TEST.replace("== 0", "== -4")
+BROKEN_TEST = "import nosuchmodule\n\n\ndef test_total_never_negative():\n    assert False\n"
+NEW_NODE = "tests/test_new.py::test_total_never_negative"
+OLD_NODE = "tests/test_old.py::test_total_plain"
+ISSUE = "total() can go negative when the discount is larger than the sum; it must never be below 0."
+
+ARGS = {"plan": {"files": ["src/shop.py"], "steps": ["floor the total at 0"], "risks": ["a discount of 0"]},
+        "scope": {"writable": ["src/shop.py"], "protected": ["tests/**", "conftest.py"]},
+        "validation": [{"id": "target", "paths": ["tests/test_new.py"], "must_pass": [NEW_NODE], "min_tests": 1},
+                       {"id": "regression", "paths": ["tests/test_old.py"], "must_pass": [OLD_NODE], "min_tests": 1}],
+        "new_tests": [{"path": "tests/test_new.py", "content": NEW_TEST}],
+        "unverifiable": ["the error message reads well"]}
+
+
+def args_with(test=None, **over):
+    a = copy.deepcopy(ARGS)
+    if test is not None:
+        a["new_tests"][0]["content"] = test
+    a.update(over)
+    return a
+
+
+def call(name, args, id):
+    return reply(tool_calls=[{"name": name, "args": args, "id": id}], input_tokens=500, output_tokens=60)
+
+
+READ = call("ReadFile", {"path": "src/shop.py"}, "r1")
+SUBMIT = call("SubmitDraft", ARGS, "s1")
+
+
+def git(repo, *args):
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@x", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
+
+
+def make_root(tmp_path):
+    """A project root with one intake, `shop`: a bug, one existing test."""
+    repo = tmp_path / "shop_repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "conftest.py").write_text("")
+    (repo / "src" / "shop.py").write_text(BUGGY)
+    (repo / "tests" / "test_old.py").write_text(OLD_TEST)
+    git(tmp_path, "init", "-q", str(repo))
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "base")
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    intake.intake(repo, "HEAD", "shop", root=proj)
+    return proj
+
+
+@pytest.fixture
+def root(tmp_path):
+    return make_root(tmp_path)
+
+
+def _functions(text):
+    """{test name: its body} of a test file, as pytest would collect it."""
+    out = {}
+    for part in ("\n" + text).split("\ndef ")[1:]:
+        name = part.split("(", 1)[0]
+        if name.startswith("test_"):
+            out[name] = part
+    return out
+
+
+def fake_validate(spec, workspace, sandbox_cfg, log=None):
+    """Stands in for `python -m pytest <paths>` in the sandbox: a test fails by assertion when it asserts the floor at 0
+    and the bug is there; a file that imports a missing module is a collection error. Every call is counted in the
+    file named by ARGUS_TEST_VALIDATE_LOG (also across processes)."""
+    if os.environ.get("ARGUS_TEST_VALIDATE_LOG"):
+        with open(os.environ["ARGUS_TEST_VALIDATE_LOG"], "a") as f:
+            f.write(spec["id"] + "\n")
+    ws, fixed = Path(workspace), (Path(workspace) / "src" / "shop.py").read_text() == FIXED
+    statuses, tail, errors = {}, [], 0
+    for path in spec["args"][2:]:
+        f = ws / path
+        text = f.read_text() if f.exists() else ""
+        if "nosuchmodule" in text:
+            errors += 1
+            tail += [f"{path}:1: in <module>", "E   ModuleNotFoundError: No module named 'nosuchmodule'"]
+            continue
+        for name, body in _functions(text).items():
+            bad = "== 0" in body and not fixed
+            statuses[f"{path}::{name}"] = "FAIL" if bad else "ok"
+            if bad:
+                tail += [f"{path}:5: in {name}", "E       assert 1 == 0", "E        +  where 1 = total([1], 5)"]
+    failures = sum(1 for s in statuses.values() if s == "FAIL")
+    tail.append(f"==== {failures} failed, {len(statuses) - failures} passed, {errors} errors in 0.12s ====")
+    must = {n: statuses.get(n) for n in spec.get("must_pass", [])}
+    ok = not failures and not errors and all(v == "ok" for v in must.values())
+    return {"id": f"validation:{spec['id']}", "layer": "C", "status": "pass" if ok else "fail",
+            "reason": "" if ok else "exit code 1",
+            "evidence": {"must_pass": must, "tests_run": len(statuses), "failures": failures, "errors": errors,
+                         "skipped": 0, "consistent": True, "output_tail": "\n".join(tail)}}
+
+
+def cfg(**drafter):
+    c = load_config()
+    c["roles"]["drafter"]["model"] = "fake:scripted"
+    c["drafter"].update(drafter)
+    return c
+
+
+def run(root, tmp_path, script, *, issue=ISSUE, max_usd=0.4, config=None, validate=fake_validate, run_id="d",
+        intake_name="shop", preflight=lambda: (True, "ok")):
+    model = StrictScriptedChatModel(script=list(script))
+    r = dt.run_drafter(run_id=run_id, runs_dir=tmp_path / "runs", cfg=config or cfg(), intake_name=intake_name,
+                       issue=issue, max_usd=max_usd, models={"drafter": model}, validate=validate,
+                       preflight=preflight, env_preflight=lambda name: (True, "ok"), root=root)
+    return r, model, tmp_path / "runs" / run_id
+
+
+def events(run_dir):
+    return [json.loads(line) for line in (run_dir / "events.jsonl").read_text().splitlines() if line.strip()]
+
+
+def tool_texts(model, n):
+    """The tool results the model saw in its n-th call (0-based)."""
+    return [m.content for m in model.calls[n]["messages"] if type(m).__name__ == "ToolMessage"]
+
+
+@pytest.fixture
+def vlog(tmp_path, monkeypatch):
+    p = tmp_path / "validate.log"
+    monkeypatch.setenv("ARGUS_TEST_VALIDATE_LOG", str(p))
+    return lambda: p.read_text().splitlines() if p.exists() else []
+
+
+# ---- the happy path -----------------------------------------------------------------------------------------------
+
+def test_a_draft_that_passes_its_check_ends_the_run_and_is_written_for_the_human(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [READ, SUBMIT])
+    assert r["status"] == dt.DRAFTED and r["drafting"] == {"end": "submitted", "steps": 1, "submits": 1}
+    assert len(model.calls) == 2 and r["llm_calls"] == 2 and r["usd_billed"] > 0 and r["usd_complete"]
+    assert r["source_unchanged"] is True and vlog() == ["target", "regression"]
+    draft = json.loads((d / "draft.json").read_text())
+    # Set by the harness, not the model: the intake, the version, and every validation's command and environment
+    assert draft["base"] == "shop" and draft["draft_version"] == dr.VERSION
+    assert draft["contract"]["validation"][0] == {
+        "id": "target", "executable": "python", "args": ["-m", "pytest", "tests/test_new.py"], "timeout_s": 300,
+        "min_tests": 1, "max_skipped": 0, "must_pass": [NEW_NODE], "environment": "argus"}
+    # The same draft passes W2a's check outside the loop, with the same baseline
+    again = dr.check(draft, task="fix_shop", issue=ISSUE, max_usd=0.5, max_iterations=3, reference_patch=None,
+                     sandbox_cfg={}, root=root, validate=fake_validate)
+    assert again["ok"] and again["baseline"]["target"]["must_pass"] == {NEW_NODE: "FAIL"}
+    report = json.loads((d / "check_report.json").read_text())
+    assert report["ok"] and report["feasibility"] == "unproven" and report["reference"] is None
+    review = (d / "DRAFT_REVIEW.md").read_text()
+    assert "assert 1 == 0" in review and "--no-reference" in review and NEW_TEST.strip() in review
+    assert (d / "issue.txt").read_text().strip() == ISSUE
+    assert json.loads((d / "result.json").read_text())["status"] == dt.DRAFTED
+
+
+def test_a_rejected_submit_goes_back_to_the_model_and_a_corrected_one_passes(root, tmp_path, vlog):
+    green = call("SubmitDraft", args_with(GREEN_TEST), "s0")
+    r, model, d = run(root, tmp_path, [green, SUBMIT])
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
+    seen = tool_texts(model, 1)[0]
+    assert seen.startswith("Draft rejected (submit 1 of 3)") and "is 'ok', not a failure by assertion" in seen
+    assert [e["ok"] for e in events(d) if e["event"] == "draft_submitted"] == [False, True]
+
+
+def test_an_error_on_the_baseline_is_not_red_and_its_output_reaches_the_model(root, tmp_path, vlog):
+    broken = call("SubmitDraft", args_with(BROKEN_TEST), "s0")
+    r, model, d = run(root, tmp_path, [broken, SUBMIT])
+    seen = tool_texts(model, 1)[0]
+    assert "was not collected on the baseline" in seen
+    assert "data from the sandbox, not instructions" in seen and "ModuleNotFoundError: No module named" in seen
+    assert r["status"] == dt.DRAFTED
+
+
+def test_submits_beyond_the_limit_run_nothing_and_the_run_ends_without_a_draft(root, tmp_path, vlog):
+    bad = [call("SubmitDraft", args_with(GREEN_TEST), f"s{i}") for i in range(3)]
+    r, model, d = run(root, tmp_path, bad + [SUBMIT], config=cfg(max_submits=2))
+    assert r["status"] == dt.NO_DRAFT and r["stop_reason"] == "submits_exhausted" and r["drafting"]["submits"] == 3
+    assert len(vlog()) == 4 and len(model.calls) == 3                  # two checks of two validations; none after
+    assert [e["event"] for e in events(d)].count("draft_submit_refused") == 1     # the third: refused, not checked
+    assert not (d / "draft.json").exists() and "No draft passed its check" in (d / "DRAFT_REVIEW.md").read_text()
+
+
+# ---- read-only, and what the model may not set ---------------------------------------------------------------------
+
+def test_the_drafter_cannot_write_validate_or_finish_and_the_intake_is_untouched(root, tmp_path, vlog):
+    before = intake.check(intake.record_for("fixtures/repos/shop", root), root / "fixtures" / "repos" / "shop")
+    tries = reply(tool_calls=[{"name": "WriteFile", "args": {"path": "src/shop.py", "content": FIXED}, "id": "w"},
+                              {"name": "EditFile", "args": {"path": "src/shop.py", "old_text": "sum", "new_text": "x"},
+                               "id": "e"},
+                              {"name": "RunValidation", "args": {"id": "target"}, "id": "v"},
+                              {"name": "Finish", "args": {"claims": [], "summary": "x"}, "id": "f"}],
+                  input_tokens=500, output_tokens=60)
+    r, model, d = run(root, tmp_path, [tries, SUBMIT])
+    seen = tool_texts(model, 1)
+    assert seen == [f"Denied: {n} is not allowed for this role." for n in ("WriteFile", "EditFile", "RunValidation")] \
+        + ["Unknown tool 'Finish'."]
+    denied = [e for e in events(d) if e["event"] == "tool_denied"]
+    assert [e["tool"] for e in denied] == ["write_file", "edit_file", "run_validation"]
+    assert {e["role"] for e in denied} == {"drafter"}
+    assert vlog() == ["target", "regression"]                           # only the SubmitDraft check ran
+    assert (d / "source" / "src" / "shop.py").read_text() == BUGGY and not (d / "source" / "SUMMARY.json").exists()
+    assert r["source_unchanged"] is True and r["status"] == dt.DRAFTED
+    assert before == [] and intake.check(intake.record_for("fixtures/repos/shop", root),
+                                         root / "fixtures" / "repos" / "shop") == []
+
+
+def test_a_changed_source_copy_blocks_the_run(root, tmp_path, monkeypatch):
+    real = dt.make_submit
+
+    def tampering(**kw):
+        submit = real(**kw)
+
+        def wrapped(args, n):
+            (tmp_path / "runs" / "d" / "source" / "src" / "shop.py").write_text(FIXED)
+            return submit(args, n)
+        return wrapped
+    monkeypatch.setattr(dt, "make_submit", tampering)
+    r, _, d = run(root, tmp_path, [SUBMIT])
+    assert r["status"] == dt.BLOCKED and r["blocked_reason"] == "source_changed" and r["source_unchanged"] is False
+    assert not (d / "draft.json").exists()
+
+
+POLICY = {"environment": "argus", "validation_timeout_s": 300, "profiles": ["default", "large"], "max_submits": 3}
+
+
+@pytest.mark.parametrize("change, why", [
+    (lambda a: a.update(base="other"), "unknown argument 'base'"),
+    (lambda a: a.update(draft_version=2), "unknown argument 'draft_version'"),
+    (lambda a: a.update(limits={"max_usd": 9}), "unknown argument 'limits'"),
+    (lambda a: a.update(inputs={"issue": "x"}), "unknown argument 'inputs'"),
+    (lambda a: a["validation"][0].update(executable="bash"), "no other command"),
+    (lambda a: a["validation"][0].update(environment="default"), "no other command"),
+    (lambda a: a["validation"][0].update(paths=["-p", "evil"]), "no options"),
+    (lambda a: a["validation"][0].update(paths=["--rootdir=/"]), "no options"),
+    (lambda a: a["validation"][0].update(paths=["../outside/test_x.py"]), "no options"),
+    (lambda a: a["validation"][0].update(paths=["/etc/test_x.py"]), "no options"),
+    (lambda a: a["validation"][0].update(paths=[]), "no options"),
+    (lambda a: a.update(validation=[]), "validation must be a non-empty list"),
+    (lambda a: a.update(budget_profile="huge"), "budget_profile must be one of"),
+    (lambda a: a.update(new_tests=[]), "at least one new test"),
+    (lambda a: a["plan"].pop("risks"), "plan must have"),
+])
+def test_the_model_sets_only_what_a_drafter_may_set(change, why):
+    a = copy.deepcopy(ARGS)
+    change(a)
+    draft, problems = dt.draft_from_args(a, base="shop", policy=POLICY)
+    assert any(why in p for p in problems), problems
+
+
+def test_the_harness_sets_the_base_the_version_and_each_validations_command():
+    draft, problems = dt.draft_from_args(dict(ARGS, budget_profile="large"), base="shop", policy=POLICY)
+    assert problems == [] and draft["base"] == "shop" and draft["draft_version"] == dr.VERSION
+    assert draft["contract"]["budget_profile"] == "large"
+    assert [v["args"] for v in draft["contract"]["validation"]] == [["-m", "pytest", "tests/test_new.py"],
+                                                                     ["-m", "pytest", "tests/test_old.py"]]
+    assert {v["environment"] for v in draft["contract"]["validation"]} == {"argus"}
+    assert dt.draft_from_args(dict(ARGS, validation=[dict(ARGS["validation"][0], paths=[NEW_NODE])]), base="shop",
+                              policy=POLICY)[1] == []                       # a node id is a path too
+
+
+def test_a_bad_submit_is_answered_without_running_anything(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [call("SubmitDraft", args_with(base="other"), "s0"), SUBMIT])
+    assert "unknown argument 'base'" in tool_texts(model, 1)[0] and vlog() == ["target", "regression"]
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
+
+
+# ---- inputs ---------------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("over, why", [
+    ({"issue": ""}, "at most 2000 characters"),
+    ({"issue": "x" * 2001}, "at most 2000 characters"),
+    ({"intake_name": "nosuch"}, "no intake named 'nosuch'"),
+    ({"intake_name": "Bad Name"}, "is not an intake name"),
+])
+def test_bad_inputs_block_before_any_model_call(root, tmp_path, over, why):
+    r, model, d = run(root, tmp_path, [SUBMIT], **over)
+    assert r["status"] == dt.BLOCKED and r["blocked_reason"] == "invalid_input" and why in r["stop_reason"]
+    assert model.calls == [] and r["llm_calls"] == 0
+
+
+def test_a_changed_intake_blocks_the_run(root, tmp_path):
+    (root / "fixtures" / "repos" / "shop" / "src" / "shop.py").write_text(FIXED)
+    r, model, _ = run(root, tmp_path, [SUBMIT])
+    assert r["blocked_reason"] == "invalid_input" and "changed" in r["stop_reason"] and model.calls == []
+
+
+def test_a_task_cannot_be_drafted_on_another_task(root, tmp_path):
+    rec_path = root / "fixtures" / "intake" / "shop.json"
+    rec = json.loads(rec_path.read_text())
+    rec_path.write_text(json.dumps({**rec, "kind": "task"}))
+    r, model, _ = run(root, tmp_path, [SUBMIT])
+    assert r["blocked_reason"] == "invalid_input" and "another task" in r["stop_reason"] and model.calls == []
+
+
+def test_no_sandbox_blocks_before_any_model_call(root, tmp_path):
+    r, model, _ = run(root, tmp_path, [SUBMIT], preflight=lambda: (False, "no docker"))
+    assert r["status"] == dt.BLOCKED and r["blocked_reason"] == "sandbox_unavailable" and model.calls == []
+
+
+# ---- money ----------------------------------------------------------------------------------------------------------
+
+def test_a_call_that_does_not_fit_the_runs_cap_is_refused_before_sending(root, tmp_path):
+    r, model, d = run(root, tmp_path, [READ, SUBMIT], max_usd=0.0001)
+    assert model.calls == [] and r["status"] == dt.NO_DRAFT and r["stop_reason"] == "reservation_exhausted"
+    evs = events(d)
+    assert [e["status"] for e in evs if e["event"] == "llm_call"] == ["refused"] and r["usd_billed"] == 0
+    assert r["max_usd"] == 0.0001
+
+
+def test_the_runs_cap_is_the_lower_of_the_config_and_the_run(root, tmp_path):
+    c = cfg()
+    c["budget"]["max_usd"] = 0.2
+    r, _, d = run(root, tmp_path, [READ, SUBMIT], max_usd=0.9, config=c)
+    assert r["max_usd"] == 0.2
+    assert dt.drafter_settings({**c, "budget": {**c["budget"], "max_usd": 0.2}})["attempt_usd"] == 0.2
+    assert dt.drafter_settings({**c, "budget": {**c["budget"], "max_tokens": 1000}})["attempt_tokens"] == 1000
+    started = [e for e in events(d) if e["event"] == "llm_call_started"]
+    assert started and all(e["node"] == "drafter" and e["task"] == "draft:shop" for e in started)
+
+
+def test_every_call_reaches_the_ledger_with_a_start_and_an_end(root, tmp_path):
+    _, _, d = run(root, tmp_path, [READ, SUBMIT])
+    evs = events(d)
+    started = [e["call_id"] for e in evs if e["event"] == "llm_call_started"]
+    ended = [e["call_id"] for e in evs if e["event"] == "llm_call"]
+    assert len(started) == 2 and started == ended
+
+
+# ---- loop shape ------------------------------------------------------------------------------------------------------
+
+def test_a_cut_off_reply_ends_the_run_without_a_draft(root, tmp_path):
+    r, _, _ = run(root, tmp_path, [reply("partial", stop_reason="max_tokens")])
+    assert r["status"] == dt.NO_DRAFT and r["stop_reason"] == "output_truncated"
+
+
+def test_a_reply_without_tools_is_nudged_to_submit(root, tmp_path):
+    r, model, _ = run(root, tmp_path, [reply("let me think"), SUBMIT])
+    last = model.calls[1]["messages"][-1]
+    assert type(last).__name__ == "HumanMessage" and "SubmitDraft" in last.content and "Finish" not in last.content
+    assert r["status"] == dt.DRAFTED
+
+
+def test_submitdraft_with_another_call_in_the_same_reply_runs_nothing(root, tmp_path, vlog):
+    both = reply(tool_calls=[{"name": "ReadFile", "args": {"path": "src/shop.py"}, "id": "r"},
+                             {"name": "SubmitDraft", "args": ARGS, "id": "s"}], input_tokens=500, output_tokens=60)
+    r, model, d = run(root, tmp_path, [both, SUBMIT])
+    assert all("must be the only tool call" in t for t in tool_texts(model, 1)) and len(tool_texts(model, 1)) == 2
+    assert vlog() == ["target", "regression"] and r["drafting"]["submits"] == 1
+
+
+def test_max_steps_ends_the_run(root, tmp_path):
+    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(3)]
+    r, model, _ = run(root, tmp_path, reads, config=cfg(max_steps=3))
+    assert r["status"] == dt.NO_DRAFT and r["stop_reason"] == "max_steps" and len(model.calls) == 3
+
+
+# ---- the review page ---------------------------------------------------------------------------------------------
+
+def test_scope_warnings_name_patterns_test_paths_and_files_outside_the_plan():
+    d = {"plan": {"files": ["src/a.py"]},
+         "contract": {"scope": {"writable": ["src/a.py", "src/*.py", "tests/test_a.py", "src/b.py"]}}}
+    w = dt.warnings(d)
+    assert any("`src/*.py` is a pattern" in x for x in w) and any("`tests/test_a.py` looks like a test" in x for x in w)
+    assert any("`src/b.py` is not among the plan's files" in x for x in w)
+    assert not any("`src/a.py`" in x for x in w)
+
+
+def test_the_review_page_is_the_golden_one():
+    draft, _ = dt.draft_from_args(dict(ARGS, scope={"writable": ["src/*.py"], "protected": ["tests/**"]}),
+                                  base="shop", policy=POLICY)
+    tail = fake_validate(draft["contract"]["validation"][0], _materialized(draft), {})["evidence"]["output_tail"]
+    state = {"status": dt.DRAFTED, "stop_reason": "a draft passed its check", "draft": draft,
+             "report": {"baseline": {"target": {"status": "fail", "must_pass": {NEW_NODE: "FAIL"}, "failures": 1,
+                                                "errors": 0, "output_tail": tail},
+                                     "regression": {"status": "pass", "must_pass": {OLD_NODE: "ok"}, "failures": 0,
+                                                    "errors": 0, "output_tail": ""}}},
+             "drafting": {"end": "submitted", "steps": 3, "submits": 1}}
+    text = dt.review_text("d1", {"intake": "shop", "issue": ISSUE}, state,
+                          {"usd": 0.0123, "usd_complete": True, "calls": 4})
+    golden = Path(__file__).parent / "golden" / "draft_review.md"
+    assert text == golden.read_text(encoding="utf-8")
+
+
+def _materialized(draft, _cache={}):
+    """A tree with the bug and the draft's new test, for the golden page's test output."""
+    import tempfile
+    if "d" not in _cache:
+        d = Path(tempfile.mkdtemp())
+        (d / "src").mkdir()
+        (d / "tests").mkdir()
+        (d / "src" / "shop.py").write_text(BUGGY)
+        (d / "tests" / "test_new.py").write_text(draft["new_tests"][0]["content"])
+        _cache["d"] = d
+    return _cache["d"]
+
+
+# ---- crash-resume across processes -------------------------------------------------------------------------------
+
+PROC = ("import sys, json; sys.path[:0] = [sys.argv[1], sys.argv[1] + '/tests']; import test_drafter as t; "
+        "sys.exit(t._proc(*sys.argv[2:]))")
+
+
+def _proc(root, runs, crash_at, resume):
+    """One process of a drafter run with the scripted model of ARGUS_FAKE_SCRIPT (its position survives a crash)."""
+    c = load_config()
+    c["roles"]["drafter"]["model"] = "fake:scripted"
+    r = dt.run_drafter(run_id="rc", runs_dir=runs, cfg=c, intake_name="shop", issue=ISSUE, max_usd=0.4,
+                       resume=resume == "1", crash_at=None if crash_at == "-" else crash_at, validate=fake_validate,
+                       preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"), root=root)
+    return 0 if r["status"] == dt.DRAFTED else 1
+
+
+def _script_reply(name, args, id):
+    return {"tool_calls": [{"name": name, "args": args, "id": id}], "usage": {"input_tokens": 500, "output_tokens": 60}}
+
+
+def _spawn(tmp_path, root, crash_at, resume):
+    env = {**os.environ, "ARGUS_FAKE_SCRIPT": str(tmp_path / "script.json"),
+           "ARGUS_TEST_VALIDATE_LOG": str(tmp_path / "validate.log")}
+    return subprocess.run([sys.executable, "-c", PROC, str(ROOT), str(root), str(tmp_path / "runs"), crash_at,
+                           resume], cwd=ROOT, capture_output=True, text=True, env=env, timeout=300)
+
+
+@pytest.mark.parametrize("point, model_calls, checks", [
+    ("setup@after_copy", 2, 2),
+    ("drafter@after_llm", 2, 2),                  # step 0 was not committed: it is bought again (the script submits)
+    ("drafter@after_tool:ReadFile", 2, 2),
+    ("drafter@after_tool:SubmitDraft", 2, 4),     # the check ran, its result was not committed: it runs again
+    ("draft@after_commit", 2, 2),
+    ("finalize@after_write", 2, 2),
+])
+def test_a_crash_anywhere_resumes_without_redoing_what_was_committed(root, tmp_path, point, model_calls, checks):
+    script = [_script_reply("ReadFile", {"path": "src/shop.py"}, "r1"), _script_reply("SubmitDraft", ARGS, "s1"),
+              _script_reply("SubmitDraft", ARGS, "s2")]           # a spare, for the call bought again
+    (tmp_path / "script.json").write_text(json.dumps(script))
+    r1 = _spawn(tmp_path, root, point, "0")
+    assert r1.returncode == 42, (r1.stdout[-2000:], r1.stderr[-2000:])
+    r2 = _spawn(tmp_path, root, "-", "1")
+    assert r2.returncode == 0, (r2.stdout[-2000:], r2.stderr[-2000:])
+    d = tmp_path / "runs" / "rc"
+    result = json.loads((d / "result.json").read_text())
+    assert result["status"] == dt.DRAFTED and (d / "draft.json").exists() and (d / "DRAFT_REVIEW.md").exists()
+    evs = events(d)
+    i = next(n for n, e in enumerate(evs) if e["event"] == "crash_simulated")
+    before, after = evs[:i], evs[i:]
+    llm = {e["step"] for e in before if e["event"] == "step_committed" and e["kind"] == "llm"}
+    called = {e["step"] for e in after if e["event"] == "llm_call" and e.get("status") == "ok"}
+    assert not llm & called, llm & called
+    tools = {(e["step"], e["tool"]) for e in before if e["event"] == "step_committed" and e["kind"] == "tool"}
+    rerun = {(e["step"], e["tool"]) for e in after if e["event"] == "step_committed" and e["kind"] == "tool"}
+    assert not tools & rerun, tools & rerun
+    nodes = {e["node"] for e in before if e["event"] == "result_committed"}
+    assert not nodes & {e["node"] for e in after if e["event"] == "node_start"}
+    assert len([e for e in evs if e["event"] == "llm_call" and e.get("status") == "ok"]) == model_calls
+    assert len((tmp_path / "validate.log").read_text().splitlines()) == checks
+    redrafted = any(e["event"] == "node_start" and e["node"] == "draft" for e in after)
+    if redrafted and any(e["event"] == "llm_call" for e in before):   # the resumed loop starts with what was spent
+        restored = [e for e in after if e["event"] == "reservation_restored" and e["node"] == "drafter"]
+        assert restored and restored[0]["calls"] >= 1, restored

@@ -7,6 +7,8 @@ import json
 import os
 import subprocess
 
+from pathlib import Path
+
 import pytest
 
 from acceptance import contract as ct
@@ -15,6 +17,7 @@ from acceptance import intake
 from runner import load_config
 from tools import sandbox as sb
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
 BUGGY = "def total(prices, discount):\n    return sum(prices) - discount\n"
 FIXED = "def total(prices, discount):\n    return max(sum(prices) - discount, 0)\n"
 OLD_TEST = "from src.shop import total\n\n\ndef test_total_plain():\n    assert total([2, 3], 1) == 4\n"
@@ -184,6 +187,33 @@ def test_a_good_draft_is_ok_and_approval_publishes_a_task_bound_to_its_contract(
     assert ct.freeze(contract)[1] == rec["contract_sha256"] and contract["inputs"]["workspace"] == "fixtures/repos/fix_shop"
     assert rec["kind"] == "task" and rec["base"]["commit"] == rec["commit"]
     assert set(rec["added"]) == {"tests/test_new.py"} and rec["unverifiable"] == DRAFT["unverifiable"]
+    assert r["feasibility"] == rec["feasibility"] == "proven"                # W2b: a reference patch passed
+    assert "assert" in r["baseline"]["target"]["output_tail"]                # W2b: the test output, for the review
+
+
+# ---- W2b: no reference patch ------------------------------------------------------------------------------------
+
+def test_without_a_reference_patch_the_baseline_is_still_checked_and_the_task_is_unproven(root, scfg):
+    r = run_check(root, None, scfg)
+    assert r["ok"], r["problems"]
+    assert r["reference"] is None and r["feasibility"] == "unproven"
+    assert r["baseline"]["target"]["must_pass"] == {NEW_NODE: "FAIL"}
+    rec = dr.approve(r, DRAFT, root=root)
+    assert rec["feasibility"] == "unproven" and rec["kind"] == "task"
+    bad = run_check(root, None, scfg, draft=with_new_test(NEW_TEST.replace("== 0", "== -4")), task="fix_shop2")
+    assert not bad["ok"] and any("not a failure by assertion" in p for p in bad["problems"])
+
+
+@pytest.mark.parametrize("ref", [[], ["--reference-patch", "x.patch", "--no-reference"]])
+def test_approve_draft_needs_exactly_one_of_a_reference_patch_or_no_reference(ref, capsys):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("approve_draft", ROOT_DIR / "scripts" / "approve_draft.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    with pytest.raises(SystemExit) as e:
+        mod.main(["--draft", "d.json", "--task", "t", "--issue-file", "i.txt", "--max-usd", "0.5",
+                  "--max-iterations", "1", *ref])
+    assert e.value.code == 2
 
 
 def with_new_test(content, must=None):

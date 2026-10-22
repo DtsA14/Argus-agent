@@ -1,6 +1,6 @@
 # Spec W2b: drafter model (dari issue ke draf task)
 
-Status: **spec, belum dikoding.** 2026-10-22. Ditulis Claude untuk review Atha/GPT. **Keputusan yang diminta: bagian 9.**
+Status: **K1–K7 disetujui (Atha, 2026-10-22); diimplementasikan, lihat `docs/reviews/REVIEW_M6_W2B.md`.** Ditulis Claude.
 Dasar: `docs/reviews/M6_PLAN.md` W2, `docs/reviews/REVIEW_M6_W2A.md`, `acceptance/draft.py`, draf manusia pilot 3b
 (`pilots/m6_pilot3/3b/draft.json`).
 

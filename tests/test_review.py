@@ -77,7 +77,7 @@ class Project:
         make_repo(self.repo, BASE)
         self.record = intake.intake(self.repo, "HEAD", "shop", root=self.root)
 
-    def task(self, name="shoptask", tests=None, unverifiable=("the message reads well",)):
+    def task(self, name="shoptask", tests=None, unverifiable=("the message reads well",), **extra):
         """An approved task by hand: the intake plus new tests, and a record of kind task."""
         tests = tests or {"tests/test_new.py": NEW_TEST}
         src, dest = self.root / "fixtures" / "repos" / "shop", self.root / "fixtures" / "repos" / name
@@ -90,7 +90,7 @@ class Project:
         snap = snapshot(dest)
         rec = {**self.record, "kind": "task", "name": name, "added": added, "files": len(snap),
                "snapshot_sha256": digest(snap), "unverifiable": list(unverifiable),
-               "base": {k: self.record[k] for k in ("name", "commit", "tree", "snapshot_sha256")}}
+               "base": {k: self.record[k] for k in ("name", "commit", "tree", "snapshot_sha256")}, **extra}
         (self.root / "fixtures" / "intake" / f"{name}.json").write_text(json.dumps(rec), encoding="utf-8")
         return rec
 
@@ -272,6 +272,15 @@ def test_what_was_never_verified_is_listed_and_never_a_criterion(proj):
     assert "Not verified automatically" in claims_md and "the message reads well" in claims_md
     assert "the message reads well" in (run_dir / "review" / "PR.md").read_text()
     assert "message reads well" not in (run_dir / "review" / "tests.md").read_text()
+
+
+@pytest.mark.parametrize("feasibility, said", [("unproven", True), ("proven", False), (None, False)])
+def test_a_task_approved_without_a_reference_patch_says_so_in_the_pr(proj, feasibility, said):
+    proj.task(**({} if feasibility is None else {"feasibility": feasibility}))
+    run_dir = proj.run(writes=FIX, workspace="shoptask")
+    assert proj.build(run_dir)["valid"]
+    pr = (run_dir / "review" / "PR.md").read_text()
+    assert ("approved without a reference patch (feasibility: unproven)" in pr) is said
 
 
 def test_the_tests_file_shows_the_verdict_and_the_fresh_result_per_required_test(proj):

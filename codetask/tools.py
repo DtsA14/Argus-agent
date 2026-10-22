@@ -109,19 +109,20 @@ class Toolbox:
     """allowed: the coder role's tool allowlist from config (tools.coder), enforced here, not by the prompt."""
 
     def __init__(self, workspace, contract, sandbox_cfg, allowed, log, validate=run_validation, journal=None,
-                 crasher=None):
-        """journal: a file outside the workspace where EditFile records each edit before making it (crash-resume)."""
+                 crasher=None, role="coder"):
+        """journal: a file outside the workspace where EditFile records each edit before making it (crash-resume).
+        role: the role named in tool_call / tool_denied events (the W2b drafter uses the read tools)."""
         self.jail = PathJail(workspace)
         self.workspace, self.contract, self.sandbox_cfg = workspace, contract, sandbox_cfg
         self.allowed, self.log, self.validate = set(allowed), log, validate
-        self.journal, self.crasher = journal, crasher
+        self.journal, self.crasher, self.role = journal, crasher, role
 
     def _gate(self, name):
         tool = GATED[name]
         if tool not in self.allowed:
-            self.log.emit("tool_denied", role="coder", tool=tool)
+            self.log.emit("tool_denied", role=self.role, tool=tool)
             return f"Denied: {name} is not allowed for this role."
-        self.log.emit("tool_call", role="coder", tool=tool)
+        self.log.emit("tool_call", role=self.role, tool=tool)
         return None
 
     def run(self, call, step_key=None):

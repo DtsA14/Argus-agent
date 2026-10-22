@@ -3,9 +3,11 @@
   python scripts/approve_draft.py --draft d.json --task fix_x --issue-file issue.txt --max-usd 0.5 \\
       --max-iterations 3 --reference-patch ref.patch                    # check only: prints the report
   python scripts/approve_draft.py ... --approve                           # a human approves: publishes the task
+  python scripts/approve_draft.py ... --no-reference [--approve]          # W2b: no reference patch; the record says
+                                                                          # feasibility "unproven"
 
-The human supplies the task name, the issue, the cost cap, the attempt limit and the reference patch; the draft never
-does. Checks run in the Docker sandbox (named environments from .sandbox_image_<name>, as scripts/run_code_task.py).
+The human supplies the task name, the issue, the cost cap, the attempt limit and the reference patch (or says there is
+none with --no-reference); the draft never does. Checks run in the Docker sandbox (named environments from .sandbox_image_<name>, as scripts/run_code_task.py).
 Exit codes: 0 ok (and published with --approve), 1 a check failed, 2 refused.
 """
 import argparse
@@ -40,8 +42,11 @@ def main(argv=None):
     ap.add_argument("--issue-file", required=True)
     ap.add_argument("--max-usd", type=float, required=True)
     ap.add_argument("--max-iterations", type=int, required=True)
-    ap.add_argument("--reference-patch", required=True,
-                    help="the human's solution: a git diff against the intake plus the draft's tests")
+    ref = ap.add_mutually_exclusive_group(required=True)
+    ref.add_argument("--reference-patch",
+                     help="the human's solution: a git diff against the intake plus the draft's tests")
+    ref.add_argument("--no-reference", action="store_true",
+                     help="no reference patch: the criteria are not proven satisfiable (recorded as unproven)")
     ap.add_argument("--config")
     ap.add_argument("--approve", action="store_true", help="publish the task if every check passes")
     a = ap.parse_args(argv)

@@ -15,6 +15,9 @@ Checks, all on the intake snapshot plus the draft's new tests, in the sandbox:
   - reference green: the human's reference patch (a git diff against the intake plus the draft's tests), applied to a
     clean copy, changes only writable files (never a test
     of the draft or a protected file), and then every validation passes.
+    W2b (docs/reviews/SPEC_W2B_DRAFTER.md, K1): the reference patch is optional. Without one (reference_patch=None)
+    this check is skipped and the report and the record say `feasibility: "unproven"`: the criteria are then not known
+    to be satisfiable, and an agent that cannot meet them fails its run. Everything else is checked the same.
 `unverifiable` is kept as reviewer notes; it is never a criterion and never counts as a pass.
 
 Approval publishes, in this order, the record (fixtures/intake/<task>.json), the contract
@@ -147,8 +150,9 @@ def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validat
     for spec in contract["validation"]:
         v = validate(spec, str(ws), sandbox_cfg)
         e = v.get("evidence") or {}
+        # output_tail (W2b): the test output, for the drafter's feedback and the human's review; data, never a criterion
         seen[spec["id"]] = {"status": v["status"], "must_pass": e.get("must_pass"), "failures": e.get("failures"),
-                            "errors": e.get("errors")}
+                            "errors": e.get("errors"), "output_tail": (e.get("output_tail") or "")[-2000:]}
         new = _new_nodes(spec, new_paths)
         if v["status"] == "blocked":
             problems.append(f"validation {spec['id']} could not run: {v['reason']}")
@@ -200,10 +204,12 @@ def reference_problems(contract, new_paths, ws, patch, sandbox_cfg, validate=run
 
 def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandbox_cfg, root=".",
           validate=run_validation):
-    """The full report on a draft. ok only when every check passed."""
+    """The full report on a draft. ok only when every check passed. reference_patch=None: no reference check (W2b),
+    and the report says the criteria are not proven satisfiable."""
     root = Path(root)
     report = {"task": task, "draft_sha256": hashlib.sha256(ct.canonical(draft).encode()).hexdigest(),
-              "unverifiable": draft.get("unverifiable"), "ok": False}
+              "unverifiable": draft.get("unverifiable"), "ok": False,
+              "feasibility": "unproven" if reference_patch is None else "proven"}
     errors = validate_draft(draft)
     if errors:
         return {**report, "problems": [f"draft: {e}" for e in errors]}
@@ -227,7 +233,9 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
         red = Path(tmp) / "baseline"
         report["added"] = materialize(base_dir, draft, red)
         problems, report["baseline"] = baseline_problems(contract, new_paths, red, sandbox_cfg, validate)
-        if not problems:
+        if not problems and reference_patch is None:
+            report["reference"] = None
+        elif not problems:
             green = Path(tmp) / "reference"
             materialize(base_dir, draft, green)
             try:
@@ -286,6 +294,8 @@ def approve(report, draft, *, root="."):
                   "files": len(snap), "snapshot_sha256": digest(snap), "executable": base["executable"],
                   "contract_sha256": contract_sha, "draft_sha256": report["draft_sha256"],
                   "plan": draft["plan"], "unverifiable": draft["unverifiable"],
+                  # W2b: "proven" only when a reference patch passed every validation in this report
+                  "feasibility": "proven" if report.get("reference") else "unproven",
                   "approved_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         for path, text in ((record_path, json.dumps(record, indent=2) + "\n"),
                            (contract_path, json.dumps(contract, indent=2, ensure_ascii=False) + "\n")):
