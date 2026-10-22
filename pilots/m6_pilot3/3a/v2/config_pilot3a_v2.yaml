@@ -1,0 +1,250 @@
+# M6 pilot 3a v2 (pilots/m6_pilot3/3a/v2/PREFLIGHT.md): config.yaml with exactly three changes, checked by go_live.sh:
+#   budget.max_usd 0.50 -> 0.75 (the same cap as pilot3a), budget.max_tokens 200000 -> 1200000 (D1 K3: 3 attempts x the
+#   large_usd ceiling of 400,000), code_task.auto_validate false -> true (D3 K5).
+budget:
+  max_iterations: 5
+  max_tokens: 1200000     # hard limit: an iteration only starts if its worst-case cost fits
+  max_seconds: 600       # soft limit: summed node time, checked between iterations
+  stagnation_rounds: 2   # stop if the evaluator score has not improved for N rounds
+  max_workers: 3         # an orchestrator plan with more parallel tasks is rejected
+  max_usd: 0.75          # hard limit, reserved like tokens: an iteration starts only if its worst case fits
+  allow_unpriced: false  # refuse models that have no entry in 'prices' (their cost could not be capped)
+
+# Node implementations. fake = deterministic stand-in (no model calls); llm = real model via harness/llm.py.
+# Milestone 2 turns these on phase by phase; override per run with  --impl orchestrator=llm
+impl:
+  orchestrator: fake
+  worker: fake
+  synthesize: fake
+  evaluator: fake       # llm: adds the phase-3c judge (role evaluator) after the programmatic checks
+
+orchestrator:
+  plan_attempts: 3       # model calls allowed to produce a valid plan (1 + 2 retries with the errors)
+  # Require the SubmitPlan tool call via tool_choice. Off: claude-sonnet-5-5, claude-opus-5-5 and
+  # claude-fable-5-1 reject a forced tool_choice with HTTP 400. Unforced, a reply without exactly one
+  # SubmitPlan call is returned to the model as an invalid plan (counts against plan_attempts).
+  force_tool: false
+
+# Which nodes call which role's model. Nodes not listed make no model calls (cost 0 USD).
+node_roles:
+  orchestrator: orchestrator
+  worker: worker
+# Only for a node running a real model (impl: llm): its fake makes no model call, so it costs nothing.
+llm_node_roles:
+  synthesize: writer
+  evaluator: evaluator
+
+# Phase 3b: the writer fills in the recommendations; every number must match a referenced fact
+# (docs/MILESTONE3_PLAN.md 3.6). attempts: model calls allowed to produce valid recommendations.
+synthesize:
+  attempts: 3
+
+# Phase 3c: the rubric judge. attempts: model calls allowed to produce a usable verdict; after that the rubric
+# fails (fail closed). A cut-off reply is never retried.
+judge:
+  attempts: 2
+
+# The LLM wrapper (harness/llm.py). Each request's max_tokens is derived from what is left of the
+# node's reservation; a request that cannot fit min_output_tokens is refused before it is sent.
+llm:
+  attempts: 3                       # transient errors (429, 5xx, timeouts) are retried, others are not
+  base_delay: 1.0                   # seconds; exponential with jitter, Retry-After wins when present
+  min_output_tokens: 64
+  input_margin: 1.2                 # safety factor on heuristic input counts (Anthropic counts exactly)
+  failed_attempt_charge: worst_case # a failed attempt is charged input + max_tokens, since it may be billed
+
+logging:
+  prompts: hashed        # hashed | full. "full" also needs ARGUS_DEV=1 and is meant for synthetic data only
+
+# Worst-case tokens per node call. Used to reserve budget before an iteration starts;
+# a node that reports more than its estimate is a harness error (EstimateExceeded).
+# With real LLMs, set each call's max_tokens so input + output stays under these.
+token_estimates:
+  orchestrator: 3000
+  worker: 2000
+  synthesize: 1000
+  evaluator: 1500
+
+# Worst-case tokens for a node that runs a real model (impl: llm); replaces token_estimates for that node
+# in node reservations, the iteration reservation and the USD estimates alike. Starting point from the
+# first 2e smoke ledger: the worker's second step alone needed ~1,650 input tokens (2,000 was too small),
+# and a revised plan used 2,095 input and was cut off at 905 output tokens (3,000 was too small).
+# With 3 workers: 12,000 + 3 x 12,000 + 1,000 + 1,500 = 50,500 tokens per iteration.
+llm_token_estimates:
+  orchestrator: 12000
+  worker: 12000
+  synthesize: 8000       # 3b starting point (prompt ~1,500 + up to 3 attempts); corrected from the ledger
+  evaluator: 20000       # input ~1,200 + 8,192 output, x2 attempts (calibration run #1: input 1,155-1,214)
+
+# General tasks, slice 1 (docs/reviews/ACCEPTANCE_GENERAL.md). Run limits are the stricter of these and the
+# contract's limits. attempt_tokens is one attempt's whole reservation (all its steps); an attempt is admitted only if
+# the ledger's spend plus this worst case fits budget.max_tokens and the contract's max_usd. Starting point, to be
+# corrected from the ledger of the first live run.
+code_task:
+  role: coder
+  attempt_tokens: 30000
+  max_steps: 12
+  stagnation_rounds: 2     # the same failing criteria this many attempts in a row ends the run (FAILED_ACCEPTANCE)
+  # D2: the feedback to the next attempt carries the error lines of each failing validation (from the verdict's
+  # output_tail, bounded). false gives the feedback as it was before D2: replays of older runs (replay_3a.py) use it.
+  feedback_error_excerpt: true
+  # D3 (docs/reviews/DESIGN_AUTO_VALIDATION.md): after a step that changed the workspace, run every validation and show
+  # the result to the agent in the same attempt, at most auto_validate_max times per attempt. Off here (verify.sh time,
+  # comparable evals); on in a pilot config. Frozen per run at setup, so a resume decides as the run did.
+  auto_validate: true
+  auto_validate_max: 4
+  # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
+  # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
+  # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room
+  # for practically one attempt; a higher cap is a per-run config approved in a preflight, never implied by a
+  # profile. `default` is what a contract without a profile gets (kept equal to the values above by a test).
+  profiles:
+    default: {attempt_tokens: 30000, max_output_tokens: 4096}
+    large: {attempt_tokens: 45000, max_output_tokens: 8192}
+    # D1 (docs/reviews/DESIGN_ATTEMPT_USD.md): the attempt is reserved in USD, not as tokens priced as output. Each call
+    # is still refused before sending when its worst case does not fit the USD left; max_input_tokens caps the input
+    # of one call (refused: input_limit, the attempt ends context_limit). attempt_tokens is only a safety ceiling:
+    # 400,000 tokens cost at least $0.80 at Sonnet's input price, so the USD limit binds first. It needs
+    # budget.max_tokens >= 400,000 (a pilot config sets 1,200,000); with the 200,000 above it never starts.
+    large_usd: {attempt_tokens: 400000, attempt_usd: 0.45, max_input_tokens: 40000, max_output_tokens: 8192}
+
+retry:
+  attempts: 3
+  base_delay: 0.05       # seconds, doubles each attempt
+
+# Tool allowlist per role (enforced by the harness, not by prompts)
+tools:
+  orchestrator: [write_file]
+  worker: [read_data, run_python]
+  evaluator: []
+  coder: [list_files, read_file, write_file, run_validation]   # code tasks (codetask/); Finish is not gated
+
+# ---------------------------------------------------------------------------
+# LLM providers. Adding a provider = adding an entry here.
+# kind: anthropic | openai | deepseek | openai_compatible (any OpenAI-style API, no code needed)
+# API keys are read from the environment variable named in api_key_env; never put keys in this file.
+# ---------------------------------------------------------------------------
+providers:
+  anthropic:
+    kind: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+  openai:
+    kind: openai
+    api_key_env: OPENAI_API_KEY
+  deepseek:
+    kind: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+  fake:                  # scripted model for tests and offline demos (no network, no key)
+    kind: fake
+    script_env: ARGUS_FAKE_SCRIPT
+  # Example: uncomment to add another provider without touching any code
+  # together:
+  #   kind: openai_compatible
+  #   api_key_env: TOGETHER_API_KEY
+  #   base_url: https://api.together.xyz/v1
+
+# ---------------------------------------------------------------------------
+# Roles: which model plays which role. Swap a model by editing "model" below,
+# or per run:  python main.py --model worker=deepseek:deepseek-flash
+# max_output_tokens: upper bound per request (the wrapper may set it lower to stay in budget).
+# timeout_s: per-request timeout. params: passed straight to the provider's chat class (temperature, ...).
+# ---------------------------------------------------------------------------
+roles:
+  coder:
+    # General tasks, slice 1 (codetask/). The model for a live run is chosen in its approval; tests use fake:scripted.
+    model: "anthropic:claude-sonnet-5-5"
+    max_output_tokens: 4096
+    timeout_s: 90
+  orchestrator:
+    model: "anthropic:claude-sonnet-5-5"
+    max_output_tokens: 2048
+    timeout_s: 60
+  worker:
+    model: "anthropic:claude-haiku-5-5"
+    max_output_tokens: 2048
+    timeout_s: 60
+    max_steps: 6           # model calls per worker run (impl.worker: llm)
+  writer:
+    # Phase 3b: writes the recommendations (impl.synthesize: llm). Decision M3-2: Sonnet 5.5.
+    model: "anthropic:claude-sonnet-5-5"
+    max_output_tokens: 2048
+    timeout_s: 60
+  evaluator:
+    # Phase 3c judge (impl.evaluator: llm). Decision M3-1: DeepSeek V4.1 Flash, a different provider from the
+    # writer. Thinking is on by default and counts as output, hence the larger output cap. No forced tool_choice.
+    model: "deepseek:deepseek-flash"
+    # 8192 since calibration run #1 (2026-10-14): output incl. thinking was median 1,216, p95 3,419, and one
+    # judgement hit the old 4096 cap exactly and was cut off (approved by Atha + GPT, 2026-10-15).
+    max_output_tokens: 8192
+    timeout_s: 90
+
+# ---------------------------------------------------------------------------
+# Price catalog, USD per 1M tokens, from public pages checked mid-Oct 2026. Verify before relying on them.
+# A missing entry (e.g. OpenAI below) means cost is reported as "n/a" instead of a guess.
+# cache_read is the discounted rate for cached input tokens; without it cached tokens are billed as normal input.
+# ---------------------------------------------------------------------------
+# Anthropic input/output and Sonnet/Opus cache_read re-checked 2026-10-14 against Anthropic's model table.
+# Haiku 5.5 bills $0.50/$2.50 for prompts over 100K tokens; that tier is not modelled, which is safe only
+# while every node's token estimate stays far below 100K (a reservation then cannot fit such a prompt).
+prices:
+  "anthropic:claude-haiku-5-5":  {input: 0.10, output: 0.50, cache_read: 0.01}
+  "anthropic:claude-sonnet-5-5": {input: 2.00, output: 10.00, cache_read: 0.20}
+  "anthropic:claude-opus-5-5":   {input: 4.00, output: 20.00, cache_read: 0.20}
+  "deepseek:deepseek-flash":     {input: 0.15, output: 0.60, cache_read: 0.003, peak_multiplier: 2}
+  "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
+  "fake:scripted":               {input: 1.00, output: 5.00}   # made-up price so tests exercise USD limits
+
+# DeepSeek charges double during these UTC windows on weekdays (Chinese public holidays are off-peak;
+# that exception is not modelled here). 01-04 and 06-10 UTC = 08-11 and 13-17 WIB.
+peak_windows:
+  deepseek:
+    utc_hours: [[1, 4], [6, 10]]
+    weekdays_only: true
+
+# Live smoke run: scripts/smoke_live.py, only with ARGUS_LIVE=1. Real money, so: one run, never retried,
+# budget.max_usd lowered to max_usd if it is higher, workers one at a time.
+smoke:
+  max_usd: 0.50
+  max_concurrency: 1
+
+# Phase 3d: judge calibration (scripts/calibrate_judge.py, docs/MILESTONE3_PLAN.md 3.4). Locked before any live run
+# (decision M3-3); tests/test_calibration.py fails if these change. Detection uses semantic detection (both
+# judgements valid and rejecting); false rejects use operational rejection (any judgement that does not pass).
+calibration:
+  max_usd: 1.00          # hard cap for the whole run: each judgement starts only if billed + its worst case fits
+  judgements: 2
+  thresholds:
+    min_detection_rate: 0.80
+    max_false_rejects: 1
+
+# Reliability guards for live calibration (docs/reviews/DESIGN_503.md, options 1 and 2; approved by GPT 2026-10-15).
+# Separate from `calibration` so the locked thresholds stay untouched. Neither loosens a budget rule.
+calibration_guard:
+  refuse_peak: true                  # a live run does not start in the judge provider's peak window (--allow-peak skips
+                                     # only this check; the cost cap and the breaker still apply)
+  breaker_consecutive_transient: 4   # stop the run after this many transient errors in a row: "incomplete: provider
+                                     # unavailable", never a pass and never a judge failure
+
+# Code execution for LLM workers (RunPython). kind: docker | none. With none, workers get no RunPython.
+# The image must be pinned (name@sha256:... or sha256:<image id>); scripts/pin_sandbox_image.sh does it
+# on the VM. ARGUS_SANDBOX_IMAGE overrides `image`. There is never an unsandboxed fallback.
+sandbox:
+  kind: none
+  image: null
+  memory: 512m           # hard limit, swap disabled; exceeding it kills the code (exit 137)
+  cpus: "1"
+  pids: 128
+  tmpfs_size: 64m
+  timeout_s: 60          # wall clock; the container is killed and removed on timeout
+  max_output_bytes: 65536            # kept per stream; the rest is drained and discarded (never buffered)
+  kill_after_output_bytes: 16777216  # total output after which the container is killed early
+  cleanup_timeout_s: 15              # total budget for kill/remove after a timeout; failure is logged
+  allow_unpinned: false
+  # Named environments (M6 W1): a contract's validation may name one ("environment": "argus") to run in its image
+  # instead of the default one, with the same isolation flags. An unknown name blocks the run before any model call.
+  # The image is set by its build script (git-ignored file) and ARGUS_SANDBOX_IMAGE_<NAME>; never by
+  # ARGUS_SANDBOX_IMAGE.
+  environments:
+    argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
+      image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker
