@@ -1,6 +1,7 @@
 # M6 W2b pilot W2b-1 (pilots/m6_w2b/w2b1/PREFLIGHT.md): config.yaml with exactly three changes, checked by go_live.sh:
 # budget.max_tokens 200000 -> 1200000, drafter.attempt_tokens 200000 -> 400000 (a ceiling; the USD reservation binds),
 # llm.prompt_cache.enabled false -> true. The run's cap is --max-usd 0.50 (= budget.max_usd); one attempt of $0.45.
+# Regenerated for run w2b1d2 after config.yaml raised roles.drafter.max_output_tokens to 16384 (option A).
 budget:
   max_iterations: 5
   max_tokens: 1200000     # hard limit: an iteration only starts if its worst-case cost fits
@@ -176,9 +177,11 @@ roles:
     max_output_tokens: 4096
     timeout_s: 90
   drafter:
-    # W2b task drafts (codetask/drafter.py). A test of 9.4 KB (pilot 3b) is ~3,000 output tokens in one SubmitDraft.
+    # W2b task drafts (codetask/drafter.py). One SubmitDraft holds the plan, the contract and every new test, plus the
+    # model's thinking (on by default): in pilot w2b1d1 it hit 8,192 with 6,108 of them thinking, before any test was
+    # written. 16,384 since then (option A, Atha 2026-10-22); the attempt's USD reservation still bounds every call.
     model: "anthropic:claude-sonnet-5-5"
-    max_output_tokens: 8192
+    max_output_tokens: 16384
     timeout_s: 120
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"

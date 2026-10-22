@@ -65,3 +65,19 @@ Kemungkinan gagal, semuanya hasil yang dicatat, bukan alasan menaikkan apa pun:
 | 2 | Live checkout ke `main`: `cd ~/pilot3a_live && git checkout main && git pull`; lalu `bash pilots/m6_w2b/w2b1/go_live.sh --check-only` | |
 | 3 | Run live **satu kali**: `bash ~/pilot3a_live/pilots/m6_w2b/w2b1/go_live.sh w2b1d1` (kunci di-paste sekali) | **Atha, "go live"** |
 | 4 | Laporan menurut bagian 4 di `w2b1/live/w2b1d1/RESULT.md`, dengan `DRAFT_REVIEW.md` dan `draft.json` dari run | |
+
+## 6. Run kedua `w2b1d2` (pilihan A, Atha 2026-10-22; ditulis sebelum run)
+
+`w2b1d1` gagal (`live/w2b1d1/RESULT.md`): `SubmitDraft` terpotong di output 8.192, dan 6.108 di antaranya thinking.
+Satu-satunya perubahan untuk run kedua: `roles.drafter.max_output_tokens` 8.192 → **16.384** di `config.yaml`.
+`config_w2b1.yaml` dibuat ulang dari situ dengan tiga selisih yang sama, sha baru ada di gerbang, dan gate 3 mengharapkan
+16.384. **Uang tidak naik:** satu attempt tetap $0,45 dan cap run $0,50. Setiap panggilan tetap ditolak sebelum dikirim
+bila kasus terburuknya (input dengan tarif tulis, ditambah output yang tersisa) tidak muat.
+
+- **Ekspektasi:** langkah baca kira-kira sama (±$0,05), lalu submit pertama dengan output 8.000–14.000 token
+  (thinking ±6.000, tes 4.000–8.000), ±$0,07–0,15. Bila submit pertama ditolak dan diperbaiki, totalnya ±$0,25–0,40.
+  Submit ketiga mungkin tidak muat lagi; bila begitu, hasilnya `reservation_exhausted` dan dicatat apa adanya.
+- **Kriteria:** sama dengan bagian 4, tanpa perubahan.
+- **Langkah:** merge PR ini; checkout live ke `main`; `go_live.sh --check-only`; lalu
+  `bash ~/pilot3a_live/pilots/m6_w2b/w2b1/go_live.sh w2b1d2` setelah **"go live"** dari Atha. Run id `w2b1d1` sudah ada
+  dan ditolak gerbang.
