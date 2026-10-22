@@ -189,7 +189,8 @@ def test_a_rejected_submit_goes_back_to_the_model_and_a_corrected_one_passes(roo
     r, model, d = run(root, tmp_path, [green, SUBMIT])
     assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
     seen = tool_texts(model, 1)[0]
-    assert seen.startswith("Draft rejected (submit 1 of 3)") and "is 'ok', not a failure by assertion" in seen
+    assert seen.startswith("Draft rejected (submit 1 of 5)") and "is 'ok', not a failure by assertion" in seen
+    assert dt.PASSING_HINT in seen                                           # how to keep a test that passes now
     assert [e["ok"] for e in events(d) if e["event"] == "draft_submitted"] == [False, True]
 
 
@@ -624,3 +625,11 @@ def test_the_task_names_the_agents_tools_and_what_may_be_added(root, tmp_path):
 def test_the_harness_puts_the_tools_into_the_contract():
     draft, problems = dt.draft_from_args(dict(ARGS, tools=["search_files", "edit_file"]), base="shop", policy=POLICY)
     assert problems == [] and draft["contract"]["tools"] == ["search_files", "edit_file"]
+
+
+def test_the_drafter_is_told_what_the_sandbox_lacks_and_only_a_passing_new_test_brings_the_hint(root, tmp_path):
+    bad = call("SubmitDraft", args_with(base="other"), "s0")
+    r, model, d = run(root, tmp_path, [bad, SUBMIT])
+    system = model.calls[0]["messages"][0].content
+    assert "no git, no network" in system and "verification/" in system
+    assert dt.PASSING_HINT not in tool_texts(model, 1)[0]                   # another problem: no hint

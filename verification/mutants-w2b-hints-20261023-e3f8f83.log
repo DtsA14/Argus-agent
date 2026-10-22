@@ -1,0 +1,5 @@
+HEAD e3f8f83 tests: tests/test_drafter.py tests/test_draft.py tests/test_review.py
+KILLED  no hint for a passing new test
+KILLED  hint for every rejection
+KILLED  sandbox limits not told
+RESULT: 3/3 killed

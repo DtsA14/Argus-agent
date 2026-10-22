@@ -41,8 +41,8 @@ sed -i 's/^  attempt_usd: 0.70$/  attempt_usd: 0.74/' config.yaml $C; rehash; t 
 echo; echo "### T8 the drafter may write, in both configs, expected hash updated: gate 3 must refuse"
 sed -i 's/^  drafter: \[list_files, search_files, read_file\]/  drafter: [list_files, search_files, read_file, write_file]/' config.yaml $C
 rehash; t t8; $GL --check-only; echo "[exit $?]"; reset
-echo; echo "### T9 four submits in both configs, expected hash updated: gate 3 must refuse"
-sed -i 's/^  max_submits: 3$/  max_submits: 4/' config.yaml $C; rehash; t t9; $GL --check-only; echo "[exit $?]"; reset
+echo; echo "### T9 six submits in both configs, expected hash updated: gate 3 must refuse"
+sed -i 's/^  max_submits: 5 /  max_submits: 6 /' config.yaml $C; rehash; t t9; $GL --check-only; echo "[exit $?]"; reset
 echo; echo "### T10 dirty tree (must refuse)"; echo x >> dirty.txt; $GL --check-only; echo "[exit $?]"; rm -f dirty.txt
 echo; echo "### T11 run id exists (must refuse)"; mkdir -p runs/w2b2d1; $GL w2b2d1 </dev/null; echo "[exit $?]"; rmdir runs/w2b2d1
 echo; echo "### T12 bad run ids (must refuse): another pilot's, zero, an injection"

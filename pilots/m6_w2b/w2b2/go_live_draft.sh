@@ -16,7 +16,7 @@ ISSUE="pilots/m6_w2b/w2b2/issue.txt"
 CONFIG="pilots/m6_w2b/w2b2/config_w2b2_draft.yaml"
 MAX_USD=0.75
 EXPECT_ISSUE_SHA="e4d511dbcc3e61b086778084e3c22247ebc4e5da23a6b9bc43a6ed33613cce0f"     # sha256 of the issue (line ends normalised)
-EXPECT_CONFIG_SHA="eea49cd5455bb244cbe737186b9b3c0d8494025b44b779d500f3c8e56c52a839"    # sha256 of the pilot config (line ends normalised)
+EXPECT_CONFIG_SHA="6482581f7b89b1e1162d26cae2cb9928cb55f19fd44037524ad11dcb967c8611"    # sha256 of the pilot config (line ends normalised)
 PY="${PY:-$HOME/Argus-agent/.venv-verify/bin/python}"
 SUPLOG="$HOME/argus-supervision.log"
 
@@ -97,14 +97,14 @@ e = {"cap_usd": cap, **lim, "max_submits": cfg["drafter"]["max_submits"], "envir
      "max_output_tokens": cfg["roles"][role]["max_output_tokens"], "tools": cfg["tools"][role],
      "prompt_cache": prompt_cache_for(cfg, role, ref), "prices": cfg["prices"][str(ref)]}
 want = {"cap_usd": 0.75, "attempt_tokens": 400000, "attempt_usd": 0.7, "max_input_tokens": 64000, "max_steps": 16, "max_usd": 0.75,
-        "max_submits": 3, "environment": "argus", "validation_timeout_s": 300, "model": "anthropic:claude-sonnet-5-5",
+        "max_submits": 5, "environment": "argus", "validation_timeout_s": 300, "model": "anthropic:claude-sonnet-5-5",
         "max_output_tokens": 16384, "tools": ["list_files", "search_files", "read_file"], "prompt_cache": True,
         "prices": {"input": 2.0, "output": 10.0, "cache_read": 0.1, "cache_write_5m": 2.5, "cache_write_1h": 4.0}}
 if e != want:
     print("REFUSED: the effective limits are not the reviewed ones: " + json.dumps({k: (e.get(k), want[k]) for k in want if e.get(k) != want[k]}),
           file=sys.stderr)
     raise SystemExit(1)
-print("gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 3 submits,"
+print("gate 3 ok: Sonnet 5.5, one attempt of $0.70 (cap $0.75), input <= 64,000 per call, output 16,384, 16 steps, 5 submits,"
       " read-only tools, validations in environment argus, prompt caching on (every input token reserved at the $2.50/M write rate)")
 PYEOF
 

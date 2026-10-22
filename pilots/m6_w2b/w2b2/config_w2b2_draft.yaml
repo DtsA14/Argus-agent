@@ -126,7 +126,7 @@ drafter:
   attempt_usd: 0.70
   max_input_tokens: 64000
   max_steps: 16
-  max_submits: 3
+  max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
   environment: argus       # the sandbox environment of every drafted validation (K4: python -m pytest <paths> only)
   validation_timeout_s: 300
 
