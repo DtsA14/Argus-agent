@@ -72,4 +72,4 @@ Penghematan dari ReviseDraft jadi lebih kecil dari yang mungkin, tetapi semuanya
 - **Titik keputusan Atha untuk W2b-1:** merge preflight, go live `w2b1d1`, pilihan A, merge, go live `w2b1d2`,
   "1+2+revisedraft", dan "merge langsung go live" (w2b1d3). Total **7**, ditambah tiga kali mengetik kunci.
 - **Waktu terminal:** 1:23, 1:51, dan 2:16 (per run).
-- **Menit Atha:** `unknown` (belum ditanya).
+- **Menit Atha:** **2** (satu angka kasar untuk seluruh W2b-1, dijawab 2026-10-23).
