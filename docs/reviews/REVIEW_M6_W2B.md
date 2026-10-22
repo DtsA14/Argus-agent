@@ -122,3 +122,12 @@ revisi bersama tool lain, crash setelah revisi, dan tool yang ditawarkan) serta 
 Mutan: `verification/mutants-w2b-revise-20261022-59eee91.log`, **9/9 tertangkap**. Satu mutan tidak dimasukkan karena
 ekuivalen dalam perilaku: menggabungkan field tak dikenal ke draf lama tetap ditolak `draft_from_args` dengan nama
 yang sama.
+
+## 7. Profil budget wajib dipilih (2026-10-23, keputusan Atha)
+
+`w2b1d3` menghasilkan draf tanpa `budget_profile`, sehingga agen akan mendapat `default`. Sekarang `budget_profile`
+**wajib** di `SubmitDraft`: draf tanpa profil, atau dengan nama yang tidak dikenal, ditolak dengan daftar profil yang
+ada. Prompt task mencantumkan setiap profil dengan batasnya (USD atau token per attempt, input dan output per
+panggilan; dibekukan di policy run sebagai `profile_info`), ditambah satu kalimat cara memilih. `DRAFT_REVIEW.md`
+menampilkan profil yang dipilih. Mutan `verification/mutants-w2b-profile-20261023-17cd3d4.log`: 4/4. `verify.sh` lulus
+di `17cd3d4`.
