@@ -49,6 +49,9 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
   - **W2b-1 `w2b1d2` gagal** ($0,22; output 16.384): submit 1 nyaris lolos (23 node merah karena assertion, satu tes gagal
     tanpa diwajibkan), lalu kirim ulang ditolak `input_limit` (45.035 > 40.000). Celah: penolakan tidak menyebut tes yang gagal di luar
     `must_pass` (`pilots/m6_w2b/w2b1/live/w2b1d2/RESULT.md`)
+  - **W2b-1 `w2b1d3` berhasil** ($0,29; ReviseDraft, attempt $0,70, input 64k): `DRAFTED` dalam 2 submit. Tes drafter lulus terhadap
+    `scripts/pilot_report.py` di `main` (20/20) dan menangkap 19/20 mutan referensi 3b (manusia 20/20; tanpa run BLOCKED). Draf tanpa
+    `budget_profile` dan regresi longgar. W2b-1 total $0,67 untuk 3 run. Berikutnya: drafter memilih profil, lalu W2b-2
 - [ ] **D4** batas ListFiles + daftar berkas di issue: **ditunda** (2026-10-22); dibuka bila ada task yang kehabisan anggaran dengan caching
   menyala
 - Pengamatan, belum tindakan: di `pilot3b1` agen memanggil `RunValidation` di balasan yang sama dengan tulisannya, sebelum validasi otomatis

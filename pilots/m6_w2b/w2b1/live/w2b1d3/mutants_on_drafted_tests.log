@@ -1,0 +1,27 @@
+The 20 mutants of the 3b reference (pilots/m6_pilot3/3b/mutants_3b.py), against the tests the drafter wrote in w2b1d3,
+in the sandbox (environment argus). Reference = pilots/m6_pilot3/3b/reference/scripts/pilot_report.py plus one line
+`sys.path.insert(0, <repo root>)` for this measurement only: the drafted tests run the script without PYTHONPATH, and
+the unchanged reference then fails all 20 (first attempt, discarded: "reference: fail 20").
+reference: pass 20
+KILLED  unknown cost counted
+KILLED  cost per success over every DONE
+KILLED  NO_RESULT counted as a failure
+KILLED  missing minutes are 0
+SURVIVED done is not FAILED_ACCEPTANCE
+KILLED  negative minutes accepted
+KILLED  bool accepted as minutes
+KILLED  NaN accepted
+KILLED  unknown run in the supervision file accepted
+KILLED  supervision that is not an object accepted
+KILLED  unreadable supervision file taken as none
+KILLED  events_skipped from result.json
+KILLED  key order changed
+KILLED  median replaced by mean
+KILLED  success rate rounded to 3
+KILLED  distribution over DONE runs only
+KILLED  refusal printed on stdout
+KILLED  a directory without events.jsonl accepted
+KILLED  cost per success rounded to 4
+KILLED  supervision mean not rounded
+RESULT: 19/20 killed
+Also: the drafted tests against scripts/pilot_report.py on main (the 3b agent's patch): pass 20/20.
