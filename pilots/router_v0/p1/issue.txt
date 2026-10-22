@@ -1,0 +1,14 @@
+argus has no way to see all jobs: status needs a job id the user must already know.
+
+Add a read-only command `argus list` (scripts/argus.py, with its logic in router/job.py) that prints one line per job
+in the jobs directory (--jobs-dir, default jobs/), sorted by job id:
+
+  <job id> <state> spent $<spent with 4 decimals> of $<cap with 2 decimals>
+
+where state and cap come from the job's job.json ("state", "max_usd") and spent is what the job's stage runs have
+spent, computed the same way status computes it. Rules:
+- only directories that contain a job.json are jobs; any other entry is ignored;
+- a job.json that cannot be read or is not valid JSON gives the line "<directory name> unreadable" instead, and the
+  other jobs are still listed;
+- when the jobs directory does not exist or holds no job, it prints exactly "no jobs";
+- it never takes a job's lock and never changes anything; it exits 0.
