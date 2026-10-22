@@ -1,0 +1,169 @@
+{
+  "task": "drafted_task",
+  "draft_sha256": "544093d3e60a5b4c7ce131ee7c508456013ce037fad01bde8cecbf82134c7cb6",
+  "unverifiable": [
+    "Run directories are read only through evals/runlog.py (read_events, read_result) and cost_known uses evals.score.cost_is_known: tests check behaviour, not which functions are called.",
+    "Nano-dollar summation (round(x*1e9) integer sum) is not distinguishable from float summation at 6 decimals by these tests.",
+    "That nothing else in the repository changes is enforced by the writable scope, not by a test.",
+    "Values for attempts/llm_calls of a NO_RESULT run are unspecified by the issue and not tested."
+  ],
+  "ok": true,
+  "feasibility": "unproven",
+  "contract": {
+    "contract": "drafted_task",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/drafted_task",
+      "issue": "Add scripts/pilot_report.py: python scripts/pilot_report.py RUN_DIR... [--supervision FILE]. Change nothing else.\nRead runs only via evals/runlog.py (read_events, read_result); cost known iff evals.score.cost_is_known(result).\nPrint json.dumps(obj, indent=2, ensure_ascii=False) + newline, exit 0. Keys in this order:\nruns: per argument, in order: run_id (dir name), status (result status, or \"NO_RESULT\" if no result.json), done (status==\"DONE\"), attempts, llm_calls, usd_billed (as in result.json; null if NO_RESULT), cost_known (false if NO_RESULT), events_skipped (from read_events), supervision_minutes (null if none; never 0 instead).\nruns_total; done; no_result;\nsuccess_rate = done/(runs_total-no_result), round 4; null if divisor 0;\nusd_known_total = sum of usd_billed over cost_known runs, summed as round(x*1e9) nano-dollars, /1e9, round 6; 0.0 if none;\nusd_unknown_runs = runs not cost_known;\ncost_per_success = usd_known_total / runs both done and cost_known, round 6; null if divisor 0;\ncost_complete = usd_unknown_runs == 0;\nattempts = {mean round 3, median (statistics.median)} over done runs; null if none;\nattempts_distribution = {\"<attempts>\": count} over runs with result.json, keys numeric order;\nsupervision = {runs_with_data, total, mean round 2} over runs with minutes; total, mean null if none;\nevents_skipped = sum.\nSupervision file: JSON object {run_id: minutes}; each value int/float, not bool, finite, >= 0; each key a given run_id.\nExit 2, stdout empty, one stderr line, when: no runs (\"no run directory given\"); an argument not a directory or without events.jsonl (the argument and \"not a run directory\"); a supervision file unreadable or invalid (\"supervision file\" and its path)."
+    },
+    "scope": {
+      "writable": [
+        "scripts/pilot_report.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "evals/**",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "fixtures/**",
+        "scripts/run_series.py",
+        "scripts/audit_run.py",
+        "scripts/run_eval.py",
+        "AGENTS.md",
+        "config.yaml"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_pilot_report.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 20,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_pilot_report.py::test_mixed_runs_full_report",
+          "tests/test_pilot_report.py::test_output_is_exactly_the_indented_dump",
+          "tests/test_pilot_report.py::test_success_rate_rounds_to_four_digits",
+          "tests/test_pilot_report.py::test_distribution_keys_in_numeric_order",
+          "tests/test_pilot_report.py::test_nothing_known_gives_nulls",
+          "tests/test_pilot_report.py::test_without_supervision_minutes_are_null_not_zero",
+          "tests/test_pilot_report.py::test_no_run_directory_given",
+          "tests/test_pilot_report.py::test_a_bad_argument_is_refused_before_any_output",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[missing]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[not_json]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[list]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[bool]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[negative]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[string]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[null]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[nan]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[infinity]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[overflow]",
+          "tests/test_pilot_report.py::test_invalid_supervision_file[unknown_run]",
+          "tests/test_pilot_report.py::test_supervision_zero_and_float_are_valid"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_eval_cost.py",
+          "tests/test_run_series.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 1,
+        "max_skipped": 0,
+        "must_pass": [],
+        "environment": "argus"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.5,
+      "max_iterations": 1
+    }
+  },
+  "contract_sha256": "fbd48fb0ae8ae2b1dd1c82da4e8fff2bf950a8d154218d64c7c7bfbdcf729343",
+  "added": {
+    "tests/test_pilot_report.py": "34c5e94f9f626b16817052db7480ff12d791b0348545596208f5974c60c62415"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_pilot_report.py::test_mixed_runs_full_report": "FAIL",
+        "tests/test_pilot_report.py::test_output_is_exactly_the_indented_dump": "FAIL",
+        "tests/test_pilot_report.py::test_success_rate_rounds_to_four_digits": "FAIL",
+        "tests/test_pilot_report.py::test_distribution_keys_in_numeric_order": "FAIL",
+        "tests/test_pilot_report.py::test_nothing_known_gives_nulls": "FAIL",
+        "tests/test_pilot_report.py::test_without_supervision_minutes_are_null_not_zero": "FAIL",
+        "tests/test_pilot_report.py::test_no_run_directory_given": "FAIL",
+        "tests/test_pilot_report.py::test_a_bad_argument_is_refused_before_any_output": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[missing]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[not_json]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[list]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[bool]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[negative]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[string]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[null]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[nan]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[infinity]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[overflow]": "FAIL",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[unknown_run]": "FAIL",
+        "tests/test_pilot_report.py::test_supervision_zero_and_float_are_valid": "FAIL"
+      },
+      "failures": 20,
+      "errors": 0,
+      "output_tail": "ot_report.py': [Errno 2] No such file or directory\nE     \nE   assert 'supervision file' in \"/usr/bin/python3: can't open file '/workspace/scripts/pilot_report.py': [Errno 2] No such file or directory\\n\"\nE    +  where 'supervision file' = str('supervision file')\nE    +  and   \"/usr/bin/python3: can't open file '/workspace/scripts/pilot_report.py': [Errno 2] No such file or directory\\n\" = CompletedProcess(args=['/usr/bin/python3', 'scripts/pilot_report.py', '/tmp/pytest-of-nobody/pytest-0/test_invalid_supervision_file_9/v1', '--supervision', '/tmp/pytest-of-nobody/pytest-0/test_invalid_supervision_file_9/sup.json'], returncode=2, stdout='', stderr=\"/usr/bin/python3: can't open file '/workspace/scripts/pilot_report.py': [Errno 2] No such file or directory\\n\").stderr\n__________________ test_invalid_supervision_file[unknown_run] __________________\ntests/test_pilot_report.py:189: in test_invalid_supervision_file\n    refused([a, \"--supervision\", sup], \"supervision file\", sup)\ntests/test_pilot_report.py:51: in refused\n    assert str(n) in p.stderr, p.stderr\nE   AssertionError: /usr/bin/python3: can't open file '/workspace/scripts/pilot_report.py': [Errno 2] No such file or directory\nE     \nE   assert 'supervision file' in \"/usr/bin/python3: can't open file '/workspace/scripts/pilot_report.py': [Errno 2] No such file or directory\\n\"\nE    +  where 'supervision file' = str('supervision file')\nE    +  and   \"/usr/bin/python3: can't open file '/workspace/scripts/pilot_report.py': [Errno 2] No such file or directory\\n\" = CompletedProcess(args=['/usr/bin/python3', 'scripts/pilot_report.py', '/tmp/pytest-of-nobody/pytest-0/test_invalid_supervision_file_10/v1', '--supervision', '/tmp/pytest-of-nobody/pytest-0/test_invalid_supervision_file_10/sup.json'], returncode=2, stdout='', stderr=\"/usr/bin/python3: can't open file '/workspace/scripts/pilot_report.py': [Errno 2] No such file or directory\\n\").stderr\n============================== 20 failed in 0.65s ==============================\n",
+      "failed_nodes": [
+        "tests/test_pilot_report.py::test_a_bad_argument_is_refused_before_any_output",
+        "tests/test_pilot_report.py::test_distribution_keys_in_numeric_order",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[bool]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[infinity]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[list]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[missing]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[nan]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[negative]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[not_json]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[null]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[overflow]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[string]",
+        "tests/test_pilot_report.py::test_invalid_supervision_file[unknown_run]",
+        "tests/test_pilot_report.py::test_mixed_runs_full_report",
+        "tests/test_pilot_report.py::test_no_run_directory_given",
+        "tests/test_pilot_report.py::test_nothing_known_gives_nulls",
+        "tests/test_pilot_report.py::test_output_is_exactly_the_indented_dump",
+        "tests/test_pilot_report.py::test_success_rate_rounds_to_four_digits",
+        "tests/test_pilot_report.py::test_supervision_zero_and_float_are_valid",
+        "tests/test_pilot_report.py::test_without_supervision_minutes_are_null_not_zero"
+      ]
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {},
+      "failures": 0,
+      "errors": 0,
+      "output_tail": "series[outcome0-BLOCKED] PASSED\ntests/test_run_series.py::test_an_infrastructure_budget_or_harness_stop_ends_the_series[outcome1-FAILED_BUDGET] PASSED\ntests/test_run_series.py::test_an_infrastructure_budget_or_harness_stop_ends_the_series[outcome2-the task has no status] PASSED\ntests/test_run_series.py::test_an_infrastructure_budget_or_harness_stop_ends_the_series[outcome3-no report] PASSED\ntests/test_run_series.py::test_an_infrastructure_budget_or_harness_stop_ends_the_series[outcome4-run_eval exited 2] PASSED\ntests/test_run_series.py::test_a_repeated_entry_is_refused_before_anything_runs PASSED\ntests/test_run_series.py::test_each_entry_runs_with_its_arms_config PASSED\ntests/test_run_series.py::test_a_malformed_series_is_refused_before_anything_runs[order0-arms0-False] PASSED\ntests/test_run_series.py::test_a_malformed_series_is_refused_before_anything_runs[order1-arms1-True] PASSED\ntests/test_run_series.py::test_a_malformed_series_is_refused_before_anything_runs[order2-arms2-True] PASSED\ntests/test_run_series.py::test_a_malformed_series_is_refused_before_anything_runs[order3-arms3-True] PASSED\ntests/test_run_series.py::test_a_malformed_series_is_refused_before_anything_runs[order4-arms4-True] PASSED\ntests/test_run_series.py::test_the_series_cap_never_splits_a_pair_and_is_never_exceeded PASSED\ntests/test_run_series.py::test_a_stop_inside_a_pair_marks_it_incomplete PASSED\ntests/test_run_series.py::test_without_pairs_the_series_cap_is_checked_per_run PASSED\ntests/test_run_series.py::test_the_series_cap_boundary_is_exact PASSED\ntests/test_run_series.py::test_a_run_whose_cost_is_unknown_stops_the_series_instead_of_counting_as_zero[None-True] PASSED\ntests/test_run_series.py::test_a_run_whose_cost_is_unknown_stops_the_series_instead_of_counting_as_zero[0.05-False] PASSED\ntests/test_run_series.py::test_a_run_whose_cost_is_unknown_stops_the_series_instead_of_counting_as_zero[0.05-None] PASSED\n\n============================== 31 passed in 1.60s ==============================\n",
+      "failed_nodes": []
+    }
+  },
+  "reference": null,
+  "problems": []
+}
