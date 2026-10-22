@@ -1,0 +1,89 @@
+# Does adding the one missing import finish the task? (2026-10-22)
+# Workspaces: runs/pilot3a/workspace and runs/pilot3a2/workspace from the archive of the two live runs (as the agent left them).
+# Run in a disposable isolated cloud workspace, NOT on a developer machine and not through the Argus sandbox (agent-written code).
+# Python 3.13.16, pytest 9.1.1. Same commands as the contract's validations.
+
+## pilot3a as_left: validation inspectors
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: ('Traceback (most recent call last):
+E     NameError: name \'read_result\' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f1]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f2]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f3]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f5]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f8]
+FAILED tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else
+FAILED tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited
+7 failed, 9 passed in 8.92s
+## pilot3a as_left: validation regression
+14 passed in 0.60s
+
+## pilot3a: added after 'from runner import load_config':
+20:from evals.runlog import read_events, read_memo, read_result
+
+## pilot3a with_import: validation inspectors
+E   assert "effective to...lidation']}\n" == 'effective to... skipped: 1\n'
+E   AssertionError: <ws>/scripts/audit_run.py", line 31, in <module>
+E     TypeError: argument of type 'NoneType' is not iterable
+FAILED tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else
+FAILED tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited
+2 failed, 14 passed in 8.98s
+## pilot3a with_import: validation regression
+14 passed in 0.66s
+
+## pilot3a2 as_left: validation inspectors
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: ('Traceback (most recent call last):
+E     json.decoder.JSONDecodeError: Unterminated string starting at: line 1 column 22 (char 21)
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'read_result' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     StopIteration
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f1]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f2]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f3]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f5]
+FAILED tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f8]
+FAILED tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else
+FAILED tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited
+FAILED tests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced
+8 failed, 8 passed in 8.98s
+## pilot3a2 as_left: validation regression
+14 passed in 0.63s
+
+## pilot3a2: added after 'from runner import load_config':
+20:from evals.runlog import read_events, read_memo, read_result
+
+## pilot3a2 with_import: validation inspectors
+E   AssertionError: ('', 'sr/lib/python3.13/json/decoder.py", line 345, in decode
+E     json.decoder.JSONDecodeError: Unterminated string starting at: line 1 column 22 (char 21)
+E   AssertionError: Traceback (most recent call last):
+E     NameError: name 'sp' is not defined
+E   AssertionError: Traceback (most recent call last):
+E     StopIteration
+FAILED tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else
+FAILED tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited
+FAILED tests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced
+3 failed, 13 passed in 8.91s
+## pilot3a2 with_import: validation regression
+14 passed in 0.52s
