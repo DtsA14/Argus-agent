@@ -37,10 +37,10 @@ sudah menyebut batas sandbox. Satu submit terbuang.
 
 - **Titik keputusan Atha** (W2b-2, dari pemilihan task sampai merge patch): pilihan task, siapa penulis issue,
   pertanyaan W2a-ext, merge persiapan, go live ×3 drafter, approve ×2, "gas" untuk tools, "gas 1+2+3", merge ×3, go live
-  agen, dan merge patch (menunggu). Total **±17**, ditambah 4 kali mengetik kunci. Banyak di antaranya akibat dua
+  agen, dan merge patch (PR #160). Total **±17**, ditambah 4 kali mengetik kunci. Banyak di antaranya akibat dua
   kegagalan drafter, yang menjadi perbaikan harness.
 - **Waktu terminal:** drafter 0:55, 1:25, 1:26; agen 0:36.
-- **Menit Atha:** belum ditanya.
+- **Menit Atha:** **5** (satu angka kasar untuk seluruh W2b-2, 2026-10-23).
 
 ## verify.sh setelah patch diterapkan
 
