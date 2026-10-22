@@ -1,0 +1,50 @@
+{
+  "intake_version": 1,
+  "kind": "task",
+  "name": "pilot_report",
+  "repo": "https://github.com/DtsA14/Argus-agent.git",
+  "commit": "f37aaba03a19cb7f84d42a4f3f0b3b755f7b020d",
+  "tree": "2a51cbb6b5f63edf7591fcde1c4657c36dd5c983",
+  "exclude": [
+    "verification",
+    "pilots"
+  ],
+  "base": {
+    "name": "argus_p6",
+    "commit": "f37aaba03a19cb7f84d42a4f3f0b3b755f7b020d",
+    "tree": "2a51cbb6b5f63edf7591fcde1c4657c36dd5c983",
+    "snapshot_sha256": "6954b618bf78bd04a8ac55d97dddaa30059a2ab46c3ca370d240c748afcab17f"
+  },
+  "added": {
+    "tests/test_pilot_report.py": "1f7a7c6122726842209f92d0f46b91694153cf359e606b52cd46784ef9406866"
+  },
+  "files": 424,
+  "snapshot_sha256": "da284adb727aaeaa863f0783d6704ba70f6b61833b8084b39850c5004a6be42f",
+  "executable": [
+    "scripts/build_argus_sandbox_image.sh",
+    "scripts/build_local_sandbox_image.sh",
+    "scripts/pin_sandbox_image.sh",
+    "scripts/verify.sh"
+  ],
+  "contract_sha256": "bff30d351f1cb4f010f06d9687db28617bfd97ca80ef1fa929b028e668a34b1d",
+  "draft_sha256": "ff3e33d1befb62cfecec29f348c6a38ae813c389fa9746dfa7a6af20a09f30ed",
+  "plan": {
+    "files": [
+      "scripts/pilot_report.py"
+    ],
+    "steps": [
+      "add scripts/pilot_report.py: read each run through evals.runlog, decide known cost with evals.score.cost_is_known",
+      "print the per-run rows and the aggregate exactly as the issue defines them; refuse bad arguments with exit 2"
+    ],
+    "risks": [
+      "an unknown cost or a missing minute must never be counted as 0",
+      "the key order, the rounding and the nano-dollar sum are part of the output"
+    ]
+  },
+  "unverifiable": [
+    "that the script reads runs only through evals.runlog and decides known cost only with cost_is_known (the tests see the output, not the code path)",
+    "that nothing else was changed: the scope protects the rest, but a reviewer must read the diff",
+    "readability and the internal layout of scripts/pilot_report.py"
+  ],
+  "approved_at": "2026-10-22T13:49:00Z"
+}
