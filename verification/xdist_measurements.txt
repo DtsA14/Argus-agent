@@ -1,0 +1,35 @@
+# xdist measurements (2026-10-22, VM 4 OCPU, main 927821f / branch verify-xdist)
+## status (A full serial default settings; B non-sandbox serial; C non-sandbox -n 4)
+A wall 516.26 s
+B wall 153.30 s
+C wall 50.30 s
+A_full: 1200 passed in 514.45s (0:08:34)
+B_serial: 1110 passed, 90 skipped in 150.85s (0:02:30)
+C_xdist4: 1110 passed, 90 skipped in 49.33s
+## verify settings (CRASH_REPEATS=5 CRASH_STRESS=50), Docker unreachable
+D serial verify-settings wall 329.21 s
+E -n 4 verify-settings wall 121.53 s
+D_serial: 1201 passed, 90 skipped in 327.43s (0:05:27)
+E_xdist4: 1201 passed, 90 skipped in 120.60s (0:02:00)
+## first try of -n 4 --dist loadgroup with Docker: the group marker was added after xdist read it (no tryfirst)
+Command exited with non-zero status 1
+run 1 wall 220.60 s
+run 1: 6 failed, 1288 passed in 219.72s (0:03:39); sandbox skipped: 0
+Command exited with non-zero status 1
+run 2 wall 220.18 s
+run 2: 5 failed, 1289 passed in 219.25s (0:03:39); sandbox skipped: 0
+Command exited with non-zero status 1
+run 3 wall 219.99 s
+run 3: 3 failed, 1291 passed in 219.09s (0:03:39); sandbox skipped: 0
+git status after: []
+FLAKY DONE
+## after the fix (tryfirst)
+run 1 wall 390.73 s
+run 1: 1295 passed in 389.78s (0:06:29); sandbox skipped: 0
+run 2 wall 391.75 s
+run 2: 1295 passed in 390.83s (0:06:30); sandbox skipped: 0
+run 3 wall 393.00 s
+run 3: 1295 passed in 392.07s (0:06:32); sandbox skipped: 0
+git status after: []
+FLAKY DONE
+## skip count under xdist (Docker unreachable): 32 lines, 25 passed, 42 skipped in 2.51s
