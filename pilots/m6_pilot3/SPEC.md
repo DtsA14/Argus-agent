@@ -3,7 +3,7 @@
 > **Update 2026-10-21:** Pilot 3 was split by decision of the reviewer into **3a** (shared reader + the two inspectors; `pilots/m6_pilot3/3a/`) and **3b** (the aggregator, which starts only after the 3a patch is applied and verified on `main`). This file is the original combined specification; the sections on `pilot_report.py` belong to 3b. The combined task did not fit one attempt (`TOKEN_SIMULATION.md`).
 
 Status 2026-10-21: **spesifikasi untuk review. Belum ada draf, tes final, patch referensi, atau coder.** Dasar: kandidat A di
-`docs/Reconciliation.md` dan arahan GPT (batas Pilot 3, satu catatan tentang dua pekerjaan berbeda). Basis: `main` pada `a0075a9`.
+`docs/reviews/RECONCILIATION_2026-10-21.md` (dulu `docs/Reconciliation.md`) dan arahan GPT (batas Pilot 3, satu catatan tentang dua pekerjaan berbeda). Basis: `main` pada `a0075a9`.
 Pertanyaan eksperimen: seberapa baik coder merapikan kode lintas berkas **sambil mempertahankan perilaku lama**, dan menambah
 satu keluaran baru dengan definisi eksplisit, dengan acceptance deterministik.
 

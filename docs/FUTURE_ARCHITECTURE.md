@@ -1,35 +1,16 @@
 # Argus — Pending Architecture Specification
 
 > **Status: draft spec for a future project (Atha, 2026-10-15).** These are proposed decisions from discussion with
-> GPT, **not** a description of what the repository implements. Update 2026-10-17: M3 is closed; the M6 part has been
-> checked against the code in [`docs/reviews/M6_GAP_ANALYSIS.md`](reviews/M6_GAP_ANALYSIS.md) (PR #73) and planned in
-> [`docs/reviews/M6_PLAN.md`](reviews/M6_PLAN.md). The other ADRs and milestones are tracked in
-> [`PENDING.md`](../PENDING.md) and have not been checked against the code yet. No code from this file without a
-> reality check and a reviewed plan.
+> GPT, **not** a description of what the repository implements. **The status of every ADR and milestone against the
+> code is kept in one place: [`docs/Reconciliation.md`](Reconciliation.md)** (updated 2026-10-22: M3 and the M6 MVP
+> done; M5 and ADR-002/004/005/006/007 partial, for code tasks; M4, M7, M8, M9, ADR-001/003 and the capability packs
+> not started). No code from this file without a reality check and a reviewed plan.
 >
-> Update 2026-10-21: the M6 MVP was reached in one live pilot (`agent-completed`, $0.0575). The ADRs were compared with
-> the code in [`docs/Reconciliation.md`](Reconciliation.md): ADR-002, 004, 005, 006 and 007 exist in part for code
-> tasks; ADR-001 and 003 do not. The label "M4 slice 1" used in older review files meant the single general-task
-> agent, **not** this file's M4 (parallel multi-agent), which has not started. The body below is unchanged.
-
-Status: Draft for Claude review.
-Important: These are proposed decisions from discussion, not claims about current repository implementation.
-
-## Instructions for Claude
-
-Act as a senior software architect and reviewer for the Argus repository.
-
-1. Inspect the actual repository, branch, recent commits, tests, and existing docs before recommending changes.
-2. Separate findings into implemented / partially implemented / missing / conflicting, citing files, symbols, tests,
-   and commands.
-3. Do not invent repository facts or claim tests ran unless they did.
-4. Do not make code changes until you present the repository reality check, gap analysis, MVP scope, and incremental
-   implementation plan.
-5. Avoid broad rewrites. Preserve working budget accounting, crash recovery, sandboxing, tool-call strictness, and
-   test conventions unless evidence shows a defect.
-6. Verify current official docs and compatibility before recommending libraries/APIs.
-7. Focus first on M3–M5 completion and an M6 repository-to-PR vertical slice. Do not implement all media capabilities
-   at once.
+> The one-time instructions for Claude's first review ("Instructions for Claude" and "Expected response", sections 0
+> and 10 of the original) were carried out by [`reviews/M6_GAP_ANALYSIS.md`](reviews/M6_GAP_ANALYSIS.md),
+> [`reviews/M6_PLAN.md`](reviews/M6_PLAN.md) and the reconciliation reports, and were removed on 2026-10-22; the
+> original text is in git history (`bf5416d:docs/FUTURE_ARCHITECTURE.md`). "M4 slice 1" in older review files meant the
+> single general-task agent, **not** this file's M4 (parallel multi-agent). The ADRs and roadmap below are unchanged.
 
 ## 1. Vision and scope
 
@@ -210,20 +191,3 @@ Measure task success against acceptance criteria, evaluator false-pass/false-rej
 violations, latency, recovery after injected failures, duplicate external calls/artifacts, human
 intervention/approval rate, policy denials, and single-agent vs multi-agent outcomes. An LLM claiming success is not
 proof.
-
-## 10. Expected response from Claude
-
-Return:
-1. Repository reality check (branch/commit, files/docs inspected, tests actually run).
-2. Gap analysis: implemented/partial/missing/conflicting, with evidence.
-3. Target architecture and component diagram (Mermaid/PlantUML).
-4. Concrete data model and migration plan grounded in existing code.
-5. Typed contracts for workflow/task, capability/tool, policy/approval, artifact, memory, evaluator.
-6. State machines and algorithms for retry, recovery, budget reservation/reconciliation, deduplication, quality gates.
-7. Threat model: trust boundaries, permissions, secrets, sandbox, network, approval.
-8. M6 incremental implementation plan, PR-sized changes, tests, rollback, acceptance criteria.
-9. Up to five high-impact open decisions, each with recommended default and rationale.
-10. Explicit out-of-scope items.
-
-Do not claim these ADRs/roadmap are implemented. Do not start code changes until the repository reality check, gap
-analysis, and proposed plan have been presented for review.
