@@ -1,0 +1,9 @@
+step 0 hash ok ok
+step 1 hash ok ok
+step 2 hash ok ok
+step 3 hash ok ok
+step 4 hash ok ok
+step 5 hash ok ok
+step 6 hash ok ok
+step 7 hash ok ok
+step 8 hash ok refused

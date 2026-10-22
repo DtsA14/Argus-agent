@@ -1,0 +1,10 @@
+##### pilot3a4
+  it0 s0 ok      in  3097 | ListFiles() ReadFile(scripts/audit_run.py) ReadFile(scripts/failure_trace.py)
+  it0 s1 ok      in 12657 | ReadFile(tests/test_run_inspectors.py) ReadFile(tests/test_run_inspectors_data.py) ReadFile(harness/events.py)
+  it0 s2 ok      in 23840 | SearchFiles(tests/test_run_stats.py)
+  it0 s3 ok      in 24065 | ReadFile(tests/test_run_stats.py)
+  it0 s4 ok      in 25371 | SearchFiles(evals)
+  it0 s5 ok      in 25472 | ReadFile(evals/score.py) RunValidation(regression)
+  it0 s6 ok      in 30424 | WriteFile(evals/runlog.py)
+  it0 s7 ok      in 32617 | WriteFile(scripts/failure_trace.py) EditFile(scripts/audit_run.py) EditFile(scripts/audit_run.py) EditFile(scripts/audit_run.py) EditFile(scripts/audi
+  it0 s8 refused in 35763 | 
