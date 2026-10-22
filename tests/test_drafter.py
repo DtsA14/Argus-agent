@@ -590,7 +590,7 @@ def test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_o
 
 
 def tiny(**drafter):
-    """A config with a profile whose output cannot hold even src/shop.py (62 bytes, about 15 tokens)."""
+    """A config with a profile whose output cannot hold even src/shop.py (63 bytes, about 15 tokens)."""
     c = cfg(**drafter)
     c["code_task"]["profiles"]["tiny"] = {"attempt_tokens": 30000, "max_output_tokens": 5}
     return c
@@ -601,7 +601,7 @@ def test_a_writable_file_too_large_to_rewrite_in_one_call_is_refused_without_edi
     edit = revise({"tools": ["edit_file"]})
     r, model, d = run(root, tmp_path, [small, edit], config=tiny())
     seen = tool_texts(model, 1)[0]
-    assert "src/shop.py is 62 bytes (about 15 tokens): without edit_file" in seen and "profile 'tiny' (5 tokens)" in seen
+    assert "src/shop.py is 63 bytes (about 15 tokens): without edit_file" in seen and "profile 'tiny' (5 tokens)" in seen
     assert r["status"] == dt.DRAFTED and len(vlog()) == 2                     # the first submit ran nothing
     c = json.loads((d / "draft.json").read_text())["contract"]
     assert c["tools"] == ["edit_file"] and c["budget_profile"] == "tiny"
