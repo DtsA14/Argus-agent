@@ -1,0 +1,97 @@
+{
+  "new_tests": [
+    {
+      "content": "\"\"\"scripts/pilot_report.py: a report over code-task run directories (read through evals/runlog.py).\n\nThe script runs as a subprocess from the repository root, without PYTHONPATH, as `python scripts/pilot_report.py` does.\nNo model and no sandbox are used.\"\"\"\nimport json\nimport os\nimport subprocess\nimport sys\nfrom pathlib import Path\n\nimport pytest\n\nROOT = Path(__file__).resolve().parent.parent\nVALID = '{\"event\": \"llm_call\", \"status\": \"ok\"}'\n\nTOP_KEYS = [\"runs\", \"runs_total\", \"done\", \"no_result\", \"success_rate\", \"usd_known_total\", \"usd_unknown_runs\",\n            \"cost_per_success\", \"cost_complete\", \"attempts\", \"attempts_distribution\", \"supervision\", \"events_skipped\"]\nRUN_KEYS = [\"run_id\", \"status\", \"done\", \"attempts\", \"llm_calls\", \"usd_billed\", \"cost_known\", \"events_skipped\",\n            \"supervision_minutes\"]\n\n\ndef run_script(*args):\n    env = {k: v for k, v in os.environ.items() if k != \"PYTHONPATH\"}\n    return subprocess.run([sys.executable, \"scripts/pilot_report.py\", *[str(a) for a in args]], cwd=ROOT,\n                          capture_output=True, text=True, env=env, timeout=120)\n\n\ndef make_run(base, name, result=None, events=(VALID,)):\n    d = Path(base) / name\n    d.mkdir(parents=True)\n    (d / \"events.jsonl\").write_text(\"\".join(line + \"\\n\" for line in events), encoding=\"utf-8\")\n    if result is not None:\n        (d / \"result.json\").write_text(json.dumps(result), encoding=\"utf-8\")\n    return d\n\n\ndef result(status, attempts, calls, usd=None, complete=None):\n    r = {\"status\": status, \"attempts\": attempts, \"llm_calls\": calls}\n    if usd is not None:\n        r[\"usd_billed\"] = usd\n    if complete is not None:\n        r[\"usd_complete\"] = complete\n    return r\n\n\ndef mixed(tmp_path):\n    \"\"\"Five runs: three DONE (one of them with an incomplete cost), one failed, one without result.json.\"\"\"\n    runs = tmp_path / \"runs\"\n    a = make_run(runs, \"run_a\", result(\"DONE\", 2, 9, 0.1, True), [VALID, \"\", \"{broken\", VALID])\n    b = make_run(runs, \"run_b\", result(\"FAILED_ACCEPTANCE\", 2, 30, 0.3, True))\n    c = make_run(runs, \"run_c\", result(\"DONE\", 10, 5, 0.05, False))\n    d = make_run(runs, \"run_d\", None, [VALID, \"{broken\", \"not json at all\"])\n    e = make_run(runs, \"run_e\", result(\"DONE\", 1, 3, 0.2, True))\n    sup = tmp_path / \"sup.json\"\n    sup.write_text(json.dumps({\"run_a\": 30, \"run_b\": 0, \"run_e\": 45.5}), encoding=\"utf-8\")\n    return [e, a, b, c, d], sup\n\n\ndef report(proc):\n    assert proc.returncode == 0, proc.stderr\n    return json.loads(proc.stdout)\n\n\ndef test_mixed_runs_report_values(tmp_path):\n    dirs, sup = mixed(tmp_path)\n    rep = report(run_script(*dirs, \"--supervision\", sup))\n    assert [r[\"run_id\"] for r in rep[\"runs\"]] == [\"run_e\", \"run_a\", \"run_b\", \"run_c\", \"run_d\"]   # the argument order\n    by = {r[\"run_id\"]: r for r in rep[\"runs\"]}\n    assert (by[\"run_a\"][\"status\"], by[\"run_a\"][\"done\"], by[\"run_a\"][\"attempts\"], by[\"run_a\"][\"llm_calls\"]) == (\"DONE\", True, 2, 9)\n    assert (by[\"run_a\"][\"usd_billed\"], by[\"run_a\"][\"cost_known\"], by[\"run_a\"][\"events_skipped\"]) == (0.1, True, 1)\n    assert (by[\"run_b\"][\"status\"], by[\"run_b\"][\"done\"], by[\"run_b\"][\"cost_known\"]) == (\"FAILED_ACCEPTANCE\", False, True)\n    assert (by[\"run_c\"][\"usd_billed\"], by[\"run_c\"][\"cost_known\"]) == (0.05, False)    # as in result.json, but not known\n    assert (by[\"run_d\"][\"status\"], by[\"run_d\"][\"done\"], by[\"run_d\"][\"usd_billed\"]) == (\"NO_RESULT\", False, None)\n    assert (by[\"run_d\"][\"cost_known\"], by[\"run_d\"][\"events_skipped\"]) == (False, 2)\n    assert by[\"run_e\"][\"events_skipped\"] == 0\n    mins = {k: v[\"supervision_minutes\"] for k, v in by.items()}\n    assert mins == {\"run_a\": 30, \"run_b\": 0, \"run_c\": None, \"run_d\": None, \"run_e\": 45.5}\n    assert mins[\"run_b\"] is not None and mins[\"run_c\"] is None            # 0 is data, no data is null, never 0\n    assert (rep[\"runs_total\"], rep[\"done\"], rep[\"no_result\"]) == (5, 3, 1)\n    assert rep[\"success_rate\"] == 0.75                                    # 3 / (5 - 1)\n    assert rep[\"usd_known_total\"] == 0.6                                  # a, b, e: c is not known\n    assert rep[\"usd_unknown_runs\"] == 2                                   # c and d\n    assert rep[\"cost_per_success\"] == 0.3                                 # 0.6 / (done and known: a, e)\n    assert rep[\"cost_complete\"] is False\n    assert rep[\"attempts\"] == {\"mean\": 4.333, \"median\": 2}                # done runs: 2, 10, 1\n    assert rep[\"attempts_distribution\"] == {\"1\": 1, \"2\": 2, \"10\": 1}      # every run with a result.json\n    assert list(rep[\"attempts_distribution\"]) == [\"1\", \"2\", \"10\"]        # numeric order\n    assert rep[\"supervision\"] == {\"runs_with_data\": 3, \"total\": 75.5, \"mean\": 25.17}\n    assert rep[\"events_skipped\"] == 3\n\n\ndef test_mixed_runs_report_key_order(tmp_path):\n    dirs, sup = mixed(tmp_path)\n    rep = report(run_script(*dirs, \"--supervision\", sup))\n    assert list(rep) == TOP_KEYS\n    assert all(list(r) == RUN_KEYS for r in rep[\"runs\"])\n    assert list(rep[\"attempts\"]) == [\"mean\", \"median\"]\n    assert list(rep[\"supervision\"]) == [\"runs_with_data\", \"total\", \"mean\"]\n\n\ndef test_stdout_is_the_exact_json_dump(tmp_path):\n    dirs, sup = mixed(tmp_path)\n    proc = run_script(*dirs, \"--supervision\", sup)\n    assert proc.returncode == 0, proc.stderr\n    assert proc.stdout == json.dumps(json.loads(proc.stdout), indent=2, ensure_ascii=False) + \"\\n\"\n\n\ndef test_success_rate_rounding_and_unknown_costs(tmp_path):\n    runs = tmp_path / \"runs\"\n    dirs = [make_run(runs, \"r1\", result(\"DONE\", 1, 1, 0.5, False)),\n            make_run(runs, \"r2\", result(\"DONE\", 2, 1)),\n            make_run(runs, \"r3\", result(\"BLOCKED\", 1, 1, 0.5, None))]\n    rep = report(run_script(*dirs))\n    assert rep[\"success_rate\"] == 0.6667\n    assert rep[\"usd_known_total\"] == 0.0 and isinstance(rep[\"usd_known_total\"], float)\n    assert rep[\"usd_unknown_runs\"] == 3 and rep[\"cost_complete\"] is False\n    assert rep[\"cost_per_success\"] is None                                # no run both done and known\n    assert rep[\"attempts\"] == {\"mean\": 1.5, \"median\": 1.5}\n    assert [r[\"cost_known\"] for r in rep[\"runs\"]] == [False, False, False]\n\n\ndef test_runs_without_any_done_run(tmp_path):\n    runs = tmp_path / \"runs\"\n    dirs = [make_run(runs, \"r1\", result(\"FAILED_ACCEPTANCE\", 3, 4, 0.25, True))]\n    rep = report(run_script(*dirs))\n    assert rep[\"success_rate\"] == 0.0 and rep[\"done\"] == 0\n    assert rep[\"usd_known_total\"] == 0.25 and rep[\"cost_complete\"] is True and rep[\"usd_unknown_runs\"] == 0\n    assert rep[\"cost_per_success\"] is None\n    assert rep[\"attempts\"] is None\n    assert rep[\"attempts_distribution\"] == {\"3\": 1}\n\n\ndef test_only_runs_without_result(tmp_path):\n    runs = tmp_path / \"runs\"\n    dirs = [make_run(runs, \"r1\"), make_run(runs, \"r2\")]\n    rep = report(run_script(*dirs))\n    assert (rep[\"runs_total\"], rep[\"done\"], rep[\"no_result\"]) == (2, 0, 2)\n    assert rep[\"success_rate\"] is None\n    assert rep[\"usd_known_total\"] == 0.0 and rep[\"usd_unknown_runs\"] == 2 and rep[\"cost_complete\"] is False\n    assert rep[\"cost_per_success\"] is None and rep[\"attempts\"] is None\n    assert rep[\"attempts_distribution\"] == {}\n    assert rep[\"events_skipped\"] == 0\n\n\ndef test_no_supervision_file_gives_nulls(tmp_path):\n    dirs, _ = mixed(tmp_path)\n    rep = report(run_script(*dirs))\n    assert [r[\"supervision_minutes\"] for r in rep[\"runs\"]] == [None] * 5\n    assert rep[\"supervision\"] == {\"runs_with_data\": 0, \"total\": None, \"mean\": None}\n\n\ndef test_non_ascii_run_id_is_not_escaped(tmp_path):\n    d = make_run(tmp_path / \"runs\", \"run_\\u00e9\", result(\"DONE\", 1, 1, 0.1, True))\n    proc = run_script(d)\n    assert proc.returncode == 0, proc.stderr\n    assert \"run_\\u00e9\" in proc.stdout and \"\\\\u00e9\" not in proc.stdout\n\n\ndef assert_refused(proc, *fragments):\n    assert proc.returncode == 2\n    assert proc.stdout == \"\"\n    assert len(proc.stderr.strip().splitlines()) == 1, proc.stderr\n    for f in fragments:\n        assert str(f) in proc.stderr\n\n\ndef test_no_run_directory_given_no_args():\n    assert_refused(run_script(), \"no run directory given\")\n\n\n@pytest.mark.parametrize(\"args\", [[], [\"--supervision\"]], ids=[\"no_args\", \"only_supervision\"])\ndef test_no_run_directory_given(tmp_path, args):\n    sup = tmp_path / \"sup.json\"\n    sup.write_text(\"{}\", encoding=\"utf-8\")\n    argv = [\"--supervision\", sup] if args else []\n    assert_refused(run_script(*argv), \"no run directory given\")\n\n\n@pytest.mark.parametrize(\"kind\", [\"missing\", \"plain_file\", \"no_events\"])\ndef test_not_a_run_directory(tmp_path, kind):\n    good = make_run(tmp_path / \"runs\", \"good\", result(\"DONE\", 1, 1, 0.1, True))\n    if kind == \"missing\":\n        bad = tmp_path / \"runs\" / \"nothing_here\"\n    elif kind == \"plain_file\":\n        bad = tmp_path / \"runs\" / \"a_file\"\n        bad.write_text(\"x\", encoding=\"utf-8\")\n    else:\n        bad = tmp_path / \"runs\" / \"no_events\"\n        bad.mkdir()\n        (bad / \"result.json\").write_text(json.dumps(result(\"DONE\", 1, 1, 0.1, True)), encoding=\"utf-8\")\n    assert_refused(run_script(good, bad), bad, \"not a run directory\")\n\n\nBAD_SUPERVISION = {\n    \"invalid_json\": \"not json\",\n    \"list\": \"[1, 2]\",\n    \"string_value\": '{\"run_a\": \"5\"}',\n    \"bool_value\": '{\"run_a\": true}',\n    \"negative\": '{\"run_a\": -1}',\n    \"nan\": '{\"run_a\": NaN}',\n    \"infinity\": '{\"run_a\": Infinity}',\n    \"null_value\": '{\"run_a\": null}',\n    \"unknown_run_id\": '{\"run_a\": 5, \"run_zzz\": 7}',\n}\n\n\n@pytest.mark.parametrize(\"kind\", [\"missing_file\", *BAD_SUPERVISION])\ndef test_bad_supervision_file(tmp_path, kind):\n    d = make_run(tmp_path / \"runs\", \"run_a\", result(\"DONE\", 1, 1, 0.1, True))\n    sup = tmp_path / \"sup.json\"\n    if kind != \"missing_file\":\n        sup.write_text(BAD_SUPERVISION[kind], encoding=\"utf-8\")\n    assert_refused(run_script(d, \"--supervision\", sup), \"supervision file\", sup)\n",
+      "path": "tests/test_pilot_report.py"
+    }
+  ],
+  "plan": {
+    "files": [
+      "scripts/pilot_report.py"
+    ],
+    "risks": [
+      "Running the script by path does not put the repo root on sys.path, so the imports of evals.* fail unless the script inserts the root itself.",
+      "A bool is an int in Python, so the supervision check must reject it explicitly. NaN and Infinity are accepted by json.loads, so the check must reject them too.",
+      "A supervision value of 0 must stay 0, not become null. A missing value must be null, not 0.",
+      "The attempts distribution keys must be sorted as numbers, not as strings.",
+      "NO_RESULT runs count as cost unknown, so they are in usd_unknown_runs and cost_complete is false. They are excluded from the success_rate divisor.",
+      "argparse errors exit 2 but print a multi-line usage. The stderr must be a single line.",
+      "Rounding and float summation can differ from the spec. Nano-dollar integer summing is required."
+    ],
+    "steps": [
+      "Create scripts/pilot_report.py. Insert the repo root into sys.path, as scripts/run_eval.py does, so `python scripts/pilot_report.py` works without PYTHONPATH.",
+      "Parse the arguments by hand or with argparse. Every user error must exit 2 with stdout empty and one stderr line, so don't let argparse print a multi-line usage. The errors are: no run directories, an argument that is not a directory or has no events.jsonl, and a bad supervision file.",
+      "Check each argument for a directory containing events.jsonl. Read it only through evals.runlog.read_events and read_result, and use evals.score.cost_is_known for cost. A run with no result.json gets status NO_RESULT, done false, usd_billed null and cost_known false.",
+      "Load and validate the supervision file. It must be a JSON object. Each value must be an int or float but not a bool, finite and >= 0. Each key must be one of the given run_ids.",
+      "Compute the aggregates exactly as the issue specifies. Round success_rate to 4, usd to 6, mean attempts to 3 and mean supervision to 2. Sum usd_known_total as integer nano-dollars. Use statistics.median for the median attempts. Order the attempts_distribution keys numerically.",
+      "Emit the keys in the specified order with json.dumps(obj, indent=2, ensure_ascii=False) plus a newline, and exit 0."
+    ]
+  },
+  "scope": {
+    "protected": [
+      "tests/**",
+      "conftest.py",
+      "evals/**",
+      "harness/**",
+      "acceptance/**",
+      "codetask/**",
+      "runner.py",
+      "fixtures/**",
+      "AGENTS.md"
+    ],
+    "writable": [
+      "scripts/pilot_report.py"
+    ]
+  },
+  "unverifiable": [
+    "That the script reads runs only through evals/runlog.py (read_events, read_result) and decides cost with evals.score.cost_is_known. Tests check the behaviour, not the imports, so a reviewer must read the diff.",
+    "That nothing else in the repository changes. The scope allows only scripts/pilot_report.py, but a reviewer should confirm that no other file was touched.",
+    "The result of a run with NO_RESULT for attempts and llm_calls is not specified, so the tests do not check those two fields.",
+    "The message wording beyond the required fragments, and whether run directories are checked before the supervision file when both are bad."
+  ],
+  "validation": [
+    {
+      "id": "target",
+      "min_tests": 23,
+      "must_pass": [
+        "tests/test_pilot_report.py::test_mixed_runs_report_values",
+        "tests/test_pilot_report.py::test_mixed_runs_report_key_order",
+        "tests/test_pilot_report.py::test_stdout_is_the_exact_json_dump",
+        "tests/test_pilot_report.py::test_success_rate_rounding_and_unknown_costs",
+        "tests/test_pilot_report.py::test_runs_without_any_done_run",
+        "tests/test_pilot_report.py::test_only_runs_without_result",
+        "tests/test_pilot_report.py::test_no_supervision_file_gives_nulls",
+        "tests/test_pilot_report.py::test_non_ascii_run_id_is_not_escaped",
+        "tests/test_pilot_report.py::test_no_run_directory_given[no_args]",
+        "tests/test_pilot_report.py::test_no_run_directory_given[only_supervision]",
+        "tests/test_pilot_report.py::test_not_a_run_directory[missing]",
+        "tests/test_pilot_report.py::test_not_a_run_directory[plain_file]",
+        "tests/test_pilot_report.py::test_not_a_run_directory[no_events]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[missing_file]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[invalid_json]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[list]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[string_value]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[bool_value]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[negative]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[nan]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[infinity]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[null_value]",
+        "tests/test_pilot_report.py::test_bad_supervision_file[unknown_run_id]"
+      ],
+      "paths": [
+        "tests/test_pilot_report.py"
+      ]
+    },
+    {
+      "id": "regression",
+      "min_tests": 6,
+      "must_pass": [
+        "tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known",
+        "tests/test_eval_cost.py::test_costs_are_aggregated_over_the_runs_whose_cost_is_known_and_the_others_are_counted"
+      ],
+      "paths": [
+        "tests/test_eval_cost.py"
+      ]
+    }
+  ]
+}
