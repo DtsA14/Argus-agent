@@ -147,6 +147,7 @@ Bagian 1–8 di atas adalah laporan 2026-10-21 dan tidak ditulis ulang. Bagian i
 | 1 | `run_stats` melewati baris bukan-JSON | `agent-completed` | $0,0575 | 1 attempt, patch identik dengan referensi |
 | 2 | validasi `--impl` di `main.py` (2 file) | `agent-completed` | $0,0795 | 2 attempt; attempt 1 `reservation_exhausted` di profil `default`, pulih lewat umpan balik |
 | 3a | pembaca run bersama + refactor 2 skrip (3 file) | **`failed`** | $0,2000 | 2 attempt, keduanya `reservation_exhausted`; 9 dari 16 tes lulus; satu impor yang kurang menggagalkan dua tes wajib |
+| 3a (D1–D3, D5) | sama, kontrak `fix_run_inspectors_v2` (profil `large_usd`) | `pilot3a4` **`failed`**; `pilot3a5` **`agent-completed`** (usulan; diputuskan reviewer) | $0,3947; **$0,1501** | `pilot3a4`: validasi otomatis menunjukkan error, satu putaran perbaikan (3 → 1 tes wajib gagal), anggaran attempt habis. `pilot3a5` (prompt caching, hemat 64%): `DONE` dalam 1 attempt, paket review valid; patch agen diterapkan ke `main` tanpa perubahan (3-way merge) |
 | 4 | `is_peak` melewati tengah malam (1 fungsi) | 2 dari 2 `DONE` (`pilot4c` sengaja tidak dijalankan) | $0,0289 + $0,0289 | patch **byte-identik** di dua run; diterapkan di PR #109 |
 | 5a | `is_peak` gagal tertutup (1 fungsi, spesifikasi lebih ketat) | `DONE` | $0,0426 | 1 attempt; patch menunggu merge di PR #115 |
 
@@ -167,7 +168,7 @@ Total biaya live pilot 1–5a ±$0,44. Waktu supervisi: ~10 menit (estimasi) unt
 
 **Belum terbukti:**
 - Tingkat sukses umum; batas ukuran task. Antara satu fungsi (3 dari 3 `DONE`) dan tiga file (gagal) belum ada titik ukur; Pilot 2 (dua file) `DONE` di attempt kedua.
-- Dua hipotesis harness yang muncul dari 3a dan **belum diuji**: umpan balik yang mengarahkan perbaikan kegagalan validasi lebih dulu (di 3a agen melihat `NameError` dua kali dan tidak memperbaikinya), dan `ReadFile` dengan rentang baris untuk berkas besar. Hanya ada satu pengamatan; perubahan harness inti baru layak bila pola itu terulang.
+- Dua hipotesis harness yang muncul dari 3a dan **belum diuji**: umpan balik yang mengarahkan perbaikan kegagalan validasi lebih dulu (koreksi: di `pilot3a` agen melihat `NameError` sekali, lewat `RunValidation` di attempt 1, dan anggaran habis sebelum ia bertindak; kedua hipotesis kemudian diuji sebagai D2 dan D3, lihat baris 3a (D1–D3, D5)), dan `ReadFile` dengan rentang baris untuk berkas besar. Hanya ada satu pengamatan; perubahan harness inti baru layak bila pola itu terulang.
 - Repo selain Argus (Athena butuh image sandbox per proyek; JS belum bisa divalidasi); drafter model (W2b); M4/M7+.
 
 ### 9.3 Utang yang ditutup dan yang masih terbuka
