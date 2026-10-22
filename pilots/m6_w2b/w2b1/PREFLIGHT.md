@@ -1,0 +1,67 @@
+# Pilot W2b-1: preflight (ditulis sebelum run)
+
+Status 2026-10-22: **persiapan; belum ada run.** Spec: `docs/reviews/SPEC_W2B_DRAFTER.md` bagian 7 (K7). Kode:
+`docs/reviews/REVIEW_M6_W2B.md` (PR #148). Pilot ini **hanya menyusun draf**: tidak ada approve dan tidak ada agen yang jalan.
+
+## 1. Tujuan
+
+Pertanyaannya: **apakah drafter, dari issue saja, menghasilkan draf yang lolos cek W2a, dan seberapa dekat drafnya dengan
+draf manusia?** Task-nya sengaja yang jawabannya sudah ada, yaitu pilot 3b (`scripts/pilot_report.py`). Draf manusia
+`pilots/m6_pilot3/3b/draft.json` (17 node wajib) menjadi pembanding.
+
+## 2. Artefak dan cek (tanpa biaya)
+
+| | |
+|---|---|
+| Basis | intake `argus_p6` = `main` `f37aaba` (423 berkas; exclude `verification`, `pilots`). Intake yang sama dengan 3b |
+| Cek bocoran | `tests/test_pilot_report.py`, `scripts/pilot_report.py`, dan `pilots/` **tidak ada** di snapshot (gate 1, dan T2 di tes gerbang). Satu-satunya jejak: satu baris di `PENDING.md` snapshot yang menyebut nama skrip dan bahwa spesifikasinya menunggu keputusan. Isinya tidak memuat tes atau jawaban, dan namanya juga ada di issue |
+| Issue | `w2b1/issue.txt` = `3b/issue.txt` byte demi byte (akhir baris dinormalisasi), 1.713 karakter |
+| Config | `w2b1/config_w2b1.yaml` = `config.yaml` + tiga selisih: `budget.max_tokens` 1.200.000, `drafter.attempt_tokens` 400.000 (hanya batas atas; USD yang mengikat), dan `llm.prompt_cache.enabled` true |
+| Batas efektif (gate 3) | Sonnet 5.5; satu attempt **$0,45**, cap run **$0,50** (`--max-usd 0.50` = `budget.max_usd`); input ≤ 40.000 per panggilan; output 8.192; 16 langkah; **3 submit**; tool read-only; validasi di environment `argus`; caching menyala |
+| Gerbang | `w2b1/go_live.sh`: intake tidak berubah dan bebas bocoran, sha issue dan config, selisih config persis tiga kunci, batas efektif, tanpa `ARGUS_LIVE` ditolak tanpa membuat direktori, run id `w2b1d[1-9]` baru, dan bentuk kunci. Waktu terminal (gerbang lolos, kunci diketik, run selesai) dicatat ke `~/argus-supervision.log`, di luar repo |
+| Tes gerbang | `w2b1/gl_test_output.txt`: kondisi benar lolos (T0, T15); **14 kondisi rusak ditolak** (intake berubah, jawaban 3b dimasukkan ke intake, issue diubah, config diubah, selisih keempat, caching di `config.yaml`, `attempt_usd` 0,60, drafter boleh menulis, 4 submit, tree kotor, run id sudah ada, run id salah atau injeksi, dan kunci kosong, salah bentuk, atau ter-paste dua kali); tidak ada direktori run yang dibuat dan tidak ada `key_entered` tercatat |
+
+## 3. Ekspektasi (sebelum run)
+
+Yang kemungkinan dibaca drafter: `evals/runlog.py` (1,4 KB), `evals/score.py` (9,8 KB), dan satu atau dua tes yang sudah
+ada sebagai contoh gaya (`tests/test_run_inspectors.py`, 8,6 KB). Tes yang ditulis untuk issue ini kemungkinan
+5–10 KB, atau 2.000–3.500 token output per `SubmitDraft`. Perkiraannya **6–10 panggilan, $0,10–0,30**, dengan 1–2 submit.
+
+Kemungkinan gagal, semuanya hasil yang dicatat, bukan alasan menaikkan apa pun:
+- `context_limit` bila drafter membaca terlalu banyak sebelum submit (input > 40.000 per panggilan);
+- submit ditolak karena tes yang ERROR di baseline (misalnya import `scripts.pilot_report` di level modul, yang gagal
+  karena skripnya belum ada, padahal kegagalannya harus karena assertion). Ini jebakan paling mungkin untuk task
+  "berkas baru". Draf manusia menghindarinya dengan menjalankan skrip sebagai subprocess.
+
+## 4. Kriteria (ditetapkan sebelum run, tidak diubah sesudahnya)
+
+1. **Berhasil:** status `DRAFTED` dalam ≤ 3 submit, `source_unchanged` true, dan biaya ≤ $0,45 dengan `usd_complete`
+   true. Dengan begitu, setiap node wajib tes baru drafter sudah terbukti merah karena assertion di sandbox, dan semua
+   validasi lain hijau.
+2. **Gagal:** selain itu (`NO_DRAFT` karena alasan apa pun, atau `BLOCKED`). Status apa pun dicatat lalu **berhenti**:
+   tidak ada run ulang, kenaikan cap, atau perubahan config tanpa persetujuan baru. `--resume` hanya untuk run yang mati.
+3. **Dicatat** (bukan kriteria lulus):
+   - panggilan, langkah, submit (dan alasan setiap penolakan), biaya, cache read/write dan penghematan, puncak input;
+   - scope: apakah writable = `scripts/pilot_report.py` saja seperti draf manusia, peringatan scope, dan isi protected;
+   - validasi: adakah validasi regresi, dan apa isinya dibanding draf manusia (empat berkas tes 3a); profil budget
+     yang dipilih;
+   - **cakupan dibanding draf manusia**: untuk setiap perilaku yang diuji draf manusia, apakah tes drafter mengujinya
+     (dinilai Claude dari isi tes, ditulis di `RESULT.md` dengan kutipan nama tes):
+     tujuh jenis run; menit supervisi; menit yang hilang = null dan 0 = data; tidak ada run `DONE`; tidak ada biaya
+     yang diketahui; hanya run tanpa hasil; tanpa argumen ditolak; argumen bukan direktori run ditolak; berkas supervisi
+     tidak valid (8 bentuk); berkas supervisi tidak ada. Juga perilaku yang diuji drafter tetapi tidak oleh manusia;
+   - `unverifiable` dari drafter;
+   - **supervisi** (ukuran ringan): titik keputusan Atha untuk pilot ini, waktu terminal dari `~/argus-supervision.log`,
+     dan menit Atha (opsional, satu angka; "skip" dicatat `unknown`).
+4. **Bukan bagian pilot ini:** approve draf drafter dan menjalankan agen di atasnya. Bila draf lolos dan Atha mau, itu
+   langkah terpisah dengan persetujuan sendiri (`approve_draft.py --no-reference` dengan nama task baru, lalu preflight
+   agen). Itu juga yang akan memberi ukuran pertama untuk W2b-2.
+
+## 5. Urutan
+
+| # | Langkah | Persetujuan |
+|---|---|---|
+| 1 | Merge PR ini (issue, config, gerbang, tes gerbang, preflight) | Atha |
+| 2 | Live checkout ke `main`: `cd ~/pilot3a_live && git checkout main && git pull`; lalu `bash pilots/m6_w2b/w2b1/go_live.sh --check-only` | |
+| 3 | Run live **satu kali**: `bash ~/pilot3a_live/pilots/m6_w2b/w2b1/go_live.sh w2b1d1` (kunci di-paste sekali) | **Atha, "go live"** |
+| 4 | Laporan menurut bagian 4 di `w2b1/live/w2b1d1/RESULT.md`, dengan `DRAFT_REVIEW.md` dan `draft.json` dari run | |
