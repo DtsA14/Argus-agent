@@ -135,7 +135,8 @@ def test_a_rejected_job_cannot_be_approved(env):
     rj.reject("jtest", "tests look wrong", deps=env.deps, jobs_dir=env.jobs)
     with pytest.raises(rj.Refused, match="REJECTED"):
         env.approve()
-    assert env.coder.calls == [] and env.job().data["state"] == rj.REJECTED
+    assert env.coder.calls == [] and env.job().data["state"] == rj.REJECTED and env.job().data["approval"] is None
+    assert not (env.job().root / "fixtures" / "contracts" / "task.json").exists()     # nothing was approved
 
 
 def test_not_confirming_starts_nothing(tmp_path):
@@ -219,10 +220,11 @@ def test_a_resumed_drafter_keeps_its_cap_and_its_run(env, monkeypatch):
         return real(**kw)
     monkeypatch.setattr(cdr, "run_drafter", crash_once)
     with pytest.raises(RuntimeError):
-        env.code()
+        env.code(max_usd=0.72)                             # the stage starts with $0.72, below draft_max_usd ($0.75)
     job = env.job()
     assert job.data["state"] == rj.DRAFTING
     cap = job.data["stages"]["d1"]["cap_usd"]
+    assert cap == 0.72
     job.data["max_usd"] = 5.0                              # a higher job cap must not raise the stage's
     job.save()
     rj.resume("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
