@@ -328,6 +328,9 @@ POLICY = {"environment": "argus", "validation_timeout_s": 300, "profiles": ["def
     (lambda a: a.update(budget_profile="huge"), "budget_profile is required and must be one of"),
     (lambda a: a.pop("budget_profile"), "budget_profile is required and must be one of"),
     (lambda a: a.update(budget_profile=None), "budget_profile is required and must be one of"),
+    (lambda a: a.update(tools=["write_file"]), "tools must be a list of distinct names from"),
+    (lambda a: a.update(tools=["edit_file", "edit_file"]), "tools must be a list of distinct names from"),
+    (lambda a: a.update(tools="edit_file"), "tools must be a list of distinct names from"),
     (lambda a: a.update(new_tests=[]), "at least one new test"),
     (lambda a: a["plan"].pop("risks"), "plan must have"),
 ])
@@ -583,3 +586,41 @@ def test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_o
     assert "$0.45 per attempt, input up to 40,000 per call" in prompt                 # large_usd, in USD
     assert json.loads((d / "draft.json").read_text())["contract"]["budget_profile"] == "large"
     assert "Budget profile for the agent: `large`" in (d / "DRAFT_REVIEW.md").read_text()
+
+
+
+def tiny(**drafter):
+    """A config with a profile whose output cannot hold even src/shop.py (62 bytes, about 15 tokens)."""
+    c = cfg(**drafter)
+    c["code_task"]["profiles"]["tiny"] = {"attempt_tokens": 30000, "max_output_tokens": 5}
+    return c
+
+
+def test_a_writable_file_too_large_to_rewrite_in_one_call_is_refused_without_edit_file(root, tmp_path, vlog):
+    small = call("SubmitDraft", dict(ARGS, budget_profile="tiny"), "s0")
+    edit = revise({"tools": ["edit_file"]})
+    r, model, d = run(root, tmp_path, [small, edit], config=tiny())
+    seen = tool_texts(model, 1)[0]
+    assert "src/shop.py is 62 bytes (about 15 tokens): without edit_file" in seen and "profile 'tiny' (5 tokens)" in seen
+    assert r["status"] == dt.DRAFTED and len(vlog()) == 2                     # the first submit ran nothing
+    c = json.loads((d / "draft.json").read_text())["contract"]
+    assert c["tools"] == ["edit_file"] and c["budget_profile"] == "tiny"
+    assert "Tools added for the agent: `edit_file`" in (d / "DRAFT_REVIEW.md").read_text()
+
+
+def test_a_file_that_fits_one_call_needs_no_edit_file(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [SUBMIT])                               # large: 8,192 tokens of output
+    assert r["status"] == dt.DRAFTED and "tools" not in json.loads((d / "draft.json").read_text())["contract"]
+    assert "Tools added for the agent: none" in (d / "DRAFT_REVIEW.md").read_text()
+
+
+def test_the_task_names_the_agents_tools_and_what_may_be_added(root, tmp_path):
+    r, model, d = run(root, tmp_path, [SUBMIT])
+    prompt = model.calls[0]["messages"][1].content
+    assert "The agent's tools: ListFiles, ReadFile, WriteFile, RunValidation. WriteFile replaces a whole file" in prompt
+    assert "`tools` may add edit_file and search_files" in prompt
+
+
+def test_the_harness_puts_the_tools_into_the_contract():
+    draft, problems = dt.draft_from_args(dict(ARGS, tools=["search_files", "edit_file"]), base="shop", policy=POLICY)
+    assert problems == [] and draft["contract"]["tools"] == ["search_files", "edit_file"]
