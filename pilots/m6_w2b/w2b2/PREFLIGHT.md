@@ -56,3 +56,19 @@ tes lama. Itu ditunda ke "W2a-ext: changed_tests" (W2b-3).
 4. **Dicatat:** biaya drafter dan agen; submit dan alasan penolakan; profil pilihan drafter dan apakah cukup bagi agen;
    cakupan dan bobot tes drafter (dinilai Claude dari isinya); titik keputusan Atha, waktu terminal kedua run
    (`~/argus-supervision.log`), dan menit Atha (satu angka, opsional).
+
+## 6. Run drafter ketiga `w2b2d3` (Atha 2026-10-23: "gas 1+2+3"; ditulis sebelum run)
+
+`w2b2d1`: draf disetujui sebagai `pr_title`, lalu ternyata mustahil dikerjakan (tanpa `edit_file`). Hasilnya
+`edit_file` dan cek tulis ulang (PR #157). `w2b2d2`: `NO_DRAFT submits_exhausted` ($0,19). Cek tulis ulang bekerja,
+tetapi dua submit habis untuk kesalahan kecil: regresi `tests/test_review.py` butuh `git`, dan tes baru yang sudah
+lulus dimasukkan ke `must_pass`. Perubahan untuk run ketiga:
+
+1. Prompt drafter: sandbox hanya berisi repositori, Python, dan paketnya; tanpa git, jaringan, atau berkas yang
+   dikecualikan.
+2. Penolakan "tes baru sudah lulus" diberi petunjuk: keluarkan dari `must_pass`; validasinya tetap menjalankan seluruh
+   berkas.
+3. `drafter.max_submits` 3 → **5**, di `config.yaml` dan config pilot. Gate 3 dan tes gerbang diperbarui.
+
+Uang tidak berubah: attempt $0,70, cap $0,75. **Ekspektasi** $0,10–0,25. **Kriteria:** bagian 5, tanpa perubahan.
+Langkah: merge PR, pull di checkout live, `--check-only`, lalu `go_live_draft.sh w2b2d3` setelah **"go live"**.
