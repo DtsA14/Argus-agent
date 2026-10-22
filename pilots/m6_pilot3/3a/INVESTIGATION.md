@@ -68,8 +68,8 @@ Reservasi attempt 1 mulai dari nol (konteks baru, tidak membawa riwayat attempt 
 
 Semua perubahan harness mengikuti aturan inti (tes yang gagal di kode lama, mutan, `verify.sh`).
 
-## 7. Apakah akan terulang di run live?
+## 7. Apakah akan terulang di run live? (terjawab oleh replikasi `pilot3a2`, 2026-10-22)
 
-- Sisi harness: pasti (replay identik).
-- Sisi model: tidak tahu. Bukti tidak langsung: pada Pilot 4 dua run menghasilkan patch byte-identik, jadi model cukup stabil pada prompt yang sama; itu mengarah pada kemungkinan kegagalan yang sama, tetapi 3a besar dan banyak titik keputusan. Cara menguji: satu run live ulang dengan kontrak, config, dan batas yang sama
-  (≈ $0,20, cap $0,75) dan dilaporkan sebagai replikasi; hasilnya menjawab apakah kegagalan ini stabil. Menunggu keputusan reviewer dan "go live".
+- Sisi harness: identik (replay).
+- Sisi model: **ya**, dengan satu run live ulang (kontrak, config, dan batas sama; `live/pilot3a2/RESULT.md`): langkah 0 identik, langkah 1 identik dalam isi (token dan alat sama), kegagalan yang sama (`reservation_exhausted` di kedua attempt, tidak sampai `Finish`), biaya $0,1937,
+  dan kesalahan impor `read_result` yang sama di `audit_run.py`. Model menyimpang mulai langkah ketiga (menulis vs mencari), tetapi anggaran sudah habis lebih dulu. Catatan: hash prompt langkah ke-1 dan seterusnya berbeda antar run karena id pemanggilan alat dari provider acak, jadi perbandingan memakai token dan alat, bukan hash.

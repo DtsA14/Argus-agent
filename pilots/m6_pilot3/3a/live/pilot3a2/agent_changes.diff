@@ -1,0 +1,67 @@
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_run_inspectors/evals/runlog.py runs/pilot3a2/workspace/evals/runlog.py
+--- fixtures/repos/fix_run_inspectors/evals/runlog.py	1970-01-01 00:00:00.000000000 +0000
++++ runs/pilot3a2/workspace/evals/runlog.py	2026-10-22 01:50:46.427516387 +0000
+@@ -0,0 +1,35 @@
++"""The one reader of a code-task run directory (events.jsonl, result.json, memo.sqlite) for the inspectors."""
++import json
++import sqlite3
++from pathlib import Path
++
++from harness.events import parse_lines
++
++
++def read_events(run_dir):
++    """(records of events.jsonl that decode, number of non-blank lines that did not)."""
++    text = (Path(run_dir) / "events.jsonl").read_text(encoding="utf-8")
++    events = parse_lines(text)
++    nonblank = sum(1 for line in text.splitlines() if line.strip())
++    return events, nonblank - len(events)
++
++
++def read_result(run_dir):
++    """result.json as a dict, or None when the run has none."""
++    path = Path(run_dir) / "result.json"
++    if not path.exists():
++        return None
++    return json.loads(path.read_text(encoding="utf-8"))
++
++
++def read_memo(run_dir):
++    """{key: value} of memo.sqlite; the value decoded from JSON, the key as stored (a JSON text)."""
++    db = sqlite3.connect(Path(run_dir) / "memo.sqlite")
++    try:
++        return {k: json.loads(v) for k, v in db.execute("select key, value from memo")}
++    finally:
++        db.close()
++
++
++def skipped_line(skipped):
++    return f"events skipped: {skipped}" if skipped else None
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_run_inspectors/scripts/audit_run.py runs/pilot3a2/workspace/scripts/audit_run.py
+--- fixtures/repos/fix_run_inspectors/scripts/audit_run.py	2026-10-21 05:48:16.874199430 +0000
++++ runs/pilot3a2/workspace/scripts/audit_run.py	2026-10-22 01:50:46.435311880 +0000
+@@ -21,15 +21,16 @@
+ run_dir = Path(sys.argv[1])
+ cfg = load_config()
+ contract = json.loads((run_dir / "contract.json").read_text())
+-result = json.loads((run_dir / "result.json").read_text())
+-tools = offered(result["tools"])
+-sp = system_prompt(tools)
+-print("effective tools", result["tools"])
+-print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
+-memo = {k: json.loads(v) for k, v in sqlite3.connect(run_dir / "memo.sqlite").execute("select key, value from memo")}
+-events = [json.loads(l) for l in (run_dir / "events.jsonl").read_text().splitlines()]
++result = read_result(run_dir)
++events, skipped = read_events(run_dir)
+ calls = [e for e in events if e["event"] == "llm_call"]
+-ref = hl.ModelRef.parse(calls[0]["model"])          # the model the run used (the ledger records it)
++print("effective tools", result["tools"])
++if calls:
++    tools = offered(result["tools"])
++    sp = system_prompt(tools)
++    print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
++    memo = read_memo(run_dir)
++    ref = hl.ModelRef.parse(calls[0]["model"])      # the model the run used (the ledger records it)
+ started = [e for e in events if e["event"] == "llm_call_started"]
+ print(f"llm_call_started {len(started)}, llm_call {len(calls)} "
+       f"(ok {sum(e['status'] == 'ok' for e in calls)}, refused {sum(e['status'] == 'refused' for e in calls)})")
