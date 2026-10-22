@@ -454,7 +454,15 @@ def render_claims(contract, verdict, doc, record):
 
 def render_pr(prov, contract, record, doc, ck):
     issue = (contract.get("inputs") or {}).get("issue") or ""
-    title = f"{contract['contract']}: " + (issue.strip().splitlines() or [""])[0][:80]
+    first = (issue.strip().splitlines() or [""])[0].strip()
+    if len(first) <= 80:
+        short = first
+    else:
+        head = first[:81]
+        at = head.rfind(" ")
+        kept = head[:at].rstrip(" ") if at != -1 else ""
+        short = (kept if kept else first[:80]) + "..."
+    title = f"{contract['contract']}: " + short
     out = []
     if not ck.valid:
         out += ["> **NOT READY: this package failed its own verification. Do not open a PR from it.**", ">"]
