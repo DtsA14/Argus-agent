@@ -15,7 +15,7 @@ TASK=pilot_report
 CONTRACT="fixtures/contracts/$TASK.json"
 RECORD="fixtures/intake/$TASK.json"
 CONFIG="pilots/m6_pilot3/3b/config_pilot3b.yaml"
-EXPECT_CONTRACT_SHA="SET_AFTER_APPROVAL"                                                        # sha256 prefix of the approved contract
+EXPECT_CONTRACT_SHA="bff30d351f1c"                                                        # sha256 prefix of the approved contract
 EXPECT_CONFIG_SHA="98b5ec0821fbd8ebde6d4c32f5062dff1ab17a8ddbad8a8f3c89d385359ccc35"      # sha256 of the pilot config (line ends normalised)
 PY="${PY:-$HOME/Argus-agent/.venv-verify/bin/python}"
 
@@ -121,6 +121,10 @@ if [ "$MODE" = "--check-only" ]; then echo "check-only: every gate holds. Nothin
 # 5. the key, typed now; nothing is started if it is empty
 read -rsp "Type or paste the API key, then Enter (not shown): " ANTHROPIC_API_KEY; echo
 [ "${#ANTHROPIC_API_KEY}" -gt 0 ] || fail "the key is empty; nothing was started"
+# The shape of an Anthropic key, checked before anything starts (pilot3a3 died on a key pasted twice). Never printed.
+case "$ANTHROPIC_API_KEY" in sk-ant-*) ;; *) fail "the key does not start with sk-ant-; nothing was started" ;; esac
+[[ "$ANTHROPIC_API_KEY" =~ [[:space:]] ]] && fail "the key contains whitespace (pasted twice?); nothing was started"
+[[ "${ANTHROPIC_API_KEY#sk-ant-}" == *sk-ant-* ]] && fail "the key contains sk-ant- more than once (pasted twice?); nothing was started"
 echo "key length: ${#ANTHROPIC_API_KEY}"
 export ANTHROPIC_API_KEY ARGUS_LIVE=1 ARGUS_SANDBOX_IMAGE="$(cat .sandbox_image)" ARGUS_SANDBOX_IMAGE_ARGUS="$(cat .sandbox_image_argus)"
 "$PY" scripts/run_code_task.py --contract "$CONTRACT" --run-id "$RUN_ID" --config "$CONFIG" --sandbox docker

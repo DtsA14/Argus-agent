@@ -1,0 +1,176 @@
+{
+  "task": "pilot_report",
+  "draft_sha256": "ff3e33d1befb62cfecec29f348c6a38ae813c389fa9746dfa7a6af20a09f30ed",
+  "unverifiable": [
+    "that the script reads runs only through evals.runlog and decides known cost only with cost_is_known (the tests see the output, not the code path)",
+    "that nothing else was changed: the scope protects the rest, but a reviewer must read the diff",
+    "readability and the internal layout of scripts/pilot_report.py"
+  ],
+  "ok": true,
+  "contract": {
+    "contract": "pilot_report",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/pilot_report",
+      "issue": "Add scripts/pilot_report.py: python scripts/pilot_report.py RUN_DIR... [--supervision FILE]. Change nothing else.\nRead runs only via evals/runlog.py (read_events, read_result); cost known iff evals.score.cost_is_known(result).\nPrint json.dumps(obj, indent=2, ensure_ascii=False) + newline, exit 0. Keys in this order:\nruns: per argument, in order: run_id (dir name), status (result status, or \"NO_RESULT\" if no result.json), done (status==\"DONE\"), attempts, llm_calls, usd_billed (as in result.json; null if NO_RESULT), cost_known (false if NO_RESULT), events_skipped (from read_events), supervision_minutes (null if none; never 0 instead).\nruns_total; done; no_result;\nsuccess_rate = done/(runs_total-no_result), round 4; null if divisor 0;\nusd_known_total = sum of usd_billed over cost_known runs, summed as round(x*1e9) nano-dollars, /1e9, round 6; 0.0 if none;\nusd_unknown_runs = runs not cost_known;\ncost_per_success = usd_known_total / runs both done and cost_known, round 6; null if divisor 0;\ncost_complete = usd_unknown_runs == 0;\nattempts = {mean round 3, median (statistics.median)} over done runs; null if none;\nattempts_distribution = {\"<attempts>\": count} over runs with result.json, keys numeric order;\nsupervision = {runs_with_data, total, mean round 2} over runs with minutes; total, mean null if none;\nevents_skipped = sum.\nSupervision file: JSON object {run_id: minutes}; each value int/float, not bool, finite, >= 0; each key a given run_id.\nExit 2, stdout empty, one stderr line, when: no runs (\"no run directory given\"); an argument not a directory or without events.jsonl (the argument and \"not a run directory\"); a supervision file unreadable or invalid (\"supervision file\" and its path)."
+    },
+    "scope": {
+      "writable": [
+        "scripts/pilot_report.py"
+      ],
+      "protected": [
+        "tests/**",
+        "conftest.py",
+        "evals/runlog.py",
+        "evals/score.py",
+        "evals/runner.py",
+        "evals/__init__.py",
+        "scripts/audit_run.py",
+        "scripts/failure_trace.py",
+        "harness/**",
+        "acceptance/**",
+        "codetask/**",
+        "tools/**",
+        "models/**",
+        "nodes/**",
+        "runner.py",
+        "graph.py",
+        "config.yaml"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "report",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_pilot_report.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 17,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run",
+          "tests/test_pilot_report.py::test_the_report_with_supervision_minutes",
+          "tests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data",
+          "tests/test_pilot_report.py::test_no_run_done",
+          "tests/test_pilot_report.py::test_no_cost_known",
+          "tests/test_pilot_report.py::test_only_runs_without_a_result",
+          "tests/test_pilot_report.py::test_no_run_is_refused",
+          "tests/test_pilot_report.py::test_an_argument_that_is_not_a_run_directory_is_refused",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[negative]",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[string]",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[bool]",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[list]",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[nan]",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[unknown_run]",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[not_json]",
+          "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[number]",
+          "tests/test_pilot_report.py::test_a_missing_supervision_file_is_refused"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_run_inspectors.py",
+          "tests/test_run_inspectors_data.py",
+          "tests/test_eval_cost.py",
+          "tests/test_run_stats.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 30,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else",
+          "tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited",
+          "tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too",
+          "tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete",
+          "tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known",
+          "tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before",
+          "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped",
+          "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.75,
+      "max_iterations": 3
+    },
+    "tools": [
+      "search_files",
+      "edit_file"
+    ],
+    "budget_profile": "large_usd"
+  },
+  "contract_sha256": "bff30d351f1cb4f010f06d9687db28617bfd97ca80ef1fa929b028e668a34b1d",
+  "added": {
+    "tests/test_pilot_report.py": "1f7a7c6122726842209f92d0f46b91694153cf359e606b52cd46784ef9406866"
+  },
+  "baseline": {
+    "report": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run": "FAIL",
+        "tests/test_pilot_report.py::test_the_report_with_supervision_minutes": "FAIL",
+        "tests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data": "FAIL",
+        "tests/test_pilot_report.py::test_no_run_done": "FAIL",
+        "tests/test_pilot_report.py::test_no_cost_known": "FAIL",
+        "tests/test_pilot_report.py::test_only_runs_without_a_result": "FAIL",
+        "tests/test_pilot_report.py::test_no_run_is_refused": "FAIL",
+        "tests/test_pilot_report.py::test_an_argument_that_is_not_a_run_directory_is_refused": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[negative]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[string]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[bool]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[list]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[nan]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[unknown_run]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[not_json]": "FAIL",
+        "tests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[number]": "FAIL",
+        "tests/test_pilot_report.py::test_a_missing_supervision_file_is_refused": "FAIL"
+      },
+      "failures": 17,
+      "errors": 0
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else": "ok",
+        "tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited": "ok",
+        "tests/test_eval_cost.py::test_an_unknown_cost_stops_the_scripted_modes_too": "ok",
+        "tests/test_eval_cost.py::test_known_costs_keep_the_eval_going_and_the_total_is_complete": "ok",
+        "tests/test_eval_cost.py::test_a_cost_is_shown_as_n_a_when_it_is_not_known": "ok",
+        "tests/test_run_stats.py::test_a_log_without_damage_is_counted_as_before": "ok",
+        "tests/test_run_stats.py::test_a_line_cut_short_in_the_middle_is_skipped": "ok",
+        "tests/test_run_stats.py::test_every_line_that_is_not_json_is_skipped_and_blank_lines_too": "ok"
+      },
+      "failures": 0,
+      "errors": 0
+    }
+  },
+  "reference": {
+    "changed": {
+      "added": [
+        "scripts/pilot_report.py"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "report": "pass",
+    "regression": "pass"
+  },
+  "problems": []
+}
