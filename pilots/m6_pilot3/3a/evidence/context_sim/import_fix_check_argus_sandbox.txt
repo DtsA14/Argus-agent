@@ -1,0 +1,14 @@
+# Reproduction of import_fix_check.txt in the Argus sandbox (2026-10-22, VM OCI, argus environment image), by pilots/m6_pilot3/3a/import_fix_check.py.
+# The agent-written workspaces (runs/pilot3a, runs/pilot3a2) run only inside the sandbox. 'with the import' adds the line PR #122 added:
+#   from evals.runlog import read_events, read_memo, read_result
+# Result: identical to import_fix_check.txt (pilot3a 7 -> 2 failing, both required; pilot3a2 8 -> 3 failing, all required).
+pilot3a   as left          inspectors fail  tests 16 failures 7 errors 0 | required not ok (2): ['test_a_cut_line_in_the_middle_of_the_log_adds_on', 'test_a_run_blocked_before_any_model_call_is_audi']
+pilot3a   as left          regression pass  tests 14 failures 0 errors 0 | required not ok (0): []
+pilot3a   with the import  inspectors fail  tests 16 failures 2 errors 0 | required not ok (2): ['test_a_cut_line_in_the_middle_of_the_log_adds_on', 'test_a_run_blocked_before_any_model_call_is_audi']
+          exceptions named in the tail: ['AssertionError', 'TypeError', 'nTypeError']
+pilot3a   with the import  regression pass  tests 14 failures 0 errors 0 | required not ok (0): []
+pilot3a2  as left          inspectors fail  tests 16 failures 8 errors 0 | required not ok (3): ['test_a_cut_line_in_the_middle_of_the_log_adds_on', 'test_a_run_blocked_before_any_model_call_is_audi', 'test_a_directory_without_a_result_is_reported_an']
+pilot3a2  as left          regression pass  tests 14 failures 0 errors 0 | required not ok (0): []
+pilot3a2  with the import  inspectors fail  tests 16 failures 3 errors 0 | required not ok (3): ['test_a_cut_line_in_the_middle_of_the_log_adds_on', 'test_a_run_blocked_before_any_model_call_is_audi', 'test_a_directory_without_a_result_is_reported_an']
+          exceptions named in the tail: ['AssertionError', 'NameError', 'StopIteration', 'nNameError']
+pilot3a2  with the import  regression pass  tests 14 failures 0 errors 0 | required not ok (0): []
