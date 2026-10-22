@@ -1,6 +1,6 @@
 # D1: anggaran attempt dalam USD, dengan batas masukan per panggilan (spesifikasi untuk review)
 
-Status 2026-10-22: **spesifikasi; belum ada kode, tes, atau patch.** Asal: `pilots/m6_pilot3/3a/CONTEXT_DESIGN.md` (D1, dikoreksi di bagian 7). Menyentuh
+Status 2026-10-22: **spesifikasi; K1–K6 diputuskan (bagian 8).** Implementasi di PR terpisah. Asal: `pilots/m6_pilot3/3a/CONTEXT_DESIGN.md` (D1, dikoreksi di bagian 7). Menyentuh
 aturan uang (`AGENTS.md`, "Budget and money"), jadi proses paling ketat: tes yang gagal di kode lama, mutan, `verify.sh` penuh, replay tanpa biaya, baru
 satu run live setelah D3 juga ada (K4 D2).
 
@@ -82,13 +82,17 @@ meleset satu (`>` jadi `>=`); penolakan batas masukan tidak dicatat di buku besa
 `it0 s3` (27.252 token masukan, tercatat ditolak) harus **diterima**. Balasannya tidak pernah direkam, jadi responder replay gagal di sana dan attempt berakhir
 `llm_failed`, dengan `requests_the_live_run_never_made` ≥ 1, bukan `reservation_exhausted`. Itu bukti bahwa batas bergeser ke tempat yang benar, tanpa memanggil model.
 
-## 8. Keputusan yang diminta
+## 8. Keputusan (diputuskan Atha, 2026-10-22)
 
-1. **K1:** profil baru dengan nama sendiri (usul `large_usd`), bukan mengubah arti `large`. Alasannya bagian 5.
-2. **K2:** nilai profil baru: `attempt_usd` $0,45, `attempt_tokens` 400.000, `max_input_tokens` 40.000 (puncak simulasi empat putaran 35.247), `max_output_tokens` 8.192;
-   dan penerimaan bahwa uang per attempt yang bisa dipakai naik dari ±$0,11 ke paling banyak $0,45 pada cap yang sama.
-3. **K3:** `budget.max_tokens` 200.000 (kumulatif per run) dengan profil baru: dinaikkan di config pilot dengan alasan tertulis (usul: 1.200.000 = 3 attempt × 400.000), atau
-   tidak dipakai untuk code task bila profil menyatakan `attempt_usd`.
-4. **K4:** run 3a berikutnya memakai versi kontrak baru (misalnya `fix_run_inspectors_v2`) yang membekukan profil baru, disetujui ulang dengan proses biasa, setelah D3.
-5. **K5:** nama alasan penolakan dan akhir attempt untuk batas masukan (`input_limit`, `context_limit`).
-6. **K6:** `max_steps` (sekarang 12): simulasi empat putaran tanpa D3 butuh 13 panggilan, dengan D3 8. Dibiarkan 12, atau dinaikkan di profil baru.
+1. **K1:** profil baru `large_usd`; `large` tidak diubah (bagian 5).
+2. **K2:** `attempt_usd` $0,45, `attempt_tokens` 400.000 (hanya pengaman: 400.000 token termurah pun $0,80 pada harga Sonnet, jadi batas USD selalu mengikat
+   lebih dulu), `max_input_tokens` 40.000, `max_output_tokens` 8.192. Diterima: uang per attempt yang bisa dipakai naik dari ±$0,11 ke paling banyak $0,45.
+   **Konsekuensi yang dicatat:** dengan cap $0,75, attempt kedua hanya diterima bila attempt pertama menghabiskan ≤ $0,30 (admission: terpakai + $0,45 ≤ cap),
+   sedangkan simulasi D3 memberi ±$0,30–$0,37. Kalau attempt pertama gagal, run berhenti dengan jujur; cap tidak dinaikkan otomatis. Dua attempt penuh adalah
+   keputusan terpisah saat kontrak `_v2` disetujui.
+3. **K3:** `budget.max_tokens` dinaikkan **di config pilot** (1.200.000 = 3 × 400.000) dengan alasan tertulis; kode admission tidak mendapat cabang baru. Dengan
+   `config.yaml` biasa (200.000) profil `large_usd` ditolak sebelum panggilan pertama (gagal tertutup). Gerbang `go_live.sh` perlu menerima selisih kedua ini
+   saat config pilot `_v2` dibuat.
+4. **K4:** run 3a berikutnya memakai `fix_run_inspectors_v2` (profil `large_usd`, sisanya sama: $0,75, 3 iterasi), disetujui ulang, setelah D3.
+5. **K5:** `input_limit` (alasan penolakan di buku besar) dan `context_limit` (akhir attempt).
+6. **K6:** `max_steps` tetap 12 (dengan D3 simulasi butuh 8; satu perubahan sekaligus).
