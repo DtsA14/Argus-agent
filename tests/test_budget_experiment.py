@@ -36,6 +36,15 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["code_task"]["feedback_error_excerpt"]   # D2 (the arms ran before it; absent means on if they are re-run)
     del base["code_task"]["auto_validate"]            # D3 (the arms ran before it; absent means off, as they ran)
     del base["code_task"]["auto_validate_max"]
+    # D5: llm.prompt_cache added after the arms ran (absent means off); cache prices corrected and write rates added
+    # after them. Their runs had no cache reads or writes, so their costs are the same under either table; every other
+    # rate must still be the one they ran with.
+    del base["llm"]["prompt_cache"]
+    arm_prices = config("30k")["prices"]
+    for model, p in base["prices"].items():
+        rest = lambda q: {k: v for k, v in q.items() if not k.startswith("cache_") and k != "long_context_above"}  # noqa: E731
+        assert rest(p) == rest(arm_prices[model]), model
+    base["prices"] = arm_prices
     keys = [("code_task", "attempt_tokens"), ("budget", "max_usd")]
     for name, tokens in (("30k", 30000), ("45k", 45000)):
         c = config(name)

@@ -36,7 +36,7 @@ from harness.crash import Crasher
 from harness.errors import EstimateExceeded
 from harness.events import EventLog, TaggedLog
 from harness.guard import guard
-from harness.llm import LLMCaller, reconcile_ledger, to_nano
+from harness.llm import LLMCaller, check_long_context, reconcile_ledger, to_nano
 from harness.memo import Memo
 from models.registry import ModelRef, price_for
 
@@ -117,13 +117,14 @@ def settings(cfg, contract=None):
     price = price_for(cfg, ref)
     if price is None:
         raise ct.ContractError([f"coder model {ref} has no price: its cost could not be capped"])
-    rate = max(price["input"], price["output"]) * price.get("peak_multiplier", 1) / 1_000_000
+    rate = max(price["input"], price["output"], price.get("cache_write_5m") or 0) * price.get("peak_multiplier", 1) / 1_000_000
     tokens = int(c["attempt_tokens"])
     max_usd = cfg["budget"].get("max_usd")
     max_usd = math.inf if max_usd is None else float(max_usd)
     # D1: a profile may reserve the attempt in USD; otherwise its tokens are priced as if all were output
     attempt_usd = float(c["attempt_usd"]) if c.get("attempt_usd") is not None else tokens * rate
     max_input = None if c.get("max_input_tokens") is None else int(c["max_input_tokens"])
+    check_long_context(cfg, ref, tokens if max_input is None else max_input, f"code task (role {c['role']!r})")
     out = {"attempt_tokens": tokens, "attempt_usd": attempt_usd, "max_input_tokens": max_input,
            "max_steps": int(c["max_steps"]),
            "stagnation_rounds": int(c.get("stagnation_rounds", 2)),
@@ -132,6 +133,27 @@ def settings(cfg, contract=None):
         out["max_usd"] = min(out["max_usd"], float(contract["limits"]["max_usd"]))
         out["max_iterations"] = int(contract["limits"]["max_iterations"])
     return out
+
+
+def cache_totals(events, cfg):
+    """D5: cache tokens of the run's model calls and an ESTIMATE of what caching saved (the same calls priced as plain
+    input, minus what the ledger charged). cache_creation_tokens is None when no call reported such a thing."""
+    from datetime import datetime, timezone
+    from models.pricing import cost_usd
+    read, creation, saved = 0, None, 0
+    for e in events:
+        if e.get("event") != "llm_call" or e.get("status") != "ok":
+            continue
+        read += e.get("cache_read") or 0
+        if e.get("cache_creation") is not None:
+            creation = (creation or 0) + e["cache_creation"]
+        price = cfg.get("prices", {}).get(e.get("model"))
+        plain = cost_usd(price, input_tokens=e.get("input_tokens") or 0, output_tokens=e.get("output_tokens") or 0,
+                         window=cfg.get("peak_windows", {}).get(str(e.get("model")).split(":")[0]),
+                         now=datetime.fromtimestamp(e["ts"], timezone.utc))
+        if plain is not None and e.get("usd_nano") is not None:
+            saved += to_nano(plain) - e["usd_nano"]
+    return {"cache_read_tokens": read, "cache_creation_tokens": creation, "usd_saved_estimate": saved / 1e9}
 
 
 def admission(log, lim):
@@ -393,6 +415,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
                                         "attempt", "tools", "provenance", "budget_profile", "loop_policy")}
+    result["cache"] = cache_totals(log.read(), cfg)
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
                   llm_calls_unknown=totals["unknown_after_crash"])
