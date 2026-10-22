@@ -59,6 +59,10 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [ ] **W2a-ext: `changed_tests`**: draf boleh mengubah tes lama (diff ditampilkan saat approve; tes tidak boleh hilang diam-diam). Task
     yang mengubah perilaku yang sudah dites (mis. `success_rate` di `pilot_report.py`) tidak bisa diekspresikan tanpa ini. Spek dulu
 - [ ] Drafter masih mencoba regresi yang butuh `git` (w2b2d3) walau prompt menyebut batas sandbox; satu submit terbuang
+- [ ] **Router v0** (`docs/reviews/SPEC_ROUTER_V0.md`, K2–K7 disetujui 2026-10-23): `argus code` sebagai satu job (cap per job $1,00,
+    kunci per job, cap tahap dicatat saat mulai, approve terikat ke sha draf). Belum dikoding
+- [ ] `argus research` **ditunda** (K1 router v0): dibuat bersama Alur A yang menerima prompt bebas; saat itu bentuk job dan ledger
+    diseragamkan
 - [ ] **D4** batas ListFiles + daftar berkas di issue: **ditunda** (2026-10-22); dibuka bila ada task yang kehabisan anggaran dengan caching
   menyala
 - Pengamatan, belum tindakan: di `pilot3b1` agen memanggil `RunValidation` di balasan yang sama dengan tulisannya, sebelum validasi otomatis
