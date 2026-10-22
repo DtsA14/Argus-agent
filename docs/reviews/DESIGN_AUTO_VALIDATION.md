@@ -1,6 +1,6 @@
 # D3: validasi otomatis setelah langkah yang menulis (spesifikasi untuk review)
 
-Status 2026-10-22: **spesifikasi; K1–K6 diputuskan (bagian 8), dengan tiga tambahan (bagian 3, poin 7–9).** Asal: `pilots/m6_pilot3/3a/CONTEXT_DESIGN.md` (D3, bagian 7). Menyentuh loop coder dan
+Status 2026-10-22: **spesifikasi; K1–K6 diputuskan (bagian 8), dengan tiga tambahan (bagian 3, poin 7–9).** **Diimplementasikan** (PR `d3-auto-validate`; bukti di `pilots/m6_pilot3/3a/evidence/d3/`). Penyimpangan kecil dari bagian 4: kunci `after_step` memuat langkah LLM induk dan versi image; digest ada di rekaman, bukan di kunci (rekamanlah yang dipakai saat resume). Bagian 7 poin 3: simulasi tidak dihitung ulang; pesan nyata 1.855 karakter, lebih kecil dari asumsi 2.502, jadi proyeksi D3 konservatif untuk suku itu. Asal: `pilots/m6_pilot3/3a/CONTEXT_DESIGN.md` (D3, bagian 7). Menyentuh loop coder dan
 crash-resume (`AGENTS.md`, "Crash-resume"), jadi proses ketat: tes yang gagal di kode lama, mutan, `verify.sh` penuh dengan Docker (dengan
 `--durations=25`, `PENDING.md`), tanpa biaya model. Run live 3a berikutnya menunggu D3 (K4 D2, K4 D1).
 

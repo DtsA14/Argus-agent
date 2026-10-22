@@ -48,7 +48,7 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
     | LC_ALL=C sort | xargs sha256sum
   echo "== pytest"
   set +e
-  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider 2>&1 | tee /dev/stderr > .verify-pytest.out
+  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider --durations=25 2>&1 | tee /dev/stderr > .verify-pytest.out
   rc=${PIPESTATUS[0]}
   set -e
   skipped_sandbox=$(grep -c "SANDBOX NOT AVAILABLE" .verify-pytest.out || true)

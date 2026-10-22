@@ -34,6 +34,8 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["sandbox"]["environments"]
     del base["code_task"]["profiles"]          # M6 W5 (budget profiles, unused by these arms' contracts)
     del base["code_task"]["feedback_error_excerpt"]   # D2 (the arms ran before it; absent means on if they are re-run)
+    del base["code_task"]["auto_validate"]            # D3 (the arms ran before it; absent means off, as they ran)
+    del base["code_task"]["auto_validate_max"]
     keys = [("code_task", "attempt_tokens"), ("budget", "max_usd")]
     for name, tokens in (("30k", 30000), ("45k", 45000)):
         c = config(name)

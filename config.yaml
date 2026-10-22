@@ -85,6 +85,11 @@ code_task:
   # D2: the feedback to the next attempt carries the error lines of each failing validation (from the verdict's
   # output_tail, bounded). false gives the feedback as it was before D2: replays of older runs (replay_3a.py) use it.
   feedback_error_excerpt: true
+  # D3 (docs/reviews/DESIGN_AUTO_VALIDATION.md): after a step that changed the workspace, run every validation and show
+  # the result to the agent in the same attempt, at most auto_validate_max times per attempt. Off here (verify.sh time,
+  # comparable evals); on in a pilot config. Frozen per run at setup, so a resume decides as the run did.
+  auto_validate: false
+  auto_validate_max: 4
   # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
   # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
   # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room
