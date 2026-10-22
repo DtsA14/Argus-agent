@@ -1,0 +1,188 @@
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_run_inspectors_v2/SUMMARY.json runs/pilot3a5/workspace/SUMMARY.json
+--- fixtures/repos/fix_run_inspectors_v2/SUMMARY.json	1970-01-01 00:00:00.000000000 +0000
++++ runs/pilot3a5/workspace/SUMMARY.json	2026-10-22 10:44:28.505329323 +0000
+@@ -0,0 +1,29 @@
++{
++  "claims": [
++    {
++      "claim": "tests_pass",
++      "evidence": "validation:inspectors"
++    },
++    {
++      "claim": "tests_pass",
++      "evidence": "validation:regression"
++    },
++    {
++      "claim": "issue_fixed",
++      "evidence": "validation:inspectors"
++    },
++    {
++      "claim": "file_changed",
++      "path": "evals/runlog.py"
++    },
++    {
++      "claim": "file_changed",
++      "path": "scripts/audit_run.py"
++    },
++    {
++      "claim": "file_changed",
++      "path": "scripts/failure_trace.py"
++    }
++  ],
++  "summary": "Added evals/runlog.py (read_events, read_result, read_memo, skipped_line) and moved audit_run.py and failure_trace.py onto it. Undecodable event lines are now skipped, with a closing 'events skipped: N' line when N > 0. audit_run.py handles runs with no model call. failure_trace.py reports a directory without result.json and continues."
++}
+\ No newline at end of file
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_run_inspectors_v2/evals/runlog.py runs/pilot3a5/workspace/evals/runlog.py
+--- fixtures/repos/fix_run_inspectors_v2/evals/runlog.py	1970-01-01 00:00:00.000000000 +0000
++++ runs/pilot3a5/workspace/evals/runlog.py	2026-10-22 10:42:55.908736122 +0000
+@@ -0,0 +1,42 @@
++"""The one reader of a code-task run directory: its events, its result and its memo."""
++import json
++import sqlite3
++from pathlib import Path
++
++from harness.events import parse_lines
++
++
++def read_events(run_dir):
++    """(events, skipped): the records of events.jsonl that decode, and the number of non-blank lines that did not."""
++    path = Path(run_dir) / "events.jsonl"
++    if not path.exists():
++        return [], 0
++    text = path.read_text(encoding="utf-8")
++    events = parse_lines(text)
++    nonblank = sum(1 for line in text.splitlines() if line.strip())
++    return events, nonblank - len(events)
++
++
++def read_result(run_dir):
++    """result.json as a dict, or None when the run has none."""
++    path = Path(run_dir) / "result.json"
++    if not path.exists():
++        return None
++    return json.loads(path.read_text(encoding="utf-8"))
++
++
++def read_memo(run_dir):
++    """{key: value} of memo.sqlite, both decoded from JSON."""
++    path = Path(run_dir) / "memo.sqlite"
++    if not path.exists():
++        return {}
++    db = sqlite3.connect(path)
++    try:
++        return {k: json.loads(v) for k, v in db.execute("select key, value from memo")}
++    finally:
++        db.close()
++
++
++def skipped_line(skipped):
++    """'events skipped: N', or None when N is 0."""
++    return f"events skipped: {skipped}" if skipped else None
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_run_inspectors_v2/scripts/audit_run.py runs/pilot3a5/workspace/scripts/audit_run.py
+--- fixtures/repos/fix_run_inspectors_v2/scripts/audit_run.py	2026-10-21 05:48:16.874199430 +0000
++++ runs/pilot3a5/workspace/scripts/audit_run.py	2026-10-22 10:43:45.824670585 +0000
+@@ -5,7 +5,6 @@
+ """
+ import hashlib
+ import json
+-import sqlite3
+ import sys
+ from pathlib import Path
+ 
+@@ -14,6 +13,7 @@
+ import harness.llm as hl
+ from codetask.agent import feedback_from, system_prompt, task_prompt
+ from codetask.tools import offered
++from evals.runlog import read_events, read_memo, read_result, skipped_line
+ from harness.llm import is_truncated
+ from harness.steps import llm_step_key, message_from_json
+ from runner import load_config
+@@ -21,21 +21,23 @@
+ run_dir = Path(sys.argv[1])
+ cfg = load_config()
+ contract = json.loads((run_dir / "contract.json").read_text())
+-result = json.loads((run_dir / "result.json").read_text())
+-tools = offered(result["tools"])
+-sp = system_prompt(tools)
++result = read_result(run_dir)
++tools = offered(result["tools"]) if result["tools"] is not None else []
+ print("effective tools", result["tools"])
+-print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
+-memo = {k: json.loads(v) for k, v in sqlite3.connect(run_dir / "memo.sqlite").execute("select key, value from memo")}
+-events = [json.loads(l) for l in (run_dir / "events.jsonl").read_text().splitlines()]
++sp = None
++if result["tools"] is not None:
++    sp = system_prompt(tools)
++    print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
++memo = read_memo(run_dir)
++events, skipped = read_events(run_dir)
+ calls = [e for e in events if e["event"] == "llm_call"]
+-ref = hl.ModelRef.parse(calls[0]["model"])          # the model the run used (the ledger records it)
++ref = hl.ModelRef.parse(calls[0]["model"]) if calls else None   # the model the run used (the ledger records it)
+ started = [e for e in events if e["event"] == "llm_call_started"]
+ print(f"llm_call_started {len(started)}, llm_call {len(calls)} "
+       f"(ok {sum(e['status'] == 'ok' for e in calls)}, refused {sum(e['status'] == 'refused' for e in calls)})")
+ 
+ mismatch, checked = 0, 0
+-for it in range(contract["limits"].get("max_iterations", 5)):
++for it in range(contract["limits"].get("max_iterations", 5) if calls and sp is not None else 0):
+     feedback = None
+     if it > 0:
+         prev = run_dir / f"verdict_{it - 1}.json"
+@@ -65,7 +67,7 @@
+         key = llm_step_key("agent", contract["contract"], it, step, messages, tools, ref)
+         if key not in memo:
+             break
+-        msg = message_from_json(memo[key])
++        msg = message_from_json(memo[key])              # memo values are already decoded
+         messages.append(msg)
+         if is_truncated(msg):                   # the harness ran none of its tool calls and ended the attempt
+             print(f"      (reply cut off at max_tokens: {[c['name'] for c in msg.tool_calls or []]} not run)")
+@@ -81,3 +83,5 @@
+         print(" ", {k: v for k, v in e.items() if k not in ("ts",)})
+ print("result", {k: result.get(k) for k in ("status", "stop_reason", "blocked_reason", "attempts", "usd_billed",
+                                            "llm_calls", "llm_calls_unknown", "tools")})
++if skipped_line(skipped):
++    print(skipped_line(skipped))
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' fixtures/repos/fix_run_inspectors_v2/scripts/failure_trace.py runs/pilot3a5/workspace/scripts/failure_trace.py
+--- fixtures/repos/fix_run_inspectors_v2/scripts/failure_trace.py	2026-10-21 05:48:16.874659873 +0000
++++ runs/pilot3a5/workspace/scripts/failure_trace.py	2026-10-22 10:43:45.777628106 +0000
+@@ -1,22 +1,25 @@
+ """For each failing run: per attempt and step, the input tokens, the tool calls, and the model's own text, from the
+ ledger and the memo. Run from the repository root on the VM with PYTHONPATH=.: failure_trace.py <run_dir>..."""
+ import json
+-import sqlite3
+ import sys
+ from pathlib import Path
+ 
++from evals.runlog import read_events, read_memo, read_result, skipped_line
+ from harness.steps import message_from_json
+ 
+ for rd in sys.argv[1:]:
+-    run = next(Path(rd).rglob("result.json")).parent
+-    evs = [json.loads(l) for l in (run / "events.jsonl").read_text().splitlines()]
++    found = next(Path(rd).rglob("result.json"), None)
++    run = found.parent if found is not None else Path(rd)
++    if found is None or read_result(run) is None:
++        print(f"##### {Path(rd).name}: no result.json")
++        continue
++    evs, skipped = read_events(run)
+     calls = {(e["iteration"], e["step"]): e for e in evs if e["event"] == "llm_call"}
+-    memo = sqlite3.connect(run / "memo.sqlite")
+     llm = {}
+-    for k, v in memo.execute("select key, value from memo"):
++    for k, v in read_memo(run).items():
+         key = json.loads(k)
+         if key[0] == "llm":
+-            llm[(key[3], key[4])] = message_from_json(json.loads(v))
++            llm[(key[3], key[4])] = message_from_json(v)
+     print(f"##### {Path(rd).name}")
+     for (it, st), e in sorted(calls.items()):
+         msg = llm.get((it, st))
+@@ -31,3 +34,6 @@
+         print(f"  it{it} s{st} {e['status']:<7} in {tok:>5} | {' '.join(tools)[:150]}")
+         if text.strip():
+             print(f"        text: {' '.join(text.split())[:400]}")
++    line = skipped_line(skipped)
++    if line:
++        print(line)
