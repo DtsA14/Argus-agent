@@ -160,7 +160,7 @@ def test_the_ledger_records_reads_and_writes_apart_and_charges_them(tmp_path):  
     on, log = caller(cfg(), StrictScriptedChatModel(script=[m]), tmp=tmp_path)
     on.call(MSGS, Reservation(tokens=10**6, usd=1.0))
     e = ledger(log)[0]
-    assert (e["input_tokens"], e["cache_read"], e["cache_creation"]) == (10000, 6000, 3000)
+    assert (e["input_tokens"], e["cache_read"], e.get("cache_creation")) == (10000, 6000, 3000)
     assert e["usd_nano"] == to_nano((1000 * 1.0 + 3000 * 1.25 + 6000 * 0.10 + 500 * 5.0) / 1e6)
     assert not ledger(log, "cache_ttl_unexpected")
 
@@ -177,7 +177,7 @@ def test_a_one_hour_write_is_priced_as_one_and_reported(tmp_path):              
     on, log = caller(cfg(), StrictScriptedChatModel(script=[m]), tmp=tmp_path)
     on.call(MSGS, Reservation(tokens=10**6, usd=1.0))
     e = ledger(log)[0]
-    assert e["cache_creation"] == 3000 and e["usd_nano"] == to_nano((7000 * 1.0 + 1000 * 1.25 + 2000 * 2.0) / 1e6)
+    assert e.get("cache_creation") == 3000 and e["usd_nano"] == to_nano((7000 * 1.0 + 1000 * 1.25 + 2000 * 2.0) / 1e6)
     warn = ledger(log, "cache_ttl_unexpected")
     assert [(w["ephemeral_1h_input_tokens"], w["call_id"]) for w in warn] == [(2000, e["call_id"])]
 
@@ -185,12 +185,12 @@ def test_a_one_hour_write_is_priced_as_one_and_reported(tmp_path):              
 def test_cache_creation_is_null_where_the_provider_has_no_such_thing(tmp_path):        # K3
     on, log = caller(cfg(), StrictScriptedChatModel(script=[reply("ok", input_tokens=900, output_tokens=10)]), tmp=tmp_path)
     on.call(MSGS, Reservation(tokens=10**6, usd=1.0))
-    assert ledger(log)[0]["cache_creation"] is None
+    assert ledger(log)[0].get("cache_creation") is None
     (tmp_path / "z").mkdir()
     zero = with_usage(total_in=900, out=10, read=0, creation=0)                       # Anthropic, caching off: 0 reported
     off, log2 = caller(cfg(cache=False), StrictScriptedChatModel(script=[zero]), tmp=tmp_path / "z")
     off.call(MSGS, Reservation(tokens=10**6, usd=1.0))
-    assert ledger(log2)[0]["cache_creation"] == 0
+    assert ledger(log2)[0].get("cache_creation") == 0
 
 
 def test_usage_parsed_from_a_langchain_anthropic_response_is_not_counted_twice():       # T7, the real converter
