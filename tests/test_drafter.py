@@ -643,3 +643,30 @@ def test_the_drafter_is_told_what_the_sandbox_lacks_and_only_a_passing_new_test_
     system = model.calls[0]["messages"][0].content
     assert "no git, no network" in system and "verification/" in system
     assert dt.PASSING_HINT not in tool_texts(model, 1)[0]                   # another problem: no hint
+
+
+
+def test_near_the_end_of_its_steps_the_drafter_is_told_to_submit(root, tmp_path):
+    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(3)]
+    r, model, _ = run(root, tmp_path, reads + [SUBMIT], config=cfg(max_steps=6))
+    note = dt.STEPS_LEFT_NOTE.format(n=dt.STEPS_LEFT, max=6)
+    seen = [[m.content for m in c["messages"] if type(m).__name__ == "HumanMessage"] for c in model.calls]
+    assert [note in s for s in seen] == [False, False, True, True]          # from step 2 = 6 - 4 on, once
+    assert seen[3].count(note) == 1 and r["status"] == dt.DRAFTED
+
+
+def test_the_steps_left_note_survives_a_resume(root, tmp_path):
+    """The note is part of the conversation the step keys hash: a resumed run rebuilds it and replays its steps."""
+    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(3)]
+    c = cfg(max_steps=6)
+    r1, _, d = run(root, tmp_path, reads + [SUBMIT], config=c)
+    model = StrictScriptedChatModel(script=[])
+    r2 = dt.run_drafter(run_id="d", runs_dir=tmp_path / "runs", cfg=c, resume=True, models={"drafter": model},
+                        validate=fake_validate, preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"),
+                        root=root)
+    assert model.calls == [] and r2["status"] == r1["status"] == dt.DRAFTED
+
+
+def test_the_drafter_reads_up_to_200000_input_tokens_per_call():
+    c = load_config()
+    assert dt.drafter_settings(dict(c, budget=dict(c["budget"], max_usd=0.75)))["max_input_tokens"] == 200000

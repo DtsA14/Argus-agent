@@ -1,0 +1,5 @@
+HEAD 6c5e51d tests: tests/test_drafter.py
+KILLED  no steps-left note
+KILLED  note one step late
+KILLED  input limit back to 64,000
+RESULT: 3/3 killed
