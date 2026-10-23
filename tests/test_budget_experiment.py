@@ -38,6 +38,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["code_task"]["auto_validate_max"]
     del base["drafter"], base["roles"]["drafter"], base["tools"]["drafter"]   # W2b (a role and section they never used)
     del base["router"]                                                      # router v0 (never used by these arms)
+    base["roles"]["coder"] = config("30k")["roles"]["coder"]   # the coder moved to DeepSeek on 2026-10-23; the arms ran Sonnet
     # D5: llm.prompt_cache added after the arms ran (absent means off); cache prices corrected and write rates added
     # after them. Their runs had no cache reads or writes, so their costs are the same under either table; every other
     # rate must still be the one they ran with.

@@ -167,9 +167,11 @@ def task_prompt(inputs, files, policy):
         f"(timeout {policy['validation_timeout_s']} s). You give the paths and the required node ids.",
         "Budget profiles (budget_profile, required; one attempt of the agent each, every model call inside it):",
         *[f"  - {name}: {_profile_text(p)}" for name, p in (policy.get("profile_info") or {}).items()],
-        "Choose by the work one attempt needs: the files the agent must read to understand the issue, plus every "
-        "file it writes (output). A new file of about 100 lines or more, or changes to several files, needs more "
-        "than the smallest profile.",
+        "Choose by the work one attempt needs. Each step of the agent sends the whole conversation again, so every "
+        "file it has read is paid again at every later step: a profile counted in tokens is used up by reading. The "
+        "smallest profile fits a small change to small files (a few KB read in all); reading a file of more than "
+        "about 5 KB, a new file of about 100 lines or more, or changes to several files need the profile priced in "
+        "USD.",
         "The agent's tools: " + ", ".join(policy.get("agent_tools") or []) + ". WriteFile replaces a whole file, so "
         "without edit_file every change rewrites the whole file within one call's output. `tools` may add "
         + " and ".join(sorted(ct.CONTRACT_TOOLS)) + " (edit_file replaces one exact piece of text); a draft whose "
@@ -389,6 +391,14 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
     return drafting
 
 
+def agent_profiles(cfg):
+    """The budget profiles a drafter may give the agent: drafter.agent_profiles (those that exist), else every profile.
+    Router pilot #1: the drafter chose `large` (45,000 tokens per attempt) and the agent spent it on reading."""
+    known = (cfg.get("code_task") or {}).get("profiles") or {}
+    wanted = (cfg.get("drafter") or {}).get("agent_profiles")
+    return sorted(known) if wanted is None else [p for p in wanted if p in known]
+
+
 def drafter_settings(cfg):
     """The one attempt's reservation: the configured one, never more than the run's limits."""
     d = cfg["drafter"]
@@ -566,8 +576,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
             return stop(FAILED_BUDGET, "the run cap leaves nothing for the drafter")
         policy = {"max_steps": lim["max_steps"], "max_submits": int(cfg["drafter"]["max_submits"]), "environment": env,
                   "validation_timeout_s": cfg["drafter"]["validation_timeout_s"],
-                  "profiles": sorted((cfg.get("code_task") or {}).get("profiles") or {}),
-                  "profile_info": {k: v for k, v in sorted(((cfg.get("code_task") or {}).get("profiles") or {}).items())},
+                  "profiles": agent_profiles(cfg),
+                  "profile_info": {k: (cfg.get("code_task") or {})["profiles"][k] for k in agent_profiles(cfg)},
                   "agent_tools": [t for t in ("ListFiles", "SearchFiles", "ReadFile", "WriteFile", "EditFile",
                                               "RunValidation")
                                   if GATED[t] in ((cfg.get("tools") or {}).get((cfg.get("code_task") or {}).get("role", "coder")) or [])],

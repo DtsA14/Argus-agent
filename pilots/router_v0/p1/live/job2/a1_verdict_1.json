@@ -1,0 +1,129 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; pytest outcome FAILED; required test tests/test_argus_list.py::test_lists_jobs_sorted_with_state_spend_and_cap is 'FAIL'; required test tests/test_argus_list.py::test_unreadable_job_json_is_reported_and_the_others_still_listed is 'FAIL'; required test tests/test_argus_list.py::test_no_jobs[missing] is 'FAIL'; required test tests/test_argus_list.py::test_no_jobs[empty] is 'FAIL'; required test tests/test_argus_list.py::test_no_jobs[only_non_jobs] is 'FAIL'; required test tests/test_argus_list.py::test_list_changes_nothing_not_even_a_log_cut_mid_line is 'FAIL'; required test tests/test_argus_list.py::test_list_works_while_another_command_holds_the_job_lock is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_argus_list.py"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 7,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 7,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_argus_list.py::test_lists_jobs_sorted_with_state_spend_and_cap": "FAIL",
+          "tests/test_argus_list.py::test_unreadable_job_json_is_reported_and_the_others_still_listed": "FAIL",
+          "tests/test_argus_list.py::test_no_jobs[missing]": "FAIL",
+          "tests/test_argus_list.py::test_no_jobs[empty]": "FAIL",
+          "tests/test_argus_list.py::test_no_jobs[only_non_jobs]": "FAIL",
+          "tests/test_argus_list.py::test_list_changes_nothing_not_even_a_log_cut_mid_line": "FAIL",
+          "tests/test_argus_list.py::test_list_works_while_another_command_holds_the_job_lock": "FAIL"
+        },
+        "output_tail": "test_argus_list.py::test_lists_jobs_sorted_with_state_spend_and_cap FAILED\ntests/test_argus_list.py::test_unreadable_job_json_is_reported_and_the_others_still_listed FAILED\ntests/test_argus_list.py::test_no_jobs[missing] FAILED\ntests/test_argus_list.py::test_no_jobs[empty] FAILED\ntests/test_argus_list.py::test_no_jobs[only_non_jobs] FAILED\ntests/test_argus_list.py::test_list_changes_nothing_not_even_a_log_cut_mid_line FAILED\ntests/test_argus_list.py::test_list_works_while_another_command_holds_the_job_lock FAILED\n\n=================================== FAILURES ===================================\n_______________ test_lists_jobs_sorted_with_state_spend_and_cap ________________\ntests/test_argus_list.py:78: in test_lists_jobs_sorted_with_state_spend_and_cap\n    assert rc == 0\nE   assert 2 == 0\n_______ test_unreadable_job_json_is_reported_and_the_others_still_listed _______\ntests/test_argus_list.py:95: in test_unreadable_job_json_is_reported_and_the_others_still_listed\n    assert rc == 0\nE   assert 2 == 0\n____________________________ test_no_jobs[missing] _____________________________\ntests/test_argus_list.py:125: in test_no_jobs\n    assert rc == 0\nE   assert 2 == 0\n_____________________________ test_no_jobs[empty] ______________________________\ntests/test_argus_list.py:125: in test_no_jobs\n    assert rc == 0\nE   assert 2 == 0\n_________________________ test_no_jobs[only_non_jobs] __________________________\ntests/test_argus_list.py:125: in test_no_jobs\n    assert rc == 0\nE   assert 2 == 0\n____________ test_list_changes_nothing_not_even_a_log_cut_mid_line _____________\ntests/test_argus_list.py:144: in test_list_changes_nothing_not_even_a_log_cut_mid_line\n    assert rc == 0\nE   assert 2 == 0\n___________ test_list_works_while_another_command_holds_the_job_lock ___________\ntests/test_argus_list.py:158: in test_list_works_while_another_command_holds_the_job_lock\n    assert rc == 0\nE   assert 2 == 0\n============================== 7 failed in 1.18s ===============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 7,
+        "deselected": 0,
+        "stderr_tail": "",
+        "failed_nodes": [
+          "tests/test_argus_list.py::test_list_changes_nothing_not_even_a_log_cut_mid_line",
+          "tests/test_argus_list.py::test_list_works_while_another_command_holds_the_job_lock",
+          "tests/test_argus_list.py::test_lists_jobs_sorted_with_state_spend_and_cap",
+          "tests/test_argus_list.py::test_no_jobs[empty]",
+          "tests/test_argus_list.py::test_no_jobs[missing]",
+          "tests/test_argus_list.py::test_no_jobs[only_non_jobs]",
+          "tests/test_argus_list.py::test_unreadable_job_json_is_reported_and_the_others_still_listed"
+        ],
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "b0e6eb896c3fc8a667a481a8208684a6a8b1d5efc2d759662f4f93ec6d6a67f3",
+  "summary_sha256": null,
+  "verdict_sha256": "c976e93fc66ffd2f6bfdcf7e4be9639054576c71ed414867e15036132c2e3807"
+}

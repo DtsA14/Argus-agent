@@ -6,6 +6,7 @@
   python scripts/argus.py reject <job> "why"
   python scripts/argus.py redraft <job>
   python scripts/argus.py resume <job>
+  python scripts/argus.py abandon <job> "why"            # close a job that will not be continued
 
 Every live stage shows its limits, asks [y/N], then asks for the API key (not shown; never an argument, never written).
 Applying the review package's patch to the target repository stays with the human. Exit codes: 0 done, 1 the stage
@@ -45,17 +46,19 @@ def main(argv=None, deps=None):
     a.add_argument("--max-usd", type=float)
     a.add_argument("--max-iterations", type=int, default=3)
     a.add_argument("--reference-patch")
-    r = sub.add_parser("reject")
-    r.add_argument("job")
-    r.add_argument("reason")
+    for name in ("reject", "abandon"):
+        r = sub.add_parser(name)
+        r.add_argument("job")
+        r.add_argument("reason")
     o = ap.parse_args(argv)
     deps = deps or rj.Deps()
     try:
         if o.cmd == "status":
             print(rj.status(o.job, jobs_dir=o.jobs_dir))
             return 0
-        if o.cmd == "reject":
-            print(rj.status(rj.reject(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir).id, jobs_dir=o.jobs_dir))
+        if o.cmd in ("reject", "abandon"):
+            fn = rj.reject if o.cmd == "reject" else rj.abandon
+            print(rj.status(fn(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir).id, jobs_dir=o.jobs_dir))
             return 0
         cfg = load_config(o.config)
         cfg["sandbox"] = sandbox_cfg(o.config)
@@ -73,6 +76,11 @@ def main(argv=None, deps=None):
     except (rj.Refused, ConfigError, OSError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        job = getattr(o, "job", None)
+        print("\ninterrupted. " + (f"Continue it with `argus resume {job}`; " if job else "")
+              + "`argus status <job>` shows where it stopped. Do not start a new job for the same task.", file=sys.stderr)
+        return 130
     print(rj.status(job.id, jobs_dir=o.jobs_dir))
     return 0 if job.data["state"] in (rj.AWAITING_APPROVAL, rj.REVIEW_READY) else 1
 
