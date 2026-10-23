@@ -116,7 +116,7 @@ def scfg():
 
 def run_check(root, ref, scfg, draft=None, **over):
     kw = {"task": "fix_shop", "issue": "the total can go negative", "max_usd": 0.5, "max_iterations": 3,
-          "reference_patch": ref, "sandbox_cfg": scfg, "root": root, **over}
+          "reference_patch": ref, "sandbox_cfg": scfg, "root": root, "profiles": None, **over}
     return dr.check(draft or DRAFT, **kw)
 
 
@@ -173,6 +173,42 @@ def test_static_problems(root, change, why):
     problems = dr.static_problems(d, c, {"src/shop.py": "x", "tests/test_old.py": "y", "conftest.py": "z",
                                         "tests/test_skip.py": "w"})
     assert any(why in p for p in problems), problems
+
+
+@pytest.mark.parametrize("change, over, why", [
+    # pilot W2b-3 run 2: a directory name passed this check and then blocked setup after approval
+    (lambda d: d["contract"]["scope"].update(protected=["tests", "tests/**", "conftest.py"]), {},
+     "contract: protected glob 'tests' matches no input file (it names a directory; globs match files: use "
+     "'tests/**')"),
+    (lambda d: d["contract"].update(budget_profile="huge"), {"profiles": ["default", "large_usd"]},
+     "contract: unknown budget profile 'huge' (configured: ['default', 'large_usd'])"),
+    (lambda d: None, {"sandbox_cfg": {"environments": {"other": {}}}},
+     "contract: unknown sandbox environment(s) ['argus'] (configured: ['other'])"),
+    # a sandbox config without the key: no environment is configured, as setup reads it (review of #180)
+    (lambda d: None, {"sandbox_cfg": {"kind": "docker"}},
+     "contract: unknown sandbox environment(s) ['argus'] (configured: [])"),
+])
+def test_what_setup_would_refuse_is_refused_by_the_draft_check(root, change, over, why):
+    d = copy.deepcopy(DRAFT)
+    change(d)
+    r = run_check(root, None, over.pop("sandbox_cfg", {}), draft=d, **over)
+    assert not r["ok"] and r["problems"] == [why] and "baseline" not in r
+
+
+def test_the_draft_check_needs_profiles_given_explicitly():
+    # review of #180: a caller that forgets profiles must not silently skip the profile check
+    with pytest.raises(TypeError, match="profiles"):
+        dr.check(DRAFT, task="t", issue="i", max_usd=0.5, max_iterations=1, reference_patch=None, sandbox_cfg={})
+
+
+def test_the_draft_check_runs_the_checks_setup_runs_through_their_shared_function(root, monkeypatch):
+    seen = []
+    monkeypatch.setattr(ct, "setup_problems", lambda c, files, **kw: seen.append((set(files), kw)) or ["sentinel"])
+    r = run_check(root, None, {}, profiles=["default"])
+    assert not r["ok"] and r["problems"] == ["contract: sentinel"]
+    files, kw = seen[0]
+    assert "tests/test_new.py" in files and "src/shop.py" in files          # the task baseline: intake plus new tests
+    assert kw == {"profiles": ["default"], "environments_configured": None}
 
 
 def test_a_draft_on_an_intake_that_changed_is_refused(root, tmp_path):

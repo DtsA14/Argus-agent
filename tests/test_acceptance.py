@@ -108,6 +108,29 @@ def test_the_scope_must_fit_the_input_repository():
     assert any("matches no input file" in e for e in ct.check_scope_against(typo, files))
 
 
+def test_a_directory_name_as_a_protected_glob_is_refused_with_the_glob_to_use_and_never_widened():
+    # pilot W2b-3 run 2: "tests" passed the draft check and blocked setup after approval
+    files = snapshot(REPO, skip_cache=True)
+    c = contract(scope={"writable": ["src/**"], "protected": ["tests", "tests/**"]})
+    assert ct.check_scope_against(c, files) == [
+        "protected glob 'tests' matches no input file (it names a directory; globs match files: use 'tests/**')"]
+    assert c["scope"]["protected"] == ["tests", "tests/**"]
+    typo = contract(scope={"writable": ["src/**"], "protected": ["test/**"]})
+    assert ct.check_scope_against(typo, files) == ["protected glob 'test/**' matches no input file"]
+
+
+@pytest.mark.parametrize("profiles, envs, why", [
+    (["default"], None, "unknown budget profile 'large' (configured: ['default'])"),
+    (None, {"other": {}}, "unknown sandbox environment(s) ['argus'] (configured: ['other'])"),
+])
+def test_setup_problems_holds_every_contract_check_setup_runs(profiles, envs, why):
+    files = snapshot(REPO, skip_cache=True)
+    c = contract(scope={"writable": ["src/**"], "protected": ["tests/**"]}, budget_profile="large")
+    c["validation"][0]["environment"] = "argus"
+    assert ct.setup_problems(c, files, profiles=profiles, environments_configured=envs) == [why]
+    assert ct.setup_problems(c, files, profiles=None, environments_configured=None) == []
+
+
 def test_globs_match_whole_path_components():
     assert ct.matches("src/calc.py", ["src/**"]) and ct.matches("src/a/b.py", ["src/**"])
     assert not ct.matches("srcx/calc.py", ["src/**"]) and not ct.matches("tests/src/x.py", ["src/**"])

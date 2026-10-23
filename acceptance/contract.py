@@ -224,7 +224,27 @@ def check_scope_against(c, files):
             errors.append(f"input file {f!r} is both writable and protected")
     for g in sc["protected"]:
         if not any(glob_regex(g).match(f) for f in files):
-            errors.append(f"protected glob {g!r} matches no input file")
+            # a directory name matches no file (globs match files): say so, never widen it (W2b-3 run 2)
+            folder = any(f.startswith(g.rstrip("/") + "/") for f in files)
+            errors.append(f"protected glob {g!r} matches no input file"
+                          + (f" (it names a directory; globs match files: use {g.rstrip('/') + '/**'!r})" if folder
+                             else ""))
+    return errors
+
+
+def setup_problems(c, files, *, profiles, environments_configured):
+    """Every check of a (valid) contract against its input files and the configuration that a code task's setup runs
+    before the agent (codetask/run.py), and that a draft's check runs against the task baseline (acceptance/draft.py),
+    so a draft that passes its check is never refused by setup. profiles / environments_configured: the configured
+    names, or None where the caller cannot know them (that check is then left to setup)."""
+    errors = check_scope_against(c, files)
+    profile = c.get("budget_profile")
+    if profiles is not None and profile is not None and profile not in profiles:
+        errors.append(f"unknown budget profile {profile!r} (configured: {sorted(profiles)})")
+    if environments_configured is not None:
+        unknown = [n for n in environments(c) if n not in environments_configured]
+        if unknown:               # the contract names an environment this config does not have: fail closed
+            errors.append(f"unknown sandbox environment(s) {unknown} (configured: {sorted(environments_configured)})")
     return errors
 
 

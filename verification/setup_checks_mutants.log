@@ -1,0 +1,22 @@
+== old code
+6 new tests
+9 failed in 2.53s
+PASSED on old code (must be none): []
+SKIPPED: []
+RESULT: ok
+== mutants
+KILLED  draft check skips the shared checks: ["FAILED tests/test_draft.py::test_what_setup_would_refuse_is_refused_by_the_draft_check[<lambda>-over0-contract: protected glob 'tests' matches no input file (it names a directory; globs match files: use 'tests/**')]"]
+KILLED  draft check gives no profiles: ["FAILED tests/test_draft.py::test_what_setup_would_refuse_is_refused_by_the_draft_check[<lambda>-over1-contract: unknown budget profile 'huge' (configured: ['default', 'large_usd'])]"]
+KILLED  setup uses only the scope check: ['FAILED tests/test_codetask.py::test_an_unknown_environment_blocks_the_run_before_any_model_call']
+KILLED  unknown profile reaches the applied check first: ['FAILED tests/test_codetask.py::test_an_unknown_profile_blocks_before_any_model_call']
+KILLED  no directory hint: ['FAILED tests/test_acceptance.py::test_a_directory_name_as_a_protected_glob_is_refused_with_the_glob_to_use_and_never_widened']
+KILLED  no profile check: ["FAILED tests/test_acceptance.py::test_setup_problems_holds_every_contract_check_setup_runs[profiles0-None-unknown budget profile 'large' (configured: ['default'])]"]
+KILLED  no environment check: ["FAILED tests/test_acceptance.py::test_setup_problems_holds_every_contract_check_setup_runs[None-envs1-unknown sandbox environment(s) ['argus'] (configured: ['other'])]"]
+KILLED  no glob example in the prompt: ['FAILED tests/test_drafter.py::test_a_directory_glob_is_refused_at_submit_and_the_drafter_fixes_it_with_revise']
+RESULT: 8/8 killed
+== verify
+1545 passed in 728.34s (0:12:08)
+== sandbox tests skipped: 0
+RESULT: PASS
+evidence saved to verification/verify-20261023T132332Z-aarch64.log
+ALLDONE

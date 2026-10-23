@@ -384,6 +384,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             report = dr.check(draft, task=TASK, issue=job.data["inputs"]["issue"], max_usd=cap,
                               max_iterations=max_iterations, reference_patch=reference_patch,
                               sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root,
+                              profiles=sorted((cfg.get("code_task") or {}).get("profiles") or {}),
                               **({"validate": deps.validate} if deps.validate else {}),
                               **({"red": deps.red} if deps.red else {}))
             if not report["ok"]:

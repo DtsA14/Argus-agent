@@ -58,7 +58,8 @@ def main(argv=None):
         return 2
     try:
         report = dr.check(draft, task=a.task, issue=issue, max_usd=a.max_usd, max_iterations=a.max_iterations,
-                          reference_patch=a.reference_patch, sandbox_cfg=sandbox_cfg(a.config), root=ROOT)
+                          reference_patch=a.reference_patch, sandbox_cfg=sandbox_cfg(a.config), root=ROOT,
+                          profiles=sorted((load_config(a.config).get("code_task") or {}).get("profiles") or {}))
         print(json.dumps({k: v for k, v in report.items() if k != "contract"}, indent=2, ensure_ascii=False))
         if not report["ok"]:
             return 1

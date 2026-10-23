@@ -178,7 +178,8 @@ SYSTEM = "\n".join([
     "and where it was raised), and test only the behaviour the issue asks for. Everything else must pass now.",
     "- Required node ids of the new tests must be ones pytest collects (path::test_name, with [params] if any).",
     "- Writable: only what a fix needs. Protected: every test file (new and old) and everything else the agent must "
-    "not change. A new test must be protected and not writable.",
+    "not change. A new test must be protected and not writable. Globs match files, never directories: write "
+    "`tests/**` (every file below tests/) or `src/shop.py`, not `tests`; every protected glob must match a file.",
     "- Keep a regression validation of existing tests when the change can break them.",
     "- The sandbox has only the repository, Python and its packages: no git, no network, and no files left out of the "
     "repository (such as verification/ and pilots/). Existing tests that need any of these fail there; do not use "
@@ -323,7 +324,7 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
             try:
                 report = dr.check(draft, task=CHECK_TASK, issue=inputs["issue"], max_usd=CHECK_USD,
                                   max_iterations=CHECK_ITERATIONS, reference_patch=None, sandbox_cfg=scfg, root=root,
-                                  validate=validate, collect=collect, red=red)
+                                  validate=validate, collect=collect, red=red, profiles=policy["profiles"])
             except (dr.DraftError, intake.IntakeError, OSError) as e:
                 problems = [f"the check could not run: {e}"]
             else:
