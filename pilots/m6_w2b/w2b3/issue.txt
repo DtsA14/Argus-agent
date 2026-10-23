@@ -1,0 +1,9 @@
+scripts/pilot_report.py reports success_rate as done / (runs_total - no_result): a run that left no result (NO_RESULT)
+is dropped from the denominator, so a run that died looks like neither a success nor a failure.
+
+Keep success_rate exactly as it is, and add one key to the report, right after it:
+
+  "success_rate_all": done / runs_total, rounded to 4 decimals like success_rate, or null when runs_total is 0
+
+so the report shows both. Nothing else in the report changes. tests/test_pilot_report.py compares the whole report
+with one it computes itself from the issue's formulas, so it must be updated to expect the new key with that formula.
