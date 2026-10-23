@@ -67,6 +67,11 @@ NODE_ID = re.compile(r"^[^\s-][^\s]*$")
 PASSING_NEW = "is 'ok', not a failure by assertion on the baseline"
 PASSING_HINT = ("A new test that passes on the code as it is now cannot be required: leave it out of must_pass. Its "
                 "validation still runs the whole file, so the test must still pass after the fix.")
+# Router pilot #1 on DeepSeek read 13 files in 11 steps and never submitted: near the end of its steps the harness
+# says how many are left (a fixed message at a fixed step, so a replay rebuilds the same conversation).
+STEPS_LEFT = 4
+STEPS_LEFT_NOTE = ("Harness: {n} steps left of {max}. Submit the draft now with SubmitDraft (or ReviseDraft after a "
+                   "rejection): a run that ends without an accepted draft has no draft, whatever was read.")
 BYTES_PER_TOKEN = 4              # a rough estimate of a source file's size in tokens, for the rewrite check below
 
 
@@ -321,6 +326,8 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
 
         messages = [SystemMessage(SYSTEM), HumanMessage(prompt)]
         for step in range(lim["max_steps"]):
+            if step > 0 and step == lim["max_steps"] - STEPS_LEFT:
+                messages.append(HumanMessage(STEPS_LEFT_NOTE.format(n=STEPS_LEFT, max=lim["max_steps"])))
             key = llm_step_key(NODE, task_id, 0, step, messages, tools, caller.ref)
             cached = memo.get(key)
             if cached is not None:

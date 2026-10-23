@@ -120,7 +120,9 @@ drafter:
   # draft in its input (~45,000) and needs ~12,700 output; at 0.45 / 40,000 it was refused before sending. The default
   # budget.max_usd (0.50) still caps a run below this; a pilot raises the cap in its own config.
   attempt_usd: 0.70
-  max_input_tokens: 64000
+  # 200,000 since the first DeepSeek drafter run (2026-10-23): it read 13 files and hit 64,000 before any submit.
+  # DeepSeek's context is 1M and a cached input token costs $0.003/M, so one call of 200,000 is ~$0.03 at worst.
+  max_input_tokens: 200000
   max_steps: 16
   max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
   # The profiles a draft may give the agent. Not `large` (45,000 tokens per attempt): an agent's input is re-sent at
