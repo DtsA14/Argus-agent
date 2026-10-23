@@ -47,3 +47,19 @@ itu, dan pembaca yang ditugasi (Claude) melewatkannya.
    mendapat petunjuk perbaikan. Ini akan menolak draf pilot ini di submit 2.
 2. **Ringkasan approve dari Claude** selalu mengutip baris "Why they fail now" apa adanya.
 3. Coba ulang W2b-3 (job baru atau `redraft`) setelah perbaikan 1.
+
+## Run 2 (setelah PR #179, red by assertion): diblok setup
+
+Job `j20261023_125659_6528`, issue yang sama.
+
+- **Drafter:** `DRAFTED`, 2 submit, $0,0156. Submit 1 kembali ditolak "duplicate paths", karena model lagi-lagi
+  mengirim entri kosong untuk file yang sama. Pengecekan merah yang baru bekerja: ke-10 tes wajib gagal karena
+  `AssertionError` dari file tesnya sendiri. Diff tes lama bersih, dengan 3 `modified` beserta alasannya. Diapprove Atha.
+- **Agen:** `BLOCKED` di setup, $0. Scope draf berisi glob protected `"tests"`, yaitu nama folder, padahal glob hanya
+  mencocokkan file. Setup menolaknya ("protected glob 'tests' matches no input file"), tapi cek draf tidak menjalankan
+  pengecekan yang sama, jadi draf itu lolos cek dan approve. Job: $0,0156.
+- **Perbaikan** (PR berikutnya): semua cek kontrak yang dijalankan setup sebelum agen (scope terhadap file, profil
+  budget, environment sandbox) dijadikan satu fungsi, `ct.setup_problems`. Fungsi itu dipanggil setup dan juga `check()`
+  W2a terhadap baseline task. Glob folder ditolak dengan petunjuk "use 'tests/**'", tidak diubah diam-diam. Prompt
+  drafter juga mendapat contoh glob yang benar.
+- Run berikutnya: job baru setelah merge, menunggu "y" dari Atha.
