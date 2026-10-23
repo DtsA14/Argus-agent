@@ -74,10 +74,10 @@ def test_list_shows_the_spend_its_stage_runs_recorded(jobs):
 
 
 def test_list_and_status_report_the_same_spend(jobs):
-    jd = job(jobs, "ja", stages={"d1": {"kind": "draft", "run_id": "ja-d1", "cap_usd": 0.4}})
+    jd = job(jobs, "ja", state="DRAFTING", stages={"d1": {"kind": "draft", "run_id": "ja-d1", "cap_usd": 0.4}})
     ledger(jd / "runs" / "ja-d1" / "events.jsonl", nano=375_000_000)
     ledger(jd / "runs" / "ja-x9" / "events.jsonl", nano=999_000_000)            # not a stage of the job
-    assert listed(jobs) == "ja AWAITING_APPROVAL spent $0.3750 of $1.00"
+    assert listed(jobs) == "ja DRAFTING spent $0.3750 of $1.00"
     assert "money: cap $1.00, spent $0.3750" in rj.status("ja", jobs_dir=jobs)
 
 
