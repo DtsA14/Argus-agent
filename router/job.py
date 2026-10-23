@@ -47,6 +47,7 @@ REJECTED, BLOCKED, ABANDONED = "REJECTED", "BLOCKED", "ABANDONED"
 LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
          (DRAFTING, AWAITING_APPROVAL), (DRAFTING, DRAFT_FAILED), (DRAFTING, BLOCKED),
          (DRAFT_FAILED, DRAFTING), (DRAFT_FAILED, REJECTED), (DRAFT_FAILED, BLOCKED),
+         (DRAFT_FAILED, AGENT_RUNNING),           # an accepted draft stays approvable after a failed redraft
          (AWAITING_APPROVAL, AGENT_RUNNING), (AWAITING_APPROVAL, REJECTED), (AWAITING_APPROVAL, DRAFTING),
          (AWAITING_APPROVAL, BLOCKED),
          (AGENT_RUNNING, REVIEW_READY), (AGENT_RUNNING, REVIEW_INVALID), (AGENT_RUNNING, AGENT_FAILED),
@@ -324,7 +325,10 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
     from codetask import run as ctrun
     job = open_job(job_id, jobs_dir)
     with job.lock():
-        if job.data["state"] != AWAITING_APPROVAL:
+        # Router pilot #1: a redraft that failed after a draft was accepted left the job DRAFT_FAILED, and the good
+        # draft could no longer be approved. A redraft is an extra attempt, not a rejection: the last accepted draft
+        # stays approvable (bound to its sha as always); reject says no.
+        if job.data["state"] not in (AWAITING_APPROVAL, DRAFT_FAILED):
             raise Refused(f"job {job.id} is {job.data['state']}, not AWAITING_APPROVAL")
         st, path = _last_draft(job)
         seen = draft_sha(path)
@@ -469,11 +473,14 @@ def status(job_id, *, jobs_dir=JOBS):
     for sid, s in d["stages"].items():
         out.append(f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
                    + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else ""))
-    if d["state"] == AWAITING_APPROVAL:
+    accepted = any(s["kind"] == "draft" and s.get("status") == "DRAFTED" for s in d["stages"].values())
+    if d["state"] == AWAITING_APPROVAL or (d["state"] == DRAFT_FAILED and accepted):
         st, path = _last_draft(job)
         sha = draft_sha(path)
         draft = json.loads(path.read_text(encoding="utf-8"))
         c = draft["contract"]
+        if d["state"] == DRAFT_FAILED:
+            out.append(f"the latest redraft failed; the last accepted draft is from {st['run_id']}")
         out += [f"draft {sha[:12]} ({job.runs / st['run_id'] / 'DRAFT_REVIEW.md'})",
                 "writable: " + ", ".join(c["scope"]["writable"]),
                 *[f"validation {v['id']}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
