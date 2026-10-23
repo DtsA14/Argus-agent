@@ -67,11 +67,19 @@ NODE_ID = re.compile(r"^[^\s-][^\s]*$")
 PASSING_NEW = "is 'ok', not a failure by assertion on the baseline"
 PASSING_HINT = ("A new test that passes on the code as it is now cannot be required: leave it out of must_pass. Its "
                 "validation still runs the whole file, so the test must still pass after the fix.")
-# Router pilot #1 on DeepSeek read 13 files in 11 steps and never submitted: near the end of its steps the harness
-# says how many are left (a fixed message at a fixed step, so a replay rebuilds the same conversation).
-STEPS_LEFT = 4
-STEPS_LEFT_NOTE = ("Harness: {n} steps left of {max}. Submit the draft now with SubmitDraft (or ReviseDraft after a "
+# Router pilot #1 on DeepSeek read 12-13 files and never submitted, twice. The harness steers by fixed rules at fixed
+# steps (so a replay rebuilds the same conversation): halfway it says how many steps are left, and in the last
+# FINAL_STEPS steps it offers only SubmitDraft and ReviseDraft (any other call is refused, not run).
+FINAL_STEPS = 3
+STEPS_LEFT_NOTE = ("Harness: {n} steps left of {max}. Submit the draft soon with SubmitDraft (or ReviseDraft after a "
                    "rejection): a run that ends without an accepted draft has no draft, whatever was read.")
+FINAL_NOTE = ("Harness: the last {n} steps. Only SubmitDraft and ReviseDraft are offered now; submit what you have "
+              "(the harness checks it and tells you what is wrong).")
+
+
+def final_from(max_steps):
+    """The first of the steps that offer only the submit tools (none when there are too few steps)."""
+    return max_steps - FINAL_STEPS if max_steps >= 2 * FINAL_STEPS + 1 else max_steps
 BYTES_PER_TOKEN = 4              # a rough estimate of a source file's size in tokens, for the rewrite check below
 
 
@@ -326,16 +334,20 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
 
         messages = [SystemMessage(SYSTEM), HumanMessage(prompt)]
         for step in range(lim["max_steps"]):
-            if step > 0 and step == lim["max_steps"] - STEPS_LEFT:
-                messages.append(HumanMessage(STEPS_LEFT_NOTE.format(n=STEPS_LEFT, max=lim["max_steps"])))
-            key = llm_step_key(NODE, task_id, 0, step, messages, tools, caller.ref)
+            final = step >= final_from(lim["max_steps"])
+            if step > 0 and step == lim["max_steps"] // 2 and not final:
+                messages.append(HumanMessage(STEPS_LEFT_NOTE.format(n=lim["max_steps"] - step, max=lim["max_steps"])))
+            if step == final_from(lim["max_steps"]):
+                messages.append(HumanMessage(FINAL_NOTE.format(n=FINAL_STEPS)))
+            step_tools = [SubmitDraft, ReviseDraft] if final else tools
+            key = llm_step_key(NODE, task_id, 0, step, messages, step_tools, caller.ref)
             cached = memo.get(key)
             if cached is not None:
                 msg = message_from_json(cached)
                 log.emit("step_replayed", kind="llm", step=step, **meta)
             else:
                 try:
-                    msg = caller.call(messages, res, tools=tools, meta={**meta, "step": step})
+                    msg = caller.call(messages, res, tools=step_tools, meta={**meta, "step": step})
                 except InputLimitExceeded:
                     return end("context_limit", step)
                 except ReservationExhausted:
@@ -376,7 +388,10 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
                 if record is not None:
                     log.emit("step_replayed", kind="tool", step=step, tool=name, **meta)
                 else:
-                    if name in SUBMITS:
+                    if final and name not in SUBMITS:
+                        record = {"content": f"Refused: {name} is not offered in the last {FINAL_STEPS} steps; only "
+                                             "SubmitDraft and ReviseDraft are. Nothing was run.", "finished": False}
+                    elif name in SUBMITS:
                         record = submit(c.get("args") or {}, submits + 1, last=last, revise=name == "ReviseDraft")
                     elif name in GATED:              # a write or a validation is denied by the role's allowlist
                         record = toolbox.run(c, step_key=tkey)

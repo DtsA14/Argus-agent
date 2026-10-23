@@ -140,8 +140,8 @@ router:
   draft_max_usd: 0.75
   agent_max_usd: {default: 0.50, large_usd: 0.75}   # by the profile the drafter chose (drafter.agent_profiles)
   overrides:
-    budget.max_tokens: 1200000
-    drafter.attempt_tokens: 400000
+    budget.max_tokens: 3000000         # 1,200,000 until router pilot #1 on DeepSeek: tokens re-sent at every step
+    drafter.attempt_tokens: 2000000    # (cache hits included) ran out at $0.018 of $0.70; the USD caps bind
     code_task.auto_validate: true
     llm.prompt_cache.enabled: true
 
