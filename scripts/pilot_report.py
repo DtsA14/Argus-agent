@@ -111,6 +111,7 @@ def build(argv):
         "done": len(done),
         "no_result": no_result,
         "success_rate": round(len(done) / with_result, 4) if with_result else None,
+        "success_rate_all": round(len(done) / total, 4) if total else None,
         "usd_known_total": round(nano / 1e9, 6),
         "usd_unknown_runs": unknown,
         "cost_per_success": round(nano / 1e9 / done_known, 6) if done_known else None,

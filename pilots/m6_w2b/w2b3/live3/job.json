@@ -1,0 +1,105 @@
+{
+  "job": "j20261023_164114_cfcb",
+  "kind": "code",
+  "state": "REVIEW_READY",
+  "created_at": "2026-10-23T16:41:14Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/pilot3a_live",
+    "commit": "HEAD",
+    "issue": "scripts/pilot_report.py reports success_rate as done / (runs_total - no_result): a run that left no result (NO_RESULT)\nis dropped from the denominator, so a run that died looks like neither a success nor a failure.\n\nKeep success_rate exactly as it is, and add one key to the report, right after it:\n\n  \"success_rate_all\": done / runs_total, rounded to 4 decimals like success_rate, or null when runs_total is 0\n\nso the report shows both. Nothing else in the report changes. tests/test_pilot_report.py compares the whole report\nwith one it computes itself from the issue's formulas, so it must be updated to expect the new key with that formula.",
+    "exclude": [
+      "verification",
+      "pilots"
+    ]
+  },
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261023_164114_cfcb-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T16:41:25Z",
+      "ended_at": "2026-10-23T16:44:18Z",
+      "status": "DRAFTED",
+      "usd": 0.01923618,
+      "draft_sha256": "6729143ebacd9df6854fc49ace3a7e49a9caea0d03b406a1386190a1c6514d8d"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261023_164114_cfcb-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T17:02:08Z",
+      "ended_at": "2026-10-23T17:03:54Z",
+      "status": "DONE",
+      "usd": 0.002354112,
+      "profile": "large_usd",
+      "review": {
+        "valid": true,
+        "problems": [],
+        "dir": "/home/ubuntu/pilot3a_live/jobs/j20261023_164114_cfcb/runs/j20261023_164114_cfcb-a1/review"
+      }
+    }
+  },
+  "approval": {
+    "draft_sha256": "6729143ebacd9df6854fc49ace3a7e49a9caea0d03b406a1386190a1c6514d8d",
+    "contract_sha256": "a18192a80d0c011264c068fe5787d12456dd183bf2190684461cb4ca7ae5f5c4",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-23T17:02:08Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-23T16:41:14Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-23T16:41:14Z",
+      "what": "intaken",
+      "files": 458
+    },
+    {
+      "at": "2026-10-23T16:41:25Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-23T16:44:18Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-23T17:02:08Z",
+      "what": "approved",
+      "draft": "6729143ebacd",
+      "contract": "a18192a80d0c"
+    },
+    {
+      "at": "2026-10-23T17:02:08Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-23T17:04:43Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "REVIEW_READY",
+      "stage": "a1"
+    }
+  ],
+  "intake": {
+    "commit": "d9a1ef4cc6ed35514638f18df869838982501350",
+    "tree": "8d3ee4f3ade2961b2ca0754dce83104d431e42ad",
+    "files": 458,
+    "snapshot_sha256": "04fd76af27ddcf117e25dbc84347e3dbb2afe8622d078190c72c11a54909bf0b"
+  }
+}

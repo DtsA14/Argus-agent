@@ -1,0 +1,78 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "a18192a80d0c011264c068fe5787d12456dd183bf2190684461cb4ca7ae5f5c4",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "229e37d4d94e09d5ce75525c8e18741ea58d8bc18cf60323c343a9ed320adfed"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "finished",
+    "steps": 3
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "edit_file",
+    "search_files"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/task",
+      "snapshot_sha256": "78cec4a7bcd5afb44133fcd81bf12bc092b4433af29461bd6db986fedfb7afbf",
+      "intake": {
+        "name": "task",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "d9a1ef4cc6ed35514638f18df869838982501350",
+        "tree": "8d3ee4f3ade2961b2ca0754dce83104d431e42ad",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "base",
+          "commit": "d9a1ef4cc6ed35514638f18df869838982501350",
+          "tree": "8d3ee4f3ade2961b2ca0754dce83104d431e42ad",
+          "snapshot_sha256": "04fd76af27ddcf117e25dbc84347e3dbb2afe8622d078190c72c11a54909bf0b"
+        },
+        "added": {
+          "tests/test_pilot_report_all.py": "85b8df7e3aebd19fc8cae5ea5920a13f5c40bd90d768a919ecc9d2d25d9fd175"
+        },
+        "contract_sha256": "a18192a80d0c011264c068fe5787d12456dd183bf2190684461cb4ca7ae5f5c4"
+      }
+    },
+    "argus": {
+      "commit": "d9a1ef4cc6ed35514638f18df869838982501350",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large_usd",
+    "attempt_tokens": 400000,
+    "max_output_tokens": 8192,
+    "attempt_usd": 0.45,
+    "max_input_tokens": 40000
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4
+  },
+  "cache": {
+    "cache_read_tokens": 24704,
+    "cache_creation_tokens": null,
+    "usd_saved_estimate": 0.003631488
+  },
+  "run_id": "j20261023_164114_cfcb-a1",
+  "attempts": 1,
+  "usd_billed": 0.002354112,
+  "usd_complete": true,
+  "llm_calls": 4,
+  "llm_calls_unknown": 0
+}

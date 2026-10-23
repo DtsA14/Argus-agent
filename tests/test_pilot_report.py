@@ -3,7 +3,9 @@
 The runs are the synthetic ones of tests/test_run_inspectors.py (build(): a scripted model, an injected validation; no Docker,
 no money) plus copies with result.json changed. Expected reports are written here from the definitions of the issue: statuses,
 attempts and calls as literals; each run's usd_billed is read from its own result.json (an input of the report) and every
-aggregate is computed below with the issue's formulas, independently of the script."""
+aggregate is computed below with the issue's formulas, independently of the script. Two success rates: success_rate over the
+runs that left a result, and success_rate_all (done / runs_total) over all of them, so a run that died (NO_RESULT) is in the
+second denominator too."""
 import json
 import os
 import shutil
@@ -65,6 +67,7 @@ def expected(rows):
     mins = [r["supervision_minutes"] for r in rows if r["supervision_minutes"] is not None]
     return {"runs": rows, "runs_total": len(rows), "done": len(done), "no_result": no_result,
             "success_rate": round(len(done) / (len(rows) - no_result), 4) if len(rows) - no_result else None,
+            "success_rate_all": round(len(done) / len(rows), 4) if len(rows) else None,
             "usd_known_total": round(total_nano / 1e9, 6), "usd_unknown_runs": len(rows) - len(known),
             "cost_per_success": round(total_nano / 1e9 / done_known, 6) if done_known else None,
             "cost_complete": len(known) == len(rows),
@@ -102,6 +105,7 @@ def test_the_report_over_seven_kinds_of_run(runs):
     assert r.stdout == text(want)
     # the facts the definitions turn on, spelled out
     assert (want["done"], want["no_result"], want["success_rate"], want["usd_unknown_runs"]) == (4, 1, 0.6667, 2)
+    assert want["success_rate_all"] == 0.5714                            # 4 done over all 7 runs, the dead one included
     assert want["attempts"] == {"mean": 1.25, "median": 1.0} and want["attempts_distribution"] == {"0": 1, "1": 3, "2": 2}
     assert want["cost_complete"] is False and want["events_skipped"] == 1
 
@@ -134,6 +138,7 @@ def test_no_run_done(runs):
                      row("f4", "BLOCKED", 0, 0, usd(runs["f4"]), True)])
     assert r.returncode == 0 and r.stdout == text(want)
     assert want["cost_per_success"] is None and want["attempts"] is None and want["success_rate"] == 0.0
+    assert want["success_rate_all"] == 0.0
 
 
 def test_no_cost_known(runs):
@@ -151,6 +156,7 @@ def test_only_runs_without_a_result(runs):
     want = expected([row("f7", "NO_RESULT", None, None, None, False)])
     assert r.returncode == 0 and r.stdout == text(want)
     assert want["success_rate"] is None and want["attempts_distribution"] == {}
+    assert want["success_rate_all"] == 0.0                                # no success out of the one run taken
 
 
 # ---- refused: exit 2, one line on stderr, nothing on stdout ----------------------------------------------------------
