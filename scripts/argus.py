@@ -1,6 +1,7 @@
 """argus: a code task as one job (router v0, docs/reviews/SPEC_ROUTER_V0.md).
 
   python scripts/argus.py code --repo ../target --commit HEAD --issue-file issue.txt [--max-usd 1.0] [--exclude docs]
+  python scripts/argus.py list                            # every job: its id, state and money (read only)
   python scripts/argus.py status <job>
   python scripts/argus.py approve <job> --sha <first 12 of the draft sha, as status shows it> [--max-usd X]
   python scripts/argus.py reject <job> "why"
@@ -38,6 +39,7 @@ def main(argv=None, deps=None):
     g.add_argument("--issue-file")
     c.add_argument("--max-usd", type=float)
     c.add_argument("--exclude", action="append", default=[])
+    sub.add_parser("list")
     for name in ("status", "redraft", "resume"):
         sub.add_parser(name).add_argument("job")
     a = sub.add_parser("approve")
@@ -53,6 +55,9 @@ def main(argv=None, deps=None):
     o = ap.parse_args(argv)
     deps = deps or rj.Deps()
     try:
+        if o.cmd == "list":
+            print(rj.list_jobs(jobs_dir=o.jobs_dir))
+            return 0
         if o.cmd == "status":
             print(rj.status(o.job, jobs_dir=o.jobs_dir))
             return 0
