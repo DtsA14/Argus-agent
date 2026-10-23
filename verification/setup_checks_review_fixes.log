@@ -1,0 +1,17 @@
+== tests
+........................................................................ [ 34%]
+........................................................................ [ 52%]
+........................................................................ [ 69%]
+........................................................................ [ 86%]
+......................................................                   [100%]
+414 passed in 438.14s (0:07:18)
+== mutants
+KILLED  a missing environments key skips the check: ["FAILED tests/test_draft.py::test_what_setup_would_refuse_is_refused_by_the_draft_check[<lambda>-over3-contract: unknown sandbox environment(s) ['argus'] (configured: [])]"]
+KILLED  profiles has a default again: ['FAILED tests/test_draft.py::test_the_draft_check_needs_profiles_given_explicitly']
+RESULT: 2/2 killed
+== verify
+1548 passed in 728.23s (0:12:08)
+== sandbox tests skipped: 0
+RESULT: PASS
+evidence saved to verification/verify-20261023T153841Z-aarch64.log
+ALLDONE

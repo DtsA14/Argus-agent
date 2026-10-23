@@ -1,6 +1,6 @@
-== verify.sh 2026-10-23T13:23:32Z
+== verify.sh 2026-10-23T15:38:41Z
 host: Linux 7.0.0-1013-oracle aarch64
-commit: e1aeceff1f442cfc66365e47f2cd6a39e67c7b8a
+commit: b1322e5747c533a29fa6f0663229bed2ed25a48d
 working tree: clean
 python: Python 3.12.3
 CRASH_REPEATS=5 CRASH_STRESS=50
@@ -24,7 +24,7 @@ httpx==0.28.1
 httpx2==2.16.0
 idna==3.20
 iniconfig==2.3.1
-jiter==0.17.0
+jiter==0.18.0
 jsonpatch==1.36
 jsonpointer==3.4
 langchain-anthropic==1.7.6
@@ -36,7 +36,7 @@ langgraph==1.2.15
 langgraph-checkpoint==4.3.0
 langgraph-checkpoint-sqlite==3.1.2
 langgraph-prebuilt==1.1.1
-langgraph-sdk==0.4.8
+langgraph-sdk==0.4.9
 langsmith==0.14.12
 openai==3.30.0
 orjson==3.13.0
@@ -61,7 +61,7 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 urllib3==2.8.0
 uuid_utils==0.18.0
-websockets==16.1.1
+websockets==17.3
 xxhash==4.0.2
 zstandard==0.25.0
 == source sha256
@@ -69,7 +69,7 @@ zstandard==0.25.0
 a5a99d622edd91ec1d477abb044ae0179fad52353959f811c6722dd60a30e095  ./acceptance/changed.py
 e8fe20297fdac713929570297beec27e70ce376b8574e16df3b72c6a1ef09179  ./acceptance/claims.py
 320bf74d18df4ce2056732d4d51f8b2f047a795b973f68121fea130c362fb370  ./acceptance/contract.py
-63f233a834c5afb132b29a1f14c1f3f641dfb1ec83e2458a555ec77c3bc2ac3e  ./acceptance/draft.py
+7295c9046e68d93bff97900dc15f6e72c873e136ee462e7da9b0b709e7e511d9  ./acceptance/draft.py
 3d7ae2d0e5d098236218cd43e5d0070e5b85b26bdd42ea8627e62c1e8fbdeab0  ./acceptance/intake.py
 2f218162d80030bcdbe17e459d3203f7c10575f561eb7f7ef13ac66776f493a7  ./acceptance/validation.py
 7bb08252c15baa3962e1475ba459de926f9f8b0618589cd46bbfe4437b2e3a71  ./acceptance/verdict.py
@@ -4358,11 +4358,11 @@ a4e5f4cc75db4737afbeb97da366b0f64b397e1907e4bed4e8c54f554070723c  ./tests/test_a
 5a33b54198748b7fc762da309cd9d0143473603cf2397f34664d900ad98990f0  ./tests/test_auto_validation.py
 1c2358b79880691e915a22a8fe05c144506eee3a7548177c36a6540e50b8ff68  ./tests/test_budget_experiment.py
 658800dc25048ea44ff09f94e6efe49902a7f6f289d27fad46c1eeaebaf8fda6  ./tests/test_calibration.py
-341952df5ffffbc68a04e585d6508e21e2f3975edd175c62aa3949bae7842823  ./tests/test_codetask.py
+b00f6c4944f00b686ad95212c6d22e1c969d6626932d8809d851caa80283deba  ./tests/test_codetask.py
 93a26759d4b41ed84f0292467bd1a098666f8d9397dfdf1f9e17569ef83ebc7e  ./tests/test_codetask_crash.py
 489dedadbb427307b906e450ad67a46d905bb88e959e48b568e3914199e9faf5  ./tests/test_deepseek_thinking.py
-c902ecccae9fea2564678f2b21959c201b5643dcb1c2831fdf9f9d12b600e559  ./tests/test_draft.py
-cdfe50e112b19ef52e695028588f39f5d5e8dfd1d25ad5b03154b8a867eb1c31  ./tests/test_drafter.py
+34a122af3c78091eef3053bbbb2408ade65cd2fe48df2bfbad3294643210a232  ./tests/test_draft.py
+354314f96f7473a8ebe984d88793ef794cf05bb07f8908c94504ba30850b37dd  ./tests/test_drafter.py
 232923031e778b42df8b075e62b193a496d898c61138ad7a60e87e0e2f96a1b7  ./tests/test_edit_tool.py
 eaad341836d8af9111a7560ccdb369e1a566b80337de1a4bd6413c1a39e39121  ./tests/test_eval.py
 109555a38e0c4f4216f7122e06fbb19593cff74ae974a2e8be05a78105886f91  ./tests/test_eval_cost.py
@@ -4435,33 +4435,33 @@ bringing up nodes...
 ........................................................................ [ 88%]
 ........................................................................ [ 93%]
 ........................................................................ [ 97%]
-.................................                                        [100%]
+....................................                                     [100%]
 ============================= slowest 25 durations =============================
-38.62s call     tests/test_eval_sandbox.py::test_no_wrong_or_cheating_script_passes_the_eval@sandbox
-32.77s call     tests/test_eval_sandbox.py::test_every_reference_script_passes_the_eval@sandbox
-30.30s setup    tests/test_draft.py::test_a_draft_that_changes_an_old_test_is_checked_and_approved_with_its_before_and_after@sandbox
-21.44s call     tests/test_draft.py::test_an_old_test_removed_with_a_reason_is_accepted_and_warned_about[draft1]@sandbox
-21.13s call     tests/test_draft.py::test_an_old_test_removed_with_a_reason_is_accepted_and_warned_about[draft0]@sandbox
-18.55s call     tests/test_draft.py::test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused[pytestmark = pytest.mark.skip\n]@sandbox
-18.25s call     tests/test_draft.py::test_a_test_of_a_changed_file_that_fails_without_being_required_is_named@sandbox
-18.15s call     tests/test_draft.py::test_a_skip_next_to_a_red_required_test_of_a_changed_file_is_refused@sandbox
-18.10s call     tests/test_draft.py::test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused[@pytest.fixture(autouse=True)\ndef _off():\n    pytest.skip('off')\n]@sandbox
-18.05s call     tests/test_draft.py::test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused[pytestmark = [pytest.mark.xfail(reason='later')]\n]@sandbox
-17.95s call     tests/test_draft.py::test_a_test_skipped_only_at_run_time_in_the_intake_cannot_be_kept_skipped_by_a_change@sandbox
-16.20s call     tests/test_draft.py::test_without_a_reference_patch_the_baseline_is_still_checked_and_the_task_is_unproven@sandbox
-16.17s setup    tests/test_draft.py::test_a_good_draft_is_ok_and_approval_publishes_a_task_bound_to_its_contract@sandbox
-15.14s call     tests/test_draft.py::test_the_reference_patch_must_fix_it_by_changing_only_writable_files[changes4-does not pass with the reference patch]@sandbox
-13.16s call     tests/test_eval_sandbox.py::test_search_value_shallow_patch_is_caught_only_on_its_issue_fixed_claim@sandbox
-12.20s call     tests/test_review.py::test_with_the_real_sandbox_a_fixed_task_is_a_valid_package_and_the_fresh_runs_repeat_the_verdict@sandbox
-11.20s call     tests/test_eval_sandbox.py::test_search_value_references_pass_with_search_only_where_the_contract_adds_it@sandbox
-9.37s call     tests/test_draft.py::test_a_regression_validation_that_fails_on_the_baseline_is_refused@sandbox
-9.35s call     tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[def test_total_never_negative():\n    assert total.floor([1], 5) == 0\n-fails with builtins.AttributeError, not by an assertion]@sandbox
-9.32s call     tests/test_eval_sandbox.py::test_failed_acceptance_is_data_and_never_stops_the_eval@sandbox
-9.30s call     tests/test_draft.py::test_a_required_test_red_by_an_assertion_of_a_test_file_is_accepted[@pytest.mark.parametrize('d', [5, 6])\ndef test_total_never_negative(d):\n    assert total([1], d) == 0\n-must5]@sandbox
-9.20s call     tests/test_draft.py::test_a_required_test_red_by_an_assertion_of_a_test_file_is_accepted[def test_total_never_negative():\n    if total([1], 5) != 0:\n        raise AssertionError('below 0')\n-None]@sandbox
-9.17s call     tests/test_draft.py::test_the_reference_patch_must_fix_it_by_changing_only_writable_files[changes2-changes src/sub/extra.py]@sandbox
-9.17s call     tests/test_draft.py::test_the_reference_patch_must_fix_it_by_changing_only_writable_files[changes3-changes nothing]@sandbox
-9.16s call     tests/test_draft.py::test_a_reference_patch_that_does_not_apply_is_refused@sandbox
-1545 passed in 728.34s (0:12:08)
+38.18s call     tests/test_eval_sandbox.py::test_no_wrong_or_cheating_script_passes_the_eval@sandbox
+32.37s call     tests/test_eval_sandbox.py::test_every_reference_script_passes_the_eval@sandbox
+30.50s setup    tests/test_draft.py::test_a_draft_that_changes_an_old_test_is_checked_and_approved_with_its_before_and_after@sandbox
+21.33s call     tests/test_draft.py::test_an_old_test_removed_with_a_reason_is_accepted_and_warned_about[draft0]@sandbox
+21.13s call     tests/test_draft.py::test_an_old_test_removed_with_a_reason_is_accepted_and_warned_about[draft1]@sandbox
+18.56s call     tests/test_draft.py::test_a_test_of_a_changed_file_that_fails_without_being_required_is_named@sandbox
+18.36s call     tests/test_draft.py::test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused[@pytest.fixture(autouse=True)\ndef _off():\n    pytest.skip('off')\n]@sandbox
+18.25s call     tests/test_draft.py::test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused[pytestmark = pytest.mark.skip\n]@sandbox
+18.21s call     tests/test_draft.py::test_a_skip_next_to_a_red_required_test_of_a_changed_file_is_refused@sandbox
+18.20s call     tests/test_draft.py::test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused[pytestmark = [pytest.mark.xfail(reason='later')]\n]@sandbox
+18.20s call     tests/test_draft.py::test_a_test_skipped_only_at_run_time_in_the_intake_cannot_be_kept_skipped_by_a_change@sandbox
+16.54s call     tests/test_draft.py::test_without_a_reference_patch_the_baseline_is_still_checked_and_the_task_is_unproven@sandbox
+16.46s setup    tests/test_draft.py::test_a_good_draft_is_ok_and_approval_publishes_a_task_bound_to_its_contract@sandbox
+15.24s call     tests/test_draft.py::test_the_reference_patch_must_fix_it_by_changing_only_writable_files[changes4-does not pass with the reference patch]@sandbox
+13.36s call     tests/test_eval_sandbox.py::test_search_value_shallow_patch_is_caught_only_on_its_issue_fixed_claim@sandbox
+12.24s call     tests/test_review.py::test_with_the_real_sandbox_a_fixed_task_is_a_valid_package_and_the_fresh_runs_repeat_the_verdict@sandbox
+11.17s call     tests/test_eval_sandbox.py::test_search_value_references_pass_with_search_only_where_the_contract_adds_it@sandbox
+9.46s call     tests/test_eval_sandbox.py::test_failed_acceptance_is_data_and_never_stops_the_eval@sandbox
+9.22s call     tests/test_draft.py::test_the_reference_patch_must_fix_it_by_changing_only_writable_files[changes1-changes tests/test_old.py]@sandbox
+9.22s call     tests/test_draft.py::test_a_regression_validation_that_fails_on_the_baseline_is_refused@sandbox
+9.15s call     tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[from src.guard import checked\n\n\ndef test_total_never_negative():\n    checked(total([1], 5))\n-fails by builtins.AssertionError raised in src/guard.py, not in a test file]@sandbox
+9.15s call     tests/test_draft.py::test_a_required_test_red_by_an_assertion_of_a_test_file_is_accepted[def test_total_never_negative():\n    if total([1], 5) < 0:\n        pytest.fail('below 0')\n-None]@sandbox
+9.13s call     tests/test_draft.py::test_the_reference_patch_must_fix_it_by_changing_only_writable_files[changes0-changes tests/test_new.py]@sandbox
+9.12s call     tests/test_draft.py::test_the_reference_patch_must_fix_it_by_changing_only_writable_files[changes3-changes nothing]@sandbox
+9.10s call     tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[def test_total_never_negative():\n    assert {'total': total([1], 5)}['floor'] == 0\n-fails with builtins.KeyError, not by an assertion]@sandbox
+1548 passed in 728.23s (0:12:08)
 == sandbox tests skipped: 0
 RESULT: PASS
