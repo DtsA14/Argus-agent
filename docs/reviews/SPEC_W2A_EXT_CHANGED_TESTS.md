@@ -1,6 +1,6 @@
 # Spec W2a-ext: `changed_tests`, draf yang boleh mengubah tes lama
 
-Status: **spec, belum dikoding.** 2026-10-23. Ditulis Claude untuk review Atha/GPT. **Keputusan yang diminta: bagian 9.**
+Status: **K1–K7 disetujui (Atha, 2026-10-23), dengan tiga tambahan (bagian 10).** Ditulis Claude.
 Dasar: `acceptance/draft.py` (W2a), `codetask/drafter.py` (W2b), `codetask/review.py` (W3), `router/job.py`.
 
 ## 0. Masalah
@@ -136,3 +136,22 @@ ditulis sebelum run. Yang diukur:
 | K7 | Pilot pertama | **W2b-3 `success_rate`** dengan drafter thinking |
 
 Perkiraan: satu PR kode untuk W2a, drafter, review, router, tes, dan mutan, lalu preflight W2b-3.
+
+## 10. Tambahan dari review (Atha, 2026-10-23), wajib sebelum ngoding
+
+1. **Node non-wajib di file yang diubah tidak boleh berubah diam-diam.** Source fungsi tesnya (AST, tanpa nomor baris)
+   harus identik dengan versi lama, kecuali dicantumkan di `modified: [{node, reason}]`. Tanpa itu draf ditolak, dan
+   nama node-nya disebut. Perubahan helper atau fixture di tingkat modul tetap hanya peringatan K3. `modified`
+   ditampilkan di `DRAFT_REVIEW.md` dan `PR.md`, sama seperti `removed`.
+2. **Tidak ada skip atau xfail baru.** Node di file yang diubah tidak boleh berakhir skipped atau xfail di baseline, di
+   run referensi, maupun di acceptance agen, kecuali node itu sudah skipped atau xfail di versi lama. Ini termasuk
+   `pytestmark = pytest.mark.skip` di tingkat modul. Penegakannya lewat kontrak: validasi yang menjalankan file yang
+   diubah mendapat `no_skip: {paths, allowed}`, dan `judge_result` menolak node yang skipped atau xfail di path itu dan
+   tidak ada di `allowed`. Karena aturan ini ada di kontrak, ia berlaku sama untuk baseline, referensi, dan acceptance.
+   `allowed` dihitung secara statis dari versi lama (penanda skip atau xfail pada fungsi, kelas, atau `pytestmark`
+   modul), sehingga kontrak tetap bisa dibangun ulang secara deterministik saat approve. Batasnya: skip lama yang
+   hanya terjadi saat run (misalnya `pytest.skip()` di dalam tubuh fungsi) tidak dianggap "sudah skipped", dan draf
+   seperti itu ditolak dengan penjelasan.
+3. **K5 eksplisit:** `conftest.py`, `pytest.ini`, `pyproject.toml`, dan `setup.cfg` tidak termasuk. Hanya `test_*.py`.
+
+Masing-masing dengan tes yang gagal di kode lama, dan mutan.
