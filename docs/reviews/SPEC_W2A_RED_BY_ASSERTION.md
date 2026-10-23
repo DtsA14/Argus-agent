@@ -1,7 +1,7 @@
 # Spec W2a: merah harus benar-benar karena assertion
 
-Status: **spec, belum dikoding.** 2026-10-23. Ditulis Claude setelah pilot W2b-3 (`pilots/m6_w2b/w2b3/RESULT.md`).
-**Keputusan yang diminta: bagian 5.**
+Status: **disetujui (Atha/GPT, 2026-10-23): K2–K4 seperti diusulkan; K1 sebagai aturan, dengan cara cek diganti (bagian 6,
+menggantikan cara baca teks di bagian 2–3).** Ditulis Claude setelah pilot W2b-3 (`pilots/m6_w2b/w2b3/RESULT.md`).
 
 ## 1. Masalah
 
@@ -60,3 +60,28 @@ tetapi bagiannya tidak ditemukan atau tidak terbaca (misalnya output terpotong) 
 | K2 | Bagian traceback tidak terbaca | Tolak (fail closed) |
 | K3 | Cakupan | Hanya baseline W2a (node wajib file baru dan file yang diubah); acceptance agen tidak berubah |
 | K4 | Setelahnya | Ulangi W2b-3 dengan job baru, issue yang sama |
+
+## 6. Keputusan review (menggantikan cara baca di bagian 2–3)
+
+Membaca baris `E   ...` dari teks traceback bergantung pada format tampilan pytest, yang bisa berubah antar versi,
+terpotong, atau berbeda karena opsi `--tb`. Karena itu cara ceknya diganti:
+
+- **Plugin pytest kecil**, dipasang harness lewat `pytest.main(..., plugins=[...])` dalam satu run yang dijalankan harness
+  sendiri di sandbox (bukan perintah kontrak). Di `pytest_runtest_makereport` plugin mencatat, per node: outcome, tipe
+  exception asli (`call.excinfo.type`), dan path **frame terakhir yang berada di dalam repositori** (frame pytest,
+  stdlib seperti `unittest`, dan site-packages dilewati). Hasilnya dicetak sebagai JSON setelah baris nonce. Tidak ada
+  parsing teks traceback. Run ini hanya untuk node wajib yang merah di validasi itu.
+- **Merah karena assertion** berarti tipenya `AssertionError` (atau turunannya) atau `pytest.fail.Exception` (`Failed`,
+  termasuk `pytest.raises` yang tidak raise), **dan** frame terakhir di repositori adalah file tes: file tes baru, file
+  yang diubah, atau helper di direktori file-file itu yang protected dan tidak writable. `AssertionError` dari kode
+  produksi ditolak, karena tesnya sendiri belum mengecek apa pun.
+- **Catatan node tidak ada atau JSON tidak terbaca → draf ditolak** (menggantikan K2 yang berbasis teks).
+- **Pesan penolakan memberi petunjuk.** `KeyError` di dalam tes (misalnya `report["field_baru"]`) adalah pola TDD yang
+  wajar tapi sengaja ditolak, jadi pesannya menyarankan: periksa dulu dengan assert (`assert "field_baru" in report`
+  sebelum mengakses key-nya, `assert hasattr(obj, "nama")` sebelum memanggilnya).
+- Batas yang tetap: hasilnya dibaca dari proses yang sama dengan kode yang dites, sama seperti validasi pada umumnya.
+  Pemalsuan yang disengaja dari dalam proses dibatasi oleh sandbox, bukan dideteksi.
+
+Tes: assert di kode produksi ditolak; `KeyError` di tes ditolak (dengan petunjuk); `pytest.raises` tanpa raise,
+`pytest.fail`, `AssertionError("msg")`, metode kelas, dan parametrize diterima; catatan yang hilang ditolak. Mutan
+untuk cek frame dan untuk cek tipe.
