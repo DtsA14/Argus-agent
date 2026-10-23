@@ -1,0 +1,228 @@
+diff --git a/router/job.py b/router/job.py
+index f4df6dc0a04e82ac70091ebf50e89f98eca1e153..836c56f9f503315bb0660ef192b063d7614b72bf 100644
+--- a/router/job.py
++++ b/router/job.py
+@@ -143,10 +143,19 @@ def open_job(job_id, jobs_dir=JOBS):
+ 
+ def spent_nano(job):
+     """Everything the job's stage runs have spent, from their ledgers (cut-off calls at their worst case). Read only:
+-    an EventLog would repair a log's cut last line, and a stage may be writing that log at this moment."""
++    an EventLog would repair a log's cut last line, and a stage may be writing that log at this moment.
++
++    The job's stages name their runs; a run directory with a ledger whose id starts with this job's id and is not
++    named there counts too: a run that started and crashed before the job file recorded it has still spent money."""
++    run_ids = {s["run_id"] for s in (job.data.get("stages") or {}).values() if s.get("run_id")}
++    try:
++        run_ids |= {p.name for p in job.runs.iterdir()
++                    if p.is_dir() and (p / "events.jsonl").exists() and p.name.startswith(f"{job.dir.name}-")}
++    except OSError:
++        pass
+     total = 0
+-    for stage in (job.data.get("stages") or {}).values():
+-        log = job.runs / stage["run_id"] / "events.jsonl"
++    for run_id in sorted(run_ids):
++        log = job.runs / run_id / "events.jsonl"
+         if log.exists():
+             total += reconcile_ledger(parse_lines(log.read_text(encoding="utf-8")))[1]["usd_nano"]
+     return total
+@@ -460,6 +469,27 @@ def reject(job_id, reason, *, deps, jobs_dir=JOBS):
+         return job
+ 
+ 
++def _job_line(path):
++    """One job, as a line: its id, state and money; or "<directory> unreadable" if its job.json cannot be read."""
++    try:
++        data = json.loads((path / "job.json").read_text(encoding="utf-8"))
++        state, cap = data["state"], float(data["max_usd"])
++    except (OSError, ValueError, TypeError, KeyError):
++        return f"{path.name} unreadable"
++    return f"{path.name} {state} spent ${spent_nano(Job(path)) / 1e9:.4f} of ${cap:.2f}"
++
++
++def list_jobs(*, jobs_dir=JOBS):
++    """Every job in the jobs directory, one line per job sorted by job id: read only, no lock, nothing changed."""
++    root = Path(jobs_dir)
++    try:
++        entries = sorted(root.iterdir(), key=lambda p: p.name)
++    except OSError:
++        return "no jobs"
++    lines = [_job_line(p) for p in entries if p.is_dir() and (p / "job.json").exists()]
++    return "\n".join(lines) if lines else "no jobs"
++
++
+ def status(job_id, *, jobs_dir=JOBS):
+     """A read-only summary (no lock): state, money, stages, and the draft to approve with its sha."""
+     job = open_job(job_id, jobs_dir)
+diff --git a/scripts/argus.py b/scripts/argus.py
+index 10aba0869c8525ae971d0278e04a75b7ea1c8cf2..c1415840391bc36d44f41850d0f86efd1c1c1c04 100644
+--- a/scripts/argus.py
++++ b/scripts/argus.py
+@@ -1,6 +1,7 @@
+ """argus: a code task as one job (router v0, docs/reviews/SPEC_ROUTER_V0.md).
+ 
+   python scripts/argus.py code --repo ../target --commit HEAD --issue-file issue.txt [--max-usd 1.0] [--exclude docs]
++  python scripts/argus.py list                            # every job: its id, state and money (read only)
+   python scripts/argus.py status <job>
+   python scripts/argus.py approve <job> --sha <first 12 of the draft sha, as status shows it> [--max-usd X]
+   python scripts/argus.py reject <job> "why"
+@@ -38,6 +39,7 @@ def main(argv=None, deps=None):
+     g.add_argument("--issue-file")
+     c.add_argument("--max-usd", type=float)
+     c.add_argument("--exclude", action="append", default=[])
++    sub.add_parser("list")
+     for name in ("status", "redraft", "resume"):
+         sub.add_parser(name).add_argument("job")
+     a = sub.add_parser("approve")
+@@ -53,6 +55,9 @@ def main(argv=None, deps=None):
+     o = ap.parse_args(argv)
+     deps = deps or rj.Deps()
+     try:
++        if o.cmd == "list":
++            print(rj.list_jobs(jobs_dir=o.jobs_dir))
++            return 0
+         if o.cmd == "status":
+             print(rj.status(o.job, jobs_dir=o.jobs_dir))
+             return 0
+diff --git a/tests/test_router_list.py b/tests/test_router_list.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..5c7fe89dd0615e16ca4364640ee3663dc4cb20a6
+--- /dev/null
++++ b/tests/test_router_list.py
+@@ -0,0 +1,137 @@
++"""`argus list` (router): every job in the jobs directory on one line, sorted by job id, read only.
++
++  <job id> <state> spent $<spent 4dp> of $<cap 2dp>
++
++The job files and their ledgers are written by hand here, so the test does not depend on a stage running."""
++import importlib.util
++import json
++import sys
++from pathlib import Path
++
++import pytest
++
++from router import job as rj
++
++ROOT = Path(__file__).resolve().parent.parent
++
++
++def ledger(path, nano=None, crash_nano=None):
++    """One finished model call (and optionally one cut off by a crash, charged at its worst case)."""
++    path.parent.mkdir(parents=True, exist_ok=True)
++    lines = []
++    if nano is not None:
++        lines += [{"event": "llm_call_started", "call_id": "c1", "worst_tokens": 500,
++                   "worst_usd_nano": nano},
++                  {"event": "llm_call", "call_id": "c1", "status": "ok", "tokens": 400, "usd_nano": nano}]
++    if crash_nano is not None:
++        lines += [{"event": "llm_call_started", "call_id": "c2", "worst_tokens": 700,
++                   "worst_usd_nano": crash_nano}]
++    path.write_text("".join(json.dumps(e) + "\n" for e in lines), encoding="utf-8")
++
++
++def job(jobs, job_id, state="AWAITING_APPROVAL", cap=1.0, stages=None, d=None):
++    jd = Path(jobs) / (d or job_id)
++    jd.mkdir(parents=True, exist_ok=True)
++    (jd / "job.json").write_text(json.dumps({"job": job_id, "kind": "code", "state": state, "max_usd": cap,
++                                              "inputs": {"repo": "/x", "commit": "HEAD", "issue": "i"},
++                                              "stages": stages or {}}), encoding="utf-8")
++    return jd
++
++
++def listed(jobs):
++    assert hasattr(rj, "list_jobs"), "router/job.py has no list_jobs"
++    return rj.list_jobs(jobs_dir=jobs)
++
++
++@pytest.fixture
++def jobs(tmp_path):
++    return tmp_path / "jobs"
++
++
++def test_list_prints_one_sorted_line_per_job(jobs):
++    job(jobs, "jb", state="DRAFT_FAILED", cap=0.5)
++    job(jobs, "ja", state="REVIEW_READY", cap=1.25)
++    job(jobs, "j10", state="NEW", cap=2.0)
++    assert listed(jobs).splitlines() == ["j10 NEW spent $0.0000 of $2.00",
++                                         "ja REVIEW_READY spent $0.0000 of $1.25",
++                                         "jb DRAFT_FAILED spent $0.0000 of $0.50"]
++
++
++def test_list_shows_the_spend_its_stage_runs_recorded(jobs):
++    first = job(jobs, "ja", stages={"d1": {"kind": "draft", "run_id": "ja-d1", "cap_usd": 0.4},
++                                     "a1": {"kind": "agent", "run_id": "ja-a1", "cap_usd": 0.5}})
++    ledger(first / "runs" / "ja-d1" / "events.jsonl", nano=125_000_000)
++    ledger(first / "runs" / "ja-a1" / "events.jsonl", nano=50_000_000)
++    second = job(jobs, "jb", state="NEW", cap=3.0)
++    ledger(second / "runs" / "jb-d1" / "events.jsonl", crash_nano=250_000_000)      # cut off: its worst case
++    assert listed(jobs).splitlines() == ["ja AWAITING_APPROVAL spent $0.1750 of $1.00",
++                                         "jb NEW spent $0.2500 of $3.00"]
++
++
++def test_a_job_json_that_cannot_be_read_is_named_and_others_still_listed(jobs):
++    job(jobs, "ja", state="NEW", cap=1.0)
++    broken = job(jobs, "jb", state="NEW", cap=1.0)
++    (broken / "job.json").write_text('{"job": "jb", ', encoding="utf-8")
++    empty = job(jobs, "jc", state="NEW", cap=1.0)
++    (empty / "job.json").write_text("", encoding="utf-8")
++    a_directory = job(jobs, "jd", state="NEW", cap=1.0)
++    (a_directory / "job.json").unlink()
++    (a_directory / "job.json").mkdir()
++    assert listed(jobs).splitlines() == ["ja NEW spent $0.0000 of $1.00", "jb unreadable", "jc unreadable",
++                                         "jd unreadable"]
++
++
++def test_only_directories_with_a_job_json_are_jobs(jobs):
++    job(jobs, "ja", state="BLOCKED", cap=1.0)
++    (jobs / "scratch").mkdir()                              # a directory that is not a job
++    (jobs / "notes.txt").write_text("x", encoding="utf-8")
++    (jobs / "jj" / ".lock").parent.mkdir()                 # only a lock: no job.json, not a job
++    (jobs / "jj" / ".lock").write_text("", encoding="utf-8")
++    assert listed(jobs).splitlines() == ["ja BLOCKED spent $0.0000 of $1.00"]
++
++
++def test_no_jobs_and_a_missing_directory_say_exactly_no_jobs(jobs, tmp_path):
++    assert listed(jobs) == "no jobs"
++    jobs.mkdir()
++    assert listed(jobs) == "no jobs"
++    (jobs / "scratch").mkdir()
++    (jobs / "notes.txt").write_text("x", encoding="utf-8")
++    assert listed(jobs) == "no jobs"
++    assert listed(tmp_path / "nowhere") == "no jobs"
++
++
++def test_list_takes_no_lock_and_changes_nothing(jobs):
++    jd = job(jobs, "ja", stages={"d1": {"kind": "draft", "run_id": "ja-d1", "cap_usd": 0.4}})
++    log = jd / "runs" / "ja-d1" / "events.jsonl"
++    ledger(log, nano=10_000_000)
++    log.write_bytes(log.read_bytes() + b'{"event": "llm_call_started", "call_id": "cut", "wor')
++    before_file, before_log = (jd / "job.json").read_bytes(), log.read_bytes()
++    holder = rj.Job(jd)
++    with holder.lock():                                    # a stage holds the job: list must not need the lock
++        text = listed(jobs)
++        files = sorted(str(p.relative_to(jd)) for p in jd.rglob("*"))
++    assert text.splitlines() == ["ja AWAITING_APPROVAL spent $0.0100 of $1.00"]
++    assert files == [".lock", "job.json", "runs", "runs/ja-d1", "runs/ja-d1/events.jsonl"]   # nothing written
++    assert (jd / "job.json").read_bytes() == before_file and log.read_bytes() == before_log
++
++
++def cli():
++    spec = importlib.util.spec_from_file_location("argus_cli_list", ROOT / "scripts" / "argus.py")
++    mod = importlib.util.module_from_spec(spec)
++    sys.path.insert(0, str(ROOT / "scripts"))
++    spec.loader.exec_module(mod)
++    return mod
++
++
++def test_the_cli_lists_jobs_and_exits_zero(jobs, capsys):
++    job(jobs, "ja", state="REVIEW_READY", cap=1.0)
++    job(jobs, "jb", state="NEW", cap=0.75)
++    rc = cli().main(["--jobs-dir", str(jobs), "list"], deps=rj.Deps(confirm=lambda text: False))
++    out = capsys.readouterr().out
++    assert rc == 0
++    assert out.splitlines() == ["ja REVIEW_READY spent $0.0000 of $1.00", "jb NEW spent $0.0000 of $0.75"]
++
++
++def test_the_cli_says_no_jobs_for_a_directory_that_does_not_exist(tmp_path, capsys):
++    rc = cli().main(["--jobs-dir", str(tmp_path / "nowhere"), "list"], deps=rj.Deps())
++    assert rc == 0 and capsys.readouterr().out == "no jobs\n"
