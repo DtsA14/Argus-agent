@@ -43,6 +43,8 @@ TEST_LINE = re.compile(r"^(\w+) \(([\w.]+)\)(?: (.*))?$")
 RAN = re.compile(r"^Ran (\d+) tests? in ")
 FINAL = re.compile(r"^(OK|FAILED)(?: \((.*)\))?$")
 MAX_NODES = 50                  # failed_nodes kept in the evidence
+# Statuses a no_skip rule refuses (W2a-ext): skipped, xfailed, and xpassed (an xfail marker on a test that passed)
+NOT_RUN = {"skipped", "expected failure", "unexpected success"}
 
 
 def kind(spec):
@@ -233,6 +235,14 @@ def parse_pytest(text):
             "errors": counts["errors"], "consistent": consistent, "collected": collected, "deselected": deselected}
 
 
+def skip_violations(no_skip, tests):
+    """W2a-ext: nodes of a changed test file that ended skipped or xfail and are not allowed (marked so in the
+    intake version; an allowed prefix is the file, a class or a function, with its parametrized ids)."""
+    allowed = no_skip["allowed"]
+    return sorted(n for n, s in tests.items() if s in NOT_RUN and n.split("::", 1)[0] in no_skip["paths"]
+                  and not any(n == a or n.startswith((a + "::", a + "[")) for a in allowed))
+
+
 def judge_result(spec, r):
     """Criterion verdict for one validation run: ok only when every condition in the contract holds."""
     pytest = kind(spec) == "pytest"
@@ -253,6 +263,8 @@ def judge_result(spec, r):
         evidence.update(runner="pytest", consistent=parsed["consistent"], collected=parsed["collected"],
                         deselected=parsed["deselected"], stderr_tail=(r.get("stderr") or "")[-500:],
                         failed_nodes=sorted(n for n, s in parsed["tests"].items() if s in ("FAIL", "ERROR"))[:MAX_NODES])
+        if spec.get("no_skip"):
+            evidence["skip_violations"] = skip_violations(spec["no_skip"], parsed["tests"])[:MAX_NODES]
     if spec.get("environment"):
         evidence["environment"] = spec["environment"]
     problems = []
@@ -279,8 +291,40 @@ def judge_result(spec, r):
         for t, st in must.items():
             if st != "ok":
                 problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")
+        if evidence.get("skip_violations"):
+            problems.append("skipped or xfail in a changed test file, and not marked so before the change: "
+                            + ", ".join(evidence["skip_violations"]))
     return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail" if problems else "pass",
             "reason": "; ".join(problems), "evidence": evidence}
+
+
+COLLECT_SUMMARY = re.compile(r"^(?:\d+ tests? collected|no tests collected)")
+
+
+def collect_argv(path):
+    """The harness's own collection of one test file (W2a-ext K1); never a contract command."""
+    return ["python3", "-I", "-B", *PYTEST_PREFIX, "-p", "no:cacheprovider", "-o", "addopts=", "--rootdir", "/workspace",
+            "--color=no", "--collect-only", "-q", path]
+
+
+def collect_nodes(path, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None):
+    """({node ids pytest collects from `path`}, None), or (None, why) when the collection did not succeed. Runs in the
+    sandbox like a validation (read-only workspace); no sandbox means no collection, never a fallback."""
+    cfg = {**(sandbox_cfg or {}), "timeout_s": timeout_s}
+    if environment:
+        cfg["environment"] = environment
+    try:
+        r = sb.run_command(collect_argv(path), workdir=workdir, cfg=cfg, log=log, meta={"collect": path})
+    except sb.SandboxUnavailable as e:
+        return None, f"sandbox unavailable: {e}"
+    out = r.get("stdout") or ""
+    if r.get("timed_out") or r.get("output_limit_exceeded") or r.get("truncated"):
+        return None, "the collection timed out or its output was cut"
+    nodes = {line for line in out.splitlines() if line.startswith(path + "::")}
+    summary = any(COLLECT_SUMMARY.match(line.strip()) for line in out.splitlines())
+    if not summary or r.get("exit_code") not in (0, 5) or (r.get("exit_code") == 5) != (not nodes):
+        return None, f"exit code {r.get('exit_code')}: " + out[-500:]
+    return nodes, None
 
 
 def run_validation(spec, workdir, sandbox_cfg, log=None):

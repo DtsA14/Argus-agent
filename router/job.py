@@ -31,6 +31,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from acceptance import changed as ch
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
@@ -327,6 +328,19 @@ def _last_draft(job):
     return st, job.runs / st["run_id"] / "draft.json"
 
 
+def changed_lines(job, draft):
+    """W2a-ext K6: a draft that changes existing tests says so where it is approved, with the number of K3 warnings
+    (computed here from the intake, not read from the drafter's report)."""
+    tests = draft.get("changed_tests") or []
+    if not tests:
+        return []
+    old = dr.old_tests(job.root / "fixtures" / "repos" / draft["base"], draft)
+    warn = [w for t in tests if old.get(t["path"]) is not None
+            for w in ch.warnings(t["path"], old[t["path"]], t["content"], t.get("removed", []))]
+    return [f"changes {len(tests)} existing test file(s) ({', '.join(t['path'] for t in tests)}), {len(warn)} "
+            "warning(s): read the diff in DRAFT_REVIEW.md"]
+
+
 def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_iterations=3, reference_patch=None,
             jobs_dir=JOBS):
     """Approve the draft the human saw (sha, as status shows it), then run the agent and build the review package."""
@@ -356,6 +370,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                  "writable: " + ", ".join(c["scope"]["writable"]),
                  *[f"validation {v['id']}: {' '.join([v['executable'], *v['args']])}; required: "
                    + (", ".join(v.get("must_pass") or []) or "none") for v in c["validation"]],
+                 *changed_lines(job, draft),
                  f"tools added: {c.get('tools') or 'none'}; profile {profile}; one attempt ${need:.2f}",
                  f"agent cap ${cap:.4f}, {max_iterations} attempts; "
                  + ("reference patch given (proven)" if reference_patch else "no reference patch (unproven)")]
@@ -513,6 +528,7 @@ def status(job_id, *, jobs_dir=JOBS):
         out += [f"draft {sha[:12]} ({job.runs / st['run_id'] / 'DRAFT_REVIEW.md'})",
                 "writable: " + ", ".join(c["scope"]["writable"]),
                 *[f"validation {v['id']}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
+                *changed_lines(job, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
         rv = d["stages"]["a1"]["review"]
