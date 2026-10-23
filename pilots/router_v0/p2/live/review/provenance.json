@@ -1,0 +1,146 @@
+{
+  "argus": {
+    "commit": "cae50e887e3ce8c7301b517d2ff5c193826b9603",
+    "dirty": false
+  },
+  "attempts": 2,
+  "base": {
+    "commit": "26befdc1cda45af165e8f26614a3c1e64e20591b",
+    "repo": "https://github.com/DtsA14/Argus-agent.git",
+    "tree": "aaa40df9db3d28cd1c866b704a599fc2b272fe8c"
+  },
+  "checks": [
+    {
+      "detail": "",
+      "id": "contract_frozen",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "verdict_passed",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "summary_bound",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "input_unchanged",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "base_commit",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "changes_in_scope",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "changes_match_verdict",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "patch_made",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "patch_applies",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "final_state_identical",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "revalidation_matches",
+      "ok": true
+    },
+    {
+      "detail": "",
+      "id": "workspace_stable",
+      "ok": true
+    }
+  ],
+  "contract": {
+    "name": "task",
+    "sha256": "6ee00c5a1b3377101a51c0fdf9d99ed013ef0df3310d5411c508efa5879921cd"
+  },
+  "cost": {
+    "calls": 17,
+    "unknown_after_crash": 0,
+    "usd": 0.021489708,
+    "usd_complete": true,
+    "usd_nano": 21489708
+  },
+  "input": {
+    "intake": {
+      "added": {
+        "tests/test_argus_list.py": "0e9a7f1ed273afccea1bad101610a8b2361fec1befada5b58ae1bb46dd1370fe"
+      },
+      "base": {
+        "commit": "26befdc1cda45af165e8f26614a3c1e64e20591b",
+        "name": "base",
+        "snapshot_sha256": "e356c275a67ef2839a6c9804a157eb75b31eddef32590151fc338713abce7a2e",
+        "tree": "aaa40df9db3d28cd1c866b704a599fc2b272fe8c"
+      },
+      "commit": "26befdc1cda45af165e8f26614a3c1e64e20591b",
+      "contract_sha256": "6ee00c5a1b3377101a51c0fdf9d99ed013ef0df3310d5411c508efa5879921cd",
+      "exclude": [
+        "verification",
+        "pilots"
+      ],
+      "kind": "task",
+      "name": "task",
+      "repo": "https://github.com/DtsA14/Argus-agent.git",
+      "tree": "aaa40df9db3d28cd1c866b704a599fc2b272fe8c"
+    },
+    "snapshot_sha256": "218a5d09c7a77e8a3133210fa3294f7e0405d159f2b3f7d1f4c9871f891c2894",
+    "workspace": "fixtures/repos/task"
+  },
+  "models": [
+    "deepseek:deepseek-flash"
+  ],
+  "package_version": 1,
+  "patch": {
+    "bytes": 12882,
+    "files": [
+      {
+        "approved_test": false,
+        "change": "M",
+        "path": "router/job.py"
+      },
+      {
+        "approved_test": false,
+        "change": "M",
+        "path": "scripts/argus.py"
+      },
+      {
+        "approved_test": true,
+        "change": "A",
+        "path": "tests/test_argus_list.py"
+      }
+    ],
+    "sha256": "a1dafe0af5ec31a7edf35c308045af9145119ee07fa7f13f16a9f4610f74bd0d"
+  },
+  "problems": [],
+  "run_id": "j20261023_062122_c7a4-a1",
+  "valid": true,
+  "validation_fresh": {
+    "target": "pass"
+  },
+  "verdict": {
+    "outcome": "pass",
+    "verdict_sha256": "518682fa0a543aac3f9f892c97b4d23c19d45a9018c644ffc6fc49c70a56a350",
+    "workspace_digest": "ca408ba41c39b391cc62133e7df82d505b15cef8d7fc4eda95d3ad8ff5d408c2"
+  }
+}

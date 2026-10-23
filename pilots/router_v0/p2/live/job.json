@@ -1,0 +1,105 @@
+{
+  "job": "j20261023_062122_c7a4",
+  "kind": "code",
+  "state": "REVIEW_READY",
+  "created_at": "2026-10-23T06:21:22Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/pilot3a_live",
+    "commit": "26befdc",
+    "issue": "argus has no way to see all jobs: status needs a job id the user must already know.\n\nAdd a read-only command `argus list` (scripts/argus.py, with its logic in router/job.py) that prints one line per job\nin the jobs directory (--jobs-dir, default jobs/), sorted by job id:\n\n  <job id> <state> spent $<spent with 4 decimals> of $<cap with 2 decimals>\n\nwhere state and cap come from the job's job.json (\"state\", \"max_usd\") and spent is what the job's stage runs have\nspent, computed the same way status computes it. Rules:\n- only directories that contain a job.json are jobs; any other entry is ignored;\n- a job.json that cannot be read or is not valid JSON gives the line \"<directory name> unreadable\" instead, and the\n  other jobs are still listed;\n- when the jobs directory does not exist or holds no job, it prints exactly \"no jobs\";\n- it never takes a job's lock and never changes anything; it exits 0.",
+    "exclude": [
+      "verification",
+      "pilots"
+    ]
+  },
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261023_062122_c7a4-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T06:21:33Z",
+      "ended_at": "2026-10-23T06:24:02Z",
+      "status": "DRAFTED",
+      "usd": 0.04815864,
+      "draft_sha256": "0d3591eedced1273be0d566e3107e99e77db9eb9e22d090448814841d603889d"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261023_062122_c7a4-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T06:28:20Z",
+      "ended_at": "2026-10-23T06:29:35Z",
+      "status": "DONE",
+      "usd": 0.021489708,
+      "profile": "large_usd",
+      "review": {
+        "valid": true,
+        "problems": [],
+        "dir": "/home/ubuntu/pilot3a_live/jobs/j20261023_062122_c7a4/runs/j20261023_062122_c7a4-a1/review"
+      }
+    }
+  },
+  "approval": {
+    "draft_sha256": "0d3591eedced1273be0d566e3107e99e77db9eb9e22d090448814841d603889d",
+    "contract_sha256": "6ee00c5a1b3377101a51c0fdf9d99ed013ef0df3310d5411c508efa5879921cd",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-23T06:28:20Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-23T06:21:22Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-23T06:21:22Z",
+      "what": "intaken",
+      "files": 450
+    },
+    {
+      "at": "2026-10-23T06:21:33Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-23T06:24:02Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-23T06:28:20Z",
+      "what": "approved",
+      "draft": "0d3591eedced",
+      "contract": "6ee00c5a1b33"
+    },
+    {
+      "at": "2026-10-23T06:28:20Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-23T06:29:40Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "REVIEW_READY",
+      "stage": "a1"
+    }
+  ],
+  "intake": {
+    "commit": "26befdc1cda45af165e8f26614a3c1e64e20591b",
+    "tree": "aaa40df9db3d28cd1c866b704a599fc2b272fe8c",
+    "files": 450,
+    "snapshot_sha256": "e356c275a67ef2839a6c9804a157eb75b31eddef32590151fc338713abce7a2e"
+  }
+}
