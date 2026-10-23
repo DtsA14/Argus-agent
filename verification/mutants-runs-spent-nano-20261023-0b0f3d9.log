@@ -1,0 +1,4 @@
+HEAD 0b0f3d9 tests: tests/test_router_list.py tests/test_router.py
+KILLED  unrecorded runs counted
+KILLED  list counts nothing
+RESULT: 2/2 killed
