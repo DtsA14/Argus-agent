@@ -19,7 +19,9 @@ Limits (stated, not hidden): the result is read from the test runner's own outpu
 the same process. Code that deliberately forges unittest output from inside the process is not detected here; it
 is contained by the sandbox, and the protected test files (scope) keep the tests themselves honest.
 """
+import json
 import re
+import secrets
 
 from tools import sandbox as sb
 
@@ -325,6 +327,77 @@ def collect_nodes(path, workdir, sandbox_cfg, *, timeout_s, environment=None, lo
     if not summary or r.get("exit_code") not in (0, 5) or (r.get("exit_code") == 5) != (not nodes):
         return None, f"exit code {r.get('exit_code')}: " + out[-500:]
     return nodes, None
+
+
+# W2a red by assertion (docs/reviews/SPEC_W2A_RED_BY_ASSERTION.md, section 6): a small pytest plugin, run by the harness,
+# records per node the outcome, the exception's real type and the path of the last traceback frame inside the
+# repository (frames of pytest, the stdlib and site-packages are passed over). No traceback text is parsed. The JSON
+# is printed after a nonce line once pytest is done. Like any validation it is read from the process that runs the code
+# under test: a deliberate forgery from inside is contained by the sandbox, not detected.
+RED_CHECK = r"""
+import json, os, sys
+import pytest
+nonce, nodes = sys.argv[1], sys.argv[2:]
+root = os.path.realpath("/workspace")
+out = {}
+
+
+def inside(p):
+    p = os.path.realpath(str(p))
+    return p.startswith(root + os.sep) and "site-packages" not in p.split(os.sep)
+
+
+class Record:
+    @pytest.hookimpl(hookwrapper=True)
+    def pytest_runtest_makereport(self, item, call):
+        rep = (yield).get_result()
+        if call.when != "call":
+            if rep.failed:
+                out[item.nodeid] = {"outcome": "error", "type": None, "assertion": False, "path": None}
+            return
+        e = call.excinfo
+        if e is None:
+            out.setdefault(item.nodeid, {"outcome": rep.outcome, "type": None, "assertion": False, "path": None})
+            return
+        path = next((os.path.relpath(os.path.realpath(str(x.path)), root).replace(os.sep, "/")
+                     for x in reversed(e.traceback) if inside(x.path)), None)
+        out[item.nodeid] = {"outcome": rep.outcome, "type": e.type.__module__ + "." + e.type.__qualname__,
+                            "assertion": issubclass(e.type, (AssertionError, pytest.fail.Exception)), "path": path}
+
+
+pytest.main(["-p", "no:cacheprovider", "-o", "addopts=", "--rootdir", "/workspace", "-q", "--color=no", *nodes],
+            plugins=[Record()])
+sys.stdout.write("\n" + nonce + json.dumps(out, sort_keys=True) + "\n")
+sys.stdout.flush()
+"""
+
+
+def red_argv(nonce, nodes):
+    """The harness's own run of the red check; never a contract command."""
+    return ["python3", "-I", "-B", "-c", RED_CHECK, nonce, *nodes]
+
+
+def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None):
+    """({node id: {outcome, type, assertion, path}}, None) for the given pytest node ids, or (None, why) when the run or
+    its JSON could not be read."""
+    nonce = "ARGUS-RED-" + secrets.token_hex(16) + ":"
+    cfg = {**(sandbox_cfg or {}), "timeout_s": timeout_s}
+    if environment:
+        cfg["environment"] = environment
+    try:
+        r = sb.run_command(red_argv(nonce, nodes), workdir=workdir, cfg=cfg, log=log, meta={"red_check": len(nodes)})
+    except sb.SandboxUnavailable as e:
+        return None, f"sandbox unavailable: {e}"
+    if r.get("timed_out") or r.get("output_limit_exceeded") or r.get("truncated"):
+        return None, "the run timed out or its output was cut"
+    lines = [line[len(nonce):] for line in (r.get("stdout") or "").splitlines() if line.startswith(nonce)]
+    try:
+        got = json.loads(lines[-1]) if len(lines) == 1 else None
+    except ValueError:
+        got = None
+    if not isinstance(got, dict):
+        return None, "no record of the run (exit code " + str(r.get("exit_code")) + ")"
+    return got, None
 
 
 def run_validation(spec, workdir, sandbox_cfg, log=None):

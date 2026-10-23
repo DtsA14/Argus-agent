@@ -65,7 +65,7 @@ class Env:
         self.deps = rj.Deps(confirm=confirm or yes, get_key=lambda: "unused", isatty=lambda: True,
                             models={"drafter": self.drafter, "coder": self.coder}, validate=td.fake_validate,
                             preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"),
-                            clock=lambda: "2026-10-23T00:00:00Z", echo=self.said.append)
+                            clock=lambda: "2026-10-23T00:00:00Z", echo=self.said.append, red=td.fake_red)
 
     def code(self, job_id="jtest", **kw):
         return rj.start_code(repo=self.repo, commit="HEAD", issue=td.ISSUE, cfg=self.cfg, deps=self.deps,

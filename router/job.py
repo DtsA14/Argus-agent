@@ -74,14 +74,14 @@ class Deps:
     """What a command needs from outside: the human (confirm, key, tty) and, in tests, models and the sandbox."""
 
     def __init__(self, *, confirm=None, get_key=None, isatty=None, models=None, validate=None, preflight=None,
-                 env_preflight=None, clock=now, echo=print):
+                 env_preflight=None, clock=now, echo=print, red=None):
         import getpass
         import sys
         self.confirm = confirm or (lambda text: input(text + "\nLanjut? [y/N] ").strip().lower() == "y")
         self.get_key = get_key or (lambda: getpass.getpass("Type or paste the API key, then Enter (not shown): "))
         self.isatty = isatty or (lambda: sys.stdin.isatty())
         self.models, self.validate, self.preflight, self.env_preflight = models, validate, preflight, env_preflight
-        self.clock, self.echo = clock, echo
+        self.clock, self.echo, self.red = clock, echo, red        # red: the W2a red check, injected by tests
 
 
 # ---- the job file and its lock -----------------------------------------------------------------------------------
@@ -308,7 +308,7 @@ def _draft(job, cfg, deps, n):
         deps.echo(running(job, "drafter", run_id))
         r = run_drafter(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job.data["inputs"]["issue"],
                         max_usd=cap, resume=again, models=deps.models, validate=deps.validate,
-                        preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root)
+                        preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root, red=deps.red)
     st = job.data["stages"][sid]
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
     deps.echo(f"drafter finished: {r['status']} (${r['usd_billed']:.4f})")
@@ -384,7 +384,8 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             report = dr.check(draft, task=TASK, issue=job.data["inputs"]["issue"], max_usd=cap,
                               max_iterations=max_iterations, reference_patch=reference_patch,
                               sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root,
-                              **({"validate": deps.validate} if deps.validate else {}))
+                              **({"validate": deps.validate} if deps.validate else {}),
+                              **({"red": deps.red} if deps.red else {}))
             if not report["ok"]:
                 raise Refused("the draft does not pass its check now: " + "; ".join(report["problems"]))
             record = dr.approve(report, draft, root=job.root)

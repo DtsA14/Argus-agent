@@ -1,0 +1,22 @@
+== old code
+5 new tests
+19 failed in 21.56s
+PASSED on old code (must be none): []
+SKIPPED: []
+RESULT: ok
+== verify
+1536 passed in 721.68s (0:12:01)
+
+== mutants
+KILLED  plugin: any exception is an assertion: ["FAILED tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[def test_total_never_negative():\\n    assert {'total': total([1], 5)}['floor'] == 0\\n-fails with builtins.KeyError, not by an assertion]"]
+KILLED  plugin: first frame, not the last in the repository: ['FAILED tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[from src.guard import checked\\n\\n\\ndef test_total_never_negative():\\n    checked(total([1], 5))\\n-fails by builtins.AssertionError raised in src/guard.py, not in a test file]']
+KILLED  plugin: pytest.fail is not an assertion: ["FAILED tests/test_draft.py::test_a_required_test_red_by_an_assertion_of_a_test_file_is_accepted[def test_total_never_negative():\\n    if total([1], 5) < 0:\\n        pytest.fail('below 0')\\n-None]"]
+KILLED  type not checked: ["FAILED tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[def test_total_never_negative():\\n    assert {'total': total([1], 5)}['floor'] == 0\\n-fails with builtins.KeyError, not by an assertion]"]
+KILLED  frame not checked: ['FAILED tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[from src.guard import checked\\n\\n\\ndef test_total_never_negative():\\n    checked(total([1], 5))\\n-fails by builtins.AssertionError raised in src/guard.py, not in a test file]']
+KILLED  outcome not checked: ['FAILED tests/test_draft.py::test_the_red_check_refuses_what_it_cannot_read_or_what_is_not_the_tests_own_assertion[got2-no record of how]']
+KILLED  unreadable run accepted: ['FAILED tests/test_draft.py::test_the_red_check_refuses_what_it_cannot_read_or_what_is_not_the_tests_own_assertion[got0-how its required tests fail could not be read: no record]']
+KILLED  writable helper accepted: ['FAILED tests/test_draft.py::test_the_red_check_refuses_what_it_cannot_read_or_what_is_not_the_tests_own_assertion[got6-raised in tests/helper_w.py]']
+KILLED  red check never runs: ["FAILED tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[def test_total_never_negative():\\n    assert {'total': total([1], 5)}['floor'] == 0\\n-fails with builtins.KeyError, not by an assertion]"]
+KILLED  no hint: ["FAILED tests/test_draft.py::test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused[def test_total_never_negative():\\n    assert {'total': total([1], 5)}['floor'] == 0\\n-fails with builtins.KeyError, not by an assertion]"]
+RESULT: 10/10 killed
+ALLDONE

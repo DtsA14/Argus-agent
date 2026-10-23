@@ -83,11 +83,11 @@ def test_a_resumed_drafter_sends_back_the_reasoning_of_replayed_steps(tmp_path):
     with pytest.raises(KeyboardInterrupt):
         dt.run_drafter(run_id="d", runs_dir=tmp_path / "runs", cfg=c, intake_name="shop", issue=td.ISSUE, max_usd=0.4,
                        models={"drafter": first}, validate=td.fake_validate, preflight=lambda: (True, "ok"),
-                       env_preflight=lambda name: (True, "ok"), root=root)
+                       env_preflight=lambda name: (True, "ok"), root=root, red=td.fake_red)
     second = strict([with_reasoning(td.call("SubmitDraft", td.ARGS, "s1"), "now submit")])
     r = dt.run_drafter(run_id="d", runs_dir=tmp_path / "runs", cfg=c, resume=True, models={"drafter": second},
                        validate=td.fake_validate, preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"),
-                       root=root)
+                       root=root, red=td.fake_red)
     assert r["status"] == dt.DRAFTED and len(second.calls) == 1
     replayed = [m for m in second.calls[0]["messages"] if isinstance(m, AIMessage)]
     assert replayed[0].additional_kwargs["reasoning_content"] == "look at the code first"
