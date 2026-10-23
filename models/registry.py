@@ -129,11 +129,38 @@ def _openai(ref, pcfg, params):
     return ChatOpenAI(**kw)
 
 
+_DEEPSEEK_CLASS = []
+
+
+def deepseek_class():
+    """ChatDeepSeek that sends every earlier assistant reply's reasoning_content back. In thinking mode with tools
+    DeepSeek requires it (HTTP 400 otherwise), and langchain_deepseek keeps it on the reply (additional_kwargs) but
+    leaves it out of the request. Only what is sent changes: hashes and memo keys never include it."""
+    if not _DEEPSEEK_CLASS:
+        from langchain_core.messages import AIMessage
+        from langchain_deepseek import ChatDeepSeek
+
+        class ArgusChatDeepSeek(ChatDeepSeek):
+            def _get_request_payload(self, input_, *, stop=None, **kwargs):
+                payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+                replies = [m for m in self._convert_input(input_).to_messages() if isinstance(m, AIMessage)]
+                sent = [p for p in payload["messages"] if p.get("role") == "assistant"]
+                if len(replies) != len(sent):
+                    raise ValueError(f"{len(replies)} assistant replies but {len(sent)} in the request")
+                for m, p in zip(replies, sent):
+                    rc = (m.additional_kwargs or {}).get("reasoning_content")
+                    if rc is not None:
+                        p["reasoning_content"] = rc
+                return payload
+        _DEEPSEEK_CLASS.append(ArgusChatDeepSeek)
+    return _DEEPSEEK_CLASS[0]
+
+
 @register_kind("deepseek")
 def _deepseek(ref, pcfg, params):
-    from langchain_deepseek import ChatDeepSeek
-    # DeepSeek turns thinking on by default; tune it with params.extra_body if needed.
-    return ChatDeepSeek(
+    # DeepSeek turns thinking on by default; params.extra_body {thinking: {type: disabled}} turns it off. With thinking
+    # on, deepseek_class() sends the earlier reasoning back, as thinking mode with tools requires.
+    return deepseek_class()(
         model=ref.model,
         api_key=_api_key(ref, pcfg),
         api_base=pcfg.get("base_url", "https://api.deepseek.com"),
