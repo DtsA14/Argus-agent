@@ -1,0 +1,7 @@
+HEAD de68218 tests: tests/test_drafter.py tests/test_router.py
+KILLED  all tools in the final steps
+KILLED  other calls run in the final steps
+KILLED  no halfway note
+KILLED  no final note
+KILLED  token ceiling back
+RESULT: 5/5 killed
