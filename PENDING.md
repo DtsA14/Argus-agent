@@ -56,8 +56,10 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     approve `--no-reference` → agen (DONE, $0,08) → patch ke `main` tanpa perubahan → `verify.sh` lulus. Total $0,54, ±17 keputusan,
     5 menit Atha (`pilots/m6_w2b/w2b2/RESULT.md`). Perbaikan yang dipicu: profil wajib (#155), `edit_file` + cek tulis ulang (#157),
     batas sandbox, petunjuk, 5 submit (#158)
-- [ ] **W2a-ext: `changed_tests`**: draf boleh mengubah tes lama (diff ditampilkan saat approve; tes tidak boleh hilang diam-diam). Task
-    yang mengubah perilaku yang sudah dites (mis. `success_rate` di `pilot_report.py`) tidak bisa diekspresikan tanpa ini. Spek dulu
+- [x] **W2a-ext: `changed_tests`** (`docs/reviews/SPEC_W2A_EXT_CHANGED_TESTS.md`, `acceptance/changed.py`): draf boleh mengubah tes
+    lama. Tidak ada tes lama yang hilang (koleksi di sandbox) atau fungsi tes yang berubah (AST) tanpa `removed`/`modified` + alasan;
+    tidak ada skip/xfail baru (kontrak `no_skip`); hanya `test_*.py`. 25 tes baru gagal di kode lama, mutan 26/26 (2026-10-23)
+- [ ] **Pilot W2b-3 `success_rate`** lewat router, drafter thinking, `--no-reference` (spek W2a-ext bagian 8). Kriteria ditulis dulu
 - [ ] Drafter masih mencoba regresi yang butuh `git` (w2b2d3) walau prompt menyebut batas sandbox; satu submit terbuang
 - [ ] **Router v0** (`docs/reviews/SPEC_ROUTER_V0.md`, K2–K7 disetujui 2026-10-23): `argus code` sebagai satu job (cap per job $1,00,
     kunci per job, cap tahap dicatat saat mulai, approve terikat ke sha draf). Belum dikoding
