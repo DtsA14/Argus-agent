@@ -142,24 +142,23 @@ def open_job(job_id, jobs_dir=JOBS):
 
 # ---- money -------------------------------------------------------------------------------------------------------
 
-def spent_nano(job):
-    """Everything the job's stage runs have spent, from their ledgers (cut-off calls at their worst case). Read only:
-    an EventLog would repair a log's cut last line, and a stage may be writing that log at this moment.
-
-    The job's stages name their runs; a run directory with a ledger whose id starts with this job's id and is not
-    named there counts too: a run that started and crashed before the job file recorded it has still spent money."""
-    run_ids = {s["run_id"] for s in (job.data.get("stages") or {}).values() if s.get("run_id")}
-    try:
-        run_ids |= {p.name for p in job.runs.iterdir()
-                    if p.is_dir() and (p / "events.jsonl").exists() and p.name.startswith(f"{job.dir.name}-")}
-    except OSError:
-        pass
+def runs_spent_nano(runs, stages):
+    """What the given stage runs have spent, from their ledgers (cut-off calls at their worst case). Read only: an
+    EventLog would repair a log's cut last line, and a stage may be writing that log at this moment. A run is counted
+    only as a stage of the job: the router records a stage before its run starts, so no run of a job is left out.
+    (Router pilot #2's thinking agent; it replaces pilot #1's agent change that also counted unrecorded run
+    directories, so status and list could differ. Atha, 2026-10-23.)"""
     total = 0
-    for run_id in sorted(run_ids):
-        log = job.runs / run_id / "events.jsonl"
+    for stage in (stages or {}).values():
+        log = Path(runs) / stage["run_id"] / "events.jsonl"
         if log.exists():
             total += reconcile_ledger(parse_lines(log.read_text(encoding="utf-8")))[1]["usd_nano"]
     return total
+
+
+def spent_nano(job):
+    """Everything the job's stage runs have spent: the number status, list and the job cap all use."""
+    return runs_spent_nano(job.runs, job.data.get("stages"))
 
 
 def left_usd(job):
@@ -480,7 +479,7 @@ def _job_line(path):
         state, cap = data["state"], float(data["max_usd"])
     except (OSError, ValueError, TypeError, KeyError):
         return f"{path.name} unreadable"
-    return f"{path.name} {state} spent ${spent_nano(Job(path)) / 1e9:.4f} of ${cap:.2f}"
+    return f"{path.name} {state} spent ${runs_spent_nano(path / 'runs', data.get('stages')) / 1e9:.4f} of ${cap:.2f}"
 
 
 def list_jobs(*, jobs_dir=JOBS):

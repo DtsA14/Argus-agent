@@ -62,10 +62,23 @@ def test_list_shows_the_spend_its_stage_runs_recorded(jobs):
                                      "a1": {"kind": "agent", "run_id": "ja-a1", "cap_usd": 0.5}})
     ledger(first / "runs" / "ja-d1" / "events.jsonl", nano=125_000_000)
     ledger(first / "runs" / "ja-a1" / "events.jsonl", nano=50_000_000)
-    second = job(jobs, "jb", state="NEW", cap=3.0)
+    second = job(jobs, "jb", state="NEW", cap=3.0, stages={"d1": {"kind": "draft", "run_id": "jb-d1", "cap_usd": 0.4}})
     ledger(second / "runs" / "jb-d1" / "events.jsonl", crash_nano=250_000_000)      # cut off: its worst case
+    third = job(jobs, "jc", state="NEW", cap=1.0)                                   # no stage recorded
+    ledger(third / "runs" / "jc-d1" / "events.jsonl", nano=90_000_000)
+    # 2026-10-23 (Atha): a run counts only as a recorded stage, as status counts it (runs_spent_nano). The approved
+    # test of pilot #1 expected an unrecorded run to count too; changed by the human, not by an agent.
     assert listed(jobs).splitlines() == ["ja AWAITING_APPROVAL spent $0.1750 of $1.00",
-                                         "jb NEW spent $0.2500 of $3.00"]
+                                         "jb NEW spent $0.2500 of $3.00",
+                                         "jc NEW spent $0.0000 of $1.00"]
+
+
+def test_list_and_status_report_the_same_spend(jobs):
+    jd = job(jobs, "ja", state="DRAFTING", stages={"d1": {"kind": "draft", "run_id": "ja-d1", "cap_usd": 0.4}})
+    ledger(jd / "runs" / "ja-d1" / "events.jsonl", nano=375_000_000)
+    ledger(jd / "runs" / "ja-x9" / "events.jsonl", nano=999_000_000)            # not a stage of the job
+    assert listed(jobs) == "ja DRAFTING spent $0.3750 of $1.00"
+    assert "money: cap $1.00, spent $0.3750" in rj.status("ja", jobs_dir=jobs)
 
 
 def test_a_job_json_that_cannot_be_read_is_named_and_others_still_listed(jobs):
