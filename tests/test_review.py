@@ -28,6 +28,7 @@ NEW_TEST = "from src.shop import total\n\n\ndef test_total_never_negative():\n  
 OLD_NODE = "tests/test_old.py::test_total_plain"
 CHANGED_OLD = OLD_TEST + "\n\ndef test_total_floor():\n    assert total([1], 5) == 0\n"     # W2a-ext
 REMOVED = [{"node": "test_total_gone", "reason": "replaced by test_total_floor"}]
+MODIFIED = [{"node": "test_total_plain", "reason": "a clearer message"}]
 
 BASE = {"src/shop.py": BUGGY.encode(), "src/extra.py": b"EXTRA = 1\n", "tests/test_old.py": OLD_TEST.encode(),
         "conftest.py": b"", "notes/readme.txt": b"one\ntwo\n", ".gitattributes": b"*.txt text eol=crlf\n",
@@ -95,7 +96,7 @@ class Project:
             for p, text in changed.items():
                 extra["changed"][p] = {"before": hashlib.sha256((dest / p).read_bytes()).hexdigest(),
                                        "after": hashlib.sha256(text.encode()).hexdigest(), "removed": REMOVED,
-                                       "modified": []}
+                                       "modified": MODIFIED}
                 (dest / p).write_bytes(text.encode())
         snap = snapshot(dest)
         rec = {**self.record, "kind": "task", "name": name, "added": added, "files": len(snap),
@@ -343,6 +344,7 @@ def test_a_tasks_changed_tests_are_in_the_patch_as_changes_and_marked_in_the_pr(
     assert "- `A` `tests/test_new.py` (new test, approved with the task)" in pr
     assert "## Existing tests changed by the task" in pr
     assert "  - removed `test_total_gone`: replaced by test_total_floor" in pr
+    assert "  - modified `test_total_plain`: a clearer message" in pr
     co = apply_to_clean_checkout(proj, run_dir, tmp_path)
     assert (co / "tests" / "test_old.py").read_text() == CHANGED_OLD
 

@@ -664,6 +664,18 @@ def test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused(root,
     assert not any("test_old_skip" in p for p in r["problems"])            # skipped by a marker in the intake: allowed
 
 
+def test_a_skip_next_to_a_red_required_test_of_a_changed_file_is_refused(root, scfg):
+    # the validation is red (its required node fails), so the baseline check reads the skip itself
+    off = ("@pytest.fixture(autouse=True)\ndef _off(request):\n    if request.node.name == 'test_total_zero':\n"
+           "        pytest.skip('off')\n")
+    d = changing(LOCK_NEW.replace("from src.shop import total\n", "from src.shop import total\n\n" + off),
+                 max_skipped=5)
+    r = run_check(root, None, scfg, draft=d)
+    assert not r["ok"], r["problems"]
+    assert any(p == "validation lock: skipped or xfail in a changed test file, and not marked so before the change: "
+               "tests/test_lock.py::test_total_zero" for p in r["problems"]), r["problems"]
+
+
 def test_a_test_skipped_only_at_run_time_in_the_intake_cannot_be_kept_skipped_by_a_change(root, scfg):
     # the limit of addition 2: pytest.skip() in a test body is not a marker, so the old skip is not "already skipped"
     d = changing(SKIP_TEST + "\n\ndef test_more():\n    assert True\n", path="tests/test_skip.py", must=[],
