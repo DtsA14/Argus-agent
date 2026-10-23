@@ -445,3 +445,11 @@ def test_an_interrupted_command_says_how_to_continue(env, capsys, monkeypatch):
     rc = mod.main(["--jobs-dir", str(env.jobs), "resume", "jtest"], deps=env.deps)
     err = capsys.readouterr().err
     assert rc == 130 and "argus resume jtest" in err and "Do not start a new job" in err
+
+
+
+def test_a_drafter_stage_is_bounded_by_dollars_not_by_re_sent_tokens():
+    """Router pilot #1 on DeepSeek: the token ceiling (re-sent and cached inputs counted) ran out at $0.018 of $0.70."""
+    s = rj.stage_config(load_config(), 0.75)
+    lim = cdr.drafter_settings(s)
+    assert lim["attempt_tokens"] == 2000000 and s["budget"]["max_tokens"] == 3000000 and lim["attempt_usd"] == 0.7

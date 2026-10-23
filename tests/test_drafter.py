@@ -646,13 +646,38 @@ def test_the_drafter_is_told_what_the_sandbox_lacks_and_only_a_passing_new_test_
 
 
 
-def test_near_the_end_of_its_steps_the_drafter_is_told_to_submit(root, tmp_path):
-    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(3)]
+def test_halfway_the_drafter_is_told_how_many_steps_are_left(root, tmp_path):
+    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(4)]
     r, model, _ = run(root, tmp_path, reads + [SUBMIT], config=cfg(max_steps=6))
-    note = dt.STEPS_LEFT_NOTE.format(n=dt.STEPS_LEFT, max=6)
+    note = dt.STEPS_LEFT_NOTE.format(n=3, max=6)
     seen = [[m.content for m in c["messages"] if type(m).__name__ == "HumanMessage"] for c in model.calls]
-    assert [note in s for s in seen] == [False, False, True, True]          # from step 2 = 6 - 4 on, once
-    assert seen[3].count(note) == 1 and r["status"] == dt.DRAFTED
+    assert [note in s for s in seen] == [False, False, False, True, True]  # from step 3 = 6 // 2 on, once
+    assert seen[4].count(note) == 1 and r["status"] == dt.DRAFTED
+
+
+def test_the_last_steps_offer_only_the_submit_tools_and_refuse_any_other(root, tmp_path, vlog, monkeypatch):
+    offered = []                                       # the tools bound for each model call, in order
+    real = StrictScriptedChatModel.bind_tools
+
+    def recording(self, tools, tool_choice=None, **kw):
+        offered.append(sorted(t.__name__ for t in tools))
+        return real(self, tools, tool_choice=tool_choice, **kw)
+    monkeypatch.setattr(StrictScriptedChatModel, "bind_tools", recording)
+    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(5)]       # steps 0-4
+    late = call("ReadFile", {"path": "src/shop.py"}, "late")                                 # step 5: final
+    r, model, d = run(root, tmp_path, reads + [late, SUBMIT], config=cfg(max_steps=8))
+    assert dt.final_from(8) == 5 and len(offered) == len(model.calls) == 7
+    assert offered[4] == ["ListFiles", "ReadFile", "ReviseDraft", "SearchFiles", "SubmitDraft"]
+    assert offered[5] == offered[6] == ["ReviseDraft", "SubmitDraft"]
+    final_note = dt.FINAL_NOTE.format(n=dt.FINAL_STEPS)
+    assert final_note in [m.content for m in model.calls[5]["messages"]]
+    assert final_note not in [m.content for m in model.calls[4]["messages"]]
+    assert tool_texts(model, 6)[-1].startswith("Refused: ReadFile is not offered in the last 3 steps")
+    assert r["status"] == dt.DRAFTED and vlog() == ["target", "regression"]
+
+
+def test_too_few_steps_have_no_final_restriction():
+    assert dt.final_from(6) == 6 and dt.final_from(7) == 4
 
 
 def test_the_steps_left_note_survives_a_resume(root, tmp_path):
