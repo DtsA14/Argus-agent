@@ -1,0 +1,195 @@
+{
+  "job": "j20261023_031205_d0f8",
+  "kind": "code",
+  "state": "REVIEW_READY",
+  "created_at": "2026-10-23T03:12:05Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/pilot3a_live",
+    "commit": "HEAD",
+    "issue": "argus has no way to see all jobs: status needs a job id the user must already know.\n\nAdd a read-only command `argus list` (scripts/argus.py, with its logic in router/job.py) that prints one line per job\nin the jobs directory (--jobs-dir, default jobs/), sorted by job id:\n\n  <job id> <state> spent $<spent with 4 decimals> of $<cap with 2 decimals>\n\nwhere state and cap come from the job's job.json (\"state\", \"max_usd\") and spent is what the job's stage runs have\nspent, computed the same way status computes it. Rules:\n- only directories that contain a job.json are jobs; any other entry is ignored;\n- a job.json that cannot be read or is not valid JSON gives the line \"<directory name> unreadable\" instead, and the\n  other jobs are still listed;\n- when the jobs directory does not exist or holds no job, it prints exactly \"no jobs\";\n- it never takes a job's lock and never changes anything; it exits 0.",
+    "exclude": [
+      "verification",
+      "pilots"
+    ]
+  },
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261023_031205_d0f8-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T03:12:22Z",
+      "ended_at": "2026-10-23T03:12:37Z",
+      "status": "NO_DRAFT",
+      "usd": 0.015996696
+    },
+    "d2": {
+      "kind": "draft",
+      "run_id": "j20261023_031205_d0f8-d2",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T03:29:10Z",
+      "ended_at": "2026-10-23T03:29:28Z",
+      "status": "NO_DRAFT",
+      "usd": 0.01835748
+    },
+    "d3": {
+      "kind": "draft",
+      "run_id": "j20261023_031205_d0f8-d3",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T04:04:43Z",
+      "ended_at": "2026-10-23T04:05:37Z",
+      "status": "DRAFTED",
+      "usd": 0.021563262,
+      "draft_sha256": "79fa37fd71ba48ff85ea45a28658af45d2208e80d99ba657685ef5777c8657c2"
+    },
+    "d4": {
+      "kind": "draft",
+      "run_id": "j20261023_031205_d0f8-d4",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T04:13:37Z",
+      "ended_at": "2026-10-23T04:14:21Z",
+      "status": "NO_DRAFT",
+      "usd": 0.014255166
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261023_031205_d0f8-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T05:53:37Z",
+      "ended_at": "2026-10-23T05:54:45Z",
+      "status": "DONE",
+      "usd": 0.009021684,
+      "profile": "large_usd",
+      "review": {
+        "valid": true,
+        "problems": [],
+        "dir": "/home/ubuntu/pilot3a_live/jobs/j20261023_031205_d0f8/runs/j20261023_031205_d0f8-a1/review"
+      }
+    }
+  },
+  "approval": {
+    "draft_sha256": "79fa37fd71ba48ff85ea45a28658af45d2208e80d99ba657685ef5777c8657c2",
+    "contract_sha256": "d62a7df27b8bd6cde309098811cc75e645b8102ed4187d30f01c43f79677b96f",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-23T05:53:37Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-23T03:12:05Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-23T03:12:05Z",
+      "what": "intaken",
+      "files": 450
+    },
+    {
+      "at": "2026-10-23T03:12:22Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-23T03:12:37Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "DRAFT_FAILED",
+      "stage": "d1",
+      "reason": "context_limit"
+    },
+    {
+      "at": "2026-10-23T03:29:02Z",
+      "what": "redraft",
+      "stage": "d2",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-23T03:29:10Z",
+      "what": "state",
+      "old": "DRAFT_FAILED",
+      "new": "DRAFTING",
+      "stage": "d2"
+    },
+    {
+      "at": "2026-10-23T03:29:28Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "DRAFT_FAILED",
+      "stage": "d2",
+      "reason": "reservation_exhausted"
+    },
+    {
+      "at": "2026-10-23T04:04:33Z",
+      "what": "redraft",
+      "stage": "d3",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-23T04:04:43Z",
+      "what": "state",
+      "old": "DRAFT_FAILED",
+      "new": "DRAFTING",
+      "stage": "d3"
+    },
+    {
+      "at": "2026-10-23T04:05:37Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d3"
+    },
+    {
+      "at": "2026-10-23T04:13:23Z",
+      "what": "redraft",
+      "stage": "d4",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-23T04:13:37Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "DRAFTING",
+      "stage": "d4"
+    },
+    {
+      "at": "2026-10-23T04:14:21Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "DRAFT_FAILED",
+      "stage": "d4",
+      "reason": "max_steps"
+    },
+    {
+      "at": "2026-10-23T05:53:37Z",
+      "what": "approved",
+      "draft": "79fa37fd71ba",
+      "contract": "d62a7df27b8b"
+    },
+    {
+      "at": "2026-10-23T05:53:37Z",
+      "what": "state",
+      "old": "DRAFT_FAILED",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-23T05:54:50Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "REVIEW_READY",
+      "stage": "a1"
+    }
+  ],
+  "intake": {
+    "commit": "26befdc1cda45af165e8f26614a3c1e64e20591b",
+    "tree": "aaa40df9db3d28cd1c866b704a599fc2b272fe8c",
+    "files": 450,
+    "snapshot_sha256": "e356c275a67ef2839a6c9804a157eb75b31eddef32590151fc338713abce7a2e"
+  }
+}

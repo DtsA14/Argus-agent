@@ -144,10 +144,19 @@ def open_job(job_id, jobs_dir=JOBS):
 
 def spent_nano(job):
     """Everything the job's stage runs have spent, from their ledgers (cut-off calls at their worst case). Read only:
-    an EventLog would repair a log's cut last line, and a stage may be writing that log at this moment."""
+    an EventLog would repair a log's cut last line, and a stage may be writing that log at this moment.
+
+    The job's stages name their runs; a run directory with a ledger whose id starts with this job's id and is not
+    named there counts too: a run that started and crashed before the job file recorded it has still spent money."""
+    run_ids = {s["run_id"] for s in (job.data.get("stages") or {}).values() if s.get("run_id")}
+    try:
+        run_ids |= {p.name for p in job.runs.iterdir()
+                    if p.is_dir() and (p / "events.jsonl").exists() and p.name.startswith(f"{job.dir.name}-")}
+    except OSError:
+        pass
     total = 0
-    for stage in (job.data.get("stages") or {}).values():
-        log = job.runs / stage["run_id"] / "events.jsonl"
+    for run_id in sorted(run_ids):
+        log = job.runs / run_id / "events.jsonl"
         if log.exists():
             total += reconcile_ledger(parse_lines(log.read_text(encoding="utf-8")))[1]["usd_nano"]
     return total
@@ -462,6 +471,27 @@ def reject(job_id, reason, *, deps, jobs_dir=JOBS):
             raise Refused(f"job {job.id} is {job.data['state']}: only a draft waiting for approval is rejected")
         job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"))
         return job
+
+
+def _job_line(path):
+    """One job, as a line: its id, state and money; or "<directory> unreadable" if its job.json cannot be read."""
+    try:
+        data = json.loads((path / "job.json").read_text(encoding="utf-8"))
+        state, cap = data["state"], float(data["max_usd"])
+    except (OSError, ValueError, TypeError, KeyError):
+        return f"{path.name} unreadable"
+    return f"{path.name} {state} spent ${spent_nano(Job(path)) / 1e9:.4f} of ${cap:.2f}"
+
+
+def list_jobs(*, jobs_dir=JOBS):
+    """Every job in the jobs directory, one line per job sorted by job id: read only, no lock, nothing changed."""
+    root = Path(jobs_dir)
+    try:
+        entries = sorted(root.iterdir(), key=lambda p: p.name)
+    except OSError:
+        return "no jobs"
+    lines = [_job_line(p) for p in entries if p.is_dir() and (p / "job.json").exists()]
+    return "\n".join(lines) if lines else "no jobs"
 
 
 def status(job_id, *, jobs_dir=JOBS):

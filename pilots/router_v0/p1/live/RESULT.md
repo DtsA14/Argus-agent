@@ -40,3 +40,35 @@
 
 Saldo Anthropic Atha habis setelah pilot ini. Drafter dan agen dipindah ke DeepSeek V4.1 Flash (non-thinking) di PR yang
 sama.
+
+
+---
+
+# Job 3 (DeepSeek V4.1 Flash, non-thinking): berhasil
+
+2026-10-23. Job `j20261023_031205_d0f8`, issue yang sama, setelah PR #165 (perbaikan pilot ini, pindah ke DeepSeek), #166
+(input drafter 200.000, pengingat langkah), #167 (batas dolar, hanya tool submit di 3 langkah terakhir), dan #169 (approve
+tetap bisa setelah redraft gagal).
+
+| Tahap | Hasil | Biaya |
+|---|---|---|
+| d1 | `NO_DRAFT context_limit`: membaca 13 file tanpa submit, input melewati 64.000 | $0,0160 |
+| d2 | `NO_DRAFT reservation_exhausted`: membaca 12 file; batas token (input cache ikut dihitung) habis di $0,018 | $0,0184 |
+| d3 | **`DRAFTED`**, 2 submit. `ReadFile` di langkah 13 ditolak (hanya tool submit); submit 1 ditolak (2 tes gagal tanpa diwajibkan, regresi butuh `git`); `ReviseDraft` diterima. Profil `large_usd`, `edit_file` + `search_files`, 8 tes wajib | $0,0216 |
+| d4 | `redraft` dijalankan tidak sengaja (riwayat terminal): `NO_DRAFT max_steps`. Job jadi `DRAFT_FAILED`, dan draf d3 tidak bisa di-approve. Celah ini ditutup PR #169 | $0,0143 |
+| a1 | Approve d3 (sha `79fa37fd71ba`, cap agen $0,75). Agen **`DONE`** di attempt kedua: attempt 0 mengedit dan memvalidasi lalu habis langkah (`max_steps`); attempt 1 memperbaiki sisa tes lalu `Finish`. Paket review **valid** | **$0,0090** |
+| **Job** | **`REVIEW_READY`** | **$0,0792** dari cap $1,00 |
+
+**Patch agen** (`job3/review/changes.patch`): `list_jobs` dan `_job_line` di `router/job.py`, subperintah `list` di
+`scripts/argus.py`, tes yang disetujui. **Agen juga mengubah `spent_nano`** (biaya job, dipakai untuk cap job) supaya
+menjumlahkan folder run milik job yang tidak tercatat di `job.json`. Tes drafter menuntut itu (job `jb` tanpa tahap
+tercatat). Efeknya hanya bisa **menambah** biaya yang terhitung (lebih ketat), dan tidak berubah untuk job buatan router
+(tahap selalu dicatat sebelum run dibuat). Penyimpangan kecil ini dari issue ("dihitung sama seperti `status`") sudah
+disebut ke Atha sebelum approve.
+
+**Keputusan Atha untuk job ini:** `code`, `redraft` ×3 (satu tidak sengaja), dan `approve`. Masing-masing dengan `[y/N]`
+dan kunci. Ditambah lima PR perbaikan di tengahnya. Router-nya sendiri hanya butuh 2 perintah bila drafter lolos sejak
+awal. Yang menambah keputusan adalah perilaku drafter DeepSeek non-thinking, bukan router.
+
+**Status:** patch diterapkan ke branch `router-p1-apply` tanpa perubahan; `verify.sh` **lulus** (1.443 tes, 0 sandbox di-skip; `verification/verify-20261023T060627Z-aarch64.log`). Setelah merge,
+pilot #1 menjadi **`agent-completed`**, dengan biaya model **$0,08** (pilot #1 dengan Sonnet: $0,65 dan gagal).
