@@ -453,3 +453,30 @@ def test_a_drafter_stage_is_bounded_by_dollars_not_by_re_sent_tokens():
     s = rj.stage_config(load_config(), 0.75)
     lim = cdr.drafter_settings(s)
     assert lim["attempt_tokens"] == 2000000 and s["budget"]["max_tokens"] == 3000000 and lim["attempt_usd"] == 0.7
+
+
+
+def test_after_a_failed_redraft_the_last_accepted_draft_is_still_approved_by_its_sha(tmp_path):
+    """Router pilot #1: d3 was accepted, a redraft (d4) failed, and the job could not be approved any more."""
+    e = Env(tmp_path, draft=[td.SUBMIT, reply("cut", stop_reason="max_tokens")])
+    e.code()
+    seen = e.sha()                                        # the draft of d1
+    rj.redraft("jtest", cfg=e.cfg, deps=e.deps, jobs_dir=e.jobs)
+    job = e.job()
+    assert job.data["state"] == rj.DRAFT_FAILED and job.data["stages"]["d2"]["status"] == "NO_DRAFT"
+    text = rj.status("jtest", jobs_dir=e.jobs)
+    assert "the latest redraft failed; the last accepted draft is from jtest-d1" in text
+    assert f"argus approve jtest --sha {seen}" in text
+    job, r = e.approve(sha=seen)
+    assert r["status"] == "DONE" and job.data["state"] == rj.REVIEW_READY
+    assert job.data["approval"]["draft_sha256"].startswith(seen)
+
+
+def test_a_failed_job_without_an_accepted_draft_cannot_be_approved(tmp_path):
+    e = Env(tmp_path, draft=[reply("cut", stop_reason="max_tokens")])
+    e.code()
+    assert e.job().data["state"] == rj.DRAFT_FAILED
+    assert "approve" not in rj.status("jtest", jobs_dir=e.jobs)
+    with pytest.raises(rj.Refused, match="has no draft"):
+        rj.approve("jtest", sha="0" * 12, cfg=e.cfg, deps=e.deps, sandbox_cfg={}, jobs_dir=e.jobs)
+    assert e.coder.calls == []
