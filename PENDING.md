@@ -34,8 +34,6 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
   task yang memang menuntut beberapa putaran
 - [ ] **Eval set yang tidak jenuh** (M5): v1 16/16 hanya untuk regresi. Perluas dari kegagalan nyata (mis. 3a v1), lalu bekukan hash; eval set
   10–20 task dengan biaya per task yang lulus
-- [ ] **`pilot_report.py` `success_rate`** (catatan review 2026-10-22): `NO_RESULT` dibuang dari pembagi, jadi run yang mati tampak bukan
-  gagal. Ganti ke `done / runs_total` atau laporkan keduanya sebelum dipakai untuk laporan sungguhan
 - [ ] `scripts/audit_run.py` belum menyisipkan pesan `NUDGE` (balasan tanpa tool call) saat membangun ulang langkah; belum pernah terjadi di
   run live
 - [ ] `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task (membandingkan dengan tree commit tanpa tes yang
@@ -59,7 +57,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **W2a-ext: `changed_tests`** (`docs/reviews/SPEC_W2A_EXT_CHANGED_TESTS.md`, `acceptance/changed.py`): draf boleh mengubah tes
     lama. Tidak ada tes lama yang hilang (koleksi di sandbox) atau fungsi tes yang berubah (AST) tanpa `removed`/`modified` + alasan;
     tidak ada skip/xfail baru (kontrak `no_skip`); hanya `test_*.py`. 25 tes baru gagal di kode lama, mutan 26/26 (2026-10-23)
-- [ ] **Pilot W2b-3 `success_rate`** lewat router, drafter thinking, `--no-reference` (spek W2a-ext bagian 8). Kriteria ditulis dulu
+- [x] **Pilot W2b-3 `success_rate_all`** (2026-10-23): berhasil pada run 3 (job $0,0216, agen 1 attempt). Run 1 dan 2
+    menemukan dua celah harness, ditutup oleh #179 (merah karena assertion) dan #180 (cek setup di cek draf).
+    `pilots/m6_w2b/w2b3/RESULT.md`
+- [ ] Drafter beberapa kali mengirim entri `changed_tests` duplikat atau kosong, dan file tes baru di `changed_tests`
+    (W2b-3); penolakannya benar, tapi satu submit terbuang. Mungkin perlu contoh di prompt
+- [x] **`pilot_report.py` `success_rate`**: ditambah `success_rate_all` (W2b-3)
 - [ ] Drafter masih mencoba regresi yang butuh `git` (w2b2d3) walau prompt menyebut batas sandbox; satu submit terbuang
 - [ ] **Router v0** (`docs/reviews/SPEC_ROUTER_V0.md`, K2–K7 disetujui 2026-10-23): `argus code` sebagai satu job (cap per job $1,00,
     kunci per job, cap tahap dicatat saat mulai, approve terikat ke sha draf). Belum dikoding

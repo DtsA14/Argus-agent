@@ -63,3 +63,31 @@ Job `j20261023_125659_6528`, issue yang sama.
   W2a terhadap baseline task. Glob folder ditolak dengan petunjuk "use 'tests/**'", tidak diubah diam-diam. Prompt
   drafter juga mendapat contoh glob yang benar.
 - Run berikutnya: job baru setelah merge, menunggu "y" dari Atha.
+
+## Run 3 (setelah PR #180, cek setup ikut di cek draf): **berhasil**
+
+Job `j20261023_164114_cfcb`, issue yang sama, DeepSeek V4.1 Flash thinking, `--no-reference`. Artefak: `live3/`.
+
+| Tahap | Hasil | Biaya | Waktu (UTC, 2026-10-23) |
+|---|---|---|---|
+| Drafter | `DRAFTED`, 3 submit | $0,0192 | 16:41 → 16:44 |
+| Approve | Atha, setelah ringkasan Claude yang mengutip "Why they fail now" apa adanya | – | 17:02 |
+| Agen | `DONE`, 1 attempt | $0,0024 | 17:02 → 17:04 |
+| Paket review | valid; PR.md menandai `tests/test_pilot_report.py` sebagai "changed test, approved with the task" | – | 17:04 |
+| **Job** | **REVIEW_READY** | **$0,0216** dari cap $1,00 | ±23 menit, termasuk ±18 menit menunggu approve |
+
+- **Penolakan submit:** (1) `changed_tests` juga memuat file tes baru, dan (2) id validasi berisi huruf besar. Keduanya
+  diperbaiki model lewat ReviseDraft. Penolakan "duplicate paths" dari run 1–2 tidak muncul.
+- **W2a-ext:** tes lama hanya ditambah assert (0,5714 = 4/7; 0,0; 0,0) dan helper `expected()` mendapat satu baris.
+  Koleksi 17 → 17, satu peringatan K3 (helper; relevan). Pengecekan merah: ke-10 node wajib gagal karena
+  `AssertionError` dari file tesnya sendiri. Tes baru membangun data run sendiri.
+- **Patch agen:** satu baris `"success_rate_all": round(len(done) / total, 4) if total else None`, diterapkan ke branch
+  tanpa perubahan bersama kedua file tes yang disetujui (commit 9cfb3fb). `verify.sh` PASS: 1552 lulus, 0 tes sandbox di-skip
+  (`verification/w2b3_verify.log`). Kriteria 1–3 terpenuhi: **agent-completed**.
+- **Keputusan Atha:** 2 perintah live (`code`, `approve`), plus "y" dan persetujuan PR di chat.
+
+## Ringkasan W2b-3
+
+Butuh tiga run untuk lulus. Dua kegagalan pertama sama-sama celah harness yang ditemukan pilot ini dan sudah ditutup
+dengan tes dan mutan: merah yang bukan karena assertion (PR #179) dan cek setup yang tidak dijalankan di cek draf
+(PR #180). Total biaya model untuk ketiga run: $0,0355 + $0,0156 + $0,0216 = **$0,0727**.
