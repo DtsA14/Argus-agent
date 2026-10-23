@@ -27,6 +27,7 @@ import json
 import os
 import re
 import secrets
+import stat
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -74,7 +75,8 @@ class Deps:
     """What a command needs from outside: the human (confirm, key, tty) and, in tests, models and the sandbox."""
 
     def __init__(self, *, confirm=None, get_key=None, isatty=None, models=None, validate=None, preflight=None,
-                 env_preflight=None, clock=now, echo=print, red=None):
+                 env_preflight=None, clock=now, echo=print, red=None, key_file=None, assume_yes=False,
+                 key_forbidden=(ROOT,)):
         import getpass
         import sys
         self.confirm = confirm or (lambda text: input(text + "\nLanjut? [y/N] ").strip().lower() == "y")
@@ -82,6 +84,9 @@ class Deps:
         self.isatty = isatty or (lambda: sys.stdin.isatty())
         self.models, self.validate, self.preflight, self.env_preflight = models, validate, preflight, env_preflight
         self.clock, self.echo, self.red = clock, echo, red        # red: the W2a red check, injected by tests
+        # docs/reviews/SPEC_ROUTER_KEY_FILE.md: the key from a 0600 file outside every repository (--key-file), and,
+        # only with it, the [y/N] answered by the human in chat (--yes)
+        self.key_file, self.assume_yes, self.key_forbidden = key_file, assume_yes, tuple(key_forbidden)
 
 
 # ---- the job file and its lock -----------------------------------------------------------------------------------
@@ -200,18 +205,61 @@ def _needs_key(cfg, roles):
     return sorted(set(out))
 
 
+def read_key_file(path, forbidden):
+    """The key in a file the router may use (SPEC_ROUTER_KEY_FILE.md K2): a regular file (no symlink) of this user,
+    readable by nobody else, outside every forbidden directory (repositories, jobs/). One newline at the end is
+    dropped. A refusal never shows the file's content."""
+    p = Path(path).expanduser()
+    try:
+        st = os.lstat(p)
+    except OSError as e:
+        raise Refused(f"--key-file {p} cannot be read: {e.strerror}") from None
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+        raise Refused(f"--key-file {p} is not a regular file")
+    if st.st_uid != os.getuid():
+        raise Refused(f"--key-file {p} is not owned by you")
+    if st.st_mode & 0o077:
+        raise Refused(f"--key-file {p} can be read by others (mode {oct(st.st_mode & 0o777)}): chmod 600 it")
+    real = p.resolve()
+    for root in forbidden:
+        r = Path(root).expanduser().resolve()
+        if real == r or r in real.parents:
+            raise Refused(f"--key-file {p} is inside {r}: keep the key outside every repository and jobs/")
+    try:
+        data = p.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise Refused(f"--key-file {p} cannot be read as text") from None
+    return data[:-1] if data.endswith("\n") else data
+
+
 @contextmanager
-def live(deps, cfg, roles, text):
-    """Confirm, then take each key the stage's real models need (never an argument, never written, unset after)."""
+def live(deps, cfg, roles, text, job=None):
+    """Confirm, then take each key the stage's real models need (never an argument, never written, unset after).
+    The key is typed in a terminal, or read from deps.key_file; only with a key file may deps.assume_yes replace the
+    [y/N] (the human approved this run in chat), and the limits are then still printed and noted in the job."""
     keys = _needs_key(cfg, roles)
-    if keys and not deps.isatty():
-        raise Refused("a live stage needs a terminal: the key is typed, never passed")
-    if not deps.confirm(text):
+    if deps.assume_yes and not deps.key_file:
+        raise Refused("--yes needs --key-file: without a key file the run is confirmed in the terminal")
+    if keys and not deps.key_file and not deps.isatty():
+        raise Refused("a live stage needs a terminal: the key is typed, never passed (or use --key-file)")
+    if deps.key_file and len(keys) > 1:
+        raise Refused(f"--key-file holds one key; this stage needs {len(keys)}")
+    if deps.assume_yes:
+        deps.echo(text + "\n(--yes: approved in chat; no [y/N] asked)")
+        if job is not None:
+            job.note(deps, "confirmed_by_flag", screen=text)
+    elif not deps.confirm(text):
         raise Refused("not confirmed; nothing was started")
+    forbidden = list(deps.key_forbidden) + ([job.dir.parent, job.data["inputs"]["repo"]] if job is not None else [])
     set_vars = []
     try:
         for var, kind in keys:
-            key = deps.get_key() or ""
+            if deps.key_file:
+                key = read_key_file(deps.key_file, forbidden)
+                if job is not None:
+                    job.note(deps, "key_from_file", path=str(Path(deps.key_file).expanduser()))
+            else:
+                key = deps.get_key() or ""
             shape = KEY_SHAPE.get(kind)
             if not key:
                 raise Refused("the key is empty; nothing was started")
@@ -298,7 +346,7 @@ def _draft(job, cfg, deps, n):
                         [f"model {scfg['roles'][scfg['drafter']['role']]['model']}; stage cap ${cap:.4f}; one attempt "
                          f"${lim['attempt_usd']:.2f}; {scfg['drafter']['max_submits']} submits",
                          f"overrides: {(cfg.get('router') or {}).get('overrides') or {}}"])
-    with live(deps, scfg, [scfg["drafter"]["role"]], text):
+    with live(deps, scfg, [scfg["drafter"]["role"]], text, job=job):
         if not resume:
             job.data["stages"][sid] = {"kind": "draft", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
                                        "started_at": deps.clock()}
@@ -378,7 +426,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             job.move(BLOCKED, deps, reason=f"budget: ${cap:.4f} left for the agent, one attempt needs ${need:.2f}")
             raise Refused(f"job {job.id}: not enough of the job cap left for one agent attempt (BLOCKED)")
         text = _limits_text(job, "approve and run the agent", lines)
-        with live(deps, acfg, [acfg["code_task"]["role"]], text):
+        with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
             if draft_sha(path) != seen:                 # changed while the human was reading
                 raise Refused("the draft changed after it was shown; nothing was approved")
             report = dr.check(draft, task=TASK, issue=job.data["inputs"]["issue"], max_usd=cap,
@@ -454,7 +502,7 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
             acfg = stage_config(apply_profile(cfg, contract["budget_profile"]) if contract.get("budget_profile")
                                 else cfg, st["cap_usd"])
             text = _limits_text(job, "resume the agent", [f"agent stage {st['run_id']}; stage cap ${st['cap_usd']:.4f}"])
-            with live(deps, acfg, [acfg["code_task"]["role"]], text):
+            with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
                 return job, _agent(job, cfg, deps, sandbox_cfg, resume=True)
         raise Refused(f"job {job.id} is {state}: nothing to resume")
 

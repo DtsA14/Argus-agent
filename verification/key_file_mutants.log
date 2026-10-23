@@ -1,0 +1,36 @@
+== old code
+6 new tests
+15 failed in 3.18s
+PASSED on old code (must be none): []
+SKIPPED: []
+RESULT: ok
+== mutants
+KILLED  mode not checked: ['FAILED tests/test_router.py::test_a_key_file_that_is_not_safe_or_not_a_key_starts_nothing_and_is_never_shown[<lambda>-can be read by others0]']
+KILLED  a symlink is followed: ['FAILED tests/test_router.py::test_a_key_file_that_is_not_safe_or_not_a_key_starts_nothing_and_is_never_shown[<lambda>-is not a regular file]']
+KILLED  key inside a repository or jobs/ accepted: ['FAILED tests/test_router.py::test_a_key_file_that_is_not_safe_or_not_a_key_starts_nothing_and_is_never_shown[<lambda>-keep the key outside every repository and jobs/0]']
+KILLED  owner not checked: ['FAILED tests/test_router.py::test_a_key_file_of_another_user_starts_nothing']
+KILLED  --yes without --key-file: ['FAILED tests/test_router.py::test_yes_without_a_key_file_is_refused_and_no_terminal_without_one_still_is']
+KILLED  --yes leaves no record of the limits: ['FAILED tests/test_router.py::test_a_key_file_runs_a_live_stage_without_a_terminal_and_the_key_is_never_written']
+KILLED  --yes prints nothing: ['FAILED tests/test_router.py::test_a_key_file_runs_a_live_stage_without_a_terminal_and_the_key_is_never_written']
+KILLED  the key file is not used: ['FAILED tests/test_router.py::test_a_key_file_runs_a_live_stage_without_a_terminal_and_the_key_is_never_written']
+KILLED  the final newline is kept: ['FAILED tests/test_router.py::test_a_key_file_runs_a_live_stage_without_a_terminal_and_the_key_is_never_written']
+KILLED  the cli forgets the repository: ['FAILED tests/test_router.py::test_the_cli_passes_key_file_and_yes_to_the_live_commands_only']
+KILLED  a key file still needs a terminal: ['FAILED tests/test_router.py::test_a_key_file_runs_a_live_stage_without_a_terminal_and_the_key_is_never_written']
+RESULT: 11/11 killed
+== verify
+
+== after the CLI test fix (d5c4a1f)
+== tests (parallel and alone)
+
+..........................................................               [100%]
+58 passed in 4.35s
+.                                                                        [100%]
+1 passed in 0.52s
+== mutant: the cli forgets the repository
+KILLED ['        assert rc == 2 and got["deps"].key_file == str(f) and got["deps"].assume_yes is True', '>       assert {rj.ROOT, env.jobs, env.repo} <= set(got["deps"].key_forbidden)', "E       AssertionError: assert {PosixPath('/...0/shop_repo')} <= {PosixPath('/...ile_a0/jobs')}"]
+== verify
+1567 passed in 732.37s (0:12:12)
+== sandbox tests skipped: 0
+RESULT: PASS
+evidence saved to verification/verify-20261023T180741Z-aarch64.log
+ALLDONE
