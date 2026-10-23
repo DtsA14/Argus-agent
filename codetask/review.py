@@ -3,7 +3,8 @@ into a pull request. Nothing here asks a model anything or trusts what the agent
 
   <run>/review/
     changes.patch     a git patch from the base commit's tree to the agent's final workspace (SUMMARY.json
-                      excluded). For a task it also adds the approved new tests, so it is the whole pull request.
+                      excluded). For a task it also adds the approved new tests and changes the approved changed
+                      tests (W2a-ext), so it is the whole pull request.
     tests.md          each criterion of the verdict, and every validation run again, fresh, on base commit + patch
     claims.md         the agent's claims with the harness's verdict on each, its free-text summary (not evidence),
                       and what was never verified automatically
@@ -24,7 +25,7 @@ PR.md says NOT READY at the top):
   - the last verdict passed and holds for exactly the final workspace (its workspace digest), and the SUMMARY.json
     that is published is the very one (same bytes, read once) the verdict saw;
   - the input repository still is what the run started from (digest and intake record);
-  - the base commit rebuilt from the repository, plus the task's approved new tests, is that input exactly;
+  - the base commit rebuilt from the repository, plus the task's approved new tests and changed tests, is that input exactly;
   - what the agent changed is inside the writable scope (never protected, never an intake exclusion) and is exactly
     the verdict's own list of changed files;
   - the patch applies to a clean rebuild of the base commit, and the result is identical to the final workspace in
@@ -275,6 +276,7 @@ def verify(run_dir, result, *, repo, sandbox_cfg, root, validate, work):
 
     # the base commit
     approved = dict(record.get("added") or {})
+    changed_tests = record.get("changed") or {}           # W2a-ext: existing tests the approved task changed
     with tempfile.TemporaryDirectory(dir=work) as tmp:
         base_dir = Path(tmp) / "base"
         base_dir.mkdir()
@@ -289,11 +291,16 @@ def verify(run_dir, result, *, repo, sandbox_cfg, root, validate, work):
         problems = [f"approved new test {p} already exists in the base commit" for p in sorted(approved) if p in base]
         for p, h in approved.items():
             expected[p] = (h, False)
+        for p, c in sorted(changed_tests.items()):
+            if base.get(p, (None,))[0] != c.get("before"):
+                problems.append(f"approved changed test {p} is not, in the base commit, the version it was changed from")
+            expected[p] = (c.get("after"), False)
+        approved.update({p: c.get("after") for p, c in changed_tests.items()})
         if base_commit_tree != record.get("tree"):
             problems.append(f"the commit's tree is {base_commit_tree[:12]}, the intake recorded {str(record.get('tree'))[:12]}")
         extra = state_diff(expected, pristine)
         if _changed(extra):
-            problems.append("the input is not the base commit plus the approved new tests: "
+            problems.append("the input is not the base commit plus the approved new and changed tests: "
                             + json.dumps(extra, sort_keys=True)[:400])
         if SUMMARY in pristine:
             problems.append(f"the input already contains {SUMMARY}, which the run uses for its own claims")
@@ -468,8 +475,19 @@ def render_pr(prov, contract, record, doc, ck):
         out += ["> **NOT READY: this package failed its own verification. Do not open a PR from it.**", ">"]
         out += [f"> - {cell(p, 400)}" for p in ck.problems] + [""]
     out += [f"# {cell(title, 120)}", "", "## Issue", "", fence(issue), "", "## What changed", ""]
-    out += [f"- `{f['change']}` `{f['path']}`" + (" (new test, approved with the task)" if f["approved_test"] else "")
+    out += [f"- `{f['change']}` `{f['path']}`" + ((" (new test, approved with the task)" if f["change"] == "A" else
+                                                    " (changed test, approved with the task)")
+                                                   if f["approved_test"] else "")
             for f in prov["patch"]["files"]] or ["_no patch_"]
+    changed = (record or {}).get("changed") or {}
+    if changed:                                               # W2a-ext
+        out += ["", "## Existing tests changed by the task", "",
+                "Approved with the task, before the agent ran (the agent cannot change them). Their diff is in "
+                "`changes.patch`: read it, a changed test can be weaker than the old one.", ""]
+        for p, c in sorted(changed.items()):
+            out.append(f"- `{cell(p)}`")
+            out += [f"  - removed `{cell(r['node'])}`: {cell(r['reason'], 500)}" for r in c.get("removed") or []]
+            out += [f"  - modified `{cell(m['node'])}`: {cell(m['reason'], 500)}" for m in c.get("modified") or []]
     out += ["", "## Validation", "", "Every validation was run again in the sandbox on the base commit plus "
             "`changes.patch` (see `tests.md`):", ""]
     out += [f"- `{k}`: {v}" for k, v in prov["validation_fresh"].items()] or ["- not run"]

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from acceptance import changed as ch
 from acceptance import draft as dr
 from acceptance import intake
 from acceptance.workspace import digest, snapshot
@@ -32,6 +33,8 @@ BROKEN_TEST = "import nosuchmodule\n\n\ndef test_total_never_negative():\n    as
 NEW_NODE = "tests/test_new.py::test_total_never_negative"
 OLD_NODE = "tests/test_old.py::test_total_plain"
 ISSUE = "total() can go negative when the discount is larger than the sum; it must never be below 0."
+CHANGED_OLD = OLD_TEST + "\n\ndef test_total_floor():\n    assert total([1], 5) == 0\n"     # W2a-ext
+FLOOR_NODE = "tests/test_old.py::test_total_floor"
 
 ARGS = {"plan": {"files": ["src/shop.py"], "steps": ["floor the total at 0"], "risks": ["a discount of 0"]},
         "scope": {"writable": ["src/shop.py"], "protected": ["tests/**", "conftest.py"]},
@@ -127,6 +130,12 @@ def fake_validate(spec, workspace, sandbox_cfg, log=None):
                          "failed_nodes": sorted(n for n, s in statuses.items() if s == "FAIL")}}
 
 
+def fake_collect(path, workspace, sandbox_cfg, **kw):
+    """Stands in for `pytest --collect-only` in the sandbox (W2a-ext K1)."""
+    f = Path(workspace) / path
+    return ({f"{path}::{n}" for n in _functions(f.read_text())} if f.exists() else set()), None
+
+
 def cfg(**drafter):
     c = load_config()
     c["roles"]["drafter"]["model"] = "fake:scripted"
@@ -139,7 +148,7 @@ def run(root, tmp_path, script, *, issue=ISSUE, max_usd=0.4, config=None, valida
     model = StrictScriptedChatModel(script=list(script))
     r = dt.run_drafter(run_id=run_id, runs_dir=tmp_path / "runs", cfg=config or cfg(), intake_name=intake_name,
                        issue=issue, max_usd=max_usd, models={"drafter": model}, validate=validate,
-                       preflight=preflight, env_preflight=lambda name: (True, "ok"), root=root)
+                       preflight=preflight, env_preflight=lambda name: (True, "ok"), root=root, collect=fake_collect)
     return r, model, tmp_path / "runs" / run_id
 
 
@@ -474,6 +483,62 @@ def test_the_review_page_is_the_golden_one():
                           {"usd": 0.0123, "usd_complete": True, "calls": 4})
     golden = Path(__file__).parent / "golden" / "draft_review.md"
     assert text == golden.read_text(encoding="utf-8")
+
+
+def changed_args(content, **entry):
+    """ARGS that also change tests/test_old.py, with its new required test in the regression validation."""
+    a = copy.deepcopy(ARGS)
+    a["validation"][1]["must_pass"] = [FLOOR_NODE]
+    a["changed_tests"] = [{"path": "tests/test_old.py", "content": content, **entry}]
+    return a
+
+
+def test_changed_tests_go_through_submit_and_revise_and_a_lost_test_is_named(root, tmp_path, vlog):
+    renamed = CHANGED_OLD.replace("test_total_plain", "test_total_renamed")
+    lost = call("SubmitDraft", changed_args(renamed), "s0")
+    fixed = call("ReviseDraft", {"changed_tests": [{"path": "tests/test_old.py", "content": CHANGED_OLD}]}, "s1")
+    r, model, d = run(root, tmp_path, [lost, fixed])
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
+    seen = tool_texts(model, 1)[0]
+    assert "loses 1 test(s) not listed in removed: tests/test_old.py::test_total_plain" in seen
+    assert "restore them, or list them in removed with a reason" in seen
+    draft = json.loads((d / "draft.json").read_text())
+    assert draft["changed_tests"] == [{"path": "tests/test_old.py", "content": CHANGED_OLD}]
+    assert draft["contract"]["validation"][1]["must_pass"] == [FLOOR_NODE]       # kept from the SubmitDraft
+    report = json.loads((d / "check_report.json").read_text())
+    assert report["baseline"]["regression"]["must_pass"] == {FLOOR_NODE: "FAIL"}
+    assert report["contract"]["validation"][1]["no_skip"] == {"paths": ["tests/test_old.py"], "allowed": []}
+    review = (d / "DRAFT_REVIEW.md").read_text()
+    assert "## Existing tests changed" in review and "+def test_total_floor():" in review
+    assert "No warnings (K3)." in review
+
+
+def test_a_draft_without_changed_tests_has_none():
+    draft, problems = dt.draft_from_args(dict(ARGS, changed_tests=[]), base="shop", policy=POLICY)
+    assert problems == [] and "changed_tests" not in draft
+
+
+WEAKER = "import pytest\n" + OLD_TEST.replace("assert total([2, 3], 1) == 4", "pytest.skip('later')")
+WEAKER_ENTRY = {"path": "tests/test_old.py", "content": WEAKER,
+                "removed": [{"node": "test_total_gone", "reason": "merged into test_total_plain"}],
+                "modified": [{"node": "test_total_plain", "reason": "skipped until the fix"}]}
+
+
+def test_the_review_page_shows_a_changed_tests_diff_what_it_removes_and_modifies_and_the_k3_warnings(tmp_path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_old.py").write_text(OLD_TEST)
+    draft, _ = dt.draft_from_args(dict(ARGS, changed_tests=[WEAKER_ENTRY]), base="shop", policy=POLICY)
+    warn = ch.warnings("tests/test_old.py", OLD_TEST, WEAKER, WEAKER_ENTRY["removed"])
+    state = {"status": dt.DRAFTED, "draft": draft, "report": {"warnings": warn}, "drafting": {}}
+    text = dt.review_text("d1", {"intake": "shop", "issue": ISSUE}, state,
+                          {"usd": 0.01, "usd_complete": True, "calls": 1}, tmp_path)
+    assert "## Existing tests changed" in text and "### `tests/test_old.py`" in text
+    assert "-    assert total([2, 3], 1) == 4" in text and "+    pytest.skip('later')" in text
+    assert "- removed `test_total_gone`: merged into test_total_plain" in text
+    assert "- modified `test_total_plain`: skipped until the fix" in text
+    assert "tests/test_old.py::test_total_plain has fewer asserts (1 -> 0)" in text
+    assert "tests/test_old.py has more skip, xfail or `assert True` (0 -> 1)" in text
+    assert "tests/test_old.py changes module-level code" in text and len(warn) == 4
 
 
 def _materialized(draft, _cache={}):

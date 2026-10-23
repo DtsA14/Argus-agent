@@ -301,6 +301,25 @@ def test_a_draft_changed_while_the_approve_screen_is_read_is_refused(tmp_path):
     assert e.coder.calls == [] and e.job().data["approval"] is None
 
 
+def test_the_approve_screen_and_status_say_how_many_old_tests_a_draft_changes(tmp_path):
+    # W2a-ext K6: the number of changed test files and of K3 warnings, computed from the job's intake
+    shown = []
+    e = Env(tmp_path, confirm=lambda text: shown.append(text) or "approve" not in text)
+    e.code()
+    st, path = rj._last_draft(e.job())
+    d = json.loads(path.read_text())
+    d["changed_tests"] = [td.WEAKER_ENTRY]
+    path.write_text(json.dumps(d))
+    line = ("changes 1 existing test file(s) (tests/test_old.py), 4 warning(s): read the diff in DRAFT_REVIEW.md")
+    assert line in rj.status("jtest", jobs_dir=e.jobs)
+    with pytest.raises(rj.Refused, match="not confirmed"):
+        e.approve()
+    assert line in shown[-1] and e.coder.calls == []
+    d.pop("changed_tests")
+    path.write_text(json.dumps(d))
+    assert "existing test file" not in rj.status("jtest", jobs_dir=e.jobs)
+
+
 def test_a_contract_changed_after_approval_blocks_the_agent(env, monkeypatch):
     env.code()
     monkeypatch.setattr(ctrun, "run_code_task", lambda **kw: (_ for _ in ()).throw(RuntimeError("crash")))

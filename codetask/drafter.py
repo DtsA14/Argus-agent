@@ -32,10 +32,11 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 
+from acceptance import changed as ch
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
-from acceptance.validation import run_validation
+from acceptance.validation import collect_nodes, run_validation
 from acceptance.workspace import digest, prepare, snapshot
 from harness.crash import Crasher
 from harness.errors import EstimateExceeded, InputLimitExceeded, LLMCallFailed, ReservationExhausted
@@ -107,6 +108,20 @@ class NewTest(BaseModel):
     content: str = Field(description="The complete file content")
 
 
+class TestNote(BaseModel):
+    node: str = Field(description="A test of the file without its path: test_x or TestC::test_x (removed may also "
+                                  "name one parametrized id, test_x[a])")
+    reason: str = Field(description="Why, for the human who approves the draft")
+
+
+class ChangedTest(BaseModel):
+    path: str = Field(description="An existing test_*.py file of the repository whose expectations the issue changes")
+    content: str = Field(description="The complete new file content")
+    removed: List[TestNote] = Field(default_factory=list, description="Old tests the new content no longer has")
+    modified: List[TestNote] = Field(default_factory=list, description="Old test functions whose code changes but "
+                                                                       "that are not required (must_pass)")
+
+
 class SubmitDraft(BaseModel):
     """Submit the task draft. The harness checks it at once: its shape, the scope, and in the sandbox that every
     required test of your new test files fails by assertion on the code as it is now while everything else passes.
@@ -120,6 +135,8 @@ class SubmitDraft(BaseModel):
     budget_profile: str = Field(description="The agent's budget profile, one of those listed in the task: large "
                                             "enough for one attempt to read what the fix needs and write it")
     tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, search_files)")
+    changed_tests: Optional[List[ChangedTest]] = Field(default=None, description="Existing test files whose "
+                                                                                 "expectations the issue changes")
 
 
 class ReviseDraft(BaseModel):
@@ -133,11 +150,12 @@ class ReviseDraft(BaseModel):
     unverifiable: Optional[List[str]] = None
     budget_profile: Optional[str] = None
     tools: Optional[List[str]] = None
+    changed_tests: Optional[List[ChangedTest]] = None
 
 
 SUBMITS = ("SubmitDraft", "ReviseDraft")       # each one is checked, and counts toward max_submits
 READ_TOOLS = [ListFiles, SearchFiles, ReadFile]
-SUBMIT_KEYS = {"plan", "scope", "validation", "new_tests", "unverifiable", "budget_profile", "tools"}
+SUBMIT_KEYS = {"plan", "scope", "validation", "new_tests", "unverifiable", "budget_profile", "tools", "changed_tests"}
 VALIDATION_ARG_KEYS = {"id", "paths", "must_pass", "min_tests"}
 # Never written by the drafter: the task repository's own files are read in a copy, and nothing here writes.
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
@@ -164,6 +182,11 @@ SYSTEM = "\n".join([
     "- The sandbox has only the repository, Python and its packages: no git, no network, and no files left out of the "
     "repository (such as verification/ and pilots/). Existing tests that need any of these fail there; do not use "
     "them in a validation.",
+    "- When the issue changes behaviour that an existing test checks, give that file's new content in changed_tests "
+    "(never leave the test out of the validations). Its tests whose expectation changes are required and must fail "
+    "now; every other test of the file stays and still passes, and its code stays as it is. A test you take out goes "
+    "in removed, a test function whose code you change without requiring it goes in modified, each with a reason. "
+    "Never add a skip or xfail. Only test_*.py files can be changed; at most " + str(ch.MAX_FILES) + ".",
     "- Put in unverifiable what the issue asks that no test checks; it is a note for the reviewer, never a pass.",
     "- You do not decide whether the draft is good: the harness checks it, and a human approves it or not.",
     "- Tools: ListFiles, SearchFiles and ReadFile read the repository; SubmitDraft submits the draft and is checked "
@@ -237,6 +260,8 @@ def draft_from_args(args, *, base, policy):
         contract["tools"] = list(tools)
     draft = {"draft_version": dr.VERSION, "base": base, "plan": args.get("plan"), "contract": contract,
              "new_tests": args.get("new_tests"), "unverifiable": args.get("unverifiable")}
+    if args.get("changed_tests"):                     # W2a-ext; absent or empty: a draft as before
+        draft["changed_tests"] = args["changed_tests"]
     return draft, [f"draft: {e}" for e in dr.validate_draft(draft)]
 
 
@@ -271,7 +296,7 @@ def _evidence(report):
     return out
 
 
-def make_submit(*, inputs, policy, scfg, root, log, validate, source):
+def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=collect_nodes):
     def submit(args, n, last=None, revise=False):
         """One SubmitDraft, or one ReviseDraft over `last` (the arguments of the previous submit): the draft built from
         the arguments and checked without a reference patch. The record keeps the arguments it used ("args"), so the
@@ -297,7 +322,7 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source):
             try:
                 report = dr.check(draft, task=CHECK_TASK, issue=inputs["issue"], max_usd=CHECK_USD,
                                   max_iterations=CHECK_ITERATIONS, reference_patch=None, sandbox_cfg=scfg, root=root,
-                                  validate=validate)
+                                  validate=validate, collect=collect)
             except (dr.DraftError, intake.IntakeError, OSError) as e:
                 problems = [f"the check could not run: {e}"]
             else:
@@ -471,8 +496,9 @@ def warnings(draft):
     return out
 
 
-def review_text(run_id, inputs, state, cost):
-    """DRAFT_REVIEW.md: what the human reads before approving, written by the harness (no model writes it)."""
+def review_text(run_id, inputs, state, cost, source=None):
+    """DRAFT_REVIEW.md: what the human reads before approving, written by the harness (no model writes it). source:
+    the intake copy the changed tests are diffed against."""
     out = [f"# Draft review: `{inputs['intake']}` ({run_id})", "",
            f"Status: **{state.get('status')}**" + (f" ({cell(state.get('stop_reason'), 200)})"
                                                    if state.get("stop_reason") else ""), "",
@@ -516,6 +542,7 @@ def review_text(run_id, inputs, state, cost):
                     out += ["", "Why they fail now (test output; check that this is the behaviour to fix):", "",
                             fence(ex, "text")]
             out += ["", "The file:", "", fence(t["content"], "python")]
+        out += _changed_text(draft, report, source)
         notes = draft["unverifiable"]
         out += ["", "## Not verified automatically", ""] + ([f"- {cell(n, 500)}" for n in notes] or ["Nothing."])
     else:
@@ -537,9 +564,37 @@ def review_text(run_id, inputs, state, cost):
     return "\n".join(out) + "\n"
 
 
+def _changed_text(draft, report, source):
+    """W2a-ext: each changed test with its diff from the intake version, what it removes and modifies, and the K3
+    warnings. A changed test can be weaker than the old one; the harness cannot tell, the human reads it."""
+    tests = draft.get("changed_tests") or []
+    if not tests:
+        return []
+    warn = report.get("warnings") or []
+    out = ["", "## Existing tests changed", "",
+           f"The draft changes {len(tests)} existing test file(s). The harness checked that no old test is lost unless "
+           "listed in removed, that no test function changes unless it is required or listed in modified, and that no "
+           "test of these files is skipped or xfail unless it was before. It cannot tell whether a test got weaker: "
+           "read the diff.", ""]
+    out += (["**Warnings (K3):**", ""] + [f"- {cell(w, 500)}" for w in warn]) if warn else ["No warnings (K3)."]
+    for t in tests:
+        out += ["", f"### `{cell(t['path'])}`", ""]
+        out += [f"- removed `{cell(r['node'])}`: {cell(r['reason'], 500)}" for r in t.get("removed") or []]
+        out += [f"- modified `{cell(m['node'])}`: {cell(m['reason'], 500)}" for m in t.get("modified") or []]
+        try:
+            old = (Path(source) / t["path"]).read_text(encoding="utf-8") if source else None
+        except OSError:
+            old = None
+        out += ["", "Diff from the intake version:", "", fence(ch.unified(t["path"], old, t["content"]), "diff")] \
+            if old is not None else ["", "(the intake version could not be read; the new file:)", "",
+                                     fence(t["content"], "python")]
+    return out
+
+
 def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None, models=None, validate=None,
-                preflight=None, env_preflight=None):
-    """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox)."""
+                preflight=None, env_preflight=None, collect=None):
+    """validate / preflight / env_preflight / collect: injected by tests to run without Docker (default: the real
+    sandbox)."""
     run_dir, root = Path(run_dir), Path(root)
     source = run_dir / SOURCE
     memo = Memo(run_dir / "memo.sqlite")
@@ -614,7 +669,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         box = Toolbox(str(source), READ_ONLY, scfg, policy["tools"], log, validate=validate, crasher=crasher,
                       role=role)
         submit = make_submit(inputs=inputs, policy=policy, scfg=scfg, root=root, log=log, validate=validate,
-                             source=source)
+                             source=source, collect=collect or collect_nodes)
         run = make_drafting(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"]}, tool_versions=versions,
                             submit=submit, crasher=crasher)
         a = run(task_id, box, task_prompt(inputs, state["files"], policy))
@@ -636,7 +691,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
             _write(run_dir / "draft.json", json.dumps(final["draft"], indent=2, ensure_ascii=False) + "\n")
             _write(run_dir / "check_report.json", json.dumps(final["report"], indent=2, ensure_ascii=False) + "\n")
         _, totals = reconcile_ledger(log.read())
-        _write(run_dir / "DRAFT_REVIEW.md", review_text(state.get("run_id"), inputs, final, totals))
+        _write(run_dir / "DRAFT_REVIEW.md", review_text(state.get("run_id"), inputs, final, totals, source))
         crasher.point("finalize@after_write")
         return out
 
@@ -653,7 +708,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
 
 
 def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=None, resume=False, crash_at=None,
-                models=None, validate=None, preflight=None, env_preflight=None, root=ROOT, echo=False):
+                models=None, validate=None, preflight=None, env_preflight=None, root=ROOT, echo=False, collect=None):
     """A new run takes the intake, the issue and the run's cap; a resume takes them from <run>/inputs.json."""
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
@@ -678,7 +733,7 @@ def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, inputs, root=root, crash_at=crash_at, models=models,
-                            validate=validate, preflight=preflight, env_preflight=env_preflight)
+                            validate=validate, preflight=preflight, env_preflight=env_preflight, collect=collect)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)

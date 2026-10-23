@@ -26,6 +26,9 @@ FIXED = "def total(prices, discount):\n    return max(sum(prices) - discount, 0)
 OLD_TEST = "from src.shop import total\n\n\ndef test_total_plain():\n    assert total([2, 3], 1) == 4\n"
 NEW_TEST = "from src.shop import total\n\n\ndef test_total_never_negative():\n    assert total([1], 5) == 0\n"
 OLD_NODE = "tests/test_old.py::test_total_plain"
+CHANGED_OLD = OLD_TEST + "\n\ndef test_total_floor():\n    assert total([1], 5) == 0\n"     # W2a-ext
+REMOVED = [{"node": "test_total_gone", "reason": "replaced by test_total_floor"}]
+MODIFIED = [{"node": "test_total_plain", "reason": "a clearer message"}]
 
 BASE = {"src/shop.py": BUGGY.encode(), "src/extra.py": b"EXTRA = 1\n", "tests/test_old.py": OLD_TEST.encode(),
         "conftest.py": b"", "notes/readme.txt": b"one\ntwo\n", ".gitattributes": b"*.txt text eol=crlf\n",
@@ -77,8 +80,9 @@ class Project:
         make_repo(self.repo, BASE)
         self.record = intake.intake(self.repo, "HEAD", "shop", root=self.root)
 
-    def task(self, name="shoptask", tests=None, unverifiable=("the message reads well",), **extra):
-        """An approved task by hand: the intake plus new tests, and a record of kind task."""
+    def task(self, name="shoptask", tests=None, unverifiable=("the message reads well",), changed=None, **extra):
+        """An approved task by hand: the intake plus new tests (and changed tests, W2a-ext), and a record of kind
+        task."""
         tests = tests or {"tests/test_new.py": NEW_TEST}
         src, dest = self.root / "fixtures" / "repos" / "shop", self.root / "fixtures" / "repos" / name
         shutil.copytree(src, dest)
@@ -87,6 +91,13 @@ class Project:
             (dest / p).parent.mkdir(parents=True, exist_ok=True)
             (dest / p).write_bytes(text.encode())
             added[p] = hashlib.sha256(text.encode()).hexdigest()
+        if changed:
+            extra["changed"] = {}
+            for p, text in changed.items():
+                extra["changed"][p] = {"before": hashlib.sha256((dest / p).read_bytes()).hexdigest(),
+                                       "after": hashlib.sha256(text.encode()).hexdigest(), "removed": REMOVED,
+                                       "modified": MODIFIED}
+                (dest / p).write_bytes(text.encode())
         snap = snapshot(dest)
         rec = {**self.record, "kind": "task", "name": name, "added": added, "files": len(snap),
                "snapshot_sha256": digest(snap), "unverifiable": list(unverifiable),
@@ -316,6 +327,48 @@ def test_a_new_test_that_already_exists_in_the_base_commit_is_refused(proj):
     # the "new" test is the existing file: input = base, not base + new tests
     run_dir = proj.run(writes=FIX, workspace="shoptask")
     assert not proj.build(run_dir)["valid"] and "base_commit" in failed_checks(run_dir)
+
+
+# ---- W2a-ext: existing tests the approved task changed ------------------------------------------------------------
+
+def test_a_tasks_changed_tests_are_in_the_patch_as_changes_and_marked_in_the_pr(proj, tmp_path):
+    proj.task(changed={"tests/test_old.py": CHANGED_OLD})
+    run_dir = proj.run(writes=FIX, workspace="shoptask")
+    out = proj.build(run_dir)
+    assert out["valid"], out["problems"]
+    files = prov(run_dir)["patch"]["files"]
+    assert {"path": "tests/test_old.py", "change": "M", "approved_test": True} in files
+    assert {"path": "tests/test_new.py", "change": "A", "approved_test": True} in files
+    pr = (run_dir / "review" / "PR.md").read_text()
+    assert "- `M` `tests/test_old.py` (changed test, approved with the task)" in pr
+    assert "- `A` `tests/test_new.py` (new test, approved with the task)" in pr
+    assert "## Existing tests changed by the task" in pr
+    assert "  - removed `test_total_gone`: replaced by test_total_floor" in pr
+    assert "  - modified `test_total_plain`: a clearer message" in pr
+    co = apply_to_clean_checkout(proj, run_dir, tmp_path)
+    assert (co / "tests" / "test_old.py").read_text() == CHANGED_OLD
+
+
+@pytest.mark.parametrize("tamper", ["before", "after", "unrecorded"])
+def test_a_changed_test_that_is_not_the_approved_change_of_the_base_commit_is_refused(proj, tamper):
+    rec = proj.task(changed={"tests/test_old.py": CHANGED_OLD})
+    if tamper == "unrecorded":
+        del rec["changed"]
+    else:
+        rec["changed"]["tests/test_old.py"][tamper] = "0" * 64
+    (proj.root / "fixtures" / "intake" / "shoptask.json").write_text(json.dumps(rec), encoding="utf-8")
+    run_dir = proj.run(writes=FIX, workspace="shoptask")
+    assert not proj.build(run_dir)["valid"] and "base_commit" in failed_checks(run_dir)
+
+
+def test_an_agent_change_to_a_changed_test_is_refused(proj):
+    proj.task(changed={"tests/test_old.py": CHANGED_OLD})
+    loose = copy.deepcopy(CONTRACT)
+    loose["scope"] = {"writable": ["**"], "protected": ["conftest.py"]}
+    run_dir = proj.run(writes={**FIX, "tests/test_old.py": OLD_TEST}, workspace="shoptask", verdict_contract=loose)
+    out = proj.build(run_dir)
+    assert not out["valid"] and "changes_in_scope" in failed_checks(run_dir)
+    assert "tests/test_old.py is protected" in " ".join(out["problems"])
 
 
 # ---- refusals: nothing is built, or the package says NOT READY ---------------------------------------------------

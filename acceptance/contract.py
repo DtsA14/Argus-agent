@@ -29,8 +29,9 @@ OPTIONAL_KEYS = {"tools", "budget_profile"}
 # Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
 # Only these, and only by adding: a contract can never grant anything else, nor remove a configured tool.
 CONTRACT_TOOLS = {"search_files", "edit_file"}
-VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass", "environment"}
-OPTIONAL_VALIDATION_KEYS = {"must_pass", "environment"}
+VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass", "environment",
+                   "no_skip"}
+OPTIONAL_VALIDATION_KEYS = {"must_pass", "environment", "no_skip"}
 MAX_TIMEOUT_S = 600
 ID = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 TEST_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")
@@ -168,6 +169,9 @@ def validate(c):
                 errors.append(f"{where}: must_pass has duplicates")
             if "environment" in v and not (isinstance(v["environment"], str) and ID.match(v["environment"])):
                 errors.append(f"{where}: environment must be a lower-case name")
+            if "no_skip" in v and not _no_skip(v):
+                errors.append(f"{where}: no_skip must be {{paths, allowed}} on a pytest validation: paths a non-empty "
+                              "list of distinct .py files, allowed a list of those paths or node ids in them")
 
     if "tools" in c:
         t = c["tools"]
@@ -194,6 +198,20 @@ def validate(c):
         if not _int(lim["max_iterations"]) or not 1 <= lim["max_iterations"] <= 10:
             errors.append("limits.max_iterations must be an integer in [1, 10]")
     return errors
+
+
+def _no_skip(v):
+    """W2a-ext: set by the harness on a validation that runs a changed test file (acceptance/changed.py)."""
+    ns = v["no_skip"]
+    if kind(v) != "pytest" or not isinstance(ns, dict) or set(ns) != {"paths", "allowed"}:
+        return False
+    paths, allowed = ns["paths"], ns["allowed"]
+    if not (isinstance(paths, list) and paths and len(set(map(str, paths))) == len(paths)
+            and all(isinstance(p, str) and check_glob(p) and p.endswith(".py") and not any(ch in p for ch in "*?")
+                    for p in paths)):
+        return False
+    return isinstance(allowed, list) and all(
+        isinstance(a, str) and any(a == p or a.startswith(p + "::") for p in paths) for a in allowed)
 
 
 def check_scope_against(c, files):

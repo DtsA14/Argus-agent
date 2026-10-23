@@ -1,0 +1,44 @@
+== tests
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 77%]
+...............................................................          [100%]
+279 passed in 307.62s (0:05:07)
+== old code
+25 new tests
+3 errors in 2.84s
+PASSED on old code (must be none): []
+SKIPPED: []
+RESULT: ok
+== mutants
+KILLED  non-required function may change: ['FAILED tests/test_draft.py::test_static_problems_of_changed_tests[draft4-tests/test_lock.py::test_total_zero differs from the intake version but is neither required nor listed in modified]']
+KILLED  modified may be unchanged: ['FAILED tests/test_draft.py::test_static_problems_of_changed_tests[draft6-modified tests/test_lock.py::test_total_zero is unchanged]']
+KILLED  modified not in PR.md: ['FAILED tests/test_review.py::test_a_tasks_changed_tests_are_in_the_patch_as_changes_and_marked_in_the_pr']
+KILLED  modified not in DRAFT_REVIEW: ['FAILED tests/test_drafter.py::test_the_review_page_shows_a_changed_tests_diff_what_it_removes_and_modifies_and_the_k3_warnings']
+KILLED  judge ignores skip violations: ['FAILED tests/test_draft.py::test_acceptance_refuses_a_skip_or_xfail_in_a_changed_file_that_was_not_marked_before[no_skip0-violations0]']
+KILLED  no no_skip in the contract: ['FAILED tests/test_draft.py::test_the_contract_holds_the_no_skip_rule_built_from_the_intake_version']
+KILLED  nothing counts as already skipped: ['FAILED tests/test_draft.py::test_the_contract_holds_the_no_skip_rule_built_from_the_intake_version']
+KILLED  baseline ignores skip violations: ['FAILED tests/test_draft.py::test_a_skip_next_to_a_red_required_test_of_a_changed_file_is_refused']
+KILLED  xpass not a violation: ["FAILED tests/test_draft.py::test_a_changed_test_file_that_skips_or_xfails_its_old_tests_is_refused[pytestmark = [pytest.mark.xfail(reason='later')]\\n]"]
+KILLED  any .py file may be changed: ['FAILED tests/test_draft.py::test_changed_tests_of_the_wrong_shape_are_refused[<lambda>-conftest.py, pytest.ini, pyproject.toml and setup.cfg are never changed0]']
+KILLED  more than 5 files: ['FAILED tests/test_draft.py::test_changed_tests_of_the_wrong_shape_are_refused[five_changes-at most 5 files]']
+KILLED  a writable changed test: ['FAILED tests/test_draft.py::test_static_problems_of_changed_tests[draft2-must be protected and not writable]']
+KILLED  lost nodes ignored: ['FAILED tests/test_draft.py::test_an_old_test_that_is_lost_without_a_reason_is_refused_and_named[draft0-loses 1 test(s) not listed in removed: tests/test_lock.py::test_total_zero]']
+KILLED  removed entries unchecked: ['FAILED tests/test_draft.py::test_an_old_test_that_is_lost_without_a_reason_is_refused_and_named[draft2-removed tests/test_lock.py::test_total_zero is still collected]']
+KILLED  changed tests not red: ['FAILED tests/test_draft.py::test_a_draft_that_changes_an_old_test_is_checked_and_approved_with_its_before_and_after']
+KILLED  changed content not written: ['FAILED tests/test_draft.py::test_a_draft_that_changes_an_old_test_is_checked_and_approved_with_its_before_and_after']
+KILLED  approve ignores changed: ['FAILED tests/test_draft.py::test_a_report_whose_changed_tests_differ_from_the_draft_is_refused']
+KILLED  record without changed: ['FAILED tests/test_draft.py::test_a_draft_that_changes_an_old_test_is_checked_and_approved_with_its_before_and_after']
+KILLED  draft may set no_skip: ['FAILED tests/test_draft.py::test_changed_tests_of_the_wrong_shape_are_refused[<lambda>-no_skip is set by the harness]']
+KILLED  contract no_skip unchecked: ['FAILED tests/test_draft.py::test_a_contract_no_skip_rule_of_the_wrong_shape_is_invalid[no_skip0]']
+KILLED  before not checked: ['FAILED tests/test_review.py::test_a_changed_test_that_is_not_the_approved_change_of_the_base_commit_is_refused[before]']
+KILLED  changed not approved: ['FAILED tests/test_review.py::test_a_tasks_changed_tests_are_in_the_patch_as_changes_and_marked_in_the_pr']
+KILLED  changed marked as new: ['FAILED tests/test_review.py::test_a_tasks_changed_tests_are_in_the_patch_as_changes_and_marked_in_the_pr']
+KILLED  drafter drops changed_tests: ['FAILED tests/test_drafter.py::test_changed_tests_go_through_submit_and_revise_and_a_lost_test_is_named']
+KILLED  review page without diff: ['FAILED tests/test_drafter.py::test_changed_tests_go_through_submit_and_revise_and_a_lost_test_is_named']
+KILLED  router does not say it: ['FAILED tests/test_router.py::test_the_approve_screen_and_status_say_how_many_old_tests_a_draft_changes']
+RESULT: 26/26 killed
+ALLDONE
