@@ -1,6 +1,6 @@
 # Spec Router v0: satu perintah `argus` untuk sebuah job
 
-Status: **spec, belum dikoding.** 2026-10-23. Ditulis Claude untuk review Atha/GPT. Keputusan (bagian 9): **K2–K7
+Status: **dikoding di #163** (2026-10-23; implementasi: `REVIEW_ROUTER_V0.md`); celah yang tersisa: `SPEC_ROUTER_STATUS.md`. Spec ditulis 2026-10-23. Ditulis Claude untuk review Atha/GPT. Keputusan (bagian 9): **K2–K7
 disetujui, K1 ditunda** (Atha 2026-10-23). Tiga tambahan sebelum ngoding, juga dari review itu: kunci per job (bagian
 1a), cap tahap dicatat saat mulai (bagian 2), dan approve terikat ke draf yang dilihat (bagian 4).
 Latar: diskusi 2026-10-23 ("orchestrator yang memilih Alur A atau B"). Usul yang disepakati: v0 **tanpa model**; jalur

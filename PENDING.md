@@ -64,8 +64,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     (W2b-3); penolakannya benar, tapi satu submit terbuang. Mungkin perlu contoh di prompt
 - [x] **`pilot_report.py` `success_rate`**: ditambah `success_rate_all` (W2b-3)
 - [ ] Drafter masih mencoba regresi yang butuh `git` (w2b2d3) walau prompt menyebut batas sandbox; satu submit terbuang
-- [ ] **Router v0** (`docs/reviews/SPEC_ROUTER_V0.md`, K2–K7 disetujui 2026-10-23): `argus code` sebagai satu job (cap per job $1,00,
-    kunci per job, cap tahap dicatat saat mulai, approve terikat ke sha draf). Belum dikoding
+- [x] **Router v0** (`docs/reviews/SPEC_ROUTER_V0.md`, #163): `argus code` sebagai satu job (cap per job $1,00, kunci per job,
+    cap tahap dicatat saat mulai, approve terikat ke sha draf); dipakai sejak router pilot #1. `--key-file`/`--yes` (#183)
+- [ ] **Router: waktu keputusan, perintah apply, alasan gagal di `status`** (`docs/reviews/SPEC_ROUTER_STATUS.md`): celah
+    spek v0 §3 poin 4 dan §5
+- [ ] Router: `argus apply` (K6 v0) dan mengulang agen dalam job yang sama (sekarang `AGENT_FAILED` hanya bisa `abandon`)
+- [ ] Router: cek bentuk kunci DeepSeek (hanya Anthropic yang dicek prefiksnya); ditunda, Atha tidak lagi mengetik kunci
 - [ ] `argus research` **ditunda** (K1 router v0): dibuat bersama Alur A yang menerima prompt bebas; saat itu bentuk job dan ledger
     diseragamkan
 - [ ] **D4** batas ListFiles + daftar berkas di issue: **ditunda** (2026-10-22); dibuka bila ada task yang kehabisan anggaran dengan caching
