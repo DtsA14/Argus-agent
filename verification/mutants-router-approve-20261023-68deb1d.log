@@ -1,0 +1,5 @@
+HEAD 68deb1d tests: tests/test_router.py
+KILLED  approve only when awaiting
+KILLED  status hides the accepted draft
+KILLED  transition not legal
+RESULT: 3/3 killed
