@@ -175,6 +175,33 @@ def test_static_problems(root, change, why):
     assert any(why in p for p in problems), problems
 
 
+@pytest.mark.parametrize("change, over, why", [
+    # pilot W2b-3 run 2: a directory name passed this check and then blocked setup after approval
+    (lambda d: d["contract"]["scope"].update(protected=["tests", "tests/**", "conftest.py"]), {},
+     "contract: protected glob 'tests' matches no input file (it names a directory; globs match files: use "
+     "'tests/**')"),
+    (lambda d: d["contract"].update(budget_profile="huge"), {"profiles": ["default", "large_usd"]},
+     "contract: unknown budget profile 'huge' (configured: ['default', 'large_usd'])"),
+    (lambda d: None, {"sandbox_cfg": {"environments": {"other": {}}}},
+     "contract: unknown sandbox environment(s) ['argus'] (configured: ['other'])"),
+])
+def test_what_setup_would_refuse_is_refused_by_the_draft_check(root, change, over, why):
+    d = copy.deepcopy(DRAFT)
+    change(d)
+    r = run_check(root, None, over.pop("sandbox_cfg", {}), draft=d, **over)
+    assert not r["ok"] and r["problems"] == [why] and "baseline" not in r
+
+
+def test_the_draft_check_runs_the_checks_setup_runs_through_their_shared_function(root, monkeypatch):
+    seen = []
+    monkeypatch.setattr(ct, "setup_problems", lambda c, files, **kw: seen.append((set(files), kw)) or ["sentinel"])
+    r = run_check(root, None, {}, profiles=["default"])
+    assert not r["ok"] and r["problems"] == ["contract: sentinel"]
+    files, kw = seen[0]
+    assert "tests/test_new.py" in files and "src/shop.py" in files          # the task baseline: intake plus new tests
+    assert kw == {"profiles": ["default"], "environments_configured": None}
+
+
 def test_a_draft_on_an_intake_that_changed_is_refused(root, tmp_path):
     (root / "fixtures" / "repos" / "shop" / "src" / "shop.py").write_text(FIXED)
     r = run_check(root, patch(tmp_path, {"src/shop.py": FIXED}), {})

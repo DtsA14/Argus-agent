@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from acceptance import contract as ct
 from codetask import status as st
 from codetask.run import admission, run_code_task, settings
 from harness.events import EventLog
@@ -762,6 +763,16 @@ def test_an_unknown_profile_blocks_before_any_model_call(tmp_path):
     r, model, d = run(tmp_path, [], contract=with_profile("huge"), model=model)
     assert r["status"] == st.BLOCKED and r["blocked_reason"] == "invalid_contract" and len(model.calls) == 0
     assert "unknown budget profile 'huge'" in r["stop_reason"]
+
+
+def test_setup_runs_its_contract_checks_through_the_function_a_draft_check_uses(tmp_path, monkeypatch):
+    # W2b-3 run 2: setup and acceptance/draft.check share ct.setup_problems, so a new check reaches both
+    seen = []
+    monkeypatch.setattr(ct, "setup_problems", lambda c, files, **kw: seen.append(kw) or ["sentinel check"])
+    model = StrictScriptedChatModel(script=[WRITE, FINISH])
+    r, model, d = run(tmp_path, [], model=model)
+    assert r["status"] == st.BLOCKED and r["stop_reason"] == "sentinel check" and len(model.calls) == 0
+    assert len(seen) == 1 and set(seen[0]) == {"profiles", "environments_configured"}
 
 
 def test_a_contract_that_cannot_fund_one_large_attempt_stops_before_any_model_call(tmp_path):

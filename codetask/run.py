@@ -215,10 +215,9 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
             return move(state, st.BLOCKED, reason=f"invalid contract: {e}", blocked="invalid_contract")
         log.emit("contract_frozen", sha256=sha, contract=contract["contract"], version=contract["version"])
         profile = contract.get("budget_profile")
-        if profile is not None and profile not in (cfg["code_task"].get("profiles") or {}):
-            return move(state, st.BLOCKED, reason=f"unknown budget profile {profile!r} "
-                        f"(configured: {sorted(cfg['code_task'].get('profiles') or {})})", blocked="invalid_contract")
-        if profile != cfg["code_task"].get("applied_profile"):
+        profiles = cfg["code_task"].get("profiles") or {}
+        # an unknown profile is reported with the other contract checks below (ct.setup_problems)
+        if (profile is None or profile in profiles) and profile != cfg["code_task"].get("applied_profile"):
             return move(state, st.BLOCKED, reason=f"the frozen contract names budget profile {profile!r}, but the "
                         f"run was configured with {cfg['code_task'].get('applied_profile')!r}",
                         blocked="contract_changed")
@@ -243,14 +242,11 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         except (OSError, ValueError, RuntimeError) as e:
             return move(state, st.BLOCKED, reason=f"invalid input repository: {e}", blocked="invalid_contract")
         crasher.point("setup@after_copy")
-        problems = ct.check_scope_against(contract, before)
+        # the same function a draft's check runs (acceptance/draft.py), so setup never refuses an approved draft
+        problems = ct.setup_problems(contract, before, profiles=profiles,
+                                     environments_configured=scfg.get("environments") or {})
         if problems:
             return move(state, st.BLOCKED, reason="; ".join(problems), blocked="invalid_contract")
-        configured_envs = scfg.get("environments") or {}
-        unknown = [n for n in ct.environments(contract) if n not in configured_envs]
-        if unknown:                     # the contract names an environment this config does not have: fail closed
-            return move(state, st.BLOCKED, reason=f"unknown sandbox environment(s) {unknown} "
-                        f"(configured: {sorted(configured_envs)})", blocked="invalid_contract")
         ok, why = preflight()
         if not ok:
             return move(state, st.BLOCKED, reason=f"sandbox unavailable: {why}", blocked="sandbox_unavailable")

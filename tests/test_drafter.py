@@ -681,6 +681,18 @@ def test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_o
     assert "Budget profile for the agent: `large_usd`" in (d / "DRAFT_REVIEW.md").read_text()
 
 
+def test_a_directory_glob_is_refused_at_submit_and_the_drafter_fixes_it_with_revise(root, tmp_path, vlog):
+    folder = call("SubmitDraft", dict(ARGS, scope={"writable": ["src/shop.py"],
+                                                   "protected": ["tests", "tests/**", "conftest.py"]}), "s0")
+    fixed = call("ReviseDraft", {"scope": ARGS["scope"]}, "s1")
+    r, model, d = run(root, tmp_path, [folder, fixed])
+    seen = tool_texts(model, 1)[0]
+    assert "protected glob 'tests' matches no input file (it names a directory; globs match files: use 'tests/**')" \
+        in seen
+    assert r["status"] == dt.DRAFTED and vlog() == ["target", "regression"]       # the refused one ran nothing
+    assert "not `tests`" in dt.SYSTEM
+
+
 def test_a_profile_not_offered_to_the_drafter_is_refused(root, tmp_path, vlog):
     r, model, d = run(root, tmp_path, [call("SubmitDraft", dict(ARGS, budget_profile="large"), "s0"), SUBMIT])
     assert "budget_profile is required and must be one of ['default', 'large_usd']" in tool_texts(model, 1)[0]
