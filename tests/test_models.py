@@ -167,11 +167,13 @@ def test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries(keys):
         assert timeout == cfg["roles"][role]["timeout_s"] > 0 and model.max_retries == 0, role
 
 
-def test_the_coder_and_drafter_run_deepseek_without_thinking(keys):
-    # 2026-10-23: DeepSeek V4.1 Flash. In thinking mode with tools DeepSeek requires every earlier reasoning_content to
-    # be sent back (HTTP 400 otherwise); the agent and drafter loops do not keep it, so thinking must be off.
+def test_the_coder_and_drafter_run_deepseek_in_thinking_mode_through_the_class_that_sends_reasoning_back(keys):
+    # 2026-10-23: DeepSeek V4.1 Flash in thinking mode (router pilot #2). With tools DeepSeek requires every earlier
+    # reasoning_content back (HTTP 400 otherwise): the role must be built by deepseek_class(), which sends it.
+    from models.registry import deepseek_class
     cfg = load_config()
     for role in ("coder", "drafter"):
         assert cfg["roles"][role]["model"] == "deepseek:deepseek-flash"
         model = build_chat_model(cfg, role)
-        assert model.extra_body == {"thinking": {"type": "disabled"}}, role
+        assert model.extra_body == {"thinking": {"type": "enabled"}}, role
+        assert type(model) is deepseek_class(), role
