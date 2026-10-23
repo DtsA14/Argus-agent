@@ -24,7 +24,7 @@
 <body>
 
 <h1>Argus: Gambaran Umum</h1>
-<p class="sub">Dokumen ringkas untuk dibaca santai. Keadaan per 23 Oktober 2026 (main <code>af4b0de</code>). Versi
+<p class="sub">Dokumen ringkas untuk dibaca santai. Keadaan per 23 Oktober 2026 (main <code>3e393b7</code>). Versi
 sebelumnya: 17 Oktober.</p>
 
 <div class="box"><b>Satu kalimat:</b> Argus adalah <i>agent harness</i>, yaitu kerangka yang menjalankan model AI dengan
@@ -35,7 +35,7 @@ sendiri oleh harness, dan klaim agen yang wajib didukung bukti.</div>
 <ul>
 <li>Argus sekarang bisa berjalan <b>dari issue sampai patch</b>. Model menyusun task-nya sendiri (<b>drafter</b>, W2b),
 lalu kamu menyetujuinya, lalu agen mengerjakannya.</li>
-<li>Satu task sudah <b>agent-completed tanpa patch referensi manusia</b>: <code>pr_title2</code>, total $0,54.</li>
+<li>Dua task sudah <b>agent-completed tanpa patch referensi manusia</b>: <code>pr_title2</code> ($0,54, Sonnet) dan <code>argus list</code> ($0,08, DeepSeek).</li>
 <li>Ada perintah tunggal <b><code>argus</code></b> (router v0): satu job per task, dengan cap biaya per job.</li>
 <li>Model untuk coder dan drafter pindah ke <b>DeepSeek V4.1 Flash</b>, sekitar 15&ndash;20&times; lebih murah dari Sonnet.</li>
 </ul></div>
@@ -149,7 +149,7 @@ diketik, tidak pernah disimpan, dan dihapus setelah tahap selesai.</li>
 <tr><td>W2b-1: drafter pada task 3b</td><td>Draf lolos di run ke-3; 3 run $0,67. Tes drafter lulus 20/20 terhadap kode jadi dan menangkap 19/20 mutan</td><td>Thinking memakan output; kirim ulang draf butuh <code>ReviseDraft</code>.</td></tr>
 <tr><td><b>W2b-2: task baru end-to-end</b></td><td><b><code>pr_title2</code> agent-completed tanpa patch referensi</b>; drafter $0,47 + agen $0,08; 5 menit waktumu</td><td>Drafter perlu bisa memberi <code>edit_file</code>, dan dicek apakah task-nya bisa dikerjakan.</td></tr>
 <tr><td>Router #1, Sonnet (<code>argus list</code>)</td><td>Gagal: agen kehabisan profil <code>large</code> sebelum menulis; $0,65 (termasuk job ganda)</td><td>Profil, progres di layar, <code>status</code> read-only, <code>abandon</code>.</td></tr>
-<tr><td>Router #1, DeepSeek (sedang berjalan)</td><td>Drafter: 2 run gagal (terus membaca), run ke-3 <b>DRAFTED</b>; job baru $0,07. Menunggu approve dan agen</td><td>DeepSeek non-thinking suka berputar membaca; batas langkah dan tool submit di akhir mengatasinya.</td></tr>
+<tr><td><b>Router #1, DeepSeek</b></td><td><b><code>argus list</code> agent-completed</b>: drafter run ke-3 DRAFTED, agen DONE ($0,009). Total job <b>$0,08</b> (versi Sonnet: $0,65, gagal)</td><td>DeepSeek non-thinking suka berputar membaca; batas langkah dan tool submit di akhir mengatasinya.</td></tr>
 </table>
 <div class="warn"><b>Batas generalisasi:</b> semua task masih di repo Argus sendiri, dan sampelnya kecil. Ini sinyal untuk
 mengambil keputusan, bukan ukuran kemampuan Argus secara umum.</div>
@@ -157,8 +157,8 @@ mengambil keputusan, bukan ukuran kemampuan Argus secara umum.</div>
 <h2>8. Berikutnya</h2>
 <table>
 <tr><th style="width:6%">#</th><th style="width:34%">Pekerjaan</th><th>Kenapa</th></tr>
-<tr><td>1</td><td>Selesaikan router #1: approve draf <code>d3</code>, agen, patch</td><td>Mengukur jumlah keputusanmu per task (target &plusmn;4).</td></tr>
-<tr><td>2</td><td>Cek live mode thinking DeepSeek (&plusmn;$0,001), lalu putuskan dinyalakan atau tidak</td><td>Bisa mengurangi kebiasaan drafter berputar.</td></tr>
+<tr><td>1</td><td>Coba DeepSeek <b>mode thinking</b> pada task yang sama (cek live dulu, lalu satu job)</td><td>Membandingkan dengan non-thinking: jumlah run drafter, biaya, dan keputusanmu.</td></tr>
+<tr><td>2</td><td>Router dengan model yang memilih Alur A atau B</td><td>Setelah Alur A umum dan <code>argus research</code> ada.</td></tr>
 <tr><td>3</td><td><b>W2a-ext: <code>changed_tests</code></b></td><td>Task yang mengubah perilaku yang sudah dites (misalnya <code>success_rate</code>) belum bisa ditangani.</td></tr>
 <tr><td>4</td><td>Alur A umum (kontrak riset dari prompt), lalu <code>argus research</code></td><td>Supaya Alur A bisa dipakai untuk pertanyaanmu sendiri.</td></tr>
 <tr><td>5</td><td>Repo selain Argus</td><td>Butuh image sandbox per proyek.</td></tr>
