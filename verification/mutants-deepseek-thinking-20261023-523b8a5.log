@@ -1,0 +1,7 @@
+HEAD 523b8a5 tests: tests/test_deepseek_thinking.py
+KILLED  memo drops the reasoning
+KILLED  replay does not restore it
+KILLED  request without the reasoning
+KILLED  reasoning sent where there was none
+KILLED  plain ChatDeepSeek
+RESULT: 5/5 killed
