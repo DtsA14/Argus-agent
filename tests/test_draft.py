@@ -73,6 +73,9 @@ def make_root(tmp_path):
     (repo / "tests" / "test_old.py").write_text(OLD_TEST)
     (repo / "tests" / "test_skip.py").write_text(SKIP_TEST)
     (repo / "tests" / "test_lock.py").write_text(LOCK_TEST)
+    # red by assertion: an assert in the code under test, and a protected assert helper beside the tests
+    (repo / "src" / "guard.py").write_text("def checked(x):\n    assert x >= 0, 'negative'\n    return x\n")
+    (repo / "tests" / "checks.py").write_text("def floor_ok(x):\n    assert x >= 0, 'below 0'\n")
     git(tmp_path, "init", "-q", str(repo))
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "base")
@@ -682,3 +685,76 @@ def test_a_test_skipped_only_at_run_time_in_the_intake_cannot_be_kept_skipped_by
                  max_skipped=1)
     r = run_check(root, None, scfg, draft=d)
     assert not r["ok"] and any("tests/test_skip.py::test_skipped_here" in p for p in r["problems"]), r["problems"]
+
+
+# ---- red by assertion, really (docs/reviews/SPEC_W2A_RED_BY_ASSERTION.md) ------------------------------------------
+
+SHOP_IMPORT = "import pytest\n\nfrom src.shop import total\n\n\n"
+
+
+@pytest.mark.parametrize("body, why", [
+    # pilot W2b-3: a KeyError in the test body fails whatever the fix is
+    ("def test_total_never_negative():\n    assert {'total': total([1], 5)}['floor'] == 0\n",
+     "fails with builtins.KeyError, not by an assertion"),
+    ("def test_total_never_negative():\n    assert total.floor([1], 5) == 0\n",
+     "fails with builtins.AttributeError, not by an assertion"),
+    # an assert of the code under test, not of the test: the test checks nothing yet
+    ("from src.guard import checked\n\n\ndef test_total_never_negative():\n    checked(total([1], 5))\n",
+     "fails by builtins.AssertionError raised in src/guard.py, not in a test file"),
+])
+def test_a_required_test_that_is_red_but_not_by_its_own_assertion_is_refused(root, scfg, body, why):
+    r = run_check(root, None, scfg, draft=with_new_test(SHOP_IMPORT + body))
+    assert not r["ok"] and any(why in p and NEW_NODE in p for p in r["problems"]), r["problems"]
+    if "KeyError" in why:
+        assert any('assert "key" in report' in p for p in r["problems"])
+
+
+@pytest.mark.parametrize("body, must", [
+    ("def test_total_never_negative():\n    if total([1], 5) != 0:\n        raise AssertionError('below 0')\n", None),
+    ("def test_total_never_negative():\n    if total([1], 5) < 0:\n        pytest.fail('below 0')\n", None),
+    ("def test_total_never_negative():\n    with pytest.raises(ValueError):\n        total([1], 5)\n", None),
+    ("from checks import floor_ok\n\n\ndef test_total_never_negative():\n    floor_ok(total([1], 5))\n", None),
+    ("class TestTotal:\n    def test_total_never_negative(self):\n        assert total([1], 5) == 0\n",
+     ["tests/test_new.py::TestTotal::test_total_never_negative"]),
+    ("@pytest.mark.parametrize('d', [5, 6])\ndef test_total_never_negative(d):\n    assert total([1], d) == 0\n",
+     ["tests/test_new.py::test_total_never_negative[5]", "tests/test_new.py::test_total_never_negative[6]"]),
+])
+def test_a_required_test_red_by_an_assertion_of_a_test_file_is_accepted(root, scfg, body, must):
+    r = run_check(root, None, scfg, draft=with_new_test(SHOP_IMPORT + body, must=must))
+    assert r["ok"], r["problems"]
+    rec = r["baseline"]["target"]["red_check"]
+    assert all(rec[n]["assertion"] for n in (must or [NEW_NODE]))
+    assert {rec[n]["path"] for n in (must or [NEW_NODE])} <= {"tests/test_new.py", "tests/checks.py"}
+
+
+def red_spec():
+    c = dr.build_contract(DRAFT, task="t", workspace="fixtures/repos/t", issue="i", max_usd=0.5, max_iterations=2)
+    return c, c["validation"][0]
+
+
+@pytest.mark.parametrize("got, why", [
+    ((None, "no record of the run (exit code 1)"), "how its required tests fail could not be read: no record"),
+    (({}, None), "no record of how it fails"),
+    (({NEW_NODE: {"outcome": "passed", "type": None, "assertion": False, "path": None}}, None), "no record of how"),
+    (({NEW_NODE: {"outcome": "failed", "type": "builtins.TypeError", "assertion": False,
+                  "path": "tests/test_new.py"}}, None), "fails with builtins.TypeError, not by an assertion"),
+    (({NEW_NODE: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True,
+                  "path": "src/shop.py"}}, None), "raised in src/shop.py, not in a test file"),
+    (({NEW_NODE: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True,
+                  "path": None}}, None), "raised in no file of the repository"),
+    (({NEW_NODE: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True,
+                  "path": "tests/helper_w.py"}}, None), "raised in tests/helper_w.py"),     # writable helper: no
+])
+def test_the_red_check_refuses_what_it_cannot_read_or_what_is_not_the_tests_own_assertion(got, why):
+    c, s = red_spec()
+    c["scope"]["writable"] = ["src/*.py", "tests/helper_w.py"]
+    problems, _ = dr.red_by_assertion(s, [NEW_NODE], "/ws", {}, c, {"tests/test_new.py"}, red=lambda *a, **k: got)
+    assert len(problems) == 1 and why in problems[0], problems
+
+
+@pytest.mark.parametrize("path", ["tests/test_new.py", "tests/checks.py"])
+def test_the_red_check_accepts_an_assertion_of_the_test_or_a_protected_helper_beside_it(path):
+    c, s = red_spec()
+    got = {NEW_NODE: {"outcome": "failed", "type": "_pytest.outcomes.Failed", "assertion": True, "path": path}}
+    assert dr.red_by_assertion(s, [NEW_NODE], "/ws", {}, c, {"tests/test_new.py"},
+                               red=lambda *a, **k: (got, None)) == ([], got)

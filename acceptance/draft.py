@@ -43,7 +43,7 @@ from pathlib import Path
 from . import changed as ch
 from . import contract as ct
 from . import intake
-from .validation import MAX_NODES, collect_nodes, kind, run_validation
+from .validation import MAX_NODES, collect_nodes, kind, red_check, run_validation
 from .workspace import diff, digest, snapshot
 
 VERSION = 1
@@ -216,11 +216,43 @@ def collection_problems(draft, contract, base_dir, ws, sandbox_cfg, collect=coll
     return problems, seen
 
 
-def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validation):
+# A failure that is not an assertion of the test itself fails whatever the fix is (pilot W2b-3: KeyError in a drafted test)
+NOT_ASSERTION_HINT = ("check with an assert first: `assert \"key\" in report` before `report[\"key\"]`, `assert hasattr(obj, "
+                      "\"name\")` before calling it, and build in the test (or its fixture) every piece of data it uses")
+
+
+def red_by_assertion(spec, nodes, ws, sandbox_cfg, contract, red_files, red=red_check):
+    """Problems unless every node failed by an assertion of a test file (docs/reviews/SPEC_W2A_RED_BY_ASSERTION.md): an
+    AssertionError or pytest.fail.Exception whose last frame in the repository is a new or changed test file, or a
+    protected, non-writable helper in the directory of one. Returns (problems, records)."""
+    got, why = red(nodes, str(ws), sandbox_cfg, timeout_s=spec["timeout_s"], environment=spec.get("environment"))
+    if got is None:
+        return [f"validation {spec['id']}: how its required tests fail could not be read: {why}"], None
+    sc, dirs = contract["scope"], {p.rsplit("/", 1)[0] + "/" for p in red_files if "/" in p}
+    problems = []
+    for n in nodes:
+        rec = got.get(n)
+        path = (rec or {}).get("path") or ""
+        test_file = path in red_files or (any(path.startswith(d) for d in dirs) and ct.matches(path, sc["protected"])
+                                          and not ct.matches(path, sc["writable"]))
+        if not isinstance(rec, dict) or rec.get("outcome") != "failed":
+            problems.append(f"required test {n}: no record of how it fails (it must fail by an assertion)")
+        elif not rec.get("assertion"):
+            problems.append(f"required test {n} fails with {rec.get('type')}, not by an assertion: it would fail "
+                            f"whatever the fix is; {NOT_ASSERTION_HINT}")
+        elif not test_file:
+            problems.append(f"required test {n} fails by {rec.get('type')} raised in {path or 'no file of the repository'}"
+                            ", not in a test file: the test itself checks nothing yet; assert on the result in the test")
+    return problems, got
+
+
+def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validation, red=red_check):
     """Baseline red for the new tests (and the required nodes of changed tests: new_paths is red_paths()), green for
-    everything else. Returns (problems, per-validation evidence)."""
+    everything else; red by an assertion of the test itself (red_by_assertion). Returns (problems, per-validation
+    evidence)."""
     problems, seen = [], {}
     for spec in contract["validation"]:
+        mark = len(problems)
         v = validate(spec, str(ws), sandbox_cfg)
         e = v.get("evidence") or {}
         # output_tail (W2b): the test output, for the drafter's feedback and the human's review; data, never a criterion
@@ -253,6 +285,9 @@ def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validat
             problems.append(f"validation {spec['id']}: {e.get('failures')} failures and {e.get('errors')} errors on the "
                             f"baseline; exactly the {len(new)} new required tests may fail, and nothing may error"
                             + (f" (failing or erroring but not required: {', '.join(extra)})" if extra else ""))
+        if len(problems) == mark:     # the red nodes are known to FAIL; now why (only when the rest of it holds)
+            more, seen[spec["id"]]["red_check"] = red_by_assertion(spec, new, ws, sandbox_cfg, contract, new_paths, red)
+            problems += more
     return problems, seen
 
 
@@ -282,7 +317,7 @@ def reference_problems(contract, new_paths, ws, patch, sandbox_cfg, validate=run
 
 
 def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandbox_cfg, root=".",
-          validate=run_validation, collect=collect_nodes):
+          validate=run_validation, collect=collect_nodes, red=red_check):
     """The full report on a draft. ok only when every check passed. reference_patch=None: no reference check (W2b),
     and the report says the criteria are not proven satisfiable."""
     root = Path(root)
@@ -315,13 +350,13 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
         report["warnings"] = [w for t in draft["changed_tests"]
                               for w in ch.warnings(t["path"], old[t["path"]], t["content"], t.get("removed", []))]
     with tempfile.TemporaryDirectory() as tmp:
-        red = Path(tmp) / "baseline"
-        report["added"] = materialize(base_dir, draft, red)
+        red_dir = Path(tmp) / "baseline"
+        report["added"] = materialize(base_dir, draft, red_dir)
         problems = []
         if draft.get("changed_tests"):
-            problems, report["collection"] = collection_problems(draft, contract, base_dir, red, sandbox_cfg, collect)
+            problems, report["collection"] = collection_problems(draft, contract, base_dir, red_dir, sandbox_cfg, collect)
         if not problems:
-            problems, report["baseline"] = baseline_problems(contract, new_paths, red, sandbox_cfg, validate)
+            problems, report["baseline"] = baseline_problems(contract, new_paths, red_dir, sandbox_cfg, validate, red)
         if not problems and reference_patch is None:
             report["reference"] = None
         elif not problems:

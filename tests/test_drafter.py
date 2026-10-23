@@ -136,6 +136,12 @@ def fake_collect(path, workspace, sandbox_cfg, **kw):
     return ({f"{path}::{n}" for n in _functions(f.read_text())} if f.exists() else set()), None
 
 
+def fake_red(nodes, workspace, sandbox_cfg, **kw):
+    """Stands in for the W2a red check in the sandbox: every node fake_validate fails, fails by an assert of its file."""
+    return {n: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True, "path": n.split("::", 1)[0]}
+            for n in nodes}, None
+
+
 def cfg(**drafter):
     c = load_config()
     c["roles"]["drafter"]["model"] = "fake:scripted"
@@ -144,11 +150,13 @@ def cfg(**drafter):
 
 
 def run(root, tmp_path, script, *, issue=ISSUE, max_usd=0.4, config=None, validate=fake_validate, run_id="d",
-        intake_name="shop", preflight=lambda: (True, "ok")):
+        intake_name="shop", preflight=lambda: (True, "ok"), red=None):
+    red = red or fake_red
     model = StrictScriptedChatModel(script=list(script))
     r = dt.run_drafter(run_id=run_id, runs_dir=tmp_path / "runs", cfg=config or cfg(), intake_name=intake_name,
                        issue=issue, max_usd=max_usd, models={"drafter": model}, validate=validate,
-                       preflight=preflight, env_preflight=lambda name: (True, "ok"), root=root, collect=fake_collect)
+                       preflight=preflight, env_preflight=lambda name: (True, "ok"), root=root, collect=fake_collect,
+                       red=red)
     return r, model, tmp_path / "runs" / run_id
 
 
@@ -183,7 +191,7 @@ def test_a_draft_that_passes_its_check_ends_the_run_and_is_written_for_the_human
         "min_tests": 1, "max_skipped": 0, "must_pass": [NEW_NODE], "environment": "argus"}
     # The same draft passes W2a's check outside the loop, with the same baseline
     again = dr.check(draft, task="fix_shop", issue=ISSUE, max_usd=0.5, max_iterations=3, reference_patch=None,
-                     sandbox_cfg={}, root=root, validate=fake_validate)
+                     sandbox_cfg={}, root=root, validate=fake_validate, red=fake_red)
     assert again["ok"] and again["baseline"]["target"]["must_pass"] == {NEW_NODE: "FAIL"}
     report = json.loads((d / "check_report.json").read_text())
     assert report["ok"] and report["feasibility"] == "unproven" and report["reference"] is None
@@ -513,6 +521,22 @@ def test_changed_tests_go_through_submit_and_revise_and_a_lost_test_is_named(roo
     assert "No warnings (K3)." in review
 
 
+def test_a_test_red_by_a_key_error_is_refused_and_the_drafter_is_told_how_to_assert_instead(root, tmp_path, vlog):
+    # docs/reviews/SPEC_W2A_RED_BY_ASSERTION.md: the first check sees a KeyError, the second an assertion
+    seen_by_red = []
+
+    def red(nodes, workspace, sandbox_cfg, **kw):
+        seen_by_red.append(list(nodes))
+        first = len(seen_by_red) == 1
+        return {n: {"outcome": "failed", "type": "builtins.KeyError" if first else "builtins.AssertionError",
+                    "assertion": not first, "path": n.split("::", 1)[0]} for n in nodes}, None
+    r, model, d = run(root, tmp_path, [SUBMIT, call("SubmitDraft", ARGS, "s2")], red=red)
+    seen = tool_texts(model, 1)[0]
+    assert f"required test {NEW_NODE} fails with builtins.KeyError, not by an assertion" in seen
+    assert 'assert "key" in report' in seen
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2 and seen_by_red == [[NEW_NODE], [NEW_NODE]]
+
+
 def test_a_draft_without_changed_tests_has_none():
     draft, problems = dt.draft_from_args(dict(ARGS, changed_tests=[]), base="shop", policy=POLICY)
     assert problems == [] and "changed_tests" not in draft
@@ -566,7 +590,7 @@ def _proc(root, runs, crash_at, resume):
     c["roles"]["drafter"]["model"] = "fake:scripted"
     r = dt.run_drafter(run_id="rc", runs_dir=runs, cfg=c, intake_name="shop", issue=ISSUE, max_usd=0.4,
                        resume=resume == "1", crash_at=None if crash_at == "-" else crash_at, validate=fake_validate,
-                       preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"), root=root)
+                       preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"), root=root, red=fake_red)
     return 0 if r["status"] == dt.DRAFTED else 1
 
 
@@ -753,7 +777,7 @@ def test_the_steps_left_note_survives_a_resume(root, tmp_path):
     model = StrictScriptedChatModel(script=[])
     r2 = dt.run_drafter(run_id="d", runs_dir=tmp_path / "runs", cfg=c, resume=True, models={"drafter": model},
                         validate=fake_validate, preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"),
-                        root=root)
+                        root=root, red=fake_red)
     assert model.calls == [] and r2["status"] == r1["status"] == dt.DRAFTED
 
 

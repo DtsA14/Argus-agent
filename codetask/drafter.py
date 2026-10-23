@@ -36,7 +36,7 @@ from acceptance import changed as ch
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
-from acceptance.validation import collect_nodes, run_validation
+from acceptance.validation import collect_nodes, red_check, run_validation
 from acceptance.workspace import digest, prepare, snapshot
 from harness.crash import Crasher
 from harness.errors import EstimateExceeded, InputLimitExceeded, LLMCallFailed, ReservationExhausted
@@ -173,8 +173,9 @@ SYSTEM = "\n".join([
     "runs, each with the node ids that must pass); at least one new test file; and what cannot be tested.",
     "",
     "Rules:",
-    "- The new tests must fail BY ASSERTION on the code as it is now (not by an import error or a missing name at "
-    "import time), and test only the behaviour the issue asks for. Everything else must pass now.",
+    "- The new tests must fail BY AN ASSERT OF THE TEST on the code as it is now (not by an import error, a missing "
+    "name, a KeyError or AttributeError, nor an assert inside the code under test: the harness checks the exception "
+    "and where it was raised), and test only the behaviour the issue asks for. Everything else must pass now.",
     "- Required node ids of the new tests must be ones pytest collects (path::test_name, with [params] if any).",
     "- Writable: only what a fix needs. Protected: every test file (new and old) and everything else the agent must "
     "not change. A new test must be protected and not writable.",
@@ -296,7 +297,7 @@ def _evidence(report):
     return out
 
 
-def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=collect_nodes):
+def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=collect_nodes, red=red_check):
     def submit(args, n, last=None, revise=False):
         """One SubmitDraft, or one ReviseDraft over `last` (the arguments of the previous submit): the draft built from
         the arguments and checked without a reference patch. The record keeps the arguments it used ("args"), so the
@@ -322,7 +323,7 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
             try:
                 report = dr.check(draft, task=CHECK_TASK, issue=inputs["issue"], max_usd=CHECK_USD,
                                   max_iterations=CHECK_ITERATIONS, reference_patch=None, sandbox_cfg=scfg, root=root,
-                                  validate=validate, collect=collect)
+                                  validate=validate, collect=collect, red=red)
             except (dr.DraftError, intake.IntakeError, OSError) as e:
                 problems = [f"the check could not run: {e}"]
             else:
@@ -592,8 +593,8 @@ def _changed_text(draft, report, source):
 
 
 def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None, models=None, validate=None,
-                preflight=None, env_preflight=None, collect=None):
-    """validate / preflight / env_preflight / collect: injected by tests to run without Docker (default: the real
+                preflight=None, env_preflight=None, collect=None, red=None):
+    """validate / preflight / env_preflight / collect / red: injected by tests to run without Docker (default: the real
     sandbox)."""
     run_dir, root = Path(run_dir), Path(root)
     source = run_dir / SOURCE
@@ -669,7 +670,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         box = Toolbox(str(source), READ_ONLY, scfg, policy["tools"], log, validate=validate, crasher=crasher,
                       role=role)
         submit = make_submit(inputs=inputs, policy=policy, scfg=scfg, root=root, log=log, validate=validate,
-                             source=source, collect=collect or collect_nodes)
+                             source=source, collect=collect or collect_nodes, red=red or red_check)
         run = make_drafting(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"]}, tool_versions=versions,
                             submit=submit, crasher=crasher)
         a = run(task_id, box, task_prompt(inputs, state["files"], policy))
@@ -708,7 +709,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
 
 
 def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=None, resume=False, crash_at=None,
-                models=None, validate=None, preflight=None, env_preflight=None, root=ROOT, echo=False, collect=None):
+                models=None, validate=None, preflight=None, env_preflight=None, root=ROOT, echo=False, collect=None,
+                red=None):
     """A new run takes the intake, the issue and the run's cap; a resume takes them from <run>/inputs.json."""
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
@@ -733,7 +735,8 @@ def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, inputs, root=root, crash_at=crash_at, models=models,
-                            validate=validate, preflight=preflight, env_preflight=env_preflight, collect=collect)
+                            validate=validate, preflight=preflight, env_preflight=env_preflight, collect=collect,
+                            red=red)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)
