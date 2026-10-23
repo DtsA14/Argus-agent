@@ -238,7 +238,7 @@ def _count(tree, pred):
 def _weak(n):
     """A skip, an xfail or an `assert True` (K3)."""
     if isinstance(n, ast.Assert):
-        return isinstance(n.test, ast.Constant) and bool(n.test.value)
+        return isinstance(n.test, ast.Constant) and n.test.value is True
     if isinstance(n, ast.Attribute):
         return n.attr in SKIP_MARKS and isinstance(n.value, ast.Attribute) and n.value.attr == "mark"
     if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
