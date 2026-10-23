@@ -74,6 +74,10 @@ def message_to_json(msg):
                                for c in invalid_calls(msg)],
         "usage_metadata": dict(msg.usage_metadata) if getattr(msg, "usage_metadata", None) else None,
         "truncated": is_truncated(msg),  # a replayed cut-off reply must stay cut off
+        # DeepSeek thinking mode with tools: every earlier reasoning_content must be sent back (HTTP 400 otherwise), so a
+        # replayed reply keeps it. Absent when the provider gave none, as before.
+        **({"reasoning_content": rc} if (rc := (getattr(msg, "additional_kwargs", None) or {}).get("reasoning_content"))
+           is not None else {}),
     }
 
 
@@ -87,6 +91,8 @@ def message_from_json(d):
         kw["usage_metadata"] = d["usage_metadata"]
     if d.get("truncated"):
         kw["response_metadata"] = {"truncated": True}
+    if d.get("reasoning_content") is not None:
+        kw["additional_kwargs"] = {"reasoning_content": d["reasoning_content"]}
     return AIMessage(**kw)
 
 
