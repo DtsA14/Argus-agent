@@ -1,13 +1,14 @@
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Argus: Gambaran Umum</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
 <style>
   @page { size: 21cm 29.7cm; margin: 2.2cm 2.2cm 2.2cm 2.2cm; }
-  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.4; color: #1f2328; }
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.45; color: #1f2328; max-width: 46em; margin: 0 auto; padding: 0 12px; }
   h1 { font-size: 22pt; color: #1f3864; margin-bottom: 2pt; }
-  h2 { font-size: 15pt; color: #1f3864; border-bottom: 1px solid #b4c6e7; padding-bottom: 2pt; margin-top: 18pt; }
+  h2 { font-size: 15pt; color: #1f3864; border-bottom: 1px solid #b4c6e7; padding-bottom: 2pt; margin-top: 20pt; }
   h3 { font-size: 12.5pt; color: #2f5496; margin-top: 12pt; }
   p.sub { color: #555; font-size: 10.5pt; margin-top: 0; }
   table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt 0; }
@@ -15,179 +16,167 @@
   td { border: 1px solid #b4c6e7; padding: 4pt 6pt; vertical-align: top; font-size: 10pt; }
   code { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; background: #f2f2f2; }
   .box { border: 1px solid #b4c6e7; background: #eef3fb; padding: 6pt 10pt; margin: 8pt 0; }
+  .ok { border: 1px solid #a9d18e; background: #eef7e8; padding: 6pt 10pt; margin: 8pt 0; }
   .warn { border: 1px solid #f4b183; background: #fdf1e8; padding: 6pt 10pt; margin: 8pt 0; }
-  .flow { font-family: Consolas, "Courier New", monospace; font-size: 10pt; background: #f7f7f7; border: 1px solid #ddd; padding: 6pt 10pt; }
+  .flow { font-family: Consolas, "Courier New", monospace; font-size: 10pt; background: #f7f7f7; border: 1px solid #ddd; padding: 6pt 10pt; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 
 <h1>Argus: Gambaran Umum</h1>
-<p class="sub">Dokumen ringkas untuk dibaca santai. Keadaan per 17 Oktober 2026 (main <code>f51a8b2</code>, ditambah laporan pilot di PR #72).</p>
+<p class="sub">Dokumen ringkas untuk dibaca santai. Keadaan per 23 Oktober 2026 (main <code>af4b0de</code>). Versi
+sebelumnya: 17 Oktober.</p>
 
 <div class="box"><b>Satu kalimat:</b> Argus adalah <i>agent harness</i>, yaitu kerangka yang menjalankan model AI dengan
-pagar pengaman yang ketat: batas biaya yang pasti, bisa lanjut setelah crash tanpa membayar dua kali, hasil yang
-dicek sendiri oleh harness, dan klaim agen yang wajib didukung bukti.</div>
+pagar pengaman yang ketat: batas biaya yang pasti, bisa lanjut setelah crash tanpa membayar dua kali, hasil yang dicek
+sendiri oleh harness, dan klaim agen yang wajib didukung bukti.</div>
+
+<div class="ok"><b>Apa yang baru sejak 17 Oktober:</b>
+<ul>
+<li>Argus sekarang bisa berjalan <b>dari issue sampai patch</b>. Model menyusun task-nya sendiri (<b>drafter</b>, W2b),
+lalu kamu menyetujuinya, lalu agen mengerjakannya.</li>
+<li>Satu task sudah <b>agent-completed tanpa patch referensi manusia</b>: <code>pr_title2</code>, total $0,54.</li>
+<li>Ada perintah tunggal <b><code>argus</code></b> (router v0): satu job per task, dengan cap biaya per job.</li>
+<li>Model untuk coder dan drafter pindah ke <b>DeepSeek V4.1 Flash</b>, sekitar 15&ndash;20&times; lebih murah dari Sonnet.</li>
+</ul></div>
 
 <h2>1. Dua alur di dalam Argus</h2>
-<p>Argus punya dua alur kerja yang terpisah. Masing-masing memakai <b>role</b> model yang berbeda, yang diatur di
-<code>config.yaml</code>.</p>
-
 <table>
-<tr><th style="width:24%">Alur</th><th style="width:30%">Role yang dipakai</th><th>Untuk apa</th></tr>
-<tr><td><b>A. Graph harness</b><br>(<code>graph.py</code>, milestone awal)</td>
+<tr><th style="width:24%">Alur</th><th style="width:28%">Role</th><th>Untuk apa, dan statusnya</th></tr>
+<tr><td><b>A. Riset / laporan</b><br>(<code>graph.py</code>)</td>
 <td><code>orchestrator</code>, <code>worker</code>, <code>writer</code>, <code>evaluator</code></td>
-<td>Task laporan data. Orchestrator membuat rencana, worker paralel mengerjakan sub-task, writer menyusun
-rekomendasi, dan evaluator menilai hasilnya.</td></tr>
-<tr><td><b>B. Code task</b><br>(<code>codetask/</code>, yang kita uji belakangan ini)</td>
-<td><code>coder</code> <b>saja</b></td>
-<td>Agen yang memperbaiki kode di sebuah repo: membaca, mengedit, memvalidasi, lalu <code>Finish</code>. Hasilnya
-dicek oleh node <i>acceptance</i> yang <b>tidak memakai LLM</b>.</td></tr>
+<td>Pertanyaan atas data, hasilnya laporan dengan angka yang dicek. <b>Masih demo:</b> kontraknya hardcoded (laporan
+penjualan dari <code>penjualan.csv</code>). Supaya bisa dipakai untuk pertanyaanmu sendiri, kontrak riset perlu dibuat
+dari prompt. Itu ada di rencana.</td></tr>
+<tr><td><b>B. Code task</b><br>(<code>codetask/</code>, <code>router/</code>)</td>
+<td><code>drafter</code>, lalu <code>coder</code></td>
+<td>Memperbaiki atau menambah kode di sebuah repo. Drafter menyusun task dan tesnya, kamu menyetujuinya, lalu agen
+coder mengerjakannya. Hasilnya dicek oleh acceptance yang <b>tidak memakai LLM</b>. <b>Sudah terbukti end-to-end.</b></td></tr>
 </table>
 
-<h3>Role dan batasnya (dari <code>config.yaml</code>)</h3>
-<table>
-<tr><th>Role</th><th>Model</th><th>Batas output per balasan</th><th>Dipakai di</th></tr>
-<tr><td><b>coder</b></td><td>Claude Sonnet 5.5</td><td><b>4.096 token</b></td><td>Code task (alur B)</td></tr>
-<tr><td>orchestrator</td><td>Claude Sonnet 5.5</td><td>2.048</td><td>Graph harness (alur A)</td></tr>
-<tr><td>worker</td><td>Claude Haiku 5.5</td><td>2.048 (maks. 6 panggilan per run)</td><td>Graph harness</td></tr>
-<tr><td>writer</td><td>Claude Sonnet 5.5</td><td>2.048</td><td>Graph harness</td></tr>
-<tr><td>evaluator</td><td>DeepSeek V4.1 Flash</td><td>8.192 (dinaikkan karena thinking ikut terhitung output)</td><td>Graph harness</td></tr>
-</table>
+<h2>2. Alur B sekarang, dari sisimu</h2>
+<div class="flow">argus code --repo &lt;repo&gt; --commit &lt;rev&gt; --issue-file issue.txt
+  intake (salinan repo pada satu commit)
+  drafter (model, read-only)   &#8592; layar batas, [y/N], kunci API
+  &#8594; berhenti di AWAITING_APPROVAL
 
-<div class="box">Semua eksperimen terbaru (search, budget, baseline lintas task, pilot self-hosting) hanya tentang role
-<b>coder</b> di alur B. Batas 4.096 yang mengganjal pilot ketiga adalah batas milik <code>coder</code>, bukan milik
-evaluator.</div>
+argus status &lt;job&gt;            ringkasan draf + sha + perintah approve
+argus approve &lt;job&gt; --sha &lt;12&gt;  &#8592; layar: sha, file writable, validasi, cap; [y/N]; kunci API
+  agen coder &#8594; acceptance (tanpa LLM) &#8594; paket review
+  &#8594; REVIEW_READY
 
-<h2>2. Cara kerja code task (alur B)</h2>
-<div class="flow">kontrak (ditulis manusia)<br>
-&nbsp;&nbsp;&#8595;<br>
-<b>setup</b>: validasi dan bekukan kontrak, salin repo ke workspace terisolasi, cek sandbox dan budget<br>
-&nbsp;&nbsp;&#8595;<br>
-<b>agent</b> (role coder): loop per langkah: model &#8594; tool &#8594; model &#8594; &hellip; &#8594; Finish<br>
-&nbsp;&nbsp;&#8595;<br>
-<b>acceptance</b> (tanpa LLM): jalankan semua validasi di sandbox Docker, cek scope file, cek setiap klaim<br>
-&nbsp;&nbsp;&#8595;<br>
-DONE &nbsp;/&nbsp; attempt berikutnya (dengan umpan balik) &nbsp;/&nbsp; FAILED_ACCEPTANCE &nbsp;/&nbsp; BLOCKED &nbsp;/&nbsp; FAILED_BUDGET</div>
+(manusia) terapkan changes.patch, verify.sh, merge</div>
+<p>Perintah lain: <code>argus reject &lt;job&gt; "alasan"</code>, <code>argus redraft &lt;job&gt;</code> (drafter
+dijalankan lagi di job yang sama), <code>argus resume &lt;job&gt;</code> (lanjut setelah terputus),
+<code>argus abandon &lt;job&gt; "alasan"</code> (menutup job yang ditinggal).</p>
+<div class="box">Selama tahap berjalan, layar menulis "&hellip; running &hellip;" lalu diam 1&ndash;3 menit. Itu normal.
+<b>Jangan jalankan job lain</b>; kalau terputus, cukup <code>argus resume &lt;job&gt;</code>.</div>
 
-<h3>2.1 Kontrak</h3>
-<p>Setiap task ditulis sebagai kontrak JSON oleh manusia, lalu dibekukan dengan hash. Agen tidak punya tool untuk
-mengubahnya. Isinya:</p>
+<h2>3. Drafter: model yang menyusun task</h2>
+<p>Dari issue, drafter membaca repo (read-only), lalu mengirim draf: rencana, file yang boleh diubah, file yang
+dilindungi, validasi pytest, tes baru, catatan yang tidak bisa dites, profil budget, dan tool tambahan untuk agen.</p>
+<h3>Yang dicek harness pada setiap submit (bukan dipercaya dari model)</h3>
 <ul>
-<li><b>inputs</b>: repo sumber (di bawah <code>fixtures/repos/</code>) dan teks issue.</li>
-<li><b>scope</b>: file yang boleh ditulis (<i>writable</i>) dan yang dilindungi (<i>protected</i>, misalnya tes).</li>
-<li><b>validation</b>: perintah tes (<code>python -m unittest discover &hellip;</code>), jumlah tes minimal, dan
-<i>must_pass</i>, yaitu tes yang wajib lulus.</li>
-<li><b>limits</b>: cap biaya per run (USD) dan jumlah attempt maksimal.</li>
-<li><b>tools</b> (opsional): tool tambahan untuk task itu saja (<code>search_files</code>, <code>edit_file</code>).</li>
+<li>Bentuk draf benar. Model tidak bisa mengisi intake, issue, cap, atau perintah selain <code>python -m pytest &lt;path&gt;</code>.</li>
+<li><b>Baseline merah:</b> setiap tes baru yang wajib harus <b>gagal karena assertion</b> di kode sekarang, dan semua yang
+lain lulus. Kalau ada tes yang gagal tanpa diwajibkan, namanya disebut di pesan penolakan.</li>
+<li><b>Bisa dikerjakan:</b> kalau file yang harus diubah terlalu besar untuk ditulis ulang dalam satu balasan, draf
+ditolak kecuali menambahkan <code>edit_file</code>.</li>
+<li>Profil yang boleh dipilih: <code>default</code> (task sangat kecil) atau <code>large_usd</code>. Profil
+<code>large</code> tidak ditawarkan lagi, karena habis untuk membaca.</li>
+</ul>
+<h3>Aturan main drafter</h3>
+<ul>
+<li>Maksimal <b>5 submit</b>. <code>ReviseDraft</code> mengubah sebagian draf tanpa mengirim ulang semuanya.</li>
+<li>Di pertengahan langkah ada pengingat "N langkah lagi". Di <b>3 langkah terakhir</b> hanya tool submit yang ditawarkan,
+supaya drafter tidak terus membaca.</li>
+<li>Sandbox tidak punya <code>git</code> atau jaringan, jadi tes lama yang butuh <code>git</code> tidak bisa dipakai sebagai
+validasi. Penjaganya baru <code>verify.sh</code> saat patch diterapkan.</li>
+<li>Approve <b>tanpa patch referensi</b> diperbolehkan, dan dicatat <code>feasibility: unproven</code>. Jadi baca tesnya
+di <code>DRAFT_REVIEW.md</code>: baseline merah membuktikan tesnya gagal sekarang, bukan bahwa tesnya benar.</li>
 </ul>
 
-<h3>2.2 Tool milik agen coder</h3>
+<h2>4. Model dan biaya</h2>
 <table>
-<tr><th>Tool</th><th>Fungsi</th><th>Aktif</th></tr>
-<tr><td>ListFiles</td><td>Daftar semua file di workspace</td><td>default</td></tr>
-<tr><td>ReadFile</td><td>Membaca satu file</td><td>default</td></tr>
-<tr><td>WriteFile</td><td>Mengganti <b>seluruh</b> isi satu file (hanya di scope writable)</td><td>default</td></tr>
-<tr><td>RunValidation</td><td>Menjalankan satu perintah validasi di sandbox dan melihat hasilnya</td><td>default</td></tr>
-<tr><td>Finish</td><td>Mengakhiri attempt dengan klaim (ditulis ke <code>SUMMARY.json</code>)</td><td>selalu</td></tr>
-<tr><td>SearchFiles</td><td>Mencari teks literal di file repo</td><td>lewat kontrak</td></tr>
-<tr><td><b>EditFile</b></td><td>Mengganti <b>satu</b> potongan teks yang muncul tepat sekali. Aman setelah crash (jurnal)</td><td>lewat kontrak</td></tr>
+<tr><th>Role</th><th>Model</th><th>Catatan</th></tr>
+<tr><td><b>coder</b>, <b>drafter</b></td><td>DeepSeek V4.1 Flash (<code>deepseek-flash</code>)</td><td>Mode <b>non-thinking</b>. Dukungan
+thinking sudah ada di kode (reasoning dikirim balik dan disimpan di memo), dan tinggal dicek live sebelum dinyalakan.</td></tr>
+<tr><td>orchestrator, writer</td><td>Claude Sonnet 5.5</td><td>Alur A</td></tr>
+<tr><td>worker</td><td>Claude Haiku 5.5</td><td>Alur A</td></tr>
+<tr><td>evaluator</td><td>DeepSeek V4.1 Flash</td><td>Alur A</td></tr>
 </table>
+<h3>Harga DeepSeek V4.1 Flash (dicek di halaman resmi, 23 Oktober)</h3>
+<table>
+<tr><th>Per 1 juta token</th><th>Di luar jam sibuk</th><th>Jam sibuk</th></tr>
+<tr><td>Input, kena cache</td><td>$0,003</td><td>$0,006</td></tr>
+<tr><td>Input, tidak kena cache</td><td>$0,15</td><td>$0,30</td></tr>
+<tr><td>Output</td><td>$0,60</td><td>$1,20</td></tr>
+</table>
+<p><b>Jam sibuk:</b> 01:00&ndash;04:00 dan 06:00&ndash;10:00 UTC, Senin&ndash;Jumat (<b>08&ndash;11 dan 13&ndash;17 WIB</b>).
+Prompt caching DeepSeek otomatis, tanpa biaya tulis. Jumlah token DeepSeek di Argus adalah perkiraan, jadi cap dolarnya
+bukan batas absolut (selisihnya kecil di harga ini).</p>
 
-<h3>2.3 Budget dan batas</h3>
+<h2>5. Uang dan batas</h2>
 <table>
 <tr><th>Batas</th><th>Nilai</th><th>Artinya</th></tr>
-<tr><td>attempt_tokens</td><td>30.000</td><td>Total token (input dan output) <b>semua</b> panggilan dalam satu attempt. Setiap panggilan mengirim ulang seluruh percakapan, jadi angka ini cepat habis.</td></tr>
-<tr><td>max_output_tokens (coder)</td><td>4.096</td><td>Output maksimal satu balasan, <b>termasuk thinking</b> (penalaran internal model). Harness memotongnya lagi ke sisa budget attempt.</td></tr>
-<tr><td>max_steps</td><td>12</td><td>Langkah per attempt.</td></tr>
-<tr><td>max_iterations</td><td>dari kontrak (biasanya 3)</td><td>Jumlah attempt maksimal.</td></tr>
-<tr><td>stagnation_rounds</td><td>2</td><td>Kalau kriteria yang sama gagal 2 attempt berturut-turut, run berhenti.</td></tr>
-<tr><td>Cap biaya</td><td>$0.50 per run (config dan kontrak)</td><td>Attempt baru dimulai hanya jika pengeluaran ditambah reservasi satu attempt penuh masih muat. Model tanpa harga ditolak.</td></tr>
+<tr><td>Cap per job (router)</td><td><b>$1,00</b></td><td>Semua tahap satu job dijumlahkan. Tahap yang tidak bisa mendanai satu attempt tidak dimulai.</td></tr>
+<tr><td>Cap tahap</td><td>drafter $0,75; agen $0,50 (<code>default</code>) atau $0,75 (<code>large_usd</code>)</td><td>Dibatasi sisa cap job, dicatat saat tahap mulai, dan dipakai lagi persis saat resume.</td></tr>
+<tr><td>Satu attempt drafter</td><td>$0,70, input &le; 200.000 per panggilan, output 16.384</td><td>16 langkah, 5 submit.</td></tr>
+<tr><td>Profil agen <code>large_usd</code></td><td>$0,45 per attempt, input &le; 40.000 per panggilan, output 8.192</td><td>Untuk task yang membaca file &gt; ~5 KB.</td></tr>
+<tr><td>Profil agen <code>default</code></td><td>30.000 token per attempt, output 4.096</td><td>Hanya untuk perubahan kecil di file kecil.</td></tr>
 </table>
+<div class="box">Pelajaran besar minggu ini: di loop agen, <b>seluruh percakapan dikirim ulang setiap langkah</b>. Jadi
+membaca satu file besar dibayar berkali-kali, dan batas yang dihitung dalam token cepat habis. Karena itu yang membatasi
+sekarang adalah cap dolar.</div>
 
-<h3>2.4 Status akhir sebuah run</h3>
-<table>
-<tr><th>Status</th><th>Arti</th></tr>
-<tr><td><b>DONE</b></td><td>Semua kriteria lulus: validasi, scope, <code>SUMMARY.json</code>, dan klaim yang didukung bukti.</td></tr>
-<tr><td><b>FAILED_ACCEPTANCE</b></td><td>Agen tidak memenuhi kontrak (bisa gagal jujur tanpa klaim).</td></tr>
-<tr><td><b>BLOCKED</b></td><td>Butuh manusia: kontrak tidak valid, sandbox mati, provider gagal, dan semacamnya.</td></tr>
-<tr><td><b>FAILED_BUDGET</b></td><td>Batas biaya atau token mencegah attempt (pertama) berjalan.</td></tr>
-</table>
-
-<h2>3. Jaminan yang dijaga Argus</h2>
+<h2>6. Jaminan yang dijaga Argus</h2>
 <ul>
-<li><b>Biaya:</b> setiap panggilan model lewat satu pintu (<code>LLMCaller</code>) dan tercatat di ledger sebelum dan sesudah dikirim. Panggilan yang tidak muat di reservasi <b>ditolak sebelum dikirim</b>.</li>
-<li><b>Crash-resume:</b> langkah yang sudah di-commit tidak pernah dihitung atau dibeli ulang. Tool dengan efek samping aman dijalankan dua kali.</li>
+<li><b>Biaya:</b> semua panggilan model lewat satu pintu (<code>LLMCaller</code>), tercatat sebelum dan sesudah dikirim.
+Panggilan yang tidak muat <b>ditolak sebelum dikirim</b>.</li>
+<li><b>Crash-resume:</b> langkah yang sudah di-commit tidak dibeli ulang, baik di drafter, agen, maupun job router.</li>
 <li><b>Acceptance independen:</b> harness menjalankan ulang semua validasi sendiri. Agen tidak bisa mengubah tes atau kontrak.</li>
-<li><b>Kejujuran:</b> klaim di <code>SUMMARY.json</code> dicek terhadap bukti. Satu klaim palsu menggagalkan task.</li>
-<li><b>Umpan balik attempt berikutnya:</b> berisi kriteria yang belum terpenuhi, hasil validasi per tes, dan file yang berubah, semuanya dari verdict harness sendiri.</li>
+<li><b>Kejujuran:</b> klaim agen dicek terhadap bukti; drafter tidak bisa menyetujui drafnya sendiri.</li>
+<li><b>Persetujuan terikat:</b> approve terikat ke sha draf yang kamu lihat. Kalau draf atau kontrak berubah sesudahnya,
+agen tidak jalan.</li>
+<li><b>Satu perintah per job:</b> kunci <code>flock</code>, jadi perintah kedua pada job yang sama ditolak. Kunci API
+diketik, tidak pernah disimpan, dan dihapus setelah tahap selesai.</li>
 </ul>
 
-<h2>4. Ringkasan eksperimen terbaru</h2>
+<h2>7. Hasil pilot</h2>
 <table>
-<tr><th style="width:26%">Eksperimen</th><th style="width:44%">Hasil</th><th>Pelajaran</th></tr>
-<tr><td>Search (<code>ledger</code>, A/B/C &times; 3)</td><td>0/9 sukses. Search hanya menghemat sekitar 2% token.</td><td>Nilai search belum terbukti. Masalah sebenarnya ada di langkah terakhir.</td></tr>
-<tr><td>Umpan balik berbasis verdict (seri #2)</td><td>0/9 &#8594; <b>4/9</b>, 0 klaim palsu</td><td>Pekerjaan yang sudah benar tidak lagi hilang di garis akhir (4/4).</td></tr>
-<tr><td>Budget 30k vs 45k (18 run berpasangan)</td><td>30k <b>3/9</b>, 45k <b>9/9</b>. Biaya per sukses $0.30 vs <b>$0.09</b></td><td>Untuk repo besar, 30k memang kurang. Budget tambahan dipakai untuk menyelesaikan, bukan dibuang.</td></tr>
-<tr><td>Baseline lintas task (Eval Set v1 &times; 2)</td><td><b>16/16</b> sukses, 4/4 gagal jujur, sekitar $0.03&ndash;0.04 per sukses</td><td>Eval Set v1 sudah jenuh: berguna sebagai suite regresi, tidak untuk mengukur batas.</td></tr>
-<tr><td>Pilot self-hosting #1 (bug parser)</td><td>Gagal jujur: menulis ulang file utuh terpotong (thinking 61&ndash;75%)</td><td>Melahirkan EditFile, dan pencatatan thinking di ledger.</td></tr>
-<tr><td>Pilot self-hosting #2 (sama, dengan EditFile)</td><td><b>DONE</b> ($0.19). Lolos audit dan <code>verify.sh</code>, fix-nya di-merge</td><td>Argus memperbaiki bug di repo-nya sendiri (EditFile ditambah umpan balik).</td></tr>
-<tr><td>Pilot self-hosting #3 (validasi kontrak)</td><td>Gagal jujur ($0.18). Thinking memakai <b>100%</b> output, tanpa tool call</td><td>Batas output 4.096 dan sisa budget attempt saling mengunci di task yang berat.</td></tr>
+<tr><th style="width:26%">Pilot</th><th style="width:40%">Hasil</th><th>Pelajaran</th></tr>
+<tr><td>Self-hosting #1&ndash;#3, 3a, 3b (Sonnet, kontrak manusia)</td><td>6 task agent-completed (M6 MVP), $1,29 untuk 10 run</td><td>Harness, budget, dan paket review bisa dipercaya.</td></tr>
+<tr><td>W2b-1: drafter pada task 3b</td><td>Draf lolos di run ke-3; 3 run $0,67. Tes drafter lulus 20/20 terhadap kode jadi dan menangkap 19/20 mutan</td><td>Thinking memakan output; kirim ulang draf butuh <code>ReviseDraft</code>.</td></tr>
+<tr><td><b>W2b-2: task baru end-to-end</b></td><td><b><code>pr_title2</code> agent-completed tanpa patch referensi</b>; drafter $0,47 + agen $0,08; 5 menit waktumu</td><td>Drafter perlu bisa memberi <code>edit_file</code>, dan dicek apakah task-nya bisa dikerjakan.</td></tr>
+<tr><td>Router #1, Sonnet (<code>argus list</code>)</td><td>Gagal: agen kehabisan profil <code>large</code> sebelum menulis; $0,65 (termasuk job ganda)</td><td>Profil, progres di layar, <code>status</code> read-only, <code>abandon</code>.</td></tr>
+<tr><td>Router #1, DeepSeek (sedang berjalan)</td><td>Drafter: 2 run gagal (terus membaca), run ke-3 <b>DRAFTED</b>; job baru $0,07. Menunggu approve dan agen</td><td>DeepSeek non-thinking suka berputar membaca; batas langkah dan tool submit di akhir mengatasinya.</td></tr>
 </table>
+<div class="warn"><b>Batas generalisasi:</b> semua task masih di repo Argus sendiri, dan sampelnya kecil. Ini sinyal untuk
+mengambil keputusan, bukan ukuran kemampuan Argus secara umum.</div>
 
-<div class="warn"><b>Batas generalisasi:</b> semua angka di atas berasal dari sedikit task buatan sendiri, satu model
-(Sonnet 5.5), dan sampel kecil. Itu sinyal untuk mengambil keputusan, bukan ukuran kemampuan Argus secara umum.</div>
-
-<h2>5. Rencana berikutnya: M6 (repo-to-PR)</h2>
-<p>Tujuannya: Argus mengerjakan satu task nyata di satu repo, memvalidasinya di sandbox yang bisa direproduksi, lalu
-menyerahkan paket review. <b>Manusia</b> yang membaca paket itu dan membuka PR. Status: desain disetujui,
-<b>implementasi ditahan</b> sampai rencana (<code>docs/reviews/M6_PLAN.md</code>), kriteria acceptance, dan preflight
-disetujui.</p>
-<h3>5.1 Empat keputusan</h3>
+<h2>8. Berikutnya</h2>
 <table>
-<tr><th style="width:4%">#</th><th style="width:40%">Keputusan</th><th>Batasannya</th></tr>
-<tr><td>1</td><td>Scope MVP: sandbox per proyek, diff dan draf PR, provenance, profil budget per task</td><td>45k / 8.192 hanya untuk task berat. Sandbox secukupnya untuk repo pertama.</td></tr>
-<tr><td>2</td><td>Model membuat draf rencana dan kriteria; manusia menyetujui sebelum eksekusi</td><td>Kriteria harus bisa diuji deterministik. Yang tak terverifikasi tidak pernah dihitung lulus.</td></tr>
-<tr><td>3</td><td>PR dibuka manusia</td><td>Argus menyiapkan diff, ringkasan, hasil tes, klaim dengan bukti, dan metadata commit.</td></tr>
-<tr><td>4</td><td>Repo pertama: Argus sendiri (bersyarat)</td><td>Task kecil yang tidak menyentuh komponen keselamatan inti. Kalau tidak bisa direproduksi: Athena.</td></tr>
+<tr><th style="width:6%">#</th><th style="width:34%">Pekerjaan</th><th>Kenapa</th></tr>
+<tr><td>1</td><td>Selesaikan router #1: approve draf <code>d3</code>, agen, patch</td><td>Mengukur jumlah keputusanmu per task (target &plusmn;4).</td></tr>
+<tr><td>2</td><td>Cek live mode thinking DeepSeek (&plusmn;$0,001), lalu putuskan dinyalakan atau tidak</td><td>Bisa mengurangi kebiasaan drafter berputar.</td></tr>
+<tr><td>3</td><td><b>W2a-ext: <code>changed_tests</code></b></td><td>Task yang mengubah perilaku yang sudah dites (misalnya <code>success_rate</code>) belum bisa ditangani.</td></tr>
+<tr><td>4</td><td>Alur A umum (kontrak riset dari prompt), lalu <code>argus research</code></td><td>Supaya Alur A bisa dipakai untuk pertanyaanmu sendiri.</td></tr>
+<tr><td>5</td><td>Repo selain Argus</td><td>Butuh image sandbox per proyek.</td></tr>
 </table>
-<h3>5.2 Workstream</h3>
-<table>
-<tr><th style="width:8%">Kode</th><th style="width:30%">Isi</th><th>Catatan</th></tr>
-<tr><td>W0</td><td>Tes output rusak, terpotong, dan timeout model</td><td>Hanya tes. Paralel dengan W1.</td></tr>
-<tr><td>W1</td><td>Sandbox repo Argus + pytest terstruktur</td><td>Image tanpa jaringan dari venv yang dipatok. Tes yang butuh Docker tidak bisa jadi kriteria.</td></tr>
-<tr><td>W2</td><td>Draf rencana, kontrak, dan tes oleh model</td><td>Tes baru wajib gagal di commit dasar. Hanya kontrak beku yang disetujui manusia yang dijalankan.</td></tr>
-<tr><td>W3</td><td>Paket review tanpa LLM</td><td><code>changes.patch</code>, <code>tests.md</code>, <code>claims.md</code>, <code>provenance.json</code>, <code>PR.md</code>.</td></tr>
-<tr><td>W4</td><td>Intake repo pada satu commit</td><td>Commit dasar dan commit agen dicatat di <code>result.json</code>.</td></tr>
-<tr><td>W5</td><td>Profil budget per task</td><td><code>default</code> 30k / 4.096, <code>large</code> 45k / 8.192.</td></tr>
-</table>
-<p><b>Urutan:</b> W0 dan W1 paralel; W4 dan W5 menyusul; W2 setelah W1; W3 setelah W4; lalu satu pilot.</p>
-<h3>5.3 Kapan boleh pilot, dan kapan dianggap berhasil</h3>
-<ul>
-<li><b>Go:</b> W0 di-merge; image bisa dibangun ulang tanpa jaringan; tes target identik di dua run; baseline
-merah/hijau terbukti; draf disetujui; dry run menghasilkan paket review lengkap; <code>verify.sh</code> lulus.</li>
-<li><b>Berhasil:</b> DONE dalam cap biaya, lolos validasi independen dan <code>verify.sh</code> setelah patch diterapkan,
-paket lengkap, PR dibuka tanpa perubahan kode manual (atau perubahannya dicatat). Waktu supervisi ikut diukur.</li>
-<li><b>Berhenti:</b> sandbox tidak bisa direproduksi, tes flaky, kriteria tidak deterministik, anomali biaya atau klaim
-palsu, atau task ternyata menyentuh komponen keselamatan inti.</li>
-</ul>
-<h3>5.4 Masih terbuka di luar M6</h3>
-<ul>
-<li><b>Celah kecil:</b> cap total di <code>evals/runner.py</code> menghitung biaya yang tidak diketahui sebagai $0.
-Harus dibuat fail-closed.</li>
-<li><b>Laporan pilot #3</b> (PR #72) masih menunggu review.</li>
-</ul>
+<p><b>Operasional (untukmu):</b> cabut kunci API Anthropic yang dipakai pilot, dan bersihkan sisa kunci di VM.</p>
 
-<h2>6. Istilah singkat</h2>
+<h2>9. Istilah singkat</h2>
 <table>
-<tr><th style="width:24%">Istilah</th><th>Arti</th></tr>
-<tr><td>Attempt</td><td>Satu percobaan agen menyelesaikan task, dengan percakapan baru dan budget token sendiri.</td></tr>
-<tr><td>Ledger</td><td>Catatan setiap panggilan model: token, biaya, thinking, dan alasan berhenti.</td></tr>
-<tr><td>Memo / checkpoint</td><td>Simpanan hasil setiap langkah agar run bisa dilanjutkan setelah crash tanpa mengulang.</td></tr>
-<tr><td>Verdict</td><td>Hasil pemeriksaan acceptance untuk satu attempt (kriteria lulus atau gagal).</td></tr>
-<tr><td>Thinking / reasoning tokens</td><td>Penalaran internal model sebelum menjawab. Ikut menghabiskan jatah output.</td></tr>
-<tr><td>Sandbox</td><td>Container Docker tanpa jaringan, tempat semua tes dijalankan.</td></tr>
-<tr><td>Fixture</td><td>Repo contoh buatan sendiri yang dipakai sebagai task.</td></tr>
-<tr><td>Self-hosting pilot</td><td>Argus mengerjakan task di repo Argus sendiri, lalu diverifikasi dari luar.</td></tr>
+<tr><th style="width:26%">Istilah</th><th>Arti</th></tr>
+<tr><td>Job</td><td>Satu task di router: intake, drafter, approve, agen, paket review. Punya cap dan folder sendiri (<code>jobs/&lt;id&gt;</code>).</td></tr>
+<tr><td>Draf</td><td>Usulan task dari drafter: rencana, scope, validasi, tes baru.</td></tr>
+<tr><td>Baseline merah</td><td>Tes baru terbukti gagal di kode sekarang, karena assertion.</td></tr>
+<tr><td>Patch referensi</td><td>Solusi manusia yang membuktikan task bisa dikerjakan. Sekarang opsional (<code>unproven</code>).</td></tr>
+<tr><td>Attempt</td><td>Satu percobaan agen dengan percakapan baru dan budget sendiri.</td></tr>
+<tr><td>Ledger</td><td>Catatan setiap panggilan model: token, biaya, cache, alasan berhenti.</td></tr>
+<tr><td>Memo / checkpoint</td><td>Simpanan setiap langkah agar run bisa lanjut setelah crash tanpa membayar ulang.</td></tr>
+<tr><td>Thinking</td><td>Penalaran internal model sebelum menjawab. Ikut dihitung sebagai output.</td></tr>
+<tr><td>Agent-completed</td><td>Patch agen diterapkan ke <code>main</code> tanpa perubahan, dan <code>verify.sh</code> lulus.</td></tr>
 </table>
 
 </body>
