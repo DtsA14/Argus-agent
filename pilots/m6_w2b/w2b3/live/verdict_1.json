@@ -1,0 +1,245 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": [
+            "scripts/pilot_report.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": [
+            "scripts/pilot_report.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; pytest outcome FAILED; required test tests/test_pilot_report_all.py::test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs is 'FAIL'; required test tests/test_pilot_report_all.py::test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_pilot_report_all.py"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 5,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 2,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_pilot_report_all.py::test_a_run_without_a_result_counts_against_success_rate_all": "ok",
+          "tests/test_pilot_report_all.py::test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs": "FAIL",
+          "tests/test_pilot_report_all.py::test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added": "FAIL",
+          "tests/test_pilot_report_all.py::test_with_no_done_run_both_rates_are_zero": "ok",
+          "tests/test_pilot_report_all.py::test_a_report_of_only_runs_without_a_result_has_no_success_rate": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 5 items\n\ntests/test_pilot_report_all.py::test_a_run_without_a_result_counts_against_success_rate_all PASSED\ntests/test_pilot_report_all.py::test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs FAILED\ntests/test_pilot_report_all.py::test_with_no_done_run_both_rates_are_zero PASSED\ntests/test_pilot_report_all.py::test_a_report_of_only_runs_without_a_result_has_no_success_rate PASSED\ntests/test_pilot_report_all.py::test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added FAILED\n\n=================================== FAILURES ===================================\n______ test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs _______\ntests/test_pilot_report_all.py:47: in test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs\n    g = got(runs[\"f1\"], runs[\"f2\"], runs[\"f3\"], runs[\"f4\"], runs[\"f5c\"], runs[\"f6a\"], runs[\"f7\"])\n                                                                         ^^^^^^^^^^^\nE   KeyError: 'f6a'\n_ test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added _\ntests/test_pilot_report_all.py:69: in test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added\n    g = got(runs[\"f1\"], runs[\"f2\"], runs[\"f3\"], runs[\"f4\"], runs[\"f5c\"], runs[\"f6a\"], runs[\"f7\"])\n                                                                         ^^^^^^^^^^^\nE   KeyError: 'f6a'\n========================= 2 failed, 3 passed in 2.34s ==========================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 5,
+        "deselected": 0,
+        "stderr_tail": "",
+        "failed_nodes": [
+          "tests/test_pilot_report_all.py::test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added",
+          "tests/test_pilot_report_all.py::test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs"
+        ],
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "validation:report",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_pilot_report.py"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 17,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run": "ok",
+          "tests/test_pilot_report.py::test_the_report_with_supervision_minutes": "ok",
+          "tests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data": "ok",
+          "tests/test_pilot_report.py::test_no_run_done": "ok",
+          "tests/test_pilot_report.py::test_no_cost_known": "ok",
+          "tests/test_pilot_report.py::test_only_runs_without_a_result": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 17 items\n\ntests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run PASSED\ntests/test_pilot_report.py::test_the_report_with_supervision_minutes PASSED\ntests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data PASSED\ntests/test_pilot_report.py::test_no_run_done PASSED\ntests/test_pilot_report.py::test_no_cost_known PASSED\ntests/test_pilot_report.py::test_only_runs_without_a_result PASSED\ntests/test_pilot_report.py::test_no_run_is_refused PASSED\ntests/test_pilot_report.py::test_an_argument_that_is_not_a_run_directory_is_refused PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[negative] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[string] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[bool] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[list] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[nan] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[unknown_run] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[not_json] PASSED\ntests/test_pilot_report.py::test_an_invalid_supervision_file_is_refused[number] PASSED\ntests/test_pilot_report.py::test_a_missing_supervision_file_is_refused PASSED\n\n============================== 17 passed in 6.15s ==============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 17,
+        "deselected": 0,
+        "stderr_tail": "",
+        "failed_nodes": [],
+        "skip_violations": [],
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "validation:regression",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_run_inspectors.py"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 14,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f1]": "ok",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f2]": "ok",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f3]": "ok",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f5]": "ok",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f8]": "ok",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f1]": "ok",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f2]": "ok",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f3]": "ok",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f5]": "ok",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f8]": "ok",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[wrap]": "ok",
+          "tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else": "ok",
+          "tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited": "ok",
+          "tests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 14 items\n\ntests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f1] PASSED\ntests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f2] PASSED\ntests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f3] PASSED\ntests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f5] PASSED\ntests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f8] PASSED\ntests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f1] PASSED\ntests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f2] PASSED\ntests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f3] PASSED\ntests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f5] PASSED\ntests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f8] PASSED\ntests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[wrap] PASSED\ntests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else PASSED\ntests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited PASSED\ntests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced PASSED\n\n============================= 14 passed in 31.96s ==============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 14,
+        "deselected": 0,
+        "stderr_tail": "",
+        "failed_nodes": [],
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "1a3bbfefb3f9ae1c3d7e36c72ee8a350f7619a3e96a0ab568baccc555ee6d8cf",
+  "summary_sha256": null,
+  "verdict_sha256": "dc40fd314d6e66c5754246fc29dadf7e2916c683152b01997ec0587218b40baa"
+}

@@ -1,0 +1,101 @@
+{
+  "job": "j20261023_104529_ca7d",
+  "kind": "code",
+  "state": "AGENT_FAILED",
+  "created_at": "2026-10-23T10:45:29Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/pilot3a_live",
+    "commit": "HEAD",
+    "issue": "scripts/pilot_report.py reports success_rate as done / (runs_total - no_result): a run that left no result (NO_RESULT)\nis dropped from the denominator, so a run that died looks like neither a success nor a failure.\n\nKeep success_rate exactly as it is, and add one key to the report, right after it:\n\n  \"success_rate_all\": done / runs_total, rounded to 4 decimals like success_rate, or null when runs_total is 0\n\nso the report shows both. Nothing else in the report changes. tests/test_pilot_report.py compares the whole report\nwith one it computes itself from the issue's formulas, so it must be updated to expect the new key with that formula.",
+    "exclude": [
+      "verification",
+      "pilots"
+    ]
+  },
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261023_104529_ca7d-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T10:46:14Z",
+      "ended_at": "2026-10-23T10:48:31Z",
+      "status": "DRAFTED",
+      "usd": 0.014340996,
+      "draft_sha256": "18d6bc27594a10318362640d5fbbceafa895e28515c420cfaa10d4ae368c2cda"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261023_104529_ca7d-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-23T10:52:20Z",
+      "ended_at": "2026-10-23T10:57:55Z",
+      "status": "FAILED_ACCEPTANCE",
+      "usd": 0.021205764,
+      "profile": "large_usd"
+    }
+  },
+  "approval": {
+    "draft_sha256": "18d6bc27594a10318362640d5fbbceafa895e28515c420cfaa10d4ae368c2cda",
+    "contract_sha256": "263b7e874b95dd31b1605144af066d52a8cc2c81d846543551a7551ca42b7fbf",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-23T10:52:20Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-23T10:45:29Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-23T10:45:30Z",
+      "what": "intaken",
+      "files": 456
+    },
+    {
+      "at": "2026-10-23T10:46:14Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-23T10:48:31Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-23T10:52:20Z",
+      "what": "approved",
+      "draft": "18d6bc27594a",
+      "contract": "263b7e874b95"
+    },
+    {
+      "at": "2026-10-23T10:52:20Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-23T10:57:55Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "AGENT_FAILED",
+      "stage": "a1",
+      "reason": "stagnant: the same criteria failed 2 attempts in a row"
+    }
+  ],
+  "intake": {
+    "commit": "e6b9fb434857db90285b7d7bb81caa1a1626e57a",
+    "tree": "4ac4b94a4338903f35da58ebe0ba674c079a375c",
+    "files": 456,
+    "snapshot_sha256": "cb59176c5d6a4ba9469e55b7a24f72234dfdfca00652ad095e1c6930bdbd2edf"
+  }
+}
