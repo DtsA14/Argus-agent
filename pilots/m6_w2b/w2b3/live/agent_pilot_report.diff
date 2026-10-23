@@ -1,0 +1,21 @@
+--- /home/ubuntu/pilot3a_live/scripts/pilot_report.py	2026-10-22 15:58:07.248916027 +0000
++++ workspace/scripts/pilot_report.py	2026-10-23 10:52:31.473277596 +0000
+@@ -4,6 +4,10 @@
+ 
+ FILE is a JSON object {run_id: minutes}. Runs are read only through evals/runlog.py. Exit 2 (one line on stderr, nothing on
+ stdout) when no run is given, an argument is not a run directory, or the supervision file is unreadable or invalid.
++
++success_rate is done / (runs_total - no_result): a run that left no result stays out of that denominator.
++success_rate_all, the key right after it, is done / runs_total (4 decimals too, null only when runs_total is 0), so a run
++that died counts as not done.
+ """
+ import json
+ import math
+@@ -111,6 +115,7 @@
+         "done": len(done),
+         "no_result": no_result,
+         "success_rate": round(len(done) / with_result, 4) if with_result else None,
++        "success_rate_all": round(len(done) / total, 4) if total else None,
+         "usd_known_total": round(nano / 1e9, 6),
+         "usd_unknown_runs": unknown,
+         "cost_per_success": round(nano / 1e9 / done_known, 6) if done_known else None,

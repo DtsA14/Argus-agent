@@ -1,0 +1,127 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "scripts/pilot_report.py"
+    ],
+    "steps": [
+      "In build(), compute the rate over every run as round(len(done) / total, 4) when total is not 0, else None.",
+      "Add the key \"success_rate_all\" to the returned dict immediately after \"success_rate\", whose expression stays exactly as it is.",
+      "Change nothing else: no other key, no other ordering, no other value."
+    ],
+    "risks": [
+      "Putting success_rate_all anywhere but right after success_rate (the test pins the key order).",
+      "Changing success_rate itself, e.g. switching its denominator to runs_total.",
+      "Getting the null branch wrong (must be checked against total, not against total - no_result, and must not divide by zero).",
+      "Rounding the new rate differently from success_rate (round(..., 4)).",
+      "Touching the tests or any other report key while editing."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "scripts/pilot_report.py"
+      ],
+      "protected": [
+        "tests/**",
+        "evals/**",
+        "fixtures/**",
+        "conftest.py",
+        "scripts/audit_run.py",
+        "scripts/failure_trace.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_pilot_report_all.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 5,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_pilot_report_all.py::test_a_run_without_a_result_counts_against_success_rate_all",
+          "tests/test_pilot_report_all.py::test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs",
+          "tests/test_pilot_report_all.py::test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added",
+          "tests/test_pilot_report_all.py::test_with_no_done_run_both_rates_are_zero",
+          "tests/test_pilot_report_all.py::test_a_report_of_only_runs_without_a_result_has_no_success_rate"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "report",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_pilot_report.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 17,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_pilot_report.py::test_the_report_over_seven_kinds_of_run",
+          "tests/test_pilot_report.py::test_the_report_with_supervision_minutes",
+          "tests/test_pilot_report.py::test_missing_minutes_are_null_and_a_zero_is_data",
+          "tests/test_pilot_report.py::test_no_run_done",
+          "tests/test_pilot_report.py::test_no_cost_known",
+          "tests/test_pilot_report.py::test_only_runs_without_a_result"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_run_inspectors.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 14,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f1]",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f2]",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f3]",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f5]",
+          "tests/test_run_inspectors.py::test_audit_run_still_prints_what_it_always_printed[f8]",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f1]",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f2]",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f3]",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f5]",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[f8]",
+          "tests/test_run_inspectors.py::test_failure_trace_still_prints_what_it_always_printed[wrap]",
+          "tests/test_run_inspectors.py::test_a_cut_line_in_the_middle_of_the_log_adds_one_line_and_changes_nothing_else",
+          "tests/test_run_inspectors.py::test_a_run_blocked_before_any_model_call_is_audited",
+          "tests/test_run_inspectors.py::test_a_directory_without_a_result_is_reported_and_the_next_one_is_still_traced"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "budget_profile": "large_usd"
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_pilot_report_all.py",
+      "content": "\"\"\"scripts/pilot_report.py: success_rate keeps its own denominator (runs with a result) and a new key success_rate_all,\nright after it, is done / runs_total (4 decimals, like success_rate), so a run that left no result counts as not done.\n\nThe runs are the synthetic ones of tests/test_run_inspectors.py (a scripted model, an injected validation: no Docker, no\nmoney). Every expected number below is written from the issue's formulas, not from the script.\"\"\"\nimport json\nimport os\nimport subprocess\nimport sys\nfrom pathlib import Path\n\nimport pytest\n\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nfrom test_run_inspectors import build  # noqa: E402\n\nROOT = Path(__file__).resolve().parent.parent\n\n\n@pytest.fixture(scope=\"module\")\ndef runs(tmp_path_factory):\n    return build(ROOT, tmp_path_factory.mktemp(\"runs\") / \"b\")\n\n\ndef report(*args):\n    return subprocess.run([sys.executable, str(ROOT / \"scripts\" / \"pilot_report.py\"), *map(str, args)], cwd=ROOT,\n                          env={**os.environ, \"PYTHONPATH\": str(ROOT)}, capture_output=True, text=True, timeout=120)\n\n\ndef got(*args):\n    r = report(*args)\n    assert r.returncode == 0, r.stderr[-500:]\n    return json.loads(r.stdout)\n\n\n# ---- the new key, and the old one unchanged --------------------------------------------------------------------------\n\ndef test_a_run_without_a_result_counts_against_success_rate_all(runs):\n    # f1 is DONE, f7 left no result: done over the runs with a result is 1/1, done over every run is 1/2\n    g = got(runs[\"f1\"], runs[\"f7\"])\n    assert (g.get(\"runs_total\"), g.get(\"done\"), g.get(\"no_result\")) == (2, 1, 1)\n    assert g.get(\"success_rate\") == 1.0                    # unchanged: NO_RESULT stays out of this denominator\n    assert g.get(\"success_rate_all\") == 0.5                # done / runs_total\n\n\ndef test_success_rate_all_is_rounded_to_four_decimals_over_seven_runs(runs):\n    g = got(runs[\"f1\"], runs[\"f2\"], runs[\"f3\"], runs[\"f4\"], runs[\"f5c\"], runs[\"f6a\"], runs[\"f7\"])\n    assert (g.get(\"runs_total\"), g.get(\"done\"), g.get(\"no_result\")) == (7, 4, 1)\n    assert g.get(\"success_rate\") == 0.6667                 # 4 / (7 - 1)\n    assert g.get(\"success_rate_all\") == 0.5714             # 4 / 7, rounded like success_rate\n\n\ndef test_with_no_done_run_both_rates_are_zero(runs):\n    g = got(runs[\"f3\"], runs[\"f4\"], runs[\"f7\"])\n    assert (g.get(\"done\"), g.get(\"no_result\")) == (0, 1)\n    assert g.get(\"success_rate\") == 0.0                    # 0 / (3 - 1)\n    assert g.get(\"success_rate_all\") == 0.0                # 0 / 3\n\n\ndef test_a_report_of_only_runs_without_a_result_has_no_success_rate(runs):\n    g = got(runs[\"f7\"])\n    assert g.get(\"runs_total\") == 1 and g.get(\"success_rate\") is None      # nothing with a result\n    assert g.get(\"success_rate_all\") == 0.0                # 0 / 1: null only when runs_total is 0\n\n\n# ---- one key, right after success_rate, nothing else added ----------------------------------------------------------\n\ndef test_success_rate_all_comes_right_after_success_rate_and_nothing_else_is_added(runs):\n    g = got(runs[\"f1\"], runs[\"f2\"], runs[\"f3\"], runs[\"f4\"], runs[\"f5c\"], runs[\"f6a\"], runs[\"f7\"])\n    assert list(g) == [\"runs\", \"runs_total\", \"done\", \"no_result\", \"success_rate\", \"success_rate_all\",\n                       \"usd_known_total\", \"usd_unknown_runs\", \"cost_per_success\", \"cost_complete\", \"attempts\",\n                       \"attempts_distribution\", \"supervision\", \"events_skipped\"]\n"
+    }
+  ],
+  "unverifiable": [
+    "The null branch of success_rate_all (runs_total == 0) cannot be reached through the script: with no run directory it refuses with exit 2, and every accepted argument adds a row, so runs_total is never 0. No test exercises that branch.",
+    "Whether the report reads well for a human scanning both rates (the point of the change) is a judgement no test makes."
+  ],
+  "changed_tests": [
+    {
+      "content": "\"\"\"M6 pilot 3b: scripts/pilot_report.py, one JSON report over several code-task run directories (pilots/m6_pilot3/3b/SPEC.md).\n\nThe runs are the synthetic ones of tests/test_run_inspectors.py (build(): a scripted model, an injected validation; no Docker,\nno money) plus copies with result.json changed. Expected reports are written here from the definitions of the issue: statuses,\nattempts and calls as literals; each run's usd_billed is read from its own result.json (an input of the report) and every\naggregate is computed below with the issue's formulas, independently of the script. success_rate is done / (runs_total -\nno_result) and success_rate_all, the key right after it, is done / runs_total.\"\"\"\nimport json\nimport os\nimport shutil\nimport statistics\nimport subprocess\nimport sys\nfrom pathlib import Path\n\nimport pytest\n\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nfrom test_run_inspectors import build  # noqa: E402\n\nROOT = Path(__file__).resolve().parent.parent\n\n\n@pytest.fixture(scope=\"module\")\ndef runs(tmp_path_factory):\n    out = build(ROOT, tmp_path_factory.mktemp(\"runs\") / \"b\")\n    base = out[\"f1\"]\n    for name, change in ((\"f6a\", lambda r: r.update(usd_complete=False)),          # a partial cost: a lower bound only\n                         (\"f6b\", lambda r: r.pop(\"usd_billed\")),                     # no cost at all\n                         (\"f6c\", lambda r: r.pop(\"usd_complete\"))):                  # completeness not stated\n        d = base.parent / name\n        shutil.copytree(base, d)\n        r = json.loads((d / \"result.json\").read_text(encoding=\"utf-8\"))\n        change(r)\n        (d / \"result.json\").write_text(json.dumps(r), encoding=\"utf-8\")\n        out[name] = d\n    return out\n\n\ndef report(*args):\n    return subprocess.run([sys.executable, str(ROOT / \"scripts\" / \"pilot_report.py\"), *map(str, args)], cwd=ROOT,\n                          env={**os.environ, \"PYTHONPATH\": str(ROOT)}, capture_output=True, text=True, timeout=120)\n\n\ndef usd(run):\n    return json.loads((run / \"result.json\").read_text(encoding=\"utf-8\")).get(\"usd_billed\")\n\n\ndef row(run_id, status, attempts, calls, usd_billed, cost_known, skipped=0, minutes=None):\n    return {\"run_id\": run_id, \"status\": status, \"done\": status == \"DONE\", \"attempts\": attempts, \"llm_calls\": calls,\n            \"usd_billed\": usd_billed, \"cost_known\": cost_known, \"events_skipped\": skipped, \"supervision_minutes\": minutes}\n\n\ndef expected(rows):\n    \"\"\"The aggregate of the issue, computed from the rows.\"\"\"\n    known = [r for r in rows if r[\"cost_known\"]]\n    no_result = sum(r[\"status\"] == \"NO_RESULT\" for r in rows)\n    done = [r for r in rows if r[\"done\"]]\n    total_nano = sum(round(r[\"usd_billed\"] * 1e9) for r in known)\n    done_known = sum(r[\"done\"] for r in known)\n    att = [r[\"attempts\"] for r in done]\n    dist = {}\n    for r in rows:\n        if r[\"status\"] != \"NO_RESULT\":\n            dist[r[\"attempts\"]] = dist.get(r[\"attempts\"], 0) + 1\n    mins = [r[\"supervision_minutes\"] for r in rows if r[\"supervision_minutes\"] is not None]\n    return {\"runs\": rows, \"runs_total\": len(rows), \"done\": len(done), \"no_result\": no_result,\n            \"success_rate\": round(len(done) / (len(rows) - no_result), 4) if len(rows) - no_result else None,\n            \"success_rate_all\": round(len(done) / len(rows), 4) if len(rows) else None,\n            \"usd_known_total\": round(total_nano / 1e9, 6), \"usd_unknown_runs\": len(rows) - len(known),\n            \"cost_per_success\": round(total_nano / 1e9 / done_known, 6) if done_known else None,\n            \"cost_complete\": len(known) == len(rows),\n            \"attempts\": {\"mean\": round(statistics.mean(att), 3), \"median\": statistics.median(att)} if att else None,\n            \"attempts_distribution\": {str(k): dist[k] for k in sorted(dist)},\n            \"supervision\": {\"runs_with_data\": len(mins), \"total\": sum(mins) if mins else None,\n                            \"mean\": round(statistics.mean(mins), 2) if mins else None},\n            \"events_skipped\": sum(r[\"events_skipped\"] for r in rows)}\n\n\ndef text(obj):\n    return json.dumps(obj, indent=2, ensure_ascii=False) + \"\\n\"\n\n\ndef the_set(runs, minutes=None):\n    m = minutes or {}\n    return [row(\"f1\", \"DONE\", 1, 4, usd(runs[\"f1\"]), True, minutes=m.get(\"f1\")),\n            row(\"f2\", \"DONE\", 2, 3, usd(runs[\"f2\"]), True, minutes=m.get(\"f2\")),\n            row(\"f3\", \"FAILED_ACCEPTANCE\", 2, 2, usd(runs[\"f3\"]), True, minutes=m.get(\"f3\")),\n            row(\"f4\", \"BLOCKED\", 0, 0, usd(runs[\"f4\"]), True, minutes=m.get(\"f4\")),\n            row(\"f5c\", \"DONE\", 1, 3, usd(runs[\"f5c\"]), True, skipped=1, minutes=m.get(\"f5c\")),\n            row(\"f6a\", \"DONE\", 1, 4, usd(runs[\"f6a\"]), False, minutes=m.get(\"f6a\")),\n            row(\"f7\", \"NO_RESULT\", None, None, None, False, minutes=m.get(\"f7\"))]\n\n\nSET = (\"f1\", \"f2\", \"f3\", \"f4\", \"f5c\", \"f6a\", \"f7\")\n\n\n# ---- the report, exactly --------------------------------------------------------------------------------------------\n\ndef test_the_report_over_seven_kinds_of_run(runs):\n    r = report(*(runs[n] for n in SET))\n    assert r.returncode == 0, r.stderr[-500:]\n    want = expected(the_set(runs))\n    assert r.stdout == text(want)\n    # the facts the definitions turn on, spelled out\n    assert (want[\"done\"], want[\"no_result\"], want[\"success_rate\"], want[\"success_rate_all\"],\n            want[\"usd_unknown_runs\"]) == (4, 1, 0.6667, 0.5714, 2)\n    assert want[\"attempts\"] == {\"mean\": 1.25, \"median\": 1.0} and want[\"attempts_distribution\"] == {\"0\": 1, \"1\": 3, \"2\": 2}\n    assert want[\"cost_complete\"] is False and want[\"events_skipped\"] == 1\n    assert list(want)[5] == \"success_rate_all\"                                  # right after success_rate\n\n\ndef test_the_report_with_supervision_minutes(runs, tmp_path):\n    minutes = {\"f1\": 12, \"f2\": 30.5, \"f3\": 0, \"f4\": 5, \"f5c\": 7, \"f6a\": 3, \"f7\": 1}\n    sup = tmp_path / \"supervision.json\"\n    sup.write_text(json.dumps(minutes), encoding=\"utf-8\")\n    r = report(*(runs[n] for n in SET), \"--supervision\", sup)\n    assert r.returncode == 0, r.stderr[-500:]\n    want = expected(the_set(runs, minutes))\n    assert r.stdout == text(want)\n    assert want[\"supervision\"] == {\"runs_with_data\": 7, \"total\": 58.5, \"mean\": 8.36}\n\n\ndef test_missing_minutes_are_null_and_a_zero_is_data(runs, tmp_path):\n    sup = tmp_path / \"s.json\"\n    sup.write_text(json.dumps({\"f3\": 0, \"f2\": 2.5}), encoding=\"utf-8\")\n    r = report(runs[\"f1\"], runs[\"f2\"], runs[\"f3\"], \"--supervision\", sup)\n    rows = [row(\"f1\", \"DONE\", 1, 4, usd(runs[\"f1\"]), True),\n            row(\"f2\", \"DONE\", 2, 3, usd(runs[\"f2\"]), True, minutes=2.5),\n            row(\"f3\", \"FAILED_ACCEPTANCE\", 2, 2, usd(runs[\"f3\"]), True, minutes=0)]\n    assert r.returncode == 0 and r.stdout == text(expected(rows))\n    assert json.loads(r.stdout)[\"supervision\"] == {\"runs_with_data\": 2, \"total\": 2.5, \"mean\": 1.25}\n\n\ndef test_no_run_done(runs):\n    r = report(runs[\"f3\"], runs[\"f4\"])\n    want = expected([row(\"f3\", \"FAILED_ACCEPTANCE\", 2, 2, usd(runs[\"f3\"]), True),\n                     row(\"f4\", \"BLOCKED\", 0, 0, usd(runs[\"f4\"]), True)])\n    assert r.returncode == 0 and r.stdout == text(want)\n    assert want[\"cost_per_success\"] is None and want[\"attempts\"] is None and want[\"success_rate\"] == 0.0\n    assert want[\"success_rate_all\"] == 0.0\n\n\ndef test_no_cost_known(runs):\n    r = report(runs[\"f6a\"], runs[\"f6b\"], runs[\"f6c\"])\n    want = expected([row(\"f6a\", \"DONE\", 1, 4, usd(runs[\"f6a\"]), False),\n                     row(\"f6b\", \"DONE\", 1, 4, None, False),\n                     row(\"f6c\", \"DONE\", 1, 4, usd(runs[\"f6c\"]), False)])\n    assert r.returncode == 0 and r.stdout == text(want)\n    assert want[\"usd_known_total\"] == 0.0 and want[\"cost_per_success\"] is None and want[\"cost_complete\"] is False\n    assert want[\"runs\"][0][\"usd_billed\"] > 0                                  # shown as it is, never taken as the cost\n\n\ndef test_only_runs_without_a_result(runs):\n    r = report(runs[\"f7\"])\n    want = expected([row(\"f7\", \"NO_RESULT\", None, None, None, False)])\n    assert r.returncode == 0 and r.stdout == text(want)\n    assert want[\"success_rate\"] is None and want[\"attempts_distribution\"] == {}\n    assert want[\"success_rate_all\"] == 0.0                                     # 0 / 1: null only when runs_total is 0\n\n\n# ---- refused: exit 2, one line on stderr, nothing on stdout ----------------------------------------------------------\n\ndef refused(r, *words):\n    lines = r.stderr.strip().splitlines()\n    assert r.returncode == 2 and r.stdout == \"\" and len(lines) == 1, (r.returncode, r.stdout[-300:], r.stderr[-300:])\n    assert all(w in lines[0] for w in words), lines[0]\n\n\ndef test_no_run_is_refused():\n    refused(report(), \"no run directory given\")\n\n\ndef test_an_argument_that_is_not_a_run_directory_is_refused(runs, tmp_path):\n    missing = tmp_path / \"nosuch\"\n    refused(report(runs[\"f1\"], missing), str(missing), \"not a run directory\")\n    refused(report(runs[\"wrap\"]), str(runs[\"wrap\"]), \"not a run directory\")          # a directory without events.jsonl\n    f = tmp_path / \"file.txt\"\n    f.write_text(\"x\")\n    refused(report(f), str(f), \"not a run directory\")\n\n\n@pytest.mark.parametrize(\"content\", [\n    '{\"f1\": -1}', '{\"f1\": \"12\"}', '{\"f1\": true}', '[12]', '{\"f1\": NaN}', '{\"nosuch\": 3}', '{not json', '12'],\n    ids=[\"negative\", \"string\", \"bool\", \"list\", \"nan\", \"unknown_run\", \"not_json\", \"number\"])\ndef test_an_invalid_supervision_file_is_refused(runs, tmp_path, content):\n    sup = tmp_path / \"s.json\"\n    sup.write_text(content, encoding=\"utf-8\")\n    refused(report(runs[\"f1\"], \"--supervision\", sup), \"supervision file\", str(sup))\n\n\ndef test_a_missing_supervision_file_is_refused(runs, tmp_path):\n    refused(report(runs[\"f1\"], \"--supervision\", tmp_path / \"none.json\"), \"supervision file\", str(tmp_path / \"none.json\"))\n",
+      "path": "tests/test_pilot_report.py",
+      "removed": [],
+      "modified": []
+    }
+  ]
+}

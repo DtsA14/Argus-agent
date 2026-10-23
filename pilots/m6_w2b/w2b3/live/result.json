@@ -1,0 +1,80 @@
+{
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+  "blocked_reason": null,
+  "contract_sha": "263b7e874b95dd31b1605144af066d52a8cc2c81d846543551a7551ca42b7fbf",
+  "verdict": {
+    "iteration": 1,
+    "outcome": "fail",
+    "failing": [
+      "artifact:SUMMARY.json",
+      "claims",
+      "validation:target"
+    ],
+    "workspace_digest": "1a3bbfefb3f9ae1c3d7e36c72ee8a350f7619a3e96a0ab568baccc555ee6d8cf"
+  },
+  "attempt": {
+    "iteration": 1,
+    "end": "context_limit",
+    "steps": 8
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/task",
+      "snapshot_sha256": "c7aa7d04f4030696c3be494fc3f66190a3d08dd0f7d65fe94468a817113b6082",
+      "intake": {
+        "name": "task",
+        "repo": "https://github.com/DtsA14/Argus-agent.git",
+        "commit": "e6b9fb434857db90285b7d7bb81caa1a1626e57a",
+        "tree": "4ac4b94a4338903f35da58ebe0ba674c079a375c",
+        "exclude": [
+          "verification",
+          "pilots"
+        ],
+        "kind": "task",
+        "base": {
+          "name": "base",
+          "commit": "e6b9fb434857db90285b7d7bb81caa1a1626e57a",
+          "tree": "4ac4b94a4338903f35da58ebe0ba674c079a375c",
+          "snapshot_sha256": "cb59176c5d6a4ba9469e55b7a24f72234dfdfca00652ad095e1c6930bdbd2edf"
+        },
+        "added": {
+          "tests/test_pilot_report_all.py": "e4f62e10703f338c03604fdb811163e9f080b083a7cf595385bddc59641ee511"
+        },
+        "contract_sha256": "263b7e874b95dd31b1605144af066d52a8cc2c81d846543551a7551ca42b7fbf"
+      }
+    },
+    "argus": {
+      "commit": "e6b9fb434857db90285b7d7bb81caa1a1626e57a",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large_usd",
+    "attempt_tokens": 400000,
+    "max_output_tokens": 8192,
+    "attempt_usd": 0.45,
+    "max_input_tokens": 40000
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4
+  },
+  "cache": {
+    "cache_read_tokens": 233088,
+    "cache_creation_tokens": null,
+    "usd_saved_estimate": 0.034263936
+  },
+  "run_id": "j20261023_104529_ca7d-a1",
+  "attempts": 2,
+  "usd_billed": 0.021205764,
+  "usd_complete": true,
+  "llm_calls": 17,
+  "llm_calls_unknown": 0
+}
