@@ -191,21 +191,22 @@ providers:
 roles:
   coder:
     # General tasks, slice 1 (codetask/). The model for a live run is chosen in its approval; tests use fake:scripted.
-    # DeepSeek V4.1 Flash since 2026-10-23 (Atha). Non-thinking: in thinking mode with tools, DeepSeek requires every
-    # earlier reasoning_content to be sent back (else HTTP 400), which the agent loop does not keep.
+    # DeepSeek V4.1 Flash since 2026-10-23 (Atha), thinking mode since router pilot #2 (Atha: "mode thinking semua"):
+    # with tools DeepSeek requires every earlier reasoning_content back (HTTP 400 otherwise); models/registry.py sends
+    # it and the step memo keeps it (PR #168).
     model: "deepseek:deepseek-flash"
     max_output_tokens: 4096
     timeout_s: 120
-    params: {extra_body: {thinking: {type: disabled}}}
+    params: {extra_body: {thinking: {type: enabled}}}
   drafter:
     # W2b task drafts (codetask/drafter.py). One SubmitDraft holds the plan, the contract and every new test, plus the
     # model's thinking (on by default): in pilot w2b1d1 it hit 8,192 with 6,108 of them thinking, before any test was
     # written. 16,384 since then (option A, Atha 2026-10-22); the attempt's USD reservation still bounds every call.
-    # DeepSeek V4.1 Flash, non-thinking, since 2026-10-23 (as coder).
+    # DeepSeek V4.1 Flash, thinking mode (as coder). Pilot #2: 1 drafter run instead of 3, at about the same cost.
     model: "deepseek:deepseek-flash"
     max_output_tokens: 16384
     timeout_s: 180
-    params: {extra_body: {thinking: {type: disabled}}}
+    params: {extra_body: {thinking: {type: enabled}}}
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
