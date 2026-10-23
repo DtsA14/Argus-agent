@@ -317,10 +317,12 @@ def reference_problems(contract, new_paths, ws, patch, sandbox_cfg, validate=run
 
 
 def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandbox_cfg, root=".",
-          validate=run_validation, collect=collect_nodes, red=red_check, profiles=None):
+          profiles, validate=run_validation, collect=collect_nodes, red=red_check):
     """The full report on a draft. ok only when every check passed. reference_patch=None: no reference check (W2b),
-    and the report says the criteria are not proven satisfiable. profiles: the configured budget profile names, for
-    the checks setup runs (ct.setup_problems); None leaves the profile to setup."""
+    and the report says the criteria are not proven satisfiable. profiles (required, no default, so a new caller
+    cannot skip the check by forgetting it): the configured budget profile names, for the checks setup runs
+    (ct.setup_problems); only an explicit profiles=None leaves the profile to setup. The sandbox environments are
+    checked as setup checks them: against sandbox_cfg's environments, none when it has no such key."""
     root = Path(root)
     report = {"task": task, "draft_sha256": hashlib.sha256(ct.canonical(draft).encode()).hexdigest(),
               "unverifiable": draft.get("unverifiable"), "ok": False,
@@ -345,7 +347,7 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
         task_files = set(base_files) | {t["path"] for t in draft["new_tests"]}
         problems = [f"contract: {p}" for p in ct.setup_problems(
             contract, task_files, profiles=profiles,
-            environments_configured=(sandbox_cfg or {}).get("environments") if sandbox_cfg else None)]
+            environments_configured=(sandbox_cfg.get("environments") or {}) if sandbox_cfg else None)]
     if not problems:
         report["contract_sha256"] = ct.freeze(contract)[1]        # what approve() must still be publishing
     if problems:

@@ -116,7 +116,7 @@ def scfg():
 
 def run_check(root, ref, scfg, draft=None, **over):
     kw = {"task": "fix_shop", "issue": "the total can go negative", "max_usd": 0.5, "max_iterations": 3,
-          "reference_patch": ref, "sandbox_cfg": scfg, "root": root, **over}
+          "reference_patch": ref, "sandbox_cfg": scfg, "root": root, "profiles": None, **over}
     return dr.check(draft or DRAFT, **kw)
 
 
@@ -184,12 +184,21 @@ def test_static_problems(root, change, why):
      "contract: unknown budget profile 'huge' (configured: ['default', 'large_usd'])"),
     (lambda d: None, {"sandbox_cfg": {"environments": {"other": {}}}},
      "contract: unknown sandbox environment(s) ['argus'] (configured: ['other'])"),
+    # a sandbox config without the key: no environment is configured, as setup reads it (review of #180)
+    (lambda d: None, {"sandbox_cfg": {"kind": "docker"}},
+     "contract: unknown sandbox environment(s) ['argus'] (configured: [])"),
 ])
 def test_what_setup_would_refuse_is_refused_by_the_draft_check(root, change, over, why):
     d = copy.deepcopy(DRAFT)
     change(d)
     r = run_check(root, None, over.pop("sandbox_cfg", {}), draft=d, **over)
     assert not r["ok"] and r["problems"] == [why] and "baseline" not in r
+
+
+def test_the_draft_check_needs_profiles_given_explicitly():
+    # review of #180: a caller that forgets profiles must not silently skip the profile check
+    with pytest.raises(TypeError, match="profiles"):
+        dr.check(DRAFT, task="t", issue="i", max_usd=0.5, max_iterations=1, reference_patch=None, sandbox_cfg={})
 
 
 def test_the_draft_check_runs_the_checks_setup_runs_through_their_shared_function(root, monkeypatch):

@@ -191,7 +191,7 @@ def test_a_draft_that_passes_its_check_ends_the_run_and_is_written_for_the_human
         "min_tests": 1, "max_skipped": 0, "must_pass": [NEW_NODE], "environment": "argus"}
     # The same draft passes W2a's check outside the loop, with the same baseline
     again = dr.check(draft, task="fix_shop", issue=ISSUE, max_usd=0.5, max_iterations=3, reference_patch=None,
-                     sandbox_cfg={}, root=root, validate=fake_validate, red=fake_red)
+                     sandbox_cfg={}, root=root, validate=fake_validate, red=fake_red, profiles=None)
     assert again["ok"] and again["baseline"]["target"]["must_pass"] == {NEW_NODE: "FAIL"}
     report = json.loads((d / "check_report.json").read_text())
     assert report["ok"] and report["feasibility"] == "unproven" and report["reference"] is None
