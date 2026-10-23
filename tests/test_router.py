@@ -478,6 +478,7 @@ def test_the_cli_passes_key_file_and_yes_to_the_live_commands_only(env, monkeypa
     import importlib.util
     spec = importlib.util.spec_from_file_location("argus_cli_k", ROOT / "scripts" / "argus.py")
     cli = importlib.util.module_from_spec(spec)
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))         # as when the script runs (approve_draft beside it)
     spec.loader.exec_module(cli)
     got = {}
     monkeypatch.setattr(rj, "start_code", lambda **kw: got.update(kw) or (_ for _ in ()).throw(rj.Refused("stop")))
