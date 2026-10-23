@@ -1,0 +1,91 @@
+"""The success rate over every run, beside the one that leaves NO_RESULT out (PENDING.md, review 2026-10-22):
+
+  success_rate     = done / (runs_total - no_result), round 4, null when the divisor is 0   (unchanged)
+  success_rate_all = done / runs_total, round 4, null when runs_total is 0                 (new, the key right after it)
+
+A run directory here is what scripts/pilot_report.py reads: result.json (status, attempts, llm_calls, usd_billed,
+usd_complete) and events.jsonl. No model, no sandbox, no Docker. A run with no result.json is a run that left no result
+(NO_RESULT); no run at all is refused by the script, so runs_total is never 0 from the command line.
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+
+REPORT_KEYS = ["runs", "runs_total", "done", "no_result", "success_rate", "usd_known_total", "usd_unknown_runs",
+               "cost_per_success", "cost_complete", "attempts", "attempts_distribution", "supervision", "events_skipped"]
+
+
+def run_dir(base, name, status, attempts, calls, usd, complete=True):
+    """One run directory. status None: a run that died and left no result.json at all."""
+    d = Path(base) / name
+    d.mkdir()
+    (d / "events.jsonl").write_text("", encoding="utf-8")
+    if status is not None:
+        (d / "result.json").write_text(json.dumps({"status": status, "attempts": attempts, "llm_calls": calls,
+                                                    "usd_billed": usd, "usd_complete": complete}),
+                                        encoding="utf-8")
+    return d
+
+
+@pytest.fixture(scope="module")
+def runs(tmp_path_factory):
+    base = tmp_path_factory.mktemp("runs")
+    return {"d1": run_dir(base, "d1", "DONE", 1, 1, 0.5),
+            "d2": run_dir(base, "d2", "DONE", 2, 3, 0.25),
+            "f1": run_dir(base, "f1", "FAILED_ACCEPTANCE", 2, 2, 0.125),
+            "n1": run_dir(base, "n1", None, None, None, None)}          # died: no result.json
+
+
+def report(*args):
+    return subprocess.run([sys.executable, str(ROOT / "scripts" / "pilot_report.py"), *map(str, args)], cwd=ROOT,
+                          env={**os.environ, "PYTHONPATH": str(ROOT)}, capture_output=True, text=True, timeout=120)
+
+
+def test_a_run_that_left_no_result_counts_in_the_denominator_of_the_all_rate(runs):
+    r = report(runs["d1"], runs["f1"], runs["n1"])
+    assert r.returncode == 0, r.stderr[-500:]
+    got = json.loads(r.stdout)
+    assert (got["runs_total"], got["done"], got["no_result"]) == (3, 1, 1)
+    assert got.get("success_rate_all") == 0.3333               # done / runs_total = 1 / 3, round 4: the dead run counts
+    assert got.get("success_rate") == 0.5                      # unchanged: done / (runs_total - no_result) = 1 / 2
+
+
+def test_the_all_rate_is_rounded_to_four_decimals(runs):
+    r = report(runs["d1"], runs["d2"], runs["f1"])
+    assert r.returncode == 0, r.stderr[-500:]
+    got = json.loads(r.stdout)
+    assert got.get("success_rate") == 0.6667                   # unchanged: 2 done over the 3 runs that left a result
+    assert got.get("success_rate_all") == 0.6667               # 2 / 3 = 0.66666... rounded, not cut to 0.6666
+    assert got.get("success_rate_all") == got.get("success_rate")   # no NO_RESULT run: the two rates agree
+
+
+def test_the_key_goes_right_after_success_rate_and_the_rest_of_the_report_is_unchanged(runs):
+    r = report(runs["d1"], runs["n1"])
+    assert r.returncode == 0, r.stderr[-500:]
+    got = json.loads(r.stdout)
+    keys = list(got)
+    assert "success_rate_all" in keys, keys
+    assert keys == REPORT_KEYS[:5] + ["success_rate_all"] + REPORT_KEYS[5:]
+    assert got["runs"] == [
+        {"run_id": "d1", "status": "DONE", "done": True, "attempts": 1, "llm_calls": 1, "usd_billed": 0.5,
+         "cost_known": True, "events_skipped": 0, "supervision_minutes": None},
+        {"run_id": "n1", "status": "NO_RESULT", "done": False, "attempts": None, "llm_calls": None,
+         "usd_billed": None, "cost_known": False, "events_skipped": 0, "supervision_minutes": None}]
+    assert got.get("success_rate") == 1.0                      # unchanged: 1 done over the 1 run that left a result
+    assert got.get("success_rate_all") == 0.5                  # done / runs_total = 1 / 2
+
+
+def test_when_every_run_left_no_result_the_all_rate_is_zero(runs):
+    r = report(runs["n1"])
+    assert r.returncode == 0, r.stderr[-500:]
+    got = json.loads(r.stdout)
+    assert (got["runs_total"], got["done"], got["no_result"]) == (1, 0, 1)
+    assert got.get("success_rate") is None                     # unchanged: the divisor runs_total - no_result is 0
+    assert got.get("success_rate_all") == 0.0                  # done / runs_total = 0 / 1
+    assert got.get("success_rate_all") is not None
