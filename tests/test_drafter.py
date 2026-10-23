@@ -655,18 +655,20 @@ def test_halfway_the_drafter_is_told_how_many_steps_are_left(root, tmp_path):
     assert seen[4].count(note) == 1 and r["status"] == dt.DRAFTED
 
 
-def offered_names(model_call):
-    return sorted(t["function"]["name"] if "function" in t else t.get("name")
-                  for t in (model_call["kwargs"].get("tools") or []))
+def test_the_last_steps_offer_only_the_submit_tools_and_refuse_any_other(root, tmp_path, vlog, monkeypatch):
+    offered = []                                       # the tools bound for each model call, in order
+    real = StrictScriptedChatModel.bind_tools
 
-
-def test_the_last_steps_offer_only_the_submit_tools_and_refuse_any_other(root, tmp_path, vlog):
+    def recording(self, tools, tool_choice=None, **kw):
+        offered.append(sorted(t.__name__ for t in tools))
+        return real(self, tools, tool_choice=tool_choice, **kw)
+    monkeypatch.setattr(StrictScriptedChatModel, "bind_tools", recording)
     reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(5)]       # steps 0-4
     late = call("ReadFile", {"path": "src/shop.py"}, "late")                                 # step 5: final
     r, model, d = run(root, tmp_path, reads + [late, SUBMIT], config=cfg(max_steps=8))
-    assert dt.final_from(8) == 5
-    assert offered_names(model.calls[4]) == ["ListFiles", "ReadFile", "ReviseDraft", "SearchFiles", "SubmitDraft"]
-    assert offered_names(model.calls[5]) == offered_names(model.calls[6]) == ["ReviseDraft", "SubmitDraft"]
+    assert dt.final_from(8) == 5 and len(offered) == len(model.calls) == 7
+    assert offered[4] == ["ListFiles", "ReadFile", "ReviseDraft", "SearchFiles", "SubmitDraft"]
+    assert offered[5] == offered[6] == ["ReviseDraft", "SubmitDraft"]
     final_note = dt.FINAL_NOTE.format(n=dt.FINAL_STEPS)
     assert final_note in [m.content for m in model.calls[5]["messages"]]
     assert final_note not in [m.content for m in model.calls[4]["messages"]]
