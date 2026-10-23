@@ -387,6 +387,109 @@ def test_a_live_stage_without_a_terminal_is_refused(tmp_path, monkeypatch):
     assert seen == []
 
 
+# ---- the key from a file, without a terminal (docs/reviews/SPEC_ROUTER_KEY_FILE.md) --------------------------------
+
+KEY = "sk-ant-file-0000"
+
+
+def key_file(tmp_path, content=KEY + "\n", mode=0o600, where=None):
+    d = where or tmp_path / "secret"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / "key"
+    f.write_text(content)
+    os.chmod(f, mode)
+    return f
+
+
+def no_terminal(tmp_path, monkeypatch, **deps):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    shown = []
+    e = Env(tmp_path, config=real_cfg(), confirm=lambda text: shown.append(text) or False)
+    e.deps.isatty = lambda: False
+    e.deps.get_key = lambda: pytest.fail("with --key-file no key is typed")
+    for k, v in deps.items():
+        setattr(e.deps, k, v)
+    seen = []
+    monkeypatch.setattr(cdr, "run_drafter", fake_draft_run(seen))
+    return e, seen, shown
+
+
+def test_a_key_file_runs_a_live_stage_without_a_terminal_and_the_key_is_never_written(tmp_path, monkeypatch):
+    e, seen, shown = no_terminal(tmp_path, monkeypatch, key_file=key_file(tmp_path), assume_yes=True)
+    e.code()
+    assert seen == [{"ANTHROPIC_API_KEY": KEY, "ARGUS_LIVE": "1"}] and shown == []          # no [y/N] asked
+    assert "ANTHROPIC_API_KEY" not in os.environ and "ARGUS_LIVE" not in os.environ
+    log = e.job().data["log"]
+    assert any(x["what"] == "confirmed_by_flag" and "job cap $1.00" in x["screen"] for x in log)  # the limits, kept
+    assert [x["path"] for x in log if x["what"] == "key_from_file"] == [str(tmp_path / "secret" / "key")]
+    assert any("job cap $1.00" in s and "(--yes: approved in chat" in s for s in e.said)        # and printed
+    for f in e.job().dir.rglob("*"):
+        if f.is_file():
+            assert KEY.encode() not in f.read_bytes(), f
+
+
+def test_a_key_file_without_yes_still_asks_y_n(tmp_path, monkeypatch):
+    e, seen, shown = no_terminal(tmp_path, monkeypatch, key_file=key_file(tmp_path))
+    with pytest.raises(rj.Refused, match="not confirmed"):
+        e.code()
+    assert len(shown) == 1 and seen == []
+
+
+@pytest.mark.parametrize("make, why", [
+    (lambda t, e: key_file(t, mode=0o644), "can be read by others"),
+    (lambda t, e: key_file(t, mode=0o640), "can be read by others"),
+    (lambda t, e: (lambda f: (t / "link").symlink_to(f) or t / "link")(key_file(t)), "is not a regular file"),
+    (lambda t, e: t / "nosuch", "cannot be read"),
+    (lambda t, e: key_file(t, where=e.jobs), "keep the key outside every repository and jobs/"),
+    (lambda t, e: key_file(t, where=e.repo / "secret"), "keep the key outside every repository and jobs/"),
+    (lambda t, e: key_file(t, content=""), "the key is empty"),
+    (lambda t, e: key_file(t, content="sk-ant-a sk-ant-b\n"), "whitespace"),
+    (lambda t, e: key_file(t, content="sk-ant-file-0000\n\n"), "whitespace"),
+    (lambda t, e: key_file(t, content="not-a-key-file-0000"), "does not look like"),
+])
+def test_a_key_file_that_is_not_safe_or_not_a_key_starts_nothing_and_is_never_shown(tmp_path, monkeypatch, make, why):
+    e, seen, shown = no_terminal(tmp_path, monkeypatch, assume_yes=True)
+    e.deps.key_file = make(tmp_path, e)
+    with pytest.raises(rj.Refused, match=why) as err:
+        e.code()
+    assert seen == [] and "ANTHROPIC_API_KEY" not in os.environ
+    assert "sk-ant" not in str(err.value) and "not-a-key" not in str(err.value)
+
+
+def test_a_key_file_of_another_user_starts_nothing(tmp_path, monkeypatch):
+    e, seen, shown = no_terminal(tmp_path, monkeypatch, key_file=key_file(tmp_path), assume_yes=True)
+    monkeypatch.setattr(rj.os, "getuid", lambda: os.stat(e.deps.key_file).st_uid + 1)     # as if another user ran it
+    with pytest.raises(rj.Refused, match="is not owned by you"):
+        e.code()
+    assert seen == []
+
+
+def test_yes_without_a_key_file_is_refused_and_no_terminal_without_one_still_is(tmp_path, monkeypatch):
+    e, seen, shown = no_terminal(tmp_path, monkeypatch, assume_yes=True)
+    with pytest.raises(rj.Refused, match="--yes needs --key-file"):
+        e.code()
+    e2, seen2, _ = no_terminal(tmp_path / "b", monkeypatch)
+    with pytest.raises(rj.Refused, match="needs a terminal"):
+        e2.code()
+    assert seen == seen2 == []
+
+
+def test_the_cli_passes_key_file_and_yes_to_the_live_commands_only(env, monkeypatch, tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("argus_cli_k", ROOT / "scripts" / "argus.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    got = {}
+    monkeypatch.setattr(rj, "start_code", lambda **kw: got.update(kw) or (_ for _ in ()).throw(rj.Refused("stop")))
+    f = key_file(tmp_path)
+    rc = cli.main(["--jobs-dir", str(env.jobs), "code", "--repo", str(env.repo), "--commit", "HEAD", "--issue", "x",
+                   "--key-file", str(f), "--yes"], deps=env.deps)
+    assert rc == 2 and got["deps"].key_file == str(f) and got["deps"].assume_yes is True
+    assert {rj.ROOT, env.jobs, env.repo} <= set(got["deps"].key_forbidden)
+    with pytest.raises(SystemExit):
+        cli.main(["status", "j", "--key-file", str(f)])                    # not a live command: no such option
+
+
 def test_the_cli_runs_a_job_and_prints_the_approve_command(env, capsys):
     import importlib.util
     spec = importlib.util.spec_from_file_location("argus_cli", ROOT / "scripts" / "argus.py")

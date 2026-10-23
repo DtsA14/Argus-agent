@@ -10,6 +10,10 @@
   python scripts/argus.py abandon <job> "why"            # close a job that will not be continued
 
 Every live stage shows its limits, asks [y/N], then asks for the API key (not shown; never an argument, never written).
+Without a terminal (docs/reviews/SPEC_ROUTER_KEY_FILE.md): --key-file PATH reads the key from a 0600 file of yours
+outside every repository and jobs/, and --yes (only with --key-file) skips the [y/N] for a run the human approved in
+chat; the limits are still printed. Both go after the command:
+  python scripts/argus.py approve <job> --sha <sha> --key-file ~/.config/argus/deepseek_key --yes
 Applying the review package's patch to the target repository stays with the human. Exit codes: 0 done, 1 the stage
 ended without success, 2 refused.
 """
@@ -40,7 +44,8 @@ def main(argv=None, deps=None):
     c.add_argument("--max-usd", type=float)
     c.add_argument("--exclude", action="append", default=[])
     sub.add_parser("list")
-    for name in ("status", "redraft", "resume"):
+    sub.add_parser("status").add_argument("job")
+    for name in ("redraft", "resume"):
         sub.add_parser(name).add_argument("job")
     a = sub.add_parser("approve")
     a.add_argument("job")
@@ -52,8 +57,15 @@ def main(argv=None, deps=None):
         r = sub.add_parser(name)
         r.add_argument("job")
         r.add_argument("reason")
+    for name, p in sub.choices.items():
+        if name in ("code", "approve", "redraft", "resume"):            # the live commands
+            p.add_argument("--key-file", help="read the API key from this 0600 file instead of typing it")
+            p.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     o = ap.parse_args(argv)
     deps = deps or rj.Deps()
+    if getattr(o, "key_file", None) or getattr(o, "yes", False):
+        deps.key_file, deps.assume_yes = o.key_file, o.yes
+        deps.key_forbidden = (rj.ROOT, Path(o.jobs_dir)) + ((Path(o.repo),) if getattr(o, "repo", None) else ())
     try:
         if o.cmd == "list":
             print(rj.list_jobs(jobs_dir=o.jobs_dir))
