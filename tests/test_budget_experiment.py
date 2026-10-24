@@ -36,6 +36,8 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["code_task"]["feedback_error_excerpt"]   # D2 (the arms ran before it; absent means on if they are re-run)
     del base["code_task"]["auto_validate"]            # D3 (the arms ran before it; absent means off, as they ran)
     del base["code_task"]["auto_validate_max"]
+    del base["code_task"]["context_notice_at"]         # SPEC_AGENT_CONTEXT_RETRY (absent means off, as they ran)
+    del base["code_task"]["max_input_tokens_by_model"]  # (only for profiles with max_input_tokens; these arms had none)
     del base["drafter"], base["roles"]["drafter"], base["tools"]["drafter"]   # W2b (a role and section they never used)
     del base["router"]                                                      # router v0 (never used by these arms)
     base["roles"]["coder"] = config("30k")["roles"]["coder"]   # the coder moved to DeepSeek on 2026-10-23; the arms ran Sonnet

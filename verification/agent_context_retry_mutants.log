@@ -1,0 +1,51 @@
+# agent context + retry: mutants and old-code check at b1ca6e1 (2026-10-24T08:33:54Z)
+# tests run per mutant (pytest -x): test_agent_context, test_router, test_auto_validation, test_attempt_usd, test_feedback_excerpt, test_run_inspectors
+## new tests on main's code (test_feedback_without_a_stop_gives_the_prompt_it_always_gave is a guard: the old prompt must not change; mutant 'ended line always' fails it)
+24 new tests
+23 failed, 1 passed in 3.82s
+PASSED on old code (must be none): ['PASSED tests/test_agent_context.py::test_feedback_without_a_stop_gives_the_prompt_it_always_gave']
+SKIPPED: []
+RESULT: PROBLEM
+## mutants
+KILLED  no stopped in feedback: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  acceptance does not pass the attempt: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  hint never given: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  hint even after a write: ['FAILED tests/test_agent_context.py::test_an_attempt_that_wrote_and_then_ran_out_of_context_gets_no_context_hint']
+KILLED  files read not recorded: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  files read not unique: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  files read unbounded: ['FAILED tests/test_agent_context.py::test_the_files_read_are_in_order_unique_and_bounded']
+KILLED  wrote always False: ['FAILED tests/test_agent_context.py::test_an_attempt_that_wrote_is_told_how_it_ended_without_the_context_hint']
+KILLED  writable not named: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  no ended line in feedback: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  ended line always: ['FAILED tests/test_agent_context.py::test_feedback_without_a_stop_gives_the_prompt_it_always_gave']
+KILLED  notice never: ['FAILED tests/test_agent_context.py::test_one_notice_when_the_input_nears_its_limit_and_nothing_was_written']
+KILLED  notice after a write: ['FAILED tests/test_agent_context.py::test_no_notice_after_a_write_without_a_limit_or_when_off']
+KILLED  notice decided again on resume: ['FAILED tests/test_agent_context.py::test_a_committed_notice_is_taken_from_the_memo_on_resume']
+KILLED  notice repeated: ['FAILED tests/test_agent_context.py::test_one_notice_when_the_input_nears_its_limit_and_nothing_was_written']
+KILLED  notice threshold ignored: ['FAILED tests/test_agent_context.py::test_one_notice_when_the_input_nears_its_limit_and_nothing_was_written']
+KILLED  notice without an input limit: ['FAILED tests/test_agent_context.py::test_no_notice_after_a_write_without_a_limit_or_when_off']
+KILLED  notice policy not frozen: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+KILLED  by model ignored: ['FAILED tests/test_agent_context.py::test_deepseek_gets_its_own_input_limit_and_sonnet_keeps_the_profiles']
+KILLED  by model without a profile limit: ['FAILED tests/test_agent_context.py::test_deepseek_gets_its_own_input_limit_and_sonnet_keeps_the_profiles']
+KILLED  deepseek limit not raised: ['FAILED tests/test_agent_context.py::test_deepseek_gets_its_own_input_limit_and_sonnet_keeps_the_profiles']
+KILLED  run ignores initial feedback: ['FAILED tests/test_agent_context.py::test_the_first_attempt_of_a_retried_run_is_told_how_the_previous_run_ended']
+KILLED  router drops the carry: ['FAILED tests/test_router.py::test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended']
+KILLED  carry not recorded: ['FAILED tests/test_router.py::test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended']
+KILLED  retry told the workspace is kept: ['FAILED tests/test_agent_context.py::test_the_first_attempt_of_a_retried_run_is_told_how_the_previous_run_ended']
+KILLED  old run: wrote not from its verdict: ['FAILED tests/test_router.py::test_a_retry_of_an_older_run_takes_wrote_from_its_last_verdict']
+KILLED  unreadable result retried blind: ['FAILED tests/test_router.py::test_a_retry_whose_previous_result_cannot_be_read_starts_nothing']
+KILLED  retry from any state: ['FAILED tests/test_router.py::test_only_a_failed_agent_is_retried - TypeError:...']
+KILLED  retry cap not bounded by the job: ['FAILED tests/test_router.py::test_a_retry_that_cannot_fund_one_attempt_is_blocked']
+KILLED  resume runs a1, not the last stage: ['FAILED tests/test_router.py::test_a_resumed_retry_keeps_its_cap_and_what_it_carries']
+KILLED  no attempt lines in status: ['FAILED tests/test_router.py::test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended']
+KILLED  attempt lines without wrote: ['FAILED tests/test_router.py::test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended']
+KILLED  audit ignores the stop: ['FAILED tests/test_feedback_excerpt.py::test_audit_run_reproduces_every_prompt_hash_with_and_without_the_excerpt']
+KILLED  audit ignores the context notice: ['FAILED tests/test_agent_context.py::test_audit_run_rebuilds_the_stop_feedback_the_notice_and_the_carried_feedback']
+KILLED  audit ignores the carried feedback: ['FAILED tests/test_agent_context.py::test_audit_run_rebuilds_the_stop_feedback_the_notice_and_the_carried_feedback']
+KILLED  review of a1, not the last stage: ['FAILED tests/test_router.py::test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended']
+KILLED  next without retry: ['FAILED tests/test_router.py::test_a_failed_agent_says_why_what_failed_and_what_can_be_done']
+KILLED  cli retry is not live: ['FAILED tests/test_router.py::test_the_cli_retries_with_a_key_file - SystemExi...']
+KILLED  no legal move from AGENT_FAILED: ['FAILED tests/test_router.py::test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended']
+KILLED  retry screen without the previous stop: ['FAILED tests/test_router.py::test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended']
+RESULT: 40/40 killed
+## earlier runs on this branch: verify FAIL at 19b58d6 (audit_run did not rebuild the new prompts; fixed in 116f7d7), FAIL at e7bb76d (test_budget_experiment: the two new config keys; fixed in b1ca6e1)

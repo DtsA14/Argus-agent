@@ -94,6 +94,14 @@ code_task:
   # comparable evals); on in a pilot config. Frozen per run at setup, so a resume decides as the run did.
   auto_validate: false
   auto_validate_max: 4
+  # docs/reviews/SPEC_AGENT_CONTEXT_RETRY.md 2.2: once per attempt, when the next call's estimated input is past this
+  # share of max_input_tokens and nothing was written yet, the agent is told to write now. null: off. Frozen at setup.
+  context_notice_at: 0.7
+  # 2.3: a USD profile's max_input_tokens per coder model. Heuristic counts run above DeepSeek's billed input (ledger
+  # of 14 runs: est/billed median 1.34-1.37, min 0.89, so counting is not changed): 60,000 is about 45,000 billed;
+  # worst case per call $0.018 (60,000 x $0.15 x 2 peak / 1M), the attempt's USD reservation still binds. Sonnet keeps
+  # the profile's 40,000.
+  max_input_tokens_by_model: {"deepseek:deepseek-flash": 60000, "deepseek:deepseek-v4-pro": 60000}
   # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
   # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
   # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room

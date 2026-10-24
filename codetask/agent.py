@@ -142,6 +142,30 @@ def system_prompt(tools):
     return "\n".join(lines)
 
 
+CONTEXT_NOTICE = ("Context: the next call is about {p}% of this attempt's input limit ({est:,} of {max:,} tokens, "
+                  "estimated) and no file has been changed yet. Write your change now; a call over the limit ends the "
+                  "attempt.")
+READ_MAX = 20
+
+
+def _ended(s):
+    """How an attempt ended, from its committed summary (docs/reviews/SPEC_AGENT_CONTEXT_RETRY.md 2.1)."""
+    wrote = s.get("wrote")
+    return (f"{s.get('end')} after {s.get('steps')} steps"
+            + ("; it changed no file" if wrote is False else "; it changed files" if wrote else ""))
+
+
+def _context_hint(s, scope, kept):
+    """Only for an attempt that ran out of context without changing a file: what it read, and to write first."""
+    if s.get("end") != "context_limit" or s.get("wrote") is not False:
+        return []
+    read = s.get("read") or []
+    return ["It ran out of context before changing any file." + (f" Files it read: {', '.join(read)}." if read else ""),
+            ("The workspace is kept between attempts. " if kept else "")
+            + f"Read only what the change needs, then write it: the writable files are {', '.join(scope['writable'])}. "
+            "A call that does not fit max_input ends the attempt."]
+
+
 def task_prompt(contract, feedback=None):
     sc = contract["scope"]
     vals = [f"  - {v['id']}" + (f" (required tests: {', '.join(v['must_pass'])})" if v.get("must_pass") else "")
@@ -150,7 +174,11 @@ def task_prompt(contract, feedback=None):
              f"Writable: {', '.join(sc['writable'])}",
              f"Protected: {', '.join(sc['protected'])}",
              "Validations the harness will run:", *vals]
-    if isinstance(feedback, dict):
+    if isinstance(feedback, dict) and feedback.get("carried"):      # a retry: the previous stage of a router job
+        parts += ["", "How the previous run of this task ended (this is a new run: the workspace starts again from "
+                  "the original):", f"its last attempt ended {_ended(feedback['stopped'])}.",
+                  *_context_hint(feedback["stopped"], sc, kept=False)]
+    elif isinstance(feedback, dict):
         parts += ["", "The previous attempt did not meet the contract. Acceptance criteria not met:",
                   *[f"  - {f}" for f in feedback["unmet"]],
                   "The harness's checks of the workspace as the previous attempt left it (the workspace is kept "
@@ -160,6 +188,9 @@ def task_prompt(contract, feedback=None):
             parts.append(EXCERPT_LABEL)
             for e in feedback["errors"]:
                 parts += [f"  {e['id']}:", *[f"    {line}" for line in e["excerpt"].splitlines()]]
+        if feedback.get("stopped"):    # absent in feedback from before it was recorded: the prompt is as it was
+            parts += [f"How the previous attempt ended: {_ended(feedback['stopped'])}.",
+                      *_context_hint(feedback["stopped"], sc, kept=True)]
     elif feedback:                    # a checkpoint written before the checks were added: the old form, unchanged
         parts += ["", "The previous attempt did not meet the contract. The harness found:", *[f"  - {f}" for f in feedback]]
     return "\n".join(parts)
@@ -179,14 +210,32 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
         tools = offered(toolbox.allowed)
         auto = {"on": bool((policy or {}).get("auto_validate")), "max": int((policy or {}).get("auto_validate_max", 0)),
                 "count": 0, "noticed": False, "last": None}
-        if auto["on"]:
-            # The workspace digest when the attempt started, committed: on resume the workspace is already past it.
-            skey = json.dumps(["attempt_start", NODE, tid, iteration])
-            start = memo.get(skey)
-            if start is None:
-                start = {"digest": toolbox.digest()}
-                memo.put(skey, start)
-            auto["last"] = start["digest"]
+        # The workspace digest when the attempt started, committed: on resume the workspace is already past it. D3
+        # compares against it; since SPEC_AGENT_CONTEXT_RETRY it also tells whether the attempt wrote anything.
+        skey = json.dumps(["attempt_start", NODE, tid, iteration])
+        start = memo.get(skey)
+        if start is None:
+            start = {"digest": toolbox.digest()}
+            memo.put(skey, start)
+        auto["last"] = start["digest"]
+        notice_at = (policy or {}).get("context_notice_at")
+        ctx = {"on": notice_at is not None and max_input is not None, "noticed": False}
+        read = []
+
+        def context_notice(step, parent):
+            """SPEC_AGENT_CONTEXT_RETRY 2.2: once per attempt, when the next call's estimated input is past notice_at
+            of max_input and the workspace is unchanged. Committed and taken from the memo on resume, as D3's."""
+            ckey = after_step_key(NODE, tid, iteration, step, f"ctx1:{notice_at}", parent)
+            rec = memo.get(ckey)
+            if rec is None:
+                est = caller.count(messages, tools)
+                content = None
+                if est > notice_at * max_input and toolbox.digest() == start["digest"]:
+                    content = CONTEXT_NOTICE.format(p=round(100 * est / max_input), est=est, max=max_input)
+                rec = {"content": content}
+                memo.put(ckey, rec)
+                log.emit("context_notice", step=step, shown=content is not None, **meta)
+            return rec["content"]
 
         def after_step(step, parent):
             """D3: after a step's tools ran and were committed. The decision and its message are committed as one record
@@ -216,8 +265,12 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
             return rec["content"]
 
         def end(reason, steps):
+            wrote = toolbox.digest() != start["digest"]
             log.emit("attempt_end", reason=reason, steps=steps, **meta)
-            return {"end": reason, "steps": steps, "tokens_used": res.used_tokens, "usd_used": res.used_usd}
+            # SPEC_AGENT_CONTEXT_RETRY: what the next attempt is told, beside attempt_end (whose fields stay as they were)
+            log.emit("attempt_summary", reason=reason, steps=steps, wrote=wrote, read=read[:READ_MAX], **meta)
+            return {"end": reason, "steps": steps, "wrote": wrote, "read": read[:READ_MAX],
+                    "tokens_used": res.used_tokens, "usd_used": res.used_usd}
 
         messages = [SystemMessage(system_prompt(tools)), HumanMessage(task_prompt(contract, feedback))]
         for step in range(max_steps):
@@ -263,6 +316,9 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
                 continue
             finished = False
             for i, c in enumerate(calls):
+                path = (c.get("args") or {}).get("path") if c.get("name") == "ReadFile" else None
+                if isinstance(path, str) and path not in read:
+                    read.append(path)
                 tkey = tool_step_key(NODE, tid, iteration, step, c.get("id"), c.get("name"), c.get("args"),
                                      tool_versions.get(c.get("name"), "unknown"), parent=key)
                 record = memo.get(tkey)
@@ -282,6 +338,11 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
             if auto["on"]:
                 note = after_step(step, key)
                 if note:
+                    messages.append(HumanMessage(note))
+            if ctx["on"] and not ctx["noticed"]:
+                note = context_notice(step, key)
+                if note:
+                    ctx["noticed"] = True
                     messages.append(HumanMessage(note))
         return end("max_steps", max_steps)
 
@@ -330,12 +391,13 @@ def auto_message(results):
     return "\n".join(lines)
 
 
-def feedback_from(verdict, limit=10, paths=20, excerpts=True):
+def feedback_from(verdict, limit=10, paths=20, excerpts=True, attempt=None):
     """What the next attempt is told, all of it facts from the harness's own verdict on the workspace the attempt
     left: every acceptance criterion not met with its reason, every validation with its test counts and required
     tests, and the files changed from the original. Bounded. It is history: acceptance checks everything again.
     With `excerpts` (D2; config code_task.feedback_error_excerpt), also the error lines of up to EXCERPT_VALIDATIONS
-    failing validations, cut from their own output_tail ("errors"; absent when there is nothing to show)."""
+    failing validations, cut from their own output_tail ("errors"; absent when there is nothing to show).
+    With `attempt` (its committed summary), also how it ended: "stopped" (SPEC_AGENT_CONTEXT_RETRY 2.1)."""
     unmet = [f"{c['id']}: {c['reason'][:300]}" for c in verdict["criteria"] if c["status"] != "pass"][:limit]
     checks, changed = [], None
     for c in verdict["criteria"]:
@@ -358,5 +420,13 @@ def feedback_from(verdict, limit=10, paths=20, excerpts=True):
         errors = [e for e in errors if e["excerpt"].strip()]
         if errors:
             out["errors"] = errors
+    if attempt and attempt.get("end"):
+        out["stopped"] = stopped(attempt)
     return out
+
+
+def stopped(attempt):
+    """The part of an attempt's committed summary that the next attempt (or the next run of a retry) is told."""
+    return {"end": attempt.get("end"), "steps": attempt.get("steps"), "wrote": attempt.get("wrote"),
+            "read": list(attempt.get("read") or [])[:READ_MAX]}
 

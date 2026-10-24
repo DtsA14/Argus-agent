@@ -180,12 +180,12 @@ def test_switched_off_nothing_changes(tmp_path):                                
     r, model, v, d = run(tmp_path, [write_bad(1), WRITE, FINISH], config=cfg(auto=False))
     assert all(LABEL not in texts(c) for c in model.calls) and v.by("auto") == []
     assert not [e for e in events(d, "step_committed") if e["kind"] == "after_step"]
-    assert r.get("loop_policy") == {"auto_validate": False, "auto_validate_max": 4}
+    assert r.get("loop_policy") == {"auto_validate": False, "auto_validate_max": 4, "context_notice_at": 0.7}
 
 
 def test_the_policy_is_recorded(tmp_path):
     r, model, v, d = run(tmp_path, [WRITE, FINISH])
-    assert r.get("loop_policy") == {"auto_validate": True, "auto_validate_max": 4}
+    assert r.get("loop_policy") == {"auto_validate": True, "auto_validate_max": 4, "context_notice_at": 0.7}
     assert [{k: e[k] for k in ("auto_validate", "auto_validate_max")} for e in events(d, "loop_policy")] == \
         [{"auto_validate": True, "auto_validate_max": 4}]
 

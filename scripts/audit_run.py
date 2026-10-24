@@ -36,15 +36,19 @@ started = [e for e in events if e["event"] == "llm_call_started"]
 print(f"llm_call_started {len(started)}, llm_call {len(calls)} "
       f"(ok {sum(e['status'] == 'ok' for e in calls)}, refused {sum(e['status'] == 'refused' for e in calls)})")
 
+summaries = {e.get("iteration"): e for e in events if e["event"] == "attempt_summary"}
+carried = [e["feedback"] for e in events if e["event"] == "carried_feedback"]
 mismatch, checked = 0, 0
 for it in range(contract["limits"].get("max_iterations", 5) if calls and sp is not None else 0):
-    feedback = None
+    feedback = carried[0] if carried and it == 0 else None     # a router retry's run: what attempt 0 was told
     if it > 0:
         prev = run_dir / f"verdict_{it - 1}.json"
         if not prev.exists():
             break
         verdict = json.loads(prev.read_text())
-        feedback = feedback_from(verdict)
+        s = summaries.get(it - 1)           # how the previous attempt ended (absent in runs from before it was told)
+        attempt = None if s is None else {"end": s["reason"], "steps": s["steps"], "wrote": s["wrote"], "read": s["read"]}
+        feedback = feedback_from(verdict, attempt=attempt)
         first = [e for e in calls if e.get("iteration") == it and e.get("step") == 0]
         legacy = [f"{c['id']}: {c['reason'][:300]}" for c in verdict["criteria"] if c["status"] != "pass"][:10]
 
@@ -52,7 +56,9 @@ for it in range(contract["limits"].get("max_iterations", 5) if calls and sp is n
             return bool(first) and hl.prompt_hash([SystemMessage(sp), HumanMessage(task_prompt(contract, fb))],
                                                   tools) == first[0]["prompt_hash"]
         if not matches(feedback):
-            plain = feedback_from(verdict, excerpts=False)
+            plain = feedback_from(verdict, excerpts=False, attempt=attempt)
+            if attempt is not None and not matches(plain) and matches(feedback_from(verdict, excerpts=False)):
+                plain = feedback_from(verdict, excerpts=False)
             if matches(plain):
                 feedback = plain            # a run from before D2, or with code_task.feedback_error_excerpt: false
                 print(f"  it {it}: feedback without error excerpts")
@@ -85,11 +91,16 @@ for it in range(contract["limits"].get("max_iterations", 5) if calls and sp is n
             tk = [k for k in memo if k.startswith('["tool", "agent"') and json.loads(k)[3] == it
                   and json.loads(k)[4] == step and json.loads(k)[5] == c.get("id")]
             messages.append(ToolMessage(memo[tk[0]]["content"], tool_call_id=c.get("id") or f"call_{step}_{i}"))
-        after = [v for k, v in memo.items() if k.startswith('["after_step", "agent"') and json.loads(k)[3] == it
-                 and json.loads(k)[4] == step and v.get("content")]
-        if after:                               # D3: the auto-validation message the agent got after this step
-            print(f"      (harness check after the step: {'limit notice' if after[0].get('limit_notice') else 'validated'})")
-            messages.append(HumanMessage(after[0]["content"]))
+        after = [(json.loads(k)[6], v) for k, v in memo.items() if k.startswith('["after_step", "agent"')
+                 and json.loads(k)[3] == it and json.loads(k)[4] == step and v.get("content")]
+        auto = [v for version, v in after if not version.startswith("ctx")]
+        if auto:                                # D3: the auto-validation message the agent got after this step
+            print(f"      (harness check after the step: {'limit notice' if auto[0].get('limit_notice') else 'validated'})")
+            messages.append(HumanMessage(auto[0]["content"]))
+        for version, v in after:                # SPEC_AGENT_CONTEXT_RETRY 2.2: the context notice, after D3's message
+            if version.startswith("ctx"):
+                print("      (harness context notice after the step)")
+                messages.append(HumanMessage(v["content"]))
 print(f"prompt_hash checked {checked}, mismatches {mismatch}")
 for e in events:
     if e["event"] in ("attempt_end", "status", "budget_violation", "tools_config_changed", "tool_denied"):

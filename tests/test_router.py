@@ -714,7 +714,7 @@ def test_a_failed_agent_says_why_what_failed_and_what_can_be_done(env, monkeypat
     text = rj.status("jtest", jobs_dir=env.jobs)
     assert "why: stagnant: the same criteria failed 2 attempts in a row" in text
     assert "agent result: FAILED_ACCEPTANCE, 2 attempt(s), failing: validation:target, claims" in text
-    assert 'next: argus abandon jtest "<why>"' in text and "redraft" not in text
+    assert 'next: argus retry jtest  |  argus abandon jtest "<why>"' in text and "redraft" not in text
     assert job.file.read_bytes() == before
 
 
@@ -782,3 +782,166 @@ def test_text_from_a_model_is_printed_without_control_characters(env, monkeypatc
     screen = rj._limits_text(job, "approve", ["writable: " + nasty])          # the [y/N] screen, too
     assert "writable: red ok over line end" in screen and not [c for c in screen.replace("\n", "")
                                                                 if unicodedata.category(c) == "Cc"]
+
+
+# ---- retry: the agent again in the same job (docs/reviews/SPEC_AGENT_CONTEXT_RETRY.md 2.4, 2.5) ---------------------
+
+A1 = {"status": "FAILED_ACCEPTANCE", "attempts": 2, "verdict": {"failing": ["validation:target", "claims"]},
+      "attempt": {"iteration": 1, "end": "context_limit", "steps": 5, "wrote": False,
+                  "read": ["src/shop.py", "tests/test_old.py"]}}
+A1_ENDS = [{"event": "attempt_end", "iteration": 0, "reason": "context_limit", "steps": 6},
+           {"event": "attempt_summary", "iteration": 0, "reason": "context_limit", "steps": 6, "wrote": False},
+           {"event": "attempt_end", "iteration": 1, "reason": "context_limit", "steps": 5},
+           {"event": "attempt_summary", "iteration": 1, "reason": "context_limit", "steps": 5, "wrote": False}]
+
+
+def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None):
+    """A job whose first agent stage failed like router pilot #3's: approved, then AGENT_FAILED."""
+    env.code()
+
+    def run(*, run_id, runs_dir, **kw):
+        d = Path(runs_dir) / run_id
+        d.mkdir(parents=True, exist_ok=True)
+        if result is not None:
+            (d / "result.json").write_text(json.dumps(result))
+        (d / "events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ends))
+        if verdict is not None:
+            (d / "verdict_1.json").write_text(json.dumps(verdict))
+        return {"status": "FAILED_ACCEPTANCE", "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+                "usd_billed": 0.0}
+    monkeypatch.setattr(ctrun, "run_code_task", run)
+    env.approve()
+    monkeypatch.undo()
+    assert env.job().data["state"] == rj.AGENT_FAILED
+    return env.job()
+
+
+def retry(env, **kw):
+    return rj.retry("jtest", cfg=env.cfg, deps=env.deps, sandbox_cfg={}, jobs_dir=env.jobs, **kw)
+
+
+def first_request(model):
+    return "\n".join(m.content if isinstance(m.content, str) else json.dumps(m.content)
+                     for m in model.calls[0]["messages"])
+
+
+def test_a_retry_runs_a_new_agent_stage_told_how_the_last_one_ended(env, monkeypatch):
+    job = failed_a1(env, monkeypatch)
+    left = rj.left_usd(job)
+    profile = json.loads((job.root / "fixtures" / "contracts" / "task.json").read_text()).get("budget_profile")
+    by = env.cfg["router"]["agent_max_usd"]
+    job, r = retry(env)
+    st = job.data["stages"]["a2"]
+    assert r["status"] == "DONE" and job.data["state"] == rj.REVIEW_READY and st["run_id"] == "jtest-a2"
+    assert st["cap_usd"] == round(min(by.get(profile, by["default"]), left), 6)
+    assert st["carry"] == {"carried": True, "from": "a1", "stopped": {"end": "context_limit", "steps": 5,
+                                                                      "wrote": False, "read": A1["attempt"]["read"]}}
+    first = first_request(env.coder)
+    assert "How the previous run of this task ended" in first
+    assert "its last attempt ended context_limit after 5 steps; it changed no file." in first
+    assert "Files it read: src/shop.py, tests/test_old.py." in first and "the writable files are src/shop.py" in first
+    assert [e["new"] for e in job.data["log"] if e["what"] == "state"][-2:] == [rj.AGENT_RUNNING, rj.REVIEW_READY]
+    assert any("retry the agent" in c and "a1 ended: context_limit after 5 steps, no file changed" in c
+               for c in env.confirms)
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert "  a1 attempts: 1 context_limit after 6 steps, no file changed; 2 context_limit after 5 steps, no file " \
+           "changed" in text
+    assert "  a2 attempts: 1 finished after 1 steps, files changed" in text
+    assert f"review package: {job.runs / 'jtest-a2' / 'review'}" in text                 # the last agent stage
+
+
+def test_a_retry_of_an_older_run_takes_wrote_from_its_last_verdict(env, monkeypatch):
+    old = {k: v for k, v in A1.items()}
+    old["attempt"] = {"iteration": 1, "end": "context_limit", "steps": 5}                 # pilot #3's a1
+    verdict = {"criteria": [{"id": "scope:protected", "evidence": {"diff": {"added": [], "removed": [],
+                                                                            "modified": []}}}]}
+    failed_a1(env, monkeypatch, result=old, verdict=verdict)
+    job, _ = retry(env)
+    assert job.data["stages"]["a2"]["carry"]["stopped"] == {"end": "context_limit", "steps": 5, "wrote": False,
+                                                            "read": []}
+    first = first_request(env.coder)
+    assert "It ran out of context before changing any file." in first and "Files it read" not in first
+
+
+def test_a_retry_whose_previous_result_cannot_be_read_starts_nothing(env, monkeypatch):
+    failed_a1(env, monkeypatch, result=None)
+    with pytest.raises(rj.Refused, match="cannot be read"):
+        retry(env)
+    assert env.job().data["state"] == rj.AGENT_FAILED and "a2" not in env.job().data["stages"]
+    assert env.coder.calls == []
+
+
+def test_only_a_failed_agent_is_retried(env):
+    env.code()
+    with pytest.raises(rj.Refused, match="AWAITING_APPROVAL"):
+        retry(env)
+    env.approve()
+    with pytest.raises(rj.Refused, match="REVIEW_READY"):
+        retry(env)
+    assert "a2" not in env.job().data["stages"]
+
+
+def test_a_retry_that_cannot_fund_one_attempt_is_blocked(env, monkeypatch):
+    failed_a1(env, monkeypatch)
+    monkeypatch.setattr(rj, "left_usd", lambda job: 0.01)
+    with pytest.raises(rj.Refused, match="not enough of the job cap"):
+        retry(env)
+    assert env.job().data["state"] == rj.BLOCKED and "a2" not in env.job().data["stages"] and env.coder.calls == []
+
+
+def test_a_retry_on_a_changed_contract_is_blocked(env, monkeypatch):
+    job = failed_a1(env, monkeypatch)
+    path = job.root / "fixtures" / "contracts" / "task.json"
+    c = json.loads(path.read_text())
+    c["limits"]["max_iterations"] = 9
+    path.write_text(json.dumps(c))
+    with pytest.raises(rj.Refused, match="not the one approved"):
+        retry(env)
+    assert env.job().data["state"] == rj.BLOCKED and "a2" not in env.job().data["stages"] and env.coder.calls == []
+
+
+def test_a_retry_not_confirmed_or_on_a_busy_job_starts_nothing(env, monkeypatch):
+    job = failed_a1(env, monkeypatch)
+    before = job.file.read_bytes()
+    with job.lock():
+        with pytest.raises(rj.JobBusy):
+            retry(env)
+    assert job.file.read_bytes() == before
+    env.deps.confirm = lambda text: False
+    with pytest.raises(rj.Refused, match="not confirmed"):
+        retry(env)
+    assert env.job().data["state"] == rj.AGENT_FAILED and "a2" not in env.job().data["stages"] and env.coder.calls == []
+
+
+def test_a_resumed_retry_keeps_its_cap_and_what_it_carries(env, monkeypatch):
+    failed_a1(env, monkeypatch)
+    seen, real = [], ctrun.run_code_task
+
+    def run(**kw):
+        seen.append({k: kw[k] for k in ("run_id", "initial_feedback")} | {"cap": kw["cfg"]["budget"]["max_usd"]})
+        if len(seen) == 1:
+            raise RuntimeError("crash")
+        return real(**kw)
+    monkeypatch.setattr(ctrun, "run_code_task", run)
+    with pytest.raises(RuntimeError):
+        retry(env)
+    assert env.job().data["state"] == rj.AGENT_RUNNING
+    monkeypatch.setattr(rj, "left_usd", lambda job: 0.9)            # the job's money moved: the stage's cap does not
+    _, r = rj.resume("jtest", cfg=env.cfg, deps=env.deps, sandbox_cfg={}, jobs_dir=env.jobs)
+    assert r["status"] == "DONE" and seen[0] == seen[1] and seen[1]["run_id"] == "jtest-a2"
+    assert seen[1]["initial_feedback"]["stopped"]["end"] == "context_limit"
+
+
+def test_the_cli_retries_with_a_key_file(env, monkeypatch, tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("argus_cli_r", ROOT / "scripts" / "argus.py")
+    cli = importlib.util.module_from_spec(spec)
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    spec.loader.exec_module(cli)
+    got = {}
+    monkeypatch.setattr(rj, "retry", lambda job_id, **kw: got.update(kw, job=job_id) or (_ for _ in ()).throw(
+        rj.Refused("stop")))
+    f = key_file(tmp_path)
+    rc = cli.main(["--jobs-dir", str(env.jobs), "retry", "jtest", "--max-usd", "0.3", "--key-file", str(f), "--yes"],
+                  deps=env.deps)
+    assert rc == 2 and got["job"] == "jtest" and got["max_usd"] == 0.3 and got["deps"].key_file == str(f)

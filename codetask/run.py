@@ -95,6 +95,10 @@ def apply_profile(cfg, name):
     role = cfg["code_task"]["role"]
     task = {k: v for k, v in cfg["code_task"].items() if k not in USD_PROFILE_KEYS}   # nothing leaks from a profile
     task.update({k: p[k] for k in USD_PROFILE_KEYS if p.get(k) is not None})         # applied before (D1)
+    # SPEC_AGENT_CONTEXT_RETRY 2.3: a USD profile's input limit per coder model (heuristic counts overestimate DeepSeek)
+    by_model = cfg["code_task"].get("max_input_tokens_by_model") or {}
+    if task.get("max_input_tokens") is not None and cfg["roles"][role]["model"] in by_model:
+        task["max_input_tokens"] = int(by_model[cfg["roles"][role]["model"]])
     out = {**cfg, "code_task": {**task, "attempt_tokens": int(p["attempt_tokens"]), "applied_profile": name},
            "roles": {**cfg["roles"], role: {**cfg["roles"][role], "max_output_tokens": int(p["max_output_tokens"])}}}
     return out
@@ -167,8 +171,9 @@ def admission(log, lim):
 
 
 def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None,
-                env_preflight=None, root=None):
+                env_preflight=None, root=None, initial_feedback=None):
     """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox).
+    initial_feedback: what attempt 0 is told about a previous run of the same task (a router retry); frozen at setup.
     root: where the contract's input repository and its intake record live (a router job has its own); None is this
     checkout (ROOT, read when called)."""
     run_dir, root = Path(run_dir), Path(ROOT if root is None else root)
@@ -270,9 +275,13 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                   **{k: cfg["code_task"][k] for k in USD_PROFILE_KEYS if cfg["code_task"].get(k) is not None}}
         log.emit("budget_profile", **budget)
         policy = {"auto_validate": bool(cfg["code_task"].get("auto_validate", False)),
-                  "auto_validate_max": int(cfg["code_task"].get("auto_validate_max", 4))}
+                  "auto_validate_max": int(cfg["code_task"].get("auto_validate_max", 4)),
+                  "context_notice_at": cfg["code_task"].get("context_notice_at")}
         log.emit("loop_policy", **policy)
-        return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[], feedback=[],
+        if initial_feedback:          # a router retry: what attempt 0 is told (audit_run.py rebuilds its prompt from it)
+            log.emit("carried_feedback", feedback=initial_feedback)
+        return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[],
+                    feedback=initial_feedback or [],
                     tools=effective_tools(contract), provenance=provenance, budget_profile=budget, loop_policy=policy)
 
     def agent(state):
@@ -300,7 +309,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         # The policy frozen at setup, not this process's config: a resume must decide every step as the run did.
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None,
                        policy=state.get("loop_policy"))
-        return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"]},
+        return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"],
+                            "wrote": a["wrote"], "read": a["read"]},
                 "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}
 
     def acceptance(state):
@@ -342,7 +352,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if stop:
             return move(state, st.FAILED_ACCEPTANCE, reason=stop, verdict=summary, failures=history)
         return move(state, st.RUNNING, iteration=i + 1, verdict=summary, failures=history,
-                    feedback=feedback_from(v, excerpts=bool(cfg["code_task"].get("feedback_error_excerpt", True))))
+                    feedback=feedback_from(v, excerpts=bool(cfg["code_task"].get("feedback_error_excerpt", True)),
+                                           attempt=state.get("attempt")))
 
     g = StateGraph(State)
     lim = settings(cfg)
@@ -359,7 +370,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
 
 
 def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_at=None, models=None,
-                  validate=None, preflight=None, env_preflight=None, echo=False, root=None):
+                  validate=None, preflight=None, env_preflight=None, echo=False, root=None, initial_feedback=None):
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
@@ -378,7 +389,8 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models, validate=validate,
-                            preflight=preflight, env_preflight=env_preflight, root=root)
+                            preflight=preflight, env_preflight=env_preflight, root=root,
+                            initial_feedback=initial_feedback)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)
