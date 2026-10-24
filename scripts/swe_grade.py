@@ -9,8 +9,10 @@ PASS_TO_PASS.txt (JSON lists of test names). The steps, as the official harness 
   2. the commit's tree (intake.write_tree: no .git) plus changes.patch;
   3. every file test_patch touches back to its base_commit content (or removed if it was not there), then test_patch:
      the official tests win over any change the agent or the drafter made to the same files;
-  4. the tests of test_patch's files run in the sandbox environment; a name is mapped to `file::name` in those files,
-     and one found in no file or in two is `missing`;
+  4. the tests of test_patch's files run in the sandbox environment; a name is mapped to `file::name` when it is a
+     module-level test function of exactly one of those files; one found in no file, in two, or only inside a class is
+     `missing`. A run that gives no test result to grade (the sandbox blocked, a timeout, no pytest summary) refuses:
+     an infrastructure failure is never graded as the agent's;
   5. per node pass / fail / missing; resolved = every FAIL_TO_PASS and every PASS_TO_PASS node found and passing.
 Also, for information only (not part of resolved): the tests approved with the task, run on base_commit plus the
 maintainers' fix. Exit codes: 0 graded (resolved or not), 2 refused (nothing was run).
@@ -68,17 +70,34 @@ def restore(repo, commit, tree, paths):
 
 
 def map_names(names, tree, test_files):
-    """{name: node or None}: a name found as a test function in exactly one of test_files is `file::name`; a name
-    that already is a node is kept if its file is one of them; anything else is None (missing)."""
+    """{name: node or None}: a name defined by a module-level `def` in exactly one of test_files is `file::name`; a
+    name that already is a node is kept if its file is one of them; anything else, a method of a class included (its
+    node would be `file::Class::name`), is None (missing)."""
     out = {}
     for name in names:
         if "::" in name:
             out[name] = name if name.split("::", 1)[0] in test_files else None
             continue
         hits = [f for f in test_files if (Path(tree) / f).exists()
-                and re.search(rf"^\s*def {re.escape(name)}\s*\(", (Path(tree) / f).read_text(encoding="utf-8"), re.M)]
+                and re.search(rf"^def {re.escape(name)}\s*\(", (Path(tree) / f).read_text(encoding="utf-8"), re.M)]
         out[name] = f"{hits[0]}::{name}" if len(hits) == 1 else None
     return out
+
+
+def unusable(v):
+    """Why a validation result gives no test result to grade, or None: only a pass or fail with a complete pytest
+    report is one. A blocked sandbox, a timeout, a cut output or a missing summary is the infrastructure's failure."""
+    ev = v.get("evidence") or {}
+    if v.get("status") not in ("pass", "fail"):
+        return f"the validation is {v.get('status')!r}: {v.get('reason', '')[:300]}"
+    for flag in ("timed_out", "output_limit_exceeded", "truncated", "cleanup_failed"):
+        if ev.get(flag):
+            return f"the validation run was cut ({flag}): {v.get('reason', '')[:300]}"
+    if ev.get("tests_run") is None or ev.get("outcome") is None:
+        return "no pytest summary in the output"
+    if ev.get("consistent") is False:
+        return "the pytest output does not account for its summary"
+    return None
 
 
 def run_tests(tree, files, nodes, environment, sandbox_cfg, validate):
@@ -105,6 +124,9 @@ def grade(*, instance, repo, review, sha, environment, sandbox_cfg, validate):
     test_patch = inst / "test_patch.diff"
     f2p = json.loads((inst / "FAIL_TO_PASS.txt").read_text())
     p2p = json.loads((inst / "PASS_TO_PASS.txt").read_text())
+    if not isinstance(f2p, list) or not f2p or not isinstance(p2p, list):
+        raise Refused(f"FAIL_TO_PASS must be a non-empty list and PASS_TO_PASS a list (got {f2p!r:.80}, {p2p!r:.80}): "
+                      "with nothing to fix there is nothing to grade")
     tfiles = [p for p in touched(test_patch.read_text(encoding="utf-8")) if p.endswith(".py")]
     approved = [f["path"] for f in (prov.get("patch") or {}).get("files") or [] if f.get("approved_test")
                 and f.get("change") != "D"]
@@ -119,6 +141,8 @@ def grade(*, instance, repo, review, sha, environment, sandbox_cfg, validate):
         m2f, m2p = map_names(f2p, tree, tfiles), map_names(p2p, tree, tfiles)
         nodes = [n for n in list(m2f.values()) + list(m2p.values()) if n]
         v = run_tests(tree, tfiles, nodes, environment, sandbox_cfg, validate) if nodes else {}
+        if nodes and unusable(v):
+            raise Refused(f"no test result to grade: {unusable(v)}")
         res_f2p, res_p2p = per_node(m2f, v), per_node(m2p, v)
         # information only: the approved tests on base_commit plus the maintainers' fix
         info = None
@@ -137,6 +161,8 @@ def grade(*, instance, repo, review, sha, environment, sandbox_cfg, validate):
             ev = r.get("evidence") or {}
             info = {"files": sorted(approved_tests), "status": r.get("status"), "tests_run": ev.get("tests_run"),
                     "failures": ev.get("failures"), "errors": ev.get("errors")}
+            if unusable(r):                  # information only: said so, never read as the drafter's tests failing
+                info.update(status="unusable", reason=unusable(r))
     resolved = all(x == "pass" for x in res_f2p.values()) and all(x == "pass" for x in res_p2p.values())
     from tools import sandbox as sb
     return {"resolved": resolved, "FAIL_TO_PASS": res_f2p, "PASS_TO_PASS": res_p2p,

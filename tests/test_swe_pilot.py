@@ -248,7 +248,8 @@ def local_pytest(spec, workspace, sandbox_cfg, log=None):
     ok = r.returncode == 0
     return {"id": f"validation:{spec['id']}", "status": "pass" if ok else "fail", "reason": "",
             "evidence": {"must_pass": must, "tests_run": len(passed), "failures": 0 if ok else 1, "errors": 0,
-                         "skipped": 0, "exit_code": r.returncode}}
+                         "skipped": 0, "exit_code": r.returncode, "outcome": "OK" if ok else "FAILED",
+                         "consistent": True}}
 
 
 def grader():
@@ -324,6 +325,64 @@ def test_a_missing_or_ambiguous_name_is_not_passing(swe):
     (swe["inst"] / "PASS_TO_PASS.txt").write_text(json.dumps(["test_ok"]))
     rc, g = grade(swe, *review_of(swe["tmp"], fix))
     assert rc == 0 and g["resolved"] is False and g["FAIL_TO_PASS"] == {"test_inc": "missing"}
+
+
+@pytest.mark.parametrize("result, why", [
+    ({"status": "blocked", "reason": "sandbox unavailable: no daemon", "evidence": {}}, "is 'blocked'"),
+    ({"status": "fail", "reason": "timed out after 600s", "evidence": {"timed_out": True, "tests_run": None}},
+     "timed_out"),
+    ({"status": "fail", "reason": "output limit exceeded", "evidence": {"output_limit_exceeded": True}},
+     "output_limit_exceeded"),
+    ({"status": "fail", "reason": "no pytest summary", "evidence": {"tests_run": None, "outcome": None}},
+     "no pytest summary"),
+    ({"status": "fail", "reason": "inconsistent", "evidence": {"tests_run": 2, "outcome": "FAILED",
+                                                               "consistent": False}}, "does not account"),
+])
+def test_a_run_that_gives_no_test_result_refuses_instead_of_grading(swe, result, why, capsys):
+    # an infrastructure failure must never be graded as the agent's: no grade file, exit 2
+    rc, g = grade(swe, *review_of(swe["tmp"], (swe["inst"] / "patch.diff").read_text()),
+                  validate=lambda spec, ws, cfg, log=None: {"id": "validation:swe", **result})
+    assert rc == 2 and g is None and why in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("f2p", [[], {}, "test_inc"])
+def test_an_empty_or_malformed_fail_to_pass_refuses(swe, f2p):
+    (swe["inst"] / "FAIL_TO_PASS.txt").write_text(json.dumps(f2p))
+    calls = []
+    rc, g = grade(swe, *review_of(swe["tmp"], (swe["inst"] / "patch.diff").read_text()),
+                  validate=lambda *a, **k: calls.append(a))
+    assert rc == 2 and g is None and calls == []
+
+
+def test_a_test_method_inside_a_class_is_missing_not_failed(swe):
+    # its node would be file::Class::name; mapping it to file::name would report a fail for a test that passes
+    tp = ("diff --git a/tests/test_cls.py b/tests/test_cls.py\nnew file mode 100644\n--- /dev/null\n"
+          "+++ b/tests/test_cls.py\n@@ -0,0 +1,6 @@\n+from pkg.calc import inc\n+\n+\n+class TestInc:\n"
+          "+    def test_in_class(self):\n+        assert inc(1) == 2\n")
+    (swe["inst"] / "test_patch.diff").write_text((swe["inst"] / "test_patch.diff").read_text() + tp)
+    (swe["inst"] / "FAIL_TO_PASS.txt").write_text(json.dumps(["test_inc", "test_in_class"]))
+    rc, g = grade(swe, *review_of(swe["tmp"], (swe["inst"] / "patch.diff").read_text()))
+    assert rc == 0 and g["resolved"] is False
+    assert g["FAIL_TO_PASS"] == {"test_inc": "pass", "test_in_class": "missing"}
+
+
+def test_an_unusable_run_of_the_approved_tests_is_said_so_and_does_not_decide_resolved(swe):
+    work = swe["tmp"] / "work4"
+    subprocess.run(["git", "clone", "-q", str(swe["repo"]), str(work)], check=True)
+    git(work, "checkout", "-q", swe["base"])
+    (work / "pkg" / "calc.py").write_text(FIXED)
+    (work / "tests" / "test_drafted.py").write_text("def test_two():\n    assert True\n")
+    git(work, "add", "-A")
+
+    def validate(spec, ws, cfg, log=None):
+        if spec["id"] == "drafter_tests":
+            return {"id": "validation:drafter_tests", "status": "blocked", "reason": "sandbox unavailable",
+                    "evidence": {}}
+        return local_pytest(spec, ws, cfg)
+    rc, g = grade(swe, *review_of(swe["tmp"], git(work, "diff", "--cached"), approved=["tests/test_drafted.py"]),
+                  validate=validate)
+    assert rc == 0 and g["resolved"] is True
+    assert g["drafter_tests_on_reference"]["status"] == "unusable" and "blocked" in g["drafter_tests_on_reference"]["reason"]
 
 
 def test_the_approved_tests_are_also_run_on_the_maintainers_fix(swe):

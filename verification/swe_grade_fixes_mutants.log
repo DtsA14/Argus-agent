@@ -1,0 +1,28 @@
+# swe_grade fixes (review of #193) at f9e5b27 (2026-10-24T13:58:51Z)
+## the new test cases on main's code
+___________ test_a_test_method_inside_a_class_is_missing_not_failed ____________
+    def test_a_test_method_inside_a_class_is_missing_not_failed(swe):
+FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result0-is 'blocked']
+FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result1-timed_out]
+FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result2-output_limit_exceeded]
+FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result3-no pytest summary]
+FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result4-does not account]
+FAILED tests/test_swe_pilot.py::test_an_empty_or_malformed_fail_to_pass_refuses[f2p0]
+FAILED tests/test_swe_pilot.py::test_an_empty_or_malformed_fail_to_pass_refuses[f2p1]
+FAILED tests/test_swe_pilot.py::test_an_empty_or_malformed_fail_to_pass_refuses[test_inc]
+FAILED tests/test_swe_pilot.py::test_a_test_method_inside_a_class_is_missing_not_failed
+FAILED tests/test_swe_pilot.py::test_an_unusable_run_of_the_approved_tests_is_said_so_and_does_not_decide_resolved
+10 failed, 20 deselected in 3.87s
+## mutants (pytest -x tests/test_swe_pilot.py per mutant)
+KILLED  an unusable run is graded: ["FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result0-is 'blocked']"]
+KILLED  a blocked run is usable: ["FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result0-is 'blocked']"]
+KILLED  a cut run is usable: ['FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result1-timed_out]']
+KILLED  a run without a summary is usable: ['FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result3-no pytest summary]']
+KILLED  an inconsistent run is usable: ['FAILED tests/test_swe_pilot.py::test_a_run_that_gives_no_test_result_refuses_instead_of_grading[result4-does not account]']
+KILLED  an empty FAIL_TO_PASS is graded: ['FAILED tests/test_swe_pilot.py::test_an_empty_or_malformed_fail_to_pass_refuses[f2p0]']
+KILLED  a malformed FAIL_TO_PASS is graded: ['FAILED tests/test_swe_pilot.py::test_an_empty_or_malformed_fail_to_pass_refuses[test_inc]']
+KILLED  a method in a class is mapped: ['FAILED tests/test_swe_pilot.py::test_a_test_method_inside_a_class_is_missing_not_failed']
+KILLED  an unusable reference run is reported as its status: ['FAILED tests/test_swe_pilot.py::test_an_unusable_run_of_the_approved_tests_is_said_so_and_does_not_decide_resolved']
+RESULT: 9/9 killed
+## all non-sandbox tests before the full verify: 1461 passed, 95 skipped in 81.75s
+## one verify run was invalid (a branch was checked out in this directory while it ran); killed and rerun on f9e5b27
