@@ -1,3 +1,5 @@
+> **Arsip.** Laporan rekonsiliasi 2026-10-22, dipindah dari `docs/Reconciliation.md` pada 2026-10-24. Keputusannya tetap berlaku sebagai sejarah. Rekonsiliasi terkini: [`docs/Reconciliation.md`](../Reconciliation.md).
+
 # Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-22)
 
 Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` `bf5416d`. Status di bawah berasal dari kode
