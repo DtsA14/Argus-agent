@@ -7,6 +7,7 @@
   python scripts/argus.py reject <job> "why"
   python scripts/argus.py redraft <job>
   python scripts/argus.py resume <job>
+  python scripts/argus.py retry <job> [--max-usd X]      # after AGENT_FAILED: the agent again, as a new stage
   python scripts/argus.py abandon <job> "why"            # close a job that will not be continued
 
 Every live stage shows its limits, asks [y/N], then asks for the API key (not shown; never an argument, never written).
@@ -53,12 +54,15 @@ def main(argv=None, deps=None):
     a.add_argument("--max-usd", type=float)
     a.add_argument("--max-iterations", type=int, default=3)
     a.add_argument("--reference-patch")
+    t = sub.add_parser("retry")
+    t.add_argument("job")
+    t.add_argument("--max-usd", type=float)
     for name in ("reject", "abandon"):
         r = sub.add_parser(name)
         r.add_argument("job")
         r.add_argument("reason")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume"):            # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry"):   # the live commands
             p.add_argument("--key-file", help="read the API key from this 0600 file instead of typing it")
             p.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     o = ap.parse_args(argv)
@@ -86,6 +90,9 @@ def main(argv=None, deps=None):
         elif o.cmd == "approve":
             job, _ = rj.approve(o.job, sha=o.sha, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
                                 max_iterations=o.max_iterations, reference_patch=o.reference_patch, jobs_dir=o.jobs_dir)
+        elif o.cmd == "retry":
+            job, _ = rj.retry(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
+                              jobs_dir=o.jobs_dir)
         elif o.cmd == "redraft":
             job, _ = rj.redraft(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
         else:

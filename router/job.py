@@ -3,6 +3,7 @@
   argus code     a new job: intake of the target repository at a commit, then the drafter            -> AWAITING_APPROVAL
   argus approve  the human approves the draft they saw (its sha), then the agent and the review package -> REVIEW_READY
   argus reject / redraft / resume / status
+  argus retry    the agent again on the approved contract (a new stage, told how the previous one ended)
 
 A job lives in jobs/<id>/: job.json (state, inputs, stages, approval, the human's decisions with their times), its own
 root (root/fixtures/...: the intake, the approved task and contract, never the Argus checkout's fixtures) and the stage
@@ -55,7 +56,8 @@ LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
          (AWAITING_APPROVAL, AGENT_RUNNING), (AWAITING_APPROVAL, REJECTED), (AWAITING_APPROVAL, DRAFTING),
          (AWAITING_APPROVAL, BLOCKED),
          (AGENT_RUNNING, REVIEW_READY), (AGENT_RUNNING, REVIEW_INVALID), (AGENT_RUNNING, AGENT_FAILED),
-         (AGENT_RUNNING, BLOCKED)} | \
+         (AGENT_RUNNING, BLOCKED),
+         (AGENT_FAILED, AGENT_RUNNING), (AGENT_FAILED, BLOCKED)} | \
         {(s, ABANDONED) for s in (NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL, AGENT_RUNNING, AGENT_FAILED, BLOCKED)}
 JOB_ID = re.compile(r"^j[0-9a-z_]{1,40}$")
 KEY_SHAPE = {"anthropic": "sk-ant-"}
@@ -465,8 +467,19 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
     return job, r
 
 
-def _agent(job, cfg, deps, sandbox_cfg=None, resume=False):
-    """The agent stage, bound to the approved contract; then the review package."""
+def agent_stages(job):
+    """The job's agent stages, a1, a2, ... in order."""
+    return sorted((k for k, s in job.data["stages"].items() if s["kind"] == "agent"), key=lambda k: int(k[1:]))
+
+
+def last_agent(job):
+    sids = agent_stages(job)
+    return (sids[-1], job.data["stages"][sids[-1]]) if sids else (None, None)
+
+
+def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, carry=None):
+    """An agent stage (a1 after approve, a2... after a retry), bound to the approved contract; then the review
+    package. cap and carry are recorded when the stage starts; a resume uses what was recorded."""
     from codetask import review
     from codetask import run as ctrun
     ap = job.data["approval"]
@@ -478,10 +491,11 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False):
     if sha != ap["contract_sha256"]:
         job.move(BLOCKED, deps, reason="contract_changed: the contract differs from the approved one")
         raise Refused(f"job {job.id}: the contract is not the one approved (BLOCKED)")
-    sid = "a1"
     if sid not in job.data["stages"]:
-        job.data["stages"][sid] = {"kind": "agent", "run_id": f"{job.id}-{sid}", "cap_usd": ap["max_usd"],
-                                   "started_at": deps.clock()}
+        job.data["stages"][sid] = {"kind": "agent", "run_id": f"{job.id}-{sid}",
+                                   "cap_usd": ap["max_usd"] if cap is None else cap, "started_at": deps.clock()}
+        if carry is not None:
+            job.data["stages"][sid]["carry"] = carry
         job.move(AGENT_RUNNING, deps, stage=sid)
     st = job.data["stages"][sid]
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -491,7 +505,7 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False):
     deps.echo(running(job, "agent", st["run_id"]))
     r = ctrun.run_code_task(contract_path=contract_path, run_id=st["run_id"], runs_dir=job.runs, cfg=acfg,
                             resume=again, models=deps.models, validate=deps.validate, preflight=deps.preflight,
-                            env_preflight=deps.env_preflight, root=job.root)
+                            env_preflight=deps.env_preflight, root=job.root, initial_feedback=st.get("carry"))
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"], profile=profile)
     deps.echo(f"agent finished: {r['status']} (${r['usd_billed']:.4f})")
     if r["status"] != "DONE":
@@ -515,15 +529,74 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
             return job, _draft(job, cfg, deps, n)
         if state == AGENT_RUNNING:
             from codetask.run import apply_profile
-            st = job.data["stages"]["a1"]
+            sid, st = last_agent(job)
             contract = json.loads((job.root / "fixtures" / "contracts" / f"{job.data['approval']['task']}.json")
                                   .read_text(encoding="utf-8"))
             acfg = stage_config(apply_profile(cfg, contract["budget_profile"]) if contract.get("budget_profile")
                                 else cfg, st["cap_usd"])
             text = _limits_text(job, "resume the agent", [f"agent stage {st['run_id']}; stage cap ${st['cap_usd']:.4f}"])
             with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
-                return job, _agent(job, cfg, deps, sandbox_cfg, resume=True)
+                return job, _agent(job, cfg, deps, sandbox_cfg, resume=True, sid=sid)
         raise Refused(f"job {job.id} is {state}: nothing to resume")
+
+
+def _wrote_from_verdict(run_dir, iteration):
+    """A run from before attempts recorded `wrote`: whether its last verdict saw any file changed from the original."""
+    v = json.loads((Path(run_dir) / f"verdict_{iteration}.json").read_text(encoding="utf-8"))
+    for c in v["criteria"]:
+        d = (c.get("evidence") or {}).get("diff")
+        if isinstance(d, dict):
+            return any(p != ct.SUMMARY for k in ("added", "modified", "removed") for p in d.get(k) or [])
+    return None
+
+
+def carry_from(job, sid):
+    """SPEC_AGENT_CONTEXT_RETRY 2.4: how the last attempt of agent stage sid ended, from its run's committed result,
+    for the first attempt of the next stage. A result that cannot be read refuses the retry (it must not start blind)."""
+    from codetask.agent import stopped
+    run_dir = job.runs / job.data["stages"][sid]["run_id"]
+    try:
+        a = dict(json.loads((run_dir / "result.json").read_text(encoding="utf-8"))["attempt"])
+        if a.get("wrote") is None:
+            a["wrote"] = _wrote_from_verdict(run_dir, a["iteration"])
+    except (OSError, ValueError, TypeError, KeyError):
+        raise Refused(f"the result of agent stage {sid} cannot be read: a retry would start without knowing how it "
+                      "ended; nothing was started") from None
+    return {"carried": True, "from": sid, "stopped": stopped(a)}
+
+
+def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
+    """Run the agent again on the approved contract, as a new stage a<n+1> with its own cap (the lower of its profile
+    and what is left of the job, recorded at start) and how the previous stage ended."""
+    from codetask import run as ctrun
+    job = open_job(job_id, jobs_dir)
+    with job.lock():
+        if job.data["state"] != AGENT_FAILED:
+            raise Refused(f"job {job.id} is {job.data['state']}: only a job whose agent failed is retried")
+        prev, _ = last_agent(job)
+        sid = f"a{int(prev[1:]) + 1}"
+        carry = carry_from(job, prev)
+        contract = json.loads((job.root / "fixtures" / "contracts" / f"{job.data['approval']['task']}.json")
+                              .read_text(encoding="utf-8"))
+        profile = contract.get("budget_profile")
+        by_profile = (cfg.get("router") or {}).get("agent_max_usd") or {}
+        want = float(max_usd if max_usd is not None else by_profile.get(profile, by_profile.get("default", 0.5)))
+        cap = round(min(want, left_usd(job)), 6)
+        acfg = stage_config(ctrun.apply_profile(cfg, profile) if profile else cfg, cap)
+        need = ctrun.settings(acfg)["attempt_usd"]
+        if cap < need:
+            job.move(BLOCKED, deps, reason=f"budget: ${cap:.4f} left for the agent, one attempt needs ${need:.2f}")
+            raise Refused(f"job {job.id}: not enough of the job cap left for one agent attempt (BLOCKED)")
+        s = carry["stopped"]
+        lines = [f"agent stage {sid} (retry of {prev}), approved contract {job.data['approval']['contract_sha256'][:12]}",
+                 f"{prev} ended: {s['end']} after {s['steps']} steps"
+                 + {True: ", files changed", False: ", no file changed"}.get(s["wrote"], ""),
+                 f"profile {profile}; max input {ctrun.settings(acfg)['max_input_tokens']}; one attempt ${need:.2f}; "
+                 f"agent cap ${cap:.4f}"]
+        text = _limits_text(job, "retry the agent", lines)
+        with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
+            job.note(deps, "retry", stage=sid, by=os.environ.get("USER"))
+            return job, _agent(job, cfg, deps, sandbox_cfg, sid=sid, cap=cap, carry=carry)
 
 
 def redraft(job_id, *, cfg, deps, jobs_dir=JOBS):
@@ -584,8 +657,8 @@ def _why(job):
 
 
 def _agent_result(job):
-    """What the agent stage's result.json says (read only), as one line; unreadable is said, never raised."""
-    st = job.data["stages"].get("a1")
+    """What the last agent stage's result.json says (read only), as one line; unreadable is said, never raised."""
+    _, st = last_agent(job)
     try:
         r = json.loads((job.runs / st["run_id"] / "result.json").read_text(encoding="utf-8"))
         failing = (r.get("verdict") or {}).get("failing") or []
@@ -617,6 +690,22 @@ def _review_lines(job, rv):
                   f"  git -C {repo} apply --whitespace=nowarn {p}"]
 
 
+def _attempt_lines(job):
+    """SPEC_AGENT_CONTEXT_RETRY 2.5: how each attempt of each agent stage ended, from its run's events (read only)."""
+    out = []
+    for sid in agent_stages(job):
+        log = job.runs / job.data["stages"][sid]["run_id"] / "events.jsonl"
+        try:
+            ends = [e for e in parse_lines(log.read_text(encoding="utf-8")) if e.get("event") == "attempt_end"]
+        except OSError:
+            continue
+        parts = [f"{int(e.get('iteration', 0)) + 1} {e.get('reason')} after {e.get('steps')} steps"
+                 + {True: ", files changed", False: ", no file changed"}.get(e.get("wrote"), "") for e in ends]
+        if parts:
+            out.append(f"  {sid} attempts: " + "; ".join(parts))
+    return out
+
+
 def branch_name(job_id):
     return f"argus/{job_id}"
 
@@ -643,15 +732,16 @@ def status(job_id, *, jobs_dir=JOBS):
                 *[f"validation {v['id']}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
                 *changed_lines(job, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
+    out += _attempt_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
-        out += _review_lines(job, d["stages"]["a1"]["review"])
+        out += _review_lines(job, last_agent(job)[1]["review"])
     if d["state"] in (DRAFT_FAILED, AGENT_FAILED, BLOCKED, REJECTED, ABANDONED):
         why = _why(job)
         out.append(f"why: {why.get('reason') or 'not recorded'}" + (f" (by {why['by']})" if why.get("by") else ""))
         if d["state"] == AGENT_FAILED:
             out.append(_agent_result(job))
         nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
-               AGENT_FAILED: [f'argus abandon {job.id} "<why>"'],
+               AGENT_FAILED: [f"argus retry {job.id}", f'argus abandon {job.id} "<why>"'],
                BLOCKED: [f'argus abandon {job.id} "<why>"']}.get(d["state"])
         if nxt:
             out.append("next: " + "  |  ".join(nxt))
