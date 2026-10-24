@@ -109,6 +109,14 @@ Ditunda sampai ada bukti kebutuhan; status dan gap di Reconciliation bagian 1–
 - [ ] Idempotency key sisi provider (ADR-004)
 - [ ] Artifact store dengan versioning (ADR-005)
 - [ ] Capability pack gambar, video/audio, game, dengan gate non-kode (ADR-006)
+- [ ] **Git untuk agen otonom** (diskusi 2026-10-24): sandbox **tetap tanpa git** (tanpa history yang bisa membocorkan perbaikan,
+  digest workspace tetap jelas, tidak ada kredensial atau `.git` untuk menyelundupkan perubahan). Git ditambah sebagai tool
+  **harness**, bertahap, saat ada bukti kebutuhan:
+  1. history read-only (`GitLog`/`GitShow`/`GitBlame`, sampai `base_commit`, dibatasi, tercatat);
+  2. repo sintetis satu commit di sandbox (tanpa history, tanpa remote), per environment, untuk repo yang build atau tesnya
+     butuh git (`setuptools_scm`, tes yang memanggil git); `.git` keluar dari snapshot dan scope, dengan spek dan mutan;
+  3. branch/commit/push/PR hanya dari harness: idempoten per `(job, tahap)`, tercatat, push dan PR butuh persetujuan,
+     kredensial tidak pernah masuk sandbox (lanjutan `argus apply`, K6)
 
 ## Batasan yang diterima
 
