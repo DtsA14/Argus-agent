@@ -4,7 +4,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status); riwayat semua butir yang sudah selesai (bukti, angka, PR) ada di
 [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-24 (router pilot #3 `agent-completed` lewat `argus retry`; status router, konteks agen).
+Terakhir diperbarui: 2026-10-24 (pilot SWE v0 `resolved` di sympy; Reconciliation diperbarui).
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -76,6 +76,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [ ] Efek petunjuk konteks belum terpisah dari variasi model (satu run; peringatan 70% belum pernah muncul di run live)
 - [ ] Router: `argus apply` (K6 v0): branch, `apply --check`, `apply`, verify; sekarang perintahnya dicetak `status`
 - [ ] Cek key manual router pilot #3 (`grep -rlF -f ...`, kriteria 4) belum dijalankan; Atha, dari PC
+- [x] **Pilot SWE v0** (`pilots/swe_v0/sympy__sympy-23534/`, #192–#196): repo luar pertama, `resolved` oleh tes resmi yang
+    tersembunyi; job $0,0202; environment per job dengan image dipin, `swe_grade.py`
+- [ ] Batch 5 instance sympy SWE-bench Verified (Reconciliation bagian 7, keputusan 1)
+- [ ] Layar batas tahap drafter (`code`, `redraft`, resume) dan layar `retry`/resume agen tidak menyebut environment dan image;
+    prioritas rendah (Atha 2026-10-24: yang membaca layar adalah Claude, dan preflight chat menghitung id image dengan
+    `environment_pin` sebelum run)
 - [ ] Router: cek bentuk kunci DeepSeek (hanya Anthropic yang dicek prefiksnya); ditunda, Atha tidak lagi mengetik kunci
 - [ ] `argus research` **ditunda** (K1 router v0): dibuat bersama Alur A yang menerima prompt bebas; saat itu bentuk job dan ledger
     diseragamkan
