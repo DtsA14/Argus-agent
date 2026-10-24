@@ -175,15 +175,39 @@ def check(record, workspace_dir):
     return problems
 
 
+def approved_tests(record):
+    """{path: sha256} of the test files approval added or changed in a task's workspace ({} for other records)."""
+    if record.get("kind") != "task":
+        return {}
+    out = {}
+    for path, body in (record.get("added") or {}).items():
+        if isinstance(body, str) and body:
+            out[path] = body
+    for path, info in (record.get("changed") or {}).items():
+        after = info.get("after") if isinstance(info, dict) else info
+        if isinstance(after, str) and after:
+            out[path] = after
+    return out
+
+
 def check_against_repo(record, workspace_dir, repo):
-    """Problems between the snapshot and the commit's tree rebuilt now from the repository (minus the exclusions)."""
+    """Problems between the snapshot and the commit's tree rebuilt now from the repository (minus the exclusions).
+
+    A task's workspace is that tree plus the approved tests the record lists (their `added` hash, or the `after` hash
+    of a `changed` one); an intake record without a kind is checked against the tree alone."""
     with tempfile.TemporaryDirectory() as tmp:
         fresh = Path(tmp) / "fresh"
         fresh.mkdir()
         write_tree(repo, record["commit"], fresh, record["exclude"])
-        if snapshot(fresh) != snapshot(workspace_dir, skip_cache=True):
+        tree = snapshot(fresh)
+        expected = {**tree, **approved_tests(record)}
+        if expected != snapshot(workspace_dir, skip_cache=True):
             return ["the snapshot is not the commit's tree minus the exclusions"]
-        if os.name == "posix" and executables(fresh) != executables(workspace_dir):
-            return ["executable bits differ from the commit"]
+        if os.name == "posix":
+            got = executables(workspace_dir)
+            if record.get("kind") == "task":
+                got = [p for p in got if p in tree]   # an approved test brings its own bits; the record fixes content
+            if executables(fresh) != got:
+                return ["executable bits differ from the commit"]
     return []
 
