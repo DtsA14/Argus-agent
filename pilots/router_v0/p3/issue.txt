@@ -1,0 +1,14 @@
+scripts/intake_repo.py --check NAME --repo R reports "the snapshot is not the commit's tree minus the exclusions" for
+every task record (fixtures/intake/<task>.json with "kind": "task"), even when the task's repository is exactly the one
+that was approved. acceptance/intake.py check_against_repo compares the workspace with the commit's tree only, but a
+task's workspace is the commit's tree plus the approved tests, which the record lists:
+  - record["added"]: {path: sha256 of the file} for each new test file;
+  - record["changed"] (present only when existing tests were changed): {path: {"after": sha256, ...}}.
+
+Fix check_against_repo so that, for a record whose "kind" is "task", the expected snapshot is the commit's tree minus
+the exclusions, with each path of "added" set to its hash and each path of "changed" set to its "after" hash. A record
+without "kind" or with "kind": "intake" is checked exactly as now.
+
+Every other difference must still be reported, for task records too: a file changed, added or removed beyond the
+approved tests, or an approved test whose content differs from its recorded hash. Executable bits are compared as now.
+Nothing else changes.
