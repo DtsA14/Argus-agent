@@ -1,6 +1,7 @@
 # Spec: environment sandbox dari image Python resmi (versi Python per environment)
 
-Status: **spec, belum dikoding.** 2026-10-24. Langkah 3 rencana SWE (diskusi 2026-10-24). **Keputusan yang diminta: bagian 7.**
+Status: **spec disetujui** (K1–K4, review 2026-10-24), dengan dua penegasan: versi pytest dipin konkret (2.1), dan cek environment
+**memblokir** pemakaian image yang tidak lolos, bukan hanya mencatat (2.3). Langkah 3 rencana SWE (diskusi 2026-10-24).
 
 ## 1. Masalah
 
@@ -21,11 +22,17 @@ Penilai menolak semua kasus itu dengan benar (bukan mencatat gagal), tapi taskny
 `environments/<name>/` (di-commit):
 - `base`: satu baris, image Python resmi **dipin digest**, mis. `python@sha256:2d97f6910b16…` (`python:3.9-slim`, Python 3.9.25,
   arm64; diambil 2026-10-24);
-- `requirements.txt`: dependensi yang dipin **dengan hash** (`pip install --require-hashes`), termasuk pytest versi yang mendukung
-  Python itu (pytest 9 tidak mendukung 3.9, jadi `pytest==8.4.*` dipin persis);
+- `requirements.txt`: dependensi yang dipin **persis dan dengan hash** (`pip install --require-hashes`), termasuk pytest versi yang
+  mendukung Python itu (pytest 9 tidak mendukung 3.9). Hash diambil dari wheel yang diunduh di base image itu sendiri;
 - `README` satu paragraf: untuk task apa environment ini (mis. sympy 1.9–1.10 SWE-bench).
 
-Environment pertama: **`sympy_py39`** (Python 3.9, `mpmath==1.3.0`, pytest 8.4.x dan dependensinya).
+Environment pertama: **`sympy_py39`** (Python 3.9.25). Requirements (semua wheel `py3-none-any`; tanggal unggah PyPI terbaru
+2026-10-07, jadi semuanya ≥ 2 minggu):
+
+```
+exceptiongroup==1.3.1  iniconfig==2.1.0  mpmath==1.3.0  packaging==26.3  pluggy==1.6.0  pygments==2.21.0
+pytest==8.4.2  tomli==2.5.0  typing-extensions==4.16.0
+```
 
 ### 2.2 Build (`scripts/build_env_from_base.sh NAME`)
 
@@ -51,7 +58,17 @@ Sebelum environment dipakai job mana pun, satu skrip menjalankan di image itu, l
 - **cek red-by-assertion** (`RED_CHECK`, #179) dan koleksi (`collect_nodes`) di pytest versi environment itu;
 - tidak ada `/bin/sh`, `pip`, `git` di image; versi Python dan pytest sesuai `.json`.
 
-Lognya disimpan di `verification/env_<NAME>.log`. Environment yang cek-nya gagal tidak dipakai.
+Lognya disimpan di `verification/env_<NAME>.log`.
+
+**Gagal tertutup (penegasan review):** hanya bila semua cek lolos, skrip menulis `.sandbox_image_<NAME>.check.json` (git-ignored)
+berisi id image yang dicek, hasil `pass`, waktu, dan sha log. Untuk environment yang didefinisikan di `environments/<NAME>/`:
+- `argus code --environment NAME` (`environment_pin`) **menolak** sebelum intake bila catatan itu tidak ada, hasilnya bukan `pass`,
+  atau id image-nya **bukan** id yang di-resolve sekarang (image dibangun ulang, atau `ARGUS_SANDBOX_IMAGE_<NAME>` menunjuk image
+  lain, harus dicek ulang);
+- tahap job berikutnya sudah terikat ke id yang dipin (K1 SPEC_SWE_PILOT), jadi tetap image yang dicek;
+- `swe_grade.py` menolak (exit 2) dengan aturan yang sama, karena penilai juga menjalankan tes di image itu.
+
+Environment lama (`argus`, `sympy`) tidak punya definisi di `environments/`, jadi aturan ini tidak berlaku untuknya.
 
 ## 3. Instance yang terbuka
 
@@ -76,19 +93,21 @@ Router, environment per job, penilai, jalur uang, image `argus` dan `sympy` (tet
 
 1. Argumen build: nama environment tidak valid ditolak; `base` tanpa digest ditolak; `requirements.txt` tanpa hash ditolak (sebelum
    docker dipanggil).
-2. Definisi `environments/sympy_py39/`: `base` berdigest, setiap baris requirements punya `--hash=sha256:`, pytest dipin persis.
-3. Image hasil build (tes sandbox, butuh image itu; skip dihitung gagal di verify, jadi **verify.sh membangunnya** seperti image
+2. Definisi `environments/sympy_py39/`: `base` berdigest, setiap baris requirements punya `--hash=sha256:` dan `==` persis.
+3. **Blokir:** tanpa catatan cek, dengan hasil bukan `pass`, atau dengan id image lain → `argus code --environment` ditolak sebelum
+   intake dan `swe_grade.py` keluar 2, tanpa job dan tanpa panggilan model; dengan catatan yang cocok → diterima.
+4. Image hasil build (tes sandbox, butuh image itu; skip dihitung gagal di verify, jadi **verify.sh membangunnya** seperti image
    `argus`, dengan cache pip di luar repo): tanpa `/bin/sh` dan `git`; Python 3.9; klasifikasi `pytest_demo` sama dengan `argus`;
    red check dan koleksi bekerja; isolasi.
-4. Dua build berurutan → rootfs sama.
+5. Dua build berurutan → rootfs sama.
 
-Mutan untuk butir 1–2 dan untuk penyalinan file (mis. shell ikut tersalin), lalu `verify.sh`.
+Mutan untuk butir 1–3 dan untuk penyalinan file (mis. shell ikut tersalin), lalu `verify.sh`.
 
 ## 7. Keputusan
 
 | | Pertanyaan | Usul |
 |---|---|---|
-| K1 | Environment pertama | `sympy_py39` (Python 3.9 resmi, pytest 8.4.x); versi lain menyusul per kebutuhan pilot |
+| K1 | Environment pertama | `sympy_py39` (Python 3.9.25 resmi, `pytest==8.4.2`); versi lain menyusul per kebutuhan pilot |
 | K2 | Jaringan saat build | Hanya di builder, dengan `--require-hashes` dan base berdigest; run tetap offline |
 | K3 | `verify.sh` membangun `sympy_py39` | Ya (supaya tes sandbox-nya tidak skip), dengan cache pip di luar repo; menambah ±1–2 menit |
-| K4 | Cek environment wajib | Ya, log `verification/env_<NAME>.log` sebelum environment dipakai pilot |
+| K4 | Cek environment wajib | Ya, dan memblokir: tanpa catatan `pass` untuk id image yang sama, router dan penilai menolak |
