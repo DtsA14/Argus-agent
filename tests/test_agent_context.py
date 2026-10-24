@@ -97,7 +97,16 @@ def test_an_attempt_that_wrote_is_told_how_it_ended_without_the_context_hint(tmp
     assert f"{ENDED} finished after 1 steps; it changed files." in first and HINT not in first
 
 
-def test_feedback_without_a_stop_gives_the_prompt_it_always_gave():
+def test_an_attempt_that_wrote_and_then_ran_out_of_context_gets_no_context_hint(tmp_path, counter):
+    per_message(counter)
+    model = StrictScriptedChatModel(script=[BAD] + tau.reads(4) + [tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, config(10000))
+    assert tau.ends(d)[0] == (0, "context_limit", 5) and r["status"] == st.DONE
+    first = text(model.calls[5])
+    assert f"{ENDED} context_limit after 5 steps; it changed files." in first and HINT not in first
+
+
+def test_feedback_without_a_stop_gives_the_prompt_it_always_gave():                            # guard
     fb = {"unmet": ["validation:unit: exit code 1"], "checks": ["files changed from the original: none"]}
     out = task_prompt(tau.CONTRACT, fb)
     assert out.endswith("  - files changed from the original: none") and ENDED not in out
