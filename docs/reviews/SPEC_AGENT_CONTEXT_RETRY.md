@@ -1,7 +1,8 @@
 # Spec: agen yang kehabisan konteks, dan mengulang agen dalam job yang sama
 
-Status: **spec, belum dikoding.** 2026-10-24. Dari router pilot #3 (`pilots/router_v0/p3/RESULT.md`) dan review Atha
-(lima butir, bagian 2). **Keputusan yang diminta: bagian 6.**
+Status: **spec disetujui** (K1–K5, satu PR; Atha 2026-10-24), dengan satu tambahan dari review: `retry` tidak mulai
+tanpa konteks (§2.4, "feedback dari tahap sebelumnya"). Dari router pilot #3 (`pilots/router_v0/p3/RESULT.md`) dan
+review Atha (lima butir, bagian 2).
 
 ## 1. Masalah (router pilot #3)
 
@@ -32,7 +33,8 @@ berikutnya tetap mengulang polanya. Karena itu butir 1 dan 2 yang utama, butir 3
 
 Attempt mengembalikan dua hal baru, yang ikut di hasil node `agent` (sudah di-commit sebagai `result_committed`, jadi
 resume tidak menghitung ulang):
-- `read`: path dari setiap `ReadFile` yang berhasil di attempt itu, urut pertama dibaca, unik, paling banyak 20;
+- `read`: path dari setiap panggilan `ReadFile` di attempt itu (diminta, berhasil atau tidak), urut pertama kali,
+  unik, paling banyak 20;
 - `wrote`: apakah workspace berubah selama attempt (digest akhir ≠ digest awal attempt). Digest awal sudah di-commit
   oleh D3 (`attempt_start`) bila auto-validate aktif; ini dijadikan selalu di-commit.
 
@@ -97,6 +99,20 @@ lain (Sonnet) tetap memakai angka profil (40.000). Angka efektif dicatat di `bud
   approval.
 - **Konfirmasi baru** lewat `live()`: layar batas menyebut tahap, cap, sisa job, dan alasan berhenti tahap sebelumnya.
   Lalu `[y/N]` atau `--yes` dengan `--key-file`, seperti tahap live lain. Kunci per job berlaku.
+- **Feedback dari tahap sebelumnya** (review Atha): tanpa ini `a2` mulai dari nol, kondisi yang membuat `a1` gagal dua
+  kali. Saat tahap `a<n+1>` pertama dimulai, router membaca attempt terakhir `a<n>` dari `result.json` run-nya (hasil
+  yang sudah di-commit: `end`, `steps`, `wrote`, `read`) dan menyimpannya di `job.json` tahap baru (`carry`), sebelum
+  run dibuat. `run_code_task(initial_feedback=carry)` memasukkannya ke state setup (hasil node yang di-commit), jadi
+  attempt 0 run baru mendapatkannya sebagai bagian dari input langkah 0, dan resume (router maupun run) memakai yang
+  tercatat. Prompt-nya:
+  ```
+  How the previous run of this task ended (this is a new run: the workspace starts again from the original):
+  its last attempt ended <end> after <steps> steps; it changed no file.
+  ```
+  ditambah petunjuk yang sama dengan §2.1 (berkas yang dibaca, writable dari kontrak) bila `context_limit` tanpa
+  tulisan, tanpa kalimat "the workspace is kept". Run lama yang hasilnya belum punya `wrote`/`read` (misalnya `a1`
+  pilot #3): `wrote` diambil dari diff verdict terakhir run itu (tidak ada berkas berubah = tidak menulis), dan baris
+  berkas yang dibaca dihilangkan.
 - `resume`, `status`, dan `list` memakai tahap agen **terakhir**, bukan `a1` yang ditulis langsung di kode.
 - `next:` di `status` untuk `AGENT_FAILED` menjadi `argus retry <job>  |  argus abandon <job> "<why>"`.
 
@@ -139,6 +155,10 @@ dihitung ulang.
    state lain; `BLOCKED budget` tanpa panggilan model bila sisa kurang; kontrak berubah → `BLOCKED contract_changed`;
    konfirmasi "N" tidak memulai apa pun; kunci per job menolak perintah kedua; resume `a2` memakai cap tercatatnya;
    `status` dan `list` menghitung uang semua tahap agen.
+   **Carry:** retry setelah `a1` berakhir `context_limit` tanpa tulisan menghasilkan prompt attempt 0 `a2` yang memuat
+   cara `a1` berhenti, berkas yang dibaca, dan writable; `carry` tercatat di `job.json` sebelum run dibuat; crash setelah
+   setup `a2` lalu `argus resume` menghasilkan prompt yang sama tanpa membeli ulang; `a1` lama tanpa `wrote`/`read`
+   memakai diff verdict-nya. Mutan: membuang `carry` (router), dan mengabaikan `initial_feedback` (run).
 6. **Status:** baris attempt per tahap agen (dengan `context_limit` dan `no file changed`), dibaca tanpa mengubah
    berkas apa pun.
 
