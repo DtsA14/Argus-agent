@@ -44,6 +44,8 @@ def main(argv=None, deps=None):
     g.add_argument("--issue-file")
     c.add_argument("--max-usd", type=float)
     c.add_argument("--exclude", action="append", default=[])
+    c.add_argument("--environment", help="the sandbox environment of the job's validations (its image is pinned for "
+                   "the whole job); without it, the drafter's configured one, nothing pinned")
     sub.add_parser("list")
     sub.add_parser("status").add_argument("job")
     for name in ("redraft", "resume"):
@@ -75,7 +77,12 @@ def main(argv=None, deps=None):
             print(rj.list_jobs(jobs_dir=o.jobs_dir))
             return 0
         if o.cmd == "status":
-            print(rj.status(o.job, jobs_dir=o.jobs_dir))
+            try:
+                cfg = load_config(o.config)
+                cfg["sandbox"] = sandbox_cfg(o.config)
+            except (ConfigError, OSError):
+                cfg = None                    # status still reads the job; the image comparison is left out
+            print(rj.status(o.job, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0
         if o.cmd in ("reject", "abandon"):
             fn = rj.reject if o.cmd == "reject" else rj.abandon
@@ -86,7 +93,7 @@ def main(argv=None, deps=None):
         if o.cmd == "code":
             issue = o.issue if o.issue is not None else Path(o.issue_file).read_text(encoding="utf-8")
             job = rj.start_code(repo=o.repo, commit=o.commit, issue=issue, cfg=cfg, deps=deps, exclude=o.exclude,
-                                max_usd=o.max_usd, jobs_dir=o.jobs_dir)
+                                max_usd=o.max_usd, jobs_dir=o.jobs_dir, environment=o.environment)
         elif o.cmd == "approve":
             job, _ = rj.approve(o.job, sha=o.sha, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
                                 max_iterations=o.max_iterations, reference_patch=o.reference_patch, jobs_dir=o.jobs_dir)
@@ -105,7 +112,7 @@ def main(argv=None, deps=None):
         print("\ninterrupted. " + (f"Continue it with `argus resume {job}`; " if job else "")
               + "`argus status <job>` shows where it stopped. Do not start a new job for the same task.", file=sys.stderr)
         return 130
-    print(rj.status(job.id, jobs_dir=o.jobs_dir))
+    print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
     return 0 if job.data["state"] in (rj.AWAITING_APPROVAL, rj.REVIEW_READY) else 1
 
 
