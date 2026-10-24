@@ -1,0 +1,7 @@
+sympy__sympy-22080 gold: refused: no test result to grade: the pytest output does not account for its summary 
+sympy__sympy-22080 empty: refused: no test result to grade: the pytest output does not account for its summary 
+sympy__sympy-24443 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 1/1 pass 
+sympy__sympy-24443 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_homomorphism': 'fail'} PASS_TO_PASS: 1/1 pass 
+sympy__sympy-24661 gold: resolved: False FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 25/27 pass; not passing: {'test_sympy_parser': 'fail', 'test_factorial_fail': 'fail'} 
+sympy__sympy-24661 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_24288': 'fail'} PASS_TO_PASS: 25/27 pass; not passing: {'test_sympy_parser': 'fail', 'test_factorial_fail': 'fail'} 
+FEASDONE
