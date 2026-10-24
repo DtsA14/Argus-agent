@@ -112,7 +112,13 @@ def per_node(mapping, verdict):
             for name, node in mapping.items()}
 
 
-def grade(*, instance, repo, review, sha, environment, sandbox_cfg, validate):
+def grade(*, instance, repo, review, sha, environment, sandbox_cfg, validate, root=None):
+    from router.job import check_problem
+    from tools import sandbox as sb
+    image = sb.environment_image(sandbox_cfg, environment)[0]
+    problem = check_problem(environment, image, root)        # SPEC_ENV_FROM_PYTHON_IMAGE 2.3: an unchecked image grades nothing
+    if problem:
+        raise Refused(problem)
     inst, review = Path(instance), Path(review)
     patch = review / "changes.patch"
     prov = json.loads((review / "provenance.json").read_text(encoding="utf-8"))
