@@ -2,9 +2,9 @@
 
 > **Status: draft spec for a future project (Atha, 2026-10-15).** These are proposed decisions from discussion with
 > GPT, **not** a description of what the repository implements. **The status of every ADR and milestone against the
-> code is kept in one place: [`docs/Reconciliation.md`](Reconciliation.md)** (updated 2026-10-22: M3 and the M6 MVP
-> done; M5 and ADR-002/004/005/006/007 partial, for code tasks; M4, M7, M8, M9, ADR-001/003 and the capability packs
-> not started). No code from this file without a reality check and a reviewed plan.
+> code is kept in one place: [`docs/Reconciliation.md`](Reconciliation.md)** (updated 2026-10-24: M3 and the M6 MVP
+> done, including a first repository outside Argus; M5 and ADR-002/004/005/006/007 partial, for code tasks; M4, M7, M8,
+> M9, ADR-001/003 and the capability packs not started). No code from this file without a reality check and a reviewed plan.
 >
 > The one-time instructions for Claude's first review ("Instructions for Claude" and "Expected response", sections 0
 > and 10 of the original) were carried out by [`reviews/M6_GAP_ANALYSIS.md`](reviews/M6_GAP_ANALYSIS.md),
