@@ -99,8 +99,14 @@ def apply_profile(cfg, name):
     by_model = cfg["code_task"].get("max_input_tokens_by_model") or {}
     if task.get("max_input_tokens") is not None and cfg["roles"][role]["model"] in by_model:
         task["max_input_tokens"] = int(by_model[cfg["roles"][role]["model"]])
+    # SPEC_AGENT_OUTPUT_BUDGET 2.1: a USD profile's output cap per coder model (a thinking model's reasoning shares it).
+    # Token profiles keep theirs: their attempt is reserved in tokens, which a larger reply could exceed by itself.
+    by_out = cfg["code_task"].get("max_output_tokens_by_model") or {}
+    max_out = int(p["max_output_tokens"])
+    if p.get("attempt_usd") is not None and cfg["roles"][role]["model"] in by_out:
+        max_out = int(by_out[cfg["roles"][role]["model"]])
     out = {**cfg, "code_task": {**task, "attempt_tokens": int(p["attempt_tokens"]), "applied_profile": name},
-           "roles": {**cfg["roles"], role: {**cfg["roles"][role], "max_output_tokens": int(p["max_output_tokens"])}}}
+           "roles": {**cfg["roles"], role: {**cfg["roles"][role], "max_output_tokens": max_out}}}
     return out
 
 

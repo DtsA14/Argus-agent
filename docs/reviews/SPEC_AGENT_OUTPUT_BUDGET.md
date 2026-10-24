@@ -24,8 +24,9 @@ Profil berbasis token (`default`, `large`) **tidak** berubah: di sana reservasi 
 melebihi `attempt_tokens` profil itu sendiri. Angka efektif tercatat di `budget_profile` run seperti sekarang.
 
 - **Biaya terburuk per panggilan:** 32.000 × $0,60 × 2 (peak) / 1M = **$0,0384** output, ditambah input (≤ 60.000 × $0,15 × 2 / 1M =
-  $0,018). Setiap panggilan tetap ditolak sebelum dikirim bila kasus terburuknya tidak muat di sisa reservasi attempt ($0,45), jadi
-  cap uang tidak berubah; yang berubah hanya ruang satu balasan.
+  $0,018). Aturan pemanggil (sejak D1) tetap: `max_tokens` setiap panggilan = min(batas ini, yang muat di sisa reservasi attempt
+  $0,45), dan panggilan ditolak sebelum dikirim bila yang muat di bawah output minimum. Jadi cap uang tidak berubah; yang
+  berubah hanya ruang maksimum satu balasan.
 - Sonnet tetap 8.192 (harganya $15/M output; 32.000 output = $0,48, lebih dari satu attempt).
 
 ### 2.2 Feedback setelah `output_truncated`
@@ -53,8 +54,8 @@ role-nya), profil berbasis token, dan Sonnet.
 
 1. DeepSeek dengan `large_usd` mendapat 32.000; dengan `large` (token) tetap 8.192; Sonnet dengan `large_usd` tetap 8.192; angka
    efektif tercatat di `budget_profile`; nilai di `config.yaml`.
-2. Panggilan dengan output 32.000 yang kasus terburuknya tidak muat di sisa reservasi tetap ditolak sebelum dikirim (tes reservasi
-   yang ada, dengan angka baru).
+2. Dengan output 32.000 yang tidak muat di reservasi attempt, `max_tokens` yang dikirim diturunkan ke yang muat dan kasus
+   terburuk setiap panggilan tetap ≤ reservasi.
 3. Attempt yang berakhir `output_truncated` membuat prompt attempt berikutnya memuat petunjuk itu; juga untuk carry di retry;
    tidak untuk `finished` atau `context_limit`; feedback lama tanpa `stopped` tetap sama persis.
 4. `audit_run.py` merekonstruksi prompt dengan petunjuk itu tanpa mismatch.

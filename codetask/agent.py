@@ -155,8 +155,16 @@ def _ended(s):
             + ("; it changed no file" if wrote is False else "; it changed files" if wrote else ""))
 
 
+TRUNCATED_HINT = ("Its last reply was cut at the output limit before any of its tool calls ran: the reasoning used the whole "
+                  "reply budget. Keep each reply short: make the change in small steps with EditFile (one function or a "
+                  "few lines per call) instead of writing a whole file, and run the validations after each step.")
+
+
 def _context_hint(s, scope, kept):
-    """Only for an attempt that ran out of context without changing a file: what it read, and to write first."""
+    """For an attempt that ran out of context without changing a file: what it read, and to write first. For one whose
+    reply was cut at the output limit (SPEC_AGENT_OUTPUT_BUDGET 2.2): to keep replies short and edit in small steps."""
+    if s.get("end") == "output_truncated":
+        return [TRUNCATED_HINT]
     if s.get("end") != "context_limit" or s.get("wrote") is not False:
         return []
     read = s.get("read") or []
