@@ -1,0 +1,27 @@
+sympy__sympy-22714 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 11/11 pass 
+sympy__sympy-22714 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_22684': 'fail'} PASS_TO_PASS: 11/11 pass 
+sympy__sympy-23950 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 4/4 pass 
+sympy__sympy-23950 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_as_set': 'fail'} PASS_TO_PASS: 4/4 pass 
+sympy__sympy-24213 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 31/31 pass 
+sympy__sympy-24213 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_24211': 'fail'} PASS_TO_PASS: 31/31 pass 
+sympy__sympy-23824 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 2/2 pass 
+sympy__sympy-23824 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_kahane_simplify1': 'fail'} PASS_TO_PASS: 2/2 pass 
+sympy__sympy-21847 gold: refused: no test result to grade: no pytest summary in the output 
+sympy__sympy-21847 empty: refused: no test result to grade: no pytest summary in the output 
+sympy__sympy-21612 gold: refused: no test result to grade: no pytest summary in the output 
+sympy__sympy-21612 empty: refused: no test result to grade: no pytest summary in the output 
+sympy__sympy-22914 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 17/17 pass 
+sympy__sympy-22914 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_PythonCodePrinter': 'fail'} PASS_TO_PASS: 17/17 pass 
+sympy__sympy-24066 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 30/30 pass 
+sympy__sympy-24066 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_24062': 'fail'} PASS_TO_PASS: 30/30 pass 
+sympy__sympy-24562 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 105/105 pass 
+sympy__sympy-24562 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_24543': 'fail'} PASS_TO_PASS: 105/105 pass 
+sympy__sympy-24539 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 62/62 pass 
+sympy__sympy-24539 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_PolyElement_as_expr': 'fail'} PASS_TO_PASS: 62/62 pass 
+sympy__sympy-21379 gold: refused: no test result to grade: no pytest summary in the output 
+sympy__sympy-21379 empty: refused: no test result to grade: no pytest summary in the output 
+sympy__sympy-22456 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 29/29 pass 
+sympy__sympy-22456 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_String': 'fail'} PASS_TO_PASS: 29/29 pass 
+sympy__sympy-23262 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 61/61 pass 
+sympy__sympy-23262 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_14941': 'fail'} PASS_TO_PASS: 61/61 pass 
+FEASDONE
