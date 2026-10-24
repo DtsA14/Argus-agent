@@ -1,0 +1,56 @@
+# SWE pilot (SPEC_SWE_PILOT): new tests on main's code, and mutants, at b064f2e (2026-10-24T12:51:54Z)
+# tests run per mutant (pytest -x): test_swe_pilot, test_router, test_pytest_validation, test_intake
+## new tests on main's code (the five PASSED are guards of guarantees that already held: an environment-less job as before, setup_problems in draft check and setup, intake takes the commit's tree only, the sandbox mounts the workspace only; each is killed by a mutant below)
+PASSED tests/test_swe_pilot.py::test_without_an_environment_a_job_is_as_before
+PASSED tests/test_swe_pilot.py::test_the_draft_check_refuses_an_unconfigured_environment_and_takes_a_configured_one
+PASSED tests/test_swe_pilot.py::test_setup_blocks_an_unconfigured_environment_and_runs_a_configured_one
+PASSED tests/test_swe_pilot.py::test_an_intake_holds_the_commits_tree_only
+PASSED tests/test_swe_pilot.py::test_nothing_of_the_host_but_the_workspace_is_visible_in_the_sandbox
+FAILED tests/test_swe_pilot.py::test_a_job_records_its_environment_and_image_and_its_drafter_writes_for_it
+FAILED tests/test_swe_pilot.py::test_an_unknown_environment_or_one_without_an_image_creates_no_job[nosuch-sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+FAILED tests/test_swe_pilot.py::test_an_unknown_environment_or_one_without_an_image_creates_no_job[sympy-None-has no image]
+FAILED tests/test_swe_pilot.py::test_an_environment_without_an_image_never_runs_on_another_image
+FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon
+FAILED tests/test_swe_pilot.py::test_the_approve_screen_names_the_environment_of_each_validation
+FAILED tests/test_swe_pilot.py::test_the_cli_passes_the_environment - SystemE...
+FAILED tests/test_swe_pilot.py::test_the_argus_build_script_is_the_environment_script_with_argus
+FAILED tests/test_swe_pilot.py::test_the_maintainers_fix_resolves_and_no_fix_does_not
+FAILED tests/test_swe_pilot.py::test_only_the_reviewed_patch_is_graded - File...
+FAILED tests/test_swe_pilot.py::test_the_official_tests_win_over_the_agents_changes_to_the_same_file
+FAILED tests/test_swe_pilot.py::test_a_failing_pass_to_pass_test_means_not_resolved
+FAILED tests/test_swe_pilot.py::test_a_missing_or_ambiguous_name_is_not_passing
+FAILED tests/test_swe_pilot.py::test_the_approved_tests_are_also_run_on_the_maintainers_fix
+FAILED tests/test_swe_pilot.py::test_the_grader_in_the_real_sandbox - FileNot...
+15 failed, 5 passed in 6.18s
+## mutants
+KILLED  environment not pinned at start: ['FAILED tests/test_swe_pilot.py::test_a_job_records_its_environment_and_image_and_its_drafter_writes_for_it']
+KILLED  image not recorded: ['FAILED tests/test_swe_pilot.py::test_a_job_records_its_environment_and_image_and_its_drafter_writes_for_it']
+KILLED  drafter not on the job's environment: ['FAILED tests/test_swe_pilot.py::test_a_job_records_its_environment_and_image_and_its_drafter_writes_for_it']
+KILLED  approve does not check the image: ['FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon']
+KILLED  resume does not check the image: ['FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon']
+KILLED  redraft does not check the image: ['FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon']
+KILLED  retry does not check the image: ['FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon']
+KILLED  a changed image is accepted: ['FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon']
+KILLED  refusal without both ids: ['FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon']
+KILLED  status does not suggest abandon: ['FAILED tests/test_swe_pilot.py::test_a_rebuilt_image_stops_the_job_with_both_ids_and_suggests_abandon']
+KILLED  router falls back to argus: ['FAILED tests/test_swe_pilot.py::test_an_unknown_environment_or_one_without_an_image_creates_no_job[sympy-None-has no image]']
+KILLED  sandbox falls back to the default image: ['FAILED tests/test_swe_pilot.py::test_an_unknown_environment_or_one_without_an_image_creates_no_job[sympy-None-has no image]']
+KILLED  approve screen without the environment: ['FAILED tests/test_swe_pilot.py::test_the_approve_screen_names_the_environment_of_each_validation']
+KILLED  validations without their environment: ['FAILED tests/test_swe_pilot.py::test_a_job_records_its_environment_and_image_and_its_drafter_writes_for_it']
+KILLED  cli drops the environment: ['FAILED tests/test_swe_pilot.py::test_the_cli_passes_the_environment - KeyErro...']
+KILLED  build script takes any name: ['FAILED tests/test_swe_pilot.py::test_the_argus_build_script_is_the_environment_script_with_argus']
+KILLED  grader ignores --sha: ['FAILED tests/test_swe_pilot.py::test_only_the_reviewed_patch_is_graded - Attr...']
+KILLED  grader ignores provenance: ['FAILED tests/test_swe_pilot.py::test_only_the_reviewed_patch_is_graded - Attr...']
+KILLED  official test files not restored: ['FAILED tests/test_swe_pilot.py::test_the_official_tests_win_over_the_agents_changes_to_the_same_file']
+KILLED  test_patch not applied: ['FAILED tests/test_swe_pilot.py::test_the_maintainers_fix_resolves_and_no_fix_does_not']
+KILLED  missing counted as pass: ['FAILED tests/test_swe_pilot.py::test_a_missing_or_ambiguous_name_is_not_passing']
+KILLED  ambiguous name guessed: ['FAILED tests/test_swe_pilot.py::test_a_missing_or_ambiguous_name_is_not_passing']
+KILLED  resolved ignores PASS_TO_PASS: ['FAILED tests/test_swe_pilot.py::test_a_failing_pass_to_pass_test_means_not_resolved']
+KILLED  approved tests not run on the fix: ['FAILED tests/test_swe_pilot.py::test_the_approved_tests_are_also_run_on_the_maintainers_fix']
+KILLED  intake takes HEAD: ['FAILED tests/test_swe_pilot.py::test_an_intake_holds_the_commits_tree_only - ...']
+KILLED  setup_problems skips environments: ['FAILED tests/test_swe_pilot.py::test_the_draft_check_refuses_an_unconfigured_environment_and_takes_a_configured_one']
+KILLED  draft check without the environments: ['FAILED tests/test_swe_pilot.py::test_the_draft_check_refuses_an_unconfigured_environment_and_takes_a_configured_one']
+KILLED  setup without the environments: ['FAILED tests/test_swe_pilot.py::test_setup_blocks_an_unconfigured_environment_and_runs_a_configured_one']
+KILLED  sandbox mounts the host's /tmp: ['FAILED tests/test_swe_pilot.py::test_nothing_of_the_host_but_the_workspace_is_visible_in_the_sandbox']
+RESULT: 29/29 killed
+## earlier verify on this branch: FAIL at 4053510 (test_xdist_groups: the new sandbox module was not listed; fixed in b064f2e)
