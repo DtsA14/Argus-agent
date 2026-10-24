@@ -27,7 +27,9 @@ import json
 import os
 import re
 import secrets
+import shlex
 import stat
+import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -57,6 +59,14 @@ LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
         {(s, ABANDONED) for s in (NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL, AGENT_RUNNING, AGENT_FAILED, BLOCKED)}
 JOB_ID = re.compile(r"^j[0-9a-z_]{1,40}$")
 KEY_SHAPE = {"anthropic": "sk-ant-"}
+ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-_]?")
+
+
+def clean(text):
+    """Text as it may be printed to a terminal (docs/reviews/SPEC_ROUTER_STATUS.md 2.4): parts of what the router prints
+    come from a model (criteria, test nodes, writable paths, stop reasons), and a control character or an ANSI escape
+    in them could garble or fake the screen. Escapes are dropped whole, every other control character becomes a space."""
+    return "".join(" " if unicodedata.category(c) == "Cc" else c for c in ANSI.sub("", str(text)))
 
 
 class Refused(Exception):
@@ -244,12 +254,19 @@ def live(deps, cfg, roles, text, job=None):
         raise Refused("a live stage needs a terminal: the key is typed, never passed (or use --key-file)")
     if deps.key_file and len(keys) > 1:
         raise Refused(f"--key-file holds one key; this stage needs {len(keys)}")
+    # SPEC_ROUTER_STATUS.md 2.1: the human's decisions and their times, for the supervision measure
+    if job is not None:
+        job.note(deps, "limits_shown", screen=text)
     if deps.assume_yes:
         deps.echo(text + "\n(--yes: approved in chat; no [y/N] asked)")
         if job is not None:
             job.note(deps, "confirmed_by_flag", screen=text)
-    elif not deps.confirm(text):
-        raise Refused("not confirmed; nothing was started")
+    else:
+        ok = deps.confirm(text)
+        if job is not None:
+            job.note(deps, "confirmed" if ok else "not_confirmed")
+        if not ok:
+            raise Refused("not confirmed; nothing was started")
     forbidden = list(deps.key_forbidden) + ([job.dir.parent, job.data["inputs"]["repo"]] if job is not None else [])
     set_vars = []
     try:
@@ -267,6 +284,8 @@ def live(deps, cfg, roles, text, job=None):
                 raise Refused("the key contains whitespace (pasted twice?); nothing was started")
             if shape and (not key.startswith(shape) or key[len(shape):].find(shape) != -1):
                 raise Refused(f"the key does not look like one {kind} key; nothing was started")
+            if not deps.key_file and job is not None:
+                job.note(deps, "key_typed")             # only when: never the key, its length or its prefix
             os.environ[var] = key
             set_vars.append(var)
         if keys:
@@ -279,7 +298,7 @@ def live(deps, cfg, roles, text, job=None):
 
 def _limits_text(job, title, lines):
     spent = spent_nano(job) / 1e9
-    return "\n".join([f"== {title} (job {job.id}) ==", *lines,
+    return "\n".join([f"== {title} (job {job.id}) ==", *map(clean, lines),
                       f"job cap ${job.data['max_usd']:.2f}; spent ${spent:.4f}; left ${job.data['max_usd'] - spent:.4f}"])
 
 
@@ -558,6 +577,50 @@ def list_jobs(*, jobs_dir=JOBS):
     return "\n".join(lines) if lines else "no jobs"
 
 
+def _why(job):
+    """The log entry of the move into the job's current state (its reason, and who)."""
+    moves = [e for e in job.data.get("log") or [] if e.get("what") == "state" and e.get("new") == job.data["state"]]
+    return moves[-1] if moves else {}
+
+
+def _agent_result(job):
+    """What the agent stage's result.json says (read only), as one line; unreadable is said, never raised."""
+    st = job.data["stages"].get("a1")
+    try:
+        r = json.loads((job.runs / st["run_id"] / "result.json").read_text(encoding="utf-8"))
+        failing = (r.get("verdict") or {}).get("failing") or []
+        return (f"agent result: {r['status']}, {r.get('attempts')} attempt(s), failing: "
+                + (", ".join(map(str, failing)) or "none"))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return "agent result: unreadable"
+
+
+def _review_lines(job, rv):
+    """Where the review package is and, when it is valid, how a human applies it (SPEC_ROUTER_STATUS.md 2.2): the
+    patch's sha256 as it is on disk now, apply --check before apply, on a branch at the commit that was taken in."""
+    d = Path(rv["dir"])
+    patch = d / "changes.patch"
+    out = [f"review package: {d} ({'valid' if rv['valid'] else 'NOT valid: ' + '; '.join(rv['problems'])})",
+           f"  PR description: {d / 'PR.md'}"]
+    if not rv["valid"]:
+        return out
+    try:
+        sha = hashlib.sha256(patch.read_bytes()).hexdigest()
+    except OSError:
+        sha = "unreadable"
+    repo, p, q = shlex.quote(job.data["inputs"]["repo"]), shlex.quote(str(patch)), shlex.quote
+    return out + [f"  patch:          {patch} (sha256 {sha})",
+                  "apply (by hand, in the target repository):",
+                  f"  sha256sum {p}",
+                  f"  git -C {repo} checkout -b {q(branch_name(job.id))} {q(job.data['intake']['commit'])}",
+                  f"  git -C {repo} apply --check --whitespace=nowarn {p}",
+                  f"  git -C {repo} apply --whitespace=nowarn {p}"]
+
+
+def branch_name(job_id):
+    return f"argus/{job_id}"
+
+
 def status(job_id, *, jobs_dir=JOBS):
     """A read-only summary (no lock): state, money, stages, and the draft to approve with its sha."""
     job = open_job(job_id, jobs_dir)
@@ -581,6 +644,15 @@ def status(job_id, *, jobs_dir=JOBS):
                 *changed_lines(job, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
-        rv = d["stages"]["a1"]["review"]
-        out.append(f"review package: {rv['dir']} ({'valid' if rv['valid'] else 'NOT valid: ' + '; '.join(rv['problems'])})")
-    return "\n".join(out)
+        out += _review_lines(job, d["stages"]["a1"]["review"])
+    if d["state"] in (DRAFT_FAILED, AGENT_FAILED, BLOCKED, REJECTED, ABANDONED):
+        why = _why(job)
+        out.append(f"why: {why.get('reason') or 'not recorded'}" + (f" (by {why['by']})" if why.get("by") else ""))
+        if d["state"] == AGENT_FAILED:
+            out.append(_agent_result(job))
+        nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
+               AGENT_FAILED: [f'argus abandon {job.id} "<why>"'],
+               BLOCKED: [f'argus abandon {job.id} "<why>"']}.get(d["state"])
+        if nxt:
+            out.append("next: " + "  |  ".join(nxt))
+    return "\n".join(map(clean, out))

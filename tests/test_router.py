@@ -1,10 +1,12 @@
 """Router v0 (docs/reviews/SPEC_ROUTER_V0.md): `argus code` as one job, with scripted models and the drafter tests'
 injected validation (no Docker): the job's states, its cap across stages, the cap a stage started with, the job lock,
 approval bound to the draft the human saw, live confirmation and the key, and a job root of its own."""
+import hashlib
 import json
 import os
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -603,3 +605,180 @@ def test_a_failed_job_without_an_accepted_draft_cannot_be_approved(tmp_path):
     with pytest.raises(rj.Refused, match="has no draft"):
         rj.approve("jtest", sha="0" * 12, cfg=e.cfg, deps=e.deps, sandbox_cfg={}, jobs_dir=e.jobs)
     assert e.coder.calls == []
+
+
+# ---- decision times, apply commands and why a job failed (docs/reviews/SPEC_ROUTER_STATUS.md) ----------------------
+
+def ticking():
+    t = iter(range(10_000))
+    return lambda: f"2026-10-24T00:00:{next(t):04d}Z"
+
+
+def decisions(job):
+    keep = ("limits_shown", "confirmed", "not_confirmed", "confirmed_by_flag", "key_typed", "key_from_file", "state")
+    return [x["what"] + (":" + x["new"] if x["what"] == "state" else "") for x in job.data["log"] if x["what"] in keep]
+
+
+def test_a_terminal_confirmation_and_a_typed_key_are_noted_with_their_times(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    e = Env(tmp_path, config=real_cfg())
+    e.deps.get_key, e.deps.clock = (lambda: "sk-ant-test-0000"), ticking()
+    monkeypatch.setattr(cdr, "run_drafter", fake_draft_run([]))
+    e.code()
+    job = e.job()
+    assert decisions(job) == ["limits_shown", "confirmed", "key_typed", "state:DRAFTING", "state:DRAFT_FAILED"]
+    at = {x["what"]: x["at"] for x in job.data["log"]}
+    assert at["limits_shown"] < at["confirmed"] < at["key_typed"]                 # each with its own time
+    assert any(x["what"] == "limits_shown" and "job cap $1.00" in x["screen"] for x in job.data["log"])
+    assert set(next(x for x in job.data["log"] if x["what"] == "key_typed")) == {"at", "what"}   # nothing of the key
+
+
+def test_not_confirming_is_noted_and_starts_nothing(tmp_path):
+    e = Env(tmp_path, confirm=lambda text: False)
+    with pytest.raises(rj.Refused, match="not confirmed"):
+        e.code()
+    job = e.job()
+    assert decisions(job) == ["limits_shown", "not_confirmed"] and job.data["stages"] == {} and e.drafter.calls == []
+
+
+@pytest.mark.parametrize("key", ["", "not-a-key", "sk-ant-a sk-ant-b"])
+def test_a_refused_key_is_not_noted_as_typed(tmp_path, monkeypatch, key):
+    e = Env(tmp_path, config=real_cfg())
+    e.deps.get_key = lambda: key
+    monkeypatch.setattr(cdr, "run_drafter", fake_draft_run([]))
+    with pytest.raises(rj.Refused):
+        e.code()
+    assert decisions(e.job()) == ["limits_shown", "confirmed"]
+
+
+def test_with_yes_the_flag_and_the_key_file_are_noted_not_a_terminal_answer(tmp_path, monkeypatch):
+    e, _, _ = no_terminal(tmp_path, monkeypatch, key_file=key_file(tmp_path), assume_yes=True)
+    e.code()
+    assert decisions(e.job()) == ["limits_shown", "confirmed_by_flag", "key_from_file", "state:DRAFTING",
+                                  "state:DRAFT_FAILED"]
+
+
+def test_a_ready_review_says_where_it_is_its_patch_sha_and_how_to_apply_it(env):
+    env.code()
+    job, _ = env.approve()
+    before = job.file.read_bytes()
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    d = Path(job.data["stages"]["a1"]["review"]["dir"])
+    patch, commit, repo = d / "changes.patch", job.data["intake"]["commit"], str(env.repo)
+    assert len(commit) == 40 and commit != "HEAD"
+    assert f"PR description: {d / 'PR.md'}" in text and (d / "PR.md").exists()
+    assert f"patch:          {patch} (sha256 {hashlib.sha256(patch.read_bytes()).hexdigest()})" in text
+    lines = text.splitlines()
+    want = [f"  sha256sum {patch}", f"  git -C {repo} checkout -b argus/jtest {commit}",
+            f"  git -C {repo} apply --check --whitespace=nowarn {patch}",
+            f"  git -C {repo} apply --whitespace=nowarn {patch}"]
+    assert lines[-4:] == want                                    # --check before apply
+    assert job.file.read_bytes() == before                       # status only reads
+
+
+def test_an_invalid_review_says_where_it_is_and_gives_no_apply_command(env):
+    env.code()
+    job, _ = env.approve()
+    job.data["stages"]["a1"]["review"].update(valid=False, problems=["claims do not match"])
+    job.data["state"] = rj.REVIEW_INVALID
+    job.save()
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert "NOT valid: claims do not match" in text and "PR description:" in text
+    assert "apply" not in text and "checkout -b" not in text and "sha256sum" not in text
+
+
+def test_branch_names_are_valid_for_every_job_id_shape():
+    for job_id in (rj.new_job_id(), "j" + "z" * 40, "j" + "_" * 40, "j0"):
+        assert rj.JOB_ID.match(job_id)
+        out = subprocess.run(["git", "check-ref-format", "--branch", rj.branch_name(job_id)], capture_output=True)
+        assert out.returncode == 0, job_id
+
+
+def failed_agent(result):
+    def run(*, run_id, runs_dir, **kw):
+        d = Path(runs_dir) / run_id
+        d.mkdir(parents=True, exist_ok=True)
+        if result is not None:
+            (d / "result.json").write_text(json.dumps(result))
+        return {"status": "FAILED_ACCEPTANCE", "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+                "usd_billed": 0.0}
+    return run
+
+
+def test_a_failed_agent_says_why_what_failed_and_what_can_be_done(env, monkeypatch):
+    env.code()
+    monkeypatch.setattr(ctrun, "run_code_task", failed_agent(
+        {"status": "FAILED_ACCEPTANCE", "attempts": 2, "verdict": {"failing": ["validation:target", "claims"]}}))
+    job, _ = env.approve()
+    before = job.file.read_bytes()
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert "why: stagnant: the same criteria failed 2 attempts in a row" in text
+    assert "agent result: FAILED_ACCEPTANCE, 2 attempt(s), failing: validation:target, claims" in text
+    assert 'next: argus abandon jtest "<why>"' in text and "redraft" not in text
+    assert job.file.read_bytes() == before
+
+
+def test_a_failed_agent_without_its_result_is_still_shown(env, monkeypatch):
+    env.code()
+    monkeypatch.setattr(ctrun, "run_code_task", failed_agent(None))
+    env.approve()
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert "agent result: unreadable" in text and "why: stagnant" in text
+
+
+def test_a_failed_draft_says_why_and_offers_redraft_or_reject(tmp_path):
+    e = Env(tmp_path, draft=[reply("cut", stop_reason="max_tokens")])
+    e.code()
+    job = e.job()
+    reason = [x for x in job.data["log"] if x.get("new") == rj.DRAFT_FAILED][-1]["reason"]
+    text = rj.status("jtest", jobs_dir=e.jobs)
+    assert reason and f"why: {reason}" in text
+    assert 'next: argus redraft jtest  |  argus reject jtest "<why>"' in text
+
+
+def test_a_blocked_job_says_why(tmp_path, env, monkeypatch):
+    e = Env(tmp_path / "budget")
+    with pytest.raises(rj.Refused):
+        e.code(max_usd=0.30)
+    text = rj.status("jtest", jobs_dir=e.jobs)
+    assert "why: budget: $0.3000 left for the drafter" in text and 'next: argus abandon jtest "<why>"' in text
+    env.code()
+    monkeypatch.setattr(ctrun, "run_code_task", lambda **kw: (_ for _ in ()).throw(RuntimeError("crash")))
+    with pytest.raises(RuntimeError):
+        env.approve()
+    monkeypatch.undo()
+    path = env.job().root / "fixtures" / "contracts" / "task.json"
+    c = json.loads(path.read_text())
+    c["limits"]["max_iterations"] = 9
+    path.write_text(json.dumps(c))
+    with pytest.raises(rj.Refused):
+        rj.resume("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    assert "why: contract_changed: the contract differs from the approved one" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_a_rejected_or_abandoned_job_says_why_and_by_whom(tmp_path, monkeypatch):
+    monkeypatch.setenv("USER", "atha")
+    for i, fn in enumerate((rj.reject, rj.abandon)):
+        e = Env(tmp_path / str(i))
+        e.code()
+        fn("jtest", "tests look wrong", deps=e.deps, jobs_dir=e.jobs)
+        text = rj.status("jtest", jobs_dir=e.jobs)
+        assert "why: tests look wrong (by atha)" in text and "next:" not in text
+
+
+def test_text_from_a_model_is_printed_without_control_characters(env, monkeypatch):
+    nasty = "\x1b[31mred\x1b[0m \x1b]0;fake title\x07ok\rover\nline\x7fend\x9b2J"
+    env.code()
+    monkeypatch.setattr(ctrun, "run_code_task", failed_agent(
+        {"status": "FAILED_ACCEPTANCE", "attempts": 1, "verdict": {"failing": [nasty]}}))
+    env.approve()
+    job = env.job()
+    [x for x in job.data["log"] if x.get("new") == rj.AGENT_FAILED][-1]["reason"] = nasty
+    job.save()
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert not [c for c in text.replace("\n", "") if unicodedata.category(c) == "Cc"]
+    assert "red ok over line end" in text and "fake title" not in text
+    assert rj.clean("a\x1bb") == "ab" and rj.clean("tab\there") == "tab here"
+    screen = rj._limits_text(job, "approve", ["writable: " + nasty])          # the [y/N] screen, too
+    assert "writable: red ok over line end" in screen and not [c for c in screen.replace("\n", "")
+                                                                if unicodedata.category(c) == "Cc"]
