@@ -262,3 +262,91 @@ def test_audit_run_rebuilds_the_stop_feedback_the_notice_and_the_carried_feedbac
     model = StrictScriptedChatModel(script=[tau.WRITE, tau.FINISH])
     r, d = go(tmp_path / "b", model, config(20000), initial_feedback=CARRY)
     assert r["status"] == st.DONE and "prompt_hash checked 2, mismatches 0" in audit(d)
+
+
+# ---- SPEC_AGENT_OUTPUT_BUDGET: the output cap per model and the hint after a truncated reply -----------------------
+
+def cut(id="c"):
+    return tau.reply("long reasoning ...", stop_reason="max_tokens", input_tokens=tau.IN, output_tokens=100)
+
+
+def test_deepseek_gets_a_larger_reply_on_usd_profiles_only_and_sonnet_keeps_its_own():
+    c = load_config()
+    assert c["code_task"]["max_output_tokens_by_model"] == {"deepseek:deepseek-flash": 32000,
+                                                            "deepseek:deepseek-v4-pro": 32000}
+    for model, profile, want in (("deepseek:deepseek-flash", "large_usd", 32000),
+                                 ("deepseek:deepseek-v4-pro", "large_usd", 32000),
+                                 ("deepseek:deepseek-flash", "large", 8192),        # a token profile: unchanged
+                                 ("deepseek:deepseek-flash", "default", 4096),
+                                 ("anthropic:claude-sonnet-5-5", "large_usd", 8192)):
+        x = copy.deepcopy(c)
+        x["roles"]["coder"]["model"] = model
+        assert tau.applied(x, profile)["roles"]["coder"]["max_output_tokens"] == want, (model, profile)
+
+
+def test_the_output_cap_of_the_model_is_the_one_the_run_uses_and_records(tmp_path, counter):
+    per_message(counter)
+    c = config(100000)
+    c["code_task"]["max_output_tokens_by_model"] = {"fake:scripted": 3000}
+    model = StrictScriptedChatModel(script=[tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, c)
+    assert r["status"] == st.DONE and r["budget_profile"]["max_output_tokens"] == 3000
+    assert {e["max_tokens"] for e in tau.events(d, "llm_call") if e["status"] == "ok"} == {3000}
+
+
+def test_a_larger_reply_is_still_bounded_by_the_attempts_usd(tmp_path, counter):
+    # 32,000 output at $5/M is $0.16, over this attempt's $0.05: each call's cap is lowered to what fits (the caller's
+    # rule since D1), so the run never pays more than its reservation
+    per_message(counter)
+    c = tau.cfg(small={"attempt_tokens": 400000, "attempt_usd": 0.05, "max_input_tokens": 100000,
+                       "max_output_tokens": 1024})
+    c["code_task"]["context_notice_at"] = None
+    c["code_task"]["max_output_tokens_by_model"] = {"fake:scripted": 32000}
+    model = StrictScriptedChatModel(script=[tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, c)
+    sent = [e for e in tau.events(d, "llm_call_started")]
+    assert r["budget_profile"]["max_output_tokens"] == 32000
+    assert sent and all(e["max_tokens"] < 32000 for e in sent)
+    assert all(e["worst_usd_nano"] <= 0.05e9 for e in sent)
+
+
+TRUNC = "Its last reply was cut at the output limit before any of its tool calls ran"
+
+
+def test_after_a_truncated_reply_the_next_attempt_is_told_to_keep_replies_short(tmp_path, counter):
+    per_message(counter)
+    for i, script in enumerate(([cut()], [BAD, cut()])):            # before and after a write
+        model = StrictScriptedChatModel(script=script + [tau.WRITE, tau.FINISH])
+        r, d = go(tmp_path / str(i), model, config(100000))
+        first = text(model.calls[len(script)])
+        assert tau.ends(d)[0][1] == "output_truncated" and r["status"] == st.DONE, i
+        assert f"{ENDED} output_truncated after {len(script) - 1} steps" in first and TRUNC in first, i
+        assert "EditFile (one function or a few lines per call)" in first and HINT not in first, i
+
+
+def test_the_truncation_hint_is_only_for_a_truncated_reply(tmp_path, counter):
+    per_message(counter)
+    model = StrictScriptedChatModel(script=[BAD, tau.FINISH, tau.WRITE, tau.FINISH])        # ended: finished
+    go(tmp_path / "f", model, config(100000))
+    assert TRUNC not in text(model.calls[2])
+    model = StrictScriptedChatModel(script=tau.reads(5) + [tau.WRITE, tau.FINISH])          # ended: context_limit
+    go(tmp_path / "c", model, config(10000))
+    assert TRUNC not in text(model.calls[5]) and HINT in text(model.calls[5])
+
+
+def test_a_retry_after_a_truncated_reply_is_told_too(tmp_path, counter):
+    per_message(counter)
+    carry = {"carried": True, "from": "a1", "stopped": {"end": "output_truncated", "steps": 3, "wrote": False,
+                                                        "read": ["src/calc.py"]}}
+    model = StrictScriptedChatModel(script=[tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, config(100000), initial_feedback=carry)
+    first = text(model.calls[0])
+    assert r["status"] == st.DONE and TRUNC in first and "The workspace is kept" not in first
+
+
+def test_audit_run_rebuilds_the_truncation_hint(tmp_path, counter):
+    per_message(counter)
+    model = StrictScriptedChatModel(script=[cut(), tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, config(100000))
+    assert r["status"] == st.DONE and TRUNC in text(model.calls[1])
+    assert "prompt_hash checked 3, mismatches 0" in audit(d)

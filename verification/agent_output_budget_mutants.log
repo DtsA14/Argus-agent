@@ -1,0 +1,16 @@
+# agent output budget (SPEC_AGENT_OUTPUT_BUDGET) at f32578a (2026-10-24T18:50:38Z)
+## new tests on main's code (test_the_truncation_hint_is_only_for_a_truncated_reply is a guard: main has no hint at all; the mutant 'truncation hint for every end' breaks it)
+6 failed, 1 passed in 2.62s
+PASSED on old code (must be none): ['PASSED tests/test_agent_context.py::test_the_truncation_hint_is_only_for_a_truncated_reply']
+SKIPPED: []
+RESULT: PROBLEM
+## mutants (pytest -x per mutant: test_agent_context, test_router, test_auto_validation, test_attempt_usd, test_feedback_excerpt, test_run_inspectors)
+KILLED  output cap per model ignored: ['FAILED tests/test_agent_context.py::test_deepseek_gets_a_larger_reply_on_usd_profiles_only_and_sonnet_keeps_its_own']
+KILLED  output cap per model on token profiles too: ['FAILED tests/test_agent_context.py::test_deepseek_gets_a_larger_reply_on_usd_profiles_only_and_sonnet_keeps_its_own']
+KILLED  deepseek output cap not raised: ['FAILED tests/test_agent_context.py::test_deepseek_gets_a_larger_reply_on_usd_profiles_only_and_sonnet_keeps_its_own']
+KILLED  no truncation hint: ['FAILED tests/test_agent_context.py::test_after_a_truncated_reply_the_next_attempt_is_told_to_keep_replies_short']
+KILLED  truncation hint without EditFile: ['FAILED tests/test_agent_context.py::test_after_a_truncated_reply_the_next_attempt_is_told_to_keep_replies_short']
+KILLED  truncation hint only before a write: ['FAILED tests/test_agent_context.py::test_after_a_truncated_reply_the_next_attempt_is_told_to_keep_replies_short']
+KILLED  truncation hint for every end: ['FAILED tests/test_agent_context.py::test_after_running_out_of_context_without_writing_the_next_attempt_is_told_what_it_read']
+RESULT: 7/7 killed
+## all non-sandbox tests before the full verify: 1468 passed, 95 skipped in 87.54s

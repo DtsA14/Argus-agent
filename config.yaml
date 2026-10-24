@@ -102,6 +102,11 @@ code_task:
   # worst case per call $0.018 (60,000 x $0.15 x 2 peak / 1M), the attempt's USD reservation still binds. Sonnet keeps
   # the profile's 40,000.
   max_input_tokens_by_model: {"deepseek:deepseek-flash": 60000, "deepseek:deepseek-v4-pro": 60000}
+  # docs/reviews/SPEC_AGENT_OUTPUT_BUDGET.md: a USD profile's max_output_tokens per coder model. DeepSeek thinking shares the
+  # reply budget with its reasoning: at 8,192 (chosen for Sonnet without thinking) the SWE v0 batch 2 agent spent 7,858 and
+  # 8,192 on reasoning and was cut before any tool call. 32,000 output is at worst $0.0384 a call (peak); every call is still
+  # refused before sending when its worst case does not fit the attempt's USD reservation. Token profiles and Sonnet keep 8,192.
+  max_output_tokens_by_model: {"deepseek:deepseek-flash": 32000, "deepseek:deepseek-v4-pro": 32000}
   # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
   # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
   # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room
