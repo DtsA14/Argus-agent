@@ -200,6 +200,50 @@ def stage_config(cfg, cap):
     return out
 
 
+def environment_pin(cfg, name):
+    """(image id, problem) of sandbox environment `name` as this config resolves it now (SPEC_SWE_PILOT 2.1, K4): an
+    unknown name or one without an image is a problem, never another environment's or the default image."""
+    from tools import sandbox as sb
+    image, problem = sb.environment_image(cfg.get("sandbox") or {}, name)
+    if problem:
+        return None, problem
+    if not image:
+        return None, (f"sandbox environment {name!r} has no image (sandbox.environments.{name}.image, "
+                      f"ARGUS_SANDBOX_IMAGE_{name.upper()} or .sandbox_image_{name}); it never falls back to another image")
+    return image, None
+
+
+def environment_changed(job, cfg):
+    """Why the job's pinned environment image is not the one this config resolves now, or None. A job from before
+    --environment pins nothing (it ran on argus, as it always did)."""
+    name = job.data["inputs"].get("environment")
+    if name is None:
+        return None
+    now, problem = environment_pin(cfg, name)
+    was = job.data.get("environment_image")
+    if now == was:
+        return None
+    return (f"the image of sandbox environment {name!r} changed since the job started (was {was}, now "
+            f"{now or problem}); an image is not rebuilt identically, so this job cannot continue: "
+            f'argus abandon {job.id} "<why>"')
+
+
+def _check_environment(job, cfg):
+    why = environment_changed(job, cfg)
+    if why:
+        raise Refused(f"job {job.id}: {why}; nothing was changed")
+
+
+def job_config(job, cfg):
+    """The config of a job's stages: its drafter writes validations for the job's environment (SPEC_SWE_PILOT 2.1)."""
+    name = job.data["inputs"].get("environment")
+    if name is None:
+        return cfg
+    out = copy.deepcopy(cfg)
+    out["drafter"]["environment"] = name
+    return out
+
+
 def draft_sha(path):
     return hashlib.sha256(ct.canonical(json.loads(Path(path).read_text(encoding="utf-8"))).encode()).hexdigest()
 
@@ -316,10 +360,18 @@ def new_job_id():
     return "j" + datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + secrets.token_hex(2)
 
 
-def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs_dir=JOBS, job_id=None):
-    """A new job: intake, then the first drafter stage. Returns the job."""
+def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs_dir=JOBS, job_id=None,
+               environment=None):
+    """A new job: intake, then the first drafter stage. Returns the job. environment: the sandbox environment its
+    validations run in, with the image it resolves to now pinned for the whole job; None is the job as before
+    (the drafter's configured environment, nothing pinned)."""
     if not isinstance(issue, str) or not issue.strip():
         raise Refused("the issue is empty")
+    image = None
+    if environment is not None:
+        image, problem = environment_pin(cfg, environment)
+        if problem:
+            raise Refused(f"{problem}; no job was created")
     job_id = job_id or new_job_id()
     if not JOB_ID.match(job_id):
         raise Refused(f"{job_id!r} is not a job id")
@@ -333,7 +385,8 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
     with job.lock():
         job.data = {"job": job_id, "kind": "code", "state": NEW, "created_at": deps.clock(), "max_usd": cap,
                     "inputs": {"repo": str(Path(repo).resolve()), "commit": commit, "issue": issue.strip(),
-                               "exclude": list(exclude)},
+                               "exclude": list(exclude), **({"environment": environment} if environment else {})},
+                    **({"environment_image": image} if environment else {}),
                     "stages": {}, "approval": None, "log": []}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
@@ -361,7 +414,7 @@ def _draft(job, cfg, deps, n):
             raise Refused(f"job {job.id}: not enough of the job cap left for a drafter (BLOCKED)")
     else:
         cap = stage["cap_usd"]                            # the cap it started with, never recomputed
-    scfg = stage_config(cfg, cap)
+    scfg = stage_config(job_config(job, cfg), cap)
     lim = drafter_settings(scfg)
     text = _limits_text(job, f"drafter stage {sid}" + (" (resume)" if resume else ""),
                         [f"model {scfg['roles'][scfg['drafter']['role']]['model']}; stage cap ${cap:.4f}; one attempt "
@@ -397,6 +450,17 @@ def _last_draft(job):
     return st, job.runs / st["run_id"] / "draft.json"
 
 
+def _env(v):
+    return f" (env {v['environment']})" if v.get("environment") else ""
+
+
+def environment_lines(job):
+    name, image = job.data["inputs"].get("environment"), job.data.get("environment_image")
+    if name is None:
+        return []
+    return [f"environment {name}, image {str(image).split(':')[-1][:12]}"]
+
+
 def changed_lines(job, draft):
     """W2a-ext K6: a draft that changes existing tests says so where it is approved, with the number of K3 warnings
     (computed here from the intake, not read from the drafter's report)."""
@@ -416,6 +480,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
     from codetask import run as ctrun
     job = open_job(job_id, jobs_dir)
     with job.lock():
+        _check_environment(job, cfg)
         # Router pilot #1: a redraft that failed after a draft was accepted left the job DRAFT_FAILED, and the good
         # draft could no longer be approved. A redraft is an extra attempt, not a rejection: the last accepted draft
         # stays approvable (bound to its sha as always); reject says no.
@@ -437,7 +502,8 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
         need = ctrun.settings(acfg)["attempt_usd"]
         lines = [f"draft {seen[:12]} (from stage {st['run_id']})",
                  "writable: " + ", ".join(c["scope"]["writable"]),
-                 *[f"validation {v['id']}: {' '.join([v['executable'], *v['args']])}; required: "
+                 *environment_lines(job),
+                 *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}; required: "
                    + (", ".join(v.get("must_pass") or []) or "none") for v in c["validation"]],
                  *changed_lines(job, draft),
                  f"tools added: {c.get('tools') or 'none'}; profile {profile}; one attempt ${need:.2f}",
@@ -523,6 +589,7 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
     """Continue the stage a crash interrupted, with the cap it started with."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
+        _check_environment(job, cfg)
         state = job.data["state"]
         if state == DRAFTING:
             n = max(int(k[1:]) for k, s in job.data["stages"].items() if s["kind"] == "draft")
@@ -571,6 +638,7 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
     from codetask import run as ctrun
     job = open_job(job_id, jobs_dir)
     with job.lock():
+        _check_environment(job, cfg)
         if job.data["state"] != AGENT_FAILED:
             raise Refused(f"job {job.id} is {job.data['state']}: only a job whose agent failed is retried")
         prev, _ = last_agent(job)
@@ -602,6 +670,7 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
 def redraft(job_id, *, cfg, deps, jobs_dir=JOBS):
     job = open_job(job_id, jobs_dir)
     with job.lock():
+        _check_environment(job, cfg)
         if job.data["state"] not in (DRAFT_FAILED, AWAITING_APPROVAL):
             raise Refused(f"job {job.id} is {job.data['state']}: only a failed or unapproved draft is redrafted")
         n = 1 + max(int(k[1:]) for k, s in job.data["stages"].items() if s["kind"] == "draft")
@@ -712,12 +781,16 @@ def branch_name(job_id):
     return f"argus/{job_id}"
 
 
-def status(job_id, *, jobs_dir=JOBS):
-    """A read-only summary (no lock): state, money, stages, and the draft to approve with its sha."""
+def status(job_id, *, jobs_dir=JOBS, cfg=None):
+    """A read-only summary (no lock): state, money, stages, and the draft to approve with its sha. With cfg, also
+    whether the job's pinned environment image is still the one the config resolves."""
     job = open_job(job_id, jobs_dir)
     d = job.data
     out = [f"job {job.id}: {d['state']}", f"repo {d['inputs']['repo']} at {d['inputs']['commit']}",
-           f"money: cap ${d['max_usd']:.2f}, spent ${spent_nano(job) / 1e9:.4f}"]
+           *environment_lines(job), f"money: cap ${d['max_usd']:.2f}, spent ${spent_nano(job) / 1e9:.4f}"]
+    changed = environment_changed(job, cfg) if cfg is not None else None
+    if changed:
+        out += [f"environment: {changed}", f'next: argus abandon {job.id} "<why>"']
     for sid, s in d["stages"].items():
         out.append(f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
                    + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else ""))
@@ -731,7 +804,7 @@ def status(job_id, *, jobs_dir=JOBS):
             out.append(f"the latest redraft failed; the last accepted draft is from {st['run_id']}")
         out += [f"draft {sha[:12]} ({job.runs / st['run_id'] / 'DRAFT_REVIEW.md'})",
                 "writable: " + ", ".join(c["scope"]["writable"]),
-                *[f"validation {v['id']}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
+                *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
                 *changed_lines(job, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     out += _attempt_lines(job)
