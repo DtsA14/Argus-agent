@@ -1,0 +1,73 @@
+writable: ['sympy/physics/units/unitsystem.py']
+validation target sympy -m pytest sympy/physics/units/tests/test_collect_factor_and_dimension.py | required: ['sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions', 'sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions_with_units']
+validation regression sympy -m pytest sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative sympy/physics/units/tests/test_quantities.py::test_issue_20288 sympy/physics/units/tests/test_quantities.py::test_issue_22164 sympy/physics/units/tests/test_quantities.py::test_issue_24062 sympy/physics/units/tests/test_quantities.py::test_add_sub sympy/physics/units/tests/test_dimensions.py sympy/physics/units/tests/test_util.py sympy/physics/units/tests/test_unitsystem.py sympy/physics/units/tests/test_dimensionsystem.py sympy/physics/units/tests/test_prefixes.py | required: ['sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency', 'sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension', 'sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing', 'sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative', 'sympy/physics/units/tests/test_quantities.py::test_issue_20288', 'sympy/physics/units/tests/test_unitsystem.py::test_definition', 'sympy/physics/units/tests/test_dimensionsystem.py::test_is_consistent']
+---- WHY
+sympy/physics/units/tests/test_collect_factor_and_dimension.py:35: in test_add_of_equivalent_dimensions
+E   AssertionError: ValueError('Dimension of "cfd_v1" is Dimension(velocity), but it should be Dimension(acceleration*time)')
+sympy/physics/units/tests/test_collect_factor_and_dimension.py:48: in test_add_of_equivalent_dimensions_with_units
+E   AssertionError: ValueError('Dimension of "cfd_v2" is Dimension(velocity), but it should be Dimension(length/time)')
+========================= 2 failed, 1 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/physics/units/tests/test_collect_factor_and_dimension.py
+"""UnitSystem._collect_factor_and_dimension must accept an addition whose
+addends have dimensions that are equivalent without being structurally the
+same object, e.g. ``velocity`` and ``acceleration*time``.
+"""
+
+from sympy.physics.units import (
+    Dimension, acceleration, length, meter, second, time, velocity)
+from sympy.physics.units.quantities import Quantity
+from sympy.physics.units.systems.si import SI
+from sympy.testing.pytest import raises
+
+
+def _collect(expr):
+    # Return the (factor, dimension) pair, or the exception that was raised
+    # instead of letting it escape: the bug shows up as a spurious ValueError.
+    try:
+        return SI._collect_factor_and_dimension(expr)
+    except ValueError as exc:
+        return exc
+
+
+def _quantity(name, dimension, scale_factor):
+    q = Quantity(name)
+    SI.set_quantity_dimension(q, dimension)
+    SI.set_quantity_scale_factor(q, scale_factor)
+    return q
+
+
+def test_add_of_equivalent_dimensions():
+    v1 = _quantity('cfd_v1', velocity, 2*meter/second)
+    a1 = _quantity('cfd_a1', acceleration, -9.8*meter/second**2)
+    t1 = _quantity('cfd_t1', time, 5*second)
+
+    result = _collect(a1*t1 + v1)
+    assert not isinstance(result, ValueError), result
+
+    factor, dim = result
+    assert isinstance(dim, Dimension)
+    # -9.8*5 + 2
+    assert abs(factor - (-47)) < 1e-10
+    assert SI.get_dimension_system().equivalent_dims(dim, velocity)
+
+
+def test_add_of_equivalent_dimensions_with_units():
+    v2 = _quantity('cfd_v2', velocity, 3*meter/second)
+
+    result = _collect(v2 + 5*meter/second)
+    assert not isinstance(result, ValueError), result
+
+    factor, dim = result
+    assert factor == 8
+    assert SI.get_dimension_system().equivalent_dims(dim, velocity)
+
+
+def test_add_of_incompatible_dimensions_raises():
+    u1 = _quantity('cfd_u1', length, 10*meter)
+    t2 = _quantity('cfd_t2', time, 2*second)
+
+    raises(ValueError, lambda: SI._collect_factor_and_dimension(u1 + t2))
+
+DRAFTER TESTS ON THE MAINTAINERS' FIX: pass {'tests_run': 3, 'failures': 0, 'errors': 0}  []

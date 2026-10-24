@@ -1,0 +1,133 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/printing/pycode.py"
+    ],
+    "steps": [
+      "Add a `_print_Min` method to `PythonCodePrinter` (in sympy/printing/pycode.py) that returns `min(a, b, ...)` by printing each argument with `self._print`.",
+      "Add a `_print_Max` method next to it doing the same with the builtin `max`.",
+      "Leave NumPyPrinter/SciPyPrinter/CuPyPrinter untouched so their existing `numpy.amin`/`numpy.amax` overrides keep precedence."
+    ],
+    "risks": [
+      "Putting the new methods on the wrong class (e.g. AbstractPythonCodePrinter) would change SymPyPrinter output and could break unrelated printers.",
+      "Overriding the NumPy/SciPy/CuPy Min/Max methods would break the array printers and existing lambdify tests.",
+      "Accidentally printing the arguments with str() instead of self._print would produce wrong code for nested expressions.",
+      "Formatting with a trailing space or missing separator would not match `min(x, y)`."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/printing/pycode.py"
+      ],
+      "protected": [
+        "sympy/printing/tests/**",
+        "sympy/utilities/tests/**",
+        "sympy/**/test_*.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/printing/tests/test_pycode_minmax.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/printing/tests/test_pycode_minmax.py::test_pycode_min",
+          "sympy/printing/tests/test_pycode_minmax.py::test_pycode_max",
+          "sympy/printing/tests/test_pycode_minmax.py::test_pycode_min_max_three_args"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression_printers",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/printing/tests/test_pycode.py::test_PythonCodePrinter",
+          "sympy/printing/tests/test_pycode.py::test_PythonCodePrinter_standard",
+          "sympy/printing/tests/test_pycode.py::test_MpmathPrinter",
+          "sympy/printing/tests/test_pycode.py::test_NumPyPrinter",
+          "sympy/printing/tests/test_pycode.py::test_SciPyPrinter",
+          "sympy/printing/tests/test_pycode.py::test_pycode_reserved_words",
+          "sympy/printing/tests/test_pycode.py::test_sqrt",
+          "sympy/printing/tests/test_pycode.py::test_frac"
+        ],
+        "timeout_s": 300,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/printing/tests/test_pycode.py::test_PythonCodePrinter",
+          "sympy/printing/tests/test_pycode.py::test_PythonCodePrinter_standard",
+          "sympy/printing/tests/test_pycode.py::test_MpmathPrinter",
+          "sympy/printing/tests/test_pycode.py::test_NumPyPrinter",
+          "sympy/printing/tests/test_pycode.py::test_SciPyPrinter",
+          "sympy/printing/tests/test_pycode.py::test_pycode_reserved_words",
+          "sympy/printing/tests/test_pycode.py::test_sqrt",
+          "sympy/printing/tests/test_pycode.py::test_frac"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression_functions",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/printing/tests/test_pycode.py::test_printmethod",
+          "sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes",
+          "sympy/printing/tests/test_pycode.py::test_issue_14283",
+          "sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq",
+          "sympy/printing/tests/test_pycode.py::test_issue_16535_16536",
+          "sympy/printing/tests/test_pycode.py::test_Integral",
+          "sympy/printing/tests/test_pycode.py::test_fresnel_integrals",
+          "sympy/printing/tests/test_pycode.py::test_beta",
+          "sympy/printing/tests/test_pycode.py::test_airy",
+          "sympy/printing/tests/test_pycode.py::test_airy_prime",
+          "sympy/printing/tests/test_pycode.py::test_numerical_accuracy_functions"
+        ],
+        "timeout_s": 300,
+        "min_tests": 11,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/printing/tests/test_pycode.py::test_printmethod",
+          "sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes",
+          "sympy/printing/tests/test_pycode.py::test_issue_14283",
+          "sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq",
+          "sympy/printing/tests/test_pycode.py::test_issue_16535_16536",
+          "sympy/printing/tests/test_pycode.py::test_Integral",
+          "sympy/printing/tests/test_pycode.py::test_fresnel_integrals",
+          "sympy/printing/tests/test_pycode.py::test_beta",
+          "sympy/printing/tests/test_pycode.py::test_airy",
+          "sympy/printing/tests/test_pycode.py::test_airy_prime",
+          "sympy/printing/tests/test_pycode.py::test_numerical_accuracy_functions"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/printing/tests/test_pycode_minmax.py",
+      "content": "from sympy import Max, Min, symbols\nfrom sympy.printing.pycode import PythonCodePrinter, pycode\n\nx, y, z = symbols('x y z')\n\n\ndef test_pycode_min():\n    assert pycode(Min(x, y)) == 'min(x, y)'\n\n\ndef test_pycode_max():\n    assert pycode(Max(x, y)) == 'max(x, y)'\n\n\ndef test_pycode_min_max_three_args():\n    prntr = PythonCodePrinter()\n    assert prntr.doprint(Min(x, y, z)) == 'min(x, y, z)'\n    assert prntr.doprint(Max(x, y, z)) == 'max(x, y, z)'\n"
+    }
+  ],
+  "unverifiable": [
+    "MpmathPrinter and SymPyPrinter inherit whatever is added to PythonCodePrinter; the issue only specifies PythonCodePrinter output, so no test asserts the mpmath/sympy printer spelling of Min/Max.",
+    "The generated `min(...)`/`max(...)` string is only checked textually; that it evaluates correctly as builtin Python is not executed in a test."
+  ]
+}

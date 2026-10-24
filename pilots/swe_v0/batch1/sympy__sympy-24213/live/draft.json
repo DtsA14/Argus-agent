@@ -1,0 +1,102 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/physics/units/unitsystem.py"
+    ],
+    "steps": [
+      "Read the Add branch of UnitSystem._collect_factor_and_dimension in sympy/physics/units/unitsystem.py.",
+      "Replace the structural comparison `if dim != addend_dim` with a comparison that goes through the unit system's DimensionSystem, i.e. `if not self.get_dimension_system().equivalent_dims(dim, addend_dim)`.",
+      "Keep raising the same ValueError (same message) when the addends really are dimensionally incompatible.",
+      "Keep returning the factor sum together with the dimension of the first addend."
+    ],
+    "risks": [
+      "Comparing with `equivalent_dims` may be done without the unit system's DimensionSystem (e.g. `self.get_dimension_system()` is None for a bare UnitSystem) and crash.",
+      "The fix might simply drop the check, so that genuinely incompatible addends (length + time, length + 1) stop raising; test_add_of_incompatible_dimensions_raises and the existing test_check_unit_consistency guard against that.",
+      "The fix might also 'convert' the addend scale factors, changing the returned factor; the tests pin the factor to the plain sum of the addends' scale factors.",
+      "Using is_dimensionless instead of dimensional equivalence would wrongly accept a dimensionless addend next to a dimensional one.",
+      "Touching the Mul/Pow/Derivative branches would change unrelated behaviour covered by test_factor_and_dimension and test_dimensional_expr_of_derivative."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/physics/units/unitsystem.py"
+      ],
+      "protected": [
+        "sympy/physics/units/tests/test_collect_factor_and_dimension.py",
+        "sympy/physics/units/tests/*.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/physics/units/tests/test_collect_factor_and_dimension.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions",
+          "sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions_with_units"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency",
+          "sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension",
+          "sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing",
+          "sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_20288",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_22164",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_24062",
+          "sympy/physics/units/tests/test_quantities.py::test_add_sub",
+          "sympy/physics/units/tests/test_dimensions.py",
+          "sympy/physics/units/tests/test_util.py",
+          "sympy/physics/units/tests/test_unitsystem.py",
+          "sympy/physics/units/tests/test_dimensionsystem.py",
+          "sympy/physics/units/tests/test_prefixes.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 30,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency",
+          "sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension",
+          "sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing",
+          "sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_20288",
+          "sympy/physics/units/tests/test_unitsystem.py::test_definition",
+          "sympy/physics/units/tests/test_dimensionsystem.py::test_is_consistent"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/physics/units/tests/test_collect_factor_and_dimension.py",
+      "content": "\"\"\"UnitSystem._collect_factor_and_dimension must accept an addition whose\naddends have dimensions that are equivalent without being structurally the\nsame object, e.g. ``velocity`` and ``acceleration*time``.\n\"\"\"\n\nfrom sympy.physics.units import (\n    Dimension, acceleration, length, meter, second, time, velocity)\nfrom sympy.physics.units.quantities import Quantity\nfrom sympy.physics.units.systems.si import SI\nfrom sympy.testing.pytest import raises\n\n\ndef _collect(expr):\n    # Return the (factor, dimension) pair, or the exception that was raised\n    # instead of letting it escape: the bug shows up as a spurious ValueError.\n    try:\n        return SI._collect_factor_and_dimension(expr)\n    except ValueError as exc:\n        return exc\n\n\ndef _quantity(name, dimension, scale_factor):\n    q = Quantity(name)\n    SI.set_quantity_dimension(q, dimension)\n    SI.set_quantity_scale_factor(q, scale_factor)\n    return q\n\n\ndef test_add_of_equivalent_dimensions():\n    v1 = _quantity('cfd_v1', velocity, 2*meter/second)\n    a1 = _quantity('cfd_a1', acceleration, -9.8*meter/second**2)\n    t1 = _quantity('cfd_t1', time, 5*second)\n\n    result = _collect(a1*t1 + v1)\n    assert not isinstance(result, ValueError), result\n\n    factor, dim = result\n    assert isinstance(dim, Dimension)\n    # -9.8*5 + 2\n    assert abs(factor - (-47)) < 1e-10\n    assert SI.get_dimension_system().equivalent_dims(dim, velocity)\n\n\ndef test_add_of_equivalent_dimensions_with_units():\n    v2 = _quantity('cfd_v2', velocity, 3*meter/second)\n\n    result = _collect(v2 + 5*meter/second)\n    assert not isinstance(result, ValueError), result\n\n    factor, dim = result\n    assert factor == 8\n    assert SI.get_dimension_system().equivalent_dims(dim, velocity)\n\n\ndef test_add_of_incompatible_dimensions_raises():\n    u1 = _quantity('cfd_u1', length, 10*meter)\n    t2 = _quantity('cfd_t2', time, 2*second)\n\n    raises(ValueError, lambda: SI._collect_factor_and_dimension(u1 + t2))\n"
+    }
+  ],
+  "unverifiable": [
+    "The wording and arguments of the ValueError raised for genuinely incompatible addends are not asserted by any test; only the exception type is.",
+    "Which representative dimension is returned when the addends are equivalent but structurally different (e.g. velocity vs acceleration*time) depends on the canonical ordering of the Add arguments and is not asserted; the tests only assert dimensional equivalence with velocity.",
+    "Docstrings and documentation examples of _collect_factor_and_dimension are not checked by any test."
+  ]
+}

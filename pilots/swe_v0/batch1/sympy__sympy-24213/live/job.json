@@ -1,0 +1,134 @@
+{
+  "job": "j20261024_174741_e451",
+  "kind": "code",
+  "state": "REVIEW_READY",
+  "created_at": "2026-10-24T17:47:41Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/swe/sympy",
+    "commit": "e8c22f6eac7314be8d92590bfff92ced79ee03e2",
+    "issue": "collect_factor_and_dimension does not detect equivalent dimensions in addition\nCode to reproduce:\n```python\nfrom sympy.physics import units\nfrom sympy.physics.units.systems.si import SI\n\nv1 = units.Quantity('v1')\nSI.set_quantity_dimension(v1, units.velocity)\nSI.set_quantity_scale_factor(v1, 2 * units.meter / units.second)\n\na1 = units.Quantity('a1')\nSI.set_quantity_dimension(a1, units.acceleration)\nSI.set_quantity_scale_factor(a1, -9.8 * units.meter / units.second**2)\n\nt1 = units.Quantity('t1')\nSI.set_quantity_dimension(t1, units.time)\nSI.set_quantity_scale_factor(t1, 5 * units.second)\n\nexpr1 = a1*t1 + v1\nSI._collect_factor_and_dimension(expr1)\n```\nResults in:\n```\nTraceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\n  File \"C:\\Python\\Python310\\lib\\site-packages\\sympy\\physics\\units\\unitsystem.py\", line 179, in _collect_factor_and_dimension\n    raise ValueError(\nValueError: Dimension of \"v1\" is Dimension(velocity), but it should be Dimension(acceleration*time)\n```",
+    "exclude": [],
+    "environment": "sympy"
+  },
+  "environment_image": "sha256:de306e046ab6347cbd56ffb62dd75fcf71c51999c5a5fbf60117e36bd11fe412",
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261024_174741_e451-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-24T17:47:41Z",
+      "ended_at": "2026-10-24T17:50:32Z",
+      "status": "DRAFTED",
+      "usd": 0.036047364,
+      "draft_sha256": "4b1a1837d532d8ac4a1b4ef66ab0dcdd7bee31c171fac2ac62f0eefcc98ebb35"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261024_174741_e451-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-24T17:52:07Z",
+      "ended_at": "2026-10-24T17:52:41Z",
+      "status": "DONE",
+      "usd": 0.002720148,
+      "profile": "large_usd",
+      "review": {
+        "valid": true,
+        "problems": [],
+        "dir": "/home/ubuntu/pilot3a_live/jobs/j20261024_174741_e451/runs/j20261024_174741_e451-a1/review"
+      }
+    }
+  },
+  "approval": {
+    "draft_sha256": "4b1a1837d532d8ac4a1b4ef66ab0dcdd7bee31c171fac2ac62f0eefcc98ebb35",
+    "contract_sha256": "139faa7fe61c1b4d0833abc9654364d793b30a0ed873fe2584960b349f06229f",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-24T17:52:07Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-24T17:47:41Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-24T17:47:41Z",
+      "what": "intaken",
+      "files": 1999
+    },
+    {
+      "at": "2026-10-24T17:47:41Z",
+      "what": "limits_shown",
+      "screen": "== drafter stage d1 (job j20261024_174741_e451) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-24T17:47:41Z",
+      "what": "confirmed_by_flag",
+      "screen": "== drafter stage d1 (job j20261024_174741_e451) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-24T17:47:41Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-24T17:47:41Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-24T17:50:32Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-24T17:51:52Z",
+      "what": "limits_shown",
+      "screen": "== approve and run the agent (job j20261024_174741_e451) ==\ndraft 4b1a1837d532 (from stage j20261024_174741_e451-d1)\nwritable: sympy/physics/units/unitsystem.py\nenvironment sympy, image de306e046ab6\nvalidation target (env sympy): python -m pytest sympy/physics/units/tests/test_collect_factor_and_dimension.py; required: sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions, sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions_with_units\nvalidation regression (env sympy): python -m pytest sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative sympy/physics/units/tests/test_quantities.py::test_issue_20288 sympy/physics/units/tests/test_quantities.py::test_issue_22164 sympy/physics/units/tests/test_quantities.py::test_issue_24062 sympy/physics/units/tests/test_quantities.py::test_add_sub sympy/physics/units/tests/test_dimensions.py sympy/physics/units/tests/test_util.py sympy/physics/units/tests/test_unitsystem.py sympy/physics/units/tests/test_dimensionsystem.py sympy/physics/units/tests/test_prefixes.py; required: sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency, sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension, sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing, sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative, sympy/physics/units/tests/test_quantities.py::test_issue_20288, sympy/physics/units/tests/test_unitsystem.py::test_definition, sympy/physics/units/tests/test_dimensionsystem.py::test_is_consistent\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0360; left $0.9640"
+    },
+    {
+      "at": "2026-10-24T17:51:52Z",
+      "what": "confirmed_by_flag",
+      "screen": "== approve and run the agent (job j20261024_174741_e451) ==\ndraft 4b1a1837d532 (from stage j20261024_174741_e451-d1)\nwritable: sympy/physics/units/unitsystem.py\nenvironment sympy, image de306e046ab6\nvalidation target (env sympy): python -m pytest sympy/physics/units/tests/test_collect_factor_and_dimension.py; required: sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions, sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_add_of_equivalent_dimensions_with_units\nvalidation regression (env sympy): python -m pytest sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative sympy/physics/units/tests/test_quantities.py::test_issue_20288 sympy/physics/units/tests/test_quantities.py::test_issue_22164 sympy/physics/units/tests/test_quantities.py::test_issue_24062 sympy/physics/units/tests/test_quantities.py::test_add_sub sympy/physics/units/tests/test_dimensions.py sympy/physics/units/tests/test_util.py sympy/physics/units/tests/test_unitsystem.py sympy/physics/units/tests/test_dimensionsystem.py sympy/physics/units/tests/test_prefixes.py; required: sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency, sympy/physics/units/tests/test_quantities.py::test_factor_and_dimension, sympy/physics/units/tests/test_quantities.py::test_quantity_postprocessing, sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative, sympy/physics/units/tests/test_quantities.py::test_issue_20288, sympy/physics/units/tests/test_unitsystem.py::test_definition, sympy/physics/units/tests/test_dimensionsystem.py::test_is_consistent\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0360; left $0.9640"
+    },
+    {
+      "at": "2026-10-24T17:51:52Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-24T17:52:07Z",
+      "what": "approved",
+      "draft": "4b1a1837d532",
+      "contract": "139faa7fe61c"
+    },
+    {
+      "at": "2026-10-24T17:52:07Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-24T17:52:55Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "REVIEW_READY",
+      "stage": "a1"
+    }
+  ],
+  "intake": {
+    "commit": "e8c22f6eac7314be8d92590bfff92ced79ee03e2",
+    "tree": "b86b9b19fdba0addfa829aedf7e76a6e6ad2e1c2",
+    "files": 1999,
+    "snapshot_sha256": "fa67cc77761e1c672950a34939b759767b2385c152c4b0467387cd22a9166b6b"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "2649c416883685c3ab01121a87a23308b3c30a9a114cebea4c9176cba6075fba",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "48e09ba25ed2a3d8a5495fce7f35dc3fd035498691fc36699f4429380805b95c"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "finished",
+    "steps": 9,
+    "wrote": true,
+    "read": [
+      "sympy/printing/pycode.py",
+      "sympy/printing/tests/test_pycode_minmax.py",
+      "sympy/printing/numpy.py"
+    ]
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "edit_file",
+    "search_files"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/task",
+      "snapshot_sha256": "9e8c173271b7d4832085af12b98f2d245b3574ef294c996d920616f5f65e2f43",
+      "intake": {
+        "name": "task",
+        "repo": "https://github.com/sympy/sympy.git",
+        "commit": "c4e836cdf73fc6aa7bab6a86719a0f08861ffb1d",
+        "tree": "8570ad33b6a6f9e4e6b84e8a9e48aee09954895d",
+        "exclude": [],
+        "kind": "task",
+        "base": {
+          "name": "base",
+          "commit": "c4e836cdf73fc6aa7bab6a86719a0f08861ffb1d",
+          "tree": "8570ad33b6a6f9e4e6b84e8a9e48aee09954895d",
+          "snapshot_sha256": "dd4efcb0543342bfc5b4a02f2164faf7a9536bedef239884778681685e5a12cb"
+        },
+        "added": {
+          "sympy/printing/tests/test_pycode_minmax.py": "77c7c7e0034d5ec8f81a5153f3f5b1600120ef0463b93dcadea1baaf78dddcbb"
+        },
+        "contract_sha256": "2649c416883685c3ab01121a87a23308b3c30a9a114cebea4c9176cba6075fba"
+      }
+    },
+    "argus": {
+      "commit": "af5f43480af03d58f0b6a6d38275b81b880eaf4d",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large_usd",
+    "attempt_tokens": 400000,
+    "max_output_tokens": 8192,
+    "attempt_usd": 0.45,
+    "max_input_tokens": 60000
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4,
+    "context_notice_at": 0.7
+  },
+  "cache": {
+    "cache_read_tokens": 239104,
+    "cache_creation_tokens": null,
+    "usd_saved_estimate": 0.035148288
+  },
+  "run_id": "j20261024_175033_872b-a1",
+  "attempts": 1,
+  "usd_billed": 0.007083012,
+  "usd_complete": true,
+  "llm_calls": 10,
+  "llm_calls_unknown": 0
+}

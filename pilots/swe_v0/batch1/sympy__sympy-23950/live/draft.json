@@ -1,0 +1,103 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/sets/contains.py"
+    ],
+    "steps": [
+      "Replace the `raise NotImplementedError()` body of `Contains.as_set` with `return self.args[1]`, so `Contains(x, S).as_set()` returns the set `S` (a Set) instead of a Boolean or an exception.",
+      "Add a short docstring/doctest to `Contains.as_set` showing `Contains(x, S.Reals).as_set() == S.Reals`, matching the existing docstring style of the other `as_set` methods.",
+      "Leave the rest of the class (eval, binary_symbols) untouched so that `Contains(x, S)` keeps evaluating to True/False when membership is decidable."
+    ],
+    "risks": [
+      "Returning `self.args[1]` ignores the case where the element itself occurs in the set (e.g. `Contains(x, FiniteSet(x))`), which yields a set still containing `x`.",
+      "Code that relied on `NotImplementedError` from `Contains.as_set` (e.g. the `try/except NotImplementedError` in `Piecewise._eval_rewrite_as_ITE`, or `Piecewise.as_expr_set_pairs`) will now follow a different path and may produce different output for conditions containing `Contains`.",
+      "Boolean expressions mixing `Contains` with relationals (`And(Contains(x, Reals), x > 0).as_set()`) now produce intersections/unions with the returned set, which can change results elsewhere."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/sets/contains.py"
+      ],
+      "protected": [
+        "**/tests/**",
+        "sympy/sets/tests/test_contains.py",
+        "sympy/sets/tests/test_contains_as_set.py",
+        "conftest.py",
+        "pytest.ini",
+        "sympy/conftest.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/sets/tests/test_contains_as_set.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/sets/tests/test_contains_as_set.py::test_contains_as_set_returns_the_set",
+          "sympy/sets/tests/test_contains_as_set.py::test_contains_as_set_finiteset",
+          "sympy/sets/tests/test_contains_as_set.py::test_piecewise_with_contains_condition"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "changed",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/sets/tests/test_contains.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 6,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/sets/tests/test_contains.py::test_as_set"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/functions/elementary/tests/test_piecewise.py",
+          "sympy/sets/tests/test_conditionset.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 20,
+        "max_skipped": 0,
+        "must_pass": [],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd"
+  },
+  "new_tests": [
+    {
+      "path": "sympy/sets/tests/test_contains_as_set.py",
+      "content": "\"\"\"Tests for ``Contains.as_set``.\n\n``Contains`` is a Boolean function: ``Contains(x, S)`` is a truth value, not a\nset, so its ``as_set`` method must return the *set* described by the\ncondition (the set the element has to belong to).  It must never return a\n``Contains`` object, because code that consumes ``as_set`` output (for\nexample :meth:`Piecewise.as_expr_set_pairs`) expects a set.\n\"\"\"\n\nfrom sympy import Contains, FiniteSet, Piecewise, S, Set, Symbol\n\n\ndef _as_set(expr):\n    \"\"\"Return ``expr.as_set()``, or ``None`` when it is not implemented.\"\"\"\n    try:\n        return expr.as_set()\n    except NotImplementedError:\n        return None\n\n\ndef test_contains_as_set_returns_the_set():\n    x = Symbol('x')\n    result = _as_set(Contains(x, S.Reals))\n    assert isinstance(result, Set)\n    assert result == S.Reals\n\n\ndef test_contains_as_set_finiteset():\n    x = Symbol('x')\n    y = Symbol('y')\n    assert _as_set(Contains(x, FiniteSet(y))) == FiniteSet(y)\n\n\ndef test_piecewise_with_contains_condition():\n    # calling as_set on the (Boolean) condition of a Piecewise must give a\n    # set, otherwise as_expr_set_pairs cannot compute the intervals\n    x = Symbol('x')\n    p = Piecewise((6, Contains(x, S.Reals)), (7, True))\n    assert _as_set(p.args[0].cond) == S.Reals\n    try:\n        pairs = p.as_expr_set_pairs()\n    except NotImplementedError:\n        pairs = None\n    assert pairs == [(6, S.Reals)]\n"
+    }
+  ],
+  "unverifiable": [
+    "The literal traceback of the issue (`AttributeError: 'Contains' object has no attribute 'as_relational'` from `Piecewise.eval`) no longer exists in this snapshot, so no test can reproduce that AttributeError; only the resulting behaviour of `Contains.as_set` and of `Piecewise.as_expr_set_pairs` is checked.",
+    "Whether returning the underlying set is semantically right when the element itself appears in the set (e.g. `Contains(x, FiniteSet(x)).as_set()`) is not checked by any test.",
+    "Downstream code such as `Piecewise._eval_rewrite_as_ITE`, which currently swallows `NotImplementedError` from `cond.as_set()`, is not checked for its behaviour change."
+  ],
+  "changed_tests": [
+    {
+      "path": "sympy/sets/tests/test_contains.py",
+      "content": "from sympy.core.expr import unchanged\nfrom sympy.core.numbers import oo\nfrom sympy.core.relational import Eq\nfrom sympy.core.singleton import S\nfrom sympy.core.symbol import Symbol\nfrom sympy.sets.contains import Contains\nfrom sympy.sets.sets import (FiniteSet, Interval)\nfrom sympy.testing.pytest import raises\n\ndef test_contains_basic():\n    raises(TypeError, lambda: Contains(S.Integers, 1))\n    assert Contains(2, S.Integers) is S.true\n    assert Contains(-2, S.Naturals) is S.false\n\n    i = Symbol('i', integer=True)\n    assert Contains(i, S.Naturals) == Contains(i, S.Naturals, evaluate=False)\n\n\ndef test_issue_6194():\n    x = Symbol('x')\n    assert unchanged(Contains, x, Interval(0, 1))\n    assert Interval(0, 1).contains(x) == (S.Zero <= x) & (x <= 1)\n    assert Contains(x, FiniteSet(0)) != S.false\n    assert Contains(x, Interval(1, 1)) != S.false\n    assert Contains(x, S.Integers) != S.false\n\n\ndef test_issue_10326():\n    assert Contains(oo, Interval(-oo, oo)) == False\n    assert Contains(-oo, Interval(-oo, oo)) == False\n\n\ndef test_binary_symbols():\n    x = Symbol('x')\n    y = Symbol('y')\n    z = Symbol('z')\n    assert Contains(x, FiniteSet(y, Eq(z, True))\n        ).binary_symbols == {y, z}\n\n\ndef test_as_set():\n    x = Symbol('x')\n    y = Symbol('y')\n    # Contains is a BooleanFunction whose value depends on an arg's\n    # containment in a Set; as_set must give back that Set -- never a\n    # Boolean and never an unimplemented error\n    try:\n        result = Contains(x, FiniteSet(y)).as_set()\n    except NotImplementedError:\n        result = None\n    assert result == FiniteSet(y)\n\ndef test_type_error():\n    # Pass in a parameter not of type \"set\"\n    raises(TypeError, lambda: Contains(2, None))\n"
+    }
+  ]
+}

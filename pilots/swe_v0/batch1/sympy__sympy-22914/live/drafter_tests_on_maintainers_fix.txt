@@ -1,0 +1,44 @@
+writable: ['sympy/printing/pycode.py']
+validation target sympy -m pytest sympy/printing/tests/test_pycode_minmax.py | required: ['sympy/printing/tests/test_pycode_minmax.py::test_pycode_min', 'sympy/printing/tests/test_pycode_minmax.py::test_pycode_max', 'sympy/printing/tests/test_pycode_minmax.py::test_pycode_min_max_three_args']
+validation regression_printers sympy -m pytest sympy/printing/tests/test_pycode.py::test_PythonCodePrinter sympy/printing/tests/test_pycode.py::test_PythonCodePrinter_standard sympy/printing/tests/test_pycode.py::test_MpmathPrinter sympy/printing/tests/test_pycode.py::test_NumPyPrinter sympy/printing/tests/test_pycode.py::test_SciPyPrinter sympy/printing/tests/test_pycode.py::test_pycode_reserved_words sympy/printing/tests/test_pycode.py::test_sqrt sympy/printing/tests/test_pycode.py::test_frac | required: ['sympy/printing/tests/test_pycode.py::test_PythonCodePrinter', 'sympy/printing/tests/test_pycode.py::test_PythonCodePrinter_standard', 'sympy/printing/tests/test_pycode.py::test_MpmathPrinter', 'sympy/printing/tests/test_pycode.py::test_NumPyPrinter', 'sympy/printing/tests/test_pycode.py::test_SciPyPrinter', 'sympy/printing/tests/test_pycode.py::test_pycode_reserved_words', 'sympy/printing/tests/test_pycode.py::test_sqrt', 'sympy/printing/tests/test_pycode.py::test_frac']
+validation regression_functions sympy -m pytest sympy/printing/tests/test_pycode.py::test_printmethod sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes sympy/printing/tests/test_pycode.py::test_issue_14283 sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq sympy/printing/tests/test_pycode.py::test_issue_16535_16536 sympy/printing/tests/test_pycode.py::test_Integral sympy/printing/tests/test_pycode.py::test_fresnel_integrals sympy/printing/tests/test_pycode.py::test_beta sympy/printing/tests/test_pycode.py::test_airy sympy/printing/tests/test_pycode.py::test_airy_prime sympy/printing/tests/test_pycode.py::test_numerical_accuracy_functions | required: ['sympy/printing/tests/test_pycode.py::test_printmethod', 'sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes', 'sympy/printing/tests/test_pycode.py::test_issue_14283', 'sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq', 'sympy/printing/tests/test_pycode.py::test_issue_16535_16536', 'sympy/printing/tests/test_pycode.py::test_Integral', 'sympy/printing/tests/test_pycode.py::test_fresnel_integrals', 'sympy/printing/tests/test_pycode.py::test_beta', 'sympy/printing/tests/test_pycode.py::test_airy', 'sympy/printing/tests/test_pycode.py::test_airy_prime', 'sympy/printing/tests/test_pycode.py::test_numerical_accuracy_functions']
+---- WHY
+sympy/printing/tests/test_pycode_minmax.py:8: in test_pycode_min
+E   AssertionError: assert '((x) if (x <= y) else (y))' == 'min(x, y)'
+E     
+E     - min(x, y)
+E     + ((x) if (x <= y) else (y))
+sympy/printing/tests/test_pycode_minmax.py:12: in test_pycode_max
+E   AssertionError: assert '((x) if (x >= y) else (y))' == 'max(x, y)'
+E     
+E     - max(x, y)
+E     + ((x) if (x >= y) else (y))
+sympy/printing/tests/test_pycode_minmax.py:17: in test_pycode_min_max_three_args
+E   AssertionError: assert '((x) if (x <... z) else (z))' == 'min(x, y, z)'
+E     
+E     - min(x, y, z)
+E     + ((x) if (x <= y) and (x <= z) else (y) if (y <= z) else (z))
+============================== 3 failed in Xs ===============================
+----
+changed_tests: []
+==== sympy/printing/tests/test_pycode_minmax.py
+from sympy import Max, Min, symbols
+from sympy.printing.pycode import PythonCodePrinter, pycode
+
+x, y, z = symbols('x y z')
+
+
+def test_pycode_min():
+    assert pycode(Min(x, y)) == 'min(x, y)'
+
+
+def test_pycode_max():
+    assert pycode(Max(x, y)) == 'max(x, y)'
+
+
+def test_pycode_min_max_three_args():
+    prntr = PythonCodePrinter()
+    assert prntr.doprint(Min(x, y, z)) == 'min(x, y, z)'
+    assert prntr.doprint(Max(x, y, z)) == 'max(x, y, z)'
+
+DRAFTER TESTS ON THE MAINTAINERS' FIX: pass {'tests_run': 3, 'failures': 0, 'errors': 0}  []
