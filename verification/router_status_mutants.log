@@ -1,0 +1,37 @@
+# router status mutants at 8fa7cce (2026-10-24T00:15:33Z); runner: pytest -x tests/test_router.py per mutant
+## new tests on main's code
+13 new tests
+15 failed in 6.19s
+PASSED on old code (must be none): []
+SKIPPED: []
+RESULT: ok
+## mutants
+KILLED  limits_shown not noted: ['FAILED tests/test_router.py::test_a_terminal_confirmation_and_a_typed_key_are_noted_with_their_times']
+KILLED  y noted as not_confirmed: ['FAILED tests/test_router.py::test_a_terminal_confirmation_and_a_typed_key_are_noted_with_their_times']
+KILLED  N noted as confirmed: ['FAILED tests/test_router.py::test_not_confirming_is_noted_and_starts_nothing']
+KILLED  key_typed not noted: ['FAILED tests/test_router.py::test_a_terminal_confirmation_and_a_typed_key_are_noted_with_their_times']
+KILLED  key_typed also with a key file: ['FAILED tests/test_router.py::test_with_yes_the_flag_and_the_key_file_are_noted_not_a_terminal_answer']
+KILLED  key_typed noted with the key: ['FAILED tests/test_router.py::test_the_key_is_set_only_during_the_stage_and_never_written']
+KILLED  key_typed before the shape checks: ['FAILED tests/test_router.py::test_a_refused_key_is_not_noted_as_typed[] - Ass...']
+KILLED  patch sha not of the file: ['FAILED tests/test_router.py::test_a_ready_review_says_where_it_is_its_patch_sha_and_how_to_apply_it']
+KILLED  no apply --check: ['FAILED tests/test_router.py::test_a_ready_review_says_where_it_is_its_patch_sha_and_how_to_apply_it']
+KILLED  apply before --check: ['FAILED tests/test_router.py::test_a_ready_review_says_where_it_is_its_patch_sha_and_how_to_apply_it']
+KILLED  commit as given, not as taken in: ['FAILED tests/test_router.py::test_a_ready_review_says_where_it_is_its_patch_sha_and_how_to_apply_it']
+KILLED  invalid review gets apply commands: ['FAILED tests/test_router.py::test_an_invalid_review_says_where_it_is_and_gives_no_apply_command']
+KILLED  no PR.md path: ['FAILED tests/test_router.py::test_a_ready_review_says_where_it_is_its_patch_sha_and_how_to_apply_it']
+KILLED  branch name not valid: ['FAILED tests/test_router.py::test_a_ready_review_says_where_it_is_its_patch_sha_and_how_to_apply_it']
+KILLED  no why: ['FAILED tests/test_router.py::test_a_failed_agent_says_why_what_failed_and_what_can_be_done']
+KILLED  no by: ['FAILED tests/test_router.py::test_a_rejected_or_abandoned_job_says_why_and_by_whom']
+KILLED  why from the wrong entry: ['FAILED tests/test_router.py::test_a_failed_agent_says_why_what_failed_and_what_can_be_done']
+KILLED  no agent result: ['FAILED tests/test_router.py::test_a_failed_agent_says_why_what_failed_and_what_can_be_done']
+KILLED  failing not shown: ['FAILED tests/test_router.py::test_a_failed_agent_says_why_what_failed_and_what_can_be_done']
+KILLED  unreadable result raises: ['FAILED tests/test_router.py::test_a_failed_agent_without_its_result_is_still_shown']
+KILLED  no redraft offered: ['FAILED tests/test_router.py::test_a_failed_draft_says_why_and_offers_redraft_or_reject']
+KILLED  redraft offered after the agent: ['FAILED tests/test_router.py::test_a_failed_agent_says_why_what_failed_and_what_can_be_done']
+KILLED  next for a rejected job: ['FAILED tests/test_router.py::test_a_rejected_or_abandoned_job_says_why_and_by_whom']
+KILLED  no next for a blocked job: ["FAILED tests/test_router.py::test_a_blocked_job_says_why - assert ('why: budg..."]
+KILLED  status not cleaned: ['FAILED tests/test_router.py::test_text_from_a_model_is_printed_without_control_characters']
+KILLED  escapes kept: ['FAILED tests/test_router.py::test_text_from_a_model_is_printed_without_control_characters']
+KILLED  control characters kept: ['FAILED tests/test_router.py::test_text_from_a_model_is_printed_without_control_characters']
+KILLED  approve screen not cleaned: ['FAILED tests/test_router.py::test_text_from_a_model_is_printed_without_control_characters']
+RESULT: 28/28 killed
