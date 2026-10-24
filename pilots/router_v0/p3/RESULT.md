@@ -76,4 +76,5 @@ dipenuhi, jadi tidak kelihatan sebagai penyebab.
 grep -rlF -f ~/.config/argus/deepseek_key ~/pilot3a_live/jobs/j20261024_031449_052d | wc -l
 ```
 
-Harus `0`. Hasil: _belum diisi_.
+Harus `0`. Hasil: **belum dicek manual** (Atha, 2026-10-24: skip dulu; dijalankan nanti dari PC). Sampai saat itu
+kriteria 4 bertumpu pada tes router (key tidak tertulis di berkas job mana pun, key diketik maupun `--key-file`).
