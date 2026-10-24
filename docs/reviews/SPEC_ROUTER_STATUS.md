@@ -1,7 +1,8 @@
 # Spec router: waktu keputusan manusia, perintah apply, dan alasan gagal di `status`
 
-Status: **spec, belum dikoding.** 2026-10-24. Ditulis Claude atas permintaan Atha ("Ok 1-3 bro"). Isinya menutup tiga
-celah antara `SPEC_ROUTER_V0.md` dan `router/job.py`. **Keputusan yang diminta: bagian 5.**
+Status: **spec disetujui** (K1–K4, Atha 2026-10-24, dengan tiga tambahan dari review: teks dibersihkan sebelum dicetak
+§2.4, sha patch dan `apply --check` §2.2, nama branch yang sah §2.2). Ditulis Claude atas permintaan Atha ("Ok 1-3
+bro"). Isinya menutup tiga celah antara `SPEC_ROUTER_V0.md` dan `router/job.py`.
 
 ## 1. Masalah
 
@@ -54,14 +55,21 @@ berulang, bisa menyusul sebagai `pilot_report.py`.
 ```
 review package: <dir> (valid)
   PR description: <dir>/PR.md
-  patch:          <dir>/changes.patch
+  patch:          <dir>/changes.patch (sha256 <64 karakter>)
 apply (by hand, in the target repository):
+  sha256sum <dir>/changes.patch
   git -C <repo> checkout -b argus/<job> <commit intake, 40 karakter>
+  git -C <repo> apply --check --whitespace=nowarn <dir>/changes.patch
   git -C <repo> apply --whitespace=nowarn <dir>/changes.patch
 ```
 
 - Commit diambil dari `job.json` `intake.commit` (commit yang benar-benar di-intake, bukan `--commit` yang bisa berupa
   `HEAD`). Ini perintah yang sama dengan yang ditulis `review.py` di `PR.md`, hanya dengan path lengkap.
+- **sha256 `changes.patch`** dihitung `status` dari berkas di disk saat itu, supaya manusia bisa memastikan berkas yang
+  diterapkan sama dengan yang di-review (`sha256sum`). `apply --check` dijalankan sebelum `apply`, jadi patch yang tidak
+  menempel bersih ketahuan sebelum repo berubah.
+- **Nama branch** `argus/<job>` harus nama branch git yang sah untuk setiap id job yang bisa dibuat (`JOB_ID`,
+  `new_job_id()`); dites dengan `git check-ref-format --branch`.
 - Router **hanya mencetak**, tidak menjalankan apa pun (K6 v0 tetap: menerapkan patch dilakukan manusia).
 - `REVIEW_INVALID`: tetap mencetak masalahnya (seperti sekarang) dan letak `PR.md`, **tanpa** perintah apply.
 
@@ -80,6 +88,14 @@ apply (by hand, in the target repository):
 - Job lama yang `result.json`-nya hilang atau rusak tetap bisa di-`status`: baris tambahannya menjadi `agent result:
   unreadable`, bukan error.
 - `list` tidak berubah (tetap satu baris per job).
+
+### 2.4 Teks dicetak tanpa karakter kontrol
+
+Sebagian isi `why:`, `failing`, dan `stop_reason` berasal dari teks buatan model (nama kriteria atau node tes dari drafter,
+alasan berhenti). Karakter kontrol di dalamnya, termasuk escape ANSI (`ESC [ ...`), bisa mengacak atau memalsukan
+tampilan terminal. Setiap teks dari log job atau `result.json` yang dicetak `status` lewat satu fungsi pembersih: escape
+ANSI/CSI dibuang utuh, lalu setiap karakter kontrol lain (kategori Unicode `Cc`, termasuk `\r`, `\n` di dalam satu nilai,
+dan `DEL`) diganti spasi. `job.json` sendiri tidak diubah: yang dibersihkan hanya yang dicetak.
 
 ## 3. Yang tidak berubah
 
@@ -103,7 +119,12 @@ spek sendiri karena mengubah alur). Cek bentuk kunci DeepSeek juga ditunda (Atha
 5. **Alasan gagal:** untuk `DRAFT_FAILED`, `AGENT_FAILED` (dengan `failing` dari `result.json`), `BLOCKED` (budget dan
    `contract_changed`), `REJECTED`, dan `ABANDONED`, `status` mencetak `why:` dengan alasan dari log dan `next:` sesuai
    tabel 2.3. `AGENT_FAILED` dengan `result.json` yang hilang mencetak `unreadable` dan tidak error.
-6. **`status` tetap hanya membaca:** `job.json` tidak berubah oleh `status` di semua state di atas (tes yang ada
+6. **Patch:** sha256 yang dicetak sama dengan `hashlib.sha256` berkas `changes.patch`; baris `apply --check` dicetak
+   sebelum baris `apply`. `argus/<job>` lolos `git check-ref-format --branch` untuk id dari `new_job_id()` dan id terpanjang
+   yang diterima `JOB_ID`.
+7. **Pembersih:** `reason` dan `failing` yang berisi `\x1b[31m`, `\x1b]0;judul\x07`, `\r`, `\n`, dan `\x7f` dicetak
+   `status` tanpa satu pun karakter kontrol, teks biasanya tetap terbaca.
+8. **`status` tetap hanya membaca:** `job.json` tidak berubah oleh `status` di semua state di atas (tes yang ada
    diperluas).
 
 Mutan untuk setiap baris tabel di atas, lalu `verify.sh` penuh di latar belakang. Bukti di `verification/`.
