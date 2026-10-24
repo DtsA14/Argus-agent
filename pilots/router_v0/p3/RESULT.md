@@ -70,6 +70,45 @@ dipenuhi, jadi tidak kelihatan sebagai penyebab.
    petunjuk di prompt coder untuk membaca hanya berkas yang perlu diubah dan tesnya sebelum menulis. Opsi pertama lebih
    kecil dan bisa diukur.
 
+## Run 2: `argus retry` (tahap `a2`, setelah PR #187/#188): berhasil
+
+2026-10-24, job yang sama, tanpa drafter baru dan tanpa review draf ulang. Preflight di chat: cap `min($0,75, $0,969)` =
+$0,75, layar batas menyebut `a1 ended: context_limit after 5 steps, no file changed`, max input 60.000.
+
+| Tahap | Hasil | Biaya | Waktu (UTC) |
+|---|---|---|---|
+| Retry | Atha ("y", setelah preflight) | – | 11:05:10 |
+| Agen `a2` | `DONE`, 1 attempt, 6 panggilan | $0,0039 | 11:05:10 → 11:05:58 |
+| **Job** | **REVIEW_READY** | **$0,0349** dari cap $1,00 | |
+
+- **Agen menulis sebelum konteks penuh.** Attempt 1 `a2` membaca 3 berkas (`acceptance/intake.py`, tes baru,
+  `acceptance/workspace.py`) dan satu `list_files`, lalu `edit_file` di langkah 3, dua `run_validation`, `Finish` di
+  langkah 5. Di `a1` setiap attempt membaca 8–9 berkas tanpa menulis.
+- **Peringatan 70% tidak muncul**: input terbesar est. 19.671, di bawah 42.000 (70% dari 60.000) dan juga di bawah
+  batas lama 40.000. Jadi `a2` berhasil **bukan karena batasnya naik**. Bedanya ada di prompt: carry (`a1` berhenti
+  `context_limit` tanpa menulis) dan petunjuk "read only what the change needs, then write it: ... acceptance/intake.py".
+  Satu run tidak cukup untuk memisahkan efek petunjuk dari variasi model.
+- **Carry** tercatat (`carried_feedback` di events, `carry` di `job.json`). Isinya tanpa daftar berkas yang dibaca,
+  karena `a1` berjalan sebelum #188 (sesuai spek untuk run lama).
+- **Patch** (`live/a2_changes.patch`, sha256 `cd136666…`, sama dengan yang dicetak `status`): fungsi baru
+  `approved_tests(record)` dan `expected = {**tree, **approved_tests(record)}`. Diterapkan tanpa perubahan ke branch dari
+  `main` di `~/Argus-agent` (bukan di checkout live, saran Atha): `apply --check` bersih, lalu `apply`.
+- **Repro dengan git asli** (sebelum `verify.sh`, permintaan Atha): 7 kasus. Record intake → `[]`; record task persis
+  seperti disetujui → `[]`; berkas lain diubah, berkas tambahan, tes yang disetujui diedit, tes `changed` kembali ke
+  isi `before`, dan record intake pada workspace task → semuanya dilaporkan. Di kode `main` (sebelum patch), kasus
+  "persis seperti disetujui" gagal: bug terbukti dan ditutup patch ini.
+- **Temuan review diff (kecil):** untuk record task, perbandingan bit executable di `check_against_repo` mengabaikan
+  berkas tes yang disetujui (`got = [p for p in got if p in tree]`). Issue meminta "executable bits are compared as
+  now". Ini bukan celah: `intake.check` (dijalankan `intake_repo.py --check` dan setup) tetap membandingkan bit
+  executable seluruh workspace dengan `record["executable"]`, jadi tes yang disetujui lalu dibuat executable tetap
+  ketahuan. Tapi baris itu tidak diminta dan tidak dites. Dibiarkan seperti dari agen (patch diterapkan tanpa
+  perubahan); bisa dihapus di PR terpisah bila Atha mau.
+
+### Supervisi (seluruh pilot)
+
+Keputusan Atha untuk run: go live (`code`), "y" (`approve`), "y" (`retry`) = **3**, plus review preflight, spek #187, dan
+merge. Waktu mesin seluruh tahap ±3,5 menit; biaya $0,0349.
+
 ## Cek key (kriteria 4, dijalankan Atha)
 
 ```bash
