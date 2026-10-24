@@ -266,7 +266,9 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
 
         def end(reason, steps):
             wrote = toolbox.digest() != start["digest"]
-            log.emit("attempt_end", reason=reason, steps=steps, wrote=wrote, **meta)
+            log.emit("attempt_end", reason=reason, steps=steps, **meta)
+            # SPEC_AGENT_CONTEXT_RETRY: what the next attempt is told, beside attempt_end (whose fields stay as they were)
+            log.emit("attempt_summary", reason=reason, steps=steps, wrote=wrote, read=read[:READ_MAX], **meta)
             return {"end": reason, "steps": steps, "wrote": wrote, "read": read[:READ_MAX],
                     "tokens_used": res.used_tokens, "usd_used": res.used_usd}
 

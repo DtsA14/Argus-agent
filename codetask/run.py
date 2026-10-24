@@ -278,6 +278,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                   "auto_validate_max": int(cfg["code_task"].get("auto_validate_max", 4)),
                   "context_notice_at": cfg["code_task"].get("context_notice_at")}
         log.emit("loop_policy", **policy)
+        if initial_feedback:          # a router retry: what attempt 0 is told (audit_run.py rebuilds its prompt from it)
+            log.emit("carried_feedback", feedback=initial_feedback)
         return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[],
                     feedback=initial_feedback or [],
                     tools=effective_tools(contract), provenance=provenance, budget_profile=budget, loop_policy=policy)

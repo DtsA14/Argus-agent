@@ -789,8 +789,10 @@ def test_text_from_a_model_is_printed_without_control_characters(env, monkeypatc
 A1 = {"status": "FAILED_ACCEPTANCE", "attempts": 2, "verdict": {"failing": ["validation:target", "claims"]},
       "attempt": {"iteration": 1, "end": "context_limit", "steps": 5, "wrote": False,
                   "read": ["src/shop.py", "tests/test_old.py"]}}
-A1_ENDS = [{"event": "attempt_end", "iteration": 0, "reason": "context_limit", "steps": 6, "wrote": False},
-           {"event": "attempt_end", "iteration": 1, "reason": "context_limit", "steps": 5, "wrote": False}]
+A1_ENDS = [{"event": "attempt_end", "iteration": 0, "reason": "context_limit", "steps": 6},
+           {"event": "attempt_summary", "iteration": 0, "reason": "context_limit", "steps": 6, "wrote": False},
+           {"event": "attempt_end", "iteration": 1, "reason": "context_limit", "steps": 5},
+           {"event": "attempt_summary", "iteration": 1, "reason": "context_limit", "steps": 5, "wrote": False}]
 
 
 def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None):

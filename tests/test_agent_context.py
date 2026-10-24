@@ -124,7 +124,8 @@ def test_the_attempt_records_what_it_read_and_whether_it_wrote(tmp_path, counter
     other = tau.call("ReadFile", {"path": "tests/test_calc.py"}, "r9")
     model = StrictScriptedChatModel(script=tau.reads(1) + [other] + tau.reads(3) + [tau.WRITE, tau.FINISH])
     r, d = go(tmp_path, model, config(10000))
-    assert [e["wrote"] for e in tau.events(d, "attempt_end")] == [False, True]
+    assert [e["wrote"] for e in tau.events(d, "attempt_summary")] == [False, True]
+    assert all("wrote" not in e for e in tau.events(d, "attempt_end"))            # its fields are as they were
     first = text(model.calls[5])
     assert "Files it read: src/calc.py, tests/test_calc.py." in first
 
@@ -234,3 +235,30 @@ def test_the_carried_feedback_is_frozen_at_setup(tmp_path, counter):
     r, d = go(tmp_path, model, config(10000), resume=True, initial_feedback=None)     # setup is not run again
     again = [e for e in tau.events(d, "llm_call_started") if e["ts"] > crashed["ts"]]
     assert r["status"] == st.DONE and again[0]["prompt_hash"] == crashed["prompt_hash"]
+
+
+# ---- scripts/audit_run.py rebuilds every prompt the agent got ------------------------------------------------------
+
+def audit(run_dir):
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    out = subprocess.run([sys.executable, str(root / "scripts" / "audit_run.py"), str(run_dir)], capture_output=True,
+                         text=True, cwd=root, env={**os.environ, "PYTHONPATH": str(root)})
+    assert out.returncode == 0, out.stderr[-800:]
+    return out.stdout
+
+
+def test_audit_run_rebuilds_the_stop_feedback_the_notice_and_the_carried_feedback(tmp_path, counter):
+    per_message(counter)
+    # attempt 0: a notice after step 1 (6,000 > 5,400), then out of context at step 5 (13,000 > 12,000); attempt 1
+    # is told so and fixes it (five calls leave the contract's $0.50 room for its attempt)
+    model = StrictScriptedChatModel(script=tau.reads(5) + [tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path / "a", model, config(12000, notice=0.45))
+    assert tau.ends(d)[0] == (0, "context_limit", 5), r["stop_reason"]
+    assert r["status"] == st.DONE and HINT in text(model.calls[5]) and notice_text(model)[0] == 2
+    out = audit(d)
+    assert "prompt_hash checked 8, mismatches 0" in out and "(harness context notice after the step)" in out
+    model = StrictScriptedChatModel(script=[tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path / "b", model, config(20000), initial_feedback=CARRY)
+    assert r["status"] == st.DONE and "prompt_hash checked 2, mismatches 0" in audit(d)

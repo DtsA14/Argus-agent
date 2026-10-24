@@ -696,11 +696,13 @@ def _attempt_lines(job):
     for sid in agent_stages(job):
         log = job.runs / job.data["stages"][sid]["run_id"] / "events.jsonl"
         try:
-            ends = [e for e in parse_lines(log.read_text(encoding="utf-8")) if e.get("event") == "attempt_end"]
+            evs = parse_lines(log.read_text(encoding="utf-8"))
         except OSError:
             continue
+        wrote = {e.get("iteration"): e.get("wrote") for e in evs if e.get("event") == "attempt_summary"}
         parts = [f"{int(e.get('iteration', 0)) + 1} {e.get('reason')} after {e.get('steps')} steps"
-                 + {True: ", files changed", False: ", no file changed"}.get(e.get("wrote"), "") for e in ends]
+                 + {True: ", files changed", False: ", no file changed"}.get(wrote.get(e.get("iteration")), "")
+                 for e in evs if e.get("event") == "attempt_end"]
         if parts:
             out.append(f"  {sid} attempts: " + "; ".join(parts))
     return out
