@@ -4,7 +4,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status); riwayat semua butir yang sudah selesai (bukti, angka, PR) ada di
 [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-22 (pilot 3a dan 3b `agent-completed`; dokumen dirapikan).
+Terakhir diperbarui: 2026-10-24 (router pilot #3 `agent-completed` lewat `argus retry`; status router, konteks agen).
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -36,8 +36,10 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
   10–20 task dengan biaya per task yang lulus
 - [ ] `scripts/audit_run.py` belum menyisipkan pesan `NUDGE` (balasan tanpa tool call) saat membangun ulang langkah; belum pernah terjadi di
   run live
-- [ ] `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task (membandingkan dengan tree commit tanpa tes yang
-  disetujui); tanpa `--repo` benar
+- [x] `intake_repo.py --check <task> --repo` memberi mismatch palsu untuk record task: ditutup oleh patch agen router pilot #3
+  (#189; repro git asli 7/7)
+- [ ] `check_against_repo` untuk record task tidak membandingkan bit executable tes yang disetujui (baris dari patch agen #189,
+  tidak diminta, tidak dites); bukan celah karena `intake.check` membandingkannya. Hapus atau tes, keputusan Atha
 - [ ] Judul `PR.md` (paket review) dipotong 80 karakter di tengah kata; kosmetik
 - [~] **W2b** drafter model (`docs/reviews/REVIEW_M6_W2B.md`): kode dan tes selesai, patch referensi opsional (K1). Berikutnya
   pilot **W2b-1** (ulang issue 3b di `argus_p6`, cek bocoran di preflight), lalu **W2b-2** end-to-end di task baru (spec bagian 7)
@@ -66,9 +68,14 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [ ] Drafter masih mencoba regresi yang butuh `git` (w2b2d3) walau prompt menyebut batas sandbox; satu submit terbuang
 - [x] **Router v0** (`docs/reviews/SPEC_ROUTER_V0.md`, #163): `argus code` sebagai satu job (cap per job $1,00, kunci per job,
     cap tahap dicatat saat mulai, approve terikat ke sha draf); dipakai sejak router pilot #1. `--key-file`/`--yes` (#183)
-- [ ] **Router: waktu keputusan, perintah apply, alasan gagal di `status`** (`docs/reviews/SPEC_ROUTER_STATUS.md`): celah
-    spek v0 §3 poin 4 dan §5
-- [ ] Router: `argus apply` (K6 v0) dan mengulang agen dalam job yang sama (sekarang `AGENT_FAILED` hanya bisa `abandon`)
+- [x] **Router: waktu keputusan, perintah apply, alasan gagal di `status`** (`docs/reviews/SPEC_ROUTER_STATUS.md`, #185)
+- [x] **Konteks agen dan `argus retry`** (`docs/reviews/SPEC_AGENT_CONTEXT_RETRY.md`, #188): cara attempt berhenti di feedback,
+    peringatan konteks, `max_input` per model (DeepSeek 60.000), retry dengan carry. Router pilot #3: `a1` gagal
+    (`context_limit` tanpa menulis), `a2` lewat retry `DONE` dalam 1 attempt; job $0,0349, 3 keputusan run
+    (`pilots/router_v0/p3/RESULT.md`)
+- [ ] Efek petunjuk konteks belum terpisah dari variasi model (satu run; peringatan 70% belum pernah muncul di run live)
+- [ ] Router: `argus apply` (K6 v0): branch, `apply --check`, `apply`, verify; sekarang perintahnya dicetak `status`
+- [ ] Cek key manual router pilot #3 (`grep -rlF -f ...`, kriteria 4) belum dijalankan; Atha, dari PC
 - [ ] Router: cek bentuk kunci DeepSeek (hanya Anthropic yang dicek prefiksnya); ditunda, Atha tidak lagi mengetik kunci
 - [ ] `argus research` **ditunda** (K1 router v0): dibuat bersama Alur A yang menerima prompt bebas; saat itu bentuk job dan ledger
     diseragamkan
