@@ -1,0 +1,59 @@
+diff --git a/sympy/core/symbol.py b/sympy/core/symbol.py
+index f4a555c13fe4d3ca530c9bf92be4d82c61238940..2aca8bab27363b1428f3069c23d9889ddf65526a 100644
+--- a/sympy/core/symbol.py
++++ b/sympy/core/symbol.py
+@@ -791,7 +791,7 @@ def literal(s):
+         return tuple(result)
+     else:
+         for name in names:
+-            result.append(symbols(name, **args))
++            result.append(symbols(name, cls=cls, **args))
+ 
+         return type(names)(result)
+ 
+diff --git a/sympy/core/tests/test_symbols_cls.py b/sympy/core/tests/test_symbols_cls.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..d2a00a51282fce5ce9b787edc731fed7b9595e56
+--- /dev/null
++++ b/sympy/core/tests/test_symbols_cls.py
+@@ -0,0 +1,40 @@
++from sympy import Function, symbols
++from sympy.core.function import FunctionClass, UndefinedFunction
++from sympy.core.symbol import Dummy
++
++
++def test_symbols_cls_function_with_tuple_of_ranges():
++    # An extra layer of parentheses (a tuple of name strings) must not
++    # discard the requested ``cls``.
++    q, u = symbols(('q:2', 'u:2'), cls=Function)
++    assert isinstance(q, tuple) and isinstance(u, tuple)
++    assert len(q) == 2 and len(u) == 2
++    for s in q + u:
++        assert isinstance(s, FunctionClass)
++        assert isinstance(s, UndefinedFunction)
++    assert [s.name for s in q] == ['q0', 'q1']
++    assert [s.name for s in u] == ['u0', 'u1']
++
++
++def test_symbols_cls_function_with_tuple_of_names():
++    f, g = symbols(('f', 'g'), cls=Function)
++    for s in (f, g):
++        assert isinstance(s, FunctionClass)
++        assert isinstance(s, UndefinedFunction)
++    assert (f.name, g.name) == ('f', 'g')
++
++
++def test_symbols_cls_dummy_with_tuple_of_ranges():
++    d, = symbols(('d:2',), cls=Dummy)
++    assert len(d) == 2
++    for s in d:
++        assert isinstance(s, Dummy)
++    assert [s.name for s in d] == ['d0', 'd1']
++
++
++def test_symbols_cls_function_with_list_input():
++    res = symbols(['f:2', 'g'], cls=Function)
++    assert isinstance(res, list)
++    assert len(res) == 2
++    assert [s.name for s in res[0]] == ['f0', 'f1']
++    assert isinstance(res[1], UndefinedFunction)

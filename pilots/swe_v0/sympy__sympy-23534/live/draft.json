@@ -1,0 +1,90 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/core/symbol.py"
+    ],
+    "steps": [
+      "In `symbols`, note that `cls` is keyword-only (`def symbols(names, *, cls=Symbol, **args)`), so it is never present in `args`.",
+      "In the non-string branch (the `else` that loops `for name in names: result.append(symbols(name, **args))`), forward the requested class explicitly, i.e. recurse with `symbols(name, cls=cls, **args)`, so the nested call no longer falls back to `Symbol`.",
+      "Keep the returned container (`type(names)(result)`) and all range/parenthesis parsing unchanged.",
+      "Confirm `symbols(('q:2', 'u:2'), cls=Function)` now yields a tuple of two tuples of `UndefinedFunction` classes, and that `symbols((...))` without `cls` still returns plain `Symbol`s."
+    ],
+    "risks": [
+      "Forwarding `cls` twice (e.g. leaving it in `args` as well) would raise `TypeError: got multiple values for keyword argument 'cls'`.",
+      "Changing the recursion for the default case would break the many existing `symbols(('x:3', 'y:2'))`, list/dict/set input and `var` tests.",
+      "Returning the wrong container type (list vs tuple vs set) when `cls` is forwarded.",
+      "Applying the fix in the string branch instead of the iterable branch, which would not address the issue."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/core/symbol.py"
+      ],
+      "protected": [
+        "sympy/core/tests/**",
+        "sympy/**/tests/**",
+        "conftest.py",
+        "sympy/conftest.py",
+        "pytest.ini"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/core/tests/test_symbols_cls.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 4,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/core/tests/test_symbols_cls.py::test_symbols_cls_function_with_tuple_of_ranges",
+          "sympy/core/tests/test_symbols_cls.py::test_symbols_cls_function_with_tuple_of_names",
+          "sympy/core/tests/test_symbols_cls.py::test_symbols_cls_dummy_with_tuple_of_ranges",
+          "sympy/core/tests/test_symbols_cls.py::test_symbols_cls_function_with_list_input"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/core/tests/test_symbol.py",
+          "sympy/core/tests/test_var.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 16,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/core/tests/test_symbol.py::test_symbols",
+          "sympy/core/tests/test_var.py::test_var",
+          "sympy/core/tests/test_var.py::test_var_cls"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/core/tests/test_symbols_cls.py",
+      "content": "from sympy import Function, symbols\nfrom sympy.core.function import FunctionClass, UndefinedFunction\nfrom sympy.core.symbol import Dummy\n\n\ndef test_symbols_cls_function_with_tuple_of_ranges():\n    # An extra layer of parentheses (a tuple of name strings) must not\n    # discard the requested ``cls``.\n    q, u = symbols(('q:2', 'u:2'), cls=Function)\n    assert isinstance(q, tuple) and isinstance(u, tuple)\n    assert len(q) == 2 and len(u) == 2\n    for s in q + u:\n        assert isinstance(s, FunctionClass)\n        assert isinstance(s, UndefinedFunction)\n    assert [s.name for s in q] == ['q0', 'q1']\n    assert [s.name for s in u] == ['u0', 'u1']\n\n\ndef test_symbols_cls_function_with_tuple_of_names():\n    f, g = symbols(('f', 'g'), cls=Function)\n    for s in (f, g):\n        assert isinstance(s, FunctionClass)\n        assert isinstance(s, UndefinedFunction)\n    assert (f.name, g.name) == ('f', 'g')\n\n\ndef test_symbols_cls_dummy_with_tuple_of_ranges():\n    d, = symbols(('d:2',), cls=Dummy)\n    assert len(d) == 2\n    for s in d:\n        assert isinstance(s, Dummy)\n    assert [s.name for s in d] == ['d0', 'd1']\n\n\ndef test_symbols_cls_function_with_list_input():\n    res = symbols(['f:2', 'g'], cls=Function)\n    assert isinstance(res, list)\n    assert len(res) == 2\n    assert [s.name for s in res[0]] == ['f0', 'f1']\n    assert isinstance(res[1], UndefinedFunction)\n"
+    }
+  ],
+  "unverifiable": [
+    "The issue shows `print(type(q[0]))` printing `<class 'sympy.core.function.UndefinedFunction'>`; the tests check the class with isinstance instead, so the exact printed text is not verified.",
+    "Whether the `symbols` docstring is extended to mention that `cls` is honoured for iterable input is not checked by any test."
+  ]
+}
