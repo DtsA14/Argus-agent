@@ -102,7 +102,8 @@ PASS = {"environment": "sympy_py39", "image": IMG, "result": "pass"}
     ({**PASS, "environment": "other"}, "did not pass"),
     ({**PASS, "image": OTHER}, "was checked with image"),
 ])
-def test_an_unchecked_or_differently_checked_image_is_not_usable(tmp_path, record, why):
+def test_an_unchecked_or_differently_checked_image_is_not_usable(tmp_path, monkeypatch, record, why):
+    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE_SYMPY_PY39", raising=False)    # verify.sh sets it; these use their own image
     root = defined(tmp_path, record=record)
     assert why in (rj.check_problem("sympy_py39", IMG, root) or "")
     cfg = {"sandbox": {"environments": {"sympy_py39": {"image": IMG}}}}
@@ -110,7 +111,8 @@ def test_an_unchecked_or_differently_checked_image_is_not_usable(tmp_path, recor
     assert image is None and why in problem
 
 
-def test_a_passing_record_for_that_image_is_usable_and_an_undefined_environment_is_not_gated(tmp_path):
+def test_a_passing_record_for_that_image_is_usable_and_an_undefined_environment_is_not_gated(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE_SYMPY_PY39", raising=False)
     root = defined(tmp_path, record=PASS)
     assert rj.check_problem("sympy_py39", IMG, root) is None
     assert rj.environment_pin({"sandbox": {"environments": {"sympy_py39": {"image": IMG}}}}, "sympy_py39", root) == \
@@ -130,7 +132,8 @@ def test_a_job_on_an_unchecked_environment_is_not_created(tmp_path, monkeypatch)
     assert not (e.jobs / "jtest").exists() and e.drafter.calls == []
 
 
-def test_the_grader_refuses_an_unchecked_environment(tmp_path):
+def test_the_grader_refuses_an_unchecked_environment(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE_SYMPY_PY39", raising=False)
     g = load("swe_grade_env", ROOT / "scripts" / "swe_grade.py")
     root = defined(tmp_path / "root")
     called = []
@@ -142,6 +145,7 @@ def test_the_grader_refuses_an_unchecked_environment(tmp_path):
 
 
 def test_the_check_writes_its_record_only_when_every_check_passes(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARGUS_SANDBOX_IMAGE_SYMPY_PY39", raising=False)
     m = load("check_env_t", ROOT / "scripts" / "check_env_image.py")
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     import approve_draft
