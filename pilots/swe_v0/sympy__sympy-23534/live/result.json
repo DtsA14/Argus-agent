@@ -1,0 +1,80 @@
+{
+  "status": "DONE",
+  "stop_reason": "all criteria passed",
+  "blocked_reason": null,
+  "contract_sha": "3ecc74ac2cf9dacb796d5d3c53395d80dc1fa4ee5e7339f365f6e7264d5854d1",
+  "verdict": {
+    "iteration": 0,
+    "outcome": "pass",
+    "failing": [],
+    "workspace_digest": "c6248a93add5e579c36ddaab2914916d43dccc33f6d281b509318a4275d76f26"
+  },
+  "attempt": {
+    "iteration": 0,
+    "end": "finished",
+    "steps": 3,
+    "wrote": true,
+    "read": [
+      "sympy/core/symbol.py"
+    ]
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "edit_file",
+    "search_files"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/task",
+      "snapshot_sha256": "115dc4a91bf1ee11d896eecf201461044fe7edcd3cbe003dca2fb361a0419d49",
+      "intake": {
+        "name": "task",
+        "repo": "https://github.com/sympy/sympy.git",
+        "commit": "832c24fec1046eaa544a4cab4c69e3af3e651759",
+        "tree": "1ff23de82d74c15a3809c4b9caa40549135113c3",
+        "exclude": [],
+        "kind": "task",
+        "base": {
+          "name": "base",
+          "commit": "832c24fec1046eaa544a4cab4c69e3af3e651759",
+          "tree": "1ff23de82d74c15a3809c4b9caa40549135113c3",
+          "snapshot_sha256": "33d377d5c4666f1a3b4f89029b858a40c351255e82f13af18462abf559e68d8a"
+        },
+        "added": {
+          "sympy/core/tests/test_symbols_cls.py": "28912b0147f7a85483c8dc934f88d795288acd4fcfe8c3127d8388e67958ef29"
+        },
+        "contract_sha256": "3ecc74ac2cf9dacb796d5d3c53395d80dc1fa4ee5e7339f365f6e7264d5854d1"
+      }
+    },
+    "argus": {
+      "commit": "9d9f97b030a397257665d485aec9885480d9005e",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large_usd",
+    "attempt_tokens": 400000,
+    "max_output_tokens": 8192,
+    "attempt_usd": 0.45,
+    "max_input_tokens": 60000
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4,
+    "context_notice_at": 0.7
+  },
+  "cache": {
+    "cache_read_tokens": 61696,
+    "cache_creation_tokens": null,
+    "usd_saved_estimate": 0.009069312
+  },
+  "run_id": "j20261024_140954_dfb0-a1",
+  "attempts": 1,
+  "usd_billed": 0.005373888,
+  "usd_complete": true,
+  "llm_calls": 4,
+  "llm_calls_unknown": 0
+}
