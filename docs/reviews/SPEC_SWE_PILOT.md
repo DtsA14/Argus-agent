@@ -1,8 +1,8 @@
 # Spec: repositori luar lewat router, dinilai ala SWE-bench (`sympy__sympy-23534`)
 
-Status: **spec, belum dikoding.** 2026-10-24. Fase 3 dari rencana pilot SWE-bench Verified (diskusi 2026-10-24); fase
-1–2 (pilih instance, kelayakan environment) sudah dikerjakan tanpa biaya model. Syarat dari review Atha dimasukkan di
-bagian 2–3. **Keputusan yang diminta: bagian 7.**
+Status: **spec disetujui** (K1–K4, Atha 2026-10-24, dengan syarat: K1 pesan dan `next:`, K2 `missing` = tidak lulus,
+K4 gagal tertutup). Fase 3 dari rencana pilot SWE-bench Verified (diskusi 2026-10-24); fase 1–2 (pilih instance,
+kelayakan environment) sudah dikerjakan tanpa biaya model. Syarat dari review Atha dimasukkan di bagian 2–3.
 
 ## 1. Tujuan dan batas klaim
 
@@ -33,7 +33,13 @@ Sekarang `drafter.environment: argus` ada di config, jadi setiap draf memakai en
 - **Image dikunci per job:** setiap tahap live (`code`, `redraft`, `approve`, `retry`, `resume`) membandingkan id image
   environment itu sekarang dengan yang tercatat. Bila berbeda (image dibangun ulang di tengah job), tahap **ditolak
   tanpa mengubah apa pun dan tanpa memanggil model**, dengan pesan yang menyebut kedua id. Aturannya sama dengan versi
-  tool di memo key (`tool_version`): hasil sandbox dari image lain tidak dipakai ulang diam-diam.
+  tool di memo key (`tool_version`): hasil sandbox dari image lain tidak dipakai ulang diam-diam. Build image tidak bisa
+  diulang persis, jadi job yang imagenya sudah dibangun ulang tidak bisa dilanjutkan: pesan penolakan menyebut id image
+  lama dan baru, dan `next:` di `status` menyarankan `argus abandon <job> "<why>"` (K1).
+- **Gagal tertutup (K4):** environment yang imagenya tidak ada (`image: null`, tanpa `ARGUS_SANDBOX_IMAGE_<NAME>`, tanpa
+  `.sandbox_image_<NAME>`) ditolak sebelum intake dan di preflight setiap tahap, dan **tidak pernah jatuh ke image
+  bawaan atau `argus`**. Tes sympy yang jalan di image tanpa `mpmath` akan gagal karena import dan tampak seperti
+  kegagalan sungguhan.
 - Drafter tahap job memakai environment itu (`drafter.environment` lewat `stage_config`), jadi setiap validasi yang ia
   tulis membawa `"environment": NAME`. Itu sudah tercatat di kontrak per validasi (`environment` di setiap entri
   `validation`).
@@ -70,7 +76,8 @@ Aturannya sama dengan penilai resmi (review Atha):
    Nama tes SWE-bench untuk sympy berupa nama fungsi (`test_symbols`), dan dipetakan ke node `berkas::nama` dari berkas
    yang disentuh `test_patch`. Nama yang tidak ditemukan atau ambigu dilaporkan, tidak ditebak.
 5. **Hasil per node:** `FAIL_TO_PASS` dan `PASS_TO_PASS` masing-masing `{node: pass|fail|missing}`, dan
-   `resolved = semua FAIL_TO_PASS pass dan semua PASS_TO_PASS pass` (definisi SWE-bench). Ditulis ke `--out`, bersama
+   `resolved = semua FAIL_TO_PASS pass dan semua PASS_TO_PASS pass` (definisi SWE-bench). **`missing` dihitung tidak
+   lulus di kedua daftar** (K2): `resolved` hanya bila setiap node ditemukan dan lulus. Ditulis ke `--out`, bersama
    sha patch, id image, `base_commit`, dan sha `test_patch`.
 6. **Tes drafter terhadap patch resmi** (informasi, bukan bagian dari `resolved`): tes yang di-approve dijalankan di atas
    `base_commit` + patch resmi. Hijau berarti tes drafter dan tes resmi menangkap perilaku yang sama.
@@ -95,13 +102,15 @@ Penilai tidak memanggil model.
 1. `--environment`: tercatat beserta id image; nama tidak dikenal atau image tidak ditemukan → ditolak sebelum intake;
    drafter tahap job memakai environment itu; tanpa opsi → `argus`.
 2. Image berubah di tengah job → `approve`/`retry`/`resume`/`redraft` ditolak tanpa mengubah `job.json` dan tanpa
-   panggilan model.
+   panggilan model; pesannya menyebut id lama dan baru; `status` menyarankan `abandon`. Environment tanpa image ditolak
+   sebelum intake dan di preflight, tidak memakai image lain (mutan: jatuh ke image `argus` atau bawaan).
 3. Layar approve dan `status` menyebut environment per validasi dan id image.
 4. `setup_problems` untuk environment non-`argus`, di cek draf dan setup.
 5. Script build: dua kali build dari venv yang sama → rootfs sama; image tanpa shell dan git (seperti tes image
    `argus`).
 6. Penilai: sha patch yang salah → berhenti; berkas tes yang diubah agen → dikembalikan lalu `test_patch` menang; hasil
-   per node; `resolved` false bila satu `PASS_TO_PASS` gagal; nama tes yang tidak ada → `missing`. Dengan repo sintetis
+   per node; `resolved` false bila satu `PASS_TO_PASS` gagal; nama tes yang tidak ada atau ambigu (ada di dua berkas
+   `test_patch`) → `missing` dan `resolved: false`. Dengan repo sintetis
    kecil dan validasi palsu, ditambah satu tes sandbox nyata.
 7. Tes bagian 2.4 (snapshot tanpa commit baru dan `.git`; penanda host tidak terlihat di sandbox). Tes sandbox yang
    di-skip tidak dihitung lulus.
