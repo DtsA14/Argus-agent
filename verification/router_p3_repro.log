@@ -1,0 +1,8 @@
+ok  intake record, its own snapshot: []
+ok  task record, exactly as approved: []
+ok  task record, another file changed: ["the snapshot is not the commit's tree minus the exclusions"]
+ok  task record, an extra file: ["the snapshot is not the commit's tree minus the exclusions"]
+ok  task record, an approved test edited: ["the snapshot is not the commit's tree minus the exclusions"]
+ok  task record, a changed test back to before: ["the snapshot is not the commit's tree minus the exclusions"]
+ok  intake record on a task workspace: ["the snapshot is not the commit's tree minus the exclusions"]
+RESULT: ok

@@ -1,7 +1,7 @@
 {
   "job": "j20261024_031449_052d",
   "kind": "code",
-  "state": "AGENT_FAILED",
+  "state": "REVIEW_READY",
   "created_at": "2026-10-24T03:14:49Z",
   "max_usd": 1.0,
   "inputs": {
@@ -33,6 +33,31 @@
       "status": "FAILED_ACCEPTANCE",
       "usd": 0.0092112,
       "profile": "large_usd"
+    },
+    "a2": {
+      "kind": "agent",
+      "run_id": "j20261024_031449_052d-a2",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-24T11:05:10Z",
+      "carry": {
+        "carried": true,
+        "from": "a1",
+        "stopped": {
+          "end": "context_limit",
+          "steps": 5,
+          "wrote": false,
+          "read": []
+        }
+      },
+      "ended_at": "2026-10-24T11:05:51Z",
+      "status": "DONE",
+      "usd": 0.003928764,
+      "profile": "large_usd",
+      "review": {
+        "valid": true,
+        "problems": [],
+        "dir": "/home/ubuntu/pilot3a_live/jobs/j20261024_031449_052d/runs/j20261024_031449_052d-a2/review"
+      }
     }
   },
   "approval": {
@@ -120,6 +145,41 @@
       "new": "AGENT_FAILED",
       "stage": "a1",
       "reason": "stagnant: the same criteria failed 2 attempts in a row"
+    },
+    {
+      "at": "2026-10-24T11:05:10Z",
+      "what": "limits_shown",
+      "screen": "== retry the agent (job j20261024_031449_052d) ==\nagent stage a2 (retry of a1), approved contract f90a94c1749d\na1 ended: context_limit after 5 steps, no file changed\nprofile large_usd; max input 60000; one attempt $0.45; agent cap $0.7500\njob cap $1.00; spent $0.0310; left $0.9690"
+    },
+    {
+      "at": "2026-10-24T11:05:10Z",
+      "what": "confirmed_by_flag",
+      "screen": "== retry the agent (job j20261024_031449_052d) ==\nagent stage a2 (retry of a1), approved contract f90a94c1749d\na1 ended: context_limit after 5 steps, no file changed\nprofile large_usd; max input 60000; one attempt $0.45; agent cap $0.7500\njob cap $1.00; spent $0.0310; left $0.9690"
+    },
+    {
+      "at": "2026-10-24T11:05:10Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-24T11:05:10Z",
+      "what": "retry",
+      "stage": "a2",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-24T11:05:10Z",
+      "what": "state",
+      "old": "AGENT_FAILED",
+      "new": "AGENT_RUNNING",
+      "stage": "a2"
+    },
+    {
+      "at": "2026-10-24T11:05:58Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "REVIEW_READY",
+      "stage": "a2"
     }
   ],
   "intake": {
