@@ -1,0 +1,85 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/combinatorics/homomorphisms.py"
+    ],
+    "steps": [
+      "Rewrite the inner `_image` helper of `_check_homomorphism` so that, for a `PermutationGroup` domain, it walks the relator's `array_form` (symbol index, exponent) and looks the corresponding element up in `domain.generators` (or in the presentation generators) instead of comparing `r[i]` against the presentation generators.",
+      "Apply the exponent with its sign, i.e. use `images[s]**power` for positive powers and the inverse image raised to `-power` for negative powers, so an inverted generator is never silently dropped.",
+      "Keep the FpGroup/FreeGroup relator branch (`codomain.equals` / `make_confluent`) and the return convention (True/False) unchanged, so `group_isomorphism` and the existing `test_check_homomorphism` rejection case keep working.",
+      "Verify with `homomorphism(DihedralGroup(3), DihedralGroup(3), D3.generators, D3.generators)` that the created map sends each generator to itself."
+    ],
+    "risks": [
+      "Mapping the presentation's generator symbols to the wrong entries of `domain.generators` (the presentation may eliminate or reorder generators), giving a wrong image.",
+      "Losing the sign of the exponent so that `g**-1` is mapped to `images[g]**power` instead of `images[g]**-power`, which still accepts invalid maps or rejects valid ones.",
+      "Making the check trivially true (e.g. returning True early or ignoring relators), which breaks the existing rejection test `homomorphism(G, G, [a], [a])` in `sympy/combinatorics/tests/test_homomorphisms.py`.",
+      "Changing the return type of `_check_homomorphism` (e.g. returning None) and so breaking `group_isomorphism`, which uses it as a truth value."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/combinatorics/homomorphisms.py"
+      ],
+      "protected": [
+        "sympy/combinatorics/tests/**",
+        "sympy/combinatorics/named_groups.py",
+        "sympy/combinatorics/perm_groups.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py::test_check_homomorphism_permutation_group_identity",
+          "sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py::test_homomorphism_permutation_group_onto_itself"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/combinatorics/tests/test_homomorphisms.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/combinatorics/tests/test_homomorphisms.py::test_homomorphism",
+          "sympy/combinatorics/tests/test_homomorphisms.py::test_isomorphisms",
+          "sympy/combinatorics/tests/test_homomorphisms.py::test_check_homomorphism"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py",
+      "content": "from sympy.combinatorics.named_groups import DihedralGroup\nfrom sympy.combinatorics.homomorphisms import (\n    GroupHomomorphism, homomorphism, _check_homomorphism)\n\n\ndef test_check_homomorphism_permutation_group_identity():\n    # Sending each generator of D3 to itself is a homomorphism, so the\n    # check has to accept it.  The relators of a permutation group's\n    # presentation contain inverted generators; those used to be dropped\n    # silently by the image computation of ``_check_homomorphism``.\n    D3 = DihedralGroup(3)\n    images = dict(zip(D3.generators, D3.generators))\n    assert _check_homomorphism(D3, D3, images)\n\n\ndef test_homomorphism_permutation_group_onto_itself():\n    D3 = DihedralGroup(3)\n    failure = None\n    try:\n        T = homomorphism(D3, D3, D3.generators, D3.generators)\n    except ValueError as exc:\n        failure = exc\n    assert failure is None, failure\n    assert isinstance(T, GroupHomomorphism)\n    for g in D3.generators:\n        assert T(g) == g\n"
+    }
+  ],
+  "unverifiable": [
+    "The issue also asks that the check be 'greatly simplified'; no test can measure simplicity, only that the identity map of D3 is accepted and that invalid images are still rejected (the latter is only covered by the existing test file).",
+    "The behaviour of `_check_homomorphism` for a PermutationGroup whose presentation eliminates generators, or for groups with more than two generators, is not exercised by the new tests; only DihedralGroup(3) is used.",
+    "The FpGroup codomain branch of the relator check (including the `make_confluent` fallback) is untouched by the new tests and remains covered only by sympy/combinatorics/tests/test_homomorphisms.py."
+  ]
+}

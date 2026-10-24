@@ -1,0 +1,65 @@
+writable: ['sympy/combinatorics/homomorphisms.py']
+validation target sympy -m pytest sympy/combinatorics/tests/test_homomorphisms_permutation_check.py | required: ['sympy/combinatorics/tests/test_homomorphisms_permutation_check.py::test_check_homomorphism_for_permutation_group_identity_map', 'sympy/combinatorics/tests/test_homomorphisms_permutation_check.py::test_homomorphism_from_permutation_group_to_itself']
+validation regression sympy -m pytest sympy/combinatorics/tests/test_homomorphisms.py | required: ['sympy/combinatorics/tests/test_homomorphisms.py::test_homomorphism', 'sympy/combinatorics/tests/test_homomorphisms.py::test_isomorphisms', 'sympy/combinatorics/tests/test_homomorphisms.py::test_check_homomorphism']
+---- WHY
+sympy/combinatorics/tests/test_homomorphisms_permutation_check.py:12: in test_check_homomorphism_for_permutation_group_identity_map
+E   assert False
+E    +  where False = _check_homomorphism(PermutationGroup([\n    (0 1 2),\n    (0 2)]), PermutationGroup([\n    (0 1 2),\n    (0 2)]), {Permutation(0, 1, 2)...
+sympy/combinatorics/tests/test_homomorphisms_permutation_check.py:22: in test_homomorphism_from_permutation_group_to_itself
+E   assert None is not None
+========================= 2 failed, 1 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/combinatorics/tests/test_homomorphisms_permutation_check.py
+from sympy.combinatorics import Permutation
+from sympy.combinatorics.perm_groups import PermutationGroup
+from sympy.combinatorics.homomorphisms import homomorphism, _check_homomorphism
+from sympy.combinatorics.named_groups import DihedralGroup
+
+
+def test_check_homomorphism_for_permutation_group_identity_map():
+    # mapping every generator of a PermutationGroup to itself is a
+    # homomorphism, so the internal check must accept it
+    D3 = DihedralGroup(3)
+    images = dict(zip(D3.generators, D3.generators))
+    assert _check_homomorphism(D3, D3, images)
+
+
+def test_homomorphism_from_permutation_group_to_itself():
+    D3 = DihedralGroup(3)
+    gens = D3.generators
+    try:
+        T = homomorphism(D3, D3, gens, gens)
+    except ValueError:
+        T = None
+    assert T is not None
+    r, s = gens
+    assert T(r) == r
+    assert T(s) == s
+    assert T.image().order() == D3.order()
+
+
+def test_check_homomorphism_rejects_bad_images_for_permutation_group():
+    # the images of the generators do not define a homomorphism here,
+    # so the check must keep returning a false value
+    a = Permutation(1, 2, 3, 4)
+    b = Permutation(1, 3)
+    G = PermutationGroup([a, b])
+    assert not _check_homomorphism(G, G, {a: a, b: G.identity})
+
+DRAFTER TESTS ON THE MAINTAINERS' FIX: fail {'tests_run': 3, 'failures': 1, 'errors': 0} exit code 1; pytest outcome FAILED ['sympy/combinatorics/tests/test_homomorphisms_permutation_check.py::test_check_homomorphism_rejects_bad_images_for_permutation_group']
+OUTPUT TAIL:  FAILURES ===================================
+_______ test_check_homomorphism_rejects_bad_images_for_permutation_group _______
+sympy/combinatorics/tests/test_homomorphisms_permutation_check.py:35: in test_check_homomorphism_rejects_bad_images_for_permutation_group
+    assert not _check_homomorphism(G, G, {a: a, b: G.identity})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sympy/combinatorics/homomorphisms.py:354: in _check_homomorphism
+    s = _image(r).is_identity
+        ^^^^^^^^^
+sympy/combinatorics/homomorphisms.py:334: in _image
+    w *= images[g]**power
+         ^^^^^^^^^
+E   KeyError: Permutation(4)(1, 3)
+                                DO *NOT* COMMIT!                                
+========================= 1 failed, 2 passed in 0.72s ==========================
+ STDERR: 
