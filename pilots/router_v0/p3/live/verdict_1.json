@@ -1,0 +1,175 @@
+{
+  "outcome": "fail",
+  "criteria": [
+    {
+      "id": "scope:protected",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:writable",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "diff": {
+          "added": [],
+          "removed": [],
+          "modified": []
+        }
+      }
+    },
+    {
+      "id": "scope:regular_files",
+      "layer": "A",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    },
+    {
+      "id": "artifact:SUMMARY.json",
+      "layer": "B",
+      "status": "fail",
+      "reason": "SUMMARY.json is missing",
+      "evidence": {
+        "path": "SUMMARY.json",
+        "sha256": null
+      }
+    },
+    {
+      "id": "validation:target",
+      "layer": "C",
+      "status": "fail",
+      "reason": "exit code 1; pytest outcome FAILED; required test tests/test_intake_task_snapshot.py::test_a_task_record_whose_workspace_is_the_tree_plus_its_approved_tests_checks_clean is 'FAIL'; required test tests/test_intake_task_snapshot.py::test_a_task_record_with_changed_tests_expects_their_after_hash is 'FAIL'; required test tests/test_intake_task_snapshot.py::test_a_changed_test_that_still_has_its_before_content_is_reported is 'FAIL'; required test tests/test_intake_task_snapshot.py::test_executable_bits_are_still_compared_for_a_task_record is 'FAIL'; required test tests/test_intake_task_snapshot.py::test_a_task_record_still_reports_a_change_beyond_the_approved_tests[drop_approved] is 'FAIL'",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_intake_task_snapshot.py"
+        ],
+        "exit_code": 1,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 11,
+        "outcome": "FAILED",
+        "skipped": 0,
+        "failures": 5,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_intake_task_snapshot.py::test_a_task_record_whose_workspace_is_the_tree_plus_its_approved_tests_checks_clean": "FAIL",
+          "tests/test_intake_task_snapshot.py::test_a_task_record_with_changed_tests_expects_their_after_hash": "FAIL",
+          "tests/test_intake_task_snapshot.py::test_a_changed_test_that_still_has_its_before_content_is_reported": "FAIL",
+          "tests/test_intake_task_snapshot.py::test_executable_bits_are_still_compared_for_a_task_record": "FAIL",
+          "tests/test_intake_task_snapshot.py::test_a_task_record_still_reports_a_change_beyond_the_approved_tests[drop_approved]": "FAIL"
+        },
+        "output_tail": "e snapshot is not the commit's tree minus the exclusions\"\nE     \nE     Full diff:\nE     - []\nE     + [\nE     +     \"the snapshot is not the commit's tree minus the exclusions\",\nE     + ]\n______ test_a_changed_test_that_still_has_its_before_content_is_reported _______\ntests/test_intake_task_snapshot.py:101: in test_a_changed_test_that_still_has_its_before_content_is_reported\n    assert intake.check_against_repo(rec, ws, \"repo\")\nE   AssertionError: assert []\nE    +  where [] = <function check_against_repo at 0xf8c368385ee0>({'intake_version': 1, 'kind': 'task', 'name': 'demo', 'repo': 'https://example.invalid/demo.git', ...}, PosixPath('/tmp/pytest-of-nobody/pytest-0/test_a_changed_test_that_still0/ws'), 'repo')\nE    +    where <function check_against_repo at 0xf8c368385ee0> = intake.check_against_repo\n__________ test_executable_bits_are_still_compared_for_a_task_record ___________\ntests/test_intake_task_snapshot.py:109: in test_executable_bits_are_still_compared_for_a_task_record\n    assert problems and any(\"executable\" in p for p in problems)\nE   assert ([\"the snapshot is not the commit's tree minus the exclusions\"] and False)\nE    +  where False = any(<generator object test_executable_bits_are_still_compared_for_a_task_record.<locals>.<genexpr> at 0xf8c368413850>)\n_ test_a_task_record_still_reports_a_change_beyond_the_approved_tests[drop_approved] _\ntests/test_intake_task_snapshot.py:131: in test_a_task_record_still_reports_a_change_beyond_the_approved_tests\n    assert intake.check_against_repo(rec, ws, \"repo\")\nE   AssertionError: assert []\nE    +  where [] = <function check_against_repo at 0xf8c368385ee0>({'intake_version': 1, 'kind': 'task', 'name': 'demo', 'repo': 'https://example.invalid/demo.git', ...}, PosixPath('/tmp/pytest-of-nobody/pytest-0/test_a_task_record_still_repor3/ws'), 'repo')\nE    +    where <function check_against_repo at 0xf8c368385ee0> = intake.check_against_repo\n========================= 5 failed, 6 passed in 0.14s ==========================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 11,
+        "deselected": 0,
+        "stderr_tail": "",
+        "failed_nodes": [
+          "tests/test_intake_task_snapshot.py::test_a_changed_test_that_still_has_its_before_content_is_reported",
+          "tests/test_intake_task_snapshot.py::test_a_task_record_still_reports_a_change_beyond_the_approved_tests[drop_approved]",
+          "tests/test_intake_task_snapshot.py::test_a_task_record_whose_workspace_is_the_tree_plus_its_approved_tests_checks_clean",
+          "tests/test_intake_task_snapshot.py::test_a_task_record_with_changed_tests_expects_their_after_hash",
+          "tests/test_intake_task_snapshot.py::test_executable_bits_are_still_compared_for_a_task_record"
+        ],
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "validation:regression",
+      "layer": "C",
+      "status": "pass",
+      "reason": "",
+      "evidence": {
+        "argv": [
+          "python3",
+          "-I",
+          "-B",
+          "-m",
+          "pytest",
+          "-p",
+          "no:cacheprovider",
+          "-o",
+          "addopts=",
+          "-o",
+          "console_output_style=classic",
+          "--rootdir",
+          "/workspace",
+          "-v",
+          "--tb=short",
+          "--color=no",
+          "-rN",
+          "tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record"
+        ],
+        "exit_code": 0,
+        "timed_out": false,
+        "killed": false,
+        "cleanup_failed": false,
+        "output_limit_exceeded": false,
+        "truncated": false,
+        "tests_run": 1,
+        "outcome": "OK",
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "must_pass": {
+          "tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record": "ok"
+        },
+        "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1, langsmith-0.14.11\ncollecting ... collected 1 item\n\ntests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record PASSED\n\n============================== 1 passed in 0.08s ===============================\n",
+        "runner": "pytest",
+        "consistent": true,
+        "collected": 1,
+        "deselected": 0,
+        "stderr_tail": "",
+        "failed_nodes": [],
+        "environment": "argus"
+      }
+    },
+    {
+      "id": "claims",
+      "layer": "D",
+      "status": "fail",
+      "reason": "no valid SUMMARY.json, so no completion claim can be checked",
+      "evidence": {}
+    },
+    {
+      "id": "workspace:unchanged_during_evaluation",
+      "layer": "B",
+      "status": "pass",
+      "reason": "",
+      "evidence": {}
+    }
+  ],
+  "workspace_digest": "9d5b3476fb3d185d7be32254ab4f160a2c82286fddb923813b68db1b0a5dcbee",
+  "summary_sha256": null,
+  "verdict_sha256": "646f198f02bb26811105c1a25a7dd113571069eb5a89e0039bddb65476055088"
+}

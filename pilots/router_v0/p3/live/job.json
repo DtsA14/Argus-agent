@@ -1,0 +1,131 @@
+{
+  "job": "j20261024_031449_052d",
+  "kind": "code",
+  "state": "AGENT_FAILED",
+  "created_at": "2026-10-24T03:14:49Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/pilot3a_live",
+    "commit": "HEAD",
+    "issue": "scripts/intake_repo.py --check NAME --repo R reports \"the snapshot is not the commit's tree minus the exclusions\" for\nevery task record (fixtures/intake/<task>.json with \"kind\": \"task\"), even when the task's repository is exactly the one\nthat was approved. acceptance/intake.py check_against_repo compares the workspace with the commit's tree only, but a\ntask's workspace is the commit's tree plus the approved tests, which the record lists:\n  - record[\"added\"]: {path: sha256 of the file} for each new test file;\n  - record[\"changed\"] (present only when existing tests were changed): {path: {\"after\": sha256, ...}}.\n\nFix check_against_repo so that, for a record whose \"kind\" is \"task\", the expected snapshot is the commit's tree minus\nthe exclusions, with each path of \"added\" set to its hash and each path of \"changed\" set to its \"after\" hash. A record\nwithout \"kind\" or with \"kind\": \"intake\" is checked exactly as now.\n\nEvery other difference must still be reported, for task records too: a file changed, added or removed beyond the\napproved tests, or an approved test whose content differs from its recorded hash. Executable bits are compared as now.\nNothing else changes.",
+    "exclude": [
+      "verification",
+      "pilots"
+    ]
+  },
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261024_031449_052d-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-24T03:14:49Z",
+      "ended_at": "2026-10-24T03:16:35Z",
+      "status": "DRAFTED",
+      "usd": 0.021798198,
+      "draft_sha256": "e87ab6f00c0037a2a1f15304e10f5cd50f08fb0863f0c220aea44942bc4d7d12"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261024_031449_052d-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-24T03:55:21Z",
+      "ended_at": "2026-10-24T03:56:03Z",
+      "status": "FAILED_ACCEPTANCE",
+      "usd": 0.0092112,
+      "profile": "large_usd"
+    }
+  },
+  "approval": {
+    "draft_sha256": "e87ab6f00c0037a2a1f15304e10f5cd50f08fb0863f0c220aea44942bc4d7d12",
+    "contract_sha256": "f90a94c1749d77efb930d2b186c79c4e5207910123af5ef716351a83d9dbab50",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-24T03:55:21Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-24T03:14:49Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-24T03:14:49Z",
+      "what": "intaken",
+      "files": 461
+    },
+    {
+      "at": "2026-10-24T03:14:49Z",
+      "what": "limits_shown",
+      "screen": "== drafter stage d1 (job j20261024_031449_052d) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-24T03:14:49Z",
+      "what": "confirmed_by_flag",
+      "screen": "== drafter stage d1 (job j20261024_031449_052d) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-24T03:14:49Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-24T03:14:49Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-24T03:16:35Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-24T03:55:11Z",
+      "what": "limits_shown",
+      "screen": "== approve and run the agent (job j20261024_031449_052d) ==\ndraft e87ab6f00c00 (from stage j20261024_031449_052d-d1)\nwritable: acceptance/intake.py\nvalidation target: python -m pytest tests/test_intake_task_snapshot.py; required: tests/test_intake_task_snapshot.py::test_a_task_record_whose_workspace_is_the_tree_plus_its_approved_tests_checks_clean, tests/test_intake_task_snapshot.py::test_a_task_record_with_changed_tests_expects_their_after_hash, tests/test_intake_task_snapshot.py::test_a_changed_test_that_still_has_its_before_content_is_reported, tests/test_intake_task_snapshot.py::test_executable_bits_are_still_compared_for_a_task_record, tests/test_intake_task_snapshot.py::test_a_task_record_still_reports_a_change_beyond_the_approved_tests[drop_approved]\nvalidation regression: python -m pytest tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record; required: tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record\ntools added: ['edit_file']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0218; left $0.9782"
+    },
+    {
+      "at": "2026-10-24T03:55:11Z",
+      "what": "confirmed_by_flag",
+      "screen": "== approve and run the agent (job j20261024_031449_052d) ==\ndraft e87ab6f00c00 (from stage j20261024_031449_052d-d1)\nwritable: acceptance/intake.py\nvalidation target: python -m pytest tests/test_intake_task_snapshot.py; required: tests/test_intake_task_snapshot.py::test_a_task_record_whose_workspace_is_the_tree_plus_its_approved_tests_checks_clean, tests/test_intake_task_snapshot.py::test_a_task_record_with_changed_tests_expects_their_after_hash, tests/test_intake_task_snapshot.py::test_a_changed_test_that_still_has_its_before_content_is_reported, tests/test_intake_task_snapshot.py::test_executable_bits_are_still_compared_for_a_task_record, tests/test_intake_task_snapshot.py::test_a_task_record_still_reports_a_change_beyond_the_approved_tests[drop_approved]\nvalidation regression: python -m pytest tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record; required: tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record\ntools added: ['edit_file']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0218; left $0.9782"
+    },
+    {
+      "at": "2026-10-24T03:55:11Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-24T03:55:21Z",
+      "what": "approved",
+      "draft": "e87ab6f00c00",
+      "contract": "f90a94c1749d"
+    },
+    {
+      "at": "2026-10-24T03:55:21Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-24T03:56:03Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "AGENT_FAILED",
+      "stage": "a1",
+      "reason": "stagnant: the same criteria failed 2 attempts in a row"
+    }
+  ],
+  "intake": {
+    "commit": "5d49cf4658f00e8bb81b98494eb73a23fbe7564d",
+    "tree": "14d67600d726b69db8d21ec45fa17fcc44d7e0e5",
+    "files": 461,
+    "snapshot_sha256": "4a3a020fbb2149b89f2974bdc86e0d83a360569ab7207b7123089cff899accc2"
+  }
+}

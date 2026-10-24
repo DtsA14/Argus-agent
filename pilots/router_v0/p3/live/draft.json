@@ -1,0 +1,90 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "acceptance/intake.py"
+    ],
+    "steps": [
+      "In check_against_repo, keep writing the commit's tree minus record['exclude'] into a fresh directory and take its snapshot as the expected snapshot.",
+      "When record.get('kind') == 'task', overlay on that expected snapshot each path of record.get('added') or {} with its recorded hash, and each path of record.get('changed') or {} with its 'after' hash.",
+      "Compare the resulting expected snapshot with snapshot(workspace_dir, skip_cache=True) as before, and leave the executable-bit comparison (fresh vs workspace) as it is."
+    ],
+    "risks": [
+      "Applying the overlay to a record without 'kind' or with 'kind': 'intake', which must be checked exactly as now.",
+      "Using the 'before' hash of a changed test, or the removed/modified entries, instead of its 'after' hash.",
+      "Dropping the executable-bit comparison, which only runs when the snapshots are equal, so it stays reachable only for a task record whose approved tests match.",
+      "Leaving the __pycache__ skip (snapshot(..., skip_cache=True)) or the exclude handling changed.",
+      "A record that has no 'changed' key (only added tests) must not raise, and a record whose 'added' hash differs from the file must still be reported."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "acceptance/intake.py"
+      ],
+      "protected": [
+        "tests/**",
+        "fixtures/**",
+        "acceptance/workspace.py",
+        "acceptance/draft.py",
+        "acceptance/changed.py",
+        "codetask/**",
+        "scripts/intake_repo.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_intake_task_snapshot.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 11,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_intake_task_snapshot.py::test_a_task_record_whose_workspace_is_the_tree_plus_its_approved_tests_checks_clean",
+          "tests/test_intake_task_snapshot.py::test_a_task_record_with_changed_tests_expects_their_after_hash",
+          "tests/test_intake_task_snapshot.py::test_a_changed_test_that_still_has_its_before_content_is_reported",
+          "tests/test_intake_task_snapshot.py::test_executable_bits_are_still_compared_for_a_task_record",
+          "tests/test_intake_task_snapshot.py::test_a_task_record_still_reports_a_change_beyond_the_approved_tests[drop_approved]"
+        ],
+        "environment": "argus"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record"
+        ],
+        "timeout_s": 300,
+        "min_tests": 1,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_intake.py::test_only_a_plain_fixture_workspace_has_a_record"
+        ],
+        "environment": "argus"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_intake_task_snapshot.py",
+      "content": "\"\"\"M6 W4 task records: a task's workspace is the commit's tree minus the exclusions, plus the approved test files that\nfixtures/intake/<task>.json lists in `added` ({path: sha256 of the file}) and `changed` ({path: {\"after\": sha256, ...}},\npresent only when existing tests were changed). check_against_repo must expect exactly that snapshot, and must still\nreport every other difference: a file changed, added or removed beyond the approved tests, an approved test whose\ncontent differs from its hash, and the executable bits as before.\n\nNo git here: the argus sandbox has none, so intake.git is replaced by canned `ls-tree -r -z --full-tree` and\n`cat-file --batch` answers, which is all write_tree runs.\n\"\"\"\nimport hashlib\n\nimport pytest\n\nfrom acceptance import intake\n\nNEW = b\"def test_new():\\n    assert True\\n\"\nOLD = b\"def test_old():\\n    assert 1 == 1\\n\"\nOLD_NEW = b\"def test_old():\\n    assert 2 == 2\\n\"\n\n# The commit's tree: path -> (bytes, executable). \"verification/log.txt\" is what the record excludes.\nTREE = {\n    \"pkg/mod.py\": (b\"X = 1\\n\", False),\n    \"scripts/run.sh\": (b\"#!/bin/sh\\n\", True),\n    \"tests/test_old.py\": (OLD, False),\n    \"verification/log.txt\": (b\"evidence\\n\", False),\n}\nEXCLUDE = [\"verification\"]\nBASE = {p: f for p, f in TREE.items() if not intake.excluded(p, EXCLUDE)}\n\n\ndef sha(data):\n    return hashlib.sha256(data).hexdigest()\n\n\nclass FakeGit:\n    \"\"\"intake.git: the commit's tree as `ls-tree -r` and `cat-file --batch` print it.\"\"\"\n\n    def __init__(self, tree):\n        self.tree = tree\n        self.blobs = {sha(body): body for body, _ in tree.values()}\n\n    def __call__(self, repo, *args, data=None):\n        if args[:1] == (\"ls-tree\",):\n            rows = [f\"{'100755' if ex else '100644'} blob {sha(body)}\\t{path}\".encode()\n                    for path, (body, ex) in sorted(self.tree.items())]\n            return b\"\\0\".join(rows) + b\"\\0\"\n        if args[:1] == (\"cat-file\",):\n            out = b\"\"\n            for line in (data or b\"\").decode().split():\n                body = self.blobs[line]\n                out += f\"{line} blob {len(body)}\\n\".encode() + body + b\"\\n\"\n            return out\n        raise AssertionError(f\"unexpected git call: {args}\")\n\n\n@pytest.fixture\ndef commit(monkeypatch):\n    monkeypatch.setattr(intake, \"git\", FakeGit(TREE))\n    return TREE\n\n\ndef layout(root, files):\n    \"\"\"Write {path: (bytes, executable)} below root (which is created) and return root.\"\"\"\n    root.mkdir(parents=True, exist_ok=True)\n    for path, (body, ex) in files.items():\n        target = root / path\n        target.parent.mkdir(parents=True, exist_ok=True)\n        target.write_bytes(body)\n        target.chmod(0o755 if ex else 0o644)\n    return root\n\n\ndef record(**over):\n    \"\"\"A task record as approval writes it: the intake's commit and exclusions, plus the approved tests.\"\"\"\n    rec = {\"intake_version\": 1, \"kind\": \"task\", \"name\": \"demo\", \"repo\": \"https://example.invalid/demo.git\",\n           \"commit\": \"c\" * 40, \"tree\": \"d\" * 40, \"exclude\": list(EXCLUDE), \"added\": {},\n           \"files\": len(BASE), \"snapshot_sha256\": \"0\" * 64, \"executable\": [\"scripts/run.sh\"]}\n    rec.update(over)\n    return rec\n\n\ndef test_a_task_record_whose_workspace_is_the_tree_plus_its_approved_tests_checks_clean(tmp_path, commit):\n    ws = layout(tmp_path / \"ws\", {**BASE, \"tests/test_new.py\": (NEW, False)})\n    rec = record(added={\"tests/test_new.py\": sha(NEW)})\n    assert intake.check_against_repo(rec, ws, \"repo\") == []\n\n\ndef test_a_task_record_with_changed_tests_expects_their_after_hash(tmp_path, commit):\n    ws = layout(tmp_path / \"ws\", {**BASE, \"tests/test_new.py\": (NEW, False),\n                                   \"tests/test_old.py\": (OLD_NEW, False)})\n    rec = record(added={\"tests/test_new.py\": sha(NEW)},\n                 changed={\"tests/test_old.py\": {\"before\": sha(OLD), \"after\": sha(OLD_NEW),\n                                                \"removed\": [], \"modified\": []}})\n    assert intake.check_against_repo(rec, ws, \"repo\") == []\n\n\ndef test_a_changed_test_that_still_has_its_before_content_is_reported(tmp_path, commit):\n    ws = layout(tmp_path / \"ws\", BASE)                      # tests/test_old.py keeps the intake's version\n    rec = record(changed={\"tests/test_old.py\": {\"before\": sha(OLD), \"after\": sha(OLD_NEW),\n                                                \"removed\": [], \"modified\": []}})\n    assert intake.check_against_repo(rec, ws, \"repo\")\n\n\ndef test_executable_bits_are_still_compared_for_a_task_record(tmp_path, commit):\n    ws = layout(tmp_path / \"ws\", {**BASE, \"tests/test_new.py\": (NEW, False)})\n    (ws / \"pkg\" / \"mod.py\").chmod(0o755)                   # the commit has it as 100644\n    rec = record(added={\"tests/test_new.py\": sha(NEW)})\n    problems = intake.check_against_repo(rec, ws, \"repo\")\n    assert problems and any(\"executable\" in p for p in problems)\n\n\ndef test_an_approved_test_whose_content_differs_from_its_hash_is_reported(tmp_path, commit):\n    ws = layout(tmp_path / \"ws\", {**BASE, \"tests/test_new.py\": (b\"def test_new():\\n    assert 2 == 2\\n\", False)})\n    rec = record(added={\"tests/test_new.py\": sha(NEW)})\n    assert intake.check_against_repo(rec, ws, \"repo\")\n\n\n@pytest.mark.parametrize(\"change\", [\"modify\", \"add\", \"remove\", \"drop_approved\"])\ndef test_a_task_record_still_reports_a_change_beyond_the_approved_tests(tmp_path, commit, change):\n    files = {**BASE, \"tests/test_new.py\": (NEW, False)}\n    if change == \"modify\":\n        files[\"pkg/mod.py\"] = (b\"X = 2\\n\", False)\n    elif change == \"add\":\n        files[\"pkg/extra.py\"] = (b\"\", False)\n    elif change == \"remove\":\n        del files[\"tests/test_old.py\"]\n    else:\n        del files[\"tests/test_new.py\"]\n    ws = layout(tmp_path / \"ws\", files)\n    rec = record(added={\"tests/test_new.py\": sha(NEW)})\n    assert intake.check_against_repo(rec, ws, \"repo\")\n\n\n@pytest.mark.parametrize(\"kind\", [None, \"intake\"])\ndef test_an_intake_record_is_still_checked_against_the_tree_alone(tmp_path, commit, kind):\n    ws = layout(tmp_path / \"ws\", {**BASE, \"tests/test_new.py\": (NEW, False)})\n    rec = record(added={\"tests/test_new.py\": sha(NEW)})\n    rec.pop(\"kind\")\n    if kind is not None:\n        rec[\"kind\"] = kind\n    assert intake.check_against_repo(rec, ws, \"repo\")\n"
+    }
+  ],
+  "unverifiable": [
+    "scripts/intake_repo.py --check NAME --repo R and its output: no test runs the CLI, which needs git and the real repository, neither of which the sandbox has",
+    "that the records already in fixtures/intake/*.json with \"kind\": \"task\" now check clean against the Argus repository: that needs git and that repository, so it can only be confirmed by hand with scripts/intake_repo.py",
+    "that a symlink or a special file inside a task's workspace is still reported: the snapshot comparison covers it, but no test of this file builds one (the sandbox is posix-only for that)"
+  ]
+}
