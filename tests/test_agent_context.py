@@ -17,7 +17,8 @@ import test_attempt_usd as tau  # noqa: E402
 from test_attempt_usd import counter  # noqa: E402,F401  (the fixture)
 
 from codetask import status as st  # noqa: E402
-from codetask.agent import CONTEXT_NOTICE, feedback_from, task_prompt  # noqa: E402
+from codetask import agent as ca  # noqa: E402
+from codetask.agent import feedback_from, task_prompt  # noqa: E402
 from codetask.run import run_code_task  # noqa: E402
 from models.fake import CallableChatModel, StrictScriptedChatModel  # noqa: E402
 from runner import load_config  # noqa: E402
@@ -144,7 +145,7 @@ def test_one_notice_when_the_input_nears_its_limit_and_nothing_was_written(tmp_p
     model = StrictScriptedChatModel(script=tau.reads(4) + [tau.WRITE, tau.FINISH])
     r, d = go(tmp_path, model, config(20000, notice=0.45))
     assert r["status"] == st.DONE and notice_text(model) == [4, 5]          # shown from step 4 on, added once
-    assert CONTEXT_NOTICE.format(p=50, est=10000, max=20000) in text(model.calls[4])
+    assert ca.CONTEXT_NOTICE.format(p=50, est=10000, max=20000) in text(model.calls[4])
     assert text(model.calls[5]).count("Context: the next call is about") == 1
     assert [e["shown"] for e in tau.events(d, "context_notice")] == [False, False, False, True]
 
