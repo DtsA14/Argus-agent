@@ -1,0 +1,44 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_symbols": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_Str": "pass",
+    "test_Symbol": "pass",
+    "test_Dummy": "pass",
+    "test_Dummy_force_dummy_index": "pass",
+    "test_lt_gt": "pass",
+    "test_no_len": "pass",
+    "test_ineq_unequal": "pass",
+    "test_Wild_properties": "pass",
+    "test_symbols_become_functions_issue_3539": "pass",
+    "test_unicode": "pass",
+    "test_uniquely_named_symbol_and_Symbol": "pass"
+  },
+  "patch_sha256": "7a44a85f0aae405760f05096527d3acda65859c3101e03a48b9b7746b2b0d4b6",
+  "test_patch_sha256": "c5ac6c22eacf1b7855a4e6613389dfee60aee2da07cb12cb469b68b107ea155c",
+  "base_commit": "832c24fec1046eaa544a4cab4c69e3af3e651759",
+  "environment": "sympy",
+  "image": "sha256:de306e046ab6347cbd56ffb62dd75fcf71c51999c5a5fbf60117e36bd11fe412",
+  "test_files": [
+    "sympy/core/tests/test_symbol.py"
+  ],
+  "run": {
+    "tests_run": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 0
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/core/tests/test_symbols_cls.py"
+    ],
+    "status": "pass",
+    "tests_run": 4,
+    "failures": 0,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}
