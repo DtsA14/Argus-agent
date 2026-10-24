@@ -1,0 +1,92 @@
+diff --git a/sympy/combinatorics/homomorphisms.py b/sympy/combinatorics/homomorphisms.py
+index bb7bdf32baa7a0cda6c0fc048332f283cbbd13a2..4b8f5728e5304ef07f5569b06d7ae6ebccb7fd63 100644
+--- a/sympy/combinatorics/homomorphisms.py
++++ b/sympy/combinatorics/homomorphisms.py
+@@ -309,41 +309,27 @@ def homomorphism(domain, codomain, gens, images=(), check=True):
+ 
+ def _check_homomorphism(domain, codomain, images):
+     if hasattr(domain, 'relators'):
++        gens = domain.generators
+         rels = domain.relators
+     else:
+         gens = domain.presentation().generators
+         rels = domain.presentation().relators
+     identity = codomain.identity
+ 
++    # Map the symbols of the generators of the presentation to their
++    # images in the codomain. The generators of the presentation of a
++    # permutation group correspond, in order, to the generators of the
++    # group itself, while for an FpGroup or a FreeGroup they are the
++    # very generators used in the relators.
++    gen_images = {}
++    for gen, g in zip(gens, domain.generators):
++        gen_images[gen.array_form[0][0]] = images[g] if g in images else identity
++
+     def _image(r):
+-        if r.is_identity:
+-            return identity
+-        else:
+-            w = identity
+-            r_arr = r.array_form
+-            i = 0
+-            j = 0
+-            # i is the index for r and j is for
+-            # r_arr. r_arr[j] is the tuple (sym, p)
+-            # where sym is the generator symbol
+-            # and p is the power to which it is
+-            # raised while r[i] is a generator
+-            # (not just its symbol) or the inverse of
+-            # a generator - hence the need for
+-            # both indices
+-            while i < len(r):
+-                power = r_arr[j][1]
+-                if isinstance(domain, PermutationGroup) and r[i] in gens:
+-                    s = domain.generators[gens.index(r[i])]
+-                else:
+-                    s = r[i]
+-                if s in images:
+-                    w = w*images[s]**power
+-                elif s**-1 in images:
+-                    w = w*images[s**-1]**power
+-                i += abs(power)
+-                j += 1
+-            return w
++        w = identity
++        for symbol, power in r.array_form:
++            w = w*gen_images[symbol]**power
++        return w
+ 
+     for r in rels:
+         if isinstance(codomain, FpGroup):
+diff --git a/sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py b/sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..605b074092e6df04a8438a5c100182aa2df85207
+--- /dev/null
++++ b/sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py
+@@ -0,0 +1,26 @@
++from sympy.combinatorics.named_groups import DihedralGroup
++from sympy.combinatorics.homomorphisms import (
++    GroupHomomorphism, homomorphism, _check_homomorphism)
++
++
++def test_check_homomorphism_permutation_group_identity():
++    # Sending each generator of D3 to itself is a homomorphism, so the
++    # check has to accept it.  The relators of a permutation group's
++    # presentation contain inverted generators; those used to be dropped
++    # silently by the image computation of ``_check_homomorphism``.
++    D3 = DihedralGroup(3)
++    images = dict(zip(D3.generators, D3.generators))
++    assert _check_homomorphism(D3, D3, images)
++
++
++def test_homomorphism_permutation_group_onto_itself():
++    D3 = DihedralGroup(3)
++    failure = None
++    try:
++        T = homomorphism(D3, D3, D3.generators, D3.generators)
++    except ValueError as exc:
++        failure = exc
++    assert failure is None, failure
++    assert isinstance(T, GroupHomomorphism)
++    for g in D3.generators:
++        assert T(g) == g

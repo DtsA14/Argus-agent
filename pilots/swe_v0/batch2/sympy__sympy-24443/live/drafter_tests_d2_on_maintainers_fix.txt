@@ -1,0 +1,41 @@
+writable: ['sympy/combinatorics/homomorphisms.py']
+validation target sympy -m pytest sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py | required: ['sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py::test_check_homomorphism_permutation_group_identity', 'sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py::test_homomorphism_permutation_group_onto_itself']
+validation regression sympy -m pytest sympy/combinatorics/tests/test_homomorphisms.py | required: ['sympy/combinatorics/tests/test_homomorphisms.py::test_homomorphism', 'sympy/combinatorics/tests/test_homomorphisms.py::test_isomorphisms', 'sympy/combinatorics/tests/test_homomorphisms.py::test_check_homomorphism']
+---- WHY
+sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py:13: in test_check_homomorphism_permutation_group_identity
+E   assert False
+E    +  where False = _check_homomorphism(PermutationGroup([\n    (0 1 2),\n    (0 2)]), PermutationGroup([\n    (0 1 2),\n    (0 2)]), {Permutation(0, 1, 2)...
+sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py:23: in test_homomorphism_permutation_group_onto_itself
+E   AssertionError: ValueError('The given images do not define a homomorphism')
+============================== 2 failed in Xs ===============================
+----
+changed_tests: []
+==== sympy/combinatorics/tests/test_homomorphisms_permutation_groups.py
+from sympy.combinatorics.named_groups import DihedralGroup
+from sympy.combinatorics.homomorphisms import (
+    GroupHomomorphism, homomorphism, _check_homomorphism)
+
+
+def test_check_homomorphism_permutation_group_identity():
+    # Sending each generator of D3 to itself is a homomorphism, so the
+    # check has to accept it.  The relators of a permutation group's
+    # presentation contain inverted generators; those used to be dropped
+    # silently by the image computation of ``_check_homomorphism``.
+    D3 = DihedralGroup(3)
+    images = dict(zip(D3.generators, D3.generators))
+    assert _check_homomorphism(D3, D3, images)
+
+
+def test_homomorphism_permutation_group_onto_itself():
+    D3 = DihedralGroup(3)
+    failure = None
+    try:
+        T = homomorphism(D3, D3, D3.generators, D3.generators)
+    except ValueError as exc:
+        failure = exc
+    assert failure is None, failure
+    assert isinstance(T, GroupHomomorphism)
+    for g in D3.generators:
+        assert T(g) == g
+
+DRAFTER TESTS ON THE MAINTAINERS' FIX: pass {'tests_run': 2, 'failures': 0, 'errors': 0}  []
