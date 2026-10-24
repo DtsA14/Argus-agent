@@ -1,0 +1,41 @@
+diff --git a/sympy/printing/pycode.py b/sympy/printing/pycode.py
+index 3a72ab606c89b2ba6c2efd72fd216aaa9fdf5396..1c7e89ce23e65f3d232aa24fcf269f8ed461810c 100644
+--- a/sympy/printing/pycode.py
++++ b/sympy/printing/pycode.py
+@@ -440,6 +440,12 @@ def _print_Indexed(self, expr):
+     def _print_Pow(self, expr, rational=False):
+         return self._hprint_Pow(expr, rational=rational)
+ 
++    def _print_Min(self, expr):
++        return 'min({})'.format(', '.join(self._print(arg) for arg in expr.args))
++
++    def _print_Max(self, expr):
++        return 'max({})'.format(', '.join(self._print(arg) for arg in expr.args))
++
+     def _print_Rational(self, expr):
+         return '{}/{}'.format(expr.p, expr.q)
+ 
+diff --git a/sympy/printing/tests/test_pycode_minmax.py b/sympy/printing/tests/test_pycode_minmax.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb79c7bcfbe3aabb3f93eadc05d636ba7c745457
+--- /dev/null
++++ b/sympy/printing/tests/test_pycode_minmax.py
+@@ -0,0 +1,18 @@
++from sympy import Max, Min, symbols
++from sympy.printing.pycode import PythonCodePrinter, pycode
++
++x, y, z = symbols('x y z')
++
++
++def test_pycode_min():
++    assert pycode(Min(x, y)) == 'min(x, y)'
++
++
++def test_pycode_max():
++    assert pycode(Max(x, y)) == 'max(x, y)'
++
++
++def test_pycode_min_max_three_args():
++    prntr = PythonCodePrinter()
++    assert prntr.doprint(Min(x, y, z)) == 'min(x, y, z)'
++    assert prntr.doprint(Max(x, y, z)) == 'max(x, y, z)'

@@ -1,0 +1,71 @@
+writable: ['sympy/polys/rings.py']
+validation target sympy -m pytest sympy/polys/tests/test_rings_as_expr.py | required: ['sympy/polys/tests/test_rings_as_expr.py::test_as_expr_uses_given_symbols', 'sympy/polys/tests/test_rings_as_expr.py::test_as_expr_given_symbols_univariate', 'sympy/polys/tests/test_rings_as_expr.py::test_as_expr_given_symbols_have_no_ring_symbols']
+validation regression_rings sympy -m pytest sympy/polys/tests/test_rings.py | required: ['sympy/polys/tests/test_rings.py::test_PolyElement_as_expr']
+validation regression_fields sympy -m pytest sympy/polys/tests/test_fields.py::test_FracElement_as_expr | required: ['sympy/polys/tests/test_fields.py::test_FracElement_as_expr']
+---- WHY
+sympy/polys/tests/test_rings_as_expr.py:15: in test_as_expr_uses_given_symbols
+E   assert 3*x**2*y - x*y*z + 7*z**3 + 1 == (((((3 * (u ** 2)) * v) - ((u * v) * w)) + (7 * (w ** 3))) + 1)
+E    +  where 3*x**2*y - x*y*z + 7*z**3 + 1 = as_expr(u, v, w)
+E    +    where as_expr = 3*x**2*y - x*y*z + 7*z**3 + 1.as_expr
+sympy/polys/tests/test_rings_as_expr.py:24: in test_as_expr_given_symbols_univariate
+E   assert x**3 - 2*x + 4 == (((t ** 3) - (2 * t)) + 4)
+E    +  where x**3 - 2*x + 4 = as_expr(t)
+E    +    where as_expr = x**3 - 2*x + 4.as_expr
+sympy/polys/tests/test_rings_as_expr.py:34: in test_as_expr_given_symbols_have_no_ring_symbols
+E   assert x**2/2 + x*y - y**2 == ((((a ** 2) / 2) + (a * b)) - (b ** 2))
+========================= 3 failed, 1 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/polys/tests/test_rings_as_expr.py
+"""PolyElement.as_expr must convert with the symbols it is given. """
+
+from sympy.core.symbol import symbols
+from sympy.polys.domains import ZZ, QQ
+from sympy.polys.rings import ring
+from sympy.testing.pytest import raises
+
+
+def test_as_expr_uses_given_symbols():
+    R, x, y, z = ring("x,y,z", ZZ)
+    f = 3*x**2*y - x*y*z + 7*z**3 + 1
+
+    u, v, w = symbols("u,v,w")
+
+    assert f.as_expr(u, v, w) == 3*u**2*v - u*v*w + 7*w**3 + 1
+
+
+def test_as_expr_given_symbols_univariate():
+    R, x = ring("x", ZZ)
+    f = x**3 - 2*x + 4
+
+    t = symbols("t")
+
+    assert f.as_expr(t) == t**3 - 2*t + 4
+
+
+def test_as_expr_given_symbols_have_no_ring_symbols():
+    R, x, y = ring("x,y", QQ)
+    f = x**2/2 + x*y - y**2
+
+    a, b = symbols("a,b")
+    expr = f.as_expr(a, b)
+
+    assert expr == a**2/2 + a*b - b**2
+    assert expr.free_symbols == {a, b}
+
+
+def test_as_expr_default_symbols_and_wrong_count():
+    R, x, y, z = ring("x,y,z", ZZ)
+    f = 3*x**2*y - x*y*z + 7*z**3 + 1
+
+    X, Y, Z = symbols("x,y,z")
+    g = 3*X**2*Y - X*Y*Z + 7*Z**3 + 1
+
+    assert f.as_expr() == g
+    assert f.as_expr(X, Y, Z) == g
+
+    u, v, w, t = symbols("u,v,w,t")
+    raises(ValueError, lambda: f.as_expr(u, v))
+    raises(ValueError, lambda: f.as_expr(u, v, w, t))
+
+DRAFTER TESTS ON THE MAINTAINERS' FIX: pass {'tests_run': 4, 'failures': 0, 'errors': 0}  []

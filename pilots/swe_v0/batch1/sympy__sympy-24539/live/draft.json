@@ -1,0 +1,101 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/polys/rings.py"
+    ],
+    "steps": [
+      "In PolyElement.as_expr, raise the ValueError only when symbols were given and their count differs from ring.ngens.",
+      "Fall back to self.ring.symbols only when no symbols were passed (replace the `else:` branch that currently always overwrites symbols with an `if not symbols:` branch).",
+      "Keep the existing call expr_from_dict(self.as_expr_dict(), *symbols), which already zips the given generators with the monomials, so no other change is needed.",
+      "Optionally note in the docstring that the given symbols are used for the conversion."
+    ],
+    "risks": [
+      "Checking the count before assigning the default, otherwise the given symbols are still clobbered.",
+      "Using `symbols = symbols or self.ring.symbols` style code that mishandles an empty argument list.",
+      "Breaking FracElement.as_expr in polys/fields.py, which forwards *symbols to numer.as_expr/denom.as_expr.",
+      "Changing the error message text that existing callers/tests do not depend on, or dropping the ValueError for a wrong count."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/polys/rings.py"
+      ],
+      "protected": [
+        "sympy/polys/tests/**",
+        "sympy/polys/fields.py",
+        "sympy/polys/polyutils.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/polys/tests/test_rings_as_expr.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 4,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/polys/tests/test_rings_as_expr.py::test_as_expr_uses_given_symbols",
+          "sympy/polys/tests/test_rings_as_expr.py::test_as_expr_given_symbols_univariate",
+          "sympy/polys/tests/test_rings_as_expr.py::test_as_expr_given_symbols_have_no_ring_symbols"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression_rings",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/polys/tests/test_rings.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 50,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/polys/tests/test_rings.py::test_PolyElement_as_expr"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression_fields",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/polys/tests/test_fields.py::test_FracElement_as_expr"
+        ],
+        "timeout_s": 300,
+        "min_tests": 1,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/polys/tests/test_fields.py::test_FracElement_as_expr"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/polys/tests/test_rings_as_expr.py",
+      "content": "\"\"\"PolyElement.as_expr must convert with the symbols it is given. \"\"\"\n\nfrom sympy.core.symbol import symbols\nfrom sympy.polys.domains import ZZ, QQ\nfrom sympy.polys.rings import ring\nfrom sympy.testing.pytest import raises\n\n\ndef test_as_expr_uses_given_symbols():\n    R, x, y, z = ring(\"x,y,z\", ZZ)\n    f = 3*x**2*y - x*y*z + 7*z**3 + 1\n\n    u, v, w = symbols(\"u,v,w\")\n\n    assert f.as_expr(u, v, w) == 3*u**2*v - u*v*w + 7*w**3 + 1\n\n\ndef test_as_expr_given_symbols_univariate():\n    R, x = ring(\"x\", ZZ)\n    f = x**3 - 2*x + 4\n\n    t = symbols(\"t\")\n\n    assert f.as_expr(t) == t**3 - 2*t + 4\n\n\ndef test_as_expr_given_symbols_have_no_ring_symbols():\n    R, x, y = ring(\"x,y\", QQ)\n    f = x**2/2 + x*y - y**2\n\n    a, b = symbols(\"a,b\")\n    expr = f.as_expr(a, b)\n\n    assert expr == a**2/2 + a*b - b**2\n    assert expr.free_symbols == {a, b}\n\n\ndef test_as_expr_default_symbols_and_wrong_count():\n    R, x, y, z = ring(\"x,y,z\", ZZ)\n    f = 3*x**2*y - x*y*z + 7*z**3 + 1\n\n    X, Y, Z = symbols(\"x,y,z\")\n    g = 3*X**2*Y - X*Y*Z + 7*Z**3 + 1\n\n    assert f.as_expr() == g\n    assert f.as_expr(X, Y, Z) == g\n\n    u, v, w, t = symbols(\"u,v,w,t\")\n    raises(ValueError, lambda: f.as_expr(u, v))\n    raises(ValueError, lambda: f.as_expr(u, v, w, t))\n"
+    }
+  ],
+  "unverifiable": [
+    "The exact wording of the ValueError raised for a wrong number of symbols is not asserted by any test (only that ValueError is raised).",
+    "Any docstring or example added to PolyElement.as_expr is not checked by a test.",
+    "Whether FracElement.as_expr also honours user supplied symbols is not asserted by a new test; it delegates to PolyElement.as_expr, so it changes as a side effect only."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_PythonCodePrinter": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_PythonCodePrinter_standard": "pass",
+    "test_MpmathPrinter": "pass",
+    "test_NumPyPrinter": "pass",
+    "test_SciPyPrinter": "pass",
+    "test_pycode_reserved_words": "pass",
+    "test_sqrt": "pass",
+    "test_frac": "pass",
+    "test_printmethod": "pass",
+    "test_codegen_ast_nodes": "pass",
+    "test_issue_14283": "pass",
+    "test_NumPyPrinter_print_seq": "pass",
+    "test_issue_16535_16536": "pass",
+    "test_Integral": "pass",
+    "test_fresnel_integrals": "pass",
+    "test_beta": "pass",
+    "test_airy": "pass",
+    "test_airy_prime": "pass"
+  },
+  "patch_sha256": "3768e24f8504204b8d213b1aab65c74fc704ab2cc854e6ebfe3830e7300b60c8",
+  "test_patch_sha256": "95e580cdfb748ead82b4e87d89ac8a8195e4dc6abded0f046028be5191b867f5",
+  "base_commit": "c4e836cdf73fc6aa7bab6a86719a0f08861ffb1d",
+  "environment": "sympy",
+  "image": "sha256:de306e046ab6347cbd56ffb62dd75fcf71c51999c5a5fbf60117e36bd11fe412",
+  "test_files": [
+    "sympy/printing/tests/test_pycode.py"
+  ],
+  "run": {
+    "tests_run": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "exit_code": 0
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/printing/tests/test_pycode_minmax.py"
+    ],
+    "status": "pass",
+    "tests_run": 3,
+    "failures": 0,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}

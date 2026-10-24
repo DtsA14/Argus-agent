@@ -1,0 +1,44 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_issue_22684": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_point": "pass",
+    "test_point3D": "pass",
+    "test_Point2D": "pass",
+    "test_issue_9214": "pass",
+    "test_issue_11617": "pass",
+    "test_transform": "pass",
+    "test_concyclic_doctest_bug": "pass",
+    "test_arguments": "pass",
+    "test_unit": "pass",
+    "test_dot": "pass",
+    "test__normalize_dimension": "pass"
+  },
+  "patch_sha256": "5acb75cb04ebb8fb778515f84c9e2c9e0afcef7f61f4f1ff38cdd22200c7e675",
+  "test_patch_sha256": "f16fe70f83de6d58be622f2fb95895585b2f390bbc423b4e0f535652f4eae2ca",
+  "base_commit": "3ff4717b6aef6086e78f01cdfa06f64ae23aed7e",
+  "environment": "sympy",
+  "image": "sha256:de306e046ab6347cbd56ffb62dd75fcf71c51999c5a5fbf60117e36bd11fe412",
+  "test_files": [
+    "sympy/geometry/tests/test_point.py"
+  ],
+  "run": {
+    "tests_run": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 0
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/geometry/tests/test_point_evaluate_false.py"
+    ],
+    "status": "pass",
+    "tests_run": 2,
+    "failures": 0,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}

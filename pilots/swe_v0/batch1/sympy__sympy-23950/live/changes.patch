@@ -1,0 +1,97 @@
+diff --git a/sympy/sets/contains.py b/sympy/sets/contains.py
+index b2d4268d1288515b53ae51cf24ef65714c92c32d..1486b01160a918e4e15b5cb6bd1491f2f535b6ef 100644
+--- a/sympy/sets/contains.py
++++ b/sympy/sets/contains.py
+@@ -45,4 +45,20 @@ def binary_symbols(self):
+             isinstance(i, (Eq, Ne))])
+ 
+     def as_set(self):
+-        raise NotImplementedError()
++        """
++        Rewrite logic operators and relationals into sets.
++
++        The condition ``Contains(x, S)`` is a Boolean expression, so its
++        ``as_set`` method returns the set described by the condition, namely
++        the set ``S`` the element has to belong to (and not a ``Contains``
++        object, which is not a set).
++
++        Examples
++        ========
++
++        >>> from sympy import Contains, Reals, Symbol
++        >>> x = Symbol('x')
++        >>> Contains(x, Reals).as_set()
++        Reals
++        """
++        return self.args[1]
+diff --git a/sympy/sets/tests/test_contains.py b/sympy/sets/tests/test_contains.py
+index 1973fed19c4e8ed62aef77d07f5848f339780ffc..a79769fc0d86d2a5f00a98bec9359d1145a0bff9 100644
+--- a/sympy/sets/tests/test_contains.py
++++ b/sympy/sets/tests/test_contains.py
+@@ -42,9 +42,13 @@ def test_as_set():
+     x = Symbol('x')
+     y = Symbol('y')
+     # Contains is a BooleanFunction whose value depends on an arg's
+-    # containment in a Set -- rewriting as a Set is not yet implemented
+-    raises(NotImplementedError, lambda:
+-           Contains(x, FiniteSet(y)).as_set())
++    # containment in a Set; as_set must give back that Set -- never a
++    # Boolean and never an unimplemented error
++    try:
++        result = Contains(x, FiniteSet(y)).as_set()
++    except NotImplementedError:
++        result = None
++    assert result == FiniteSet(y)
+ 
+ def test_type_error():
+     # Pass in a parameter not of type "set"
+diff --git a/sympy/sets/tests/test_contains_as_set.py b/sympy/sets/tests/test_contains_as_set.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b6fb9d2571c588e68eac0fa8fdf894ba20a6ec0d
+--- /dev/null
++++ b/sympy/sets/tests/test_contains_as_set.py
+@@ -0,0 +1,44 @@
++"""Tests for ``Contains.as_set``.
++
++``Contains`` is a Boolean function: ``Contains(x, S)`` is a truth value, not a
++set, so its ``as_set`` method must return the *set* described by the
++condition (the set the element has to belong to).  It must never return a
++``Contains`` object, because code that consumes ``as_set`` output (for
++example :meth:`Piecewise.as_expr_set_pairs`) expects a set.
++"""
++
++from sympy import Contains, FiniteSet, Piecewise, S, Set, Symbol
++
++
++def _as_set(expr):
++    """Return ``expr.as_set()``, or ``None`` when it is not implemented."""
++    try:
++        return expr.as_set()
++    except NotImplementedError:
++        return None
++
++
++def test_contains_as_set_returns_the_set():
++    x = Symbol('x')
++    result = _as_set(Contains(x, S.Reals))
++    assert isinstance(result, Set)
++    assert result == S.Reals
++
++
++def test_contains_as_set_finiteset():
++    x = Symbol('x')
++    y = Symbol('y')
++    assert _as_set(Contains(x, FiniteSet(y))) == FiniteSet(y)
++
++
++def test_piecewise_with_contains_condition():
++    # calling as_set on the (Boolean) condition of a Piecewise must give a
++    # set, otherwise as_expr_set_pairs cannot compute the intervals
++    x = Symbol('x')
++    p = Piecewise((6, Contains(x, S.Reals)), (7, True))
++    assert _as_set(p.args[0].cond) == S.Reals
++    try:
++        pairs = p.as_expr_set_pairs()
++    except NotImplementedError:
++        pairs = None
++    assert pairs == [(6, S.Reals)]

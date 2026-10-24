@@ -1,0 +1,78 @@
+diff --git a/sympy/physics/units/tests/test_collect_factor_and_dimension.py b/sympy/physics/units/tests/test_collect_factor_and_dimension.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..2c4a0b52c29e84ce2304d35aa9611c95deabbcad
+--- /dev/null
++++ b/sympy/physics/units/tests/test_collect_factor_and_dimension.py
+@@ -0,0 +1,59 @@
++"""UnitSystem._collect_factor_and_dimension must accept an addition whose
++addends have dimensions that are equivalent without being structurally the
++same object, e.g. ``velocity`` and ``acceleration*time``.
++"""
++
++from sympy.physics.units import (
++    Dimension, acceleration, length, meter, second, time, velocity)
++from sympy.physics.units.quantities import Quantity
++from sympy.physics.units.systems.si import SI
++from sympy.testing.pytest import raises
++
++
++def _collect(expr):
++    # Return the (factor, dimension) pair, or the exception that was raised
++    # instead of letting it escape: the bug shows up as a spurious ValueError.
++    try:
++        return SI._collect_factor_and_dimension(expr)
++    except ValueError as exc:
++        return exc
++
++
++def _quantity(name, dimension, scale_factor):
++    q = Quantity(name)
++    SI.set_quantity_dimension(q, dimension)
++    SI.set_quantity_scale_factor(q, scale_factor)
++    return q
++
++
++def test_add_of_equivalent_dimensions():
++    v1 = _quantity('cfd_v1', velocity, 2*meter/second)
++    a1 = _quantity('cfd_a1', acceleration, -9.8*meter/second**2)
++    t1 = _quantity('cfd_t1', time, 5*second)
++
++    result = _collect(a1*t1 + v1)
++    assert not isinstance(result, ValueError), result
++
++    factor, dim = result
++    assert isinstance(dim, Dimension)
++    # -9.8*5 + 2
++    assert abs(factor - (-47)) < 1e-10
++    assert SI.get_dimension_system().equivalent_dims(dim, velocity)
++
++
++def test_add_of_equivalent_dimensions_with_units():
++    v2 = _quantity('cfd_v2', velocity, 3*meter/second)
++
++    result = _collect(v2 + 5*meter/second)
++    assert not isinstance(result, ValueError), result
++
++    factor, dim = result
++    assert factor == 8
++    assert SI.get_dimension_system().equivalent_dims(dim, velocity)
++
++
++def test_add_of_incompatible_dimensions_raises():
++    u1 = _quantity('cfd_u1', length, 10*meter)
++    t2 = _quantity('cfd_t2', time, 2*second)
++
++    raises(ValueError, lambda: SI._collect_factor_and_dimension(u1 + t2))
+diff --git a/sympy/physics/units/unitsystem.py b/sympy/physics/units/unitsystem.py
+index a436880c4b3c35db7d0559eee590970a3e21990e..5705c821c217f781717f9dd5cad6f3c9c77b145f 100644
+--- a/sympy/physics/units/unitsystem.py
++++ b/sympy/physics/units/unitsystem.py
+@@ -175,7 +175,7 @@ def _collect_factor_and_dimension(self, expr):
+             for addend in expr.args[1:]:
+                 addend_factor, addend_dim = \
+                     self._collect_factor_and_dimension(addend)
+-                if dim != addend_dim:
++                if not self.get_dimension_system().equivalent_dims(dim, addend_dim):
+                     raise ValueError(
+                         'Dimension of "{}" is {}, '
+                         'but it should be {}'.format(

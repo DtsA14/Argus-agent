@@ -1,0 +1,76 @@
+diff --git a/sympy/polys/rings.py b/sympy/polys/rings.py
+index 12bd2fc920aac3bdbc7c84237208eec77a22e7ff..1430cbbe60e77d3d4160b95c8a4fb2d4f7e95174 100644
+--- a/sympy/polys/rings.py
++++ b/sympy/polys/rings.py
+@@ -616,10 +616,12 @@ def set_ring(self, new_ring):
+             return new_ring.from_dict(self, self.ring.domain)
+ 
+     def as_expr(self, *symbols):
+-        if symbols and len(symbols) != self.ring.ngens:
+-            raise ValueError("not enough symbols, expected %s got %s" % (self.ring.ngens, len(symbols)))
+-        else:
++        if not symbols:
+             symbols = self.ring.symbols
++        elif len(symbols) != self.ring.ngens:
++            raise ValueError(
++                "wrong number of symbols, expected %s got %s" % (
++                    self.ring.ngens, len(symbols)))
+ 
+         return expr_from_dict(self.as_expr_dict(), *symbols)
+ 
+diff --git a/sympy/polys/tests/test_rings_as_expr.py b/sympy/polys/tests/test_rings_as_expr.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..a82d644d7933d231648ef6cea1b0e6624bba037b
+--- /dev/null
++++ b/sympy/polys/tests/test_rings_as_expr.py
+@@ -0,0 +1,50 @@
++"""PolyElement.as_expr must convert with the symbols it is given. """
++
++from sympy.core.symbol import symbols
++from sympy.polys.domains import ZZ, QQ
++from sympy.polys.rings import ring
++from sympy.testing.pytest import raises
++
++
++def test_as_expr_uses_given_symbols():
++    R, x, y, z = ring("x,y,z", ZZ)
++    f = 3*x**2*y - x*y*z + 7*z**3 + 1
++
++    u, v, w = symbols("u,v,w")
++
++    assert f.as_expr(u, v, w) == 3*u**2*v - u*v*w + 7*w**3 + 1
++
++
++def test_as_expr_given_symbols_univariate():
++    R, x = ring("x", ZZ)
++    f = x**3 - 2*x + 4
++
++    t = symbols("t")
++
++    assert f.as_expr(t) == t**3 - 2*t + 4
++
++
++def test_as_expr_given_symbols_have_no_ring_symbols():
++    R, x, y = ring("x,y", QQ)
++    f = x**2/2 + x*y - y**2
++
++    a, b = symbols("a,b")
++    expr = f.as_expr(a, b)
++
++    assert expr == a**2/2 + a*b - b**2
++    assert expr.free_symbols == {a, b}
++
++
++def test_as_expr_default_symbols_and_wrong_count():
++    R, x, y, z = ring("x,y,z", ZZ)
++    f = 3*x**2*y - x*y*z + 7*z**3 + 1
++
++    X, Y, Z = symbols("x,y,z")
++    g = 3*X**2*Y - X*Y*Z + 7*Z**3 + 1
++
++    assert f.as_expr() == g
++    assert f.as_expr(X, Y, Z) == g
++
++    u, v, w, t = symbols("u,v,w,t")
++    raises(ValueError, lambda: f.as_expr(u, v))
++    raises(ValueError, lambda: f.as_expr(u, v, w, t))
