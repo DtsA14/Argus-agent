@@ -671,11 +671,12 @@ def test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_o
     prompt = model.calls[0]["messages"][1].content
     c = load_config()
     assert "budget_profile, required" in prompt and c["drafter"]["agent_profiles"] == ["default", "large_usd"]
-    for name in c["drafter"]["agent_profiles"]:
-        p = c["code_task"]["profiles"][name]
-        assert f"  - {name}: " in prompt and f"output up to {p['max_output_tokens']:,} per call" in prompt
+    # SPEC_AGENT_BUDGET_GAPS 2.3: the profiles as the configured coder (DeepSeek) runs them, not the raw profile numbers
+    assert c["roles"]["coder"]["model"] == "deepseek:deepseek-flash"
+    for name, out in (("default", 4096), ("large_usd", 32000)):
+        assert f"  - {name}: " in prompt and f"output up to {out:,} per call" in prompt
     assert "  - large: " not in prompt                                         # not offered (router pilot #1)
-    assert "$0.45 per attempt, input up to 40,000 per call" in prompt                 # large_usd, in USD
+    assert "$0.45 per attempt, input up to 60,000 per call" in prompt                 # large_usd, in USD
     assert "every file it has read is paid again at every later step" in prompt
     assert json.loads((d / "draft.json").read_text())["contract"]["budget_profile"] == "large_usd"
     assert "Budget profile for the agent: `large_usd`" in (d / "DRAFT_REVIEW.md").read_text()
@@ -796,3 +797,39 @@ def test_the_steps_left_note_survives_a_resume(root, tmp_path):
 def test_the_drafter_reads_up_to_200000_input_tokens_per_call():
     c = load_config()
     assert dt.drafter_settings(dict(c, budget=dict(c["budget"], max_usd=0.75)))["max_input_tokens"] == 200000
+
+
+# ---- SPEC_AGENT_BUDGET_GAPS 2.2, 2.3: the drafter's output per model, and the profiles it is told ---------------------
+
+def test_deepseek_drafters_get_a_larger_reply_and_others_keep_their_own():
+    from codetask.drafter import with_drafter_output
+    c = load_config()
+    assert c["drafter"]["max_output_tokens_by_model"] == {"deepseek:deepseek-flash": 32000,
+                                                          "deepseek:deepseek-v4-pro": 32000}
+    assert with_drafter_output(c)["roles"]["drafter"]["max_output_tokens"] == 32000
+    c["roles"]["drafter"]["model"] = "anthropic:claude-sonnet-5-5"
+    assert with_drafter_output(c)["roles"]["drafter"]["max_output_tokens"] == c["roles"]["drafter"]["max_output_tokens"]
+
+
+def test_the_drafter_run_uses_and_records_the_output_of_its_model(root, tmp_path):
+    r, model, d = run(root, tmp_path, [SUBMIT], config=cfg(max_output_tokens_by_model={"fake:scripted": 20000}))
+    evs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()]
+    assert [e["max_output_tokens"] for e in evs if e["event"] == "drafter_policy"] == [20000]
+    assert {e["max_tokens"] for e in evs if e["event"] == "llm_call_started"} == {20000}     # $0.10 fits $0.40
+
+
+def test_the_drafter_is_told_the_profiles_as_the_coder_model_runs_them(tmp_path):
+    from codetask import drafter as cdr
+    c = load_config()
+    eff = cdr.effective_profiles(c)                                        # coder: DeepSeek
+    assert (eff["large_usd"]["max_input_tokens"], eff["large_usd"]["max_output_tokens"]) == (60000, 32000)
+    assert eff["default"]["max_output_tokens"] == 4096 and "max_input_tokens" not in eff["default"]
+    c["roles"]["coder"]["model"] = "anthropic:claude-sonnet-5-5"
+    eff_s = cdr.effective_profiles(c)
+    assert (eff_s["large_usd"]["max_input_tokens"], eff_s["large_usd"]["max_output_tokens"]) == (40000, 8192)
+    # a 20,000-token file without edit_file: rewritable in one DeepSeek reply, not in one Sonnet reply
+    (tmp_path / "big.py").write_text("x" * (20000 * cdr.BYTES_PER_TOKEN))
+    draft = {"contract": {"tools": [], "budget_profile": "large_usd",
+                          "scope": {"writable": ["big.py"], "protected": []}}}
+    assert cdr.rewrite_problems(draft, {"profile_info": eff}, tmp_path) == []
+    assert cdr.rewrite_problems(draft, {"profile_info": eff_s}, tmp_path)

@@ -160,11 +160,18 @@ TRUNCATED_HINT = ("Its last reply was cut at the output limit before any of its 
                   "few lines per call) instead of writing a whole file, and run the validations after each step.")
 
 
+MAX_STEPS_HINT = ("It used all of its steps without changing any file: it kept searching and reading. Make a first change "
+                  "early (within a few steps) with EditFile on the most likely place, run the validations, and refine "
+                  "from their output.")
+
+
 def _context_hint(s, scope, kept):
     """For an attempt that ran out of context without changing a file: what it read, and to write first. For one whose
     reply was cut at the output limit (SPEC_AGENT_OUTPUT_BUDGET 2.2): to keep replies short and edit in small steps."""
     if s.get("end") == "output_truncated":
         return [TRUNCATED_HINT]
+    if s.get("end") == "max_steps" and s.get("wrote") is False:      # SPEC_AGENT_BUDGET_GAPS 2.1
+        return [MAX_STEPS_HINT + (" The workspace is kept between attempts." if kept else "")]
     if s.get("end") != "context_limit" or s.get("wrote") is not False:
         return []
     read = s.get("read") or []

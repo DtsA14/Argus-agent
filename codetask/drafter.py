@@ -448,6 +448,33 @@ def agent_profiles(cfg):
     return sorted(known) if wanted is None else [p for p in wanted if p in known]
 
 
+def with_drafter_output(cfg):
+    """SPEC_AGENT_BUDGET_GAPS 2.2: the drafter role's output cap per model (a thinking model's reasoning shares it). The
+    drafter's attempt is always reserved in USD, so each call's cap is still lowered to what fits."""
+    role = cfg["drafter"]["role"]
+    model = cfg["roles"][role]["model"]
+    by_model = cfg["drafter"].get("max_output_tokens_by_model") or {}
+    if model not in by_model:
+        return cfg
+    return {**cfg, "roles": {**cfg["roles"], role: {**cfg["roles"][role], "max_output_tokens": int(by_model[model])}}}
+
+
+def effective_profiles(cfg):
+    """SPEC_AGENT_BUDGET_GAPS 2.3: each agent profile as the configured coder model would run it (input and output per
+    model applied), which is what the drafter is told and what rewrite_problems checks."""
+    from codetask.run import apply_profile
+    ct_cfg = cfg.get("code_task") or {}
+    out = {}
+    for name in agent_profiles(cfg):
+        p = dict(ct_cfg["profiles"][name])
+        eff = apply_profile(cfg, name)
+        p["max_output_tokens"] = int(eff["roles"][ct_cfg["role"]]["max_output_tokens"])
+        if p.get("max_input_tokens") is not None:
+            p["max_input_tokens"] = int(eff["code_task"]["max_input_tokens"])
+        out[name] = p
+    return out
+
+
 def drafter_settings(cfg):
     """The one attempt's reservation: the configured one, never more than the run's limits."""
     d = cfg["drafter"]
@@ -656,7 +683,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         policy = {"max_steps": lim["max_steps"], "max_submits": int(cfg["drafter"]["max_submits"]), "environment": env,
                   "validation_timeout_s": cfg["drafter"]["validation_timeout_s"],
                   "profiles": agent_profiles(cfg),
-                  "profile_info": {k: (cfg.get("code_task") or {})["profiles"][k] for k in agent_profiles(cfg)},
+                  "profile_info": effective_profiles(cfg),
+                  "max_output_tokens": int(cfg["roles"][role]["max_output_tokens"]),
                   "agent_tools": [t for t in ("ListFiles", "SearchFiles", "ReadFile", "WriteFile", "EditFile",
                                               "RunValidation")
                                   if GATED[t] in ((cfg.get("tools") or {}).get((cfg.get("code_task") or {}).get("role", "coder")) or [])],
@@ -731,6 +759,7 @@ def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=
     cap = inputs["max_usd"] if cap is None else min(float(cap), inputs["max_usd"])
     cfg = {**cfg, "budget": {**cfg["budget"], "max_usd": cap},
            "sandbox": {**(cfg.get("sandbox") or {}), "labels": {"argus.run": run_id}}}
+    cfg = with_drafter_output(cfg)
     log = EventLog(run_dir / "events.jsonl", echo=echo)
     config = {"configurable": {"thread_id": run_id}, "recursion_limit": 20}
 
