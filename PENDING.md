@@ -90,9 +90,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **Tiga celah batch 3** (#204, `docs/reviews/SPEC_AGENT_BUDGET_GAPS.md`): petunjuk setelah `max_steps` tanpa menulis, output
     drafter per model (DeepSeek 32.000), drafter melihat profil efektif coder (juga `rewrite_problems`). verify PASS (1690 passed,
     sandbox skipped 0), mutan 11/11
-- [ ] **SWE batch 4** (usul, Reconciliation bagian 7 keputusan 1): lima instance yang layak di Python 3.12 tapi tidak dipilih di
+- [ ] **Agen melihat jalur panggilan dari traceback** (`docs/reviews/SPEC_LOCATE_FROM_TRACEBACK.md`, #206): penelusuran `21379`
+    (potongan error membuang `mod.py:169`, attempt 1 tanpa error, `SearchFiles` menolak path berkas 11×, "No matches" palsu 5×).
+    Spek menunggu review K1–K4; lalu `21379` diulang, dilaporkan terpisah
+- [ ] **SWE batch 4** (usul, sesudah #206, Reconciliation bagian 7 keputusan 1): lima instance yang layak di Python 3.12 tapi tidak dipilih di
     batch 1 (`24562` core/numbers, `24066` physics.units, `23824` physics.hep, `22456` codegen, `23262` utilities/lambdify), tanpa
-    bocoran, di `main` dengan #204; plus `21379` ulang sebagai job baru, dilaporkan terpisah. Menunggu keputusan Atha
+    bocoran, di `main` dengan #204; Menunggu keputusan Atha
 - [ ] Approve tanpa oracle lebih lama (batch 3: ±5–7 menit per draf, batch 1 median 45 detik); bila batch 4 sama, pertimbangkan
     ringkasan yang membantu menilai isi tes tanpa patch maintainer
 - [ ] Layar batas tahap drafter (`code`, `redraft`, resume) dan layar `retry`/resume agen tidak menyebut environment dan image;

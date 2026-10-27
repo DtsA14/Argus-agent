@@ -128,7 +128,7 @@ variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di r
 2. **Efek petunjuk #204** (`max_steps` tanpa menulis) dan output drafter 32.000: ada di kode, belum di run live.
 3. **Eval set yang tidak jenuh** (M5): instance SWE sebagai eval regresi harness; bukan ukuran model selama terkontaminasi.
 4. **Menit kerja manusia** (M5): jumlah keputusan, waktu mesin, dan waktu ringkasan → "y" terukur; menit Atha belum ditanyakan.
-5. **Persetujuan run di chat tidak tercatat di job** (ADR-007): slice terkecil bila dibutuhkan.
+5. **Persetujuan run di chat tidak tercatat di job** (ADR-007): ditunda sampai ada aksi berisiko di dalam run (bagian 7).
 6. **Pertanyaan B D5** (≥ 2 putaran perbaikan dalam satu attempt).
 7. **`argus apply`** (K6 router v0): belum ada bukti kebutuhan (apply 4 baris dari `status`).
 8. **Idempotency key provider** (ADR-004): dampak rendah selama tidak ada aksi eksternal selain panggilan model.
@@ -139,8 +139,9 @@ fungsi yang sama); baris bit executable dari patch agen #189; cek key manual rou
 
 ## 7. Keputusan yang diminta
 
-1. **Batch 4** (usul di `PENDING.md`): lima instance sympy yang layak di Python 3.12 tetapi tidak dipilih di batch 1 (`24562`,
+1. **Batch 4** (usul di `PENDING.md`), sesudah spek `docs/reviews/SPEC_LOCATE_FROM_TRACEBACK.md` (#206, dari penelusuran `21379`): lima instance sympy yang layak di Python 3.12 tetapi tidak dipilih di batch 1 (`24562`,
    `24066`, `23824`, `22456`, `23262`), tanpa bocoran seperti batch 3, di `main` dengan #204; `21379` diulang sebagai job baru dan
    dilaporkan terpisah (instance yang sudah gagal, dipilih ulang).
-2. Gap 5 (mencatat persetujuan chat di job) sebagai slice ADR-007 sekarang, atau tunggu sampai ada aksi berisiko di dalam run?
-   (Dari laporan 2026-10-24, belum dijawab.)
+Diputuskan 2026-10-27 (Atha): gap 5 (mencatat persetujuan chat di job, ADR-007) **ditunda**; dibuka bersama aksi berisiko di dalam
+run (`argus apply`, git push/PR). Catatan teks persetujuan yang ditulis Claude bukan bukti persetujuan; saat itu yang dibutuhkan
+adalah sesuatu yang hanya bisa diberikan Atha.
