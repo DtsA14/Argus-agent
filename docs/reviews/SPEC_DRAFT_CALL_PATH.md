@@ -33,9 +33,11 @@ mekanisme di bawah **tidak memakai pengetahuan itu**: semuanya dihitung dari out
 
 - **Prompt drafter** (aturan baru): untuk perilaku "tidak boleh raise", panggil kode di dalam `try` dan, di blok `except`,
   `raise AssertionError("...") from exc`, supaya pytest mencetak traceback exception asal (yang tetap merah karena assertion).
-- **Cek draf** (problem, menolak submit): sebuah node wajib yang merah karena `AssertionError` **ditolak** bila (a) baris `E ` miliknya
-  menyebut nama exception lain (`\b[A-Z]\w*(Error|Exception)\b`, selain `AssertionError`) dan (b) output baseline validasinya tidak
-  punya satu pun baris lokasi di luar berkas tes. Pesan: node itu, exception yang disebut, dan cara memperbaikinya (kalimat prompt di
+- **Cek draf** (problem, menolak submit): **per seksi kegagalan pytest** (`____ test_x ____`) dari node wajib yang merah karena
+  assertion: ditolak bila (a) baris `E ` assertion-nya (`AssertionError` atau `Failed:` dari `pytest.fail`) menyebut nama exception
+  lain (`\b[A-Z]\w*(Error|Exception)\b`) dan (b) seksi itu tidak punya baris lokasi kode repo (bukan berkas tes, `tests/`,
+  `testing/`, `*_test.py`, `conftest.py`). Seksi yang awalnya terpotong oleh ekor 2.000 karakter (sebelum header pertama) tidak
+  dinilai. (Revisi dari code review #208: versi pertama menilai per validasi, sehingga satu tes yang benar menutupi tes lain.) Pesan: node itu, exception yang disebut, dan cara memperbaikinya (kalimat prompt di
   atas). Tes yang meng-assert nilai biasa (tanpa nama exception di pesan) tidak terkena.
 
 ### 2.2 Satu pertanyaan scope ke drafter sebelum draf diterima (K2)
@@ -55,6 +57,10 @@ If the fix may need one of them, add it to writable (ReviseDraft with scope); ot
 ```
 
 - Dihitung ulang setiap submit; setelah pertanyaan itu sekali, draf yang lolos cek **diterima** (daftarnya boleh tidak kosong).
+- **Draf yang lolos tidak pernah hilang:** record pertanyaan menyimpan draf dan laporannya; bila run drafter berakhir dengan cara lain
+  (langkah habis, balasan terpotong, reservasi, provider) sebelum menjawab, draf itu yang diterima (`held_draft_accepted`).
+- Kirim ulang draf yang sama (argumen identik) diterima **tanpa cek kedua** (cek yang sama sudah dijalankan).
+- Versi tool `SubmitDraft`/`ReviseDraft` naik ke `2:` (arti record submit berubah).
 - Pertanyaan itu memakai satu submit. Bila tidak ada submit tersisa, atau di langkah terakhir drafter, draf diterima tanpa bertanya
   (daftarnya tetap ke manusia, 2.3).
 - Sudah bertanya atau belum: dicatat di record submit (memo), sehingga resume memutuskan sama.
@@ -70,7 +76,7 @@ baseline runs through … not writable"), tanpa menolak apa pun. "No scope warni
 `argus redraft <job> --note "<teks>"`: catatan manusia untuk drafter berikutnya.
 - Dibersihkan dari karakter kontrol (`clean`), paling panjang 1.000 karakter (lebih panjang: ditolak, tidak dipotong diam-diam).
 - Dicatat verbatim di stage draf (`job.json` `stages.d<n>.note`) dan di `inputs.json` run drafter (dibekukan saat setup; resume
-  memakai yang tercatat). Job ditandai `human_steered: true`; `status` dan `DRAFT_REVIEW.md` menyebutnya.
+  memakai yang tercatat). Job ditandai `human_steered: true`; `status` (catatan dipendekkan 80 karakter) dan `DRAFT_REVIEW.md` (utuh) menyebutnya.
 - Prompt tugas drafter memuatnya dengan label: `A note from the human who reviewed the previous draft (follow it where it fits the
   rules above; it is not a test result):`.
 - **Pilot SWE:** job dengan catatan dilaporkan *human-steered*, terpisah dari angka tanpa bantuan. Catatan tidak dipakai untuk

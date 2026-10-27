@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_drafter as td  # noqa: E402
 import test_router as tr  # noqa: E402
-from test_drafter import root  # noqa: E402,F401  (the fixture)
+from test_drafter import root, vlog  # noqa: E402,F401  (the fixtures)
 from test_router import env  # noqa: E402,F401  (the fixture)
 
 from codetask import drafter as dt  # noqa: E402
@@ -46,7 +46,7 @@ def swallowing(spec, workspace, sandbox_cfg, log=None):
     """fake_validate whose failure is an AssertionError reporting a KeyError, with no line of the repository's code."""
     r = td.fake_validate(spec, workspace, sandbox_cfg, log)
     if r["status"] != "pass":
-        r["evidence"]["output_tail"] = r["evidence"]["output_tail"].replace(
+        r["evidence"]["output_tail"] = "____ test_total_never_negative ____\n" + r["evidence"]["output_tail"].replace(
             "E       assert 1 == 0", "E   AssertionError: total() raised KeyError: 'discount'")
     return r
 
@@ -79,6 +79,41 @@ def test_a_submit_whose_test_swallows_the_traceback_is_rejected(root, tmp_path):
     assert first.startswith("Draft rejected") and "reports KeyError" in first and r["status"] != dt.DRAFTED
 
 
+def section(name, *lines):
+    return "\n".join([f"____ {name} ____", *lines])
+
+
+SWALLOWED_A = section("test_a", "tests/test_a.py:5: in test_a", "E   AssertionError: f() raised KeyError: 'k'")
+CHAINED_B = section("test_b", "src/lib.py:9: in f", "E   KeyError: 'k'", "tests/test_a.py:9: in test_b",
+                    "E   AssertionError: f() raised KeyError: 'k'")
+RED_AB = {"tests/test_a.py::test_a": {"assertion": True}, "tests/test_a.py::test_b": {"assertion": True}}
+SCOPE_A = {"writable": ["src/a.py"], "protected": ["tests/**"]}
+
+
+def base_of(tail):
+    return {"baseline": {"t": {"status": "fail", "red_check": RED_AB, "output_tail": tail}}}
+
+
+def test_each_test_is_judged_by_its_own_section():
+    """Review of #208: a test that keeps its traceback does not cover another one in the same validation."""
+    out = dt.swallowed_problems(draft_of(SCOPE_A), base_of(CHAINED_B + "\n" + SWALLOWED_A + "\n==== 2 failed ===="))
+    assert len(out) == 1 and "tests/test_a.py::test_a" in out[0] and "test_b" not in out[0]
+
+
+def test_a_section_cut_by_the_start_of_the_tail_is_not_judged():
+    cut = "tests/test_a.py:5: in test_a\nE   AssertionError: f() raised KeyError: 'k'\n==== 1 failed ===="
+    assert dt.swallowed_problems(draft_of(SCOPE_A), base_of(cut)) == []
+
+
+def test_pytest_fail_counts_and_test_helpers_are_not_the_repositorys_code():
+    fail = section("test_a", "tests/test_a.py:5: in test_a", "E   Failed: f() raised KeyError: 'k'")
+    assert len(dt.swallowed_problems(draft_of(SCOPE_A), base_of(fail))) == 1
+    helper = section("test_a", "sympy/testing/pytest.py:10: in raises", "tests/test_a.py:5: in test_a",
+                     "E   AssertionError: f() raised KeyError: 'k'")
+    assert len(dt.swallowed_problems(draft_of(SCOPE_A), base_of(helper))) == 1
+    assert dt.call_path_outside(draft_of(SCOPE_A), base_of(helper)) == []
+
+
 # ---- 2.2 the one scope question ---------------------------------------------------------------------------------------
 
 def test_the_batch3_call_path_outside_writable_starts_at_mod_py():
@@ -107,16 +142,51 @@ def test_a_draft_that_adds_the_file_to_writable_is_accepted(root, tmp_path):  # 
     assert json.loads((d / "draft.json").read_text())["contract"]["scope"]["writable"] == ["src/**"]
 
 
+def questions(d):
+    return [e for e in td.events(d) if e["event"] == "draft_submitted" and e.get("scope_question")]
+
+
 def test_no_question_without_a_submit_left_or_without_a_call_path(root, tmp_path):  # noqa: F811
     r, model, d = td.run(root, tmp_path, [td.SUBMIT], validate=framed(), config=td.cfg(max_submits=1))
-    assert r["status"] == dt.DRAFTED and not td.tool_texts(model, 0)
+    assert r["status"] == dt.DRAFTED and questions(d) == [] and len(model.calls) == 1
     r, model, d = td.run(root, tmp_path / "b", [td.SUBMIT])                       # nothing outside writable
-    assert r["status"] == dt.DRAFTED
+    assert r["status"] == dt.DRAFTED and questions(d) == []
+
+
+def test_a_revised_draft_after_the_question_is_not_asked_again(root, tmp_path):  # noqa: F811
+    """The answer may change the draft without adding the file (here: unverifiable); it is checked and accepted."""
+    other = {"unverifiable": ["the error message reads well", "the floor holds for every discount"]}
+    r, model, d = td.run(root, tmp_path, [td.SUBMIT, td.call("ReviseDraft", other, "v1")], validate=framed())
+    assert r["status"] == dt.DRAFTED and len(questions(d)) == 1
+    assert json.loads((d / "draft.json").read_text())["unverifiable"] == other["unverifiable"]
+
+
+def test_a_held_draft_is_accepted_when_the_drafter_stops_without_answering(root, tmp_path):  # noqa: F811
+    """Review of #208: the draft that passed is kept while the question is open; the run ends DRAFTED with it."""
+    r, model, d = td.run(root, tmp_path, [td.SUBMIT] + [td.READ] * 5, validate=framed(), config=td.cfg(max_steps=4))
+    assert r["status"] == dt.DRAFTED and td.tool_texts(model, 1)[0].startswith(QUESTION)
+    assert [e["after"] for e in td.events(d) if e["event"] == "held_draft_accepted"] == ["max_steps"]
+
+
+def test_the_same_draft_again_is_accepted_without_a_second_check(root, tmp_path, vlog):  # noqa: F811
+    td.run(root, tmp_path / "one", [td.SUBMIT])
+    once = len(vlog())                                                    # the validations of one check
+    r, model, d = td.run(root, tmp_path, [td.SUBMIT, td.call("ReviseDraft", {}, "v1")], validate=framed())
+    assert r["status"] == dt.DRAFTED and once > 0 and len(vlog()) == 2 * once
+    assert [e.get("held") for e in td.events(d) if e["event"] == "draft_submitted"] == [None, True]
+
+
+def test_the_submit_tools_are_version_2_in_the_step_memo_keys(root, tmp_path):  # noqa: F811
+    import sqlite3
+    r, model, d = td.run(root, tmp_path, [td.READ, td.SUBMIT])
+    keys = [json.loads(k) for (k,) in sqlite3.connect(d / "memo.sqlite").execute("select key from memo")]
+    versions = sorted({k[-1] for k in keys if k[0] == "tool"})
+    assert versions[0] == "1" and len(versions) == 2 and versions[1].startswith("2:")    # ReadFile, SubmitDraft
 
 
 def test_no_question_on_the_drafters_last_step(root, tmp_path):  # noqa: F811
     r, model, d = td.run(root, tmp_path, [td.READ, td.SUBMIT], validate=framed(), config=td.cfg(max_steps=2))
-    assert r["status"] == dt.DRAFTED                                     # asked there, the draft would be lost
+    assert r["status"] == dt.DRAFTED and questions(d) == []             # no step is left to answer it
 
 
 PROC = ("import sys; sys.path[:0] = [sys.argv[1], sys.argv[1] + '/tests']; import test_draft_call_path as t; "
@@ -181,6 +251,10 @@ def test_a_redraft_note_reaches_the_drafter_and_marks_the_job(env):  # noqa: F81
     assert inputs["note"] == st["note"]
     text = rj.status("jtest", jobs_dir=env.jobs)
     assert "human-steered" in text and "note: look at src/shop.py" in text
+    job.data["stages"]["d2"]["note"] = "y" * 1000
+    job.save()
+    line = [x for x in rj.status("jtest", jobs_dir=env.jobs).splitlines() if "note:" in x][0]
+    assert line.endswith("; note: " + "y" * 80 + "...")                # the full note stays in job.json
     assert "Note from the reviewer (human-steered)" in (job.runs / st["run_id"] / "DRAFT_REVIEW.md").read_text()
 
 

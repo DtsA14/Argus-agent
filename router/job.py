@@ -861,7 +861,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     for sid, s in d["stages"].items():
         out.append(f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
                    + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else "")
-                   + (f"; note: {s['note']}" if s.get("note") else ""))
+                   + (f"; note: {s['note'][:80]}" + ("..." if len(s["note"]) > 80 else "") if s.get("note") else ""))
     accepted = any(s["kind"] == "draft" and s.get("status") == "DRAFTED" for s in d["stages"].values())
     if d["state"] == AWAITING_APPROVAL or (d["state"] == DRAFT_FAILED and accepted):
         st, path = _last_draft(job)
