@@ -1,0 +1,28 @@
+# agent budget gaps (SPEC_AGENT_BUDGET_GAPS) at 64f4d4f (2026-10-27T16:10:19Z)
+## new tests on main's code (the -k selection also picks older tests that pass there; test_no_max_steps_hint_after_a_write_or_for_another_end is a guard: main has no hint at all)
+PASSED tests/test_agent_context.py::test_deepseek_gets_a_larger_reply_on_usd_profiles_only_and_sonnet_keeps_its_own
+PASSED tests/test_agent_context.py::test_a_larger_reply_is_still_bounded_by_the_attempts_usd
+PASSED tests/test_agent_context.py::test_no_max_steps_hint_after_a_write_or_for_another_end
+PASSED tests/test_drafter.py::test_max_steps_ends_the_run
+FAILED tests/test_agent_context.py::test_after_max_steps_without_writing_the_next_attempt_is_told_to_change_something_early
+FAILED tests/test_agent_context.py::test_a_retry_after_max_steps_without_writing_is_told_too
+FAILED tests/test_drafter.py::test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_one
+FAILED tests/test_drafter.py::test_deepseek_drafters_get_a_larger_reply_and_others_keep_their_own
+FAILED tests/test_drafter.py::test_the_drafter_run_uses_and_records_the_output_of_its_model
+FAILED tests/test_drafter.py::test_the_drafter_is_told_the_profiles_as_the_coder_model_runs_them
+6 failed, 4 passed, 93 deselected in 2.82s
+## mutants (pytest -x tests/test_agent_context.py tests/test_drafter.py per mutant)
+KILLED  no max_steps hint: ['FAILED tests/test_agent_context.py::test_after_max_steps_without_writing_the_next_attempt_is_told_to_change_something_early']
+KILLED  max_steps hint after a write: ['FAILED tests/test_agent_context.py::test_no_max_steps_hint_after_a_write_or_for_another_end']
+KILLED  max_steps hint without EditFile: ['FAILED tests/test_agent_context.py::test_after_max_steps_without_writing_the_next_attempt_is_told_to_change_something_early']
+KILLED  retry told the workspace is kept: ['FAILED tests/test_agent_context.py::test_a_retry_after_max_steps_without_writing_is_told_too']
+KILLED  drafter output not applied: ['FAILED tests/test_drafter.py::test_the_drafter_run_uses_and_records_the_output_of_its_model']
+KILLED  drafter output map ignored: ['FAILED tests/test_drafter.py::test_deepseek_drafters_get_a_larger_reply_and_others_keep_their_own']
+KILLED  deepseek drafter output not raised: ['FAILED tests/test_drafter.py::test_deepseek_drafters_get_a_larger_reply_and_others_keep_their_own']
+KILLED  drafter output not recorded: ['FAILED tests/test_drafter.py::test_the_drafter_run_uses_and_records_the_output_of_its_model']
+KILLED  raw profiles told to the drafter: ['FAILED tests/test_drafter.py::test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_one']
+KILLED  effective input not applied: ['FAILED tests/test_drafter.py::test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_one']
+KILLED  effective output not applied: ['FAILED tests/test_drafter.py::test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_one']
+RESULT: 11/11 killed
+## all non-sandbox tests before the full verify
+1522 passed, 77 skipped in 255.20s (0:04:15)
