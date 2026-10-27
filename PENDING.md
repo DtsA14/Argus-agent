@@ -4,7 +4,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status); riwayat semua butir yang sudah selesai (bukti, angka, PR) ada di
 [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-24 (pilot SWE v0 `resolved` di sympy; Reconciliation diperbarui).
+Terakhir diperbarui: 2026-10-27 (SWE batch 1–3, #200, #202, #204; Reconciliation diperbarui).
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -13,7 +13,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 | | Status | Rinci |
 |---|---|---|
 | M1–M3, general-task agent | `[x]` | Reconciliation bagian 1 |
-| M6 repo → PR | `[x]` MVP | 10 run live pilot, 6 task `agent-completed`, $1,29 total (Reconciliation bagian 4) |
+| M6 repo → PR | `[x]` MVP | repo Argus: 6 task `agent-completed`; sympy: 11 instance, 3/4 `resolved` tanpa bocoran (Reconciliation bagian 4) |
 | M5 observability | `[~]` | ledger, inspektor, `pilot_report.py`; belum: tracing, supervisi, benchmark tidak jenuh |
 | M4, M7, M8, M9, capability pack | `[ ]` | ditunda sampai ada bukti kebutuhan (keputusan 2026-10-21) |
 | ADR-002, 004, 005, 006, 007 | `[~]` | ada untuk code task (Reconciliation bagian 2) |
@@ -73,12 +73,31 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     peringatan konteks, `max_input` per model (DeepSeek 60.000), retry dengan carry. Router pilot #3: `a1` gagal
     (`context_limit` tanpa menulis), `a2` lewat retry `DONE` dalam 1 attempt; job $0,0349, 3 keputusan run
     (`pilots/router_v0/p3/RESULT.md`)
-- [ ] Efek petunjuk konteks belum terpisah dari variasi model (satu run; peringatan 70% belum pernah muncul di run live)
+- [ ] Efek petunjuk berhenti belum terpisah dari variasi model: `context_limit` (#188, router #3 + dua instance batch 3),
+    `output_truncated` (#200, batch 2 `a2` lolos tanpa butuh batas baru), `max_steps` tanpa menulis (#204, belum dipakai live);
+    peringatan 70% belum pernah muncul di run live
 - [ ] Router: `argus apply` (K6 v0): branch, `apply --check`, `apply`, verify; sekarang perintahnya dicetak `status`
 - [ ] Cek key manual router pilot #3 (`grep -rlF -f ...`, kriteria 4) belum dijalankan; Atha, dari PC
 - [x] **Pilot SWE v0** (`pilots/swe_v0/sympy__sympy-23534/`, #192–#196): repo luar pertama, `resolved` oleh tes resmi yang
     tersembunyi; job $0,0202; environment per job dengan image dipin, `swe_grade.py`
-- [ ] Batch 5 instance sympy SWE-bench Verified (Reconciliation bagian 7, keputusan 1)
+- [x] **SWE batch 1** (#198, 2026-10-24): 5/5 `resolved`, $0,1378, 6 keputusan; *oracle-informed* (`pilots/swe_v0/batch1/RESULT.md`)
+- [x] **SWE batch 2** (#199): `24443` `resolved` setelah redraft, #200, dan `retry`, $0,0606; *oracle-assisted*
+- [x] **Anggaran output agen** (#200, `docs/reviews/SPEC_AGENT_OUTPUT_BUDGET.md`): `max_output_tokens` per model (DeepSeek 32.000),
+    petunjuk setelah `output_truncated`
+- [x] **Environment dari image Python resmi** (#201/#202, `docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md`): `sympy_py39`
+- [x] **SWE batch 3** (#203, 2026-10-27): **3/4 `resolved` tanpa bocoran** di `sympy_py39`, $0,2127, 7 keputusan; `21379` gagal
+    (4 attempt tanpa menulis). `pilots/swe_v0/batch3/RESULT.md`
+- [x] **Tiga celah batch 3** (#204, `docs/reviews/SPEC_AGENT_BUDGET_GAPS.md`): petunjuk setelah `max_steps` tanpa menulis, output
+    drafter per model (DeepSeek 32.000), drafter melihat profil efektif coder (juga `rewrite_problems`). verify PASS (1690 passed,
+    sandbox skipped 0), mutan 11/11
+- [ ] **Agen melihat jalur panggilan dari traceback** (`docs/reviews/SPEC_LOCATE_FROM_TRACEBACK.md`, #206): penelusuran `21379`
+    (potongan error membuang `mod.py:169`, attempt 1 tanpa error, `SearchFiles` menolak path berkas 11×, "No matches" palsu 5×).
+    Spek menunggu review K1–K4; lalu `21379` diulang, dilaporkan terpisah
+- [ ] **SWE batch 4** (usul, sesudah #206, Reconciliation bagian 7 keputusan 1): lima instance yang layak di Python 3.12 tapi tidak dipilih di
+    batch 1 (`24562` core/numbers, `24066` physics.units, `23824` physics.hep, `22456` codegen, `23262` utilities/lambdify), tanpa
+    bocoran, di `main` dengan #204; Menunggu keputusan Atha
+- [ ] Approve tanpa oracle lebih lama (batch 3: ±5–7 menit per draf, batch 1 median 45 detik); bila batch 4 sama, pertimbangkan
+    ringkasan yang membantu menilai isi tes tanpa patch maintainer
 - [ ] Layar batas tahap drafter (`code`, `redraft`, resume) dan layar `retry`/resume agen tidak menyebut environment dan image;
     prioritas rendah (Atha 2026-10-24: yang membaca layar adalah Claude, dan preflight chat menghitung id image dengan
     `environment_pin` sebelum run)
