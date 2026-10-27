@@ -1,6 +1,15 @@
 # Pilot SWE v0: `sympy__sympy-21379` diulang setelah #206 (preflight, ditulis sebelum run)
 
-Status 2026-10-27: **siap; belum ada run.** #206 sudah di-merge (`docs/reviews/SPEC_LOCATE_FROM_TRACEBACK.md`); menunggu "go live".
+Status 2026-10-27: **percobaan 1 ditolak sebelum approve; percobaan 2 siap, menunggu "go live".**
+
+**Percobaan 1** (job `j20261027_175610_34ba`, `main` `03d078b`, $0,0515): draf `d1` DRAFTED, **ditolak** (pilihan B Atha). Tes
+draf menelan traceback `PolynomialError` (baseline tanpa satu pun frame kode repo, jadi #206 tidak membawa jalur panggilan), dan
+writable (8 berkas) tidak memuat satu pun pemanggil di jalur error, sama dengan draf batch 3. Diperbaiki oleh #208
+(`docs/reviews/SPEC_DRAFT_CALL_PATH.md`): tes yang menelan traceback ditolak, satu pertanyaan scope ke drafter dari jalur panggilan
+baseline, daftar yang sama untuk manusia, `redraft --note`.
+
+**Percobaan 2:** job baru di `main` `d046929` (sesudah #208), aturan di bawah. **Tanpa `redraft --note`** (Claude sudah melihat patch
+maintainer; catatan apa pun dari Atha yang berasal dari ringkasan Claude bisa membocorkan jawaban). Semua yang lain sama.
 Asal: penelusuran kegagalan `21379` di batch 3 (job `j20261027_151552_7cdd`: 4 attempt di 2 tahap, tidak satu pun menulis;
 `../batch3/RESULT.md`). Aturan lain sama dengan `../batch3/PREFLIGHT.md` (tanpa bocoran jawaban, bagian 3a di sana).
 
@@ -13,7 +22,7 @@ setelah tahu sebab gagalnya. Hasilnya menjawab "apakah #206 menutup sebab kegaga
 |---|---|---|
 | Instance, `base_commit`, issue | `624217179aaf…`, `problem_statement` apa adanya | sama |
 | Environment | `sympy_py39`, image `sha256:2f684b89c437…` | sama (image yang sama, cek environment diulang: PASS; bagian 2) |
-| Harness | `main` sebelum #204 | `main` `fd20cde` (sesudah #206) |
+| Harness | `main` sebelum #204 | `main` `d046929` (sesudah #206 dan #208) |
 | Model | DeepSeek V4.1 Flash thinking | sama |
 | Draf | `d1` (approve dari isi draf) | **job baru, draf baru dari awal**; drafter tidak melihat run lama |
 
@@ -46,6 +55,9 @@ Lalu ringkasan draf dengan format tetap (kutipan "Why they fail now" apa adanya;
 approve atas "y". `retry` paling banyak sekali, atas "y". Tes drafter di atas patch maintainer baru dijalankan **setelah grading**.
 
 ## 4. Yang diamati (dicatat apa pun hasilnya)
+
+0. **Drafter (#208):** apakah tes draf menyimpan traceback (tidak ditolak 2.1, atau ditolak lalu diperbaiki); apakah pertanyaan scope
+   muncul, berkas apa saja di daftarnya (urutan), dan apakah drafter menambah berkas ke writable (yang mana) atau mengirim ulang.
 
 1. **Apakah attempt 1 melihat `mod.py`:** `job.json` `approval.baseline` dan prompt attempt 1 (`audit_run.py`) memuat
    `sympy/core/mod.py:169`. Ini bergantung pada tes drafter yang baru: bila tesnya tidak lewat `Mod.eval` (atau menelan exception
