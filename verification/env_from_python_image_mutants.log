@@ -1,0 +1,50 @@
+# environments from an official Python image (SPEC_ENV_FROM_PYTHON_IMAGE) at 47624c8 (2026-10-27T15:01:27Z)
+## the new tests on main's code (the 2 sandbox tests skip there: main has no sympy_py39 environment)
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[../x-python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[Py39-python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[nodef-None-pytest==8.4.2 --hash=sha256:bbbbbbbbbbbb
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[tagged-python:3.9-slim-pytest==8.4.2 --hash=sha256:
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[short-python@sha256:abc-pytest==8.4.2 --hash=sha256
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[nohash-python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[range-python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[onebad-python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+FAILED tests/test_env_from_base.py::test_a_pinned_definition_gets_to_docker
+FAILED tests/test_env_from_base.py::test_the_sympy_py39_definition_is_pinned
+FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[None-has not been checked]
+FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[record1-did not pass]
+FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[record2-did not pass]
+FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[record3-was checked with image]
+FAILED tests/test_env_from_base.py::test_a_passing_record_for_that_image_is_usable_and_an_undefined_environment_is_not_gated
+FAILED tests/test_env_from_base.py::test_a_job_on_an_unchecked_environment_is_not_created
+FAILED tests/test_env_from_base.py::test_the_grader_refuses_an_unchecked_environment
+FAILED tests/test_env_from_base.py::test_the_check_writes_its_record_only_when_every_check_passes
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[isolation-isolation]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[classification-classification like argus]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[inconsistent-classification like argus]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[red-red check]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[collection-collection]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[sh-no shell, git or pip]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[git-no shell, git or pip]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[pip-no shell, git or pip]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[pytest-versions]
+FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[python-versions]
+28 failed, 2 skipped in 1.52s
+## mutants (pytest -x tests/test_env_from_base.py per mutant)
+KILLED  any environment name: ['FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[../x-python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-pytest==8.4.2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\\n-lower-case]']
+KILLED  a base without a digest: ['FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[tagged-python:3.9-slim-pytest==8.4.2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\\n-pinned by digest]']
+KILLED  requirements without hashes: ['FAILED tests/test_env_from_base.py::test_an_unpinned_definition_is_refused_before_docker[nohash-python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-pytest==8.4.2\\n---hash=sha256]']
+KILLED  a shell is copied and not guarded: ['FAILED tests/test_env_from_base.py::test_a_build_has_no_shell_git_or_pip_and_two_builds_have_the_same_rootfs']
+KILLED  the base's pip is copied: ['FAILED tests/test_env_from_base.py::test_a_build_has_no_shell_git_or_pip_and_two_builds_have_the_same_rootfs']
+KILLED  the check is not required: ['FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[None-has not been checked]']
+KILLED  a record of another image is accepted: ['FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[record3-was checked with image]']
+KILLED  a failed record is accepted: ['FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[record1-did not pass]']
+KILLED  the router ignores the check: ['FAILED tests/test_env_from_base.py::test_an_unchecked_or_differently_checked_image_is_not_usable[None-has not been checked]']
+KILLED  the grader ignores the check: ['FAILED tests/test_env_from_base.py::test_the_grader_refuses_an_unchecked_environment']
+KILLED  the record is written after a failed check: ['FAILED tests/test_env_from_base.py::test_the_check_writes_its_record_only_when_every_check_passes']
+KILLED  classification not compared: ['FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[classification-classification like argus]']
+KILLED  red check not checked: ['FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[red-red check]']
+KILLED  pip in the image accepted: ['FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[pip-no shell, git or pip]']
+KILLED  pytest version not compared: ['FAILED tests/test_env_from_base.py::test_each_check_fails_when_its_condition_does_not_hold[pytest-versions]']
+RESULT: 15/15 killed
+## earlier verify on this branch: FAIL at 0f436e2 (2 unit tests read verify's ARGUS_SANDBOX_IMAGE_SYMPY_PY39 instead of their own image; fixed in 47624c8)
+## rootfs of two builds: identical (sha256:176cffbb638e55c374ffcbddaadc475df7aeb718e4cbef8ed5ec4eeda683ad54), and the build test compares two builds again
