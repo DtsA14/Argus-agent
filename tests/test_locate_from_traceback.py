@@ -77,6 +77,27 @@ def test_each_block_gets_only_the_frames_since_the_previous_block():
                                   "src/c.py:3: in c"]
 
 
+def test_frames_never_push_another_error_out_of_the_excerpt():
+    """Review of #206: three distinct errors with six long frames each. Every error that fitted without frames is
+    still shown; frames only fill the room left, the first block's first."""
+    tail = ""
+    for b, err in zip("abc", ["KeyError", "ValueError", "TypeError"]):
+        tail += "".join(f"src/{b}{k}.py:{k + 1}: in f{k}\n    call_{k}{'x' * 150}()\n" for k in range(6))
+        tail += f"src/{b}_deep.py:9: in deep\n    raise {err}(k)\nE   {err}: k\n"
+    x = ca.error_excerpt(tail + "==== 3 failed in 0.10s ====\n")
+    assert all(f"E   {err}: k" in x for err in ["KeyError", "ValueError", "TypeError"]) and len(x) <= LIMIT
+    assert "src/a5.py:6: in f5" in x                                          # the room left goes to frames
+
+
+def test_a_section_separator_ends_the_frames_of_the_test_before_it():
+    tail = ("src/a.py:1: in a\n    b()\n"                                   # test_a's frames, its error cut away
+            "________________________________ test_b ________________________________\n"
+            "src/c.py:3: in c\n    d()\nsrc/d.py:4: in d\n    raise ValueError(v)\nE   ValueError: v\n"
+            "==== 2 failed in 0.10s ====\n")
+    x = ca.error_excerpt(tail)
+    assert "src/a.py" not in x and x.startswith("src/c.py:3: in c\n    d()\nsrc/d.py:4: in d")
+
+
 # ---- 2.2 the approved draft's red baseline in the first attempt of each agent stage --------------------------------
 
 def test_approve_records_the_red_baseline_and_the_first_attempt_is_told_it(env):  # noqa: F811
@@ -174,7 +195,7 @@ def test_searchfiles_reports_a_file_too_large_to_search(tmp_path, monkeypatch):
     assert out.startswith("No matches.") and "larger than 100 bytes were not searched: src/big.py" in out
 
 
-def test_a_search_stopped_at_its_limit_says_how_many_files_it_searched(tmp_path, monkeypatch):
+def test_a_search_stopped_at_its_limit_says_its_no_match_is_only_for_the_files_searched(tmp_path, monkeypatch):
     import test_searchfiles as ts
     from codetask import tools as ct
     root = tmp_path / "ws"
@@ -183,9 +204,27 @@ def test_a_search_stopped_at_its_limit_says_how_many_files_it_searched(tmp_path,
         (root / "src" / f"f{k}.py").write_text("x\n")
     monkeypatch.setattr(ct, "SEARCH_MAX_FILES", 2)
     out = ts.search(ts.box(root, tmp_path), "needle").splitlines()
-    assert out[0] == "No matches in the 2 files searched." and out[1].startswith("... search stopped after 2 files")
+    assert out[0] == "No matches in the files searched." and out[1].startswith("... search stopped after 2 files")
 
 
-def test_the_searchfiles_version_in_the_step_memo_keys_is_2():
-    for path in ("codetask/run.py", "codetask/drafter.py"):
-        assert '"SearchFiles": "2"' in (ROOT / path).read_text(encoding="utf-8"), path
+def test_a_missing_file_path_is_not_called_a_missing_directory(tmp_path):
+    import test_searchfiles as ts
+    (tmp_path / "ws" / "src").mkdir(parents=True)
+    assert ts.search(ts.box(tmp_path / "ws", tmp_path), "x", "src/mods.py") == "No such directory or file: 'src/mods.py'"
+
+
+def test_a_searchfiles_step_is_memo_keyed_by_version_2(tmp_path, counter):  # noqa: F811
+    """A SearchFiles step recorded by version 1 (a directory-only search) must not be replayed as this one."""
+    import sqlite3
+    tac.per_message(counter)
+    search = tac.tau.call("SearchFiles", {"text": "def divide", "path": "src/calc.py"}, "s1")
+    model = tac.StrictScriptedChatModel(script=[search, tac.tau.WRITE, tac.tau.FINISH])
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "contract.json").write_text(json.dumps({**tac.tau.contract("small"), "tools": ["search_files"]}))
+    r, d = tac.go(tmp_path, model, tac.config(20000))
+    rows = [(json.loads(k), json.loads(v)) for k, v in sqlite3.connect(d / "memo.sqlite").execute(
+        "select key, value from memo")]
+    tool = [(k, v) for k, v in rows if k[0] == "tool" and k[5] == "s1"]
+    assert r["status"] == st.DONE and len(tool) == 1 and tool[0][0][-1] == "2"
+    assert tool[0][1]["content"].startswith("src/calc.py:")                    # one file searched, not refused
+    assert '"SearchFiles": "2"' in (ROOT / "codetask" / "drafter.py").read_text(encoding="utf-8")   # the drafter's map

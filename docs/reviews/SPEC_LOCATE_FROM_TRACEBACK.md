@@ -42,13 +42,17 @@ Agen tidak pernah melihat baris `mod.py:169`:
 ### 2.1 Potongan error menyimpan jalur panggilan (K1)
 
 Untuk setiap blok pytest yang dipakai (aturan D2 tetap: blok yang dimulai dari baris lokasi dan punya baris `E `), sertakan **frame
-pemanggil**: baris lokasi tanpa baris `E ` yang langsung mendahului blok itu (sesudah blok sebelumnya atau awal ekor), **paling banyak
+pemanggil**: baris lokasi tanpa baris `E ` yang langsung mendahului blok itu (sesudah blok sebelumnya, separator seksi pytest
+`____ test_x ____`, atau awal ekor), **paling banyak
 6 yang terdekat**, masing-masing baris lokasinya dan baris kode pertama di bawahnya (yang berindentasi, di-strip, diawali 4 spasi).
 Urutan tetap seperti di ekor (luar → dalam), di depan baris lokasi blok.
 
 - Tiap baris tetap paling panjang 160 karakter. Dedup antar blok tetap menurut error (frame tidak masuk kunci).
-- Batas per validasi naik **800 → 1.200** karakter (`EXCERPT_CHARS`). Bila blok beserta frame-nya tidak muat, **frame dibuang
-  lebih dulu, dari yang terluar**, sebelum aturan potong lama berlaku; baris `E ` dan baris ringkasan tidak dikorbankan untuk frame.
+- Batas per validasi naik **800 → 1.200** karakter (`EXCERPT_CHARS`). **Blok error ditempatkan lebih dulu** dengan aturan lama (tanpa
+  frame); frame lalu mengisi sisa ruang, blok demi blok, dari yang terdekat. Jadi frame tidak pernah menggeser blok error lain atau
+  baris `E ` (revisi dari code review #206: versi pertama memberi blok pertama semua ruang untuk frame-nya).
+- Frame mengandalkan `--tb=short` (baris kode sesudah baris lokasi). Itu selalu dipakai: opsi pytest ditetapkan harness
+  (`acceptance/validation.py` `PYTEST_FIXED`), kontrak hanya boleh menambah `-k`.
 - Tanpa filter per repo atau per nama berkas (tidak ada daftar "plumbing" seperti `cache.py`): deterministik dan sama untuk semua
   repo. Untuk `21379`, frame terdekat ke-3 adalah `mod.py:169`.
 - Berlaku di keempat pemakai `error_excerpt`: feedback antar attempt, cek otomatis D3, evidence drafter, ringkasan draf (batas
@@ -85,8 +89,9 @@ Versi tool `SearchFiles` naik `"1"` → `"2"` di `codetask/run.py` dan `codetask
 
 ### 2.4 "No matches" yang tidak lengkap dikatakan tidak lengkap (K3)
 
-Bila pencarian berhenti di batas dan tidak ada hasil, baris pertama menjadi `No matches in the N files searched.` alih-alih
-`No matches.`; baris "search stopped … results incomplete" tetap.
+Bila pencarian berhenti di batas dan tidak ada hasil, baris pertama menjadi `No matches in the files searched.` alih-alih
+`No matches.`; baris "search stopped after N files … results incomplete" tetap (jumlahnya tidak diulang). Path yang tidak ada:
+`No such directory or file: …` (sekarang `path` boleh berkas).
 
 ## 3. Yang tidak berubah
 
@@ -98,7 +103,8 @@ tidak ada run yang sedang berjalan.
 
 1. **Ekor nyata `21379`** (dari `verdict_0.json`, disimpan sebagai fixture): potongan memuat `sympy/core/mod.py:169: in eval` dan
    `G = gcd(p, q)`, error `PolynomialError` dan baris ringkasan tetap ada, panjang ≤ 1.200. Gagal di kode lama.
-2. Frame paling banyak 6, yang terdekat; frame dibuang dari yang terluar saat tidak muat, baris `E ` tidak pernah; ekor D2 lama tanpa
+2. Frame paling banyak 6, yang terdekat; frame dibuang dari yang terluar saat tidak muat, baris `E ` tidak pernah; frame tidak
+   menggeser blok error lain (tiga error dengan frame panjang); separator seksi mengakhiri frame tes sebelumnya; ekor D2 lama tanpa
    frame tengah menghasilkan potongan yang sama persis; dedup tidak berubah.
 3. Router: `approve` mencatat baseline; tahap `a1` dan `retry` membawa baseline di feedback attempt 1 (retry: plus carry); resume
    memakai yang tercatat; job tanpa `approval.baseline` → prompt sama persis; hanya validasi merah dengan output, paling banyak 3;

@@ -167,7 +167,7 @@ class Toolbox:
                 try:
                     st = os.lstat(cur)
                 except FileNotFoundError:
-                    return f"No such directory: {under!r}"
+                    return f"No such directory or file: {under!r}"
                 if stat.S_ISLNK(st.st_mode):
                     raise PathEscape(f"refusing to search through a symlink: {under!r}")
                 if stat.S_ISREG(st.st_mode) and n == len(prefix):
@@ -198,7 +198,7 @@ class Toolbox:
                         hits.append(f"{rel}:{n}: {line.strip()[:SEARCH_MAX_LINE]}")
             if stopped:
                 break
-        out = hits[:SEARCH_MAX_MATCHES] or [f"No matches in the {files} files searched." if stopped else "No matches."]
+        out = hits[:SEARCH_MAX_MATCHES] or ["No matches in the files searched." if stopped else "No matches."]
         if len(hits) > SEARCH_MAX_MATCHES:
             out.append(f"... {len(hits) - SEARCH_MAX_MATCHES} more matches not shown: results incomplete, "
                        "narrow the text or the path.")
