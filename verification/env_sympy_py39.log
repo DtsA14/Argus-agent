@@ -1,0 +1,8 @@
+environment sympy_py39, image sha256:3d0d091fb05b7ac5a81eb735a8ffdfb5bbeabbe2e64846eb0387849c54c14969
+PASS isolation: ok
+PASS classification like argus: same
+PASS red check: {"tests/test_demo.py::test_add": {"assertion": false, "outcome": "passed", "path": null, "type": null}, "tests/test_demo.py::test_fails": {"assertion": true, "outcome": "failed", "path": "tests/test_demo.py", "type": "builtins.AssertionError"}}
+PASS collection: 10 nodes
+PASS no shell, git or pip: {"bash": false, "git": null, "pip": false, "pytest": "8.4.2", "python": "3.9.25", "sh": false}
+PASS versions: python 3.9.25 (built 3.9), pytest 8.4.2 (pinned 8.4.2)
+RESULT: PASS

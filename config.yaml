@@ -322,5 +322,10 @@ sandbox:
     # scripts/build_env_sandbox_image.sh sympy <venv> -> .sandbox_image_sympy. No image: refused (never another one).
     sympy:
       image: null
+    # sympy_py39 (docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md): Python 3.9 from an official image pinned by digest,
+    # defined in environments/sympy_py39/, built by scripts/build_env_from_base.sh, usable by a job or the grader only
+    # after scripts/check_env_image.py has passed for that exact image id.
+    sympy_py39:
+      image: null
     argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
       image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker

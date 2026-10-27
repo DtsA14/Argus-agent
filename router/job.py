@@ -200,9 +200,30 @@ def stage_config(cfg, cap):
     return out
 
 
-def environment_pin(cfg, name):
+def check_problem(name, image, root=None):
+    """Why environment `name` may not be used with `image`, or None (docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md 2.3): an
+    environment defined in environments/NAME/ needs a passing scripts/check_env_image.py record for exactly that image.
+    An environment without a definition there (argus, sympy) is not subject to it."""
+    root = ROOT if root is None else root
+    if not (Path(root) / "environments" / name).is_dir():
+        return None
+    rec = Path(root) / f".sandbox_image_{name}.check.json"
+    try:
+        r = json.loads(rec.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return f"sandbox environment {name!r} has not been checked: run scripts/check_env_image.py {name}"
+    if not isinstance(r, dict) or r.get("result") != "pass" or r.get("environment") != name:
+        return f"sandbox environment {name!r} did not pass its check ({rec.name})"
+    if r.get("image") != image:
+        return (f"sandbox environment {name!r} was checked with image {r.get('image')}, not {image}: run "
+                f"scripts/check_env_image.py {name} again")
+    return None
+
+
+def environment_pin(cfg, name, root=None):
     """(image id, problem) of sandbox environment `name` as this config resolves it now (SPEC_SWE_PILOT 2.1, K4): an
-    unknown name or one without an image is a problem, never another environment's or the default image."""
+    unknown name or one without an image is a problem, never another environment's or the default image; so is an
+    environment from environments/ whose image has not passed its check (SPEC_ENV_FROM_PYTHON_IMAGE)."""
     from tools import sandbox as sb
     image, problem = sb.environment_image(cfg.get("sandbox") or {}, name)
     if problem:
@@ -210,6 +231,9 @@ def environment_pin(cfg, name):
     if not image:
         return None, (f"sandbox environment {name!r} has no image (sandbox.environments.{name}.image, "
                       f"ARGUS_SANDBOX_IMAGE_{name.upper()} or .sandbox_image_{name}); it never falls back to another image")
+    problem = check_problem(name, image, root)
+    if problem:
+        return None, problem
     return image, None
 
 

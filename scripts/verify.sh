@@ -40,6 +40,13 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
     export ARGUS_SANDBOX_IMAGE_ARGUS="$(tr -d '[:space:]' < .sandbox_image_argus)"
   fi
   echo "sandbox image (argus environment): ${ARGUS_SANDBOX_IMAGE_ARGUS:-<none>}"
+  # SPEC_ENV_FROM_PYTHON_IMAGE (K3): the sympy_py39 environment from its pinned Python image, so its sandbox tests run
+  # instead of skipping. The builder container is the only step with network (pip --require-hashes, cache outside the repo).
+  if [ -z "${ARGUS_SANDBOX_IMAGE_SYMPY_PY39:-}" ] && docker version >/dev/null 2>&1; then
+    bash scripts/build_env_from_base.sh sympy_py39
+    export ARGUS_SANDBOX_IMAGE_SYMPY_PY39="$(tr -d '[:space:]' < .sandbox_image_sympy_py39)"
+  fi
+  echo "sandbox image (sympy_py39 environment): ${ARGUS_SANDBOX_IMAGE_SYMPY_PY39:-<none>}"
   echo "docker: $(docker version --format 'client {{.Client.Version}} / server {{.Server.Version}} ({{.Server.Os}}/{{.Server.Arch}})' 2>/dev/null || echo 'not available')"
   echo "== pip freeze"
   "$VENV/bin/pip" freeze

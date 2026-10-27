@@ -1,0 +1,6 @@
+Sandbox environment for SWE-bench style pilots on sympy versions that need Python < 3.12 (sympy 1.9 imports distutils;
+sympy 1.10's codegen tests too). Base: python:3.9-slim (Python 3.9.25, arm64), pinned by digest in `base`. Requirements are
+exact versions with sha256 hashes of the py3-none-any wheels, downloaded in that base image on 2026-10-24 (all uploaded to
+PyPI 2026-10-07 or earlier). pytest 8.4.2: pytest 9 does not support Python 3.9. Built by
+scripts/build_env_from_base.sh sympy_py39; checked by scripts/check_env_image.py sympy_py39 before any job may use it
+(docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md).
