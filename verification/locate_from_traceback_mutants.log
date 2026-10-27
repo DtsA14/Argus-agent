@@ -24,3 +24,31 @@ RESULT: 14/14 killed
 == sandbox tests skipped: 0
 RESULT: PASS
 evidence saved to verification/verify-20261027T171503Z-aarch64.log
+
+# after /code-review medium (fixes at 4c772ec, 2026-10-27T17:52:41Z)
+## new tests on 03b93cc (before the fixes): test_a_section_separator_ends_the_frames_of_the_test_before_it, test_a_search_stopped_at_its_limit_says_its_no_match_is_only_for_the_files_searched, test_a_missing_file_path_is_not_called_a_missing_directory fail; test_frames_never_push_another_error_out_of_the_excerpt fails at frame width 150 (probe: TypeError dropped at widths 100, 120, 145-155 on the old code, shown at every width on the new)
+## mutants
+KILLED   no caller frames: ['FAILED tests/test_locate_from_traceback.py::test_the_nearest_six_frames_are_kept_in_order_each_with_its_code_line']
+KILLED   outermost frames kept: ['FAILED tests/test_locate_from_traceback.py::test_the_real_21379_excerpt_shows_where_the_error_was_called_from']
+KILLED   outermost frame kept first in the room left: ['FAILED tests/test_locate_from_traceback.py::test_the_nearest_six_frames_are_kept_in_order_each_with_its_code_line']
+KILLED   frames placed before the blocks: ['FAILED tests/test_locate_from_traceback.py::test_frames_that_do_not_fit_go_first_outermost_first_and_never_an_e_line']
+KILLED   separator keeps the frames: ['FAILED tests/test_locate_from_traceback.py::test_a_section_separator_ends_the_frames_of_the_test_before_it']
+KILLED   missing file called a missing directory: ['FAILED tests/test_locate_from_traceback.py::test_a_missing_file_path_is_not_called_a_missing_directory']
+KILLED   frame without its code line: ['FAILED tests/test_locate_from_traceback.py::test_the_real_21379_excerpt_shows_where_the_error_was_called_from']
+KILLED   frames kept across blocks: ['FAILED tests/test_locate_from_traceback.py::test_each_block_gets_only_the_frames_since_the_previous_block']
+KILLED   baseline not recorded: ['FAILED tests/test_locate_from_traceback.py::test_approve_records_the_red_baseline_and_the_first_attempt_is_told_it']
+KILLED   stage ignores the baseline: ['FAILED tests/test_locate_from_traceback.py::test_approve_records_the_red_baseline_and_the_first_attempt_is_told_it']
+KILLED   baseline replaces the carry: ['FAILED tests/test_locate_from_traceback.py::test_a_retry_is_told_the_baseline_and_how_the_last_stage_ended']
+KILLED   baseline not rendered: ['FAILED tests/test_locate_from_traceback.py::test_approve_records_the_red_baseline_and_the_first_attempt_is_told_it']
+KILLED   green validations in the baseline: ['FAILED tests/test_locate_from_traceback.py::test_approve_records_the_red_baseline_and_the_first_attempt_is_told_it']
+KILLED   baseline unbounded: ['FAILED tests/test_locate_from_traceback.py::test_only_failing_validations_with_output_give_a_baseline_at_most_three']
+KILLED   SearchFiles refuses a file: ['FAILED tests/test_locate_from_traceback.py::test_searchfiles_searches_one_file_and_refuses_a_symlinked_one']
+KILLED   bare No matches when stopped: ['FAILED tests/test_locate_from_traceback.py::test_a_search_stopped_at_its_limit_says_its_no_match_is_only_for_the_files_searched']
+KILLED   SearchFiles version 1: ['FAILED tests/test_locate_from_traceback.py::test_a_searchfiles_step_is_memo_keyed_by_version_2']
+RESULT: 17/17 killed
+## all non-sandbox tests
+1275 passed in 62.95s
+## verify.sh at 4c772ec
+1708 passed in 778.03s (0:12:58)
+== sandbox tests skipped: 0
+RESULT: PASS
