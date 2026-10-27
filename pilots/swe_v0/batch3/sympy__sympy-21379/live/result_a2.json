@@ -1,0 +1,89 @@
+{
+  "status": "FAILED_ACCEPTANCE",
+  "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
+  "blocked_reason": null,
+  "contract_sha": "316ba8fbffab97e9dfa52b43d87ffab44330c1afe3f09646ed2eac23a73009a2",
+  "verdict": {
+    "iteration": 1,
+    "outcome": "fail",
+    "failing": [
+      "artifact:SUMMARY.json",
+      "claims",
+      "validation:target"
+    ],
+    "workspace_digest": "a7290723e6aa29a0a80efd2afe27209e652e262e7b943182bffd3dbc6a878460"
+  },
+  "attempt": {
+    "iteration": 1,
+    "end": "max_steps",
+    "steps": 12,
+    "wrote": false,
+    "read": [
+      "sympy/core/tests/test_issue_20521.py",
+      "sympy/polys/polytools.py",
+      "sympy/functions/elementary/piecewise.py",
+      "sympy/core/expr.py",
+      "sympy/core/basic.py",
+      "sympy/core/relational.py"
+    ]
+  },
+  "tools": [
+    "list_files",
+    "read_file",
+    "write_file",
+    "run_validation",
+    "edit_file",
+    "search_files"
+  ],
+  "provenance": {
+    "input": {
+      "workspace": "fixtures/repos/task",
+      "snapshot_sha256": "a7290723e6aa29a0a80efd2afe27209e652e262e7b943182bffd3dbc6a878460",
+      "intake": {
+        "name": "task",
+        "repo": "https://github.com/sympy/sympy.git",
+        "commit": "624217179aaf8d094e6ff75b7493ad1ee47599b0",
+        "tree": "4914f038f694c62fed6b2d4165783ced1f5da4ef",
+        "exclude": [],
+        "kind": "task",
+        "base": {
+          "name": "base",
+          "commit": "624217179aaf8d094e6ff75b7493ad1ee47599b0",
+          "tree": "4914f038f694c62fed6b2d4165783ced1f5da4ef",
+          "snapshot_sha256": "5e37cb109f4cdda7d78b687721d55058ad0ba4dfa18c02cdf159f5bb6b024fe6"
+        },
+        "added": {
+          "sympy/core/tests/test_issue_20521.py": "9518a242eb01420ca916bb7f6df5dd4fb812e9e016c33d25df4ce578644d2126"
+        },
+        "contract_sha256": "316ba8fbffab97e9dfa52b43d87ffab44330c1afe3f09646ed2eac23a73009a2"
+      }
+    },
+    "argus": {
+      "commit": "ed186476f66033bb479b572c56e6ba8fc5755934",
+      "dirty": false
+    }
+  },
+  "budget_profile": {
+    "name": "large_usd",
+    "attempt_tokens": 400000,
+    "max_output_tokens": 32000,
+    "attempt_usd": 0.45,
+    "max_input_tokens": 60000
+  },
+  "loop_policy": {
+    "auto_validate": true,
+    "auto_validate_max": 4,
+    "context_notice_at": 0.7
+  },
+  "cache": {
+    "cache_read_tokens": 242560,
+    "cache_creation_tokens": null,
+    "usd_saved_estimate": 0.03565632
+  },
+  "run_id": "j20261027_151552_7cdd-a2",
+  "attempts": 2,
+  "usd_billed": 0.01369248,
+  "usd_complete": true,
+  "llm_calls": 19,
+  "llm_calls_unknown": 0
+}

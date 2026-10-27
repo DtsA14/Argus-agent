@@ -1,0 +1,126 @@
+diff --git a/sympy/parsing/sympy_parser.py b/sympy/parsing/sympy_parser.py
+index 52711d1324782797cb8689cca11513f21d733851..e1270a2e7aff7a312db568701940161bf2cc888f 100644
+--- a/sympy/parsing/sympy_parser.py
++++ b/sympy/parsing/sympy_parser.py
+@@ -1110,6 +1110,14 @@ class EvaluateFalseTransformer(ast.NodeTransformer):
+         ast.BitAnd: 'And',
+         ast.BitXor: 'Not',
+     }
++    relational_operators = {
++        ast.NotEq: 'Ne',
++        ast.Lt: 'Lt',
++        ast.LtE: 'Le',
++        ast.Gt: 'Gt',
++        ast.GtE: 'Ge',
++        ast.Eq: 'Eq'
++    }
+     functions = (
+         'Abs', 'im', 're', 'sign', 'arg', 'conjugate',
+         'acos', 'acot', 'acsc', 'asec', 'asin', 'atan',
+@@ -1186,6 +1194,40 @@ def visit_BinOp(self, node):
+             return new_node
+         return node
+ 
++    def visit_Compare(self, node):
++        def _new_relational(sympy_class, left, right):
++            return ast.Call(
++                func=ast.Name(id=sympy_class, ctx=ast.Load()),
++                args=[left, right],
++                keywords=[ast.keyword(arg='evaluate', value=ast.NameConstant(value=False, ctx=ast.Load()))],
++                starargs=None,
++                kwargs=None
++            )
++
++        if node.ops[0].__class__ in self.relational_operators:
++            sympy_class = self.relational_operators[node.ops[0].__class__]
++            right = self.visit(node.comparators[0])
++            left = self.visit(node.left)
++            new_node = _new_relational(sympy_class, left, right)
++
++            if len(node.ops) > 1:
++                # chained comparison, e.g. ``1 < x < 2``, which Python
++                # evaluates as ``1 < x and x < 2``
++                rest = ast.Compare(
++                    left=node.comparators[0],
++                    ops=node.ops[1:],
++                    comparators=node.comparators[1:])
++                new_node = ast.Call(
++                    func=ast.Name(id='And', ctx=ast.Load()),
++                    args=[new_node, self.visit(rest)],
++                    keywords=[ast.keyword(arg='evaluate', value=ast.NameConstant(value=False, ctx=ast.Load()))],
++                    starargs=None,
++                    kwargs=None
++                )
++
++            return new_node
++        return node
++
+     def visit_Call(self, node):
+         new_node = self.generic_visit(node)
+         if isinstance(node.func, ast.Name) and node.func.id in self.functions:
+diff --git a/sympy/parsing/tests/test_parse_expr_relationals.py b/sympy/parsing/tests/test_parse_expr_relationals.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f8e740760721b705d6065de33f1208ee096ad99
+--- /dev/null
++++ b/sympy/parsing/tests/test_parse_expr_relationals.py
+@@ -0,0 +1,60 @@
++"""Tests for ``parse_expr(..., evaluate=False)`` applied to relationals.
++
++The ``evaluate=False`` parameter of ``parse_expr`` used to be ignored for
++relationals, so that e.g. ``parse_expr('1 < 2', evaluate=False)`` returned
++``True`` instead of the unevaluated ``Lt(1, 2, evaluate=False)``.
++"""
++
++from sympy.core import Integer, Symbol
++from sympy.core.relational import Eq, Ge, Gt, Le, Lt, Ne
++from sympy.core.singleton import S
++from sympy.parsing.sympy_parser import parse_expr
++
++
++def test_lt_with_evaluate_false():
++    expr = parse_expr('1 < 2', evaluate=False)
++    assert isinstance(expr, Lt)
++    assert expr.args == (Integer(1), Integer(2))
++    assert str(expr) == '1 < 2'
++
++
++def test_gt_with_evaluate_false():
++    expr = parse_expr('1 > 2', evaluate=False)
++    assert isinstance(expr, Gt)
++    assert expr.args == (Integer(1), Integer(2))
++
++
++def test_le_with_evaluate_false():
++    expr = parse_expr('1 <= 1', evaluate=False)
++    assert isinstance(expr, Le)
++    assert expr.args == (Integer(1), Integer(1))
++
++
++def test_ge_with_evaluate_false():
++    expr = parse_expr('1 >= 1', evaluate=False)
++    assert isinstance(expr, Ge)
++    assert expr.args == (Integer(1), Integer(1))
++
++
++def test_eq_with_evaluate_false():
++    expr = parse_expr('1 == 1', evaluate=False)
++    assert isinstance(expr, Eq)
++    assert expr.args == (Integer(1), Integer(1))
++
++
++def test_ne_with_evaluate_false():
++    expr = parse_expr('1 != 2', evaluate=False)
++    assert isinstance(expr, Ne)
++    assert expr.args == (Integer(1), Integer(2))
++
++
++def test_relational_with_symbols_with_evaluate_false():
++    x = Symbol('x')
++    expr = parse_expr('x < 1', evaluate=False)
++    assert expr == Lt(x, Integer(1), evaluate=False)
++
++
++def test_relational_evaluates_by_default():
++    assert parse_expr('1 < 2') is S.true
++    assert parse_expr('2 < 1') is S.false
++    assert parse_expr('1 == 1') is True

@@ -1,0 +1,14 @@
+batch spent $0.0000 over 0 jobs; next stage cap $0.75; fits $3.00: True
+sympy__sympy-21847: start 2026-10-27T15:11:26Z
+sympy__sympy-21847: end 2026-10-27T15:13:19Z rc=0 job=j20261027_151126_f6bf drafter finished: DRAFTED ($0.0166) job j20261027_151126_f6bf: AWAITING_APPROVAL 
+batch spent $0.0166 over 1 jobs; next stage cap $0.75; fits $3.00: True
+sympy__sympy-21612: start 2026-10-27T15:13:19Z
+sympy__sympy-21612: end 2026-10-27T15:15:51Z rc=1 job=j20261027_151320_1514 drafter finished: NO_DRAFT ($0.0241) job j20261027_151320_1514: DRAFT_FAILED 
+batch spent $0.0407 over 2 jobs; next stage cap $0.75; fits $3.00: True
+sympy__sympy-21379: start 2026-10-27T15:15:51Z
+sympy__sympy-21379: end 2026-10-27T15:19:21Z rc=0 job=j20261027_151552_7cdd drafter finished: DRAFTED ($0.0310) job j20261027_151552_7cdd: AWAITING_APPROVAL 
+batch spent $0.0717 over 3 jobs; next stage cap $0.75; fits $3.00: True
+sympy__sympy-24661: start 2026-10-27T15:19:21Z
+sympy__sympy-24661: end 2026-10-27T15:21:33Z rc=0 job=j20261027_151922_fcff drafter finished: DRAFTED ($0.0218) job j20261027_151922_fcff: AWAITING_APPROVAL 
+batch spent $0.1340 over 4 jobs; next stage cap $0.00; fits $3.00: True
+BATCHCODEDONE

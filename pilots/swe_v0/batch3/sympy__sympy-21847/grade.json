@@ -1,0 +1,42 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_monomials": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_monomial_count": "pass",
+    "test_monomial_mul": "pass",
+    "test_monomial_div": "pass",
+    "test_monomial_gcd": "pass",
+    "test_monomial_lcm": "pass",
+    "test_monomial_max": "pass",
+    "test_monomial_pow": "pass",
+    "test_monomial_min": "pass",
+    "test_monomial_divides": "pass"
+  },
+  "patch_sha256": "f4669f22f7d02e57b4fce11eb8469f0a382491696896b9a17481b772e0e3209b",
+  "test_patch_sha256": "5b7f4777d3758f017525597a935d95a0516f90b653bd21ccdcc9a92e681d16e6",
+  "base_commit": "d9b18c518d64d0ebe8e35a98c2fb519938b9b151",
+  "environment": "sympy_py39",
+  "image": "sha256:2f684b89c437b84269305d9bbc056389c32533facb911fce7ee2bba7e509d78f",
+  "test_files": [
+    "sympy/polys/tests/test_monomials.py"
+  ],
+  "run": {
+    "tests_run": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 0
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/polys/tests/test_itermonomials.py"
+    ],
+    "status": "pass",
+    "tests_run": 6,
+    "failures": 0,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}

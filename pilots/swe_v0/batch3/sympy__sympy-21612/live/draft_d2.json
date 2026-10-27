@@ -1,0 +1,105 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/printing/str.py"
+    ],
+    "risks": [
+      "Over-parenthesizing: bracketing every denominator (or swapping strict=False for strict=True everywhere) changes strings checked by sympy/printing/tests/test_str.py and sympy/printing/tests/test_latex.py.",
+      "Double brackets, e.g. '((a**3 + b)/c)/((1/(c**2)))', which is not the expression the issue expects.",
+      "Only patching the special 'unevaluated Mul' branch of _print_Mul while the normal branch (the one this example takes) keeps printing the denominator unbracketed.",
+      "Bracketing the wrong side, e.g. printing 'c*(a**3 + b)/(1)' or dropping the denominator altogether by evaluating the nested Pow.",
+      "Breaking plain quotients such as x/y, 1/x, x/(y*z) or a**-1 by adding brackets where none are wanted."
+    ],
+    "steps": [
+      "Build the expression the LaTeX converter builds for \\frac{\\frac{a^3+b}{c}}{\\frac{1}{c^2}}: Mul(Mul(Add(a**3, b), Pow(c, -1)), Pow(Pow(Pow(c, 2), -1), -1)), all unevaluated.",
+      "Reproduce the reported output: str() of it is '((a**3 + b)/c)/1/(c**2)' because StrPrinter._print_Mul puts the denominator factor Pow(Pow(c, 2), -1) into the denominator list and prints it as '1/(c**2)' with no brackets.",
+      "Fix _print_Mul in sympy/printing/str.py so a denominator factor that prints as a quotient (a Pow with negative exponent, such as the base of the outer Pow with exponent -1) is enclosed in brackets, giving '((a**3 + b)/c)/(1/(c**2))' and 'a/(1/b)'.",
+      "Leave the numerator handling, the 'unevaluated Mul' branch, the associativity order and every other printed form untouched so no existing string changes.",
+      "Run the new test file and the regression suites sympy/printing/tests/test_str.py and sympy/printing/tests/test_precedence.py, and narrow the bracketing until nothing previously printed changes."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/printing/str.py"
+      ],
+      "protected": [
+        "sympy/printing/tests/**",
+        "sympy/parsing/tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/parsing/tests/test_latex_nested_frac.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_roundtrip",
+          "sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_str_keeps_denominator_brackets",
+          "sympy/parsing/tests/test_latex_nested_frac.py::test_frac_with_frac_denominator_roundtrip"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "strprinter",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/printing/tests/test_str.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 50,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/printing/tests/test_str.py::test_Mul",
+          "sympy/printing/tests/test_str.py::test_Pow"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "precedence",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/printing/tests/test_precedence.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/printing/tests/test_precedence.py::test_Mul",
+          "sympy/printing/tests/test_precedence.py::test_Pow"
+        ],
+        "environment": "sympy_py39"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "content": "\"\"\"Missing brackets when printing a fraction whose denominator is a fraction.\n\n``\\\\frac{\\\\frac{a^3+b}{c}}{\\\\frac{1}{c^2}}`` is converted to the unevaluated\nproduct ``((a**3 + b)/c) * (1/(c**2))**-1``.  Printing that product dropped the\nbrackets around the denominator and gave ``((a**3 + b)/c)/1/(c**2)``, which no\nlonger means what was parsed.  The LaTeX converter itself needs the antlr4\nruntime, so these tests build the expression the converter builds and check\nhow it prints: the printed form has to read back as the parsed expression.\n\"\"\"\n\nfrom sympy import Add, Mul, Pow, sympify\nfrom sympy.abc import a, b, c\n\n\ndef _Add(*args):\n    return Add(*args, evaluate=False)\n\n\ndef _Mul(*args):\n    return Mul(*args, evaluate=False)\n\n\ndef _Pow(base, exp):\n    return Pow(base, exp, evaluate=False)\n\n\ndef _nested_frac():\n    # \\frac{\\frac{a^3+b}{c}}{\\frac{1}{c^2}}\n    upper = _Mul(_Add(_Pow(a, 3), b), _Pow(c, -1))\n    lower = _Pow(_Pow(c, 2), -1)  # \\frac{1}{c^2}\n    return _Mul(upper, _Pow(lower, -1))\n\n\ndef test_nested_frac_roundtrip():\n    expr = _nested_frac()\n    expected = (a**3 + b)/c/(1/c**2)\n    assert sympify(str(expr)) == expected\n\n\ndef test_nested_frac_str_keeps_denominator_brackets():\n    assert str(_nested_frac()) == \"((a**3 + b)/c)/(1/(c**2))\"\n\n\ndef test_frac_with_frac_denominator_roundtrip():\n    # \\frac{a}{\\frac{1}{b}}\n    expr = _Mul(a, _Pow(_Pow(b, -1), -1))\n    assert sympify(str(expr)) == a/(1/b)\n",
+      "path": "sympy/parsing/tests/test_latex_nested_frac.py"
+    }
+  ],
+  "unverifiable": [
+    "The end-to-end call parse_latex('\\\\frac{\\\\frac{a^3+b}{c}}{\\\\frac{1}{c^2}}') cannot be exercised in the sandbox: the antlr4 runtime is not installed, so sympy/parsing/tests/test_latex.py is skipped entirely. The tests therefore build the exact expression the latex converter builds for that input and check its printed form; the conversion step itself is not covered.",
+    "Whether the converter could instead be changed so that the denominator never becomes a nested unevaluated Pow (an alternative fix in sympy/parsing/latex/_parse_latex_antlr.py) is not checked, and cannot be checked here.",
+    "The internal structure of the parsed object is not checked: it already evaluates correctly (substituting a=2, b=5, c=3 gives 39); only the printed form is wrong, so only printing is tested.",
+    "Printing of quotients whose denominator is a quotient in other shapes than the two tested is not covered."
+  ]
+}

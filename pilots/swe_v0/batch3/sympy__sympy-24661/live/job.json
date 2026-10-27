@@ -1,0 +1,134 @@
+{
+  "job": "j20261027_151922_fcff",
+  "kind": "code",
+  "state": "REVIEW_READY",
+  "created_at": "2026-10-27T15:19:22Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/swe/sympy",
+    "commit": "a36caf5c74fe654cedc488e8a8a05fad388f8406",
+    "issue": "The evaluate=False parameter to `parse_expr` is ignored for relationals\nSee also #22305 and #22098\n\nThis inequality evaluates even though `evaluate=False` is given:\n```python\nIn [14]: parse_expr('1 < 2', evaluate=False)\nOut[14]: True\n```\nThe result that should be returned is:\n```python\nIn [15]: Lt(1, 2, evaluate=False)\nOut[15]: 1 < 2\n```",
+    "exclude": [],
+    "environment": "sympy_py39"
+  },
+  "environment_image": "sha256:2f684b89c437b84269305d9bbc056389c32533facb911fce7ee2bba7e509d78f",
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261027_151922_fcff-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-27T15:19:23Z",
+      "ended_at": "2026-10-27T15:21:33Z",
+      "status": "DRAFTED",
+      "usd": 0.021826302,
+      "draft_sha256": "f6c2a10aa8d3533af752c6688d3a9788efbdac04386b7b3b1f3ef63c367c5830"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261027_151922_fcff-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-27T15:29:18Z",
+      "ended_at": "2026-10-27T15:30:47Z",
+      "status": "DONE",
+      "usd": 0.013033254,
+      "profile": "large_usd",
+      "review": {
+        "valid": true,
+        "problems": [],
+        "dir": "/home/ubuntu/pilot3a_live/jobs/j20261027_151922_fcff/runs/j20261027_151922_fcff-a1/review"
+      }
+    }
+  },
+  "approval": {
+    "draft_sha256": "f6c2a10aa8d3533af752c6688d3a9788efbdac04386b7b3b1f3ef63c367c5830",
+    "contract_sha256": "ec36ac475963293f8c26925d7864a8c7e75770e38b25df3bfbb4520a11bb8037",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-27T15:29:18Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-27T15:19:22Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-27T15:19:23Z",
+      "what": "intaken",
+      "files": 1950
+    },
+    {
+      "at": "2026-10-27T15:19:23Z",
+      "what": "limits_shown",
+      "screen": "== drafter stage d1 (job j20261027_151922_fcff) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-27T15:19:23Z",
+      "what": "confirmed_by_flag",
+      "screen": "== drafter stage d1 (job j20261027_151922_fcff) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-27T15:19:23Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-27T15:19:23Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-27T15:21:33Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-27T15:29:06Z",
+      "what": "limits_shown",
+      "screen": "== approve and run the agent (job j20261027_151922_fcff) ==\ndraft f6c2a10aa8d3 (from stage j20261027_151922_fcff-d1)\nwritable: sympy/parsing/sympy_parser.py\nenvironment sympy_py39, image 2f684b89c437\nvalidation target (env sympy_py39): python -m pytest sympy/parsing/tests/test_parse_expr_relationals.py; required: sympy/parsing/tests/test_parse_expr_relationals.py::test_lt_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_gt_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_le_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_ge_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_eq_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_ne_with_evaluate_false\nvalidation regression (env sympy_py39): python -m pytest sympy/parsing/tests/test_sympy_parser.py; required: sympy/parsing/tests/test_sympy_parser.py::test_sympy_parser, sympy/parsing/tests/test_sympy_parser.py::test_rationalize, sympy/parsing/tests/test_sympy_parser.py::test_factorial_fail, sympy/parsing/tests/test_sympy_parser.py::test_repeated_fail, sympy/parsing/tests/test_sympy_parser.py::test_repeated_dot_only, sympy/parsing/tests/test_sympy_parser.py::test_local_dict, sympy/parsing/tests/test_sympy_parser.py::test_local_dict_split_implmult, sympy/parsing/tests/test_sympy_parser.py::test_local_dict_symbol_to_fcn, sympy/parsing/tests/test_sympy_parser.py::test_global_dict, sympy/parsing/tests/test_sympy_parser.py::test_no_globals, sympy/parsing/tests/test_sympy_parser.py::test_issue_2515, sympy/parsing/tests/test_sympy_parser.py::test_issue_7663, sympy/parsing/tests/test_sympy_parser.py::test_recursive_evaluate_false_10560, sympy/parsing/tests/test_sympy_parser.py::test_function_evaluate_false, sympy/parsing/tests/test_sympy_parser.py::test_issue_10773, sympy/parsing/tests/test_sympy_parser.py::test_split_symbols, sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_function, sympy/parsing/tests/test_sympy_parser.py::test_functional_exponent, sympy/parsing/tests/test_sympy_parser.py::test_match_parentheses_implicit_multiplication, sympy/parsing/tests/test_sympy_parser.py::test_convert_equals_signs, sympy/parsing/tests/test_sympy_parser.py::test_parse_function_issue_3539, sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_numeric, sympy/parsing/tests/test_sympy_parser.py::test_unicode_names, sympy/parsing/tests/test_sympy_parser.py::test_python3_features, sympy/parsing/tests/test_sympy_parser.py::test_issue_19501, sympy/parsing/tests/test_sympy_parser.py::test_parsing_definitions, sympy/parsing/tests/test_sympy_parser.py::test_builtins, sympy/parsing/tests/test_sympy_parser.py::test_issue_22822\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0218; left $0.9782"
+    },
+    {
+      "at": "2026-10-27T15:29:06Z",
+      "what": "confirmed_by_flag",
+      "screen": "== approve and run the agent (job j20261027_151922_fcff) ==\ndraft f6c2a10aa8d3 (from stage j20261027_151922_fcff-d1)\nwritable: sympy/parsing/sympy_parser.py\nenvironment sympy_py39, image 2f684b89c437\nvalidation target (env sympy_py39): python -m pytest sympy/parsing/tests/test_parse_expr_relationals.py; required: sympy/parsing/tests/test_parse_expr_relationals.py::test_lt_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_gt_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_le_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_ge_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_eq_with_evaluate_false, sympy/parsing/tests/test_parse_expr_relationals.py::test_ne_with_evaluate_false\nvalidation regression (env sympy_py39): python -m pytest sympy/parsing/tests/test_sympy_parser.py; required: sympy/parsing/tests/test_sympy_parser.py::test_sympy_parser, sympy/parsing/tests/test_sympy_parser.py::test_rationalize, sympy/parsing/tests/test_sympy_parser.py::test_factorial_fail, sympy/parsing/tests/test_sympy_parser.py::test_repeated_fail, sympy/parsing/tests/test_sympy_parser.py::test_repeated_dot_only, sympy/parsing/tests/test_sympy_parser.py::test_local_dict, sympy/parsing/tests/test_sympy_parser.py::test_local_dict_split_implmult, sympy/parsing/tests/test_sympy_parser.py::test_local_dict_symbol_to_fcn, sympy/parsing/tests/test_sympy_parser.py::test_global_dict, sympy/parsing/tests/test_sympy_parser.py::test_no_globals, sympy/parsing/tests/test_sympy_parser.py::test_issue_2515, sympy/parsing/tests/test_sympy_parser.py::test_issue_7663, sympy/parsing/tests/test_sympy_parser.py::test_recursive_evaluate_false_10560, sympy/parsing/tests/test_sympy_parser.py::test_function_evaluate_false, sympy/parsing/tests/test_sympy_parser.py::test_issue_10773, sympy/parsing/tests/test_sympy_parser.py::test_split_symbols, sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_function, sympy/parsing/tests/test_sympy_parser.py::test_functional_exponent, sympy/parsing/tests/test_sympy_parser.py::test_match_parentheses_implicit_multiplication, sympy/parsing/tests/test_sympy_parser.py::test_convert_equals_signs, sympy/parsing/tests/test_sympy_parser.py::test_parse_function_issue_3539, sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_numeric, sympy/parsing/tests/test_sympy_parser.py::test_unicode_names, sympy/parsing/tests/test_sympy_parser.py::test_python3_features, sympy/parsing/tests/test_sympy_parser.py::test_issue_19501, sympy/parsing/tests/test_sympy_parser.py::test_parsing_definitions, sympy/parsing/tests/test_sympy_parser.py::test_builtins, sympy/parsing/tests/test_sympy_parser.py::test_issue_22822\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0218; left $0.9782"
+    },
+    {
+      "at": "2026-10-27T15:29:06Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-27T15:29:18Z",
+      "what": "approved",
+      "draft": "f6c2a10aa8d3",
+      "contract": "ec36ac475963"
+    },
+    {
+      "at": "2026-10-27T15:29:18Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-27T15:30:58Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "REVIEW_READY",
+      "stage": "a1"
+    }
+  ],
+  "intake": {
+    "commit": "a36caf5c74fe654cedc488e8a8a05fad388f8406",
+    "tree": "57a4c028a91753ca541654a967f973dcd82656ec",
+    "files": 1950,
+    "snapshot_sha256": "5cfad2e9e6ee45cf5461aa5c95e30933dc2db939007571761b55175fa000d510"
+  }
+}

@@ -1,0 +1,108 @@
+diff --git a/sympy/parsing/tests/test_latex_nested_frac.py b/sympy/parsing/tests/test_latex_nested_frac.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f55d642f090fcf3ef973c28ce707cc534926159e
+--- /dev/null
++++ b/sympy/parsing/tests/test_latex_nested_frac.py
+@@ -0,0 +1,47 @@
++"""Missing brackets when printing a fraction whose denominator is a fraction.
++
++``\\frac{\\frac{a^3+b}{c}}{\\frac{1}{c^2}}`` is converted to the unevaluated
++product ``((a**3 + b)/c) * (1/(c**2))**-1``.  Printing that product dropped the
++brackets around the denominator and gave ``((a**3 + b)/c)/1/(c**2)``, which no
++longer means what was parsed.  The LaTeX converter itself needs the antlr4
++runtime, so these tests build the expression the converter builds and check
++how it prints: the printed form has to read back as the parsed expression.
++"""
++
++from sympy import Add, Mul, Pow, sympify
++from sympy.abc import a, b, c
++
++
++def _Add(*args):
++    return Add(*args, evaluate=False)
++
++
++def _Mul(*args):
++    return Mul(*args, evaluate=False)
++
++
++def _Pow(base, exp):
++    return Pow(base, exp, evaluate=False)
++
++
++def _nested_frac():
++    # \frac{\frac{a^3+b}{c}}{\frac{1}{c^2}}
++    upper = _Mul(_Add(_Pow(a, 3), b), _Pow(c, -1))
++    lower = _Pow(_Pow(c, 2), -1)  # \frac{1}{c^2}
++    return _Mul(upper, _Pow(lower, -1))
++
++
++def test_nested_frac_roundtrip():
++    expr = _nested_frac()
++    expected = (a**3 + b)/c/(1/c**2)
++    assert sympify(str(expr)) == expected
++
++
++def test_nested_frac_str_keeps_denominator_brackets():
++    assert str(_nested_frac()) == "((a**3 + b)/c)/(1/(c**2))"
++
++
++def test_frac_with_frac_denominator_roundtrip():
++    # \frac{a}{\frac{1}{b}}
++    expr = _Mul(a, _Pow(_Pow(b, -1), -1))
++    assert sympify(str(expr)) == a/(1/b)
+diff --git a/sympy/printing/str.py b/sympy/printing/str.py
+index c3fdcdd4358f3e3180e0b4e5c2839f61b34c3fb0..7fe1803aa3c16190608a3d82cb9955d5c3604379 100644
+--- a/sympy/printing/str.py
++++ b/sympy/printing/str.py
+@@ -15,6 +15,29 @@
+ from sympy.utilities import default_sort_key, sift
+ 
+ 
++def _has_top_level_division(printed):
++    """Return ``True`` if ``printed`` contains a division at bracket level 0.
++
++    A denominator factor whose printed form is itself a division has to be
++    put in brackets, otherwise ``a/(1/b)`` would be printed as ``a/1/b``,
++    which reads back as a completely different expression.
++    """
++    depth = 0
++    for char in printed:
++        if char in '([{':
++            depth += 1
++        elif char in ')]}':
++            depth = max(depth - 1, 0)
++        elif char == '/' and depth == 0:
++            return True
++    return False
++
++
++def _parenthesize_divisions(factors):
++    """Put brackets around printed factors that contain a top-level division."""
++    return ["(%s)" % f if _has_top_level_division(f) else f for f in factors]
++
++
+ class StrPrinter(Printer):
+     printmethod = "_sympystr"
+     _default_settings = {
+@@ -284,8 +307,8 @@ def _print_Mul(self, expr):
+                 pre = [str(d.pop(0))]
+             else:
+                 pre = []
+-            dfactors = pre + [self.parenthesize(a, prec, strict=False)
+-                for a in d]
++            dfactors = pre + _parenthesize_divisions(
++                [self.parenthesize(a, prec, strict=False) for a in d])
+ 
+             n = '*'.join(nfactors)
+             d = '*'.join(dfactors)
+@@ -348,7 +371,8 @@ def apow(i):
+         a = a or [S.One]
+ 
+         a_str = [self.parenthesize(x, prec, strict=False) for x in a]
+-        b_str = [self.parenthesize(x, prec, strict=False) for x in b]
++        b_str = _parenthesize_divisions(
++            [self.parenthesize(x, prec, strict=False) for x in b])
+ 
+         # To parenthesize Pow with exp = -1 and having more than one Symbol
+         for item in pow_paren:

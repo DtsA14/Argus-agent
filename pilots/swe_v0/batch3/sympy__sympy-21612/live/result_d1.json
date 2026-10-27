@@ -1,0 +1,57 @@
+{
+  "status": "NO_DRAFT",
+  "stop_reason": "output_truncated",
+  "blocked_reason": null,
+  "drafting": {
+    "end": "output_truncated",
+    "steps": 9,
+    "submits": 0
+  },
+  "policy": {
+    "max_steps": 16,
+    "max_submits": 5,
+    "environment": "sympy_py39",
+    "validation_timeout_s": 300,
+    "profiles": [
+      "default",
+      "large_usd"
+    ],
+    "profile_info": {
+      "default": {
+        "attempt_tokens": 30000,
+        "max_output_tokens": 4096
+      },
+      "large_usd": {
+        "attempt_tokens": 400000,
+        "attempt_usd": 0.45,
+        "max_input_tokens": 40000,
+        "max_output_tokens": 8192
+      }
+    },
+    "agent_tools": [
+      "ListFiles",
+      "ReadFile",
+      "WriteFile",
+      "RunValidation"
+    ],
+    "tools": [
+      "list_files",
+      "search_files",
+      "read_file"
+    ]
+  },
+  "source_unchanged": true,
+  "run_id": "j20261027_151320_1514-d1",
+  "intake": "base",
+  "max_usd": 0.75,
+  "draft": false,
+  "cache": {
+    "cache_read_tokens": 361472,
+    "cache_creation_tokens": null,
+    "usd_saved_estimate": 0.053136384
+  },
+  "usd_billed": 0.024071016,
+  "usd_complete": true,
+  "llm_calls": 10,
+  "llm_calls_unknown": 0
+}

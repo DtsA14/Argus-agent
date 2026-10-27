@@ -1,0 +1,108 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/polys/polytools.py",
+      "sympy/core/basic.py",
+      "sympy/core/expr.py",
+      "sympy/functions/elementary/piecewise.py"
+    ],
+    "steps": [
+      "Reproduce the MWE with real symbols and a cleared cache and capture the traceback into the polynomial-construction helper that raises 'Piecewise generators do not make sense'.",
+      "Trace which automatic evaluation step (subs/fallback reconstruction or Piecewise reconstruction) asks for a polynomial with Piecewise objects as generators.",
+      "Change that path so a Piecewise-containing expression is not passed to polynomial construction as generators, or so the substitution leaves the expression unchanged instead of evaluating it via Poly.",
+      "Run the new regression test plus the subs and Piecewise suites."
+    ],
+    "risks": [
+      "A broad catch around the polynomial helper could hide genuine PolynomialError cases and change Poly API behaviour.",
+      "Changing Piecewise subs/reconstruction could alter evaluation of conditions or assumptions and break other substitution tests.",
+      "Clearing the cache inside a test makes the failure order-dependent; the fix must work on a fresh process, not only after cache warm-up."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/polys/polytools.py",
+        "sympy/core/basic.py",
+        "sympy/core/expr.py",
+        "sympy/functions/elementary/piecewise.py"
+      ],
+      "protected": [
+        "sympy/**/tests/**",
+        "conftest.py",
+        "pytest.ini",
+        "setup.cfg"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/core/tests/test_issue_20521.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 1,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/core/tests/test_issue_20521.py::test_subs_int_to_float_with_piecewise_hyperbolic"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "regression_subs_piecewise",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/core/tests/test_subs.py::test_subs",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_7370",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_16715",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_20360"
+        ],
+        "timeout_s": 300,
+        "min_tests": 4,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/core/tests/test_subs.py::test_subs",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_7370",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_16715",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_20360"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "regression_polytools",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/polys/tests/test_polytools.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 50,
+        "max_skipped": 0,
+        "must_pass": [],
+        "environment": "sympy_py39"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/core/tests/test_issue_20521.py",
+      "content": "from sympy import Piecewise, exp, sinh, symbols\nfrom sympy.core.cache import clear_cache\n\n\ndef test_subs_int_to_float_with_piecewise_hyperbolic():\n    # This is the MWE from the issue: with real assumptions, substituting\n    # an integer by a float inside this expression raised a PolynomialError\n    # (\"Piecewise generators do not make sense\").\n    x, y, z = symbols('x y z', real=True)\n    clear_cache()\n    expr = exp(sinh(Piecewise((x, y > x), (y, True)) / z))\n    try:\n        expr.subs({1: 1.0})\n    except Exception as exc:\n        assert False, 'subs raised %s: %s' % (type(exc).__name__, exc)\n"
+    }
+  ],
+  "unverifiable": [
+    "The issue also reports that a second subs call without clearing the cache succeeds; the test only exercises the cleared-cache path, where the exception occurs.",
+    "The report says replacing sinh by cosh or tanh also triggers the error; the test deliberately uses only the MWE with sinh."
+  ]
+}
