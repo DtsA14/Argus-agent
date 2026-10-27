@@ -350,3 +350,45 @@ def test_audit_run_rebuilds_the_truncation_hint(tmp_path, counter):
     r, d = go(tmp_path, model, config(100000))
     assert r["status"] == st.DONE and TRUNC in text(model.calls[1])
     assert "prompt_hash checked 3, mismatches 0" in audit(d)
+
+
+# ---- SPEC_AGENT_BUDGET_GAPS 2.1: the hint after max_steps without writing --------------------------------------------
+
+STEPS = "It used all of its steps without changing any file"
+
+
+def cheap_reads(n):
+    return [tau.reply(tool_calls=[{"name": "ReadFile", "args": {"path": "src/calc.py"}, "id": f"q{i}"}],
+                      input_tokens=500, output_tokens=60) for i in range(n)]
+
+
+def test_after_max_steps_without_writing_the_next_attempt_is_told_to_change_something_early(tmp_path, counter):
+    per_message(counter)
+    steps = load_config()["code_task"]["max_steps"]
+    model = StrictScriptedChatModel(script=cheap_reads(steps) + [tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, config(100000))
+    assert tau.ends(d)[0] == (0, "max_steps", steps) and r["status"] == st.DONE
+    first = text(model.calls[steps])
+    assert STEPS in first and "with EditFile on the most likely place" in first
+    assert "The workspace is kept between attempts." in first and TRUNC not in first and HINT not in first
+
+
+def test_no_max_steps_hint_after_a_write_or_for_another_end(tmp_path, counter):
+    per_message(counter)
+    steps = load_config()["code_task"]["max_steps"]
+    model = StrictScriptedChatModel(script=[BAD] + cheap_reads(steps - 1) + [tau.WRITE, tau.FINISH])
+    go(tmp_path / "w", model, config(100000))
+    assert STEPS not in text(model.calls[steps])
+    model = StrictScriptedChatModel(script=tau.reads(5) + [tau.WRITE, tau.FINISH])                # context_limit
+    go(tmp_path / "c", model, config(10000))
+    assert STEPS not in text(model.calls[5]) and HINT in text(model.calls[5])
+
+
+def test_a_retry_after_max_steps_without_writing_is_told_too(tmp_path, counter):
+    per_message(counter)
+    carry = {"carried": True, "from": "a1", "stopped": {"end": "max_steps", "steps": 12, "wrote": False, "read": []}}
+    model = StrictScriptedChatModel(script=[tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, config(100000), initial_feedback=carry)
+    first = text(model.calls[0])
+    assert r["status"] == st.DONE and STEPS in first and "The workspace is kept" not in first
+    assert "prompt_hash checked 2, mismatches 0" in audit(d)

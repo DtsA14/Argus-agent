@@ -1,6 +1,6 @@
 # Spec: tiga celah dari SWE batch 3 (max_steps tanpa menulis, output drafter, profil yang dilihat drafter)
 
-Status: **spec, belum dikoding.** 2026-10-27. Dari `pilots/swe_v0/batch3/RESULT.md` bagian "Yang dipelajari" 2–4; Atha: "spek satu
+Status: **spec disetujui** (K1–K3, Atha 2026-10-27: "Gass"). Dari `pilots/swe_v0/batch3/RESULT.md` bagian "Yang dipelajari" 2–4; Atha: "spek satu
 PR kecil buat celah 1-3". **Keputusan yang diminta: bagian 5.**
 
 ## 1. Masalah

@@ -136,6 +136,10 @@ drafter:
   # 200,000 since the first DeepSeek drafter run (2026-10-23): it read 13 files and hit 64,000 before any submit.
   # DeepSeek's context is 1M and a cached input token costs $0.003/M, so one call of 200,000 is ~$0.03 at worst.
   max_input_tokens: 200000
+  # docs/reviews/SPEC_AGENT_BUDGET_GAPS.md 2.2: the drafter's output cap per model. SWE v0 batch 3 (21612 d1): DeepSeek's
+  # reasoning used 16,384 of 16,384 and the drafter ended NO_DRAFT before a submit. 32,000 as the coder (#200); every call
+  # is still lowered to what fits the attempt's $0.70 reservation.
+  max_output_tokens_by_model: {"deepseek:deepseek-flash": 32000, "deepseek:deepseek-v4-pro": 32000}
   max_steps: 16
   max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
   # The profiles a draft may give the agent. Not `large` (45,000 tokens per attempt): an agent's input is re-sent at
