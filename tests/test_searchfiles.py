@@ -55,7 +55,9 @@ def test_path_limits_the_search_to_a_directory(ws, tmp_path):
     b = box(ws, tmp_path)
     assert search(b, "report_key", "src/pkg").splitlines() == ["src/pkg/use.py:2: k = report_key(a, b)"]
     assert search(b, "report_key", "src/nope") == "No such directory: 'src/nope'"
-    assert search(b, "report_key", "src/keys.py") == "Rejected: 'src/keys.py' is not a directory."
+    # SPEC_LOCATE_FROM_TRACEBACK 2.3: a file path searches that file only (tests/test_locate_from_traceback.py)
+    assert search(b, "report_key", "src/keys.py").splitlines() == ["src/keys.py:1: def report_key(c, p):"]
+    assert search(b, "x", "src/keys.py/y") == "Rejected: 'src/keys.py/y' is not a directory or a regular file."
 
 
 @pytest.mark.parametrize("path", ["../", "..", "src/../..", "/etc", "/", "src\x00"])
@@ -123,7 +125,7 @@ def test_the_files_read_per_call_are_bounded(ws, tmp_path, monkeypatch):
 def test_the_bytes_read_per_call_are_bounded(ws, tmp_path, monkeypatch):
     monkeypatch.setattr(ct, "SEARCH_MAX_BYTES", 30)
     out = search(box(ws, tmp_path), "report_key")
-    assert "search stopped after 0 files (0 bytes)" in out and "No matches." in out
+    assert "search stopped after 0 files (0 bytes)" in out and "No matches in the 0 files searched." in out
 
 
 def test_bad_text_is_rejected(ws, tmp_path):

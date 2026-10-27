@@ -1,0 +1,41 @@
+j)
+sympy/functions/elementary/hyperbolic.py:251: in _eval_is_real
+    return (im%pi).is_zero
+sympy/core/decorators.py:266: in _func
+    return func(self, other)
+sympy/core/decorators.py:136: in binary_op_wrapper
+    return func(self, other)
+sympy/core/expr.py:280: in __mod__
+    return Mod(self, other)
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/function.py:473: in __new__
+    result = super().__new__(cls, *args, **options)
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/function.py:285: in __new__
+    evaluated = cls.eval(*args)
+sympy/core/mod.py:169: in eval
+    G = gcd(p, q)
+sympy/polys/polytools.py:5306: in gcd
+    (F, G), opt = parallel_poly_from_expr((f, g), *gens, **args)
+sympy/polys/polytools.py:4340: in parallel_poly_from_expr
+    return _parallel_poly_from_expr(exprs, opt)
+sympy/polys/polytools.py:4399: in _parallel_poly_from_expr
+    raise PolynomialError("Piecewise generators do not make sense")
+E   sympy.polys.polyerrors.PolynomialError: Piecewise generators do not make sense
+
+During handling of the above exception, another exception occurred:
+sympy/core/tests/test_issue_20521.py:15: in test_subs_int_to_float_with_piecewise_hyperbolic
+    assert False, 'subs raised %s: %s' % (type(exc).__name__, exc)
+E   AssertionError: subs raised PolynomialError: Piecewise generators do not make sense
+E   assert False
+=============================== warnings summary ===============================
+../usr/local/lib/python3.9/site-packages/_pytest/config/__init__.py:1474
+  /usr/local/lib/python3.9/site-packages/_pytest/config/__init__.py:1474: PytestConfigWarning: Unknown config option: doctestplus
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+                                DO *NOT* COMMIT!                                
+========================= 1 failed, 1 warning in 0.88s =========================

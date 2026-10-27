@@ -549,9 +549,13 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             if not report["ok"]:
                 raise Refused("the draft does not pass its check now: " + "; ".join(report["problems"]))
             record = dr.approve(report, draft, root=job.root)
+            from codetask.agent import baseline_errors
+            # SPEC_LOCATE_FROM_TRACEBACK 2.2: the red baseline of this check (the approved draft, just now), recorded
+            # once; every agent stage's first attempt is told it, a resume included.
             job.data["approval"] = {"draft_sha256": seen, "contract_sha256": record["contract_sha256"], "task": TASK,
                                     "max_usd": cap, "max_iterations": max_iterations, "at": deps.clock(),
-                                    "by": os.environ.get("USER"), "feasibility": record["feasibility"]}
+                                    "by": os.environ.get("USER"), "feasibility": record["feasibility"],
+                                    "baseline": baseline_errors(report)}
             job.note(deps, "approved", draft=seen[:12], contract=record["contract_sha256"][:12])
             r = _agent(job, cfg, deps, sandbox_cfg)
     return job, r
@@ -595,7 +599,7 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
     deps.echo(running(job, "agent", st["run_id"]))
     r = ctrun.run_code_task(contract_path=contract_path, run_id=st["run_id"], runs_dir=job.runs, cfg=acfg,
                             resume=again, models=deps.models, validate=deps.validate, preflight=deps.preflight,
-                            env_preflight=deps.env_preflight, root=job.root, initial_feedback=st.get("carry"))
+                            env_preflight=deps.env_preflight, root=job.root, initial_feedback=stage_feedback(ap, st))
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"], profile=profile)
     deps.echo(f"agent finished: {r['status']} (${r['usd_billed']:.4f})")
     if r["status"] != "DONE":
@@ -607,6 +611,15 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
     st["review"] = {"valid": out["valid"], "problems": out["problems"], "dir": str(out["dir"])}
     job.move(REVIEW_READY if out["valid"] else REVIEW_INVALID, deps, stage=sid)
     return r
+
+
+def stage_feedback(approval, stage):
+    """What the first attempt of an agent stage is told: the approved draft's red baseline (SPEC_LOCATE_FROM_TRACEBACK
+    2.2, absent in jobs approved before it) and, for a retry, the carry. Both recorded; nothing is recomputed."""
+    fb = dict(stage.get("carry") or {})
+    if approval.get("baseline"):
+        fb["baseline"] = approval["baseline"]
+    return fb or None
 
 
 def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):

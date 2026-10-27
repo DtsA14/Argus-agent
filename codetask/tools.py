@@ -149,19 +149,20 @@ class Toolbox:
         return "\n".join(sorted(snapshot(self.workspace)))
 
     def searchfiles(self, args):
-        """Literal, case-sensitive search over regular files under the workspace (or under `path`). Every read goes
-        through the path jail; symlinks and special files are never followed or read. Bounded in files and bytes
-        read, in files too large to read, and in result lines; any bound reached is reported as incomplete."""
+        """Literal, case-sensitive search over regular files under the workspace (or under `path`, or in the one
+        regular file `path` names: SPEC_LOCATE_FROM_TRACEBACK 2.3). Every read goes through the path jail; symlinks
+        and special files are never followed or read. Bounded in files and bytes read, in files too large to read, and
+        in result lines; any bound reached is reported as incomplete."""
         text, under = args.get("text"), args.get("path") or ""
         if not isinstance(text, str) or not 1 <= len(text) <= SEARCH_MAX_TEXT or "\n" in text or "\r" in text:
             return f"Rejected: text must be one line of 1 to {SEARCH_MAX_TEXT} characters."
         if not isinstance(under, str):
-            return "Rejected: path must be a directory path."
-        prefix = ()
+            return "Rejected: path must be a directory or file path."
+        prefix, single = (), False
         if under not in ("", ".", "./"):                                # "/" and other absolute paths: refused
             prefix = tuple(self.jail.parts(under))                     # PathEscape: '..', absolute, NUL
             cur = self.jail.root
-            for part in prefix:                                        # every component a real directory
+            for n, part in enumerate(prefix, 1):                       # a real directory, or the last a regular file
                 cur = cur / part
                 try:
                     st = os.lstat(cur)
@@ -169,11 +170,14 @@ class Toolbox:
                     return f"No such directory: {under!r}"
                 if stat.S_ISLNK(st.st_mode):
                     raise PathEscape(f"refusing to search through a symlink: {under!r}")
-                if not stat.S_ISDIR(st.st_mode):
-                    return f"Rejected: {under!r} is not a directory."
+                if stat.S_ISREG(st.st_mode) and n == len(prefix):
+                    single = True                                      # the last component: search this file only
+                elif not stat.S_ISDIR(st.st_mode):
+                    return f"Rejected: {under!r} is not a directory or a regular file."
         start = self.jail.root.joinpath(*prefix)
         hits, large, files, read, stopped = [], [], 0, 0, False
-        for dirpath, dirnames, filenames in os.walk(start, followlinks=False):
+        walk = [(str(start.parent), [], [start.name])] if single else os.walk(start, followlinks=False)
+        for dirpath, dirnames, filenames in walk:
             here = os.path.relpath(dirpath, self.jail.root)
             dirnames[:] = sorted(d for d in dirnames if not os.path.islink(os.path.join(dirpath, d)))
             for name in sorted(filenames):
@@ -194,7 +198,7 @@ class Toolbox:
                         hits.append(f"{rel}:{n}: {line.strip()[:SEARCH_MAX_LINE]}")
             if stopped:
                 break
-        out = hits[:SEARCH_MAX_MATCHES] or ["No matches."]
+        out = hits[:SEARCH_MAX_MATCHES] or [f"No matches in the {files} files searched." if stopped else "No matches."]
         if len(hits) > SEARCH_MAX_MATCHES:
             out.append(f"... {len(hits) - SEARCH_MAX_MATCHES} more matches not shown: results incomplete, "
                        "narrow the text or the path.")
