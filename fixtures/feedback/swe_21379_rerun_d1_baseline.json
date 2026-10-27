@@ -1,0 +1,36 @@
+{
+ "source": "j20261027_175610_34ba/runs/j20261027_175610_34ba-d1",
+ "scope": {
+  "writable": [
+   "sympy/core/basic.py",
+   "sympy/core/expr.py",
+   "sympy/core/function.py",
+   "sympy/core/mul.py",
+   "sympy/core/power.py",
+   "sympy/functions/elementary/exponential.py",
+   "sympy/functions/elementary/piecewise.py",
+   "sympy/polys/polytools.py"
+  ],
+  "protected": [
+   "sympy/core/tests/test_piecewise_subs.py",
+   "sympy/**/tests/*.py",
+   "conftest.py",
+   "sympy/conftest.py",
+   "pytest.ini"
+  ]
+ },
+ "baseline": {
+  "target": {
+   "status": "fail",
+   "red_check": {
+    "sympy/core/tests/test_piecewise_subs.py::test_subs_with_piecewise_hyperbolic_real_symbols": {
+     "assertion": true,
+     "outcome": "failed",
+     "path": "sympy/core/tests/test_piecewise_subs.py",
+     "type": "builtins.AssertionError"
+    }
+   },
+   "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.9.25, pytest-8.4.2, pluggy-1.6.0 -- /usr/bin/python3\narchitecture: 64-bit\ncache:        yes\nground types: python \n\nrootdir: /workspace\nconfigfile: pytest.ini\ncollecting ... collected 2 items\n\nsympy/core/tests/test_piecewise_subs.py::test_subs_with_piecewise_hyperbolic_real_symbols FAILED\nsympy/core/tests/test_piecewise_subs.py::test_subs_with_piecewise_hyperbolic_plain_symbols PASSED\n\n=================================== FAILURES ===================================\n_______________ test_subs_with_piecewise_hyperbolic_real_symbols _______________\nsympy/core/tests/test_piecewise_subs.py:41: in test_subs_with_piecewise_hyperbolic_real_symbols\n    _assert_no_exception(result, 1, 1.0)\nsympy/core/tests/test_piecewise_subs.py:27: in _assert_no_exception\n    assert not isinstance(result, Exception), (\nE   AssertionError: subs({1: 1.0}) raised PolynomialError: Piecewise generators do not make sense\nE   assert not True\nE    +  where True = isinstance(PolynomialError('Piecewise generators do not make sense'), Exception)\n=============================== warnings summary ===============================\n../usr/local/lib/python3.9/site-packages/_pytest/config/__init__.py:1474\n  /usr/local/lib/python3.9/site-packages/_pytest/config/__init__.py:1474: PytestConfigWarning: Unknown config option: doctestplus\n  \n    self._warn_or_fail_if_strict(f\"Unknown config option: {key}\\n\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n                                DO *NOT* COMMIT!                                \n==================== 1 failed, 1 passed, 1 warning in 0.38s ====================\n"
+  }
+ }
+}

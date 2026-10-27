@@ -424,8 +424,12 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
     return job
 
 
-def _draft(job, cfg, deps, n):
-    """Start drafter stage n (its cap fixed now), or resume it with the cap it started with."""
+NOTE_MAX = 1000                  # SPEC_DRAFT_CALL_PATH 2.4: characters of a reviewer's note to the drafter
+
+
+def _draft(job, cfg, deps, n, note=None):
+    """Start drafter stage n (its cap fixed now), or resume it with the cap it started with. note: a reviewer's note
+    for a redraft, recorded with the stage when it starts (a resume takes the drafter run's own record)."""
     from codetask.drafter import DRAFTED, drafter_settings, run_drafter
     sid = f"d{n}"
     stage = job.data["stages"].get(sid)
@@ -447,14 +451,17 @@ def _draft(job, cfg, deps, n):
     with live(deps, scfg, [scfg["drafter"]["role"]], text, job=job):
         if not resume:
             job.data["stages"][sid] = {"kind": "draft", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
-                                       "started_at": deps.clock()}
+                                       "started_at": deps.clock(), **({"note": note} if note else {})}
+            if note:
+                job.data["human_steered"] = True
             job.move(DRAFTING, deps, stage=sid)
         run_id = job.data["stages"][sid]["run_id"]
         again = (job.runs / run_id / "checkpoints.sqlite").exists()
         deps.echo(running(job, "drafter", run_id))
         r = run_drafter(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job.data["inputs"]["issue"],
                         max_usd=cap, resume=again, models=deps.models, validate=deps.validate,
-                        preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root, red=deps.red)
+                        preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root, red=deps.red,
+                        note=job.data["stages"][sid].get("note"))
     st = job.data["stages"][sid]
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
     deps.echo(f"drafter finished: {r['status']} (${r['usd_billed']:.4f})")
@@ -498,6 +505,18 @@ def changed_lines(job, draft):
             "warning(s): read the diff in DRAFT_REVIEW.md"]
 
 
+def call_path_lines(draft_path, draft):
+    """SPEC_DRAFT_CALL_PATH 2.3: the approve screen says when the draft's failing baseline runs through files that are
+    not writable (from the drafter's check report next to the draft)."""
+    from codetask.drafter import call_path_warning
+    try:
+        report = json.loads((Path(draft_path).parent / "check_report.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    w = call_path_warning(draft, report)
+    return [f"warning: {w}"] if w else []
+
+
 def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_iterations=3, reference_patch=None,
             jobs_dir=JOBS):
     """Approve the draft the human saw (sha, as status shows it), then run the agent and build the review package."""
@@ -530,6 +549,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                  *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}; required: "
                    + (", ".join(v.get("must_pass") or []) or "none") for v in c["validation"]],
                  *changed_lines(job, draft),
+                 *call_path_lines(path, draft),
                  f"tools added: {c.get('tools') or 'none'}; profile {profile}; one attempt ${need:.2f}",
                  f"agent cap ${cap:.4f}, {max_iterations} attempts; "
                  + ("reference patch given (proven)" if reference_patch else "no reference patch (unproven)")]
@@ -704,15 +724,23 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
             return job, _agent(job, cfg, deps, sandbox_cfg, sid=sid, cap=cap, carry=carry)
 
 
-def redraft(job_id, *, cfg, deps, jobs_dir=JOBS):
+def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
+    """A new drafter stage; note: the reviewer's note it is told (SPEC_DRAFT_CALL_PATH 2.4), which marks the job
+    human-steered."""
+    if note is not None:
+        note = clean(note).strip()
+        if not note:
+            raise Refused("the note is empty; nothing was started")
+        if len(note) > NOTE_MAX:
+            raise Refused(f"the note has {len(note)} characters, more than {NOTE_MAX}; nothing was started")
     job = open_job(job_id, jobs_dir)
     with job.lock():
         _check_environment(job, cfg)
         if job.data["state"] not in (DRAFT_FAILED, AWAITING_APPROVAL):
             raise Refused(f"job {job.id} is {job.data['state']}: only a failed or unapproved draft is redrafted")
         n = 1 + max(int(k[1:]) for k, s in job.data["stages"].items() if s["kind"] == "draft")
-        job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"))
-        return job, _draft(job, cfg, deps, n)
+        job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"), **({"note": True} if note else {}))
+        return job, _draft(job, cfg, deps, n, note=note)
 
 
 def abandon(job_id, reason, *, deps, jobs_dir=JOBS):
@@ -828,9 +856,12 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     changed = environment_changed(job, cfg) if cfg is not None else None
     if changed:
         out += [f"environment: {changed}", f'next: argus abandon {job.id} "<why>"']
+    if d.get("human_steered"):                  # SPEC_DRAFT_CALL_PATH 2.4
+        out.append("human-steered: a redraft was given a reviewer's note")
     for sid, s in d["stages"].items():
         out.append(f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
-                   + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else ""))
+                   + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else "")
+                   + (f"; note: {s['note']}" if s.get("note") else ""))
     accepted = any(s["kind"] == "draft" and s.get("status") == "DRAFTED" for s in d["stages"].values())
     if d["state"] == AWAITING_APPROVAL or (d["state"] == DRAFT_FAILED and accepted):
         st, path = _last_draft(job)
@@ -843,6 +874,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                 "writable: " + ", ".join(c["scope"]["writable"]),
                 *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
                 *changed_lines(job, draft),
+                *call_path_lines(path, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     out += _attempt_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):

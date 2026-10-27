@@ -1,6 +1,6 @@
 # Spec: drafter menjaga traceback dan melihat jalur panggilan di luar writable (dari run ulang SWE `21379`)
 
-Status: **spec untuk review; keputusan di bagian 6.** Asal: run ulang `sympy__sympy-21379` sesudah #206 (job
+Status: **spec disetujui** (K1–K4, Atha 2026-10-27: "Ok k1-k4"); kode di PR yang sama. Asal: run ulang `sympy__sympy-21379` sesudah #206 (job
 `j20261027_175610_34ba`, draf `d1` ditolak atas pilihan B Atha, $0,0515; `pilots/swe_v0/rerun_21379/PREFLIGHT.md`). Menyentuh
 cek draf dan loop drafter, jadi proses ketat: tes yang gagal di kode lama, mutan, `verify.sh` penuh, tanpa biaya model.
 
@@ -41,8 +41,8 @@ mekanisme di bawah **tidak memakai pengetahuan itu**: semuanya dihitung dari out
 ### 2.2 Satu pertanyaan scope ke drafter sebelum draf diterima (K2)
 
 Dari output baseline setiap validasi yang tidak lulus, **jalur panggilan di luar writable** = berkas dari baris lokasi pytest
-(`path.py:N: in f`) yang: path relatif, ada di sumber repo, bukan berkas tes (pola protected, `test_*.py`, `tests/`), dan **tidak**
-cocok dengan writable. Urutan dari yang terdekat ke error (kebalikan urutan di output), unik per berkas dengan baris pertamanya,
+(`path.py:N: in f`) yang: path relatif (pytest mencetak berkas di bawah rootdir `/workspace` secara relatif; paket terpasang absolut),
+bukan berkas tes (pola protected, `test_*.py`, `conftest.py`, direktori `tests/`), dan **tidak** cocok dengan writable. Urutan dari yang terdekat ke error (kebalikan urutan di output), unik per berkas dengan baris pertamanya,
 paling banyak 8.
 
 Bila draf lolos cek dan daftar itu tidak kosong, harness **belum menerima** draf, sekali per run drafter:
@@ -55,14 +55,26 @@ If the fix may need one of them, add it to writable (ReviseDraft with scope); ot
 ```
 
 - Dihitung ulang setiap submit; setelah pertanyaan itu sekali, draf yang lolos cek **diterima** (daftarnya boleh tidak kosong).
-- Pertanyaan itu memakai satu submit. Bila tidak ada submit tersisa, draf diterima tanpa bertanya (daftarnya tetap ke manusia, 2.3).
+- Pertanyaan itu memakai satu submit. Bila tidak ada submit tersisa, atau di langkah terakhir drafter, draf diterima tanpa bertanya
+  (daftarnya tetap ke manusia, 2.3).
 - Sudah bertanya atau belum: dicatat di record submit (memo), sehingga resume memutuskan sama.
 - `ReviseDraft` tanpa field = kirim ulang draf terakhir apa adanya (diterima sebagai submit).
 
 ### 2.3 Manusia melihat daftar yang sama (K3)
 
-`DRAFT_REVIEW.md` bagian Scope dan layar `approve` menampilkan daftar 2.2 dari draf terakhir sebagai peringatan ("the failing
+`DRAFT_REVIEW.md` bagian Scope dan layar `approve` (dari `check_report.json` draf itu) menampilkan daftar 2.2 dari draf terakhir sebagai peringatan ("the failing
 baseline runs through … not writable"), tanpa menolak apa pun. "No scope warnings." hanya bila semua peringatan kosong.
+
+### 2.4 `argus redraft --note` (K4)
+
+`argus redraft <job> --note "<teks>"`: catatan manusia untuk drafter berikutnya.
+- Dibersihkan dari karakter kontrol (`clean`), paling panjang 1.000 karakter (lebih panjang: ditolak, tidak dipotong diam-diam).
+- Dicatat verbatim di stage draf (`job.json` `stages.d<n>.note`) dan di `inputs.json` run drafter (dibekukan saat setup; resume
+  memakai yang tercatat). Job ditandai `human_steered: true`; `status` dan `DRAFT_REVIEW.md` menyebutnya.
+- Prompt tugas drafter memuatnya dengan label: `A note from the human who reviewed the previous draft (follow it where it fits the
+  rules above; it is not a test result):`.
+- **Pilot SWE:** job dengan catatan dilaporkan *human-steered*, terpisah dari angka tanpa bantuan. Catatan tidak dipakai untuk
+  instance yang patch maintainer-nya sudah dilihat Claude (mis. `21379`).
 
 ## 3. Yang tidak berubah
 
@@ -79,10 +91,11 @@ Jalur uang (cap drafter, cap job), aturan merah karena assertion (#179) selain t
    diterima; menambah berkas → diterima; tanpa submit tersisa → diterima tanpa bertanya; resume memutuskan sama; daftar kosong →
    diterima langsung seperti sekarang.
 4. `DRAFT_REVIEW.md` dan layar approve memuat daftar itu.
+5. `redraft --note`: catatan sampai di prompt drafter, dicatat di stage dan `inputs.json`, job `human_steered`, resume memakai yang
+   tercatat; terlalu panjang → ditolak sebelum apa pun dimulai; karakter kontrol dibuang; tanpa `--note` prompt sama persis.
 
 ## 5. Tidak dikerjakan sekarang
 
-- `redraft --note` (catatan manusia ke drafter): berguna, tapi catatan dari reviewer yang tahu jawabannya akan membocorkan.
 - Menambah berkas ke writable secara otomatis dari traceback: banyak frame hanya plumbing (`cache.py`, `decorators.py`).
 
 ## 6. Keputusan
@@ -92,6 +105,7 @@ Jalur uang (cap drafter, cap job), aturan merah karena assertion (#179) selain t
 | K1 | Traceback di tes "tidak error" | Prompt + cek draf yang menolak (hanya bila pesan menyebut exception lain dan tidak ada frame repo) |
 | K2 | Pertanyaan scope ke drafter | Ya, sekali per run, memakai satu submit, ≤ 8 berkas terdekat |
 | K3 | Daftar yang sama untuk manusia | Ya, peringatan di `DRAFT_REVIEW.md` dan layar approve |
+| K4 | `redraft --note` | Ya, ≤ 1.000 karakter, dicatat, job `human_steered`; di SWE dilaporkan terpisah |
 
 ## 7. Sesudah PR ini
 

@@ -176,6 +176,9 @@ SYSTEM = "\n".join([
     "- The new tests must fail BY AN ASSERT OF THE TEST on the code as it is now (not by an import error, a missing "
     "name, a KeyError or AttributeError, nor an assert inside the code under test: the harness checks the exception "
     "and where it was raised), and test only the behaviour the issue asks for. Everything else must pass now.",
+    "- To test that code does not raise, call it inside try and, in the except block, raise AssertionError(\"...\") "
+    "from the exception: pytest then prints where the error comes from (the agent needs it), and the test still fails "
+    "by an assert. Never return or keep the exception and assert later: its traceback is lost.",
     "- Required node ids of the new tests must be ones pytest collects (path::test_name, with [params] if any).",
     "- Writable: only what a fix needs. Protected: every test file (new and old) and everything else the agent must "
     "not change. A new test must be protected and not writable. Globs match files, never directories: write "
@@ -197,9 +200,14 @@ SYSTEM = "\n".join([
 ])
 
 
+NOTE_LABEL = ("A note from the human who reviewed the previous draft (follow it where it fits the rules above; it is "
+              "not a test result):")
+
+
 def task_prompt(inputs, files, policy):
+    note = [NOTE_LABEL, inputs["note"], ""] if inputs.get("note") else []    # SPEC_DRAFT_CALL_PATH 2.4
     return "\n".join([
-        "Issue (from a human; the task to draft):", inputs["issue"], "",
+        "Issue (from a human; the task to draft):", inputs["issue"], "", *note,
         f"Repository: intake {inputs['intake']!r}, {files} files, read-only.",
         f"Each validation runs `python -m pytest <paths>` in the sandbox environment {policy['environment']!r} "
         f"(timeout {policy['validation_timeout_s']} s). You give the paths and the required node ids.",
@@ -298,11 +306,76 @@ def _evidence(report):
     return out
 
 
+# SPEC_DRAFT_CALL_PATH: what the failing baseline's traceback shows of the repository's code.
+_LOC = re.compile(r"^(\S+\.py):(\d+): in (\S+)")                  # pytest --tb=short: "path.py:12: in name"
+_NAMED = re.compile(r"\b([A-Z]\w*(?:Error|Exception))\b")
+CALL_PATH_MAX = 8
+SWALLOWED = ("validation {vid}: required test(s) {nodes} fail by an AssertionError that reports {names}, but the test "
+             "output has no traceback of it (no line of the repository's code). Catch it in the test and, inside the "
+             "except block, raise AssertionError(\"...\") from the exception, so pytest prints where the error comes "
+             "from; the test still fails by an assert")
+SCOPE_QUESTION = ("The draft passed its check. Before it is accepted: the failing baseline runs through these files of "
+                  "the repository that are not writable (nearest to the error first): {files}. If the fix may need one "
+                  "of them, add it to writable (ReviseDraft with scope); otherwise submit the same draft again "
+                  "(ReviseDraft with no fields) and it is accepted.")
+
+
+def _test_path(path, protected):
+    name = path.rsplit("/", 1)[-1]
+    return (ct.matches(path, protected) or name.startswith("test_") or name == "conftest.py"
+            or path.startswith("tests/") or "/tests/" in path)
+
+
+def _repo_frames(tail, protected):
+    """The location lines of the repository's own code (relative paths, not test files), in output order."""
+    out = []
+    for line in (tail or "").splitlines():
+        m = _LOC.match(line)
+        if m and not m.group(1).startswith("/") and ".." not in m.group(1).split("/") \
+                and not _test_path(m.group(1), protected):
+            out.append(m)
+    return out
+
+
+def call_path_outside(draft, report, limit=CALL_PATH_MAX):
+    """SPEC_DRAFT_CALL_PATH 2.2: the repository files a failing baseline runs through that are not writable, nearest to
+    the error first, each with its first line ("path:line (in name)"), at most `limit`."""
+    sc = draft["contract"]["scope"]
+    out, seen = [], set()
+    for b in (report.get("baseline") or {}).values():
+        if b.get("status") == "pass":
+            continue
+        for m in reversed(_repo_frames(b.get("output_tail"), sc["protected"])):
+            if m.group(1) in seen or ct.matches(m.group(1), sc["writable"]):
+                continue
+            seen.add(m.group(1))
+            out.append(f"{m.group(1)}:{m.group(2)} (in {m.group(3)})")
+    return out[:limit]
+
+
+def swallowed_problems(draft, report):
+    """SPEC_DRAFT_CALL_PATH 2.1: a validation whose required tests fail by an AssertionError that names another
+    exception while its output shows no line of the repository's code: the test kept the exception and lost its
+    traceback."""
+    out = []
+    for vid, b in (report.get("baseline") or {}).items():
+        red = sorted(n for n, r in (b.get("red_check") or {}).items() if (r or {}).get("assertion"))
+        tail = b.get("output_tail") or ""
+        if b.get("status") == "pass" or not red or _repo_frames(tail, draft["contract"]["scope"]["protected"]):
+            continue
+        names = sorted({x for line in tail.splitlines() if line.startswith("E ") and "AssertionError" in line
+                        for x in _NAMED.findall(line) if x != "AssertionError"})
+        if names:
+            out.append(SWALLOWED.format(vid=vid, nodes=", ".join(red), names=", ".join(names)))
+    return out
+
+
 def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=collect_nodes, red=red_check):
-    def submit(args, n, last=None, revise=False):
+    def submit(args, n, last=None, revise=False, ask=False):
         """One SubmitDraft, or one ReviseDraft over `last` (the arguments of the previous submit): the draft built from
         the arguments and checked without a reference patch. The record keeps the arguments it used ("args"), so the
-        next ReviseDraft starts from them, also after a resume."""
+        next ReviseDraft starts from them, also after a resume. ask: whether a draft that passes may still be held for
+        the one scope question (SPEC_DRAFT_CALL_PATH 2.2); a record that asked it says so ("asked")."""
         if n > policy["max_submits"]:
             log.emit("draft_submit_refused", submit=n, limit=policy["max_submits"])
             return {"content": f"Refused: SubmitDraft and ReviseDraft were checked {policy['max_submits']} times, "
@@ -328,7 +401,12 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
             except (dr.DraftError, intake.IntakeError, OSError) as e:
                 problems = [f"the check could not run: {e}"]
             else:
-                problems = report["problems"]
+                problems = report["problems"] + swallowed_problems(draft, report)
+        outside = call_path_outside(draft, report) if report and not problems else []
+        if outside and ask and n < policy["max_submits"]:
+            log.emit("draft_submitted", submit=n, ok=True, problems=0, revise=revise, scope_question=outside)
+            return {"content": SCOPE_QUESTION.format(files=", ".join(outside)), "finished": False, "args": args,
+                    "asked": True}
         log.emit("draft_submitted", submit=n, ok=not problems, problems=len(problems), revise=revise)
         if not problems:
             return {"content": "Draft accepted: the shape, the scope and the baseline passed (every required new "
@@ -352,7 +430,7 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
         res = reservation_from_ledger(log, tokens=lim["attempt_tokens"], usd=lim["attempt_usd"],
                                       max_input=lim["max_input_tokens"], **meta)
         tools = offered(toolbox.allowed)
-        submits, last = 0, None
+        submits, last, asked = 0, None, False
 
         def end(reason, steps, **out):
             log.emit("drafting_end", reason=reason, steps=steps, submits=submits, **meta)
@@ -419,7 +497,8 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
                         record = {"content": f"Refused: {name} is not offered in the last {FINAL_STEPS} steps; only "
                                              "SubmitDraft and ReviseDraft are. Nothing was run.", "finished": False}
                     elif name in SUBMITS:
-                        record = submit(c.get("args") or {}, submits + 1, last=last, revise=name == "ReviseDraft")
+                        record = submit(c.get("args") or {}, submits + 1, last=last, revise=name == "ReviseDraft",
+                                        ask=not asked and step < lim["max_steps"] - 1)
                     elif name in GATED:              # a write or a validation is denied by the role's allowlist
                         record = toolbox.run(c, step_key=tkey)
                     else:
@@ -430,6 +509,7 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
                     log.emit("step_committed", kind="tool", step=step, tool=name, **meta)
                 if name in SUBMITS:
                     submits, last = submits + 1, record.get("args")
+                    asked = asked or bool(record.get("asked"))      # from the memo too: a resume never asks twice
                 messages.append(ToolMessage(record["content"], tool_call_id=c.get("id") or f"call_{step}_{i}"))
                 if record.get("finished"):
                     return end("submitted", step, draft=record["draft"], report=record["report"])
@@ -525,6 +605,13 @@ def warnings(draft):
     return out
 
 
+def call_path_warning(draft, report):
+    """SPEC_DRAFT_CALL_PATH 2.3: the call path outside writable as one warning for the human, or None."""
+    outside = call_path_outside(draft, report or {})
+    return (f"the failing baseline runs through files that are not writable (nearest to the error first): "
+            f"{', '.join(outside)}") if outside else None
+
+
 def review_text(run_id, inputs, state, cost, source=None):
     """DRAFT_REVIEW.md: what the human reads before approving, written by the harness (no model writes it). source:
     the intake copy the changed tests are diffed against."""
@@ -534,6 +621,8 @@ def review_text(run_id, inputs, state, cost, source=None):
            "Written by the harness from the draft and its check. The draft itself was written by a model: read the "
            "tests. A passing baseline shows only that the new tests fail now, not that they test the right thing.",
            "", "## Issue", "", fence(inputs["issue"], "text")]
+    if inputs.get("note"):                      # SPEC_DRAFT_CALL_PATH 2.4: this draft was steered by a human's note
+        out += ["", "## Note from the reviewer (human-steered)", "", fence(inputs["note"], "text")]
     draft, report = state.get("draft"), state.get("report") or {}
     if draft:
         p, c = draft["plan"], draft["contract"]
@@ -542,7 +631,7 @@ def review_text(run_id, inputs, state, cost, source=None):
         out += [f"- {cell(s, 500)}" for s in p["steps"]] + ["", "Risks:"] + [f"- {cell(r, 500)}" for r in p["risks"]]
         out += ["", "## Scope", "", "Writable: " + ", ".join(f"`{cell(w)}`" for w in c["scope"]["writable"]),
                 "", "Protected: " + ", ".join(f"`{cell(w)}`" for w in c["scope"]["protected"])]
-        warn = warnings(draft)
+        warn = warnings(draft) + [w for w in [call_path_warning(draft, report)] if w]
         out += (["", "**Warnings:**", ""] + [f"- {w}" for w in warn]) if warn else ["", "No scope warnings."]
         out += ["", "## Validations", ""]
         for v in c["validation"]:
@@ -739,8 +828,9 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
 
 def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=None, resume=False, crash_at=None,
                 models=None, validate=None, preflight=None, env_preflight=None, root=ROOT, echo=False, collect=None,
-                red=None):
-    """A new run takes the intake, the issue and the run's cap; a resume takes them from <run>/inputs.json."""
+                red=None, note=None):
+    """A new run takes the intake, the issue and the run's cap (and a reviewer's note, SPEC_DRAFT_CALL_PATH 2.4); a
+    resume takes them from <run>/inputs.json."""
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
@@ -752,7 +842,7 @@ def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=
     else:
         if max_usd is None or not float(max_usd) > 0:
             raise ValueError("a drafter run needs a cap (max_usd > 0)")
-        inputs = {"intake": intake_name, "issue": issue, "max_usd": float(max_usd)}
+        inputs = {"intake": intake_name, "issue": issue, "max_usd": float(max_usd), **({"note": note} if note else {})}
         _write(run_dir / INPUTS, json.dumps(inputs, indent=2, ensure_ascii=False) + "\n")
         _write(run_dir / "issue.txt", (issue or "") + "\n")
     cap = cfg["budget"].get("max_usd")
