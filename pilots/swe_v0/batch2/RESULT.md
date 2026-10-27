@@ -4,6 +4,10 @@
 lihat `PREFLIGHT.md`). DeepSeek V4.1 Flash thinking, environment `sympy` (image `sha256:de306e046ab6…`, dipin). Artefak:
 `sympy__sympy-24443/live/`, penilaian: `sympy__sympy-24443/grade.json`.
 
+> **Oracle-assisted** (review Atha 2026-10-27): draf `d1` ditolak dan di-redraft **karena** tes drafter gagal di atas patch resmi
+> maintainer, yang dijalankan sebelum approve. Itu menyaring draf dengan jawaban yang tidak ada di repo nyata. Hasil batch ini tidak
+> dicampur dengan batch tanpa bocoran (batch 3 dan sesudahnya).
+
 ## Hasil: `resolved` setelah satu redraft, satu perbaikan harness (#200), dan `retry`
 
 | Tahap | Hasil | Biaya | Catatan |

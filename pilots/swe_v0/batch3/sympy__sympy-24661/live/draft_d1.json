@@ -1,0 +1,113 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/parsing/sympy_parser.py"
+    ],
+    "steps": [
+      "Add a `relational_operators` mapping in `EvaluateFalseTransformer` from `ast.Lt/Gt/LtE/GtE/Eq/NotEq` to the SymPy class names 'Lt', 'Gt', 'Le', 'Ge', 'Eq', 'Ne'.",
+      "Add a `visit_Compare` method to `EvaluateFalseTransformer` that visits the left side and first comparator and re-emits them as a call to the mapped SymPy relational class with `evaluate=False`.",
+      "Leave comparisons whose operator is not mapped (e.g. `is`, `in`) untouched and let non-comparison nodes fall through, so `parse_expr(..., evaluate=True)` and all other parsing paths are unchanged.",
+      "Run the new relational tests and the existing parser tests to confirm unevaluated relationals and no regressions."
+    ],
+    "risks": [
+      "Rebuilding a comparison with only the first operator silently drops the rest of a chained comparison such as '1 < 2 < 3'.",
+      "Forgetting to recurse into the operands with `self.visit`, so nested arithmetic like '2*x < 1' keeps default evaluation.",
+      "Handling ast.Compare in the existing BinOp `operators` dict instead of a dedicated `visit_Compare`, which would never fire or would raise.",
+      "Changing the behaviour for evaluate=True or for `Eq` built by the `convert_equals_signs` transformation, which must stay as it is."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/parsing/sympy_parser.py"
+      ],
+      "protected": [
+        "sympy/parsing/tests/**",
+        "sympy/core/relational.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/parsing/tests/test_parse_expr_relationals.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/parsing/tests/test_parse_expr_relationals.py::test_lt_with_evaluate_false",
+          "sympy/parsing/tests/test_parse_expr_relationals.py::test_gt_with_evaluate_false",
+          "sympy/parsing/tests/test_parse_expr_relationals.py::test_le_with_evaluate_false",
+          "sympy/parsing/tests/test_parse_expr_relationals.py::test_ge_with_evaluate_false",
+          "sympy/parsing/tests/test_parse_expr_relationals.py::test_eq_with_evaluate_false",
+          "sympy/parsing/tests/test_parse_expr_relationals.py::test_ne_with_evaluate_false"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/parsing/tests/test_sympy_parser.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 28,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/parsing/tests/test_sympy_parser.py::test_sympy_parser",
+          "sympy/parsing/tests/test_sympy_parser.py::test_rationalize",
+          "sympy/parsing/tests/test_sympy_parser.py::test_factorial_fail",
+          "sympy/parsing/tests/test_sympy_parser.py::test_repeated_fail",
+          "sympy/parsing/tests/test_sympy_parser.py::test_repeated_dot_only",
+          "sympy/parsing/tests/test_sympy_parser.py::test_local_dict",
+          "sympy/parsing/tests/test_sympy_parser.py::test_local_dict_split_implmult",
+          "sympy/parsing/tests/test_sympy_parser.py::test_local_dict_symbol_to_fcn",
+          "sympy/parsing/tests/test_sympy_parser.py::test_global_dict",
+          "sympy/parsing/tests/test_sympy_parser.py::test_no_globals",
+          "sympy/parsing/tests/test_sympy_parser.py::test_issue_2515",
+          "sympy/parsing/tests/test_sympy_parser.py::test_issue_7663",
+          "sympy/parsing/tests/test_sympy_parser.py::test_recursive_evaluate_false_10560",
+          "sympy/parsing/tests/test_sympy_parser.py::test_function_evaluate_false",
+          "sympy/parsing/tests/test_sympy_parser.py::test_issue_10773",
+          "sympy/parsing/tests/test_sympy_parser.py::test_split_symbols",
+          "sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_function",
+          "sympy/parsing/tests/test_sympy_parser.py::test_functional_exponent",
+          "sympy/parsing/tests/test_sympy_parser.py::test_match_parentheses_implicit_multiplication",
+          "sympy/parsing/tests/test_sympy_parser.py::test_convert_equals_signs",
+          "sympy/parsing/tests/test_sympy_parser.py::test_parse_function_issue_3539",
+          "sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_numeric",
+          "sympy/parsing/tests/test_sympy_parser.py::test_unicode_names",
+          "sympy/parsing/tests/test_sympy_parser.py::test_python3_features",
+          "sympy/parsing/tests/test_sympy_parser.py::test_issue_19501",
+          "sympy/parsing/tests/test_sympy_parser.py::test_parsing_definitions",
+          "sympy/parsing/tests/test_sympy_parser.py::test_builtins",
+          "sympy/parsing/tests/test_sympy_parser.py::test_issue_22822"
+        ],
+        "environment": "sympy_py39"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/parsing/tests/test_parse_expr_relationals.py",
+      "content": "\"\"\"Tests for ``parse_expr(..., evaluate=False)`` applied to relationals.\n\nThe ``evaluate=False`` parameter of ``parse_expr`` used to be ignored for\nrelationals, so that e.g. ``parse_expr('1 < 2', evaluate=False)`` returned\n``True`` instead of the unevaluated ``Lt(1, 2, evaluate=False)``.\n\"\"\"\n\nfrom sympy.core import Integer, Symbol\nfrom sympy.core.relational import Eq, Ge, Gt, Le, Lt, Ne\nfrom sympy.core.singleton import S\nfrom sympy.parsing.sympy_parser import parse_expr\n\n\ndef test_lt_with_evaluate_false():\n    expr = parse_expr('1 < 2', evaluate=False)\n    assert isinstance(expr, Lt)\n    assert expr.args == (Integer(1), Integer(2))\n    assert str(expr) == '1 < 2'\n\n\ndef test_gt_with_evaluate_false():\n    expr = parse_expr('1 > 2', evaluate=False)\n    assert isinstance(expr, Gt)\n    assert expr.args == (Integer(1), Integer(2))\n\n\ndef test_le_with_evaluate_false():\n    expr = parse_expr('1 <= 1', evaluate=False)\n    assert isinstance(expr, Le)\n    assert expr.args == (Integer(1), Integer(1))\n\n\ndef test_ge_with_evaluate_false():\n    expr = parse_expr('1 >= 1', evaluate=False)\n    assert isinstance(expr, Ge)\n    assert expr.args == (Integer(1), Integer(1))\n\n\ndef test_eq_with_evaluate_false():\n    expr = parse_expr('1 == 1', evaluate=False)\n    assert isinstance(expr, Eq)\n    assert expr.args == (Integer(1), Integer(1))\n\n\ndef test_ne_with_evaluate_false():\n    expr = parse_expr('1 != 2', evaluate=False)\n    assert isinstance(expr, Ne)\n    assert expr.args == (Integer(1), Integer(2))\n\n\ndef test_relational_with_symbols_with_evaluate_false():\n    x = Symbol('x')\n    expr = parse_expr('x < 1', evaluate=False)\n    assert expr == Lt(x, Integer(1), evaluate=False)\n\n\ndef test_relational_evaluates_by_default():\n    assert parse_expr('1 < 2') is S.true\n    assert parse_expr('2 < 1') is S.false\n    assert parse_expr('1 == 1') is True\n"
+    }
+  ],
+  "unverifiable": [
+    "Documentation of the ``evaluate`` parameter of ``parse_expr`` (docstring/online docs) is not checked by any test.",
+    "Chained comparisons such as ``parse_expr('1 < 2 < 3', evaluate=False)`` are not specified by the issue and are not covered by a test."
+  ]
+}

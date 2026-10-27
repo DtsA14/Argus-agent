@@ -1,0 +1,95 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/polys/monomials.py"
+    ],
+    "steps": [
+      "In the total-degree branch of `itermonomials`, change the commutative filter `max(powers.values()) >= min_degree` to use the total degree `sum(powers.values()) >= min_degree`, so that monomials with padded `S.One` factors (degree below `max_degree`) are kept whenever their total degree is at least `min_degree`.",
+      "Apply the same `sum(powers.values()) >= min_degree` change to the non-commutative loop, which also filters by the largest single-variable exponent instead of the total degree.",
+      "Leave the argument validation, the `min_degree > max_degree` shortcut and the degree-list (Case II) branch untouched, and keep the docstring examples valid."
+    ],
+    "risks": [
+      "Filtering by `len(item)` or by the padded length would count the `S.One` padding as degree and yield monomials of total degree below `min_degree`.",
+      "Touching the degree-list branch or the `min_degree > max_degree` early return would regress existing behaviour in `sympy/polys/tests/test_monomials.py`.",
+      "Dropping or reordering the `set(...)` de-duplication changes the yield order, which the docs do not fix but the non-commutative case relies on for unique monomials.",
+      "Counting exponents of the appended `S.One` sentinel as a variable would break the total degree computation."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/polys/monomials.py"
+      ],
+      "protected": [
+        "sympy/polys/tests/**",
+        "sympy/polys/__init__.py",
+        "sympy/__init__.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/polys/tests/test_itermonomials.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 6,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/polys/tests/test_itermonomials.py::test_itermonomials_min_degrees_equal_to_max_degrees",
+          "sympy/polys/tests/test_itermonomials.py::test_itermonomials_min_degrees_below_max_degrees",
+          "sympy/polys/tests/test_itermonomials.py::test_itermonomials_min_degrees_cases",
+          "sympy/polys/tests/test_itermonomials.py::test_itermonomials_min_degrees_noncommutative",
+          "sympy/polys/tests/test_itermonomials.py::test_itermonomials_min_degrees_mixed_commutativity"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/polys/tests/test_monomials.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 11,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/polys/tests/test_monomials.py::test_monomials",
+          "sympy/polys/tests/test_monomials.py::test_monomial_count",
+          "sympy/polys/tests/test_monomials.py::test_monomial_mul",
+          "sympy/polys/tests/test_monomials.py::test_monomial_div",
+          "sympy/polys/tests/test_monomials.py::test_monomial_gcd",
+          "sympy/polys/tests/test_monomials.py::test_monomial_lcm",
+          "sympy/polys/tests/test_monomials.py::test_monomial_max",
+          "sympy/polys/tests/test_monomials.py::test_monomial_pow",
+          "sympy/polys/tests/test_monomials.py::test_monomial_min",
+          "sympy/polys/tests/test_monomials.py::test_monomial_divides",
+          "sympy/polys/tests/test_monomials.py::test_Monomial"
+        ],
+        "environment": "sympy_py39"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/polys/tests/test_itermonomials.py",
+      "content": "\"\"\"Tests for itermonomials with a non-zero minimum total degree. \"\"\"\n\nfrom itertools import product\n\nfrom sympy.core import Mul, S, symbols\nfrom sympy.polys.monomials import itermonomials\n\n\ndef monomials_between_degrees(variables, max_degree, min_degree):\n    \"\"\"Reference enumeration of every monomial in ``variables`` whose\n    total degree lies between ``min_degree`` and ``max_degree``.\"\"\"\n    monomials = set()\n    for exponents in product(range(max_degree + 1), repeat=len(variables)):\n        if min_degree <= sum(exponents) <= max_degree:\n            monomials.add(Mul(*[var**exp for var, exp in\n                                zip(variables, exponents)]))\n    return monomials\n\n\ndef test_itermonomials_min_degrees_equal_to_max_degrees():\n    x1, x2, x3 = symbols('x1 x2 x3')\n    states = [x1, x2, x3]\n\n    monomials = set(itermonomials(states, 3, min_degrees=3))\n\n    assert monomials == {\n        x1**3, x2**3, x3**3,\n        x1**2*x2, x1**2*x3, x2**2*x1, x2**2*x3, x3**2*x1, x3**2*x2,\n        x1*x2*x3,\n    }\n\n\ndef test_itermonomials_min_degrees_below_max_degrees():\n    x1, x2, x3 = symbols('x1 x2 x3')\n    variables = [x1, x2, x3]\n\n    monomials = set(itermonomials(variables, 3, min_degrees=2))\n\n    assert monomials == monomials_between_degrees(variables, 3, 2)\n    assert x1*x2 in monomials\n    assert x1*x2*x3 in monomials\n    assert x1 not in monomials\n\n\ndef test_itermonomials_min_degrees_cases():\n    x, y, z = symbols('x y z')\n\n    cases = [\n        ([x, y], 3, 2),\n        ([x, y], 4, 3),\n        ([x, y, z], 2, 2),\n        ([x, y, z], 3, 3),\n        ([x, y, z], 4, 2),\n        ([x, y, z], 4, 3),\n    ]\n\n    for variables, max_degree, min_degree in cases:\n        expected = monomials_between_degrees(variables, max_degree, min_degree)\n        assert set(itermonomials(variables, max_degree, min_degree)) == expected\n\n\ndef test_itermonomials_min_degrees_noncommutative():\n    a, b = symbols('a b', commutative=False)\n\n    monomials = set(itermonomials([a, b], 2, min_degrees=2))\n\n    assert monomials == {a**2, a*b, b*a, b**2}\n\n\ndef test_itermonomials_min_degrees_mixed_commutativity():\n    x = symbols('x')\n    a = symbols('a', commutative=False)\n\n    monomials = set(itermonomials([x, a], 2, min_degrees=2))\n\n    assert monomials == {x**2, a**2, x*a, a*x}\n\n\ndef test_itermonomials_default_min_degree_unchanged():\n    x, y = symbols('x y')\n\n    assert set(itermonomials([x, y], 2)) == {S.One, x, y, x**2, x*y, y**2}\n    assert set(itermonomials([x, y], 2, 1)) == {x, y, x**2, x*y, y**2}\n    assert set(itermonomials([x], 3, 2)) == {x**2, x**3}\n    assert set(itermonomials([x, y], [2, 4], [1, 2])) == {\n        x*y**2, x*y**3, x*y**4,\n        x**2*y**2, x**2*y**3, x**2*y**4,\n    }\n"
+    }
+  ],
+  "unverifiable": [
+    "The order in which the generator yields monomials is not specified by the documentation, so no test fixes it.",
+    "The doctest examples in the `itermonomials` docstring are exercised by `bin/doctest`, not by pytest, so they are not part of the validations (they already show the corrected output).",
+    "Performance of the generator for large `max_degree` (the filter change does not alter the enumeration cost) is not checked by any test."
+  ]
+}

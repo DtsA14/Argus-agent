@@ -1,0 +1,57 @@
+{
+  "status": "DRAFTED",
+  "stop_reason": "a draft passed its check",
+  "blocked_reason": null,
+  "drafting": {
+    "end": "submitted",
+    "steps": 15,
+    "submits": 2
+  },
+  "policy": {
+    "max_steps": 16,
+    "max_submits": 5,
+    "environment": "sympy_py39",
+    "validation_timeout_s": 300,
+    "profiles": [
+      "default",
+      "large_usd"
+    ],
+    "profile_info": {
+      "default": {
+        "attempt_tokens": 30000,
+        "max_output_tokens": 4096
+      },
+      "large_usd": {
+        "attempt_tokens": 400000,
+        "attempt_usd": 0.45,
+        "max_input_tokens": 40000,
+        "max_output_tokens": 8192
+      }
+    },
+    "agent_tools": [
+      "ListFiles",
+      "ReadFile",
+      "WriteFile",
+      "RunValidation"
+    ],
+    "tools": [
+      "list_files",
+      "search_files",
+      "read_file"
+    ]
+  },
+  "source_unchanged": true,
+  "run_id": "j20261027_151552_7cdd-d1",
+  "intake": "base",
+  "max_usd": 0.75,
+  "draft": true,
+  "cache": {
+    "cache_read_tokens": 424576,
+    "cache_creation_tokens": null,
+    "usd_saved_estimate": 0.062412672
+  },
+  "usd_billed": 0.031020378,
+  "usd_complete": true,
+  "llm_calls": 16,
+  "llm_calls_unknown": 0
+}

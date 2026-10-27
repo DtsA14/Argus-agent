@@ -1,0 +1,179 @@
+{
+  "job": "j20261027_151320_1514",
+  "kind": "code",
+  "state": "REVIEW_READY",
+  "created_at": "2026-10-27T15:13:20Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/swe/sympy",
+    "commit": "b4777fdcef467b7132c055f8ac2c9a5059e6a145",
+    "issue": "Latex parsing of fractions yields wrong expression due to missing brackets\nProblematic latex expression: `\"\\\\frac{\\\\frac{a^3+b}{c}}{\\\\frac{1}{c^2}}\"`\n\nis parsed to: `((a**3 + b)/c)/1/(c**2)`.\n\nExpected is: `((a**3 + b)/c)/(1/(c**2))`. \n\nThe missing brackets in the denominator result in a wrong expression.\n\n## Tested on\n\n- 1.8\n- 1.6.2\n\n## Reproduce:\n\n```\nroot@d31ef1c26093:/# python3\nPython 3.6.9 (default, Jan 26 2021, 15:33:00)\n[GCC 8.4.0] on linux\nType \"help\", \"copyright\", \"credits\" or \"license\" for more information.\n>>> from sympy.parsing.latex import parse_latex\n>>> parse_latex(\"\\\\frac{\\\\frac{a^3+b}{c}}{\\\\frac{1}{c^2}}\")\n((a**3 + b)/c)/1/(c**2)",
+    "exclude": [],
+    "environment": "sympy_py39"
+  },
+  "environment_image": "sha256:2f684b89c437b84269305d9bbc056389c32533facb911fce7ee2bba7e509d78f",
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261027_151320_1514-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-27T15:13:21Z",
+      "ended_at": "2026-10-27T15:15:51Z",
+      "status": "NO_DRAFT",
+      "usd": 0.024071016
+    },
+    "d2": {
+      "kind": "draft",
+      "run_id": "j20261027_151320_1514-d2",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-27T15:19:35Z",
+      "ended_at": "2026-10-27T15:23:11Z",
+      "status": "DRAFTED",
+      "usd": 0.040116276,
+      "draft_sha256": "b0944ade75f37d33604179161b9085349ffe4ba6af3e3ea9c15fa544f9bda6ef"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261027_151320_1514-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-27T15:32:52Z",
+      "ended_at": "2026-10-27T15:35:41Z",
+      "status": "DONE",
+      "usd": 0.023885358,
+      "profile": "large_usd",
+      "review": {
+        "valid": true,
+        "problems": [],
+        "dir": "/home/ubuntu/pilot3a_live/jobs/j20261027_151320_1514/runs/j20261027_151320_1514-a1/review"
+      }
+    }
+  },
+  "approval": {
+    "draft_sha256": "b0944ade75f37d33604179161b9085349ffe4ba6af3e3ea9c15fa544f9bda6ef",
+    "contract_sha256": "0dcce489073c263146b6bea785f0d14d03d813a8a1f2bcdc032f85c471624943",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-27T15:32:52Z",
+    "by": "ubuntu",
+    "feasibility": "unproven"
+  },
+  "log": [
+    {
+      "at": "2026-10-27T15:13:20Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-27T15:13:21Z",
+      "what": "intaken",
+      "files": 1890
+    },
+    {
+      "at": "2026-10-27T15:13:21Z",
+      "what": "limits_shown",
+      "screen": "== drafter stage d1 (job j20261027_151320_1514) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-27T15:13:21Z",
+      "what": "confirmed_by_flag",
+      "screen": "== drafter stage d1 (job j20261027_151320_1514) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-27T15:13:21Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-27T15:13:21Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-27T15:15:51Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "DRAFT_FAILED",
+      "stage": "d1",
+      "reason": "output_truncated"
+    },
+    {
+      "at": "2026-10-27T15:19:35Z",
+      "what": "redraft",
+      "stage": "d2",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-27T15:19:35Z",
+      "what": "limits_shown",
+      "screen": "== drafter stage d2 (job j20261027_151320_1514) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0241; left $0.9759"
+    },
+    {
+      "at": "2026-10-27T15:19:35Z",
+      "what": "confirmed_by_flag",
+      "screen": "== drafter stage d2 (job j20261027_151320_1514) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0241; left $0.9759"
+    },
+    {
+      "at": "2026-10-27T15:19:35Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-27T15:19:35Z",
+      "what": "state",
+      "old": "DRAFT_FAILED",
+      "new": "DRAFTING",
+      "stage": "d2"
+    },
+    {
+      "at": "2026-10-27T15:23:11Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d2"
+    },
+    {
+      "at": "2026-10-27T15:32:35Z",
+      "what": "limits_shown",
+      "screen": "== approve and run the agent (job j20261027_151320_1514) ==\ndraft b0944ade75f3 (from stage j20261027_151320_1514-d2)\nwritable: sympy/printing/str.py\nenvironment sympy_py39, image 2f684b89c437\nvalidation target (env sympy_py39): python -m pytest sympy/parsing/tests/test_latex_nested_frac.py; required: sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_roundtrip, sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_str_keeps_denominator_brackets, sympy/parsing/tests/test_latex_nested_frac.py::test_frac_with_frac_denominator_roundtrip\nvalidation strprinter (env sympy_py39): python -m pytest sympy/printing/tests/test_str.py; required: sympy/printing/tests/test_str.py::test_Mul, sympy/printing/tests/test_str.py::test_Pow\nvalidation precedence (env sympy_py39): python -m pytest sympy/printing/tests/test_precedence.py; required: sympy/printing/tests/test_precedence.py::test_Mul, sympy/printing/tests/test_precedence.py::test_Pow\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0642; left $0.9358"
+    },
+    {
+      "at": "2026-10-27T15:32:35Z",
+      "what": "confirmed_by_flag",
+      "screen": "== approve and run the agent (job j20261027_151320_1514) ==\ndraft b0944ade75f3 (from stage j20261027_151320_1514-d2)\nwritable: sympy/printing/str.py\nenvironment sympy_py39, image 2f684b89c437\nvalidation target (env sympy_py39): python -m pytest sympy/parsing/tests/test_latex_nested_frac.py; required: sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_roundtrip, sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_str_keeps_denominator_brackets, sympy/parsing/tests/test_latex_nested_frac.py::test_frac_with_frac_denominator_roundtrip\nvalidation strprinter (env sympy_py39): python -m pytest sympy/printing/tests/test_str.py; required: sympy/printing/tests/test_str.py::test_Mul, sympy/printing/tests/test_str.py::test_Pow\nvalidation precedence (env sympy_py39): python -m pytest sympy/printing/tests/test_precedence.py; required: sympy/printing/tests/test_precedence.py::test_Mul, sympy/printing/tests/test_precedence.py::test_Pow\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0642; left $0.9358"
+    },
+    {
+      "at": "2026-10-27T15:32:35Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-27T15:32:52Z",
+      "what": "approved",
+      "draft": "b0944ade75f3",
+      "contract": "0dcce489073c"
+    },
+    {
+      "at": "2026-10-27T15:32:52Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-27T15:35:58Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "REVIEW_READY",
+      "stage": "a1"
+    }
+  ],
+  "intake": {
+    "commit": "b4777fdcef467b7132c055f8ac2c9a5059e6a145",
+    "tree": "5de537ff2523f2fdfbdcec893b95a7125d0d7296",
+    "files": 1890,
+    "snapshot_sha256": "5673a7e8a365d196ca92a35d9b04c50d1d306189945b23a43c011ccf5ba9de92"
+  }
+}

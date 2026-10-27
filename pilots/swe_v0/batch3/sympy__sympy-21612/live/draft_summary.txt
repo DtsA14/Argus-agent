@@ -1,0 +1,73 @@
+stage: j20261027_151320_1514-d2
+writable: ['sympy/printing/str.py']
+validation target sympy_py39 -m pytest sympy/parsing/tests/test_latex_nested_frac.py | required: ['sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_roundtrip', 'sympy/parsing/tests/test_latex_nested_frac.py::test_nested_frac_str_keeps_denominator_brackets', 'sympy/parsing/tests/test_latex_nested_frac.py::test_frac_with_frac_denominator_roundtrip']
+validation strprinter sympy_py39 -m pytest sympy/printing/tests/test_str.py | required: ['sympy/printing/tests/test_str.py::test_Mul', 'sympy/printing/tests/test_str.py::test_Pow']
+validation precedence sympy_py39 -m pytest sympy/printing/tests/test_precedence.py | required: ['sympy/printing/tests/test_precedence.py::test_Mul', 'sympy/printing/tests/test_precedence.py::test_Pow']
+---- WHY
+sympy/parsing/tests/test_latex_nested_frac.py:37: in test_nested_frac_roundtrip
+E   AssertionError: assert (a**3 + b)/c**3 == c*(a**3 + b)
+E    +  where (a**3 + b)/c**3 = sympify('((a**3 + b)/c)/1/(c**2)')
+E    +    where '((a**3 + b)/c)/1/(c**2)' = str(((a**3 + b)/c)/1/(c**2))
+sympy/parsing/tests/test_latex_nested_frac.py:41: in test_nested_frac_str_keeps_denominator_brackets
+E   AssertionError: assert '((a**3 + b)/c)/1/(c**2)' == '((a**3 + b)/c)/(1/(c**2))'
+E     
+E     - ((a**3 + b)/c)/(1/(c**2))
+E     ?                -        -
+E     + ((a**3 + b)/c)/1/(c**2)
+sympy/parsing/tests/test_latex_nested_frac.py:47: in test_frac_with_frac_denominator_roundtrip
+E   AssertionError: assert a/b == (a / (1 / b))
+E    +  where a/b = sympify('a/1/b')
+E    +    where 'a/1/b' = str(a/1/b)
+========================= 3 failed, 1 warning in Xs =========================
+----
+changed_tests: []
+==== sympy/parsing/tests/test_latex_nested_frac.py
+"""Missing brackets when printing a fraction whose denominator is a fraction.
+
+``\\frac{\\frac{a^3+b}{c}}{\\frac{1}{c^2}}`` is converted to the unevaluated
+product ``((a**3 + b)/c) * (1/(c**2))**-1``.  Printing that product dropped the
+brackets around the denominator and gave ``((a**3 + b)/c)/1/(c**2)``, which no
+longer means what was parsed.  The LaTeX converter itself needs the antlr4
+runtime, so these tests build the expression the converter builds and check
+how it prints: the printed form has to read back as the parsed expression.
+"""
+
+from sympy import Add, Mul, Pow, sympify
+from sympy.abc import a, b, c
+
+
+def _Add(*args):
+    return Add(*args, evaluate=False)
+
+
+def _Mul(*args):
+    return Mul(*args, evaluate=False)
+
+
+def _Pow(base, exp):
+    return Pow(base, exp, evaluate=False)
+
+
+def _nested_frac():
+    # \frac{\frac{a^3+b}{c}}{\frac{1}{c^2}}
+    upper = _Mul(_Add(_Pow(a, 3), b), _Pow(c, -1))
+    lower = _Pow(_Pow(c, 2), -1)  # \frac{1}{c^2}
+    return _Mul(upper, _Pow(lower, -1))
+
+
+def test_nested_frac_roundtrip():
+    expr = _nested_frac()
+    expected = (a**3 + b)/c/(1/c**2)
+    assert sympify(str(expr)) == expected
+
+
+def test_nested_frac_str_keeps_denominator_brackets():
+    assert str(_nested_frac()) == "((a**3 + b)/c)/(1/(c**2))"
+
+
+def test_frac_with_frac_denominator_roundtrip():
+    # \frac{a}{\frac{1}{b}}
+    expr = _Mul(a, _Pow(_Pow(b, -1), -1))
+    assert sympify(str(expr)) == a/(1/b)
+
+['Drafter: $0.0401, 15 model calls, 3 submits, 14 steps (ended: submitted).']

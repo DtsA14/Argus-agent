@@ -4,6 +4,10 @@
 `sha256:de306e046ab6…`, dipin per job), dari VM dengan `--key-file`/`--yes`. Kriteria: `PREFLIGHT.md` (ditulis sebelum run).
 Per instance: `<instance>/grade.json` (penilaian) dan `<instance>/live/` (job, draf, paket review, tes drafter di atas patch resmi).
 
+> **Oracle-informed** (review Atha 2026-10-27): hasil tes drafter di atas patch resmi maintainer ditampilkan di ringkasan **sebelum**
+> approve. Tidak ada draf yang ditolak karenanya (kelimanya hijau), tapi informasinya terlihat saat keputusan diambil. Tidak dicampur
+> dengan batch tanpa bocoran (batch 3 dan sesudahnya).
+
 ## Hasil: 5/5 `resolved` (4 instance + 1 dengan petunjuk perbaikan di issue)
 
 | Instance | Drafter | Agen | `swe_grade.py` | Biaya job | Patch agen vs maintainer |

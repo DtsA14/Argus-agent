@@ -1,0 +1,74 @@
+stage: j20261027_151922_fcff-d1
+writable: ['sympy/parsing/sympy_parser.py']
+validation target sympy_py39 -m pytest sympy/parsing/tests/test_parse_expr_relationals.py | required: ['sympy/parsing/tests/test_parse_expr_relationals.py::test_lt_with_evaluate_false', 'sympy/parsing/tests/test_parse_expr_relationals.py::test_gt_with_evaluate_false', 'sympy/parsing/tests/test_parse_expr_relationals.py::test_le_with_evaluate_false', 'sympy/parsing/tests/test_parse_expr_relationals.py::test_ge_with_evaluate_false', 'sympy/parsing/tests/test_parse_expr_relationals.py::test_eq_with_evaluate_false', 'sympy/parsing/tests/test_parse_expr_relationals.py::test_ne_with_evaluate_false']
+validation regression sympy_py39 -m pytest sympy/parsing/tests/test_sympy_parser.py | required: ['sympy/parsing/tests/test_sympy_parser.py::test_sympy_parser', 'sympy/parsing/tests/test_sympy_parser.py::test_rationalize', 'sympy/parsing/tests/test_sympy_parser.py::test_factorial_fail', 'sympy/parsing/tests/test_sympy_parser.py::test_repeated_fail', 'sympy/parsing/tests/test_sympy_parser.py::test_repeated_dot_only', 'sympy/parsing/tests/test_sympy_parser.py::test_local_dict', 'sympy/parsing/tests/test_sympy_parser.py::test_local_dict_split_implmult', 'sympy/parsing/tests/test_sympy_parser.py::test_local_dict_symbol_to_fcn', 'sympy/parsing/tests/test_sympy_parser.py::test_global_dict', 'sympy/parsing/tests/test_sympy_parser.py::test_no_globals', 'sympy/parsing/tests/test_sympy_parser.py::test_issue_2515', 'sympy/parsing/tests/test_sympy_parser.py::test_issue_7663', 'sympy/parsing/tests/test_sympy_parser.py::test_recursive_evaluate_false_10560', 'sympy/parsing/tests/test_sympy_parser.py::test_function_evaluate_false', 'sympy/parsing/tests/test_sympy_parser.py::test_issue_10773', 'sympy/parsing/tests/test_sympy_parser.py::test_split_symbols', 'sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_function', 'sympy/parsing/tests/test_sympy_parser.py::test_functional_exponent', 'sympy/parsing/tests/test_sympy_parser.py::test_match_parentheses_implicit_multiplication', 'sympy/parsing/tests/test_sympy_parser.py::test_convert_equals_signs', 'sympy/parsing/tests/test_sympy_parser.py::test_parse_function_issue_3539', 'sympy/parsing/tests/test_sympy_parser.py::test_split_symbols_numeric', 'sympy/parsing/tests/test_sympy_parser.py::test_unicode_names', 'sympy/parsing/tests/test_sympy_parser.py::test_python3_features', 'sympy/parsing/tests/test_sympy_parser.py::test_issue_19501', 'sympy/parsing/tests/test_sympy_parser.py::test_parsing_definitions', 'sympy/parsing/tests/test_sympy_parser.py::test_builtins', 'sympy/parsing/tests/test_sympy_parser.py::test_issue_22822']
+---- WHY
+sympy/parsing/tests/test_parse_expr_relationals.py:16: in test_lt_with_evaluate_false
+E   assert False
+E    +  where False = isinstance(True, Lt)
+========================= 6 failed, 2 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/parsing/tests/test_parse_expr_relationals.py
+"""Tests for ``parse_expr(..., evaluate=False)`` applied to relationals.
+
+The ``evaluate=False`` parameter of ``parse_expr`` used to be ignored for
+relationals, so that e.g. ``parse_expr('1 < 2', evaluate=False)`` returned
+``True`` instead of the unevaluated ``Lt(1, 2, evaluate=False)``.
+"""
+
+from sympy.core import Integer, Symbol
+from sympy.core.relational import Eq, Ge, Gt, Le, Lt, Ne
+from sympy.core.singleton import S
+from sympy.parsing.sympy_parser import parse_expr
+
+
+def test_lt_with_evaluate_false():
+    expr = parse_expr('1 < 2', evaluate=False)
+    assert isinstance(expr, Lt)
+    assert expr.args == (Integer(1), Integer(2))
+    assert str(expr) == '1 < 2'
+
+
+def test_gt_with_evaluate_false():
+    expr = parse_expr('1 > 2', evaluate=False)
+    assert isinstance(expr, Gt)
+    assert expr.args == (Integer(1), Integer(2))
+
+
+def test_le_with_evaluate_false():
+    expr = parse_expr('1 <= 1', evaluate=False)
+    assert isinstance(expr, Le)
+    assert expr.args == (Integer(1), Integer(1))
+
+
+def test_ge_with_evaluate_false():
+    expr = parse_expr('1 >= 1', evaluate=False)
+    assert isinstance(expr, Ge)
+    assert expr.args == (Integer(1), Integer(1))
+
+
+def test_eq_with_evaluate_false():
+    expr = parse_expr('1 == 1', evaluate=False)
+    assert isinstance(expr, Eq)
+    assert expr.args == (Integer(1), Integer(1))
+
+
+def test_ne_with_evaluate_false():
+    expr = parse_expr('1 != 2', evaluate=False)
+    assert isinstance(expr, Ne)
+    assert expr.args == (Integer(1), Integer(2))
+
+
+def test_relational_with_symbols_with_evaluate_false():
+    x = Symbol('x')
+    expr = parse_expr('x < 1', evaluate=False)
+    assert expr == Lt(x, Integer(1), evaluate=False)
+
+
+def test_relational_evaluates_by_default():
+    assert parse_expr('1 < 2') is S.true
+    assert parse_expr('2 < 1') is S.false
+    assert parse_expr('1 == 1') is True
+
+['Drafter: $0.0218, 11 model calls, 2 submits, 10 steps (ended: submitted).']

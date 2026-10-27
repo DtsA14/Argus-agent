@@ -1,0 +1,60 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_issue_24288": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_sympy_parser": "pass",
+    "test_rationalize": "pass",
+    "test_factorial_fail": "pass",
+    "test_repeated_fail": "pass",
+    "test_repeated_dot_only": "pass",
+    "test_local_dict": "pass",
+    "test_local_dict_split_implmult": "pass",
+    "test_local_dict_symbol_to_fcn": "pass",
+    "test_global_dict": "pass",
+    "test_no_globals": "pass",
+    "test_issue_2515": "pass",
+    "test_issue_7663": "pass",
+    "test_recursive_evaluate_false_10560": "pass",
+    "test_function_evaluate_false": "pass",
+    "test_issue_10773": "pass",
+    "test_split_symbols": "pass",
+    "test_split_symbols_function": "pass",
+    "test_functional_exponent": "pass",
+    "test_match_parentheses_implicit_multiplication": "pass",
+    "test_convert_equals_signs": "pass",
+    "test_parse_function_issue_3539": "pass",
+    "test_split_symbols_numeric": "pass",
+    "test_unicode_names": "pass",
+    "test_python3_features": "pass",
+    "test_issue_19501": "pass",
+    "test_parsing_definitions": "pass",
+    "test_builtins": "pass"
+  },
+  "patch_sha256": "cfc7096fa93b0fdbd3d67e173d19061eb637c8c896172a2691fbcb390d6ed768",
+  "test_patch_sha256": "d032f09bb66d39c678f25ad4144c8ca86fb17523f25cb68ccb6c9f36ced43eea",
+  "base_commit": "a36caf5c74fe654cedc488e8a8a05fad388f8406",
+  "environment": "sympy_py39",
+  "image": "sha256:2f684b89c437b84269305d9bbc056389c32533facb911fce7ee2bba7e509d78f",
+  "test_files": [
+    "sympy/parsing/tests/test_sympy_parser.py"
+  ],
+  "run": {
+    "tests_run": 29,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 0
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/parsing/tests/test_parse_expr_relationals.py"
+    ],
+    "status": "pass",
+    "tests_run": 8,
+    "failures": 0,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}

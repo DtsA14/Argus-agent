@@ -4,6 +4,9 @@
 `sha256:de306e046ab6…`, rootfs `5b2123cd…`, dipin di `job.json`), dari VM dengan `--key-file`/`--yes`. Kriteria:
 `PREFLIGHT.md` (ditulis sebelum run). Artefak: `live/`, penilaian: `grade.json`.
 
+> **Oracle-informed** (review Atha 2026-10-27): tes drafter dijalankan di atas patch resmi sebelum approve dan hasilnya (4/4)
+> ditampilkan di ringkasan.
+
 ## Hasil: berhasil (kriteria 3), `resolved: true`
 
 | Tahap | Hasil | Biaya | Waktu (UTC) |

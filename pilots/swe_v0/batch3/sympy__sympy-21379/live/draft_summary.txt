@@ -1,0 +1,31 @@
+stage: j20261027_151552_7cdd-d1
+writable: ['sympy/polys/polytools.py', 'sympy/core/basic.py', 'sympy/core/expr.py', 'sympy/functions/elementary/piecewise.py']
+validation target sympy_py39 -m pytest sympy/core/tests/test_issue_20521.py | required: ['sympy/core/tests/test_issue_20521.py::test_subs_int_to_float_with_piecewise_hyperbolic']
+validation regression_subs_piecewise sympy_py39 -m pytest sympy/core/tests/test_subs.py::test_subs sympy/functions/elementary/tests/test_piecewise.py::test_issue_7370 sympy/functions/elementary/tests/test_piecewise.py::test_issue_16715 sympy/functions/elementary/tests/test_piecewise.py::test_issue_20360 | required: ['sympy/core/tests/test_subs.py::test_subs', 'sympy/functions/elementary/tests/test_piecewise.py::test_issue_7370', 'sympy/functions/elementary/tests/test_piecewise.py::test_issue_16715', 'sympy/functions/elementary/tests/test_piecewise.py::test_issue_20360']
+validation regression_polytools sympy_py39 -m pytest sympy/polys/tests/test_polytools.py | required: []
+---- WHY
+sympy/polys/polytools.py:4399: in _parallel_poly_from_expr
+E   sympy.polys.polyerrors.PolynomialError: Piecewise generators do not make sense
+sympy/core/tests/test_issue_20521.py:15: in test_subs_int_to_float_with_piecewise_hyperbolic
+E   AssertionError: subs raised PolynomialError: Piecewise generators do not make sense
+========================= 1 failed, 1 warning in Xs =========================
+----
+changed_tests: []
+==== sympy/core/tests/test_issue_20521.py
+from sympy import Piecewise, exp, sinh, symbols
+from sympy.core.cache import clear_cache
+
+
+def test_subs_int_to_float_with_piecewise_hyperbolic():
+    # This is the MWE from the issue: with real assumptions, substituting
+    # an integer by a float inside this expression raised a PolynomialError
+    # ("Piecewise generators do not make sense").
+    x, y, z = symbols('x y z', real=True)
+    clear_cache()
+    expr = exp(sinh(Piecewise((x, y > x), (y, True)) / z))
+    try:
+        expr.subs({1: 1.0})
+    except Exception as exc:
+        assert False, 'subs raised %s: %s' % (type(exc).__name__, exc)
+
+['Drafter: $0.0310, 16 model calls, 2 submits, 15 steps (ended: submitted).']
