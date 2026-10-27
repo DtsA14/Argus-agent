@@ -67,6 +67,16 @@ def test_a_repeated_error_is_still_shown_once_with_the_frames_of_its_first_block
     assert x.count("E   KeyError") == 1 and "src/a.py:1: in a" in x and "src/c.py" not in x
 
 
+def test_each_block_gets_only_the_frames_since_the_previous_block():
+    tail = ("src/a.py:1: in a\n    b()\nsrc/b.py:2: in b\n    raise KeyError(k)\nE   KeyError: 'k'\n"
+            "src/c.py:3: in c\n    d()\nsrc/d.py:4: in d\n    raise ValueError(v)\nE   ValueError: v\n"
+            "==== 2 failed in 0.10s ====\n")
+    x = ca.error_excerpt(tail)
+    assert x.count("src/a.py:1: in a") == 1 and x.index("src/c.py:3: in c") > x.index("E   KeyError")
+    assert x.splitlines()[:5] == ["src/a.py:1: in a", "    b()", "src/b.py:2: in b", "E   KeyError: 'k'",
+                                  "src/c.py:3: in c"]
+
+
 # ---- 2.2 the approved draft's red baseline in the first attempt of each agent stage --------------------------------
 
 def test_approve_records_the_red_baseline_and_the_first_attempt_is_told_it(env):  # noqa: F811
