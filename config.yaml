@@ -140,7 +140,9 @@ drafter:
   # reasoning used 16,384 of 16,384 and the drafter ended NO_DRAFT before a submit. 32,000 as the coder (#200); every call
   # is still lowered to what fits the attempt's $0.70 reservation.
   max_output_tokens_by_model: {"deepseek:deepseek-flash": 32000, "deepseek:deepseek-v4-pro": 32000}
-  max_steps: 16
+  # 24 since SPEC_DRAFTER_SKIPPED_STEPS (2026-10-27): the 21379 re-run's drafters read 13 steps on sympy before a first
+  # submit and ran out at 16 with one problem left, twice. The money bound is unchanged (attempt_usd, the stage cap).
+  max_steps: 24
   max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
   # The profiles a draft may give the agent. Not `large` (45,000 tokens per attempt): an agent's input is re-sent at
   # every step, and in router pilot #1 reading a 23 KB file used it up before any edit (2026-10-23).

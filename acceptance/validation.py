@@ -45,6 +45,7 @@ TEST_LINE = re.compile(r"^(\w+) \(([\w.]+)\)(?: (.*))?$")
 RAN = re.compile(r"^Ran (\d+) tests? in ")
 FINAL = re.compile(r"^(OK|FAILED)(?: \((.*)\))?$")
 MAX_NODES = 50                  # failed_nodes kept in the evidence
+SKIPPED_NAMED = 10              # skipped nodes named in a reason (SPEC_DRAFTER_SKIPPED_STEPS 2.1); all in the evidence
 # Statuses a no_skip rule refuses (W2a-ext): skipped, xfailed, and xpassed (an xfail marker on a test that passed)
 NOT_RUN = {"skipped", "expected failure", "unexpected success"}
 
@@ -269,6 +270,9 @@ def judge_result(spec, r):
             evidence["skip_violations"] = skip_violations(spec["no_skip"], parsed["tests"])[:MAX_NODES]
     if spec.get("environment"):
         evidence["environment"] = spec["environment"]
+    skipped = sorted(n for n, s in parsed["tests"].items() if s in NOT_RUN)
+    if skipped:                     # which ones, so a draft (or the agent) can leave them out without guessing
+        evidence["skipped_nodes"] = skipped[:MAX_NODES]
     problems = []
     if r.get("timed_out"):
         problems.append(f"timed out after {spec['timeout_s']}s (container killed"
@@ -289,7 +293,10 @@ def judge_result(spec, r):
         if parsed["tests_run"] is not None and parsed["tests_run"] < spec["min_tests"]:
             problems.append(f"{parsed['tests_run']} tests ran, contract requires at least {spec['min_tests']}")
         if parsed["skipped"] > spec["max_skipped"]:
-            problems.append(f"{parsed['skipped']} tests skipped, contract allows {spec['max_skipped']}")
+            named = ", ".join(skipped[:SKIPPED_NAMED]) + (f" and {len(skipped) - SKIPPED_NAMED} more"
+                                                          if len(skipped) > SKIPPED_NAMED else "")
+            problems.append(f"{parsed['skipped']} tests skipped, contract allows {spec['max_skipped']}"
+                            + (f": {named}" if named else ""))
         for t, st in must.items():
             if st != "ok":
                 problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")

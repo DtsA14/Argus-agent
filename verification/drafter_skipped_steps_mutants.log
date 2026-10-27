@@ -1,0 +1,17 @@
+# drafter skipped and steps (SPEC_DRAFTER_SKIPPED_STEPS) at ee7d7f6 (2026-10-27T19:35:25Z)
+## new tests on main: 4 failed
+## mutants
+KILLED   reason names no node: ['FAILED tests/test_drafter_skipped_steps.py::test_a_skipped_reason_names_the_skipped_xfail_and_xpass_nodes']
+KILLED   no skipped_nodes evidence: ['FAILED tests/test_drafter_skipped_steps.py::test_a_skipped_reason_names_the_skipped_xfail_and_xpass_nodes']
+KILLED   xfail and xpass not named: ['FAILED tests/test_drafter_skipped_steps.py::test_a_skipped_reason_names_the_skipped_xfail_and_xpass_nodes']
+KILLED   every node listed: ['FAILED tests/test_drafter_skipped_steps.py::test_more_than_ten_skipped_nodes_are_counted_not_listed']
+KILLED   no 'and K more': ['FAILED tests/test_drafter_skipped_steps.py::test_more_than_ten_skipped_nodes_are_counted_not_listed']
+KILLED   drafter steps 16: ['FAILED tests/test_drafter_skipped_steps.py::test_the_drafter_has_24_steps']
+RESULT: 6/6 killed
+## all non-sandbox tests
+1301 passed in 68.28s
+## no /code-review: a small PR (Atha 2026-10-27: reviews only for harness-core PRs)
+## verify.sh
+1734 passed in 772.44s (0:12:52)
+== sandbox tests skipped: 0
+RESULT: PASS
