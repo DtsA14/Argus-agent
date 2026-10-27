@@ -48,8 +48,11 @@ def main(argv=None, deps=None):
                    "the whole job); without it, the drafter's configured one, nothing pinned")
     sub.add_parser("list")
     sub.add_parser("status").add_argument("job")
-    for name in ("redraft", "resume"):
-        sub.add_parser(name).add_argument("job")
+    sub.add_parser("resume").add_argument("job")
+    d = sub.add_parser("redraft")
+    d.add_argument("job")
+    d.add_argument("--note", help="a note for the drafter from the reviewer of the previous draft (at most 1000 "
+                   "characters; the job is then marked human-steered)")
     a = sub.add_parser("approve")
     a.add_argument("job")
     a.add_argument("--sha", required=True)
@@ -101,7 +104,7 @@ def main(argv=None, deps=None):
             job, _ = rj.retry(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
                               jobs_dir=o.jobs_dir)
         elif o.cmd == "redraft":
-            job, _ = rj.redraft(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
+            job, _ = rj.redraft(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, note=o.note)
         else:
             job, _ = rj.resume(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], jobs_dir=o.jobs_dir)
     except (rj.Refused, ConfigError, OSError) as e:

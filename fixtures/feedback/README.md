@@ -7,3 +7,7 @@ M6 pilot 3a live runs, for the tests of the error excerpt in the feedback betwee
 - `swe_21379_verdict_0_target_tail.txt`: `validation:target` of SWE batch 3 `sympy__sympy-21379`, job `j20261027_151552_7cdd`
   stage `a1`, `verdict_0.json` (`pilots/swe_v0/batch3/`). The fix is at `sympy/core/mod.py:169`, a caller frame without `E `
   lines: the case for the call path in the excerpt (`tests/test_locate_from_traceback.py`, SPEC_LOCATE_FROM_TRACEBACK).
+- `swe_21379_rerun_d1_baseline.json` and `swe_21379_batch3_d1_baseline.json`: the draft scope and the failing baseline (status,
+  red check, output tail) of the drafter checks of `21379`'s re-run (job `j20261027_175610_34ba`, draft rejected) and of batch 3
+  (job `j20261027_151552_7cdd`). The first keeps the exception and loses its traceback; the second chains it, and its call path
+  outside writable starts at `sympy/core/mod.py:169` (`tests/test_draft_call_path.py`, SPEC_DRAFT_CALL_PATH).

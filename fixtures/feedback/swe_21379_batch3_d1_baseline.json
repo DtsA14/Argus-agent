@@ -1,0 +1,31 @@
+{
+ "source": "j20261027_151552_7cdd/runs/j20261027_151552_7cdd-d1",
+ "scope": {
+  "writable": [
+   "sympy/polys/polytools.py",
+   "sympy/core/basic.py",
+   "sympy/core/expr.py",
+   "sympy/functions/elementary/piecewise.py"
+  ],
+  "protected": [
+   "sympy/**/tests/**",
+   "conftest.py",
+   "pytest.ini",
+   "setup.cfg"
+  ]
+ },
+ "baseline": {
+  "target": {
+   "status": "fail",
+   "red_check": {
+    "sympy/core/tests/test_issue_20521.py::test_subs_int_to_float_with_piecewise_hyperbolic": {
+     "assertion": true,
+     "outcome": "failed",
+     "path": "sympy/core/tests/test_issue_20521.py",
+     "type": "builtins.AssertionError"
+    }
+   },
+   "output_tail": "j)\nsympy/functions/elementary/hyperbolic.py:251: in _eval_is_real\n    return (im%pi).is_zero\nsympy/core/decorators.py:266: in _func\n    return func(self, other)\nsympy/core/decorators.py:136: in binary_op_wrapper\n    return func(self, other)\nsympy/core/expr.py:280: in __mod__\n    return Mod(self, other)\nsympy/core/cache.py:72: in wrapper\n    retval = cfunc(*args, **kwargs)\nsympy/core/function.py:473: in __new__\n    result = super().__new__(cls, *args, **options)\nsympy/core/cache.py:72: in wrapper\n    retval = cfunc(*args, **kwargs)\nsympy/core/function.py:285: in __new__\n    evaluated = cls.eval(*args)\nsympy/core/mod.py:169: in eval\n    G = gcd(p, q)\nsympy/polys/polytools.py:5306: in gcd\n    (F, G), opt = parallel_poly_from_expr((f, g), *gens, **args)\nsympy/polys/polytools.py:4340: in parallel_poly_from_expr\n    return _parallel_poly_from_expr(exprs, opt)\nsympy/polys/polytools.py:4399: in _parallel_poly_from_expr\n    raise PolynomialError(\"Piecewise generators do not make sense\")\nE   sympy.polys.polyerrors.PolynomialError: Piecewise generators do not make sense\n\nDuring handling of the above exception, another exception occurred:\nsympy/core/tests/test_issue_20521.py:15: in test_subs_int_to_float_with_piecewise_hyperbolic\n    assert False, 'subs raised %s: %s' % (type(exc).__name__, exc)\nE   AssertionError: subs raised PolynomialError: Piecewise generators do not make sense\nE   assert False\n=============================== warnings summary ===============================\n../usr/local/lib/python3.9/site-packages/_pytest/config/__init__.py:1474\n  /usr/local/lib/python3.9/site-packages/_pytest/config/__init__.py:1474: PytestConfigWarning: Unknown config option: doctestplus\n  \n    self._warn_or_fail_if_strict(f\"Unknown config option: {key}\\n\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n                                DO *NOT* COMMIT!                                \n========================= 1 failed, 1 warning in 0.84s =========================\n"
+  }
+ }
+}

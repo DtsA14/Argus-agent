@@ -1,0 +1,62 @@
+# draft call path (SPEC_DRAFT_CALL_PATH) at 4142ff2 (2026-10-27T18:57:18Z)
+## new tests on main (03d078b), first round (b645b0d): 12 failed, 2 passed (guards: main never asks)
+## the 7 tests added for the review of #208, on b645b0d: 7 failed
+## mutants, first round at b645b0d: 20/20 (the 'no prompt rule' mutant was fixed to remove the asserted sentence)
+KILLED   no prompt rule: ['FAILED tests/test_draft_call_path.py::test_the_drafter_is_told_to_raise_from_the_exception']
+KILLED   swallowed not checked: ['FAILED tests/test_draft_call_path.py::test_a_submit_whose_test_swallows_the_traceback_is_rejected']
+KILLED   swallowed despite repo frames: ['FAILED tests/test_draft_call_path.py::test_a_test_raising_from_the_exception_or_asserting_a_value_is_not_refused']
+KILLED   AssertionError counts as another exception: ['FAILED tests/test_draft_call_path.py::test_a_test_raising_from_the_exception_or_asserting_a_value_is_not_refused']
+KILLED   writable files in the call path: ['FAILED tests/test_draft_call_path.py::test_the_batch3_call_path_outside_writable_starts_at_mod_py']
+KILLED   call path outermost first: ['FAILED tests/test_draft_call_path.py::test_the_batch3_call_path_outside_writable_starts_at_mod_py']
+KILLED   test files in the call path: ['FAILED tests/test_draft_call_path.py::test_the_rerun_drafts_test_is_refused_for_losing_the_traceback']
+KILLED   always ask: ['FAILED tests/test_draft_call_path.py::test_a_draft_that_passes_is_asked_once_then_accepted_as_it_is']
+KILLED   never ask: ['FAILED tests/test_draft_call_path.py::test_a_draft_that_passes_is_asked_once_then_accepted_as_it_is']
+KILLED   asked not kept from the record: ['FAILED tests/test_draft_call_path.py::test_a_draft_that_passes_is_asked_once_then_accepted_as_it_is']
+KILLED   ask on the last step: ['FAILED tests/test_draft_call_path.py::test_no_question_on_the_drafters_last_step']
+KILLED   ask without a submit left: ['FAILED tests/test_draft_call_path.py::test_no_question_without_a_submit_left_or_without_a_call_path']
+KILLED   no review warning: ['FAILED tests/test_draft_call_path.py::test_the_draft_review_and_the_approve_screen_show_the_call_path']
+KILLED   no approve screen warning: ['FAILED tests/test_draft_call_path.py::test_the_draft_review_and_the_approve_screen_show_the_call_path']
+KILLED   note not in the prompt: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   note not cleaned: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   note length unchecked: ['FAILED tests/test_draft_call_path.py::test_a_note_too_long_or_empty_starts_nothing']
+KILLED   job not marked steered: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   note not recorded in the drafter inputs: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   cli drops the note: ['FAILED tests/test_draft_call_path.py::test_the_cli_passes_the_note_to_redraft']
+RESULT: 20/20 killed
+## mutants after the review fixes (4142ff2; 5 survived on the first run because the held draft also rescued the old cases; tests made to check the question events, a revised-draft case added)
+KILLED   no prompt rule: ['FAILED tests/test_draft_call_path.py::test_the_drafter_is_told_to_raise_from_the_exception']
+KILLED   swallowed not checked: ['FAILED tests/test_draft_call_path.py::test_a_submit_whose_test_swallows_the_traceback_is_rejected']
+KILLED   swallowed despite repo frames: ['FAILED tests/test_draft_call_path.py::test_each_test_is_judged_by_its_own_section']
+KILLED   AssertionError counts as another exception: ['FAILED tests/test_draft_call_path.py::test_a_submit_whose_test_swallows_the_traceback_is_rejected']
+KILLED   frames judged over the whole tail: ['FAILED tests/test_draft_call_path.py::test_each_test_is_judged_by_its_own_section']
+KILLED   a cut first section is judged: ['FAILED tests/test_draft_call_path.py::test_a_section_cut_by_the_start_of_the_tail_is_not_judged']
+KILLED   pytest.fail not counted: ['FAILED tests/test_draft_call_path.py::test_pytest_fail_counts_and_test_helpers_are_not_the_repositorys_code']
+KILLED   testing helpers count as repo code: ['FAILED tests/test_draft_call_path.py::test_pytest_fail_counts_and_test_helpers_are_not_the_repositorys_code']
+KILLED   held draft lost on another end: ['FAILED tests/test_draft_call_path.py::test_a_held_draft_is_accepted_when_the_drafter_stops_without_answering']
+KILLED   held draft not kept: ['FAILED tests/test_draft_call_path.py::test_a_held_draft_is_accepted_when_the_drafter_stops_without_answering']
+KILLED   same draft checked again: ['FAILED tests/test_draft_call_path.py::test_the_same_draft_again_is_accepted_without_a_second_check']
+KILLED   submit version 1: ['FAILED tests/test_draft_call_path.py::test_the_submit_tools_are_version_2_in_the_step_memo_keys']
+KILLED   status note not shortened: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   writable files in the call path: ['FAILED tests/test_draft_call_path.py::test_the_batch3_call_path_outside_writable_starts_at_mod_py']
+KILLED   call path outermost first: ['FAILED tests/test_draft_call_path.py::test_the_batch3_call_path_outside_writable_starts_at_mod_py']
+KILLED   test files in the call path: ['FAILED tests/test_draft_call_path.py::test_the_rerun_drafts_test_is_refused_for_losing_the_traceback']
+KILLED   always ask: ['FAILED tests/test_draft_call_path.py::test_no_question_without_a_submit_left_or_without_a_call_path']
+KILLED   never ask: ['FAILED tests/test_draft_call_path.py::test_a_draft_that_passes_is_asked_once_then_accepted_as_it_is']
+KILLED   asked not kept from the record: ['FAILED tests/test_draft_call_path.py::test_a_revised_draft_after_the_question_is_not_asked_again']
+KILLED   ask on the last step: ['FAILED tests/test_draft_call_path.py::test_no_question_on_the_drafters_last_step']
+KILLED   ask without a submit left: ['FAILED tests/test_draft_call_path.py::test_no_question_without_a_submit_left_or_without_a_call_path']
+KILLED   no review warning: ['FAILED tests/test_draft_call_path.py::test_the_draft_review_and_the_approve_screen_show_the_call_path']
+KILLED   no approve screen warning: ['FAILED tests/test_draft_call_path.py::test_the_draft_review_and_the_approve_screen_show_the_call_path']
+KILLED   note not in the prompt: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   note not cleaned: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   note length unchecked: ['FAILED tests/test_draft_call_path.py::test_a_note_too_long_or_empty_starts_nothing']
+KILLED   job not marked steered: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   note not recorded in the drafter inputs: ['FAILED tests/test_draft_call_path.py::test_a_redraft_note_reaches_the_drafter_and_marks_the_job']
+KILLED   cli drops the note: ['FAILED tests/test_draft_call_path.py::test_the_cli_passes_the_note_to_redraft']
+RESULT: 29/29 killed
+## all non-sandbox tests
+1297 passed in 66.41s
+## verify.sh at 4142ff2
+1730 passed in 771.64s (0:12:51)
+== sandbox tests skipped: 0
+RESULT: PASS
