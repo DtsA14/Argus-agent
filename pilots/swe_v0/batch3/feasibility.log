@@ -1,0 +1,10 @@
+sympy__sympy-21847 gold: resolved True {'test_monomials': 'pass'} P2P not pass {}
+sympy__sympy-21847 empty: resolved False {'test_monomials': 'fail'} P2P not pass {}
+sympy__sympy-21612 gold: resolved True {'test_Mul': 'pass'} P2P not pass {}
+sympy__sympy-21612 empty: resolved False {'test_Mul': 'fail'} P2P not pass {}
+sympy__sympy-21379 gold: resolved True {'test_Mod': 'pass'} P2P not pass {}
+sympy__sympy-21379 empty: resolved False {'test_Mod': 'fail'} P2P not pass {}
+sympy__sympy-22080 gold: resolved False {'test_create_expand_pow_optimization': 'pass', 'test_PythonCodePrinter': 'pass', 'test_empty_modules': 'pass'} P2P not pass {'test_sqrt': 'missing'}
+sympy__sympy-22080 empty: resolved False {'test_create_expand_pow_optimization': 'fail', 'test_PythonCodePrinter': 'fail', 'test_empty_modules': 'fail'} P2P not pass {'test_sqrt': 'missing'}
+sympy__sympy-24661 gold: resolved True {'test_issue_24288': 'pass'} P2P not pass {}
+sympy__sympy-24661 empty: resolved False {'test_issue_24288': 'fail'} P2P not pass {}
