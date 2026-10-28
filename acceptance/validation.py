@@ -261,6 +261,10 @@ def judge_result(spec, r):
                 "tests_run": parsed["tests_run"], "outcome": parsed["outcome"], "skipped": parsed["skipped"],
                 "failures": parsed["failures"], "errors": parsed["errors"], "must_pass": must,
                 "output_tail": ((r.get("stdout") or "") if pytest else (r.get("stderr") or ""))[-2000:]}
+    if pytest and parsed["tests_run"] is None and (r.get("stderr") or "").strip():
+        # No pytest summary: the reason (e.g. an ImportError while loading a conftest, pytest exit code 4) is on stderr,
+        # which the agent and the drafter otherwise never see (sympy-24562 dev run: two attempts on a broken import)
+        evidence["output_tail"] = ((r.get("stdout") or "").rstrip() + "\n--- stderr ---\n" + r["stderr"])[-2000:]
     if pytest:
         # failed_nodes (W2b): every node that failed or errored, required or not, so a check can name the unexpected ones
         evidence.update(runner="pytest", consistent=parsed["consistent"], collected=parsed["collected"],

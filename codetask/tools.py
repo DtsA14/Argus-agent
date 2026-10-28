@@ -31,6 +31,10 @@ READ_MAX_FILE = 2_000_000
 READ_MAX_LINES = 400
 # ListFiles: at most LIST_MAX_FILES paths per call; past that it says how many more and to narrow the path.
 LIST_MAX_FILES = 300
+# WriteFile on an existing file that keeps less than SHRINK_WARN of its lines says so (sympy-24562: the agent replaced
+# numbers.py, 4,487 lines, with a wrapper that tried to load "the original" and broke every import).
+SHRINK_WARN = 0.5
+SHRINK_MIN_LINES = 200
 
 # SearchFiles (docs/reviews/DESIGN_SEARCHFILES.md): bounds on the input, the work done and the output of one call.
 SEARCH_MAX_TEXT = 200          # characters of the literal text
@@ -114,6 +118,20 @@ _ReadFileV1.__name__ = "ReadFile"
 # The schemas of ListFiles and ReadFile before line ranges (tool version 1): only for auditing runs recorded with them
 # (scripts/audit_run.py); a run never offers them.
 V1 = {"ListFiles": _ListFilesV1, "ReadFile": _ReadFileV1}
+
+
+def _parse_warning(path, text):
+    """A line for a .py file that does not parse (empty otherwise). compile() only parses: nothing is executed on the
+    host; running code stays in the sandbox. Depends only on the text, so a repeated step reports the same."""
+    if not path.endswith(".py"):
+        return ""
+    try:
+        compile(text, path, "exec", dont_inherit=True)
+    except SyntaxError as e:
+        return f"\nWarning: {path} does not parse as Python: {e.msg} (line {e.lineno}). Fix it before running validations."
+    except (ValueError, RecursionError, MemoryError) as e:
+        return f"\nWarning: {path} does not parse as Python: {type(e).__name__}."
+    return ""
 
 
 def offered(allowed, version=2):
@@ -297,9 +315,20 @@ class Toolbox:
             return problem
         if len(content.encode("utf-8")) > MAX_WRITE:
             return f"Rejected: content larger than {MAX_WRITE} bytes."
+        try:
+            before = self.jail.read_text(norm, max_bytes=READ_MAX_FILE).count("\n")
+        except (FileNotFoundError, PathEscape):
+            before = None
         self.jail.write_text(norm, content)
         h = hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
-        return f"{norm} now has {len(content.encode('utf-8'))} bytes (sha256 {h})."
+        out = f"{norm} now has {len(content.encode('utf-8'))} bytes (sha256 {h})."
+        after = content.count("\n")
+        # After a crash the step runs again on the file it already wrote, so this line can differ from the first run's;
+        # that run's text was never committed or seen (module docstring). Committed results replay from the memo.
+        if before is not None and before >= SHRINK_MIN_LINES and after < before * SHRINK_WARN:
+            out += (f"\nWarning: {norm} had {before} lines and now has {after}: WriteFile replaced the whole file. If you "
+                    "meant to change part of it, restore what you removed and use EditFile for the change.")
+        return out + _parse_warning(norm, content)
 
     def runvalidation(self, args):
         specs = {v["id"]: v for v in self.contract["validation"]}
@@ -367,7 +396,8 @@ class Toolbox:
     @staticmethod
     def _edited(norm, text):
         data = text.encode("utf-8")
-        return f"{norm} edited: 1 occurrence replaced; it now has {len(data)} bytes (sha256 {_sha(data)[:12]})."
+        return (f"{norm} edited: 1 occurrence replaced; it now has {len(data)} bytes (sha256 {_sha(data)[:12]})."
+                + _parse_warning(norm, text))
 
     def editfile(self, args, step_key):
         path, old, new = args.get("path"), args.get("old_text"), args.get("new_text")

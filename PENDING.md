@@ -39,6 +39,12 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
 - [ ] **Mode fitur di drafter** (jalur ketat, **hanya bila perlu**): tes fitur yang `import` modul baru di level berkas jadi collection
   error dan ditolak. Gate sekarang sudah menerima tes yang memeriksa dulu dengan assert (`assert importlib.util.find_spec(...)`,
   `assert hasattr(...)`; hint penolakan menyarankannya). Tahap 0 dicoba dengan harness yang ada; spek ditulis bila drafter mentok
+- [x] **Umpan balik tulis dan validasi** (jalur cepat, dari dev `24562` dan Replit): stderr ditampilkan bila pytest tanpa ringkasan
+  (exit 4: `ImportError` saat memuat conftest tidak pernah terlihat agen); peringatan bila `WriteFile` membuang sebagian besar berkas
+  besar; cek parse Python (`compile`, tanpa eksekusi) sesudah tulis/edit `.py`
+- [ ] Dari Replit, **ditunda sampai ada bukti:** ringkasan validasi untuk agen (subagen penguji versi ringan; dibuka bila sebuah run
+  `context_limit` karena output validasi); tes browser dengan kode Playwright (tahap 3 `argus-ledger`: image dengan Chromium, server di
+  localhost dalam sandbox, pola aksi → cek hasil melawan "Potemkin interface")
 - [ ] **Web search sebagai tool** (sesudah tahap awal `argus-ledger`; jalur ketat): sandbox sekarang tanpa jaringan; isi web dilabeli
   data, hasil di-memo (crash-resume), biaya search masuk ledger. Dipakai coder (dokumentasi) dan nanti riset
 - [ ] **Deep research** (sesudah web search): kerangka orchestrator → workers → synthesize → evaluator sudah ada; gate kutipan
