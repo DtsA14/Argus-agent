@@ -5,7 +5,7 @@ import json
 import sqlite3
 
 GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
+                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
                  'llm_call_started 4, llm_call 4 (ok 4, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> ReadFile {"path": "src/calc.py"}\n'
@@ -37,7 +37,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  '  it0 s3 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
  'f2': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
+                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
                  'llm_call_started 3, llm_call 3 (ok 3, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
@@ -69,7 +69,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  '  it1 s1 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
  'f3': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
+                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
                  'llm_call_started 2, llm_call 2 (ok 2, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
@@ -95,7 +95,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  '  it1 s0 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
  'f5': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
+                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
                  'llm_call_started 3, llm_call 2 (ok 2, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> WriteFile {"content": "\\"\\"\\"Small arithmetic helpers.\\"\\"\\"\\n\\n\\ndef add(a, '
@@ -111,7 +111,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  "  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', "
                  "'blocked_reason': None}\n"
                  "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
-                 "1, 'usd_billed': 0.023389, 'llm_calls': 3, 'llm_calls_unknown': 1, 'tools': ['list_files', "
+                 "1, 'usd_billed': 0.023721, 'llm_calls': 3, 'llm_calls_unknown': 1, 'tools': ['list_files', "
                  "'read_file', 'write_file', 'run_validation']}\n",
         'trace': '##### f5\n'
                  '  it0 s0 ok      in   500 | WriteFile(src/calc.py)\n'
@@ -119,7 +119,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  '  it0 s1 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
  'f8': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0\n'
+                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
                  'llm_call_started 3, llm_call 3 (ok 3, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd0.py"}\n'

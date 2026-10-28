@@ -56,7 +56,7 @@ from .tools import GATED, ListFiles, ReadFile, SearchFiles, Toolbox
 NODE = "drafter"
 SOURCE = "source"
 INPUTS = "inputs.json"
-MAX_ISSUE = 2000                      # the same bound as a contract's inputs.issue
+MAX_ISSUE = ct.MAX_ISSUE                # the same bound as a contract's inputs.issue
 # The task name and limits the check runs under. Placeholders: approve_draft.py checks the draft again under the
 # human's task name, issue, cap and attempt limit, and only that check can publish a task.
 CHECK_TASK, CHECK_USD, CHECK_ITERATIONS = "drafted_task", 0.5, 1
@@ -776,7 +776,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
     caller = LLMCaller(cfg, role, log, model=(models or {}).get(role))
     from tools.sandbox import tool_version
     env = cfg["drafter"]["environment"]
-    versions = {"ListFiles": "1", "SearchFiles": "2", "ReadFile": "1",
+    versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "2",
                 "SubmitDraft": f"2:{tool_version(scfg, [env])}", "ReviseDraft": f"2:{tool_version(scfg, [env])}"}
     common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
     task_id = f"draft:{inputs['intake']}"

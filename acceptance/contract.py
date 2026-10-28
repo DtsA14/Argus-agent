@@ -24,6 +24,7 @@ from .validation import PYTEST_NODE, kind, validate_command
 
 ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
+MAX_ISSUE = 8000   # characters of inputs.issue (and of a drafter's issue); 2000 refused sympy-23824 (2103)
 KEYS = {"contract", "version", "inputs", "scope", "artifacts", "validation", "judge", "limits"}
 OPTIONAL_KEYS = {"tools", "budget_profile"}
 # Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
@@ -116,8 +117,8 @@ def validate(c):
         ws = inp["workspace"]
         if not check_glob(ws) or any(ch in ws for ch in "*?") or not ws.startswith("fixtures/repos/"):
             errors.append("inputs.workspace must be a plain relative path under fixtures/repos/")
-        if not isinstance(inp["issue"], str) or not inp["issue"].strip() or len(inp["issue"]) > 2000:
-            errors.append("inputs.issue must be a non-empty string of at most 2000 characters")
+        if not isinstance(inp["issue"], str) or not inp["issue"].strip() or len(inp["issue"]) > MAX_ISSUE:
+            errors.append(f"inputs.issue must be a non-empty string of at most {MAX_ISSUE} characters")
 
     sc = c["scope"]
     if not isinstance(sc, dict) or set(sc) != {"writable", "protected"}:

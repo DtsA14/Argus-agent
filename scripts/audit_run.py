@@ -22,15 +22,28 @@ run_dir = Path(sys.argv[1])
 cfg = load_config()
 contract = json.loads((run_dir / "contract.json").read_text())
 result = read_result(run_dir)
-tools = offered(result["tools"]) if result["tools"] is not None else []
-print("effective tools", result["tools"])
-sp = None
-if result["tools"] is not None:
-    sp = system_prompt(tools)
-    print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
 memo = read_memo(run_dir)
 events, skipped = read_events(run_dir)
 calls = [e for e in events if e["event"] == "llm_call"]
+# ListFiles/ReadFile version: 2 (line ranges) unless the run's first call was built with version 1's schemas and prompt
+version = 2
+if result["tools"] is not None and calls:
+    fb0 = next((e["feedback"] for e in events if e["event"] == "carried_feedback"), None)
+    first0 = next((e for e in calls if e.get("iteration") == 0 and e.get("step") == 0), None)
+
+    def built(v):
+        t = offered(result["tools"], version=v)
+        return hl.prompt_hash([SystemMessage(system_prompt(t, version=v)), HumanMessage(task_prompt(contract, fb0))], t)
+    if first0 is not None and built(2) != first0["prompt_hash"] and built(1) == first0["prompt_hash"]:
+        version = 1
+tools = offered(result["tools"], version=version) if result["tools"] is not None else []
+print("effective tools", result["tools"])
+sp = None
+if result["tools"] is not None:
+    sp = system_prompt(tools, version=version)
+    print("effective system prompt sha256", hashlib.sha256(sp.encode()).hexdigest())
+    if version == 1:
+        print("ListFiles/ReadFile: version 1 (before line ranges)")
 ref = hl.ModelRef.parse(calls[0]["model"]) if calls else None   # the model the run used (the ledger records it)
 started = [e for e in events if e["event"] == "llm_call_started"]
 print(f"llm_call_started {len(started)}, llm_call {len(calls)} "

@@ -30,7 +30,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--intake", help="the name of an intake in fixtures/repos (a new run)")
-    ap.add_argument("--issue-file", help="the human's issue, at most 2000 characters (a new run)")
+    ap.add_argument("--issue-file", help="the human's issue, at most 8000 characters (a new run)")
     ap.add_argument("--max-usd", type=float, help="the cap of this run (a new run)")
     ap.add_argument("--runs-dir", default=str(ROOT / "runs"))
     ap.add_argument("--config", help="config file (default: config.yaml)")

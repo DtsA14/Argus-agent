@@ -428,8 +428,9 @@ def test_old_checks_are_history_a_workspace_broken_after_them_fails(tmp_path):
 def test_the_first_attempt_prompt_is_unchanged(tmp_path):
     r, model, d = run(tmp_path, [WRITE, FINISH])
     assert sha(human(model, 0)) == "56d8c4f3f2eb070af313b8aad343149e1db8de9f91b542f410ba63dfb03df5e5"
+    # system prompt: ListFiles and ReadFile descriptions changed with line ranges (after SWE v0 batch 4)
     assert sha(model.calls[0]["messages"][0].content) == \
-        "ee7af58da465bd579f4f82ba9547cfefbc441577f89b04a101fdd123ee0d3bc0"
+        "fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b"
 
 
 def test_a_next_attempt_that_does_not_fit_the_budget_is_not_run_and_nothing_is_done(tmp_path):
