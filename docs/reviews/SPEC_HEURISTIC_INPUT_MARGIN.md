@@ -98,7 +98,7 @@ Verifikasi: `verify.sh` penuh (jalur ketat), mutants untuk tes 1–3.
 
 - `harness/llm.py`: margin = `llm.input_margin_by_model[str(model)]`, selain itu `llm.input_margin`. Satu tempat, jadi
   worst case token dan USD memakai est yang sama (`_output_cap`, `_worst_usd`).
-- `config.yaml`: `llm.input_margin_by_model: {}` (eval tidak berubah). Override router: DeepSeek 2,5;
+- `config.yaml` tidak berubah (key `input_margin_by_model` tidak ada di sana, supaya config eval tetap sama). Override router: DeepSeek 2,5;
   `code_task.max_input_tokens_by_model` 125.000 (= 60.000 × 2,5/1,2); `drafter.max_input_tokens` 416.000
   (≈ 200.000 × 2,5/1,2); `code_task.profiles.large_usd.attempt_tokens` 1.200.000.
 - Tes `tests/test_input_margin.py` (5): margin per model, model tanpa entri, replay langkah 18 `24562` (margin 1,2

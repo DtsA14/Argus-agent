@@ -48,7 +48,6 @@ llm:
   base_delay: 1.0                   # seconds; exponential with jitter, Retry-After wins when present
   min_output_tokens: 64
   input_margin: 1.2                 # safety factor on heuristic input counts (Anthropic counts exactly)
-  input_margin_by_model: {}          # SPEC_HEURISTIC_INPUT_MARGIN H1: per model, replaces input_margin (router: DeepSeek)
   # D5: Anthropic prompt caching (markers added only to what is sent; hashes and memo keys unchanged). Off by default,
   # turned on explicitly for a pilot; a role may override it (roles.<role>.prompt_cache). Only ttl 5m; Haiku 5.5 is
   # not cached in D5. While on, every input token is reserved at the dearer of input and 5-minute write: no hit is assumed.

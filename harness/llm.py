@@ -311,7 +311,8 @@ class LLMCaller:
         if counter is not None:
             self.count, self.exact = counter, True
         else:
-            # SPEC_HEURISTIC_INPUT_MARGIN H1: a margin per model from the ledger, else input_margin
+            # SPEC_HEURISTIC_INPUT_MARGIN H1: llm.input_margin_by_model (set by the router's overrides, absent in
+            # config.yaml so the evals' configs stay equal to it), else input_margin
             margin = (llm.get("input_margin_by_model") or {}).get(str(self.ref), llm.get("input_margin", 1.2))
             self.count, self.exact = provider_counter(self.model, float(margin))
         self.sleep, self.now = sleep, now
