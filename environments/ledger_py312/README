@@ -1,0 +1,9 @@
+Sandbox environment for the argus-ledger practice app (Argus PENDING.md, stage 2: a JSON API with FastAPI, tested with
+FastAPI's TestClient over httpx; no server, no network). Base: python:3.12-slim (Python 3.12.16, arm64), pinned by digest
+in `base`. Requirements are exact versions with sha256 hashes of the wheels, resolved in that base image on 2026-10-28 for
+fastapi==0.143.0, httpx==0.28.1 and pytest==9.1.1, each package at its newest release whose files were all uploaded before
+2026-10-14 (two weeks or more before the build). pydantic-core is the one compiled wheel (manylinux aarch64): the hash is
+for this VM's architecture. Built by scripts/build_env_from_base.sh ledger_py312; checked by scripts/check_env_image.py
+ledger_py312 before any job may use it (docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md). Smoke test 2026-10-28: a FastAPI app with a
+404 route passes under TestClient in the sandbox; starlette 1.8 warns that httpx is deprecated for its TestClient (a
+warning, not a failure).
