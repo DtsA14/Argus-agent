@@ -28,7 +28,9 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
 - [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`, lokal): dashboard ledger Argus dari folder `jobs/`.
   Setiap fitur = satu job Argus. Issue `~/argus-ledger-issues/` (001–010 **ditulis Claude atas delegasi Atha**). Sejak tahap 6
   **jalur cepat** (Atha 2026-10-28): Claude approve draf, review patch, cek, dan commit sendiri; dari Atha hanya "go live" per job.
-  **8 task, agen 8/8 di attempt pertama, total $0,3471, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Drafter gagal sekali
+  **10 task di `main` (tahap 0–8), total $0,5094, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Agen 8/10 di attempt
+  pertama; 010b butuh retry (5 attempt, 4 `context_limit`); 010 ($0,0575) DONE tapi **tidak di-merge** (2 cacat yang lolos
+  dari tesnya, ditemukan uji serangan). Drafter gagal sekali
   (tahap 4 d1: batas 500 karakter item rencana tidak disebut di pesan error → #223), redraft lolos 1 submit.
 
   | Tahap | Fitur | Job | Agen | Biaya | Cek di data asli |
@@ -41,10 +43,18 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   | 4 `a4d6cc1` | SQLite `import`/`history`, skema v1, SQL berparameter | `…113909_2235` | 5 | $0,0620 | folder dihapus, history = summary |
   | 5 `a503bdb` | login: PBKDF2, cookie HMAC 12 jam, middleware | `…121336_0231` | 14 | $0,0344 | uji serangan sandbox: semua ditolak |
   | 6 `54fd0e0` | hardening 008: cookie `Secure` default, key ≥ 32, body login ≤ 4096 (413) | `…143850_e07b` | 11 | $0,0473 | 74 tes; 17 uji serangan + data asli 38 job |
+  | 7 `ae66c31` | 009: batas login gagal per alamat (429 + `Retry-After`, tanpa PBKDF2 saat diblokir) | `…145520_0b94` | 8 | $0,0338 | brute force 20 tebakan: 5 hash, 15× 429 |
+  | – | 010: sesi bisa dicabut, **tidak di-merge** (logout palsu tersimpan tanpa batas; login di detik yang sama memberi nilai yang dicabut) | `…150342_8c2b` | 6+18 | $0,0575 | uji serangan: 2 gagal |
+  | 8 `759c59c` | 010b: logout mencabut sesi valid (SHA-256), `revoke-sessions` SQLite, fail-closed | `…152604_5fde` | retry, 5 attempt | $0,0810 | 103 tes; uji tahap 6–8 + data asli |
 
   - Temuan dogfooding: tahap 0 kurang hitung job yang dihentikan (`usd` null di `job.json`) → tahap 1. Mode fitur drafter **tidak
     perlu**: drafter menulis tes fitur yang merah karena assertion (impor di dalam tes, CLI lewat subprocess).
-  - [~] **Hardening login** (dari review tahap 5, Atha 2026-10-28): `Secure`, panjang `secret_key`, batas body, docstring "running":
+  - [x] **Hardening login selesai** (tahap 6–8). Pelajaran 010: tes draf bisa menghindari kasus sulit (`_next_second()`); uji
+    serangan Claude di luar tes yang menangkapnya. Issue yang mengunci format (cookie `<expiry>.<HMAC>`) ikut menyebabkan cacat
+  - [x] **Context agen** (#227, jalur cepat): `ReadFile` tanpa rentang pada `.py` > 12.000 karakter memberi outline (kelas/fungsi
+    + baris), berkas lain 12.000 karakter pertama; petunjuk sesudah `context_limit` juga untuk attempt yang sudah menulis. Bacaan
+    010b a1 attempt 1: 135.665 → 37.767 karakter. Efek live belum diukur
+  - Riwayat hardening (Atha 2026-10-28): `Secure`, panjang `secret_key`, batas body, docstring "running":
     **selesai di tahap 6** (008: draf pertama dengan blok "Why they fail now" per tes dari #225, 11 alasan terlihat; drafter 3 submit).
     Sisa, satu "go live" untuk dua job berurutan: **009** batas percobaan login per alamat (429 + `Retry-After`, tanpa PBKDF2 saat
     diblokir) dan **010** sesi yang bisa dicabut (logout mencabut di server; `revoke-sessions` lewat SQLite; format cookie tetap,
