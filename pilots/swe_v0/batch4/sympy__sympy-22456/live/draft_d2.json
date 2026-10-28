@@ -1,0 +1,115 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/codegen/ast.py"
+    ],
+    "steps": [
+      "In `sympy/codegen/ast.py`, remove `not_in_args = ['text']` from `String` so that `Token.__new__` no longer drops the text and `Basic.args` becomes `('foo',)` for `String('foo')`.",
+      "Leave `_construct_text` (the `str` type check), `is_Atom = True`, `_sympystr` and `kwargs()` untouched, so `str`/`repr`/`Type(String(...))` printing, equality, hashing and `String(text='foo')` keep working.",
+      "Rebuild-from-args must also work through `Token.__new__`'s pass-through branch, i.e. `String(*String('foo').args) == String('foo')` and the same for `QuotedString` and `Comment`."
+    ],
+    "risks": [
+      "`String.args` will then hold a plain Python `str`, so helpers that assume every `Basic` argument is a `Basic` (e.g. `_test_args` in `sympy/core/tests/test_args.py`, which covers `test_sympy__codegen__ast__String`, or `Basic.free_symbols` over the arguments) no longer hold for `String`; that file is protected and is deliberately not part of the validations.",
+      "Changing `Token`/`Token.__new__` in general instead of just `String` would change `Type`, `Attribute`, `Variable`, `FunctionPrototype`, ... and break their round-tripping.",
+      "Dropping `_construct_text`, `is_Atom` or `_sympystr` would break `String('foo') == 'foo'`-style printing (`str`, `repr`) and the `is_Atom` behaviour that other code relies on.",
+      "Making `func` return something other than the class (e.g. a closure) would satisfy the check only vacuously; the text must stay reachable from `args`."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/codegen/ast.py"
+      ],
+      "protected": [
+        "sympy/**/tests/**",
+        "conftest.py",
+        "pytest.ini"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/codegen/tests/test_ast_invariance.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 4,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/codegen/tests/test_ast_invariance.py::test_String_args_hold_the_text",
+          "sympy/codegen/tests/test_ast_invariance.py::test_String_func_of_args",
+          "sympy/codegen/tests/test_ast_invariance.py::test_QuotedString_func_of_args",
+          "sympy/codegen/tests/test_ast_invariance.py::test_Comment_func_of_args"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression_ast",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/codegen/tests/test_ast.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 31,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/codegen/tests/test_ast.py::test_Assignment",
+          "sympy/codegen/tests/test_ast.py::test_AugAssign",
+          "sympy/codegen/tests/test_ast.py::test_Assignment_printing",
+          "sympy/codegen/tests/test_ast.py::test_CodeBlock",
+          "sympy/codegen/tests/test_ast.py::test_CodeBlock_topological_sort",
+          "sympy/codegen/tests/test_ast.py::test_CodeBlock_free_symbols",
+          "sympy/codegen/tests/test_ast.py::test_CodeBlock_cse",
+          "sympy/codegen/tests/test_ast.py::test_CodeBlock_cse__issue_14118",
+          "sympy/codegen/tests/test_ast.py::test_For",
+          "sympy/codegen/tests/test_ast.py::test_none",
+          "sympy/codegen/tests/test_ast.py::test_String",
+          "sympy/codegen/tests/test_ast.py::test_Comment",
+          "sympy/codegen/tests/test_ast.py::test_Node",
+          "sympy/codegen/tests/test_ast.py::test_Type",
+          "sympy/codegen/tests/test_ast.py::test_Type__from_expr",
+          "sympy/codegen/tests/test_ast.py::test_Type__cast_check__integers",
+          "sympy/codegen/tests/test_ast.py::test_Attribute",
+          "sympy/codegen/tests/test_ast.py::test_Variable",
+          "sympy/codegen/tests/test_ast.py::test_Pointer",
+          "sympy/codegen/tests/test_ast.py::test_Declaration",
+          "sympy/codegen/tests/test_ast.py::test_IntBaseType",
+          "sympy/codegen/tests/test_ast.py::test_FloatType",
+          "sympy/codegen/tests/test_ast.py::test_Type__cast_check__floating_point",
+          "sympy/codegen/tests/test_ast.py::test_Type__cast_check__complex_floating_point",
+          "sympy/codegen/tests/test_ast.py::test_While",
+          "sympy/codegen/tests/test_ast.py::test_Scope",
+          "sympy/codegen/tests/test_ast.py::test_Print",
+          "sympy/codegen/tests/test_ast.py::test_FunctionPrototype_and_FunctionDefinition",
+          "sympy/codegen/tests/test_ast.py::test_Return",
+          "sympy/codegen/tests/test_ast.py::test_FunctionCall",
+          "sympy/codegen/tests/test_ast.py::test_ast_replace"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/codegen/tests/test_ast_invariance.py",
+      "content": "\"\"\"Argument invariance of ``sympy.codegen.ast.String``.\n\n``expr.func(*expr.args) == expr`` must hold for every ``Basic`` subclass, and\n``String`` is one of them.  It used to be excluded from that invariance: the\ntext was listed in ``not_in_args``, so ``String('foo').args`` was ``()`` and\nonly ``expr.func(**expr.kwargs()) == expr`` worked.\n\"\"\"\n\nfrom sympy.codegen.ast import String, QuotedString, Comment\n\n\ndef test_String_args_hold_the_text():\n    # the text has to be the argument of the instance, not an attribute that\n    # is hidden from ``Basic.args``\n    assert String('foobar').args == ('foobar',)\n\n\ndef test_String_func_of_args():\n    st = String('foobar')\n    try:\n        rebuilt = st.func(*st.args)\n    except Exception as exc:\n        raise AssertionError(\n            'String.func(*String.args) raised %s: %s (args was %r)'\n            % (type(exc).__name__, exc, st.args)) from exc\n    assert rebuilt == String('foobar')\n    assert rebuilt == st\n\n\ndef test_QuotedString_func_of_args():\n    qs = QuotedString('foobar')\n    try:\n        rebuilt = qs.func(*qs.args)\n    except Exception as exc:\n        raise AssertionError(\n            'QuotedString.func(*QuotedString.args) raised %s: %s (args was %r)'\n            % (type(exc).__name__, exc, qs.args)) from exc\n    assert rebuilt == QuotedString('foobar')\n    assert rebuilt == qs\n\n\ndef test_Comment_func_of_args():\n    cm = Comment('a comment')\n    try:\n        rebuilt = cm.func(*cm.args)\n    except Exception as exc:\n        raise AssertionError(\n            'Comment.func(*Comment.args) raised %s: %s (args was %r)'\n            % (type(exc).__name__, exc, cm.args)) from exc\n    assert rebuilt == cm\n    assert isinstance(rebuilt, Comment)\n    assert rebuilt.text == 'a comment'\n"
+    }
+  ],
+  "unverifiable": [
+    "Whether other ``Basic`` subclasses of the repository keep the ``expr.func(*expr.args) == expr`` invariance is not checked; only ``String`` and its ``QuotedString``/``Comment`` subclasses are.",
+    "The consequences of ``text`` becoming a plain ``str`` argument for helpers that assume every ``Basic`` argument is a ``Basic`` (``_test_args`` in ``sympy/core/tests/test_args.py``, which covers ``test_sympy__codegen__ast__String`` and ``test_sympy__codegen__ast__QuotedString``, and ``Basic.free_symbols``/``Basic.atoms`` over a ``String``) are not covered by any validation here, because test files are protected and cannot be adjusted.",
+    "Nothing checks the printed output of real code generated for e.g. C/Fortran/Python beyond what ``sympy/codegen/tests/test_ast.py`` already covers."
+  ]
+}

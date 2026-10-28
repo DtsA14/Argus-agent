@@ -1,0 +1,18 @@
+== drafter stage d1 (job j20261028_031352_c162) ==
+model deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits
+overrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}
+job cap $1.00; spent $0.0000; left $1.0000
+(--yes: approved in chat; no [y/N] asked)
+drafter running in j20261028_031352_c162-d1 (usually 1-3 minutes; it prints nothing until it ends). Do not start another job for this task: if this stops or the terminal closes, continue it with `argus resume j20261028_031352_c162`.
+drafter finished: DRAFTED ($0.0574)
+job j20261028_031352_c162: AWAITING_APPROVAL
+repo /home/ubuntu/swe/sympy at fdc707f73a65a429935c01532cd3970d3355eab6
+environment sympy, image de306e046ab6
+money: cap $1.00, spent $0.0574
+  d1 draft: DRAFTED cap $0.7500 spent $0.0574
+draft b087bf908863 (/home/ubuntu/pilot3a_live/jobs/j20261028_031352_c162/runs/j20261028_031352_c162-d1/DRAFT_REVIEW.md)
+writable: sympy/utilities/lambdify.py
+validation target (env sympy): python -m pytest sympy/utilities/tests/test_lambdify_tuple_one_element.py
+validation lambdify_regression (env sympy): python -m pytest sympy/utilities/tests/test_lambdify.py::test_no_args sympy/utilities/tests/test_lambdify.py::test_nested_args sympy/utilities/tests/test_lambdify.py::test_str_args sympy/utilities/tests/test_lambdify.py::test_lambdify_imps sympy/utilities/tests/test_lambdify.py::test_vector_simple sympy/utilities/tests/test_lambdify.py::test_issue_14941 sympy/utilities/tests/test_lambdify.py::test_lambdify_inspect sympy/utilities/tests/test_lambdify.py::test_issue_2790 sympy/utilities/tests/test_lambdify.py::test_matrix sympy/utilities/tests/test_lambdify.py::test_lambdify_dummy_arg sympy/utilities/tests/test_lambdify.py::test_true_false
+validation printing_regression (env sympy): python -m pytest sympy/printing/tests/test_pycode.py::test_PythonCodePrinter sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq
+approve: argus approve j20261028_031352_c162 --sha b087bf908863

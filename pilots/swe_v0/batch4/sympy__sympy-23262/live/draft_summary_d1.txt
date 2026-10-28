@@ -1,0 +1,81 @@
+stage: j20261028_031352_c162-d1
+writable: ['sympy/utilities/lambdify.py']
+validation target sympy -m pytest sympy/utilities/tests/test_lambdify_tuple_one_element.py | required: ['sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_single_element_tuple_constant', 'sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_single_element_tuple_symbol', 'sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_single_element_tuple_in_generated_source', 'sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_nested_single_element_tuple']
+validation lambdify_regression sympy -m pytest sympy/utilities/tests/test_lambdify.py::test_no_args sympy/utilities/tests/test_lambdify.py::test_nested_args sympy/utilities/tests/test_lambdify.py::test_str_args sympy/utilities/tests/test_lambdify.py::test_lambdify_imps sympy/utilities/tests/test_lambdify.py::test_vector_simple sympy/utilities/tests/test_lambdify.py::test_issue_14941 sympy/utilities/tests/test_lambdify.py::test_lambdify_inspect sympy/utilities/tests/test_lambdify.py::test_issue_2790 sympy/utilities/tests/test_lambdify.py::test_matrix sympy/utilities/tests/test_lambdify.py::test_lambdify_dummy_arg sympy/utilities/tests/test_lambdify.py::test_true_false | required: ['sympy/utilities/tests/test_lambdify.py::test_no_args', 'sympy/utilities/tests/test_lambdify.py::test_nested_args', 'sympy/utilities/tests/test_lambdify.py::test_str_args', 'sympy/utilities/tests/test_lambdify.py::test_lambdify_imps', 'sympy/utilities/tests/test_lambdify.py::test_vector_simple', 'sympy/utilities/tests/test_lambdify.py::test_issue_14941', 'sympy/utilities/tests/test_lambdify.py::test_lambdify_inspect', 'sympy/utilities/tests/test_lambdify.py::test_issue_2790', 'sympy/utilities/tests/test_lambdify.py::test_matrix', 'sympy/utilities/tests/test_lambdify.py::test_lambdify_dummy_arg', 'sympy/utilities/tests/test_lambdify.py::test_true_false']
+validation printing_regression sympy -m pytest sympy/printing/tests/test_pycode.py::test_PythonCodePrinter sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq | required: ['sympy/printing/tests/test_pycode.py::test_PythonCodePrinter', 'sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes', 'sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq']
+---- WHY
+sympy/utilities/tests/test_lambdify_tuple_one_element.py:18: in test_single_element_tuple_constant
+E   AssertionError: lambdify returned 1, which is not a tuple
+sympy/utilities/tests/test_lambdify_tuple_one_element.py:26: in test_single_element_tuple_symbol
+E   AssertionError: lambdify returned 2, which is not a tuple
+sympy/utilities/tests/test_lambdify_tuple_one_element.py:34: in test_single_element_tuple_in_generated_source
+E   AssertionError: generated source has no one-element tuple:
+E     def _lambdifygenerated():
+E         return (1)
+E     
+sympy/utilities/tests/test_lambdify_tuple_one_element.py:41: in test_nested_single_element_tuple
+E   AssertionError: lambdify returned 2 for the nested tuple
+========================= 4 failed, 2 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/utilities/tests/test_lambdify_tuple_one_element.py
+"""Tests for lambdify printing of tuples with a single element.
+
+``lambdify([], (1,))`` must generate ``return (1,)``; the missing comma
+made the generated function return the integer ``1`` instead of a tuple.
+"""
+
+import inspect
+
+from sympy.core.symbol import Symbol
+from sympy.utilities.lambdify import lambdify
+
+x = Symbol('x')
+
+
+def test_single_element_tuple_constant():
+    f = lambdify([], tuple([1]))
+    result = f()
+    assert isinstance(result, tuple), \
+        "lambdify returned {!r}, which is not a tuple".format(result)
+    assert result == (1,)
+
+
+def test_single_element_tuple_symbol():
+    f = lambdify([x], (x,))
+    result = f(2)
+    assert isinstance(result, tuple), \
+        "lambdify returned {!r}, which is not a tuple".format(result)
+    assert result == (2,)
+
+
+def test_single_element_tuple_in_generated_source():
+    f = lambdify([], tuple([1]))
+    source = inspect.getsource(f)
+    assert "(1,)" in source, \
+        "generated source has no one-element tuple:\n{}".format(source)
+
+
+def test_nested_single_element_tuple():
+    f = lambdify([x], ((x,), x + 1))
+    result = f(2)
+    assert isinstance(result[0], tuple), \
+        "lambdify returned {!r} for the nested tuple".format(result[0])
+    assert result == ((2,), 3)
+
+
+def test_empty_tuple_is_unchanged():
+    f = lambdify([], tuple())
+    result = f()
+    assert isinstance(result, tuple), \
+        "lambdify returned {!r}, which is not a tuple".format(result)
+    assert result == ()
+
+
+def test_several_element_tuple_is_unchanged():
+    f = lambdify([], (1, 2))
+    assert f() == (1, 2)
+    g = lambdify([x], (x, x + 1))
+    assert g(3) == (3, 4)
+
+['Drafter: $0.0574, 18 model calls, 3 submits, 17 steps (ended: submitted).']

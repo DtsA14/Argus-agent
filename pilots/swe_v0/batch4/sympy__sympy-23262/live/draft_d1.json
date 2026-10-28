@@ -1,0 +1,126 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/utilities/lambdify.py"
+    ],
+    "steps": [
+      "In `_recursive_to_string` (sympy/utilities/lambdify.py), special-case a tuple of length one so that its printed form keeps the trailing comma, i.e. `(x,)` instead of `(x)`.",
+      "Keep the special case inside the recursive helper so nested one-element tuples also get their comma.",
+      "Leave the empty tuple printing as `()` and leave lists and multi-element tuples printed exactly as before.",
+      "Run the new tests and the existing lambdify test module."
+    ],
+    "risks": [
+      "Adding the comma unconditionally would give `(,)` for the empty tuple and break `lambdify([], ())`.",
+      "Fixing only the top-level expression in `_EvaluatorPrinter.doprint` instead of the recursive helper would leave nested one-element tuples wrong.",
+      "Adding a trailing comma to every tuple would needlessly change the generated source of multi-element tuples.",
+      "Touching the list or dict branches of `_recursive_to_string` could break list/dict expressions covered by existing tests."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/utilities/lambdify.py"
+      ],
+      "protected": [
+        "sympy/**/tests/**",
+        "sympy/**/test_*.py",
+        "sympy/utilities/tests/test_lambdify_tuple_one_element.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/utilities/tests/test_lambdify_tuple_one_element.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 6,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_single_element_tuple_constant",
+          "sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_single_element_tuple_symbol",
+          "sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_single_element_tuple_in_generated_source",
+          "sympy/utilities/tests/test_lambdify_tuple_one_element.py::test_nested_single_element_tuple"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "lambdify_regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/utilities/tests/test_lambdify.py::test_no_args",
+          "sympy/utilities/tests/test_lambdify.py::test_nested_args",
+          "sympy/utilities/tests/test_lambdify.py::test_str_args",
+          "sympy/utilities/tests/test_lambdify.py::test_lambdify_imps",
+          "sympy/utilities/tests/test_lambdify.py::test_vector_simple",
+          "sympy/utilities/tests/test_lambdify.py::test_issue_14941",
+          "sympy/utilities/tests/test_lambdify.py::test_lambdify_inspect",
+          "sympy/utilities/tests/test_lambdify.py::test_issue_2790",
+          "sympy/utilities/tests/test_lambdify.py::test_matrix",
+          "sympy/utilities/tests/test_lambdify.py::test_lambdify_dummy_arg",
+          "sympy/utilities/tests/test_lambdify.py::test_true_false"
+        ],
+        "timeout_s": 300,
+        "min_tests": 11,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/utilities/tests/test_lambdify.py::test_no_args",
+          "sympy/utilities/tests/test_lambdify.py::test_nested_args",
+          "sympy/utilities/tests/test_lambdify.py::test_str_args",
+          "sympy/utilities/tests/test_lambdify.py::test_lambdify_imps",
+          "sympy/utilities/tests/test_lambdify.py::test_vector_simple",
+          "sympy/utilities/tests/test_lambdify.py::test_issue_14941",
+          "sympy/utilities/tests/test_lambdify.py::test_lambdify_inspect",
+          "sympy/utilities/tests/test_lambdify.py::test_issue_2790",
+          "sympy/utilities/tests/test_lambdify.py::test_matrix",
+          "sympy/utilities/tests/test_lambdify.py::test_lambdify_dummy_arg",
+          "sympy/utilities/tests/test_lambdify.py::test_true_false"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "printing_regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/printing/tests/test_pycode.py::test_PythonCodePrinter",
+          "sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes",
+          "sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq"
+        ],
+        "timeout_s": 300,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/printing/tests/test_pycode.py::test_PythonCodePrinter",
+          "sympy/printing/tests/test_pycode.py::test_codegen_ast_nodes",
+          "sympy/printing/tests/test_pycode.py::test_NumPyPrinter_print_seq"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/utilities/tests/test_lambdify_tuple_one_element.py",
+      "content": "\"\"\"Tests for lambdify printing of tuples with a single element.\n\n``lambdify([], (1,))`` must generate ``return (1,)``; the missing comma\nmade the generated function return the integer ``1`` instead of a tuple.\n\"\"\"\n\nimport inspect\n\nfrom sympy.core.symbol import Symbol\nfrom sympy.utilities.lambdify import lambdify\n\nx = Symbol('x')\n\n\ndef test_single_element_tuple_constant():\n    f = lambdify([], tuple([1]))\n    result = f()\n    assert isinstance(result, tuple), \\\n        \"lambdify returned {!r}, which is not a tuple\".format(result)\n    assert result == (1,)\n\n\ndef test_single_element_tuple_symbol():\n    f = lambdify([x], (x,))\n    result = f(2)\n    assert isinstance(result, tuple), \\\n        \"lambdify returned {!r}, which is not a tuple\".format(result)\n    assert result == (2,)\n\n\ndef test_single_element_tuple_in_generated_source():\n    f = lambdify([], tuple([1]))\n    source = inspect.getsource(f)\n    assert \"(1,)\" in source, \\\n        \"generated source has no one-element tuple:\\n{}\".format(source)\n\n\ndef test_nested_single_element_tuple():\n    f = lambdify([x], ((x,), x + 1))\n    result = f(2)\n    assert isinstance(result[0], tuple), \\\n        \"lambdify returned {!r} for the nested tuple\".format(result[0])\n    assert result == ((2,), 3)\n\n\ndef test_empty_tuple_is_unchanged():\n    f = lambdify([], tuple())\n    result = f()\n    assert isinstance(result, tuple), \\\n        \"lambdify returned {!r}, which is not a tuple\".format(result)\n    assert result == ()\n\n\ndef test_several_element_tuple_is_unchanged():\n    f = lambdify([], (1, 2))\n    assert f() == (1, 2)\n    g = lambdify([x], (x, x + 1))\n    assert g(3) == (3, 4)\n"
+    }
+  ],
+  "unverifiable": [
+    "Whether the fix also corrects `lambdastr`, which shares `_recursive_to_string`, is not checked: the issue only reports `lambdify`.",
+    "The exact spacing of the generated source is only checked loosely (the presence of `(1,)`), so a differently formatted but semantically correct output is accepted.",
+    "Printing a SymPy `Tuple` with one element through the code printers (`pycode`) already produced `(1,)` before the fix, so it is not part of the checked behaviour."
+  ]
+}

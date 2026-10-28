@@ -1,0 +1,14 @@
+== drafter stage d1 (job j20261028_030912_cae2) ==
+model deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits
+overrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}
+job cap $1.00; spent $0.0000; left $1.0000
+(--yes: approved in chat; no [y/N] asked)
+drafter running in j20261028_030912_cae2-d1 (usually 1-3 minutes; it prints nothing until it ends). Do not start another job for this task: if this stops or the terminal closes, continue it with `argus resume j20261028_030912_cae2`.
+drafter finished: BLOCKED ($0.0000)
+job j20261028_030912_cae2: DRAFT_FAILED
+repo /home/ubuntu/swe/sympy at 39de9a2698ad4bb90681c0fdb70b30a78233145f
+environment sympy, image de306e046ab6
+money: cap $1.00, spent $0.0000
+  d1 draft: BLOCKED cap $0.7500 spent $0.0000
+why: the issue must be non-empty text of at most 2000 characters
+next: argus redraft j20261028_030912_cae2  |  argus reject j20261028_030912_cae2 "<why>"
