@@ -4,7 +4,8 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status); riwayat semua butir yang sudah selesai (bukti, angka, PR) ada di
 [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-28 (run ulang 21379 `resolved`, #206–#212; batch 4 preflight).
+Terakhir diperbarui: 2026-10-28 sore (batch 4 3/5, #214; jalur cepat #215/#216, margin input #217, dev set 1 #218; arah baru:
+coding agent untuk production, latihan `argus-ledger`).
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -18,6 +19,35 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 | M4, M7, M8, M9, capability pack | `[ ]` | ditunda sampai ada bukti kebutuhan (keputusan 2026-10-21) |
 | ADR-002, 004, 005, 006, 007 | `[~]` | ada untuk code task (Reconciliation bagian 2) |
 | ADR-001, 003 | `[ ]` | target M7 dan M8 |
+
+## Arah sejak 2026-10-28: coding agent untuk production
+
+Diputuskan Atha 2026-10-28 (Reconciliation bagian 7). SWE-bench turun jadi **±20% usaha** (dev set regresi + batch baru sesekali untuk
+angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
+
+- [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`): dashboard ledger Argus (job, status, biaya, grading)
+  dari folder `jobs/`. Setiap fitur = satu job Argus; issue fitur ditulis Atha.
+  - [~] Tahap 0: CLI `ledger summary <jobs_dir>`, stdlib saja. Kerangka repo siap (`d131105`, README memuat format `job.json`);
+    menunggu issue fitur dari Atha
+  - [ ] Tahap 1: filter (tanggal, status) dan total per batch
+  - [ ] Tahap 2: API JSON (FastAPI); butuh image environment dengan FastAPI
+  - [ ] Tahap 3: halaman HTML
+  - [ ] Tahap 4: SQLite (impor ledger, query)
+  - [ ] Tahap 5: login sederhana (patch-nya direview jalur ketat)
+  - Ukuran: PR di-merge tanpa ditulis ulang, menit review Atha per PR, biaya per PR yang di-merge, insiden (scope, tes dilonggarkan,
+    error ditelan). Bukan resolve rate.
+- [ ] **Mode fitur di drafter** (jalur ketat, **hanya bila perlu**): tes fitur yang `import` modul baru di level berkas jadi collection
+  error dan ditolak. Gate sekarang sudah menerima tes yang memeriksa dulu dengan assert (`assert importlib.util.find_spec(...)`,
+  `assert hasattr(...)`; hint penolakan menyarankannya). Tahap 0 dicoba dengan harness yang ada; spek ditulis bila drafter mentok
+- [ ] **Web search sebagai tool** (sesudah tahap awal `argus-ledger`; jalur ketat): sandbox sekarang tanpa jaringan; isi web dilabeli
+  data, hasil di-memo (crash-resume), biaya search masuk ledger. Dipakai coder (dokumentasi) dan nanti riset
+- [ ] **Deep research** (sesudah web search): kerangka orchestrator → workers → synthesize → evaluator sudah ada; gate kutipan
+  (klaim ↔ sumber yang benar-benar di-fetch) belum ada (gap ADR-006 non-kode)
+- [ ] Email Agensi.io (marketplace skill, 2026-10-28): **nanti**. Nilai Argus ada di kode yang menegakkan jaminan, bukan di
+  instruksi; bila dibuka, eksperimen dibatasi waktu
+- Cara kerja (2026-10-28): **dua jalur.** Ketat (uang/ledger, crash-resume, sandbox, key, grader: spek, mutants, `verify.sh`, "merge"
+  Atha) dan cepat (kemampuan agen: PR = spek, tes non-sandbox + modul sandbox terkait, Claude merge sendiri). `verify.sh` penuh
+  wajib untuk jalur ketat dan **sekali sebelum setiap batch**. Run live tetap butuh "go live"; dev set: retry otomatis sekali
 
 ## Terbuka sekarang
 
@@ -97,12 +127,20 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **Node skipped disebut, drafter 24 langkah** (#210); **langkah submit sesudah `max_steps`** (#211)
 - [x] **Run ulang `21379`** (#207, #209, #212): `resolved` (1/1, 91/91), job $0,2773, seluruh run ulang $0,3288; dilaporkan terpisah.
     Agen hanya menyentuh `mod.py`, tangkapan sempit di sekitar `gcd` (`pilots/swe_v0/rerun_21379/RESULT.md`)
-- [ ] **SWE batch 4** (`pilots/swe_v0/batch4/PREFLIGHT.md`): lima instance sympy (`24562`, `24066`, `23824`, `22456`, `23262`),
-    environment `sympy` (3.12), tanpa bocoran, **harness tidak diubah selama batch**, izin di muka 1 redraft + 1 retry per instance.
-    Menunggu "go live". SWE-rebench ditunda (Atha 2026-10-28: beban environment per repo)
-- [ ] Kandidat spek sesudah batch 4 (dari 21379): `ReadFile` per rentang baris (agen `a1` habis konteks membaca 3 berkas besar utuh;
-    K4 #206); gerbang writable glob/lebar vs regresi sempit (catatan Atha: `sympy/core/*.py` dijaga 16 tes); drafter membaca sampai
-    dipaksa berhenti (16/16/24/23 langkah)
+- [x] **SWE batch 4** (#214, `pilots/swe_v0/batch4/RESULT.md`): **3/5 `resolved`** (3/4 tanpa `23824` *harness-blocked*), tanpa bocoran,
+    harness beku, $0,4260, 5 balasan Atha. `24562` gagal (agen tidak pernah menulis); `22456` d1 ditahan, redraft polos
+- [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
+    300, issue 8.000 karakter, `max_steps` agen 30 (override router); audit run lama tetap memakai skema tool versi 1
+- [x] **Timeout validasi router 120 s** (#216; 261 validasi: p99 59 s, maks 66 s)
+- [x] **Margin input heuristik per model** (#217, `docs/reviews/SPEC_HEURISTIC_INPUT_MARGIN.md`): DeepSeek 2,5 (950 panggilan, tagihan
+    sampai 1,77× perkiraan), batas input diskalakan, plafon `large_usd` 1,2 juta token (override router; eval tidak berubah)
+- [x] **Dev set 1** (#218, `pilots/swe_v0/dev1/RESULT.md`, bukan klaim): `23824` dan `21379` `resolved`; `24562` gagal karena mutu patch
+    (`numbers.py` rusak saat import), retry dihentikan Atha. $0,4968
+- [ ] Jalur cepat berikutnya: umpan balik khusus bila validasi gagal dengan pytest exit code 4 (berkas tidak bisa di-import);
+    `estimate_miss` per run di `status` (H3 spek margin); `swe_grade.py` mencatat nama tes draf yang gagal di atas patch maintainer;
+    blok "Why they fail now" memuat semua tes merah; tes lama yang diubah drafter otomatis wajib (`22456` d1)
+- [ ] Kandidat sisa dari 21379: gerbang writable glob/lebar vs regresi sempit (dev set `21379`: writable 4 berkas di 3 paket);
+    drafter membaca sampai dipaksa berhenti
 - [ ] Langkah submit (#211) dan pertanyaan scope (#208) belum pernah terpakai di run live
 - [ ] Approve tanpa oracle lebih lama (batch 3: ±5–7 menit per draf, batch 1 median 45 detik); bila batch 4 sama, pertimbangkan
     ringkasan yang membantu menilai isi tes tanpa patch maintainer
