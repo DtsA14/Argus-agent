@@ -461,9 +461,11 @@ def test_submitdraft_with_another_call_in_the_same_reply_runs_nothing(root, tmp_
 
 
 def test_max_steps_ends_the_run(root, tmp_path):
-    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(3)]
+    # SPEC_DRAFTER_SUBMIT_STEPS: after max_steps one more step offers only the submit tools; a reply without a submit
+    # there ends the run
+    reads = [call("ReadFile", {"path": "src/shop.py"}, f"r{i}") for i in range(4)]
     r, model, _ = run(root, tmp_path, reads, config=cfg(max_steps=3))
-    assert r["status"] == dt.NO_DRAFT and r["stop_reason"] == "max_steps" and len(model.calls) == 3
+    assert r["status"] == dt.NO_DRAFT and r["stop_reason"] == "max_steps" and len(model.calls) == 4
 
 
 # ---- the review page ---------------------------------------------------------------------------------------------

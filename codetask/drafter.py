@@ -76,6 +76,10 @@ STEPS_LEFT_NOTE = ("Harness: {n} steps left of {max}. Submit the draft soon with
                    "rejection): a run that ends without an accepted draft has no draft, whatever was read.")
 FINAL_NOTE = ("Harness: the last {n} steps. Only SubmitDraft and ReviseDraft are offered now; submit what you have "
               "(the harness checks it and tells you what is wrong).")
+# SPEC_DRAFTER_SUBMIT_STEPS: the steps for reading end at max_steps, the submits do not. The 21379 re-run's drafters read
+# to the last step three times (16, 16, 24 steps) and ran out with one problem left and submits unused.
+SUBMIT_STEPS_NOTE = ("Harness: the steps for reading are used up. You may still call SubmitDraft or ReviseDraft, {n} more "
+                     "time(s) at most; a reply without one of them ends the drafting.")
 
 
 def final_from(max_steps):
@@ -467,7 +471,14 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
                     "usd_used": res.used_usd, **out}
 
         messages = [SystemMessage(SYSTEM), HumanMessage(prompt)]
-        for step in range(lim["max_steps"]):
+        used = 0
+        for step in range(lim["max_steps"] + lim["max_submits"]):
+            extra = step >= lim["max_steps"]           # only submits are left (SPEC_DRAFTER_SUBMIT_STEPS)
+            if extra and submits >= lim["max_submits"]:
+                break
+            used = step + 1
+            if step == lim["max_steps"]:
+                messages.append(HumanMessage(SUBMIT_STEPS_NOTE.format(n=lim["max_submits"] - submits)))
             final = step >= final_from(lim["max_steps"])
             if step > 0 and step == lim["max_steps"] // 2 and not final:
                 messages.append(HumanMessage(STEPS_LEFT_NOTE.format(n=lim["max_steps"] - step, max=lim["max_steps"])))
@@ -500,8 +511,12 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
                 log.emit("invalid_tool_call", step=step, tools=[c.get("name") for c in msg.invalid_tool_calls], **meta)
                 reason = "Rejected: " + "; ".join(invalid_call_errors(msg)) + ". Nothing in this reply was executed."
                 messages += [ToolMessage(reason, tool_call_id=i) for i in call_ids(msg, f"call_{step}")]
+                if extra:
+                    return end("max_steps", step + 1)
                 continue
             calls = list(msg.tool_calls or [])
+            if extra and not any(c.get("name") in SUBMITS for c in calls):
+                return end("max_steps", step + 1)
             if not calls:
                 messages.append(HumanMessage(NUDGE.replace("work on the issue", "draft the task")
                                              .replace("call Finish", "call SubmitDraft")))
@@ -527,7 +542,7 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
                                              "SubmitDraft and ReviseDraft are. Nothing was run.", "finished": False}
                     elif name in SUBMITS:
                         record = submit(c.get("args") or {}, submits + 1, last=last, revise=name == "ReviseDraft",
-                                        ask=not asked and step < lim["max_steps"] - 1, held=held or None)
+                                        ask=not asked, held=held or None)
                     elif name in GATED:              # a write or a validation is denied by the role's allowlist
                         record = toolbox.run(c, step_key=tkey)
                     else:
@@ -546,7 +561,7 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
                     return end("submitted", step, draft=record["draft"], report=record["report"])
                 if record.get("exhausted"):
                     return end("submits_exhausted", step)
-        return end("max_steps", lim["max_steps"])
+        return end("max_steps", used)
 
     return drafting
 
@@ -820,7 +835,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
                       role=role)
         submit = make_submit(inputs=inputs, policy=policy, scfg=scfg, root=root, log=log, validate=validate,
                              source=source, collect=collect or collect_nodes, red=red or red_check)
-        run = make_drafting(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"]}, tool_versions=versions,
+        run = make_drafting(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"],
+                                                         "max_submits": policy["max_submits"]}, tool_versions=versions,
                             submit=submit, crasher=crasher)
         a = run(task_id, box, task_prompt(inputs, state["files"], policy))
         out = {"drafting": {"end": a["end"], "steps": a["steps"], "submits": a["submits"]},
