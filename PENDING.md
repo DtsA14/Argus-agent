@@ -69,6 +69,9 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   - [ ] Tahap 3b: interaksi JavaScript + tes Playwright (image dengan Chromium; ±2–3 PR jalur ketat), bila ada kebutuhan JS
   - Ukuran: PR di-merge tanpa ditulis ulang, menit review Atha per PR, biaya per PR yang di-merge, insiden (scope, tes dilonggarkan,
     error ditelan). Bukan resolve rate.
+  - [x] **Hasil review job tercatat** (jalur cepat): `argus applied <job> --commit <sha>` (→ `APPLIED`: commit, sha256 patch,
+    `as_is` = patch-id commit sama dengan `changes.patch`) dan `argus reject` juga untuk paket review (→ `REJECTED` + alasan).
+    `by` = user OS yang menjalankan perintah, bukan bukti persetujuan Atha (ADR-007 tetap ditunda)
 - [x] **Environment `ledger_py312`** (#221, jalur ketat): Python 3.12 + FastAPI 0.143.0, httpx 0.28.1, pytest 9.1.1, wheel ber-hash
   (rilis < 2026-10-14); `check_env_image.py` PASS; satu wheel terkompilasi (`pydantic-core`, aarch64)
 - [x] **Pesan error rencana draf menyebut item, panjang, dan batasnya** (#223, jalur cepat; dari `argus-ledger` tahap 4)

@@ -4,7 +4,8 @@
   python scripts/argus.py list                            # every job: its id, state and money (read only)
   python scripts/argus.py status <job>
   python scripts/argus.py approve <job> --sha <first 12 of the draft sha, as status shows it> [--max-usd X]
-  python scripts/argus.py reject <job> "why"
+  python scripts/argus.py reject <job> "why"             # a draft, or a review package that will not be applied
+  python scripts/argus.py applied <job> --commit <sha>   # the review package was applied in that commit of the repo
   python scripts/argus.py redraft <job>
   python scripts/argus.py resume <job>
   python scripts/argus.py retry <job> [--max-usd X]      # after AGENT_FAILED: the agent again, as a new stage
@@ -64,6 +65,10 @@ def main(argv=None, deps=None):
     t = sub.add_parser("retry")
     t.add_argument("job")
     t.add_argument("--max-usd", type=float)
+    p = sub.add_parser("applied")
+    p.add_argument("job")
+    p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
+    p.add_argument("--note")
     for name in ("reject", "abandon"):
         r = sub.add_parser(name)
         r.add_argument("job")
@@ -92,6 +97,10 @@ def main(argv=None, deps=None):
         if o.cmd in ("reject", "abandon"):
             fn = rj.reject if o.cmd == "reject" else rj.abandon
             print(rj.status(fn(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir).id, jobs_dir=o.jobs_dir))
+            return 0
+        if o.cmd == "applied":
+            print(rj.status(rj.applied(o.job, o.commit, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id,
+                            jobs_dir=o.jobs_dir))
             return 0
         cfg = load_config(o.config)
         cfg["sandbox"] = sandbox_cfg(o.config)
