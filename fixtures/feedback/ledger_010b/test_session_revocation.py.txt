@@ -1,0 +1,917 @@
+"""Login hardening: sessions that can be revoked on the server.
+
+The stage 5 cookie is ``<expiry>.<hex HMAC-SHA256 of the expiry>`` and it stays
+valid until it expires, so ``POST /logout`` alone only asked the browser to drop
+it and a copied cookie kept working. This file checks the server side:
+
+1. ``create_app(..., session_db=None)`` keeps the revocations in a SQLite file
+   (in memory when it is ``None``), records a schema version as
+   ``ledger/history.py`` does, and creates a missing file;
+2. ``POST /logout`` with a valid, unexpired, not yet revoked cookie revokes it
+   (a SHA-256 of the value is stored, never the value itself); a logout without
+   such a session stores nothing; a revoked value counts as no session (401 for
+   the API, 303 to /login for the pages) in every app that uses the file;
+3. ``python -m ledger revoke-sessions <session_db>`` (and
+   ``ledger.auth.revoke_all_sessions``) revokes every cookie issued before the
+   moment it ran, without a restart; a login after it works; a file that cannot
+   be opened is exit code 1 with a message on stderr;
+4. a session_db that cannot be read makes requests fail closed;
+5. a login never hands out a value that is already revoked;
+6. the README Login section documents all of it.
+
+No server and no network are needed here: the command line runs in a subprocess
+with the repository on ``PYTHONPATH``, and everything else through the ASGI app
+of ``fastapi.testclient``.
+"""
+
+import hashlib
+import hmac
+import inspect
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+from urllib.parse import urlparse
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+PASSWORD = "correct horse battery staple"
+SECRET_KEY = "a-test-secret-key-for-the-session-cookie"  # 40 characters
+COOKIE = "ledger_session"
+
+SESSION_SECONDS = 12 * 3600
+
+_SALT = bytes(range(16))
+
+
+def _hash_of(password=PASSWORD, iterations=1000):
+    """The documented hash of ``password``: pbkdf2_sha256$iter$salt$hash."""
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), _SALT, iterations)
+    return "pbkdf2_sha256${}${}${}".format(iterations, _SALT.hex(), digest.hex())
+
+
+PASSWORD_HASH = _hash_of()
+
+
+# ---------------------------------------------------------------------------
+# the session cookie of stage 5: <expiry>.<hex HMAC-SHA256 of the expiry>
+# ---------------------------------------------------------------------------
+
+
+def _cookie_for(expiry):
+    """The documented cookie value whose expiry is ``expiry`` unix seconds."""
+    expiry_text = str(int(expiry))
+    signature = hmac.new(
+        SECRET_KEY.encode("utf-8"), expiry_text.encode("ascii"), hashlib.sha256
+    ).hexdigest()
+    return expiry_text + "." + signature
+
+
+def _cookie_issued_in(seconds):
+    """A signed, unexpired cookie whose issue time is ``seconds`` from now."""
+    return _cookie_for(int(time.time()) + int(seconds) + SESSION_SECONDS)
+
+
+#: A signed, unexpired cookie issued eleven hours ago: clearly older than any
+#: moment a test or the command records now.
+_OLD_COOKIE_SECONDS = 11 * 3600
+
+
+def _cookie_issued_before(seconds=_OLD_COOKIE_SECONDS):
+    """A signed, unexpired cookie issued ``seconds`` ago."""
+    return _cookie_for(int(time.time()) - int(seconds) + SESSION_SECONDS)
+
+
+# ---------------------------------------------------------------------------
+# the app, the client and the requests
+# ---------------------------------------------------------------------------
+
+
+def _create_app():
+    """``ledger.api.create_app``, or a failure saying what is missing."""
+    try:
+        from ledger.api import create_app
+    except Exception as exc:
+        raise AssertionError(
+            "ledger/api.py must define create_app and fastapi must be importable"
+        ) from exc
+    return create_app
+
+
+def _parameters(function):
+    """The parameters of ``function``, or an empty mapping."""
+    try:
+        return inspect.signature(function).parameters
+    except (TypeError, ValueError):
+        return {}
+
+
+def _jobs_dir(tmp_path):
+    """An (empty) jobs directory: the login never reads it."""
+    jobs_dir = Path(tmp_path) / "jobs"
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    return jobs_dir
+
+
+def _app(jobs_dir, session_db=None, password_hash=PASSWORD_HASH):
+    """create_app(jobs_dir, ...), or a failure naming the arguments given."""
+    create_app = _create_app()
+    kwargs = {}
+    if password_hash is not None:
+        kwargs["password_hash"] = password_hash
+        kwargs["secret_key"] = SECRET_KEY
+    if session_db is not None:
+        kwargs["session_db"] = str(session_db)
+    given = ", ".join(sorted(kwargs))
+    try:
+        return create_app(str(jobs_dir), **kwargs)
+    except Exception as exc:
+        raise AssertionError(
+            "create_app(jobs_dir, %s) must return a working app, it failed with %s"
+            % (given, exc)
+        ) from exc
+
+
+def _client(app):
+    """A TestClient over the app that never follows a redirect."""
+    try:
+        from fastapi.testclient import TestClient
+    except Exception as exc:
+        raise AssertionError("fastapi.testclient must be importable") from exc
+    try:
+        try:
+            return TestClient(app, follow_redirects=False)
+        except TypeError:
+            client = TestClient(app)
+            client.follow_redirects = False
+            return client
+    except Exception as exc:
+        raise AssertionError(
+            "TestClient(create_app(...)) must build a working client"
+        ) from exc
+
+
+def _headers(cookie):
+    """The Cookie header a client sends with ``cookie``."""
+    return None if cookie is None else {"Cookie": "{}={}".format(COOKIE, cookie)}
+
+
+def _get(client, path, cookie=None):
+    """GET ``path`` (with ``cookie`` when given), or a failure."""
+    kwargs = {}
+    headers = _headers(cookie)
+    if headers is not None:
+        kwargs["headers"] = headers
+    try:
+        return client.get(path, **kwargs)
+    except Exception as exc:
+        raise AssertionError(
+            "GET %s must be answered by the app, it failed with %s" % (path, exc)
+        ) from exc
+
+
+def _post(client, path, cookie=None):
+    """POST ``path`` (with ``cookie`` when given), or a failure."""
+    kwargs = {}
+    headers = _headers(cookie)
+    if headers is not None:
+        kwargs["headers"] = headers
+    try:
+        return client.post(path, **kwargs)
+    except Exception as exc:
+        raise AssertionError(
+            "POST %s must be answered by the app, it failed with %s" % (path, exc)
+        ) from exc
+
+
+def _login(client):
+    """POST the password of the login form to /login."""
+    try:
+        return client.post("/login", data={"password": PASSWORD})
+    except Exception as exc:
+        raise AssertionError(
+            "POST /login must be answered by the app, it failed with %s" % (exc,)
+        ) from exc
+
+
+def _set_cookies(response):
+    """Every Set-Cookie header of ``response``, as text."""
+    headers = response.headers
+    try:
+        return list(headers.get_list("set-cookie"))
+    except AttributeError:
+        getall = getattr(headers, "getall", None)
+        return list(getall("set-cookie")) if getall is not None else []
+
+
+def _session_cookie_of(response, what="the login"):
+    """The value of the session cookie ``response`` sets, or a failure."""
+    for header in _set_cookies(response):
+        first = header.split(";", 1)[0]
+        name, _, value = first.partition("=")
+        if name.strip().lower() == COOKIE:
+            return value.strip().strip("'\"")
+    raise AssertionError(
+        "%s must set the %r cookie, got %r" % (what, COOKIE, _set_cookies(response))
+    )
+
+
+def _path_of(response):
+    """The path a redirect points at ("/ui" out of a whole URL too)."""
+    location = response.headers.get("location", "")
+    path = urlparse(location).path
+    return path or location
+
+
+# ---------------------------------------------------------------------------
+# what a request with and without a session gets
+# ---------------------------------------------------------------------------
+
+
+def _assert_session(client, cookie, what):
+    """The API is served with ``cookie``: it is a valid session."""
+    response = _get(client, "/jobs", cookie=cookie)
+    assert response.status_code == 200, (
+        "%s: GET /jobs must be served with a valid session, got %s (%r)"
+        % (what, response.status_code, response.text[:300])
+    )
+
+
+def _assert_no_session(client, cookie, what):
+    """``cookie`` counts as no session: 401 for the API, 303 for the pages."""
+    api = _get(client, "/jobs", cookie=cookie)
+    assert api.status_code == 401, (
+        "%s: GET /jobs must answer 401 without a session, got %s (%r)"
+        % (what, api.status_code, api.text[:300])
+    )
+    try:
+        body = api.json()
+    except Exception as exc:
+        raise AssertionError(
+            "%s: GET /jobs must answer a JSON body, got %r" % (what, api.text[:300])
+        ) from exc
+    assert body == {"detail": "login required"}, (
+        "%s: GET /jobs must answer {'detail': 'login required'}, got %r"
+        % (what, api.text[:300])
+    )
+    page = _get(client, "/ui", cookie=cookie)
+    assert page.status_code == 303, (
+        "%s: GET /ui must answer 303 without a session, got %s (%r)"
+        % (what, page.status_code, page.text[:300])
+    )
+    assert _path_of(page) == "/login", (
+        "%s: GET /ui must redirect to /login, got %r"
+        % (what, page.headers.get("location"))
+    )
+
+
+# ---------------------------------------------------------------------------
+# the session_db file, read with the standard library
+# ---------------------------------------------------------------------------
+
+
+def _db_tables(db_path):
+    """The names of the tables of the SQLite file, or an empty list."""
+    path = Path(db_path)
+    if not path.is_file():
+        return []
+    try:
+        connection = sqlite3.connect(str(path))
+    except sqlite3.Error as exc:
+        raise AssertionError(
+            "the session_db %r must be a SQLite file readable with sqlite3, opening "
+            "it failed with %s" % (str(path), exc)
+        ) from exc
+    try:
+        names = [
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        ]
+    except sqlite3.Error as exc:
+        raise AssertionError(
+            "the session_db %r must be a SQLite database, reading its tables failed "
+            "with %s" % (str(path), exc)
+        ) from exc
+    finally:
+        connection.close()
+    return names
+
+
+def _db_dump(db_path):
+    """Every row of every non-empty table of the SQLite file, as raw values."""
+    path = Path(db_path)
+    if not path.is_file():
+        return {}
+    try:
+        connection = sqlite3.connect(str(path))
+    except sqlite3.Error as exc:
+        raise AssertionError(
+            "the session_db %r must be readable with sqlite3, opening it failed with "
+            "%s" % (str(path), exc)
+        ) from exc
+    try:
+        dump = {}
+        for name in _db_tables(path):
+            quoted = '"' + name.replace('"', '""') + '"'
+            try:
+                rows = connection.execute("SELECT * FROM " + quoted).fetchall()
+            except sqlite3.Error as exc:
+                raise AssertionError(
+                    "the table %r of the session_db %r must be readable, reading it "
+                    "failed with %s" % (name, str(path), exc)
+                ) from exc
+            if rows:
+                dump[name] = rows
+        return dump
+    finally:
+        connection.close()
+
+
+def _db_bytes(db_path):
+    """The bytes of the SQLite file and of its -wal/-shm/-journal siblings."""
+    base = Path(db_path)
+    chunks = []
+    try:
+        candidates = sorted(base.parent.iterdir())
+    except OSError:
+        candidates = []
+    for candidate in candidates:
+        if candidate.name != base.name and not candidate.name.startswith(
+            base.name + "-"
+        ):
+            continue
+        try:
+            if candidate.is_file():
+                chunks.append(candidate.read_bytes())
+        except OSError:
+            continue
+    return b"".join(chunks)
+
+
+def _digest_forms(value):
+    """The SHA-256 of the cookie value ``value``, as hex text and as bytes."""
+    digest = hashlib.sha256(value.encode("utf-8"))
+    return digest.hexdigest(), digest.digest()
+
+
+def _mentions_digest(dump, value):
+    """True when the dump holds the SHA-256 of ``value``."""
+    hexdigest, raw = _digest_forms(value)
+    for rows in dump.values():
+        for row in rows:
+            for cell in row:
+                if isinstance(cell, bytes):
+                    if cell == raw or raw in cell or hexdigest.encode() in cell.lower():
+                        return True
+                elif isinstance(cell, (str, int)):
+                    if hexdigest in str(cell).lower():
+                        return True
+    return False
+
+
+def _mentions_value(dump, value):
+    """True when the dump holds the cookie value ``value`` itself."""
+    needle = value.lower()
+    raw = value.encode("utf-8")
+    for rows in dump.values():
+        for row in rows:
+            for cell in row:
+                if isinstance(cell, bytes) and raw in cell:
+                    return True
+                if isinstance(cell, (str, int)) and needle in str(cell).lower():
+                    return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# the command line (a subprocess: no server, no network)
+# ---------------------------------------------------------------------------
+
+
+def _run(*args):
+    """Run ``python -m ledger <args>`` and return the finished process."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    command = [sys.executable, "-m", "ledger"] + [str(argument) for argument in args]
+    try:
+        return subprocess.run(
+            command, cwd=str(REPO_ROOT), env=env, capture_output=True, text=True
+        )
+    except Exception as exc:
+        raise AssertionError(
+            "`python -m ledger %s` must run" % (" ".join(str(a) for a in args),)
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# revoke_all_sessions from Python
+# ---------------------------------------------------------------------------
+
+
+def _revoke_all_sessions():
+    """``ledger.auth.revoke_all_sessions``, or a failure saying what is missing."""
+    try:
+        from ledger.auth import revoke_all_sessions
+    except Exception as exc:
+        raise AssertionError(
+            "ledger/auth.py must define revoke_all_sessions(session_db, now=None)"
+        ) from exc
+    return revoke_all_sessions
+
+
+def _revoke_all(db_path, now=None):
+    """Record the moment ``now`` (or the current time) in the session_db."""
+    function = _revoke_all_sessions()
+    try:
+        if now is None:
+            return function(str(db_path))
+        return function(str(db_path), now=now)
+    except Exception as exc:
+        raise AssertionError(
+            "ledger.auth.revoke_all_sessions(<session_db>%s) must record the moment, "
+            "it failed with %s" % ("" if now is None else ", now=%r" % (now,), exc)
+        ) from exc
+
+
+def _wait_past(deadline):
+    """Wait (in small steps) until ``time.time()`` is past ``deadline``."""
+    while time.time() < deadline:
+        time.sleep(0.05)
+
+
+# ---------------------------------------------------------------------------
+# 1. the factory: session_db, the schema version and a missing file
+# ---------------------------------------------------------------------------
+
+
+def test_create_app_takes_a_session_db_that_defaults_to_none():
+    create_app = _create_app()
+    parameters = _parameters(create_app)
+
+    assert "session_db" in parameters, (
+        "create_app must take a session_db argument (the SQLite file of the revoked "
+        "sessions), its parameters are %r" % (sorted(parameters),)
+    )
+    assert parameters["session_db"].default is None, (
+        "create_app's session_db must default to None (the revocations are then kept "
+        "in memory), got %r" % (parameters["session_db"].default,)
+    )
+    names = list(parameters)
+    if "clock" in names:
+        assert names.index("session_db") > names.index("clock"), (
+            "create_app's session_db must come after the earlier arguments, its "
+            "parameters are %r" % (names,)
+        )
+
+
+def test_the_session_db_records_a_schema_version(tmp_path):
+    db_path = Path(tmp_path) / "sessions.db"
+
+    _app(_jobs_dir(tmp_path), session_db=db_path)
+
+    tables = _db_tables(db_path)
+    version_tables = [name for name in tables if "version" in name.lower()]
+    assert version_tables, (
+        "the session_db must record a schema version as ledger/history.py does (a "
+        "schema_version table), its tables are %r" % (tables,)
+    )
+    dump = _db_dump(db_path)
+    cells = [
+        cell
+        for name in version_tables
+        for row in dump.get(name, [])
+        for cell in row
+    ]
+    versions = [
+        cell for cell in cells if isinstance(cell, int) and not isinstance(cell, bool)
+    ]
+    assert versions and max(versions) >= 1, (
+        "the schema version row of the session_db must hold a version number (1), the "
+        "rows are %r" % (cells,)
+    )
+
+
+def test_a_missing_session_db_file_is_created(tmp_path):
+    db_path = Path(tmp_path) / "sessions.db"
+    assert not db_path.exists(), "the fixture file must be missing"
+
+    _app(_jobs_dir(tmp_path), session_db=db_path)
+
+    assert db_path.is_file(), (
+        "create_app(jobs_dir, session_db=<a missing path>) must create the file, %r is "
+        "not a file" % (str(db_path),)
+    )
+    tables = _db_tables(db_path)
+    assert tables, (
+        "the created session_db must hold the tables of the revocations, it holds "
+        "none"
+    )
+
+
+def test_without_a_password_hash_nothing_changes(tmp_path):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "sessions.db"
+    create_app = _create_app()
+
+    try:
+        app = create_app(str(jobs_dir), session_db=str(db_path))
+    except Exception as exc:
+        raise AssertionError(
+            "create_app(jobs_dir, session_db=...) without a password hash must return "
+            "a working app, it failed with %s" % (exc,)
+        ) from exc
+    client = _client(app)
+
+    response = _get(client, "/jobs")
+
+    assert response.status_code == 200, (
+        "without a password hash nothing changes: GET /jobs must stay open, got %s "
+        "(%r)" % (response.status_code, response.text[:300])
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2. POST /logout revokes the presented value
+# ---------------------------------------------------------------------------
+
+
+def test_the_logout_revokes_the_cookie_on_the_server(tmp_path):
+    client = _client(_app(_jobs_dir(tmp_path)))  # no session_db: in memory
+    value = _cookie_issued_in(0)
+
+    _assert_session(client, value, "before the logout")
+    response = _post(client, "/logout", cookie=value)
+
+    assert response.status_code == 303, (
+        "POST /logout must answer 303, got %s (%r)"
+        % (response.status_code, response.text[:300])
+    )
+    _assert_no_session(client, value, "a revoked cookie sent again before its expiry")
+    _assert_no_session(
+        client, value, "the same revoked cookie sent a second time"
+    )
+
+
+def test_the_logout_stores_a_sha256_of_the_value_and_not_the_value(tmp_path):
+    db_path = Path(tmp_path) / "sessions.db"
+    client = _client(_app(_jobs_dir(tmp_path), session_db=db_path))
+    value = _cookie_issued_in(0)
+
+    response = _post(client, "/logout", cookie=value)
+
+    assert response.status_code == 303, (
+        "POST /logout must answer 303, got %s (%r)"
+        % (response.status_code, response.text[:300])
+    )
+    dump = _db_dump(db_path)
+    assert _mentions_digest(dump, value), (
+        "POST /logout must store a SHA-256 of the cookie value in the session_db, the "
+        "stored rows are %r" % (dump,)
+    )
+    assert not _mentions_value(dump, value), (
+        "the session_db must never store the cookie value itself, the stored rows are "
+        "%r" % (dump,)
+    )
+    assert value.encode("utf-8") not in _db_bytes(db_path), (
+        "the session_db file must never hold the cookie value itself"
+    )
+    _assert_no_session(client, value, "after the logout")
+
+
+def test_a_logout_without_a_valid_session_stores_nothing(tmp_path):
+    db_path = Path(tmp_path) / "sessions.db"
+    client = _client(_app(_jobs_dir(tmp_path), session_db=db_path))
+    unsigned = "9999999999." + "a" * 64
+    forged = "9999999999." + "f" * 64
+    expired = _cookie_for(int(time.time()) - 3600)
+
+    before = _db_dump(db_path)
+    _post(client, "/logout")  # no session at all
+    _post(client, "/logout", cookie=forged)  # an unsigned, forged value
+    _post(client, "/logout", cookie=expired)  # an expired cookie
+    for _attempt in range(200):
+        _post(client, "/logout", cookie=unsigned)
+    after = _db_dump(db_path)
+
+    assert after == before, (
+        "a logout without a valid, unexpired, not yet revoked session must store "
+        "nothing: 200 logouts with %r and one each with a forged, an expired and no "
+        "cookie changed the session_db from %r to %r" % (unsigned, before, after)
+    )
+
+    live = _cookie_issued_in(0)
+    assert _post(client, "/logout", cookie=live).status_code == 303, (
+        "the logout of a valid session must still answer 303"
+    )
+    revoked = _db_dump(db_path)
+    assert revoked != before, (
+        "the logout of a valid session must store its revocation, the session_db is "
+        "still %r" % (revoked,)
+    )
+    _post(client, "/logout", cookie=live)
+    assert _db_dump(db_path) == revoked, (
+        "a logout with an already revoked cookie must store nothing, the session_db "
+        "changed"
+    )
+
+
+def test_unsigned_logouts_revoke_no_session_in_memory(tmp_path):
+    client = _client(_app(_jobs_dir(tmp_path)))  # no session_db: in memory
+    unsigned = "9999999999." + "b" * 64
+
+    for _attempt in range(200):
+        _post(client, "/logout", cookie=unsigned)
+    live = _cookie_issued_in(0)
+
+    _assert_session(client, live, "after 200 logouts without a session")
+    assert _post(client, "/logout", cookie=live).status_code == 303, (
+        "the logout of a valid session must still answer 303"
+    )
+    _assert_no_session(client, live, "after the logout of a valid session")
+
+
+def test_a_revoked_cookie_counts_as_no_session_in_every_app_of_the_file(tmp_path):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "sessions.db"
+    first = _client(_app(jobs_dir, session_db=db_path))
+    second = _client(_app(jobs_dir, session_db=db_path))  # built before the logout
+    value = _cookie_issued_in(0)
+
+    _assert_session(first, value, "the first app before the logout")
+    _assert_session(second, value, "the second app before the logout")
+    assert _post(first, "/logout", cookie=value).status_code == 303, (
+        "POST /logout must answer 303"
+    )
+
+    _assert_no_session(first, value, "the app that logged out")
+    _assert_no_session(
+        second, value, "an app built before the logout, with no restart"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 3. revoking every session
+# ---------------------------------------------------------------------------
+
+
+def test_revoke_all_sessions_revokes_every_cookie_issued_before_it(tmp_path):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "sessions.db"
+    first = _client(_app(jobs_dir, session_db=db_path))
+    second = _client(_app(jobs_dir, session_db=db_path))
+    old = _cookie_issued_before()  # issued eleven hours ago
+    new = _cookie_issued_in(3600)  # issued an hour from now
+
+    _assert_session(first, old, "a cookie issued eleven hours ago")
+    _assert_session(first, new, "a cookie issued an hour from now")
+
+    _revoke_all(db_path, now=time.time() + 1800)  # not before: in half an hour
+
+    _assert_no_session(first, old, "a cookie issued before the recorded moment")
+    _assert_no_session(
+        second, old, "a cookie issued before the recorded moment, in another app"
+    )
+    _assert_session(second, new, "a cookie issued after the recorded moment")
+
+    _revoke_all(db_path)  # now=None: the moment it runs
+
+    _assert_no_session(first, old, "a cookie issued before the command's moment")
+    _assert_session(first, new, "a cookie issued after the command's moment")
+
+
+def test_a_login_after_the_revocation_works(tmp_path):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "sessions.db"
+    client = _client(_app(jobs_dir, session_db=db_path))
+    old = _cookie_issued_before()
+
+    _assert_session(client, old, "a cookie issued eleven hours ago")
+    _revoke_all(db_path, now=time.time() - 3600)  # not before: an hour ago
+    _assert_no_session(client, old, "a cookie issued before the recorded moment")
+
+    response = _login(client)
+
+    assert response.status_code == 303, (
+        "a login after the revocation must answer 303, got %s (%r)"
+        % (response.status_code, response.text[:300])
+    )
+    value = _session_cookie_of(response, "the login after the revocation")
+    assert value, "the login after the revocation must set a %r cookie" % (COOKIE,)
+    _assert_session(client, value, "the cookie of the login after the revocation")
+
+
+def test_the_revoke_sessions_command_revokes_the_cookies_issued_before_it_runs(
+    tmp_path,
+):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "sessions.db"
+    client = _client(_app(jobs_dir, session_db=db_path))
+    old = _cookie_issued_before()
+
+    _assert_session(client, old, "before the command")
+    result = _run("revoke-sessions", db_path)
+
+    assert result.returncode == 0, (
+        "`python -m ledger revoke-sessions <session_db>` must exit 0, got %s (stdout "
+        "%r, stderr %r)"
+        % (result.returncode, result.stdout[-600:], result.stderr[-600:])
+    )
+    printed = result.stdout.lower()
+    assert "sessions issued before" in printed, (
+        "the command must print 'sessions issued before <UTC time> revoked', got %r"
+        % (result.stdout[-600:],)
+    )
+    assert "revoked" in printed, (
+        "the command must say the sessions are revoked, got %r"
+        % (result.stdout[-600:],)
+    )
+    output = result.stdout + result.stderr
+    for secret, what in ((SECRET_KEY, "secret key"), (old, "cookie value")):
+        assert secret not in output, "the command must never echo the %s, got %r" % (
+            what,
+            output[-600:],
+        )
+
+    _assert_no_session(
+        client, old, "a cookie issued before the command, in the running app"
+    )
+    later = _cookie_issued_in(3600)
+    _assert_session(client, later, "a cookie issued after the command")
+
+
+def test_the_revoke_sessions_command_exits_1_when_it_cannot_open_the_file(tmp_path):
+    directory = Path(tmp_path) / "a-directory"
+    directory.mkdir()
+    missing_parent = Path(tmp_path) / "no-such-dir" / "sessions.db"
+
+    for path, what in (
+        (directory, "a directory"),
+        (missing_parent, "a path whose directory is missing"),
+    ):
+        result = _run("revoke-sessions", path)
+
+        assert result.returncode == 1, (
+            "`python -m ledger revoke-sessions %r` (%s, which cannot be opened) must "
+            "exit 1, got %s (stdout %r, stderr %r)"
+            % (
+                str(path),
+                what,
+                result.returncode,
+                result.stdout[-600:],
+                result.stderr[-600:],
+            )
+        )
+        assert result.stderr.strip(), (
+            "the command must say on stderr why the file cannot be opened, stderr is "
+            "empty (stdout %r)" % (result.stdout[-600:],)
+        )
+
+
+# ---------------------------------------------------------------------------
+# 5. a login never hands out a revoked value
+# ---------------------------------------------------------------------------
+
+
+def test_the_login_never_hands_out_a_revoked_value(tmp_path):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "sessions.db"
+    client = _client(_app(jobs_dir, session_db=db_path))
+    # The value a login of this second hands out: it depends only on the expiry.
+    value = _cookie_for(int(time.time()) + SESSION_SECONDS)
+
+    _assert_session(client, value, "the value a login would hand out")
+    assert _post(client, "/logout", cookie=value).status_code == 303, (
+        "POST /logout must answer 303"
+    )
+    _assert_no_session(client, value, "the revoked value")
+
+    response = _login(client)
+
+    assert response.status_code == 303, (
+        "a login right after the logout must answer 303, got %s (%r)"
+        % (response.status_code, response.text[:300])
+    )
+    handed = _session_cookie_of(response, "the login right after the logout")
+    assert handed, "the login must set a %r cookie" % (COOKIE,)
+    assert handed != value, (
+        "the login must not hand out the revoked value again (the same expiry gives "
+        "the same value), it handed out %r" % (handed,)
+    )
+    _assert_session(
+        client, handed, "the cookie of the login right after the logout"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2 (continued). a revocation whose expiry has passed is forgotten
+# ---------------------------------------------------------------------------
+
+
+def test_the_revocations_of_expired_cookies_are_forgotten(tmp_path):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "sessions.db"
+    client = _client(_app(jobs_dir, session_db=db_path))
+    expiry = int(time.time()) + 5
+    short = _cookie_for(expiry)  # a cookie valid for five more seconds
+
+    _assert_session(client, short, "a cookie valid for five more seconds")
+    assert _post(client, "/logout", cookie=short).status_code == 303, (
+        "POST /logout must answer 303"
+    )
+    _assert_no_session(client, short, "the revoked cookie")
+    assert _mentions_digest(_db_dump(db_path), short), (
+        "the logout must store a SHA-256 of the value in the session_db"
+    )
+
+    _wait_past(expiry + 1)  # let the revoked cookie expire
+    other = _cookie_issued_in(0)
+    _assert_session(client, other, "another session after the expiry")
+    assert _post(client, "/logout", cookie=other).status_code == 303, (
+        "the logout of another session must answer 303"
+    )
+
+    assert not _mentions_digest(_db_dump(db_path), short), (
+        "a revocation whose expiry has passed must be forgotten, the session_db still "
+        "holds it: %r" % (_db_dump(db_path),)
+    )
+
+
+# ---------------------------------------------------------------------------
+# 4. a session_db that cannot be read fails closed
+# ---------------------------------------------------------------------------
+
+
+def test_a_session_db_that_cannot_be_read_fails_closed(tmp_path):
+    jobs_dir = _jobs_dir(tmp_path)
+    db_path = Path(tmp_path) / "broken.db"
+    db_path.write_bytes(b"this is not a SQLite database\n" * 200)
+    client = _client(_app(jobs_dir, session_db=db_path))
+    value = _cookie_issued_in(0)
+
+    _assert_no_session(
+        client, value, "a correctly signed cookie with a session_db that cannot be read"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 6. the README, as text
+# ---------------------------------------------------------------------------
+
+
+def _readme_login_section():
+    """The text of the README's '## Login' section."""
+    try:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    except Exception as exc:
+        raise AssertionError("README.md must be readable") from exc
+    match = re.search(
+        r"^##[ \t]+Login\b.*?(?=^##[ \t]+\S|\Z)",
+        readme,
+        re.MULTILINE | re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError("README.md must have a '## Login' section")
+    return match.group(0)
+
+
+def test_the_readme_documents_the_revocable_sessions():
+    section = _readme_login_section()
+    lowered = section.lower()
+    flat = " ".join(section.split())
+    sentences = [sentence.lower() for sentence in re.split(r"(?<=[.!?]) ", flat)]
+
+    assert "session_db" in lowered, (
+        "the README Login section must document the session_db argument, got %r"
+        % (section[:800],)
+    )
+    assert "revoke-sessions" in lowered, (
+        "the README Login section must document the revoke-sessions command, got %r"
+        % (section[:800],)
+    )
+    assert any("logout" in sentence and "revok" in sentence for sentence in sentences), (
+        "the README Login section must say that a logout revokes the session on the "
+        "server, got %r" % (section[:800],)
+    )
+    assert "restart" in lowered and re.search(r"in[ \t-]*memory", lowered), (
+        "the README Login section must say that the in-memory revocations are lost on "
+        "a restart, got %r" % (section[:800],)
+    )
+    assert any(
+        ("secret_key" in sentence or "secret key" in sentence)
+        and "session" in sentence
+        and re.search(
+            r"end\w*|invalidat\w*|revok\w*|kill\w*|drop\w*|no longer valid|stop working",
+            sentence,
+        )
+        for sentence in sentences
+    ), (
+        "the README Login section must say that changing the secret key also ends "
+        "every session, got %r" % (section[:800],)
+    )

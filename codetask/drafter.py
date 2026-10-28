@@ -792,7 +792,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
     caller = LLMCaller(cfg, role, log, model=(models or {}).get(role))
     from tools.sandbox import tool_version
     env = cfg["drafter"]["environment"]
-    versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "2",
+    versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3",
                 "SubmitDraft": f"2:{tool_version(scfg, [env])}", "ReviseDraft": f"2:{tool_version(scfg, [env])}"}
     common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
     task_id = f"draft:{inputs['intake']}"

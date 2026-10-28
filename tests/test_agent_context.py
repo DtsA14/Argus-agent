@@ -97,13 +97,16 @@ def test_an_attempt_that_wrote_is_told_how_it_ended_without_the_context_hint(tmp
     assert f"{ENDED} finished after 1 steps; it changed files." in first and HINT not in first
 
 
-def test_an_attempt_that_wrote_and_then_ran_out_of_context_gets_no_context_hint(tmp_path, counter):
+def test_an_attempt_that_wrote_and_then_ran_out_of_context_is_told_to_start_from_the_validations(tmp_path, counter):
+    # argus-ledger 010b (fast lane): it used to get no hint, and the next attempt read the same whole files again
     per_message(counter)
     model = StrictScriptedChatModel(script=[BAD] + tau.reads(4) + [tau.WRITE, tau.FINISH])
     r, d = go(tmp_path, model, config(10000))
     assert tau.ends(d)[0] == (0, "context_limit", 5) and r["status"] == st.DONE
     first = text(model.calls[5])
     assert f"{ENDED} context_limit after 5 steps; it changed files." in first and HINT not in first
+    assert "It ran out of context after changing files. Its changes are kept in the workspace: start with " \
+           "RunValidation" in first
 
 
 def test_feedback_without_a_stop_gives_the_prompt_it_always_gave():                            # guard

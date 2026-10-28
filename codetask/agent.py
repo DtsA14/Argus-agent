@@ -199,20 +199,35 @@ MAX_STEPS_HINT = ("It used all of its steps without changing any file: it kept s
                   "from their output.")
 
 
+RANGES = ("A large file read without a range shows only its outline (Python: classes and functions with their lines); "
+          "read the line ranges you need with start_line/end_line.")
+
+
 def _context_hint(s, scope, kept):
-    """For an attempt that ran out of context without changing a file: what it read, and to write first. For one whose
-    reply was cut at the output limit (SPEC_AGENT_OUTPUT_BUDGET 2.2): to keep replies short and edit in small steps."""
+    """For an attempt that ran out of context without changing a file: what it read, and to write first; after changing
+    files (argus-ledger 010b: the next attempt read the same whole files again): to start from the validations when
+    the workspace is kept, and in both cases to read line ranges. For one whose reply was cut at the output limit
+    (SPEC_AGENT_OUTPUT_BUDGET 2.2): to keep replies short and edit in small steps."""
     if s.get("end") == "output_truncated":
         return [TRUNCATED_HINT]
     if s.get("end") == "max_steps" and s.get("wrote") is False:      # SPEC_AGENT_BUDGET_GAPS 2.1
         return [MAX_STEPS_HINT + (" The workspace is kept between attempts." if kept else "")]
-    if s.get("end") != "context_limit" or s.get("wrote") is not False:
+    if s.get("end") != "context_limit":
+        return []
+    if s.get("wrote"):
+        return ["It ran out of context after changing files. "
+                + ("Its changes are kept in the workspace: start with RunValidation and read only the line ranges its "
+                   "output points to, not whole files again." if kept else
+                   "This run starts again from the original, without its changes: read only what the change needs, "
+                   "then write it in small EditFile steps."),
+                RANGES]
+    if s.get("wrote") is not False:
         return []
     read = s.get("read") or []
     return ["It ran out of context before changing any file." + (f" Files it read: {', '.join(read)}." if read else ""),
             ("The workspace is kept between attempts. " if kept else "")
             + f"Read only what the change needs, then write it: the writable files are {', '.join(scope['writable'])}. "
-            "A call that does not fit max_input ends the attempt."]
+            "A call that does not fit max_input ends the attempt.", RANGES]
 
 
 def task_prompt(contract, feedback=None):
