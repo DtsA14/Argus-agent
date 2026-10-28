@@ -108,3 +108,31 @@ def test_with_a_pytest_summary_the_output_shown_is_stdout_only():
     v = va.judge_result(SPEC, run(out, "some warning on stderr\n", 0))
     assert v["status"] == "pass", v["reason"]
     assert v["evidence"]["output_tail"] == out
+
+
+# ---- A draft's plan item that is too long names itself (argus-ledger stage 4: three submits lost on a hidden limit) ----
+
+def _draft(**plan):
+    p = {"files": ["a.py"], "steps": ["do it"], "risks": ["none"], **plan}
+    return {"draft_version": 1, "base": "base", "plan": p, "contract": {"scope": {}, "validation": []},
+            "new_tests": [], "unverifiable": []}
+
+
+def test_a_too_long_plan_step_is_named_with_its_length_and_the_limit():
+    from acceptance.draft import validate_draft
+    problems = validate_draft(_draft(steps=["short", "x" * 548]))
+    assert "plan.steps[1] has 548 characters, at most 500: shorten it or split it into two items" in problems
+
+
+def test_an_empty_or_non_string_plan_item_and_a_long_unverifiable_note_are_named():
+    from acceptance.draft import validate_draft
+    assert "plan.risks[0] must be a non-empty string" in validate_draft(_draft(risks=[""]))
+    assert "plan.files must be a list of strings, not str" in validate_draft(_draft(files="a.py"))
+    d = _draft()
+    d["unverifiable"] = ["y" * 501]
+    assert any(p.startswith("unverifiable[0] has 501 characters, at most 500") for p in validate_draft(d))
+
+
+def test_a_valid_plan_has_no_plan_problem():
+    from acceptance.draft import validate_draft
+    assert not [p for p in validate_draft(_draft(steps=["x" * 500])) if p.startswith("plan")]

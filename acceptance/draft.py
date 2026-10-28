@@ -62,6 +62,21 @@ def _strings(v, limit=50, length=500):
     return isinstance(v, list) and len(v) <= limit and all(isinstance(x, str) and 0 < len(x) <= length for x in v)
 
 
+def _strings_problem(name, v, limit=50, length=500):
+    """Why `v` is not a list of at most `limit` non-empty strings of at most `length` characters, naming the item, or
+    None. (argus-ledger stage 4: "each a list of non-empty strings" hid a 548-character step; three submits went on it.)"""
+    if not isinstance(v, list):
+        return f"{name} must be a list of strings, not {type(v).__name__}"
+    if len(v) > limit:
+        return f"{name} has {len(v)} items, at most {limit}"
+    for i, x in enumerate(v):
+        if not isinstance(x, str) or not x:
+            return f"{name}[{i}] must be a non-empty string"
+        if len(x) > length:
+            return f"{name}[{i}] has {len(x)} characters, at most {length}: shorten it or split it into two items"
+    return None
+
+
 def validate_draft(d):
     """Problems with the shape of a draft, or []."""
     if not isinstance(d, dict):
@@ -75,8 +90,10 @@ def validate_draft(d):
     if not isinstance(d["base"], str) or not intake.NAME.match(d["base"]):
         errors.append("base must be the name of an intake")
     p = d["plan"]
-    if not isinstance(p, dict) or set(p) != PLAN_KEYS or not all(_strings(p[k]) for k in PLAN_KEYS):
+    if not isinstance(p, dict) or set(p) != PLAN_KEYS:
         errors.append("plan must have files, steps and risks, each a list of non-empty strings")
+    else:
+        errors += [why for k in sorted(PLAN_KEYS) if (why := _strings_problem(f"plan.{k}", p[k]))]
     c = d["contract"]
     if not isinstance(c, dict) or not {"scope", "validation"} <= set(c) or set(c) - CONTRACT_KEYS:
         errors.append(f"contract must have scope and validation, and only {sorted(CONTRACT_KEYS)}")
@@ -100,8 +117,9 @@ def validate_draft(d):
             paths.append(path)
         if len(set(paths)) != len(paths):
             errors.append("new_tests has duplicate paths")
-    if not _strings(d["unverifiable"], limit=20):
-        errors.append("unverifiable must be a list of non-empty strings (may be empty)")
+    why = _strings_problem("unverifiable", d["unverifiable"], limit=20)
+    if why:
+        errors.append(why + " (unverifiable may be empty)")
     if "changed_tests" in d:
         new_paths = [t.get("path") for t in tests if isinstance(t, dict)] if isinstance(tests, list) else []
         errors += ch.shape_problems(d["changed_tests"], new_paths, intake._plain, MAX_TEST_BYTES)
