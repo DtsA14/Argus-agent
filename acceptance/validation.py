@@ -343,29 +343,38 @@ def collect_nodes(path, workdir, sandbox_cfg, *, timeout_s, environment=None, lo
 # W2a red by assertion (docs/reviews/SPEC_W2A_RED_BY_ASSERTION.md, section 6): a small pytest plugin, run by the harness,
 # records per node the outcome, the exception's real type and the path of the last traceback frame inside the
 # repository (frames of pytest, the stdlib and site-packages are passed over). No traceback text is parsed. The JSON
-# is printed after a nonce line once pytest is done. SPEC_RED_TESTS_PER_NODE 2.1: also the exception's message (at most
-# RED_MESSAGE characters), the exception names its whole message names (read before it is cut), and the repository files of
-# every frame of it and of its chain (__cause__, __context__ unless suppressed by `from None`; at most RED_CHAIN deep;
-# each file once, the RED_PATHS deepest), for the review and the swallowed-traceback gate. pytest prints no traceback,
+# is printed after a nonce line once pytest is done. SPEC_RED_TESTS_PER_NODE 2.1: also the exception's message (cut at
+# RED_LIMITS), the exception names other than AssertionError that the test's own words name (read from the whole message,
+# before it is cut; not pytest's explanation of a rewritten assert, nor "DID NOT RAISE"), and the repository files (real
+# files only) of every frame of it and of its chain (__cause__, __context__ unless suppressed by `from None`; each file
+# once, the deepest kept), for the review and the swallowed-traceback gate. pytest prints no traceback,
 # short summary or warning summary (only the display: the repository's filterwarnings still apply), so the JSON fits the
 # sandbox's output; output that is cut is refused, never read. Like any validation it is read from the process that runs the code
 # under test: a deliberate forgery from inside is contained by the sandbox, not detected.
-RED_MESSAGE, RED_PATHS, RED_CHAIN, RED_NAMES = 500, 20, 5, 20
+RED_LIMITS = {"message": 500, "paths": 20, "chain": 20, "names": 20}
 RED_CHECK = r"""
 import json, os, re, sys, traceback
 import pytest
-nonce, nodes = sys.argv[1], sys.argv[2:]
+nonce, limits, nodes = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3:]
 root = os.path.realpath("/workspace")
 out = {}
+_real = {}
+
+
+def real(p):
+    p = str(p)
+    if p not in _real:
+        _real[p] = os.path.realpath(p) if os.path.isfile(p) else None   # "<frozen ...>", "<string>": no file
+    return _real[p]
 
 
 def inside(p):
-    p = os.path.realpath(str(p))
-    return p.startswith(root + os.sep) and "site-packages" not in p.split(os.sep)
+    r = real(p)
+    return r is not None and r.startswith(root + os.sep) and "site-packages" not in r.split(os.sep)
 
 
 def rel(p):
-    return os.path.relpath(os.path.realpath(str(p)), root).replace(os.sep, "/")
+    return os.path.relpath(real(p), root).replace(os.sep, "/")
 
 
 def text(exc):
@@ -377,24 +386,39 @@ def text(exc):
 
 def message(exc):
     m = text(exc)
-    return m if len(m) <= %(message)d else m[:%(message)d - 3] + "..."
+    return m if len(m) <= limits["message"] else m[:limits["message"] - 3] + "..."
+
+
+def own(exc):
+    # The test's own words: not pytest's explanation of a rewritten assert (it starts at the first "assert " line),
+    # nor pytest.raises' "DID NOT RAISE <class ...>" (nothing was raised, so nothing was kept).
+    m = text(exc)
+    if isinstance(exc, pytest.fail.Exception) and m.startswith("DID NOT RAISE"):
+        return ""
+    lines = m.split("\n")
+    cut = next((i for i, line in enumerate(lines) if line.startswith("assert ")), len(lines))
+    return "\n".join(lines[:cut])
 
 
 def names(exc):
-    return sorted(set(re.findall(r"\b([A-Z]\w*(?:Error|Exception))\b", text(exc))))[:%(names)d]
+    found = set(re.findall(r"\b([A-Z]\w*(?:Error|Exception))\b", own(exc))) - {"AssertionError"}
+    return sorted(found)[:limits["names"]]
 
 
 def repo_paths(exc):
-    paths, seen = [], set()
-    for _ in range(%(chain)d):
+    paths, kept, seen = [], set(), set()
+    for _ in range(limits["chain"]):
         if exc is None or id(exc) in seen:
             break
         seen.add(id(exc))
         for f in traceback.extract_tb(exc.__traceback__):
-            if inside(f.filename) and rel(f.filename) not in paths:
-                paths.append(rel(f.filename))
+            if inside(f.filename):
+                r = rel(f.filename)
+                if r not in kept:
+                    kept.add(r)
+                    paths.append(r)
         exc = exc.__cause__ or (None if exc.__suppress_context__ else exc.__context__)
-    return paths[-%(paths)d:]
+    return paths[-limits["paths"]:]
 
 
 class Record:
@@ -402,7 +426,8 @@ class Record:
     def pytest_runtest_makereport(self, item, call):
         rep = (yield).get_result()
         if call.when != "call":
-            if rep.failed:
+            # an error in setup, or in teardown after a call that did not fail (a failed call keeps its record)
+            if rep.failed and (call.when == "setup" or out.get(item.nodeid, {}).get("outcome") != "failed"):
                 out[item.nodeid] = {"outcome": "error", "type": None, "assertion": False, "path": None}
             return
         e = call.excinfo
@@ -420,12 +445,13 @@ pytest.main(["-p", "no:cacheprovider", "-o", "addopts=", "--rootdir", "/workspac
              "-rN", "--disable-warnings", *nodes], plugins=[Record()])
 sys.stdout.write("\n" + nonce + json.dumps(out, sort_keys=True) + "\n")
 sys.stdout.flush()
-""" % {"message": RED_MESSAGE, "paths": RED_PATHS, "chain": RED_CHAIN, "names": RED_NAMES}
+"""
 
 
 def red_argv(nonce, nodes):
-    """The harness's own run of the red check; never a contract command."""
-    return ["python3", "-I", "-B", "-c", RED_CHECK, nonce, *nodes]
+    """The harness's own run of the red check; never a contract command. Its limits go as an argument, so the plugin's
+    source is never a format template."""
+    return ["python3", "-I", "-B", "-c", RED_CHECK, nonce, json.dumps(RED_LIMITS, sort_keys=True), *nodes]
 
 
 def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None):

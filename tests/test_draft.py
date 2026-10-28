@@ -869,6 +869,53 @@ def test_fixture_error(broken):
     assert broken
 
 
+def test_did_not_raise():
+    with pytest.raises(ValueError):
+        pass
+
+
+def test_compares_a_name():
+    assert "x" == "NotFoundError"
+
+
+def test_message_and_explanation():
+    value = "ValueError"
+    assert value == "y", "the total was wrong"
+
+
+@pytest.fixture
+def messy():
+    yield
+    raise RuntimeError("cleanup on the old code")
+
+
+def test_teardown_after_a_failed_assert(messy):
+    assert False, "the total was wrong"
+
+
+def wrap(n):
+    try:
+        if n == 0:
+            f({})
+        wrap(n - 1)
+    except Exception as e:
+        raise RuntimeError(f"level {n}") from e
+
+
+def test_deep_chain():
+    try:
+        wrap(7)                                              # eight links, the repository's frame in the last one
+    except RuntimeError as e:
+        raise AssertionError("wrap() raised") from e
+
+
+def test_exec_frame():
+    try:
+        exec("{}['k']")
+    except KeyError as e:
+        raise AssertionError(f"raised {e!r}") from e
+
+
 def test_warns():
     import warnings
     warnings.warn("noisy " * 50, DeprecationWarning)
@@ -890,10 +937,13 @@ def test_the_red_check_records_the_message_and_the_repository_files_of_the_chain
     (tmp_path / "src" / "deep.py").write_text("from src.d0 import d0  # noqa\n")
     nodes = [f"tests/test_a.py::{n}" for n in ("test_swallowed", "test_chained", "test_context", "test_from_none",
                                                "test_long", "test_warns", "test_deep", "test_fixture_error",
-                                               "test_cause_outside_except")]
+                                               "test_cause_outside_except", "test_did_not_raise",
+                                               "test_compares_a_name", "test_message_and_explanation",
+                                               "test_teardown_after_a_failed_assert", "test_deep_chain",
+                                               "test_exec_frame")]
     got, why = va.red_check(nodes, str(tmp_path), scfg, timeout_s=120, environment="argus")
     assert why is None, why
-    sw, ch, cx, fn, lg, wn, dp, fx, co = (got[n] for n in nodes)
+    sw, ch, cx, fn, lg, wn, dp, fx, co, dr_, cn, me, td_, dc, ex = (got[n] for n in nodes)
     assert all(r["assertion"] for r in (sw, ch, cx, fn, lg, wn, dp))
     assert "KeyError" in (sw.get("message") or "") and sw.get("repo_paths") == ["tests/test_a.py"]
     assert "KeyError" in (sw.get("message_names") or [])
@@ -906,7 +956,16 @@ def test_the_red_check_records_the_message_and_the_repository_files_of_the_chain
     assert len(dp.get("repo_paths") or []) == 20 and dp["repo_paths"][-1] == "src/d24.py"
     assert "tests/test_a.py" not in dp["repo_paths"]                     # the shallowest file is the one left out
     assert fx["outcome"] == "error" and not fx["assertion"]
+    # review of #225: pytest's own words name no exception the test kept
+    assert dr_["message"].startswith("DID NOT RAISE") and dr_["message_names"] == []
+    assert "NotFoundError" in cn["message"] and cn["message_names"] == []
+    assert "ValueError" in me["message"] and me["message_names"] == []          # only in the assert explanation
+    assert td_["outcome"] == "failed" and td_["assertion"]                      # a teardown error keeps the record
+    assert "src/lib.py" in dc["repo_paths"]                                     # more than five links deep
+    assert ex["repo_paths"] == ["tests/test_a.py"]                              # "<string>" is no file
     from codetask import drafter as dt
     out = dt.swallowed_problems({"contract": {"scope": {"writable": ["src/lib.py"], "protected": ["tests/**"]}}},
                                 {"baseline": {"t": {"status": "fail", "red_check": got, "output_tail": ""}}})
-    assert sorted(n for n in nodes if any(n in p for p in out)) == sorted([nodes[0], nodes[3], nodes[4]])
+    # refused: swallowed, `from None`, a name past the cut, and an error only in "<string>" (no file of the repository)
+    refused = sorted(n for n in nodes if any(n + " " in p for p in out))
+    assert refused == sorted([nodes[0], nodes[3], nodes[4], nodes[14]])

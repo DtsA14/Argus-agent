@@ -134,3 +134,18 @@ Fixture: `check_report.json` asli kedua draf (disalin ke `fixtures/drafts/`), re
 3. Dedup lalu 20 terdalam; setup error dengan alasan sendiri; `-rN`: diterima.
 4. JSON lewat berkas: tidak sekarang (bagian 3).
 5. Merge sesudah batch yang sedang berjalan.
+
+## 8. Revisi dari `/code-review medium` PR #225 (2026-10-28)
+
+1. `message_names` hanya dari **kata-kata tes sendiri**: bukan dari penjelasan pytest untuk `assert` yang di-rewrite (mulai baris
+   pertama `assert `), bukan dari `DID NOT RAISE` `pytest.raises` (tidak ada exception yang disimpan). Tanpa ini tes merah biasa
+   (`assert x == "NotFoundError"`, `pytest.raises(ValueError)` di kode lama) ditolak sebagai "menelan". Aturan lama juga punya celah
+   `DID NOT RAISE` (baris `E   Failed:`), hanya jarang kena karena ekor terpotong.
+2. `AssertionError` dikeluarkan sebelum batas 20 nama (bukan sesudah): batas tidak bisa membuang nama yang penting.
+3. Frame tanpa berkas nyata (`<frozen ...>`, `<string>`) tidak dihitung sebagai berkas repo (sebelumnya `realpath` relatif ke
+   `/workspace` membuatnya "di dalam"; juga untuk field `path` W2a).
+4. Error teardown sesudah call yang gagal tidak menimpa record call (setup error tetap `outcome: error`).
+5. Rantai sampai 20 link (bukan 5); `realpath` sekali per berkas, dedup dengan set.
+6. Batas plugin lewat argumen JSON, bukan template `%` (tanda `%` di plugin tidak lagi bisa merusak import).
+7. Review: blok "from the red check" hanya bila baseline punya `red_check`; laporan tanpa red check memakai blok lama.
+8. Tes gate memakai `message_names` tetap, bukan salinan regex plugin.

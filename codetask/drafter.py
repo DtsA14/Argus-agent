@@ -712,11 +712,15 @@ def review_text(run_id, inputs, state, cost, source=None):
                     continue
                 out.append(f"On the code as it is now, validation `{v['id']}`: " + ", ".join(
                     f"`{cell(n.split('::', 1)[1], 200)}` {(b.get('must_pass') or {}).get(n)}" for n in mine))
-                out += ["", "Why they fail now (from the red check; test output, check that this is the behaviour to "
-                        "fix):", "", fence("\n".join(red_lines(b, mine, short=True)), "text")]
                 ex = error_excerpt(b.get("output_tail") or "", limit=1500)
-                if ex:
-                    out += ["", "End of the test output (it may not show every test):", "", fence(ex, "text")]
+                if b.get("red_check"):
+                    out += ["", "Why they fail now (from the red check; test output, check that this is the behaviour "
+                            "to fix):", "", fence("\n".join(red_lines(b, mine, short=True)), "text")]
+                    if ex:
+                        out += ["", "End of the test output (it may not show every test):", "", fence(ex, "text")]
+                elif ex:                    # no red check recorded (a report from before it): the output, as before
+                    out += ["", "Why they fail now (test output; check that this is the behaviour to fix):", "",
+                            fence(ex, "text")]
             out += ["", "The file:", "", fence(t["content"], "python")]
         out += _changed_text(draft, report, source)
         notes = draft["unverifiable"]
