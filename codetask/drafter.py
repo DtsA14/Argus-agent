@@ -298,12 +298,33 @@ def rewrite_problems(draft, policy, source):
     return out
 
 
+RED_LINE = 200
+
+
+def red_lines(b, nodes, short=False):
+    """SPEC_RED_TESTS_PER_NODE 2.3: one line per node of a validation's baseline, why it fails as the red check recorded
+    it (type, the last repository file of its traceback, the first line of its message), not as the output tail shows it:
+    a long message or a warning summary can leave no test in the tail. short: the test name without its file."""
+    red, out = b.get("red_check") or {}, []
+    for n in nodes:
+        r, name = red.get(n), n.split("::", 1)[-1] if short else n
+        if not isinstance(r, dict):
+            out.append(f"{name}: how it fails was not recorded")
+            continue
+        first = " ".join(str(r.get("message") or "").split("\n", 1)[0].split())
+        first = first if len(first) <= RED_LINE else first[:RED_LINE - 3] + "..."
+        out.append(f"{name}: {r.get('type')} in {r.get('path') or 'no file of the repository'}: {first}")
+    return out
+
+
 def _evidence(report):
-    """The baseline of each validation, with the error lines of its output, for the drafter's next submit."""
+    """The baseline of each validation, with why each red test fails and the error lines of its output, for the
+    drafter's next submit."""
     out = []
     for vid, b in (report.get("baseline") or {}).items():
         out.append(f"  {vid}: {b.get('status')}; required: {json.dumps(b.get('must_pass'), sort_keys=True)}; "
                    f"failures {b.get('failures')}, errors {b.get('errors')}")
+        out += [f"    {line}" for line in red_lines(b, sorted(b.get("red_check") or {}))]
         ex = error_excerpt(b.get("output_tail") or "")
         if ex:
             out += [f"    {line}" for line in ex.splitlines()]
@@ -312,14 +333,13 @@ def _evidence(report):
 
 # SPEC_DRAFT_CALL_PATH: what the failing baseline's traceback shows of the repository's code.
 _LOC = re.compile(r"^(\S+\.py):(\d+): in (\S+)")                  # pytest --tb=short: "path.py:12: in name"
-_NAMED = re.compile(r"\b([A-Z]\w*(?:Error|Exception))\b")
-_HEADER = re.compile(r"^_{3,} (\S.*?) _{3,}$")                     # pytest: "____ test_x ____", one per failure
-_SECTION_END = re.compile(r"^={3,}")                               # "==== warnings summary ====", the summary line
 CALL_PATH_MAX = 8
 SWALLOWED = ("validation {vid}: required test(s) {nodes} fail by an assertion that reports {names}, but the test "
              "output has no traceback of it (no line of the repository's code). Catch it in the test and, inside the "
              "except block, raise AssertionError(\"...\") from the exception, so pytest prints where the error comes "
              "from; the test still fails by an assert")
+UNREAD = ("validation {vid}: required test {node} fails by an assertion, but its message and traceback files could not be "
+          "read from the red check, so whether it keeps the traceback was not checked")
 ACCEPTED = ("Draft accepted: the shape, the scope and the baseline passed (every required new test fails by assertion "
             "now, everything else passes). The drafting is over; a human reviews and approves it.")
 SCOPE_QUESTION = ("The draft passed its check. Before it is accepted: the failing baseline runs through these files of "
@@ -334,13 +354,18 @@ def _test_path(path, protected):
             or name == "conftest.py" or any(path.startswith(f"{d}/") or f"/{d}/" in path for d in ("tests", "testing")))
 
 
+def _repo_code(path, protected):
+    """A file of the repository's own code: a relative path, not a test file."""
+    return (isinstance(path, str) and not path.startswith("/") and ".." not in path.split("/")
+            and not _test_path(path, protected))
+
+
 def _repo_frames(tail, protected):
     """The location lines of the repository's own code (relative paths, not test files), in output order."""
     out = []
     for line in (tail or "").splitlines():
         m = _LOC.match(line)
-        if m and not m.group(1).startswith("/") and ".." not in m.group(1).split("/") \
-                and not _test_path(m.group(1), protected):
+        if m and _repo_code(m.group(1), protected):
             out.append(m)
     return out
 
@@ -361,40 +386,26 @@ def call_path_outside(draft, report, limit=CALL_PATH_MAX):
     return out[:limit]
 
 
-def _sections(tail):
-    """[(test name, its lines)] of pytest's failure sections. Lines before the first section header are left out: the
-    tail may have cut that section's start (and with it its traceback)."""
-    out, cur = [], None
-    for line in (tail or "").splitlines():
-        h = _HEADER.match(line)
-        if h:
-            cur = (h.group(1), [])
-            out.append(cur)
-        elif _SECTION_END.match(line):
-            cur = None
-        elif cur is not None:
-            cur[1].append(line)
-    return out
-
-
 def swallowed_problems(draft, report):
-    """SPEC_DRAFT_CALL_PATH 2.1: a required test that fails by an assertion (AssertionError, pytest.fail) naming
-    another exception while its own failure section shows no line of the repository's code: the test kept the
-    exception and lost its traceback. Judged per section, so one test that keeps its traceback does not cover another."""
+    """SPEC_DRAFT_CALL_PATH 2.1, judged per node from the red check (SPEC_RED_TESTS_PER_NODE 2.2): a required test that
+    fails by an assertion (AssertionError, pytest.fail) whose message names another exception (message_names, read by the
+    red check from the whole message), while no file of the repository's own code is in the traceback of it or of its
+    chain: the test kept the exception and lost its traceback. A red record without its names or files is a problem,
+    never a pass; the output tail is not read (it may show no test at all)."""
     out, protected = [], draft["contract"]["scope"]["protected"]
     for vid, b in (report.get("baseline") or {}).items():
-        red = sorted(n for n, r in (b.get("red_check") or {}).items() if (r or {}).get("assertion"))
-        if b.get("status") == "pass" or not red:
-            continue
-        for name, lines in _sections(b.get("output_tail")):
-            if _repo_frames("\n".join(lines), protected):
+        for n, r in sorted((b.get("red_check") or {}).items()):
+            if not isinstance(r, dict) or not r.get("assertion"):
                 continue
-            names = sorted({x for line in lines if line.startswith("E ")
-                            and ("AssertionError" in line or line.startswith("E   Failed:"))
-                            for x in _NAMED.findall(line) if x != "AssertionError"})
-            nodes = [n for n in red if n.split("::", 1)[-1].replace("::", ".") == name] or [name]
+            named, paths = r.get("message_names"), r.get("repo_paths")
+            if not isinstance(named, list) or not isinstance(paths, list):
+                out.append(UNREAD.format(vid=vid, node=n))
+                continue
+            if any(_repo_code(p, protected) for p in paths):
+                continue
+            names = sorted({x for x in named if isinstance(x, str) and x != "AssertionError"})
             if names:
-                out.append(SWALLOWED.format(vid=vid, nodes=", ".join(nodes), names=", ".join(names)))
+                out.append(SWALLOWED.format(vid=vid, nodes=n, names=", ".join(names)))
     return out
 
 
@@ -701,10 +712,11 @@ def review_text(run_id, inputs, state, cost, source=None):
                     continue
                 out.append(f"On the code as it is now, validation `{v['id']}`: " + ", ".join(
                     f"`{cell(n.split('::', 1)[1], 200)}` {(b.get('must_pass') or {}).get(n)}" for n in mine))
+                out += ["", "Why they fail now (from the red check; test output, check that this is the behaviour to "
+                        "fix):", "", fence("\n".join(red_lines(b, mine, short=True)), "text")]
                 ex = error_excerpt(b.get("output_tail") or "", limit=1500)
                 if ex:
-                    out += ["", "Why they fail now (test output; check that this is the behaviour to fix):", "",
-                            fence(ex, "text")]
+                    out += ["", "End of the test output (it may not show every test):", "", fence(ex, "text")]
             out += ["", "The file:", "", fence(t["content"], "python")]
         out += _changed_text(draft, report, source)
         notes = draft["unverifiable"]

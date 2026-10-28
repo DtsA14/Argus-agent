@@ -253,7 +253,11 @@ def red_by_assertion(spec, nodes, ws, sandbox_cfg, contract, red_files, red=red_
         path = (rec or {}).get("path") or ""
         test_file = path in red_files or (any(path.startswith(d) for d in dirs) and ct.matches(path, sc["protected"])
                                           and not ct.matches(path, sc["writable"]))
-        if not isinstance(rec, dict) or rec.get("outcome") != "failed":
+        if isinstance(rec, dict) and rec.get("outcome") == "error":     # SPEC_RED_TESTS_PER_NODE 2.2
+            problems.append(f"required test {n} errors in its setup or teardown (a fixture), before or after the test "
+                            "itself runs: it must fail by an assertion in the test; build the data the test needs in "
+                            "the test or a fixture that cannot fail on the old code")
+        elif not isinstance(rec, dict) or rec.get("outcome") != "failed":
             problems.append(f"required test {n}: no record of how it fails (it must fail by an assertion)")
         elif not rec.get("assertion"):
             problems.append(f"required test {n} fails with {rec.get('type')}, not by an assertion: it would fail "

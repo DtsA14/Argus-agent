@@ -1,0 +1,118 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "ledger/api.py",
+      "ledger/summary.py",
+      "README.md"
+    ],
+    "steps": [
+      "Add to ledger/summary.py a small helper that returns, for one job directory, the job list data plus the ledger cost of each stage's run (built on the existing _read_job/_stages/_ledger_path/_ledger_cost_nano/job_cost_nano so the ledgers are read one way only).",
+      "Create ledger/api.py with create_app(jobs_dir) returning a FastAPI app; it holds the jobs dir and calls the summary helpers per request.",
+      "Serve GET /jobs with the jobs oldest first, each row having job, state, created_at exactly as in job.json, stages, integer cost_nano, cost_usd text with 4 decimals (no '$' sign), and running from a null stage usd.",
+      "Serve GET /jobs/{job_id} with the same row plus stages_detail in run order, each stage costed by its own run ledger (0 without run_id or events.jsonl), and answer 404 with {'detail': 'no such job: <id>'} for an id that is not a job of the directory, never joining an id that could leave the jobs directory.",
+      "Serve GET /summary with jobs, integer cost_nano, cost_usd text and skipped, from the same collection the CLI uses; a missing jobs dir gives [] and zeros.",
+      "Format dollars only from integer nano-dollars (round half up to 4 decimals) and add a short 'API' section to README.md mentioning create_app, /jobs and /summary, leaving `python -m ledger summary` output unchanged."
+    ],
+    "risks": [
+      "Formatting money via floats, so a last digit differs from the integer nano-dollar value.",
+      "Computing a stage's cost in a second, different way instead of the run-ledger cost, so stage costs disagree with job_cost_nano.",
+      "Refactoring ledger/summary.py in a way that changes the text `python -m ledger summary` prints or the existing helper signatures.",
+      "Building the job path from the URL id so that '..' or a '/'-carrying id escapes the jobs directory.",
+      "Missing or extra keys in the JSON payloads (e.g. keeping the '$' in cost_usd, or returning a float for cost_nano).",
+      "A missing or unreadable jobs directory raising instead of serving [] and zeros."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "ledger/api.py",
+        "ledger/summary.py",
+        "README.md"
+      ],
+      "protected": [
+        "tests/test_api.py",
+        "tests/test_summary.py",
+        "tests/test_ledger_cost.py",
+        "tests/test_package.py",
+        "ledger/__main__.py",
+        "ledger/__init__.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "api",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_api.py"
+        ],
+        "timeout_s": 120,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers",
+          "tests/test_api.py::test_jobs_are_ordered_by_created_at_not_by_id",
+          "tests/test_api.py::test_a_job_detail_lists_its_stages_in_order_with_their_own_cost",
+          "tests/test_api.py::test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail",
+          "tests/test_api.py::test_a_job_id_never_reads_a_file_outside_the_jobs_directory",
+          "tests/test_api.py::test_the_summary_endpoint_matches_the_command_totals",
+          "tests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals",
+          "tests/test_api.py::test_the_readme_documents_the_api"
+        ],
+        "environment": "ledger_py312"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_summary.py",
+          "tests/test_ledger_cost.py",
+          "tests/test_package.py"
+        ],
+        "timeout_s": 120,
+        "min_tests": 15,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_summary.py::test_the_package_still_imports",
+          "tests/test_summary.py::test_cli_summary_prints_jobs_oldest_first_with_state_stages_and_cost",
+          "tests/test_summary.py::test_cli_summary_counts_a_null_stage_as_zero_and_marks_the_job_running",
+          "tests/test_summary.py::test_cli_summary_skips_directories_without_a_readable_job_json",
+          "tests/test_summary.py::test_cli_summary_of_an_empty_jobs_directory",
+          "tests/test_summary.py::test_cli_summary_of_a_missing_jobs_directory_exits_with_code_1",
+          "tests/test_summary.py::test_summary_module_returns_the_lines",
+          "tests/test_ledger_cost.py::test_a_stopped_stage_costs_what_its_ledger_says_not_job_json",
+          "tests/test_ledger_cost.py::test_the_ledger_cost_follows_started_and_final_events",
+          "tests/test_ledger_cost.py::test_a_stage_without_a_run_id_or_ledger_costs_nothing",
+          "tests/test_ledger_cost.py::test_the_summary_aligns_the_columns_like_the_readme_example",
+          "tests/test_ledger_cost.py::test_the_cost_column_is_right_aligned",
+          "tests/test_ledger_cost.py::test_singular_job_and_stage",
+          "tests/test_ledger_cost.py::test_the_readme_documents_the_ledger_format",
+          "tests/test_package.py::test_the_package_imports"
+        ],
+        "environment": "ledger_py312"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "tests/test_api.py",
+      "content": "\"\"\"The JSON API over one Argus jobs directory: ledger/api.py, served by FastAPI.\n\n``create_app(jobs_dir)`` serves the same numbers ``python -m ledger summary``\nprints, as JSON: ``/jobs``, ``/jobs/{job_id}`` and ``/summary``. Money stays\ninteger nano-dollars; ``cost_usd`` is only the four-decimal text of it.\n\"\"\"\n\nimport json\nimport sys\nfrom pathlib import Path\n\nREPO_ROOT = Path(__file__).resolve().parents[1]\nif str(REPO_ROOT) not in sys.path:\n    sys.path.insert(0, str(REPO_ROOT))\n\n\n# ---------------------------------------------------------------------------\n# talking to the app\n# ---------------------------------------------------------------------------\n\n\ndef _client(jobs_dir):\n    \"\"\"A TestClient over create_app(jobs_dir); no server, no network.\"\"\"\n    try:\n        from fastapi.testclient import TestClient\n        from ledger.api import create_app\n    except Exception as exc:\n        raise AssertionError(\n            \"ledger/api.py must define create_app(jobs_dir) and fastapi.testclient \"\n            \"must be importable\"\n        ) from exc\n    try:\n        app = create_app(str(jobs_dir))\n    except Exception as exc:\n        raise AssertionError(\n            \"create_app(jobs_dir) must return a FastAPI app, not raise\"\n        ) from exc\n    try:\n        return TestClient(app)\n    except Exception as exc:\n        raise AssertionError(\n            \"TestClient(create_app(jobs_dir)) must build a working client\"\n        ) from exc\n\n\ndef _get(client, path):\n    \"\"\"GET ``path`` and return the response, failing the test if it raises.\"\"\"\n    try:\n        return client.get(path)\n    except Exception as exc:\n        raise AssertionError(\"GET %s must be answered by the app\" % (path,)) from exc\n\n\ndef _json(response, path):\n    \"\"\"The JSON body of ``response``; a non-JSON body fails the test.\"\"\"\n    try:\n        return response.json()\n    except Exception as exc:\n        raise AssertionError(\n            \"GET %s must answer a JSON body, got %r\" % (path, response.text)\n        ) from exc\n\n\n# ---------------------------------------------------------------------------\n# writing an Argus jobs directory\n# ---------------------------------------------------------------------------\n\n\ndef _started(call_id, worst_usd_nano):\n    return json.dumps(\n        {\"event\": \"llm_call_started\", \"call_id\": call_id, \"worst_usd_nano\": worst_usd_nano}\n    )\n\n\ndef _ended(call_id, usd_nano, status=\"ok\"):\n    return json.dumps(\n        {\"event\": \"llm_call\", \"call_id\": call_id, \"status\": status, \"usd_nano\": usd_nano}\n    )\n\n\ndef _ok(call_id, nano):\n    \"\"\"One call that started and ended, costing ``nano`` nano-dollars.\"\"\"\n    return [_started(call_id, nano), _ended(call_id, nano)]\n\n\ndef _open(call_id, worst_nano):\n    \"\"\"One call that started and never ended: it costs ``worst_nano``.\"\"\"\n    return [_started(call_id, worst_nano)]\n\n\ndef _write_job(jobs_dir, job):\n    job_dir = Path(jobs_dir) / job[\"job\"]\n    job_dir.mkdir(parents=True, exist_ok=True)\n    (job_dir / \"job.json\").write_text(json.dumps(job), encoding=\"utf-8\")\n    return job_dir\n\n\ndef _write_ledger(job_dir, run_id, lines):\n    \"\"\"Write ``runs/<run_id>/events.jsonl`` under one job directory.\"\"\"\n    run_dir = Path(job_dir) / \"runs\" / run_id\n    run_dir.mkdir(parents=True, exist_ok=True)\n    (run_dir / \"events.jsonl\").write_text(\"\\n\".join(lines) + \"\\n\", encoding=\"utf-8\")\n\n\n# Ledger: 57398976 + 7500000 + 54800000 = 119698976 nano -> 0.1197\nJOB_A = {\n    \"job\": \"j20261028_030146_c6ca\",\n    \"kind\": \"code\",\n    \"state\": \"AGENT_FAILED\",\n    \"created_at\": \"2026-10-28T03:01:46Z\",\n    \"max_usd\": 1.0,\n    \"stages\": {\n        \"d1\": {\"kind\": \"draft\", \"status\": \"DRAFTED\", \"usd\": 0.05, \"run_id\": \"run-d1\"},\n        \"a1\": {\"kind\": \"agent\", \"status\": \"DONE\", \"usd\": 0.0075, \"run_id\": \"run-a1\"},\n        \"d2\": {\"kind\": \"draft\", \"status\": \"DRAFTED\", \"usd\": 0.0548, \"run_id\": \"run-d2\"},\n    },\n}\n\n# Ledger: 55200000 + 60000000 (started, never ended) = 115200000 nano -> 0.1152\n# a1 has usd == null, so the job is running.\nJOB_B = {\n    \"job\": \"j20261028_030554_244f\",\n    \"kind\": \"code\",\n    \"state\": \"REVIEW_READY\",\n    \"created_at\": \"2026-10-28T03:05:54Z\",\n    \"max_usd\": 1.0,\n    \"stages\": {\n        \"d1\": {\"kind\": \"draft\", \"status\": \"DRAFTED\", \"usd\": 0.0552, \"run_id\": \"run-d1\"},\n        \"a1\": {\"kind\": \"agent\", \"status\": \"RUNNING\", \"usd\": None, \"run_id\": \"run-a1\"},\n    },\n}\n\n\ndef _fixture(tmp_path):\n    \"\"\"JOB_A and JOB_B (written newest first) plus a directory that is not a job.\"\"\"\n    jobs_dir = Path(tmp_path) / \"jobs\"\n    jobs_dir.mkdir()\n    job_b = _write_job(jobs_dir, JOB_B)\n    _write_ledger(job_b, \"run-d1\", _ok(\"c1\", 55200000))\n    _write_ledger(job_b, \"run-a1\", _open(\"c1\", 60000000))\n    job_a = _write_job(jobs_dir, JOB_A)\n    _write_ledger(job_a, \"run-d1\", _ok(\"c1\", 57398976))\n    _write_ledger(job_a, \"run-a1\", _ok(\"c1\", 7500000))\n    _write_ledger(job_a, \"run-d2\", _ok(\"c1\", 54800000))\n    not_a_job = jobs_dir / \"not_a_job\"\n    not_a_job.mkdir()\n    (not_a_job / \"notes.txt\").write_text(\"no job here\", encoding=\"utf-8\")\n    return jobs_dir\n\n\ndef test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers(tmp_path):\n    jobs_dir = _fixture(tmp_path)\n\n    response = _get(_client(jobs_dir), \"/jobs\")\n\n    assert response.status_code == 200\n    assert _json(response, \"/jobs\") == [\n        {\n            \"job\": \"j20261028_030146_c6ca\",\n            \"state\": \"AGENT_FAILED\",\n            \"created_at\": \"2026-10-28T03:01:46Z\",\n            \"stages\": 3,\n            \"cost_nano\": 119698976,\n            \"cost_usd\": \"0.1197\",\n            \"running\": False,\n        },\n        {\n            \"job\": \"j20261028_030554_244f\",\n            \"state\": \"REVIEW_READY\",\n            \"created_at\": \"2026-10-28T03:05:54Z\",\n            \"stages\": 2,\n            \"cost_nano\": 115200000,\n            \"cost_usd\": \"0.1152\",\n            \"running\": True,\n        },\n    ]\n\n\nORDER_OLD = {\n    \"job\": \"j20261028_090000_zzzz\",\n    \"kind\": \"code\",\n    \"state\": \"DONE\",\n    \"created_at\": \"2026-10-28T01:00:00Z\",\n    \"max_usd\": 1.0,\n    \"stages\": {},\n}\n\nORDER_NEW = {\n    \"job\": \"j20261028_010000_aaaa\",\n    \"kind\": \"code\",\n    \"state\": \"DONE\",\n    \"created_at\": \"2026-10-28T02:00:00Z\",\n    \"max_usd\": 1.0,\n    \"stages\": {},\n}\n\n\ndef test_jobs_are_ordered_by_created_at_not_by_id(tmp_path):\n    # directory names sort the other way round: ORDER_NEW before ORDER_OLD\n    jobs_dir = Path(tmp_path) / \"jobs\"\n    jobs_dir.mkdir()\n    _write_job(jobs_dir, ORDER_NEW)\n    _write_job(jobs_dir, ORDER_OLD)\n\n    response = _get(_client(jobs_dir), \"/jobs\")\n\n    assert response.status_code == 200\n    assert _json(response, \"/jobs\") == [\n        {\n            \"job\": \"j20261028_090000_zzzz\",\n            \"state\": \"DONE\",\n            \"created_at\": \"2026-10-28T01:00:00Z\",\n            \"stages\": 0,\n            \"cost_nano\": 0,\n            \"cost_usd\": \"0.0000\",\n            \"running\": False,\n        },\n        {\n            \"job\": \"j20261028_010000_aaaa\",\n            \"state\": \"DONE\",\n            \"created_at\": \"2026-10-28T02:00:00Z\",\n            \"stages\": 0,\n            \"cost_nano\": 0,\n            \"cost_usd\": \"0.0000\",\n            \"running\": False,\n        },\n    ]\n\n\n# Ledgers: run-d1 100000000, run-a1 70000000 + 12000000 (started, never ended),\n# run-d2 100600000, run-extra 5000000 (named by no stage), run-gone has none.\nDETAIL_JOB = {\n    \"job\": \"j20261028_065812_5cb1\",\n    \"kind\": \"code\",\n    \"state\": \"ABANDONED\",\n    \"created_at\": \"2026-10-28T06:58:12Z\",\n    \"max_usd\": 1.0,\n    \"stages\": {\n        \"d1\": {\"kind\": \"draft\", \"status\": \"DRAFTED\", \"usd\": 0.1, \"run_id\": \"run-d1\"},\n        \"a1\": {\"kind\": \"agent\", \"status\": \"RUNNING\", \"usd\": None, \"run_id\": \"run-a1\"},\n        \"d2\": {\"kind\": \"draft\", \"status\": \"DRAFTED\", \"usd\": 0.1023, \"run_id\": \"run-d2\"},\n        \"d3\": {\"kind\": \"draft\", \"status\": \"DRAFT_FAILED\", \"usd\": 0.0},\n        \"a2\": {\"kind\": \"agent\", \"status\": \"DONE\", \"usd\": 0.0, \"run_id\": \"run-gone\"},\n    },\n}\n\n\ndef _detail_fixture(tmp_path):\n    jobs_dir = Path(tmp_path) / \"jobs\"\n    jobs_dir.mkdir()\n    job_dir = _write_job(jobs_dir, DETAIL_JOB)\n    _write_ledger(job_dir, \"run-d1\", _ok(\"c1\", 100000000))\n    _write_ledger(\n        job_dir,\n        \"run-a1\",\n        [\n            _started(\"c1\", 50000000),\n            _ended(\"c1\", 70000000),\n            _started(\"c2\", 12000000),  # the process died: no final event\n        ],\n    )\n    _write_ledger(job_dir, \"run-d2\", _ok(\"c1\", 100600000))\n    _write_ledger(job_dir, \"run-extra\", _ok(\"c1\", 5000000))\n    (job_dir / \"runs\" / \"run-gone\").mkdir(parents=True)  # no events.jsonl inside\n    return jobs_dir\n\n\ndef test_a_job_detail_lists_its_stages_in_order_with_their_own_cost(tmp_path):\n    jobs_dir = _detail_fixture(tmp_path)\n\n    response = _get(_client(jobs_dir), \"/jobs/j20261028_065812_5cb1\")\n\n    assert response.status_code == 200\n    assert _json(response, \"/jobs/j20261028_065812_5cb1\") == {\n        \"job\": \"j20261028_065812_5cb1\",\n        \"state\": \"ABANDONED\",\n        \"created_at\": \"2026-10-28T06:58:12Z\",\n        \"stages\": 5,\n        # 100000000 + 82000000 + 100600000 + 5000000 (the un-named run-extra)\n        \"cost_nano\": 287600000,\n        \"cost_usd\": \"0.2876\",\n        \"running\": True,\n        \"stages_detail\": [\n            {\n                \"stage\": \"d1\",\n                \"kind\": \"draft\",\n                \"status\": \"DRAFTED\",\n                \"cost_nano\": 100000000,\n                \"cost_usd\": \"0.1000\",\n            },\n            {\n                \"stage\": \"a1\",\n                \"kind\": \"agent\",\n                \"status\": \"RUNNING\",\n                \"cost_nano\": 82000000,\n                \"cost_usd\": \"0.0820\",\n            },\n            {\n                \"stage\": \"d2\",\n                \"kind\": \"draft\",\n                \"status\": \"DRAFTED\",\n                \"cost_nano\": 100600000,\n                \"cost_usd\": \"0.1006\",\n            },\n            {\n                \"stage\": \"d3\",\n                \"kind\": \"draft\",\n                \"status\": \"DRAFT_FAILED\",\n                \"cost_nano\": 0,\n                \"cost_usd\": \"0.0000\",\n            },\n            {\n                \"stage\": \"a2\",\n                \"kind\": \"agent\",\n                \"status\": \"DONE\",\n                \"cost_nano\": 0,\n                \"cost_usd\": \"0.0000\",\n            },\n        ],\n    }\n\n\ndef test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail(tmp_path):\n    jobs_dir = _fixture(tmp_path)\n\n    response = _get(_client(jobs_dir), \"/jobs/j20261028_999999_nope\")\n\n    assert response.status_code == 404\n    body = _json(response, \"/jobs/j20261028_999999_nope\")\n    assert body == {\"detail\": \"no such job: j20261028_999999_nope\"}\n\n\ndef test_a_job_id_never_reads_a_file_outside_the_jobs_directory(tmp_path):\n    jobs_dir = Path(tmp_path) / \"jobs\"\n    jobs_dir.mkdir()\n    # decoys that a \"..\" in the job id would reach\n    (tmp_path / \"job.json\").write_text(json.dumps(JOB_A), encoding=\"utf-8\")\n    outside = tmp_path / \"outside\"\n    outside.mkdir()\n    (outside / \"job.json\").write_text(json.dumps(JOB_B), encoding=\"utf-8\")\n\n    client = _client(jobs_dir)\n\n    for path in (\"/jobs/%2E%2E\", \"/jobs/..%2Foutside\", \"/jobs/..%2F..%2Foutside\"):\n        response = _get(client, path)\n        assert response.status_code == 404, \"%s must not serve anything\" % (path,)\n        assert \"j20261028_030146_c6ca\" not in response.text, (\n            \"%s must not read the job.json of the directory above the jobs dir\" % (path,)\n        )\n        assert \"j20261028_030554_244f\" not in response.text, (\n            \"%s must not read a job.json outside the jobs dir\" % (path,)\n        )\n\n\ndef test_the_summary_endpoint_matches_the_command_totals(tmp_path):\n    # the last lines of `python -m ledger summary`: 2 jobs, $0.2349, skipped 1\n    jobs_dir = _fixture(tmp_path)\n\n    response = _get(_client(jobs_dir), \"/summary\")\n\n    assert response.status_code == 200\n    assert _json(response, \"/summary\") == {\n        \"jobs\": 2,\n        \"cost_nano\": 234898976,\n        \"cost_usd\": \"0.2349\",\n        \"skipped\": 1,\n    }\n\n\ndef test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals(tmp_path):\n    missing = tmp_path / \"does_not_exist\"\n\n    client = _client(missing)\n\n    jobs = _get(client, \"/jobs\")\n    assert jobs.status_code == 200\n    assert _json(jobs, \"/jobs\") == []\n\n    summary = _get(client, \"/summary\")\n    assert summary.status_code == 200\n    assert _json(summary, \"/summary\") == {\n        \"jobs\": 0,\n        \"cost_nano\": 0,\n        \"cost_usd\": \"0.0000\",\n        \"skipped\": 0,\n    }\n\n\ndef test_the_readme_documents_the_api():\n    readme = (REPO_ROOT / \"README.md\").read_text(encoding=\"utf-8\")\n\n    assert \"API\" in readme, \"README.md must have a section documenting the JSON API\"\n    for needle in (\"create_app\", \"/jobs\", \"/summary\"):\n        assert needle in readme, (\n            \"the README API section must mention %r\" % (needle,)\n        )\n"
+    }
+  ],
+  "unverifiable": [
+    "That the fix reuses ledger/summary.py instead of reading the ledgers a second way is a code-review point; the tests only check that the numbers agree.",
+    "The exact 404 body for an id that carries a '/': FastAPI's router rejects such a path before the handler, so the reply is its own 'Not Found' rather than \"no such job: <id>\"; the test only checks that nothing outside the jobs directory is served.",
+    "The README 'API' section's prose beyond the words 'API', 'create_app', '/jobs' and '/summary'.",
+    "That the app is served over real HTTP and not only under fastapi.testclient.TestClient.",
+    "A directory whose name differs from the 'job' field of its job.json: which id /jobs/{job_id} should accept is left to the fix."
+  ]
+}

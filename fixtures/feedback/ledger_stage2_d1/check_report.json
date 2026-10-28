@@ -1,0 +1,217 @@
+{
+  "task": "drafted_task",
+  "draft_sha256": "fb00e5179e82b41215bc17130c1e3675e7be1b75824b563bf8ab2dd1c5bc4939",
+  "unverifiable": [
+    "That the fix reuses ledger/summary.py instead of reading the ledgers a second way is a code-review point; the tests only check that the numbers agree.",
+    "The exact 404 body for an id that carries a '/': FastAPI's router rejects such a path before the handler, so the reply is its own 'Not Found' rather than \"no such job: <id>\"; the test only checks that nothing outside the jobs directory is served.",
+    "The README 'API' section's prose beyond the words 'API', 'create_app', '/jobs' and '/summary'.",
+    "That the app is served over real HTTP and not only under fastapi.testclient.TestClient.",
+    "A directory whose name differs from the 'job' field of its job.json: which id /jobs/{job_id} should accept is left to the fix."
+  ],
+  "ok": true,
+  "feasibility": "unproven",
+  "contract": {
+    "contract": "drafted_task",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/drafted_task",
+      "issue": "A JSON API over a jobs directory (FastAPI)\n\nThe summary command is useful, but other tools (and later a web page) need the same data as JSON over HTTP.\n\nAdd ledger/api.py with `create_app(jobs_dir)` that returns a FastAPI app serving one Argus jobs directory (format in\nREADME.md). Reuse what ledger/summary.py already computes (the job list, `job_cost_nano`); do not read the ledgers twice\nin different ways.\n\nEndpoints:\n1. GET /jobs: the jobs oldest first (by created_at), each\n   {\"job\": \"<id>\", \"state\": \"<state>\", \"created_at\": \"<as in job.json>\", \"stages\": <number>,\n    \"cost_nano\": <int>, \"cost_usd\": \"<dollars with 4 decimals, as text, e.g. \\\"0.2826\\\">\", \"running\": <bool>}\n   `running` is true when a stage's job.json usd is null (as \"(running)\" in the summary).\n2. GET /jobs/{job_id}: one job, the same fields plus \"stages_detail\": a list in the order the stages ran, each\n   {\"stage\": \"d1\", \"kind\": \"draft\", \"status\": \"DRAFTED\", \"cost_nano\": <int>, \"cost_usd\": \"<4 decimals>\"}, where a stage's\n   cost is the ledger cost of its run (0 without run_id or ledger). A job id that is not a job of the directory: 404 with\n   {\"detail\": \"no such job: <id>\"}. An id with \"/\" or \"..\" can never reach a file outside the jobs directory.\n3. GET /summary: {\"jobs\": <int>, \"cost_nano\": <int>, \"cost_usd\": \"<4 decimals>\", \"skipped\": <int>}, the same numbers as\n   the last lines of `python -m ledger summary`.\n\nMoney stays integer nano-dollars; \"cost_usd\" is only formatted from it. A missing jobs directory: /jobs is [], /summary is\nzeros, and nothing crashes. Tests use fastapi.testclient.TestClient (no server, no network). Do not change the output of\n`python -m ledger summary`. Add a short \"API\" section to README.md.\n\nThis runs in the environment ledger_py312 (Python 3.12, fastapi 0.143.0, httpx 0.28.1, pytest 9.1.1): use only those\nand the standard library."
+    },
+    "scope": {
+      "writable": [
+        "ledger/api.py",
+        "ledger/summary.py",
+        "README.md"
+      ],
+      "protected": [
+        "tests/test_api.py",
+        "tests/test_summary.py",
+        "tests/test_ledger_cost.py",
+        "tests/test_package.py",
+        "ledger/__main__.py",
+        "ledger/__init__.py"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "api",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_api.py"
+        ],
+        "timeout_s": 120,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers",
+          "tests/test_api.py::test_jobs_are_ordered_by_created_at_not_by_id",
+          "tests/test_api.py::test_a_job_detail_lists_its_stages_in_order_with_their_own_cost",
+          "tests/test_api.py::test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail",
+          "tests/test_api.py::test_a_job_id_never_reads_a_file_outside_the_jobs_directory",
+          "tests/test_api.py::test_the_summary_endpoint_matches_the_command_totals",
+          "tests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals",
+          "tests/test_api.py::test_the_readme_documents_the_api"
+        ],
+        "environment": "ledger_py312"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_summary.py",
+          "tests/test_ledger_cost.py",
+          "tests/test_package.py"
+        ],
+        "timeout_s": 120,
+        "min_tests": 15,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_summary.py::test_the_package_still_imports",
+          "tests/test_summary.py::test_cli_summary_prints_jobs_oldest_first_with_state_stages_and_cost",
+          "tests/test_summary.py::test_cli_summary_counts_a_null_stage_as_zero_and_marks_the_job_running",
+          "tests/test_summary.py::test_cli_summary_skips_directories_without_a_readable_job_json",
+          "tests/test_summary.py::test_cli_summary_of_an_empty_jobs_directory",
+          "tests/test_summary.py::test_cli_summary_of_a_missing_jobs_directory_exits_with_code_1",
+          "tests/test_summary.py::test_summary_module_returns_the_lines",
+          "tests/test_ledger_cost.py::test_a_stopped_stage_costs_what_its_ledger_says_not_job_json",
+          "tests/test_ledger_cost.py::test_the_ledger_cost_follows_started_and_final_events",
+          "tests/test_ledger_cost.py::test_a_stage_without_a_run_id_or_ledger_costs_nothing",
+          "tests/test_ledger_cost.py::test_the_summary_aligns_the_columns_like_the_readme_example",
+          "tests/test_ledger_cost.py::test_the_cost_column_is_right_aligned",
+          "tests/test_ledger_cost.py::test_singular_job_and_stage",
+          "tests/test_ledger_cost.py::test_the_readme_documents_the_ledger_format",
+          "tests/test_package.py::test_the_package_imports"
+        ],
+        "environment": "ledger_py312"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.5,
+      "max_iterations": 1
+    },
+    "tools": [
+      "edit_file"
+    ],
+    "budget_profile": "large_usd"
+  },
+  "contract_sha256": "d1757eec1315b43256791c4944b59d6d488adc2e8c37e43c42b252e1549fa9d9",
+  "added": {
+    "tests/test_api.py": "517eb97159b1f3c00b1989634352677babad60a732dfc35b8c436c9bdff23911"
+  },
+  "baseline": {
+    "api": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers": "FAIL",
+        "tests/test_api.py::test_jobs_are_ordered_by_created_at_not_by_id": "FAIL",
+        "tests/test_api.py::test_a_job_detail_lists_its_stages_in_order_with_their_own_cost": "FAIL",
+        "tests/test_api.py::test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail": "FAIL",
+        "tests/test_api.py::test_a_job_id_never_reads_a_file_outside_the_jobs_directory": "FAIL",
+        "tests/test_api.py::test_the_summary_endpoint_matches_the_command_totals": "FAIL",
+        "tests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals": "FAIL",
+        "tests/test_api.py::test_the_readme_documents_the_api": "FAIL"
+      },
+      "failures": 8,
+      "errors": 0,
+      "output_tail": ", `a1`, `d2`, `a2`, ...). `usd` is what that stage spent, in dollars; it can be\\n  `null` while a stage runs. Other keys may be present and are to be ignored.\\n- A directory without a readable `job.json` is not a job.\\n\\n## Ledger ...`worst_usd_nano`. A null cost counts as 0. Money is integer nano-dollars (1 dollar = 1,000,000,000); sums\\nare kept as integers and only turned into dollars when printing.\\n\\n## Cost and the summary output\\n\\nA job\\'s cost is the sum over its stages of the ledger cost of each stage\\'s run (each run ledger under `runs/` is\\ncounted once, including any run whose `events.jsonl` no stage names). A stage without a `run_id`, or whose\\n`events.jsonl` does not exist, costs 0; the `usd` in `job.json` is no longer used for the cost — it only says whether\\na stage is still running (`(running)` is shown when a stage\\'s `usd` is `null`).\\n\\n`python -m ledger summary <jobs_dir>` prints one line per job, oldest first, plus a total line. The job id and the\\nstate are left-aligned and padded to the widest value in the output, columns are separated by two spaces, and the\\ncost is right-aligned:\\n\\n```\\nj20261028_030146_c6ca  AGENT_FAILED  3 stages  $0.1197\\nj20261028_065812_5cb1  ABANDONED     3 stages  $0.2826  (running)\\n2 jobs  $0.4023\\n```\\n\\nCounts are singular when they are 1 (`1 job`, `1 stage`).\\n\\n## Layout\\n\\n- `ledger/`: the package\\n- `tests/`: pytest tests (`python -m pytest tests`)\\n'\n=============================== warnings summary ===============================\ntests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers\n  /usr/local/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n========================= 8 failed, 1 warning in 0.86s =========================\n",
+      "failed_nodes": [
+        "tests/test_api.py::test_a_job_detail_lists_its_stages_in_order_with_their_own_cost",
+        "tests/test_api.py::test_a_job_id_never_reads_a_file_outside_the_jobs_directory",
+        "tests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals",
+        "tests/test_api.py::test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail",
+        "tests/test_api.py::test_jobs_are_ordered_by_created_at_not_by_id",
+        "tests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers",
+        "tests/test_api.py::test_the_readme_documents_the_api",
+        "tests/test_api.py::test_the_summary_endpoint_matches_the_command_totals"
+      ],
+      "red_check": {
+        "tests/test_api.py::test_a_job_detail_lists_its_stages_in_order_with_their_own_cost": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_api.py::test_a_job_id_never_reads_a_file_outside_the_jobs_directory": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_api.py::test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_api.py::test_jobs_are_ordered_by_created_at_not_by_id": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_api.py::test_the_readme_documents_the_api": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_api.py::test_the_summary_endpoint_matches_the_command_totals": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_api.py",
+          "type": "builtins.AssertionError"
+        }
+      }
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_summary.py::test_the_package_still_imports": "ok",
+        "tests/test_summary.py::test_cli_summary_prints_jobs_oldest_first_with_state_stages_and_cost": "ok",
+        "tests/test_summary.py::test_cli_summary_counts_a_null_stage_as_zero_and_marks_the_job_running": "ok",
+        "tests/test_summary.py::test_cli_summary_skips_directories_without_a_readable_job_json": "ok",
+        "tests/test_summary.py::test_cli_summary_of_an_empty_jobs_directory": "ok",
+        "tests/test_summary.py::test_cli_summary_of_a_missing_jobs_directory_exits_with_code_1": "ok",
+        "tests/test_summary.py::test_summary_module_returns_the_lines": "ok",
+        "tests/test_ledger_cost.py::test_a_stopped_stage_costs_what_its_ledger_says_not_job_json": "ok",
+        "tests/test_ledger_cost.py::test_the_ledger_cost_follows_started_and_final_events": "ok",
+        "tests/test_ledger_cost.py::test_a_stage_without_a_run_id_or_ledger_costs_nothing": "ok",
+        "tests/test_ledger_cost.py::test_the_summary_aligns_the_columns_like_the_readme_example": "ok",
+        "tests/test_ledger_cost.py::test_the_cost_column_is_right_aligned": "ok",
+        "tests/test_ledger_cost.py::test_singular_job_and_stage": "ok",
+        "tests/test_ledger_cost.py::test_the_readme_documents_the_ledger_format": "ok",
+        "tests/test_package.py::test_the_package_imports": "ok"
+      },
+      "failures": 0,
+      "errors": 0,
+      "output_tail": "============================= test session starts ==============================\nplatform linux -- Python 3.12.16, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3\nrootdir: /workspace\nplugins: anyio-4.15.1\ncollecting ... collected 15 items\n\ntests/test_summary.py::test_the_package_still_imports PASSED\ntests/test_summary.py::test_cli_summary_prints_jobs_oldest_first_with_state_stages_and_cost PASSED\ntests/test_summary.py::test_cli_summary_counts_a_null_stage_as_zero_and_marks_the_job_running PASSED\ntests/test_summary.py::test_cli_summary_skips_directories_without_a_readable_job_json PASSED\ntests/test_summary.py::test_cli_summary_of_an_empty_jobs_directory PASSED\ntests/test_summary.py::test_cli_summary_of_a_missing_jobs_directory_exits_with_code_1 PASSED\ntests/test_summary.py::test_summary_module_returns_the_lines PASSED\ntests/test_ledger_cost.py::test_a_stopped_stage_costs_what_its_ledger_says_not_job_json PASSED\ntests/test_ledger_cost.py::test_the_ledger_cost_follows_started_and_final_events PASSED\ntests/test_ledger_cost.py::test_a_stage_without_a_run_id_or_ledger_costs_nothing PASSED\ntests/test_ledger_cost.py::test_the_summary_aligns_the_columns_like_the_readme_example PASSED\ntests/test_ledger_cost.py::test_the_cost_column_is_right_aligned PASSED\ntests/test_ledger_cost.py::test_singular_job_and_stage PASSED\ntests/test_ledger_cost.py::test_the_readme_documents_the_ledger_format PASSED\ntests/test_package.py::test_the_package_imports PASSED\n\n============================== 15 passed in 1.19s ==============================\n",
+      "failed_nodes": []
+    }
+  },
+  "reference": null,
+  "problems": []
+}

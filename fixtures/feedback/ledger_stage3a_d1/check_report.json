@@ -1,0 +1,259 @@
+{
+  "task": "drafted_task",
+  "draft_sha256": "24bc47c0b6d81daaffd359e676fef849ba3c2fbb7d7a7449da6b63865e2b1e23",
+  "unverifiable": [
+    "That the pages look right to a person in a browser: layout, styling and readability are not checked by any test.",
+    "That no JavaScript and no external CSS or fonts are used: the tests check the text, the cells and the links, they do not scan every attribute for external resources.",
+    "The wording and length of the README 'Pages' section beyond the words 'Pages' and '/ui'.",
+    "That the pages are rendered from the same reading as the JSON API rather than by a second implementation: the tests compare the visible numbers only."
+  ],
+  "ok": true,
+  "feasibility": "unproven",
+  "contract": {
+    "contract": "drafted_task",
+    "version": 1,
+    "inputs": {
+      "workspace": "fixtures/repos/drafted_task",
+      "issue": "HTML pages for the jobs (server-rendered, no JavaScript)\n\nThe JSON API works for tools; people want a page to look at. Add server-rendered HTML pages to the same FastAPI app\n(ledger/api.py, `create_app(jobs_dir)`), built with the standard library only (no template engine, no JavaScript, no\nexternal CSS or fonts).\n\n1. GET /ui: an HTML page with a table of the jobs, oldest first, one row per job with the job id, state, number of\n   stages and cost (\"$0.2826\"), and \"running\" for a job that /jobs marks running. Each job id is a link to its page. Under\n   the table, the totals: \"<n> jobs, $<total>\" as on the summary. With no jobs, the page says \"No jobs.\" instead of a table.\n2. A filter by state: GET /ui?state=REVIEW_READY shows only the jobs in that state, and the totals are for the shown jobs.\n   Above the table there is one link per state present in the directory (with its count), and a link \"all\" to /ui.\n   An unknown state shows \"No jobs.\" (not an error).\n3. GET /ui/jobs/{job_id}: the page of one job: its id, state, created_at, cost, and a table of its stages in order (stage,\n   kind, status, cost), and a link back to /ui. An unknown or invalid job id: 404 with an HTML page that says\n   \"no such job: <id>\" and links back to /ui. The same id rules as /jobs/{job_id} (never a path outside the directory).\n4. Every value from job.json is HTML-escaped (a state or id containing \"<script>\" must appear as text, never as markup).\n5. Responses are `text/html; charset=utf-8`; the JSON endpoints and `python -m ledger summary` do not change.\n\nThe numbers must be the ones the JSON API gives (reuse it; do not compute costs a third way). Tests use TestClient and\nhtml.parser from the standard library: they read the table cells and follow every link on a page (each must answer 200,\nexcept the deliberate 404). Add a short \"Pages\" section to README.md. Environment: ledger_py312."
+    },
+    "scope": {
+      "writable": [
+        "ledger/api.py",
+        "README.md"
+      ],
+      "protected": [
+        "tests/**",
+        "ledger/summary.py",
+        "ledger/__main__.py",
+        "ledger/__init__.py",
+        ".gitignore"
+      ]
+    },
+    "artifacts": [
+      {
+        "path": "SUMMARY.json",
+        "type": "json",
+        "schema": "claims_v2"
+      }
+    ],
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_ui.py"
+        ],
+        "timeout_s": 120,
+        "min_tests": 11,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_ui.py::test_the_pages_are_served_as_html",
+          "tests/test_ui.py::test_the_jobs_page_lists_the_jobs_oldest_first",
+          "tests/test_ui.py::test_a_missing_jobs_directory_shows_no_jobs",
+          "tests/test_ui.py::test_the_page_links_one_filter_per_state_present",
+          "tests/test_ui.py::test_a_state_filter_shows_only_that_state_and_its_totals",
+          "tests/test_ui.py::test_an_unknown_state_filter_shows_no_jobs",
+          "tests/test_ui.py::test_a_job_page_shows_the_job_and_its_stages_in_order",
+          "tests/test_ui.py::test_an_unknown_or_invalid_job_id_is_404_with_a_page",
+          "tests/test_ui.py::test_every_link_of_the_pages_answers_200",
+          "tests/test_ui.py::test_markup_in_a_state_or_an_id_stays_text",
+          "tests/test_ui.py::test_the_readme_has_a_pages_section"
+        ],
+        "environment": "ledger_py312"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests/test_api.py",
+          "tests/test_summary.py",
+          "tests/test_ledger_cost.py",
+          "tests/test_package.py"
+        ],
+        "timeout_s": 120,
+        "min_tests": 23,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers",
+          "tests/test_api.py::test_jobs_are_ordered_by_created_at_not_by_id",
+          "tests/test_api.py::test_a_job_detail_lists_its_stages_in_order_with_their_own_cost",
+          "tests/test_api.py::test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail",
+          "tests/test_api.py::test_a_job_id_never_reads_a_file_outside_the_jobs_directory",
+          "tests/test_api.py::test_the_summary_endpoint_matches_the_command_totals",
+          "tests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals",
+          "tests/test_api.py::test_the_readme_documents_the_api",
+          "tests/test_summary.py::test_the_package_still_imports",
+          "tests/test_summary.py::test_cli_summary_prints_jobs_oldest_first_with_state_stages_and_cost",
+          "tests/test_summary.py::test_cli_summary_counts_a_null_stage_as_zero_and_marks_the_job_running",
+          "tests/test_summary.py::test_cli_summary_skips_directories_without_a_readable_job_json",
+          "tests/test_summary.py::test_cli_summary_of_an_empty_jobs_directory",
+          "tests/test_summary.py::test_cli_summary_of_a_missing_jobs_directory_exits_with_code_1",
+          "tests/test_summary.py::test_summary_module_returns_the_lines",
+          "tests/test_ledger_cost.py::test_a_stopped_stage_costs_what_its_ledger_says_not_job_json",
+          "tests/test_ledger_cost.py::test_the_ledger_cost_follows_started_and_final_events",
+          "tests/test_ledger_cost.py::test_a_stage_without_a_run_id_or_ledger_costs_nothing",
+          "tests/test_ledger_cost.py::test_the_summary_aligns_the_columns_like_the_readme_example",
+          "tests/test_ledger_cost.py::test_the_cost_column_is_right_aligned",
+          "tests/test_ledger_cost.py::test_singular_job_and_stage",
+          "tests/test_ledger_cost.py::test_the_readme_documents_the_ledger_format",
+          "tests/test_package.py::test_the_package_imports"
+        ],
+        "environment": "ledger_py312"
+      }
+    ],
+    "judge": [],
+    "limits": {
+      "max_usd": 0.5,
+      "max_iterations": 1
+    },
+    "tools": [
+      "edit_file",
+      "search_files"
+    ],
+    "budget_profile": "large_usd"
+  },
+  "contract_sha256": "6704d4782b1be3269464c99f1d761153cceea91496da076a6396c1de56ce99e7",
+  "added": {
+    "tests/test_ui.py": "92fa796efdf295752dd0648bc965c4f4703e9818c18b22a18eb35d0cce08cc32"
+  },
+  "baseline": {
+    "target": {
+      "status": "fail",
+      "must_pass": {
+        "tests/test_ui.py::test_the_pages_are_served_as_html": "FAIL",
+        "tests/test_ui.py::test_the_jobs_page_lists_the_jobs_oldest_first": "FAIL",
+        "tests/test_ui.py::test_a_missing_jobs_directory_shows_no_jobs": "FAIL",
+        "tests/test_ui.py::test_the_page_links_one_filter_per_state_present": "FAIL",
+        "tests/test_ui.py::test_a_state_filter_shows_only_that_state_and_its_totals": "FAIL",
+        "tests/test_ui.py::test_an_unknown_state_filter_shows_no_jobs": "FAIL",
+        "tests/test_ui.py::test_a_job_page_shows_the_job_and_its_stages_in_order": "FAIL",
+        "tests/test_ui.py::test_an_unknown_or_invalid_job_id_is_404_with_a_page": "FAIL",
+        "tests/test_ui.py::test_every_link_of_the_pages_answers_200": "FAIL",
+        "tests/test_ui.py::test_markup_in_a_state_or_an_id_stays_text": "FAIL",
+        "tests/test_ui.py::test_the_readme_has_a_pages_section": "FAIL"
+      },
+      "failures": 11,
+      "errors": 0,
+      "output_tail": "`, `DRAFT_FAILED`, `ABANDONED`.\\n- `stages`: in the order they ran (`d1`, `a1`, `d2`, `a2`, ...). `usd` is what that stage spent, in dollars; it can be\\n  `null` while a stage runs. Other keys may be present and are to be ignored.\\n- A directory without a reada...the text of\\n  `job.json`, `stages` is the number of stages, and `running` is true when a stage\\'s `usd` is `null` (the same\\n  `(running)` as the summary). A directory that is not a job is left out.\\n- `GET /jobs/{job_id}` — the same fields for one job, plus `stages_detail`: one\\n  `{\"stage\", \"kind\", \"status\", \"cost_nano\", \"cost_usd\"}` per stage, in the order the stages ran, where a stage\\'s\\n  cost is the ledger cost of its own run (0 without a `run_id` or without a ledger). An id that is not a job of\\n  the directory is `404` with `{\"detail\": \"no such job: <id>\"}`; an id with a `/` or `..` never reaches a file\\n  outside the jobs directory.\\n- `GET /summary` — `{\"jobs\", \"cost_nano\", \"cost_usd\", \"skipped\"}`, the numbers of the summary\\'s last lines.\\n\\nA missing jobs directory is not an error: `/jobs` is `[]` and `/summary` is zeros.\\n\\n```\\n$ python -c \\'from fastapi.testclient import TestClient; from ledger.api import create_app; \\\\\\nprint(TestClient(create_app(\"jobs\")).get(\"/summary\").json())\\'\\n{\\'jobs\\': 2, \\'cost_nano\\': 402300000, \\'cost_usd\\': \\'0.4023\\', \\'skipped\\': 0}\\n```\\n\\n## Layout\\n\\n- `ledger/`: the package\\n- `tests/`: pytest tests (`python -m pytest tests`)\\n'\n=============================== warnings summary ===============================\ntests/test_ui.py::test_the_pages_are_served_as_html\n  /usr/local/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================== 11 failed, 1 warning in 1.16s =========================\n",
+      "failed_nodes": [
+        "tests/test_ui.py::test_a_job_page_shows_the_job_and_its_stages_in_order",
+        "tests/test_ui.py::test_a_missing_jobs_directory_shows_no_jobs",
+        "tests/test_ui.py::test_a_state_filter_shows_only_that_state_and_its_totals",
+        "tests/test_ui.py::test_an_unknown_or_invalid_job_id_is_404_with_a_page",
+        "tests/test_ui.py::test_an_unknown_state_filter_shows_no_jobs",
+        "tests/test_ui.py::test_every_link_of_the_pages_answers_200",
+        "tests/test_ui.py::test_markup_in_a_state_or_an_id_stays_text",
+        "tests/test_ui.py::test_the_jobs_page_lists_the_jobs_oldest_first",
+        "tests/test_ui.py::test_the_page_links_one_filter_per_state_present",
+        "tests/test_ui.py::test_the_pages_are_served_as_html",
+        "tests/test_ui.py::test_the_readme_has_a_pages_section"
+      ],
+      "red_check": {
+        "tests/test_ui.py::test_a_job_page_shows_the_job_and_its_stages_in_order": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_a_missing_jobs_directory_shows_no_jobs": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_a_state_filter_shows_only_that_state_and_its_totals": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_an_unknown_or_invalid_job_id_is_404_with_a_page": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_an_unknown_state_filter_shows_no_jobs": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_every_link_of_the_pages_answers_200": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_markup_in_a_state_or_an_id_stays_text": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_the_jobs_page_lists_the_jobs_oldest_first": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_the_page_links_one_filter_per_state_present": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_the_pages_are_served_as_html": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        },
+        "tests/test_ui.py::test_the_readme_has_a_pages_section": {
+          "assertion": true,
+          "outcome": "failed",
+          "path": "tests/test_ui.py",
+          "type": "builtins.AssertionError"
+        }
+      }
+    },
+    "regression": {
+      "status": "pass",
+      "must_pass": {
+        "tests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers": "ok",
+        "tests/test_api.py::test_jobs_are_ordered_by_created_at_not_by_id": "ok",
+        "tests/test_api.py::test_a_job_detail_lists_its_stages_in_order_with_their_own_cost": "ok",
+        "tests/test_api.py::test_an_unknown_job_id_is_404_with_the_job_id_in_the_detail": "ok",
+        "tests/test_api.py::test_a_job_id_never_reads_a_file_outside_the_jobs_directory": "ok",
+        "tests/test_api.py::test_the_summary_endpoint_matches_the_command_totals": "ok",
+        "tests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals": "ok",
+        "tests/test_api.py::test_the_readme_documents_the_api": "ok",
+        "tests/test_summary.py::test_the_package_still_imports": "ok",
+        "tests/test_summary.py::test_cli_summary_prints_jobs_oldest_first_with_state_stages_and_cost": "ok",
+        "tests/test_summary.py::test_cli_summary_counts_a_null_stage_as_zero_and_marks_the_job_running": "ok",
+        "tests/test_summary.py::test_cli_summary_skips_directories_without_a_readable_job_json": "ok",
+        "tests/test_summary.py::test_cli_summary_of_an_empty_jobs_directory": "ok",
+        "tests/test_summary.py::test_cli_summary_of_a_missing_jobs_directory_exits_with_code_1": "ok",
+        "tests/test_summary.py::test_summary_module_returns_the_lines": "ok",
+        "tests/test_ledger_cost.py::test_a_stopped_stage_costs_what_its_ledger_says_not_job_json": "ok",
+        "tests/test_ledger_cost.py::test_the_ledger_cost_follows_started_and_final_events": "ok",
+        "tests/test_ledger_cost.py::test_a_stage_without_a_run_id_or_ledger_costs_nothing": "ok",
+        "tests/test_ledger_cost.py::test_the_summary_aligns_the_columns_like_the_readme_example": "ok",
+        "tests/test_ledger_cost.py::test_the_cost_column_is_right_aligned": "ok",
+        "tests/test_ledger_cost.py::test_singular_job_and_stage": "ok",
+        "tests/test_ledger_cost.py::test_the_readme_documents_the_ledger_format": "ok",
+        "tests/test_package.py::test_the_package_imports": "ok"
+      },
+      "failures": 0,
+      "errors": 0,
+      "output_tail": "t_the_summary_endpoint_matches_the_command_totals PASSED\ntests/test_api.py::test_a_missing_jobs_directory_serves_an_empty_list_and_zeroed_totals PASSED\ntests/test_api.py::test_the_readme_documents_the_api PASSED\ntests/test_summary.py::test_the_package_still_imports PASSED\ntests/test_summary.py::test_cli_summary_prints_jobs_oldest_first_with_state_stages_and_cost PASSED\ntests/test_summary.py::test_cli_summary_counts_a_null_stage_as_zero_and_marks_the_job_running PASSED\ntests/test_summary.py::test_cli_summary_skips_directories_without_a_readable_job_json PASSED\ntests/test_summary.py::test_cli_summary_of_an_empty_jobs_directory PASSED\ntests/test_summary.py::test_cli_summary_of_a_missing_jobs_directory_exits_with_code_1 PASSED\ntests/test_summary.py::test_summary_module_returns_the_lines PASSED\ntests/test_ledger_cost.py::test_a_stopped_stage_costs_what_its_ledger_says_not_job_json PASSED\ntests/test_ledger_cost.py::test_the_ledger_cost_follows_started_and_final_events PASSED\ntests/test_ledger_cost.py::test_a_stage_without_a_run_id_or_ledger_costs_nothing PASSED\ntests/test_ledger_cost.py::test_the_summary_aligns_the_columns_like_the_readme_example PASSED\ntests/test_ledger_cost.py::test_the_cost_column_is_right_aligned PASSED\ntests/test_ledger_cost.py::test_singular_job_and_stage PASSED\ntests/test_ledger_cost.py::test_the_readme_documents_the_ledger_format PASSED\ntests/test_package.py::test_the_package_imports PASSED\n\n=============================== warnings summary ===============================\ntests/test_api.py::test_jobs_lists_the_jobs_oldest_first_with_the_summary_numbers\n  /usr/local/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================== 23 passed, 1 warning in 2.05s =========================\n",
+      "failed_nodes": []
+    }
+  },
+  "reference": null,
+  "problems": []
+}

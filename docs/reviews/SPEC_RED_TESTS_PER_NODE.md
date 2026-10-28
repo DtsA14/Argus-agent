@@ -1,6 +1,7 @@
 # Spec: alasan merah per tes dari red check, bukan dari ekor output (dari `argus-ledger` tahap 2 dan 3a)
 
-Status: **draf, menunggu keputusan Atha** (K1–K4 di bagian 6). Asal: review draf `argus-ledger` tahap 2 (`j20261028_103452_6a83-d1`)
+Status: **disetujui** (K1–K4, Atha 2026-10-28: "Gass bro"), **direvisi dengan review sesi sebelah** (bagian 7). Kode di PR yang
+sama; **tidak di-merge sebelum batch yang sedang berjalan selesai** (termasuk redraft `22456`): K3 mengubah umpan balik drafter. Asal: review draf `argus-ledger` tahap 2 (`j20261028_103452_6a83-d1`)
 dan 3a (`j20261028_105608_9d7a-d1`). Menyentuh plugin red check (`acceptance/validation.py`) dan cek draf (gate SPEC_DRAFT_CALL_PATH
 2.1), jadi jalur ketat: tes yang gagal di kode lama, mutan, `verify.sh` penuh, "merge" Atha. Tanpa biaya model.
 
@@ -33,14 +34,19 @@ Plugin red check (W2a, `RED_CHECK`) sudah berjalan untuk setiap node wajib baru 
 
 ### 2.1 Red check mencatat pesan dan berkas repo per node (K1)
 
-Plugin menambah dua field per node yang gagal di fase `call` (field lama tidak berubah):
+Plugin menambah tiga field per node yang gagal di fase `call` (field lama tidak berubah):
 
-- `message`: `str(exc)` (untuk `pytest.fail`: pesannya), maksimal **500** karakter, dipotong dengan `...`.
+- `message`: `str(exc)` (untuk `pytest.fail`: pesannya), maksimal **500** karakter, dipotong dengan `...`. Hanya untuk dibaca.
+- `message_names`: nama exception (`\b[A-Z]\w*(?:Error|Exception)\b`) di pesan **utuh**, dibaca di sandbox sebelum dipotong, unik,
+  maksimal 20. Gate K2 memakai field ini, jadi tidak bergantung pada pemotongan `message` (revisi review 1).
 - `repo_paths`: path relatif (terhadap `/workspace`, tanpa `site-packages`, aturan `inside()` yang sama) dari **semua** frame traceback
-  exception itu **dan rantainya** (`__cause__`, dan `__context__` kecuali `__suppress_context__`; kedalaman maks 5), unik, urutan
-  pertama muncul, maksimal **20**. Ini setara dengan "baris lokasi" di seksi pytest, karena pytest juga mencetak rantai.
+  exception itu **dan rantainya**: `__cause__` (`raise ... from e`), dan `__context__` (exception yang muncul di dalam `except`)
+  **kecuali** `__suppress_context__` (`from None`); kedalaman maks 5. Tiap berkas sekali (dedup dulu), lalu bila lebih dari **20**,
+  yang disimpan 20 yang **terdalam** (traceback rekursif sympy mudah lewat 20). Setara dengan baris lokasi di seksi pytest, karena
+  pytest juga mencetak rantai dan juga tidak mencetak context yang di-`from None`.
 
-pytest di dalam plugin dijalankan dengan `--tb=no --disable-warnings`: output teksnya tidak dibaca (hanya JSON sesudah nonce), dan
+pytest di dalam plugin dijalankan dengan `--tb=no -rN --disable-warnings` (tanpa traceback, ringkasan `FAILED` per tes, dan ringkasan
+warning): output teksnya tidak dibaca (hanya JSON sesudah nonce), dan
 tanpa traceback dan ringkasan warning stdout jauh dari batas 64 KiB sandbox. Keduanya hanya mengubah tampilan: `filterwarnings` dari
 konfigurasi repo tetap berlaku, jadi hasil tes sama dengan validasi. Bila output tetap terpotong, red check tetap menolak seperti
 sekarang ("the run timed out or its output was cut").
@@ -51,11 +57,14 @@ Data ini dari proses yang menjalankan kode yang dites, sama seperti sebelumnya: 
 
 `swallowed_problems` tidak lagi membaca ekor. Untuk setiap node wajib di `red_check` dengan `assertion: true`:
 
-- ditolak bila (a) `message` menyebut nama exception lain (`\b[A-Z]\w*(?:Error|Exception)\b`, selain `AssertionError`; regex yang sama)
+- ditolak bila (a) `message_names` memuat nama exception selain `AssertionError`
   dan (b) tidak ada path di `repo_paths` yang merupakan kode repo (aturan `_test_path` yang sama: bukan berkas tes, `tests/`,
   `testing/`, `*_test.py`, `conftest.py`, bukan `protected`);
-- **fail-closed:** node dengan `assertion: true` yang tidak punya field `message` atau `repo_paths` (bukan list) menjadi problem
-  "how it fails could not be read", tidak dilewati;
+- **fail-closed:** node dengan `assertion: true` yang tidak punya `message_names` atau `repo_paths` (bukan list) menjadi problem
+  ("could not be read from the red check"), tidak dilewati;
+- **dibedakan** (revisi review): red check yang tidak berjalan atau tanpa JSON tetap "how its required tests fail could not be read"
+  (W2a, tidak berubah); tes yang error di fase setup/teardown (`outcome: error`, mis. fixture) sekarang ditolak di `red_by_assertion`
+  dengan alasannya sendiri ("errors in its setup or teardown (a fixture)"), bukan "no record of how it fails";
 - pesan penolakan sama dengan sekarang (`SWALLOWED`), per node.
 
 Crash-resume: hasil submit di-commit per langkah (memo drafter), jadi submit yang sudah di-commit sebelum upgrade tidak dinilai ulang.
@@ -79,9 +88,11 @@ Crash-resume: hasil submit di-commit per langkah (memo drafter), jadi submit yan
 
 ## 3. Risiko
 
-- **Pesan > 500 karakter** yang menyebut nama exception di bagian yang dipotong lolos dari 2.2(a). Lebih sempit dari sekarang (ekor
-  2.000 karakter untuk semua tes); batasnya disebut di docstring.
-- **Ukuran JSON:** 50 node × (500 + 20 path) masih bisa melewati 64 KiB pada kasus ekstrem; hasilnya penolakan (fail-closed), bukan lolos.
+- **Ukuran JSON lewat stdout** (revisi review: usul lewat berkas JSON): per node ±500 + 20 path + 20 nama ≈ 2 KB, jadi ±30 node
+  muat di 64 KiB; di atas itu stdout terpotong dan red check **menolak** ("the run timed out or its output was cut"), tidak membaca
+  sebagian. Dipilih tetap stdout: satu-satunya tempat yang bisa ditulis di sandbox adalah `/workspace`, yaitu workspace yang sedang
+  dicek (berkas baru di sana ikut snapshot/diff), dan mount tulis terpisah adalah perubahan sandbox. Dibuka bila ada draf yang ditolak
+  karena ini.
 - Sengaja **bukan** `-p no:warnings`: plugin itu juga menerapkan `filterwarnings` repo, jadi mematikannya bisa membuat tes yang gagal
   karena warning-sebagai-error di validasi berperilaku lain di red check. `--disable-warnings` hanya menyembunyikan ringkasan.
 
@@ -89,9 +100,11 @@ Crash-resume: hasil submit di-commit per langkah (memo drafter), jadi submit yan
 
 Fixture: `check_report.json` asli kedua draf (disalin ke `fixtures/drafts/`), red check palsu, dan satu repo kecil di sandbox.
 
-1. Red check di sandbox (modul sandbox, tidak di-skip): tes yang menangkap `ValueError` lalu `assert False, f"raised {e!r}"` di luar
-   `except` → `message` memuat `ValueError`, `repo_paths` hanya berkas tes; tes yang `raise AssertionError(...) from e` → `repo_paths`
-   memuat modul repo; pesan 2.000 karakter dipotong ke 500; output tanpa traceback teks (`--tb=no`).
+1. Red check di sandbox (`tests/test_draft.py`, modul sandbox, tidak di-skip): menelan (`err = e`, assert di luar `except`) →
+   `repo_paths` hanya berkas tes, `message_names` memuat `KeyError`; `from e` dan `assert` di dalam `except` → `src/lib.py`;
+   `from None` → hanya berkas tes; nama sesudah karakter 500 tetap di `message_names`; rantai 26 berkas → 20 terdalam, berkas tes
+   (paling dangkal) yang keluar; fixture error → `outcome: error`; gate atas hasil asli menolak tepat menelan, `from None`, dan pesan
+   panjang.
 2. Gate: record "menelan" ditolak; record dengan kode repo di `repo_paths` lolos; record `assertion: true` tanpa `message`/`repo_paths`
    ditolak (fail-closed); satu node yang benar tidak menutupi node lain; ekor tanpa seksi (fixture tahap 2) **tidak** lagi meloloskan
    record yang menelan.
@@ -112,3 +125,12 @@ Fixture: `check_report.json` asli kedua draf (disalin ke `fixtures/drafts/`), re
 - **K2** Gate traceback per node dari red check, fail-closed bila field hilang; tidak lagi dari ekor.
 - **K3** Review dan umpan balik drafter: satu baris per tes merah.
 - **K4** Satu PR untuk K1–K3 (jalur ketat).
+
+## 7. Revisi dari review sesi sebelah (2026-10-28)
+
+1. *`exc_types` dari rantai sebagai pengganti teks pesan:* tidak menutup celah, karena pada pola menelan (dan `from None`) exception
+   asal **tidak ada di rantai**; namanya hanya ada di pesan. Celah 500 karakter ditutup dengan `message_names` dari pesan utuh.
+2. *`__context__` dan `__suppress_context__`:* sudah di kode pertama; ditambah tes `from None` (gate menolak, benar).
+3. Dedup lalu 20 terdalam; setup error dengan alasan sendiri; `-rN`: diterima.
+4. JSON lewat berkas: tidak sekarang (bagian 3).
+5. Merge sesudah batch yang sedang berjalan.

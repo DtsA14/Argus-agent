@@ -138,8 +138,9 @@ def fake_collect(path, workspace, sandbox_cfg, **kw):
 
 def fake_red(nodes, workspace, sandbox_cfg, **kw):
     """Stands in for the W2a red check in the sandbox: every node fake_validate fails, fails by an assert of its file."""
-    return {n: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True, "path": n.split("::", 1)[0]}
-            for n in nodes}, None
+    return {n: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True, "path": n.split("::", 1)[0],
+                "message": "assert 1 == 0", "message_names": [],
+                "repo_paths": [n.split("::", 1)[0]]} for n in nodes}, None
 
 
 def cfg(**drafter):
@@ -485,7 +486,11 @@ def test_the_review_page_is_the_golden_one():
     tail = fake_validate(draft["contract"]["validation"][0], _materialized(draft), {})["evidence"]["output_tail"]
     state = {"status": dt.DRAFTED, "stop_reason": "a draft passed its check", "draft": draft,
              "report": {"baseline": {"target": {"status": "fail", "must_pass": {NEW_NODE: "FAIL"}, "failures": 1,
-                                                "errors": 0, "output_tail": tail},
+                                                "errors": 0, "output_tail": tail, "red_check": {NEW_NODE: {
+                                                    "outcome": "failed", "type": "builtins.AssertionError",
+                                                    "assertion": True, "path": "tests/test_new.py",
+                                                    "message": "assert 1 == 0\n +  where 1 = total([1], 5)",
+                                                    "repo_paths": ["tests/test_new.py"]}}},
                                      "regression": {"status": "pass", "must_pass": {OLD_NODE: "ok"}, "failures": 0,
                                                     "errors": 0, "output_tail": ""}}},
              "drafting": {"end": "submitted", "steps": 3, "submits": 1}}
@@ -531,7 +536,8 @@ def test_a_test_red_by_a_key_error_is_refused_and_the_drafter_is_told_how_to_ass
         seen_by_red.append(list(nodes))
         first = len(seen_by_red) == 1
         return {n: {"outcome": "failed", "type": "builtins.KeyError" if first else "builtins.AssertionError",
-                    "assertion": not first, "path": n.split("::", 1)[0]} for n in nodes}, None
+                    "assertion": not first, "path": n.split("::", 1)[0], "message": "assert 1 == 0",
+                    "message_names": [], "repo_paths": [n.split("::", 1)[0]]} for n in nodes}, None
     r, model, d = run(root, tmp_path, [SUBMIT, call("SubmitDraft", ARGS, "s2")], red=red)
     seen = tool_texts(model, 1)[0]
     assert f"required test {NEW_NODE} fails with builtins.KeyError, not by an assertion" in seen

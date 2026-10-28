@@ -16,6 +16,7 @@ from acceptance import changed as ch
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
+from acceptance import validation as va
 from acceptance.workspace import snapshot
 from runner import load_config
 from tools import sandbox as sb
@@ -772,6 +773,9 @@ def red_spec():
     ((None, "no record of the run (exit code 1)"), "how its required tests fail could not be read: no record"),
     (({}, None), "no record of how it fails"),
     (({NEW_NODE: {"outcome": "passed", "type": None, "assertion": False, "path": None}}, None), "no record of how"),
+    # SPEC_RED_TESTS_PER_NODE 2.2: an error in a fixture is named as such, not as a missing record
+    (({NEW_NODE: {"outcome": "error", "type": None, "assertion": False, "path": None}}, None),
+     "errors in its setup or teardown (a fixture)"),
     (({NEW_NODE: {"outcome": "failed", "type": "builtins.TypeError", "assertion": False,
                   "path": "tests/test_new.py"}}, None), "fails with builtins.TypeError, not by an assertion"),
     (({NEW_NODE: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True,
@@ -794,3 +798,115 @@ def test_the_red_check_accepts_an_assertion_of_the_test_or_a_protected_helper_be
     got = {NEW_NODE: {"outcome": "failed", "type": "_pytest.outcomes.Failed", "assertion": True, "path": path}}
     assert dr.red_by_assertion(s, [NEW_NODE], "/ws", {}, c, {"tests/test_new.py"},
                                red=lambda *a, **k: (got, None)) == ([], got)
+
+
+# ---- SPEC_RED_TESTS_PER_NODE 2.1: the red check records the message and the repository files of the chain -------------
+
+LIB = "def f(d):\n    return d['k']\n"
+TESTS = '''from src.lib import f
+
+
+def test_swallowed():
+    try:
+        f({})
+        err = None
+    except KeyError as e:
+        err = e
+    assert err is None, f"f() raised {err!r}"
+
+
+def test_chained():
+    try:
+        f({})
+    except KeyError as e:
+        raise AssertionError(f"f() raised {e!r}") from e
+
+
+def test_context():
+    try:
+        f({})
+    except KeyError as e:
+        assert False, f"f() raised {e!r}"
+
+
+def test_cause_outside_except():
+    try:
+        f({})
+        err = None
+    except KeyError as e:
+        err = e
+    raise AssertionError("f() raised") from err                    # __cause__ only, no __context__
+
+
+def test_from_none():
+    try:
+        f({})
+    except KeyError as e:
+        raise AssertionError(f"f() raised {e!r}") from None
+
+
+def test_long():
+    assert False, "y" * 2000 + " and then a KeyError"
+
+
+def test_deep():
+    from src.deep import d0
+    try:
+        d0()
+    except KeyError as e:
+        raise AssertionError("d0() raised") from e
+
+
+import pytest
+
+
+@pytest.fixture
+def broken():
+    raise RuntimeError("no data")
+
+
+def test_fixture_error(broken):
+    assert broken
+
+
+def test_warns():
+    import warnings
+    warnings.warn("noisy " * 50, DeprecationWarning)
+    assert 1 == 0
+'''
+
+
+def test_the_red_check_records_the_message_and_the_repository_files_of_the_chain(tmp_path, scfg):
+    tmp_path.chmod(0o755)                                     # read by the sandbox's own user
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src" / "__init__.py").write_text("")
+    (tmp_path / "conftest.py").write_text("")                  # the rootdir on sys.path, as in a task repository
+    (tmp_path / "src" / "lib.py").write_text(LIB)
+    (tmp_path / "tests" / "test_a.py").write_text(TESTS)
+    for i in range(25):                  # a chain through 25 files of the repository: the 20 deepest are kept
+        nxt = f"from src.d{i + 1} import d{i + 1}\n    return d{i + 1}()" if i < 24 else "return {}['k']"
+        (tmp_path / "src" / f"d{i}.py").write_text(f"def d{i}():\n    {nxt}\n")
+    (tmp_path / "src" / "deep.py").write_text("from src.d0 import d0  # noqa\n")
+    nodes = [f"tests/test_a.py::{n}" for n in ("test_swallowed", "test_chained", "test_context", "test_from_none",
+                                               "test_long", "test_warns", "test_deep", "test_fixture_error",
+                                               "test_cause_outside_except")]
+    got, why = va.red_check(nodes, str(tmp_path), scfg, timeout_s=120, environment="argus")
+    assert why is None, why
+    sw, ch, cx, fn, lg, wn, dp, fx, co = (got[n] for n in nodes)
+    assert all(r["assertion"] for r in (sw, ch, cx, fn, lg, wn, dp))
+    assert "KeyError" in (sw.get("message") or "") and sw.get("repo_paths") == ["tests/test_a.py"]
+    assert "KeyError" in (sw.get("message_names") or [])
+    assert ch.get("repo_paths") == ["tests/test_a.py", "src/lib.py"] == cx.get("repo_paths")    # each file once
+    assert co.get("repo_paths") == ["tests/test_a.py", "src/lib.py"]                           # __cause__ is followed
+    assert fn.get("repo_paths") == ["tests/test_a.py"]                    # `from None`: the context is not followed
+    assert len(lg.get("message") or "") == 500 and lg["message"].endswith("...") and "KeyError" not in lg["message"]
+    assert "KeyError" in (lg.get("message_names") or [])                 # read from the whole message
+    assert (wn.get("message") or "").startswith("assert 1 == 0")
+    assert len(dp.get("repo_paths") or []) == 20 and dp["repo_paths"][-1] == "src/d24.py"
+    assert "tests/test_a.py" not in dp["repo_paths"]                     # the shallowest file is the one left out
+    assert fx["outcome"] == "error" and not fx["assertion"]
+    from codetask import drafter as dt
+    out = dt.swallowed_problems({"contract": {"scope": {"writable": ["src/lib.py"], "protected": ["tests/**"]}}},
+                                {"baseline": {"t": {"status": "fail", "red_check": got, "output_tail": ""}}})
+    assert sorted(n for n in nodes if any(n in p for p in out)) == sorted([nodes[0], nodes[3], nodes[4]])
