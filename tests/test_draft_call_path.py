@@ -184,9 +184,11 @@ def test_the_submit_tools_are_version_2_in_the_step_memo_keys(root, tmp_path):  
     assert versions[0] == "1" and len(versions) == 2 and versions[1].startswith("2:")    # ReadFile, SubmitDraft
 
 
-def test_no_question_on_the_drafters_last_step(root, tmp_path):  # noqa: F811
-    r, model, d = td.run(root, tmp_path, [td.READ, td.SUBMIT], validate=framed(), config=td.cfg(max_steps=2))
-    assert r["status"] == dt.DRAFTED and questions(d) == []             # no step is left to answer it
+def test_a_question_on_the_last_reading_step_is_answered_in_a_submit_step(root, tmp_path):  # noqa: F811
+    """SPEC_DRAFTER_SUBMIT_STEPS: the submit steps after max_steps leave room to answer (no longer refused there)."""
+    r, model, d = td.run(root, tmp_path, [td.READ, td.SUBMIT, td.call("ReviseDraft", {}, "v1")], validate=framed(),
+                         config=td.cfg(max_steps=2))
+    assert r["status"] == dt.DRAFTED and len(questions(d)) == 1 and len(model.calls) == 3
 
 
 PROC = ("import sys; sys.path[:0] = [sys.argv[1], sys.argv[1] + '/tests']; import test_draft_call_path as t; "

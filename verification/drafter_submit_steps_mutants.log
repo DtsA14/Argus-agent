@@ -1,0 +1,16 @@
+# drafter submit steps (SPEC_DRAFTER_SUBMIT_STEPS) at ff7860e (2026-10-28T01:29:25Z)
+## new tests on main: 5 failed
+## mutants (first run 5/6: 'steps miscounted' survived; the step count is now checked)
+KILLED   no submit steps: ['FAILED tests/test_drafter_submit_steps.py::test_a_rejection_on_the_last_reading_step_can_still_be_fixed']
+KILLED   submit steps not bounded by the submits: ['FAILED tests/test_drafter_submit_steps.py::test_the_submit_steps_end_when_the_submits_are_used_up']
+KILLED   a non-submit call does not end a submit step: ['FAILED tests/test_drafter_submit_steps.py::test_a_reply_without_a_submit_in_a_submit_step_ends_the_run']
+KILLED   no note: ['FAILED tests/test_drafter_submit_steps.py::test_a_rejection_on_the_last_reading_step_can_still_be_fixed']
+KILLED   no question on the last reading step: ['FAILED tests/test_draft_call_path.py::test_a_question_on_the_last_reading_step_is_answered_in_a_submit_step']
+KILLED   steps miscounted: ['FAILED tests/test_drafter_submit_steps.py::test_the_submit_steps_end_when_the_submits_are_used_up']
+RESULT: 6/6 killed
+## all non-sandbox tests
+1306 passed in 66.56s
+## verify.sh
+1739 passed in 788.83s (0:13:08)
+== sandbox tests skipped: 0
+RESULT: PASS
