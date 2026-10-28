@@ -86,7 +86,7 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   - **Pilot K7** (issue 011, dua job): A `--web` dan B tanpa web sama-sama DONE di attempt 1 dengan patch hampir identik (saling
     lulus tes, 125); **agen A tidak pernah memanggil ReadDocs** (fitur umum, model sudah tahu). A $0,0272 vs B $0,0411 (selisih dari
     drafter, 1 vs 3 submit). Manfaat belum terbukti; tunggu task dengan API langka/baru dari kebutuhan nyata, bukan dibuat-buat
-  - [~] `www.starlette.io` mati (dokumentasi pindah ke `starlette.dev`): PR jalur ketat menunggu "merge"
+  - [x] `www.starlette.io` mati, diganti `starlette.dev` (#231; tes penjaga daftar host, verify PASS 1948)
 - [ ] **Mesin pencari (tahap 2)**: hanya bila ReadDocs terbukti kurang (agen tidak tahu halaman mana); spek sendiri, biaya per
   panggilan masuk ledger
 - [ ] **Deep research** (sesudah web search): kerangka orchestrator → workers → synthesize → evaluator sudah ada; gate kutipan
