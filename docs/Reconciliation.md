@@ -13,6 +13,11 @@ jawaban** (approve hanya dari isi draf; batch 1, 2, dan `23534` ditandai oracle-
 DeepSeek 32.000, plus petunjuk setelah `output_truncated`) dan untuk drafter (#204); petunjuk setelah `max_steps` tanpa menulis dan
 profil efektif untuk drafter (#204). Perubahan sebelumnya (router v0, DeepSeek bawaan, environment per job, SWE v0) di arsip 2026-10-24.
 
+**Tambahan 2026-10-28 sore:** batch 4 **3/5** tanpa bocoran (#214); alat baca agen (#215: `ReadFile` per rentang baris, `ListFiles`
+dibatasi, issue 8.000, `max_steps` 30), timeout validasi 120 s (#216), margin input heuristik per model (#217); dev set 1 (#218):
+dua instance yang dulu tidak pernah menulis sekarang `resolved`. **Arah baru** (bagian 7): coding agent untuk production, SWE-bench
+jadi alat regresi.
+
 Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu, sisanya belum) · `[ ]` belum dimulai.
 
 ## 1. Milestone
@@ -116,23 +121,26 @@ variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di r
 | Memori/prosedur basi | n/a | belum ada memori |
 | Evaluator berselisih / verdict rusak | ✓ | judge gagal tertutup; penilai SWE menolak hasil yang tidak sah alih-alih mencatatnya sebagai gagal |
 | Retry loop / planner berosilasi | ✓ | aturan stagnan, `max_iterations`, `max_steps`; `retry` hanya atas perintah manusia |
-| Agen membaca tanpa menulis sampai konteks habis | ~ | feedback antar attempt dan carry (#188): terbukti di router #3 dan dua instance batch 3; **`max_steps` tanpa menulis** (`21379`) belum tertolong, petunjuknya ada sejak #204, belum dipakai live |
+| Agen membaca tanpa menulis sampai konteks habis | ~ | feedback antar attempt dan carry (#188); **penyebab utamanya alat baca** (`read_file` menolak berkas > 100 KB, `list_files` ±25k token): sesudah #215, `21379` dan `23824` selesai dalam 5–14 langkah (dev set 1). `24562` kini menulis tapi merusak berkasnya (mutu patch) |
 | Thinking menghabiskan output | ~ | balasan terpotong tidak dijalankan; output per model dan petunjuk untuk agen (#200) dan drafter (#204); `a2` batch 2 lolos, tapi bukan karena batas baru (balasan terbesar 5.519) |
 | Approval dicabut / parameter berubah | ~ | approve terikat sha draf, kontrak dan image terikat job; persetujuan run di chat tidak tercatat di job (ADR-007) |
 | Tulis bersamaan ke berkas proyek | ✗ | satu agen per workspace; satu perintah per job |
 
 ## 6. Gap terbuka, diurutkan menurut nilai sekarang
 
-1. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): 3/4. Lanjutkan batch tanpa oracle (bagian 7); angka yang bersih dari
-   kontaminasi butuh sumber yang lebih baru (SWE-rebench/Live).
-2. **Efek petunjuk #204** (`max_steps` tanpa menulis) dan output drafter 32.000: ada di kode, belum di run live.
-3. **Eval set yang tidak jenuh** (M5): instance SWE sebagai eval regresi harness; bukan ukuran model selama terkontaminasi.
-4. **Menit kerja manusia** (M5): jumlah keputusan, waktu mesin, dan waktu ringkasan → "y" terukur; menit Atha belum ditanyakan.
-5. **Persetujuan run di chat tidak tercatat di job** (ADR-007): ditunda sampai ada aksi berisiko di dalam run (bagian 7).
-6. **Pertanyaan B D5** (≥ 2 putaran perbaikan dalam satu attempt).
-7. **`argus apply`** (K6 router v0): belum ada bukti kebutuhan (apply 4 baris dari `status`).
-8. **Idempotency key provider** (ADR-004): dampak rendah selama tidak ada aksi eksternal selain panggilan model.
-9. **M4, M7, M8, M9, capability pack**: ditunda sampai ada bukti kebutuhan.
+1. **Task fitur di aplikasi nyata** (arah 2026-10-28): belum pernah dijalankan; latihan pertama `argus-ledger` tahap 0
+   (`PENDING.md`). Gate drafter menerima tes fitur yang memeriksa keberadaan simbol dengan assert; mode fitur hanya bila perlu.
+2. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): batch 3 3/4, batch 4 3/5. Sekarang alat regresi (±20% usaha), bukan
+   tujuan; batch 5 di harness sesudah #215–#217 untuk melihat efeknya di instance baru.
+3. **Efek petunjuk #204** (`max_steps` tanpa menulis) dan output drafter 32.000: ada di kode, belum di run live.
+4. **Eval set yang tidak jenuh** (M5): instance SWE sebagai eval regresi harness; bukan ukuran model selama terkontaminasi.
+5. **Menit kerja manusia** (M5): jumlah keputusan, waktu mesin, dan waktu ringkasan → "y" terukur; menit Atha belum ditanyakan.
+6. **Persetujuan run di chat tidak tercatat di job** (ADR-007): ditunda sampai ada aksi berisiko di dalam run (bagian 7).
+7. **Pertanyaan B D5** (≥ 2 putaran perbaikan dalam satu attempt).
+8. **`argus apply`** (K6 router v0): belum ada bukti kebutuhan (apply 4 baris dari `status`).
+9. **Idempotency key provider** (ADR-004): dampak rendah selama tidak ada aksi eksternal selain panggilan model.
+10. **M4, M7, M8, M9, capability pack**: ditunda sampai ada bukti kebutuhan. Web search dan deep research bukan bagian capability
+   pack (gambar, video/audio, game); keduanya kandidat sesudah tahap awal `argus-ledger` (bagian 7).
 
 Kecil, dicatat di `PENDING.md`: layar batas tahap drafter tidak menyebut environment dan image (preflight chat menghitungnya dengan
 fungsi yang sama); baris bit executable dari patch agen #189; cek key manual router #3.
@@ -145,3 +153,12 @@ fungsi yang sama); baris bit executable dari patch agen #189; cek key manual rou
 Diputuskan 2026-10-27 (Atha): gap 5 (mencatat persetujuan chat di job, ADR-007) **ditunda**; dibuka bersama aksi berisiko di dalam
 run (`argus apply`, git push/PR). Catatan teks persetujuan yang ditulis Claude bukan bukti persetujuan; saat itu yang dibutuhkan
 adalah sesuatu yang hanya bisa diberikan Atha.
+
+Diputuskan 2026-10-28 (Atha):
+- **Batch 4 selesai** (#214, 3/5). Sesudahnya: dua jalur kerja (ketat: AGENTS.md, spek + mutants + `verify.sh` + "merge" Atha;
+  cepat: kemampuan agen, Claude merge sendiri, `verify.sh` penuh tidak per PR tapi wajib sebelum setiap batch).
+- **Arah:** Argus sebagai coding agent untuk membangun aplikasi production. SWE-bench ±20% usaha (dev set regresi, batch baru
+  sesekali untuk klaim); ±80% dogfooding. Aplikasi latihan pertama: **`argus-ledger`** (dashboard ledger Argus, repo terpisah,
+  bertahap CLI → filter → API → HTML → SQLite → login). Mode fitur di drafter hanya bila tahap 0 membuktikan perlu.
+- **M7/M8 di parkiran** (belum diputuskan), selain yang dibutuhkan task nyata. Web search lalu deep research sesudah tahap awal
+  `argus-ledger`. Tawaran marketplace skill (Agensi.io) **nanti**.
