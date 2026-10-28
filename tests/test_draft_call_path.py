@@ -42,29 +42,41 @@ def framed(validate=td.fake_validate, frame=FRAME):
     return run
 
 
-def swallowing(spec, workspace, sandbox_cfg, log=None):
-    """fake_validate whose failure is an AssertionError reporting a KeyError, with no line of the repository's code."""
-    r = td.fake_validate(spec, workspace, sandbox_cfg, log)
-    if r["status"] != "pass":
-        r["evidence"]["output_tail"] = "____ test_total_never_negative ____\n" + r["evidence"]["output_tail"].replace(
-            "E       assert 1 == 0", "E   AssertionError: total() raised KeyError: 'discount'")
-    return r
+def swallowing(nodes, workspace, sandbox_cfg, **kw):
+    """fake_red whose failure is an AssertionError reporting a KeyError, with no file of the repository's code in its
+    traceback (SPEC_RED_TESTS_PER_NODE: the gate reads the red check's record, not the output tail)."""
+    return {n: {"outcome": "failed", "type": "builtins.AssertionError", "assertion": True, "path": n.split("::")[0],
+                "message": "total() raised KeyError: 'discount'", "message_names": ["KeyError"],
+                "repo_paths": [n.split("::")[0]]} for n in nodes}, None
+
+
+def with_records(case, message, paths):
+    """A 21379 baseline with the fields the red check records since SPEC_RED_TESTS_PER_NODE, as its tail shows them."""
+    case = json.loads(json.dumps(case))
+    for r in case["baseline"]["target"]["red_check"].values():
+        r.update(message=message, message_names=["AssertionError", "PolynomialError"], repo_paths=paths)
+    return case
 
 
 # ---- 2.1 a test that keeps the exception loses its traceback: refused ------------------------------------------------
 
 def test_the_rerun_drafts_test_is_refused_for_losing_the_traceback():
-    out = dt.swallowed_problems(draft_of(RERUN["scope"]), RERUN)
+    rerun = with_records(RERUN, "subs({1: 1.0}) raised PolynomialError: Piecewise generators do not make sense\n"
+                                "assert not True", ["sympy/core/tests/test_piecewise_subs.py"])
+    out = dt.swallowed_problems(draft_of(RERUN["scope"]), rerun)
     assert len(out) == 1 and "PolynomialError" in out[0] and "test_subs_with_piecewise_hyperbolic_real_symbols" in out[0]
     assert "raise AssertionError" in out[0] and "from the exception" in out[0]
 
 
 def test_a_test_raising_from_the_exception_or_asserting_a_value_is_not_refused():
-    assert dt.swallowed_problems(draft_of(BATCH3["scope"]), BATCH3) == []          # chained: the traceback is there
-    plain = {"baseline": {"t": {"status": "fail", "red_check": {"tests/test_a.py::test_a": {"assertion": True}},
-                                "output_tail": "tests/test_a.py:5: in test_a\nE       assert 1 == 0\n"}}}
+    batch3 = with_records(BATCH3, "subs raised PolynomialError: Piecewise generators do not make sense\nassert False",
+                          ["sympy/core/tests/test_issue_20521.py", "sympy/core/mod.py", "sympy/polys/polytools.py"])
+    assert dt.swallowed_problems(draft_of(BATCH3["scope"]), batch3) == []          # chained: the traceback is there
+    plain = {"baseline": {"t": {"status": "fail", "red_check": {"tests/test_a.py::test_a": {
+        "assertion": True, "message": "assert 1 == 0", "message_names": [], "repo_paths": ["tests/test_a.py"]}}}}}
     assert dt.swallowed_problems(draft_of({"writable": ["src/a.py"], "protected": ["tests/**"]}), plain) == []
-    plain["baseline"]["t"]["output_tail"] = "tests/test_a.py:5: in test_a\nE   AssertionError: total was 1\n"
+    plain["baseline"]["t"]["red_check"]["tests/test_a.py::test_a"].update(message="AssertionError: total was 1",
+                                                                         message_names=["AssertionError"])
     assert dt.swallowed_problems(draft_of({"writable": ["src/a.py"], "protected": ["tests/**"]}), plain) == []
 
 
@@ -73,48 +85,22 @@ def test_the_drafter_is_told_to_raise_from_the_exception():
 
 
 def test_a_submit_whose_test_swallows_the_traceback_is_rejected(root, tmp_path):  # noqa: F811
-    r, model, d = td.run(root, tmp_path, [td.SUBMIT, td.call("ReviseDraft", {}, "v1")], validate=swallowing,
+    r, model, d = td.run(root, tmp_path, [td.SUBMIT, td.call("ReviseDraft", {}, "v1")], red=swallowing,
                          config=td.cfg(max_submits=2))
     first = td.tool_texts(model, 1)[0]
     assert first.startswith("Draft rejected") and "reports KeyError" in first and r["status"] != dt.DRAFTED
 
 
-def section(name, *lines):
-    return "\n".join([f"____ {name} ____", *lines])
+def test_a_test_helper_is_not_the_repositorys_code_for_the_call_path():
+    helper = ("____ test_a ____\nsympy/testing/pytest.py:10: in raises\ntests/test_a.py:5: in test_a\n"
+              "E   AssertionError: f() raised KeyError: 'k'")
+    scope = {"writable": ["src/a.py"], "protected": ["tests/**"]}
+    assert dt.call_path_outside(draft_of(scope), {"baseline": {"t": {"status": "fail", "output_tail": helper}}}) == []
 
 
-SWALLOWED_A = section("test_a", "tests/test_a.py:5: in test_a", "E   AssertionError: f() raised KeyError: 'k'")
-CHAINED_B = section("test_b", "src/lib.py:9: in f", "E   KeyError: 'k'", "tests/test_a.py:9: in test_b",
-                    "E   AssertionError: f() raised KeyError: 'k'")
-RED_AB = {"tests/test_a.py::test_a": {"assertion": True}, "tests/test_a.py::test_b": {"assertion": True}}
-SCOPE_A = {"writable": ["src/a.py"], "protected": ["tests/**"]}
+# Judged per node from the red check (each node by its own record, pytest.fail, test helpers, a missing record):
+# tests/test_red_per_node.py (SPEC_RED_TESTS_PER_NODE 2.2).
 
-
-def base_of(tail):
-    return {"baseline": {"t": {"status": "fail", "red_check": RED_AB, "output_tail": tail}}}
-
-
-def test_each_test_is_judged_by_its_own_section():
-    """Review of #208: a test that keeps its traceback does not cover another one in the same validation."""
-    out = dt.swallowed_problems(draft_of(SCOPE_A), base_of(CHAINED_B + "\n" + SWALLOWED_A + "\n==== 2 failed ===="))
-    assert len(out) == 1 and "tests/test_a.py::test_a" in out[0] and "test_b" not in out[0]
-
-
-def test_a_section_cut_by_the_start_of_the_tail_is_not_judged():
-    cut = "tests/test_a.py:5: in test_a\nE   AssertionError: f() raised KeyError: 'k'\n==== 1 failed ===="
-    assert dt.swallowed_problems(draft_of(SCOPE_A), base_of(cut)) == []
-
-
-def test_pytest_fail_counts_and_test_helpers_are_not_the_repositorys_code():
-    fail = section("test_a", "tests/test_a.py:5: in test_a", "E   Failed: f() raised KeyError: 'k'")
-    assert len(dt.swallowed_problems(draft_of(SCOPE_A), base_of(fail))) == 1
-    helper = section("test_a", "sympy/testing/pytest.py:10: in raises", "tests/test_a.py:5: in test_a",
-                     "E   AssertionError: f() raised KeyError: 'k'")
-    assert len(dt.swallowed_problems(draft_of(SCOPE_A), base_of(helper))) == 1
-    assert dt.call_path_outside(draft_of(SCOPE_A), base_of(helper)) == []
-
-
-# ---- 2.2 the one scope question ---------------------------------------------------------------------------------------
 
 def test_the_batch3_call_path_outside_writable_starts_at_mod_py():
     out = dt.call_path_outside(draft_of(BATCH3["scope"]), BATCH3)

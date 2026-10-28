@@ -47,7 +47,13 @@ Tools added for the agent: none (it rewrites whole files with WriteFile)
 
 On the code as it is now, validation `target`: `test_total_never_negative` FAIL
 
-Why they fail now (test output; check that this is the behaviour to fix):
+Why they fail now (from the red check; test output, check that this is the behaviour to fix):
+
+```text
+test_total_never_negative: builtins.AssertionError in tests/test_new.py: assert 1 == 0
+```
+
+End of the test output (it may not show every test):
 
 ```text
 tests/test_new.py:5: in test_total_never_negative
