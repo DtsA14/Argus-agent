@@ -59,6 +59,8 @@ def main(argv=None, deps=None):
     a.add_argument("--max-usd", type=float)
     a.add_argument("--max-iterations", type=int, default=3)
     a.add_argument("--reference-patch")
+    a.add_argument("--web", action="store_true", help="grant the agent ReadDocs (documentation pages from the hosts in "
+                   "config web.hosts); refused for an environment off web.environments")
     t = sub.add_parser("retry")
     t.add_argument("job")
     t.add_argument("--max-usd", type=float)
@@ -99,7 +101,8 @@ def main(argv=None, deps=None):
                                 max_usd=o.max_usd, jobs_dir=o.jobs_dir, environment=o.environment)
         elif o.cmd == "approve":
             job, _ = rj.approve(o.job, sha=o.sha, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
-                                max_iterations=o.max_iterations, reference_patch=o.reference_patch, jobs_dir=o.jobs_dir)
+                                max_iterations=o.max_iterations, reference_patch=o.reference_patch, jobs_dir=o.jobs_dir,
+                                web=o.web)
         elif o.cmd == "retry":
             job, _ = rj.retry(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
                               jobs_dir=o.jobs_dir)

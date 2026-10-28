@@ -99,6 +99,9 @@ def validate_draft(d):
         errors.append(f"contract must have scope and validation, and only {sorted(CONTRACT_KEYS)}")
     elif isinstance(c["validation"], list) and any(isinstance(v, dict) and "no_skip" in v for v in c["validation"]):
         errors.append("no_skip is set by the harness, never by a draft")
+    elif isinstance(c.get("tools"), list) and set(c["tools"]) & ct.HUMAN_TOOLS:
+        errors.append(f"tools: {sorted(set(c['tools']) & ct.HUMAN_TOOLS)} are granted by the human at approve "
+                      "(argus approve --web), never by a draft")
     tests = d["new_tests"]
     if not isinstance(tests, list) or not tests:
         errors.append("new_tests must name at least one new test file")
@@ -142,9 +145,10 @@ def old_tests(base_dir, draft):
     return out
 
 
-def build_contract(draft, *, task, workspace, issue, max_usd, max_iterations, old=None):
+def build_contract(draft, *, task, workspace, issue, max_usd, max_iterations, old=None, web=False):
     """The task's contract: the draft's scope, validations, tools and profile; everything else from the human.
-    old: {path: intake text} of the changed test files (old_tests), from which their no_skip rules are made."""
+    old: {path: intake text} of the changed test files (old_tests), from which their no_skip rules are made.
+    web: the human granted ReadDocs (SPEC_WEB_TOOLS 3): read_docs is added to the draft's tools."""
     c = {"contract": task, "version": 1, "inputs": {"workspace": workspace, "issue": issue},
          "scope": copy.deepcopy(draft["contract"]["scope"]),
          "artifacts": [{"path": ct.SUMMARY, "type": "json", "schema": "claims_v2"}],
@@ -153,6 +157,8 @@ def build_contract(draft, *, task, workspace, issue, max_usd, max_iterations, ol
     for k in ("tools", "budget_profile"):
         if k in draft["contract"]:
             c[k] = copy.deepcopy(draft["contract"][k])
+    if web:
+        c["tools"] = [t for t in c.get("tools") or [] if t != "read_docs"] + ["read_docs"]
     if draft.get("changed_tests"):
         ch.add_no_skip(c["validation"], {t["path"]: (old or {}).get(t["path"]) for t in draft["changed_tests"]})
     return c
@@ -339,7 +345,7 @@ def reference_problems(contract, new_paths, ws, patch, sandbox_cfg, validate=run
 
 
 def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandbox_cfg, root=".",
-          profiles, validate=run_validation, collect=collect_nodes, red=red_check):
+          profiles, validate=run_validation, collect=collect_nodes, red=red_check, web=False):
     """The full report on a draft. ok only when every check passed. reference_patch=None: no reference check (W2b),
     and the report says the criteria are not proven satisfiable. profiles (required, no default, so a new caller
     cannot skip the check by forgetting it): the configured budget profile names, for the checks setup runs
@@ -361,7 +367,7 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
         return {**report, "problems": [f"intake {draft['base']}: {p}" for p in problems]}
     old = old_tests(base_dir, draft)
     contract = build_contract(draft, task=task, workspace=f"fixtures/repos/{task}", issue=issue, max_usd=max_usd,
-                              max_iterations=max_iterations, old=old)
+                              max_iterations=max_iterations, old=old, web=web)
     report["contract"] = contract
     base_files = snapshot(base_dir, skip_cache=True)
     problems = static_problems(draft, contract, base_files, old)
@@ -434,7 +440,7 @@ def approve(report, draft, *, root="."):
         raise DraftError(f"intake {draft['base']} changed since the check: {'; '.join(stale)}")
     rebuilt = build_contract(draft, task=task, workspace=f"fixtures/repos/{task}", issue=contract["inputs"]["issue"],
                              max_usd=contract["limits"]["max_usd"], max_iterations=contract["limits"]["max_iterations"],
-                             old=old_tests(base_dir, draft))
+                             old=old_tests(base_dir, draft), web="read_docs" in (contract.get("tools") or []))
     if ct.canonical(rebuilt) != ct.canonical(contract):
         raise DraftError("the contract is not the draft plus the human's fields")
     changed = changed_record(snapshot(base_dir, skip_cache=True), draft)

@@ -186,6 +186,34 @@ tools:
   coder: [list_files, read_file, write_file, run_validation]   # code tasks (codetask/); Finish is not gated
   drafter: [list_files, search_files, read_file]   # W2b; read-only. SubmitDraft is not gated (it ends the run, as Finish)
 
+# ReadDocs (docs/reviews/SPEC_WEB_TOOLS.md): documentation pages for the coder, granted only by the human at approve
+# (argus approve --web) and only for jobs whose validations all run in one of `environments` (never the SWE images).
+# Hosts are exact names (no subdomains), each with a full-match path pattern. The download runs in a child process with
+# no environment; the sandbox keeps --network none. Changing this block is a strict-lane PR.
+web:
+  environments: [argus, ledger_py312]
+  hosts:
+    docs.python.org: '/3(\.\d+)?/[A-Za-z0-9._~/-]*'
+    pypi.org: '/pypi/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)?/json'
+    docs.pytest.org: '/en/[A-Za-z0-9._~/-]*'
+    fastapi.tiangolo.com: '/[A-Za-z0-9._~/-]*'
+    www.starlette.io: '/[A-Za-z0-9._~/-]*'
+    docs.pydantic.dev: '/[A-Za-z0-9._~/-]*'
+    www.python-httpx.org: '/[A-Za-z0-9._~/-]*'
+    docs.sympy.org: '/[A-Za-z0-9._~/-]*'
+  limits:
+    part_chars: 12000          # one part of a page's text (READ_WHOLE_MAX of ReadFile)
+    pages_attempt: 8           # different pages read in one attempt
+    pages_run: 20              # pages downloaded in one run (an agent stage)
+    page_bytes: 2000000        # one page, all of it or nothing
+    attempt_bytes: 8000000     # downloaded in one attempt, reserved a page at a time (page_bytes)
+    run_bytes: 20000000
+    attempt_text: 60000        # web text given to one attempt
+    timeout_s: 15              # one page with its redirects
+    redirects: 3
+    url_len: 300
+    page_text: 400000          # the text of one page
+
 # ---------------------------------------------------------------------------
 # LLM providers. Adding a provider = adding an entry here.
 # kind: anthropic | openai | deepseek | openai_compatible (any OpenAI-style API, no code needed)

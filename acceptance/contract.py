@@ -30,6 +30,8 @@ OPTIONAL_KEYS = {"tools", "budget_profile"}
 # Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
 # Only these, and only by adding: a contract can never grant anything else, nor remove a configured tool.
 CONTRACT_TOOLS = {"search_files", "edit_file"}
+# Tools only the human grants, at approve (SPEC_WEB_TOOLS 3: `argus approve --web`); a draft may not name them.
+HUMAN_TOOLS = {"read_docs"}
 VALIDATION_KEYS = {"id", "executable", "args", "timeout_s", "min_tests", "max_skipped", "must_pass", "environment",
                    "no_skip"}
 OPTIONAL_VALIDATION_KEYS = {"must_pass", "environment", "no_skip"}
@@ -179,8 +181,8 @@ def validate(c):
         if not isinstance(t, list) or not t or not all(isinstance(x, str) for x in t):
             errors.append("tools must be a non-empty list of tool names")
         else:
-            errors += [f"tools: {x!r} cannot be granted by a contract (allowed: {sorted(CONTRACT_TOOLS)})"
-                       for x in t if x not in CONTRACT_TOOLS]
+            errors += [f"tools: {x!r} cannot be granted by a contract (allowed: {sorted(CONTRACT_TOOLS | HUMAN_TOOLS)})"
+                       for x in t if x not in CONTRACT_TOOLS | HUMAN_TOOLS]
             if len(set(t)) != len(t):
                 errors.append("tools: duplicate tool names")
 
