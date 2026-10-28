@@ -5,7 +5,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
 Terakhir diperbarui: 2026-10-28 sore (batch 4 3/5, #214; jalur cepat #215/#216, margin input #217, dev set 1 #218; arah baru:
-coding agent untuk production, latihan `argus-ledger`).
+coding agent untuk production, latihan `argus-ledger`); malam: #220, #221, `argus-ledger` tahap 0–3a.
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -25,26 +25,33 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 Diputuskan Atha 2026-10-28 (Reconciliation bagian 7). SWE-bench turun jadi **±20% usaha** (dev set regresi + batch baru sesekali untuk
 angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
 
-- [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`): dashboard ledger Argus (job, status, biaya, grading)
-  dari folder `jobs/`. Setiap fitur = satu job Argus; issue fitur ditulis Atha.
-  - [~] Tahap 0: CLI `ledger summary <jobs_dir>`, stdlib saja. Kerangka repo siap (`d131105`, README memuat format `job.json`);
-    menunggu issue fitur dari Atha
-  - [ ] Tahap 1: filter (tanggal, status) dan total per batch
-  - [ ] Tahap 2: API JSON (FastAPI); butuh image environment dengan FastAPI
-  - [ ] Tahap 3: halaman HTML
-  - [ ] Tahap 4: SQLite (impor ledger, query)
-  - [ ] Tahap 5: login sederhana (patch-nya direview jalur ketat)
+- [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`, lokal): dashboard ledger Argus dari folder `jobs/`.
+  Setiap fitur = satu job Argus. Issue `~/argus-ledger-issues/` (001–004 **ditulis Claude atas delegasi Atha**); approve "y" Atha.
+  **4/4 tahap selesai di attempt pertama, total $0,1616, 0 tes lama dilonggarkan, 0 patch ditulis ulang.**
+
+  | Tahap | Fitur | Job | Agen | Biaya | Cek di data asli |
+  |---|---|---|---|---|---|
+  | 0 `c564aee` | CLI `ledger summary` | `j20261028_082955_aea9` | 6 langkah | $0,0317 | angka cocok ledger |
+  | 1 `0720b43` | biaya dari ledger (nano, worst case), kolom rata | `…091419_915f` | 16 | $0,0529 | 32 job = `spent_nano` Argus, 0 selisih |
+  | 2 `cb5d55a` | API JSON FastAPI (`ledger_py312`) | `…103452_6a83` | 18 | $0,0289 | `/summary` = CLI; traversal 404 |
+  | 3a `8b7312f` | halaman HTML (filter state, escape) | `…105608_9d7a` | 15 | $0,0481 | crawl 39 halaman, semua 200 |
+
+  - Temuan dogfooding: tahap 0 kurang hitung job yang dihentikan (`usd` null di `job.json`) → tahap 1. Mode fitur drafter **tidak
+    perlu**: drafter menulis tes fitur yang merah karena assertion (impor di dalam tes, CLI lewat subprocess).
+  - [ ] Berikutnya: "running" hanya untuk state yang masih berjalan (sekarang job `ABANDONED` dengan stage `usd` null tampil running)
+  - [ ] Tahap 3b: interaksi JavaScript + tes Playwright (image dengan Chromium; ±2–3 PR jalur ketat), bila ada kebutuhan JS
+  - [ ] Tahap 4: SQLite (impor ledger, query); tahap 5: login sederhana (patch-nya direview jalur ketat)
   - Ukuran: PR di-merge tanpa ditulis ulang, menit review Atha per PR, biaya per PR yang di-merge, insiden (scope, tes dilonggarkan,
     error ditelan). Bukan resolve rate.
-- [ ] **Mode fitur di drafter** (jalur ketat, **hanya bila perlu**): tes fitur yang `import` modul baru di level berkas jadi collection
-  error dan ditolak. Gate sekarang sudah menerima tes yang memeriksa dulu dengan assert (`assert importlib.util.find_spec(...)`,
-  `assert hasattr(...)`; hint penolakan menyarankannya). Tahap 0 dicoba dengan harness yang ada; spek ditulis bila drafter mentok
-- [x] **Umpan balik tulis dan validasi** (jalur cepat, dari dev `24562` dan Replit): stderr ditampilkan bila pytest tanpa ringkasan
+- [x] **Environment `ledger_py312`** (#221, jalur ketat): Python 3.12 + FastAPI 0.143.0, httpx 0.28.1, pytest 9.1.1, wheel ber-hash
+  (rilis < 2026-10-14); `check_env_image.py` PASS; satu wheel terkompilasi (`pydantic-core`, aarch64)
+- [x] **Umpan balik tulis dan validasi** (#220, jalur cepat, dari dev `24562` dan Replit): stderr ditampilkan bila pytest tanpa ringkasan
   (exit 4: `ImportError` saat memuat conftest tidak pernah terlihat agen); peringatan bila `WriteFile` membuang sebagian besar berkas
   besar; cek parse Python (`compile`, tanpa eksekusi) sesudah tulis/edit `.py`
 - [ ] Dari Replit, **ditunda sampai ada bukti:** ringkasan validasi untuk agen (subagen penguji versi ringan; dibuka bila sebuah run
-  `context_limit` karena output validasi); tes browser dengan kode Playwright (tahap 3 `argus-ledger`: image dengan Chromium, server di
-  localhost dalam sandbox, pola aksi → cek hasil melawan "Potemkin interface")
+  `context_limit` karena output validasi); tes browser dengan kode Playwright (tahap 3b `argus-ledger`: image dengan Chromium, server di
+  localhost dalam sandbox, pola aksi → cek hasil melawan "Potemkin interface"). Tahap 3a memakai pola anti-Potemkin tanpa
+  browser: tes mengikuti setiap link
 - [ ] **Web search sebagai tool** (sesudah tahap awal `argus-ledger`; jalur ketat): sandbox sekarang tanpa jaringan; isi web dilabeli
   data, hasil di-memo (crash-resume), biaya search masuk ledger. Dipakai coder (dokumentasi) dan nanti riset
 - [ ] **Deep research** (sesudah web search): kerangka orchestrator → workers → synthesize → evaluator sudah ada; gate kutipan
@@ -142,9 +149,11 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     sampai 1,77× perkiraan), batas input diskalakan, plafon `large_usd` 1,2 juta token (override router; eval tidak berubah)
 - [x] **Dev set 1** (#218, `pilots/swe_v0/dev1/RESULT.md`, bukan klaim): `23824` dan `21379` `resolved`; `24562` gagal karena mutu patch
     (`numbers.py` rusak saat import), retry dihentikan Atha. $0,4968
-- [ ] Jalur cepat berikutnya: umpan balik khusus bila validasi gagal dengan pytest exit code 4 (berkas tidak bisa di-import);
-    `estimate_miss` per run di `status` (H3 spek margin); `swe_grade.py` mencatat nama tes draf yang gagal di atas patch maintainer;
-    blok "Why they fail now" memuat semua tes merah; tes lama yang diubah drafter otomatis wajib (`22456` d1)
+- [ ] Jalur cepat berikutnya: **blok "Why they fail now" memuat semua tes merah** (argus-ledger tahap 2–3a: blok tertutup warning
+    deprecation Starlette, hanya satu nama tes terlihat); `estimate_miss` per run di `status` (H3 spek margin); `swe_grade.py`
+    mencatat nama tes draf yang gagal di atas patch maintainer; tes lama yang diubah drafter otomatis wajib (`22456` d1).
+    (Exit code 4 sudah: #220 menampilkan stderr.)
+- [ ] **`verify.sh` penuh sebelum batch berikutnya**: sesudah #220 dan #221 baru tes terkait (aturan jalur cepat)
 - [ ] Kandidat sisa dari 21379: gerbang writable glob/lebar vs regresi sempit (dev set `21379`: writable 4 berkas di 3 paket);
     drafter membaca sampai dipaksa berhenti
 - [ ] Langkah submit (#211) dan pertanyaan scope (#208) belum pernah terpakai di run live
