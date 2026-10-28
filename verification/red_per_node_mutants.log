@@ -1,0 +1,26 @@
+# SPEC_RED_TESTS_PER_NODE mutants at c989e1e (2026-10-28)
+## the new tests on main's code: 20 failed (assertion), the sandbox case red on the missing message field
+## mutants (pytest -x on the named tests per mutant; sandbox case in the argus image)
+KILLED  plugin: __cause__ not followed: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: context followed through from None: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: chain not followed: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: names from the cut message: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: shallowest 20 kept: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: no dedup: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: message not cut: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: no message_names: ['FAILED tests/test_draft.py::test_the_red_check_records_the_message_and_the_repository_files_of_the_chain']
+KILLED  plugin: tracebacks printed: ['FAILED tests/test_red_per_node.py::test_the_red_check_prints_no_traceback_or_warning_summary']
+KILLED  plugin: short summary printed: ['FAILED tests/test_red_per_node.py::test_the_red_check_prints_no_traceback_or_warning_summary']
+KILLED  gate: a record it cannot read passes: ['FAILED tests/test_red_per_node.py::test_a_red_record_without_the_message_or_the_paths_is_refused_not_passed[message_names]']
+KILLED  gate: AssertionError counts as another exception: ['FAILED tests/test_red_per_node.py::test_a_plain_assert_or_an_assertion_naming_only_assertion_error_is_not_refused']
+KILLED  gate: every file must be repository code: ['FAILED tests/test_red_per_node.py::test_a_chained_traceback_into_the_repository_is_not_refused']
+KILLED  gate: test files count as repository code: ['FAILED tests/test_red_per_node.py::test_a_swallowed_exception_is_refused_from_the_record_with_no_failure_section_in_the_tail']
+KILLED  gate: the tail decides again (old rule: no record, no problem): ['FAILED tests/test_red_per_node.py::test_each_node_is_judged_by_its_own_record']
+KILLED  review: only the first red test: ['FAILED tests/test_red_per_node.py::test_the_review_lists_every_red_test_with_its_type_and_first_message_line[ledger_stage2_d1-api-8]']
+KILLED  review: first line not cut: ['FAILED tests/test_red_per_node.py::test_a_long_first_line_is_cut_and_a_message_cannot_close_the_block']
+KILLED  review: whole message, not its first line: ['FAILED tests/test_red_per_node.py::test_the_review_lists_every_red_test_with_its_type_and_first_message_line[ledger_stage2_d1-api-8]']
+KILLED  feedback: no red lines: ['FAILED tests/test_red_per_node.py::test_the_drafters_feedback_lists_the_red_tests_before_the_output']
+KILLED  red_by_assertion: setup error not named: ['FAILED tests/test_draft.py::test_the_red_check_refuses_what_it_cannot_read_or_what_is_not_the_tests_own_assertion[got3-errors in its setup or teardown (a fixture)]']
+RESULT: 20/20 killed
+## all non-sandbox tests before the full verify: 1628 passed, 78 skipped (sandbox modules without images) in 255s
+## verify.sh at c989e1e: PASS, 1797 passed, sandbox skipped 0 (verify-20261028T135008Z-aarch64.log)
