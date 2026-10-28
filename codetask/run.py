@@ -39,6 +39,7 @@ from harness.guard import guard
 from harness.llm import LLMCaller, check_long_context, reconcile_ledger, to_nano
 from harness.memo import Memo
 from models.registry import ModelRef, price_for
+from tools import web
 
 from . import frozen
 from . import status as st
@@ -80,6 +81,7 @@ class State(TypedDict, total=False):
     provenance: dict             # input (workspace, snapshot hash, intake record) and the Argus commit, at setup
     budget_profile: dict         # the profile the run was configured with: name, attempt_tokens, max_output_tokens
     loop_policy: dict            # D3, frozen at setup: auto_validate, auto_validate_max (absent: a run from before D3)
+    web: dict                    # SPEC_WEB_TOOLS, frozen at setup when ReadDocs is granted: {hosts, limits}
     tokens_used: Annotated[int, operator.add]
     usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
@@ -177,8 +179,9 @@ def admission(log, lim):
 
 
 def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None,
-                env_preflight=None, root=None, initial_feedback=None):
+                env_preflight=None, root=None, initial_feedback=None, web_spawn=None):
     """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox).
+    web_spawn: injected by tests for ReadDocs's downloader (default: tools.web.spawn, a child process).
     initial_feedback: what attempt 0 is told about a previous run of the same task (a router retry); frozen at setup.
     root: where the contract's input repository and its intake record live (a router job has its own); None is this
     checkout (ROOT, read when called)."""
@@ -197,7 +200,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
     lim0 = settings(cfg)
     caller = LLMCaller(cfg, cfg["code_task"]["role"], log, model=(models or {}).get(cfg["code_task"]["role"]))
     from tools.sandbox import tool_version
-    versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "WriteFile": "2", "EditFile": "2", "Finish": "1",
+    versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "WriteFile": "2", "EditFile": "2", "ReadDocs": "1", "Finish": "1",
                 "RunValidation": f"1:{tool_version(scfg)}"}
     attempt_fn = make_attempt(caller, memo, log, tokens=lim0["attempt_tokens"], usd=lim0["attempt_usd"],
                               max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher,
@@ -258,6 +261,13 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                                      environments_configured=scfg.get("environments") or {})
         if problems:
             return move(state, st.BLOCKED, reason="; ".join(problems), blocked="invalid_contract")
+        frozen_web = None
+        if "read_docs" in effective_tools(contract):           # granted at approve; checked again against this config
+            why = web.problem(cfg.get("web"), contract)
+            if why:
+                return move(state, st.BLOCKED, reason=why, blocked="invalid_contract")
+            frozen_web = {"hosts": dict(cfg["web"]["hosts"]), "limits": dict(cfg["web"]["limits"])}
+            log.emit("web_granted", hosts=sorted(frozen_web["hosts"]), limits=frozen_web["limits"])
         ok, why = preflight()
         if not ok:
             return move(state, st.BLOCKED, reason=f"sandbox unavailable: {why}", blocked="sandbox_unavailable")
@@ -288,7 +298,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
             log.emit("carried_feedback", feedback=initial_feedback)
         return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[],
                     feedback=initial_feedback or [],
-                    tools=effective_tools(contract), provenance=provenance, budget_profile=budget, loop_policy=policy)
+                    tools=effective_tools(contract), provenance=provenance, budget_profile=budget, loop_policy=policy,
+                    **({"web": frozen_web} if frozen_web else {}))
 
     def agent(state):
         try:
@@ -310,8 +321,14 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         # RunValidation results are memo-keyed by the images that ran them, environments included (a contract
         # without environments keeps the key it always had).
         versions["RunValidation"] = f"1:{tool_version(scfg, ct.environments(contract))}"
+        docs = None
+        if "read_docs" in tools:              # the hosts and limits frozen at setup, never this process's config
+            if not state.get("web"):
+                return move(state, st.BLOCKED, reason="ReadDocs is granted but the checkpoint has no frozen web config",
+                            blocked="invalid_contract")
+            docs = web.DocsReader(state["web"], run_dir, state["iteration"], log, spawn=web_spawn or web.spawn)
         box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate, journal=run_dir / "tool_journal.jsonl",
-                      crasher=crasher)
+                      crasher=crasher, docs=docs)
         # The policy frozen at setup, not this process's config: a resume must decide every step as the run did.
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None,
                        policy=state.get("loop_policy"))
@@ -376,7 +393,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
 
 
 def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_at=None, models=None,
-                  validate=None, preflight=None, env_preflight=None, echo=False, root=None, initial_feedback=None):
+                  validate=None, preflight=None, env_preflight=None, echo=False, root=None, initial_feedback=None,
+                  web_spawn=None):
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
@@ -396,7 +414,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models, validate=validate,
                             preflight=preflight, env_preflight=env_preflight, root=root,
-                            initial_feedback=initial_feedback)
+                            initial_feedback=initial_feedback, web_spawn=web_spawn)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)

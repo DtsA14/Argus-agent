@@ -41,6 +41,7 @@ from acceptance import draft as dr
 from acceptance import intake
 from harness.events import parse_lines
 from harness.llm import reconcile_ledger, to_nano
+from tools.web import problem as web_problem
 
 ROOT = Path(__file__).resolve().parent.parent
 JOBS = ROOT / "jobs"
@@ -518,8 +519,9 @@ def call_path_lines(draft_path, draft):
 
 
 def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_iterations=3, reference_patch=None,
-            jobs_dir=JOBS):
-    """Approve the draft the human saw (sha, as status shows it), then run the agent and build the review package."""
+            jobs_dir=JOBS, web=False):
+    """Approve the draft the human saw (sha, as status shows it), then run the agent and build the review package.
+    web: the human grants ReadDocs (SPEC_WEB_TOOLS 3), refused for an environment off web.environments."""
     from codetask import run as ctrun
     job = open_job(job_id, jobs_dir)
     with job.lock():
@@ -536,6 +538,9 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                           "(at least its first 12 characters)")
         draft = json.loads(path.read_text(encoding="utf-8"))
         c = draft["contract"]
+        why = web_problem(cfg.get("web"), c) if web else None
+        if why:
+            raise Refused(f"job {job.id}: {why}; nothing was approved")
         profile = c.get("budget_profile")
         router = cfg.get("router") or {}
         by_profile = router.get("agent_max_usd") or {}
@@ -551,6 +556,8 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                  *changed_lines(job, draft),
                  *call_path_lines(path, draft),
                  f"tools added: {c.get('tools') or 'none'}; profile {profile}; one attempt ${need:.2f}",
+                 *([f"network: ReadDocs on {len(cfg['web']['hosts'])} allowlisted hosts "
+                    f"({', '.join(sorted(cfg['web']['hosts']))}), granted by this approval"] if web else []),
                  f"agent cap ${cap:.4f}, {max_iterations} attempts; "
                  + ("reference patch given (proven)" if reference_patch else "no reference patch (unproven)")]
         if cap < need:
@@ -565,7 +572,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                               sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root,
                               profiles=sorted((cfg.get("code_task") or {}).get("profiles") or {}),
                               **({"validate": deps.validate} if deps.validate else {}),
-                              **({"red": deps.red} if deps.red else {}))
+                              **({"red": deps.red} if deps.red else {}), web=web)
             if not report["ok"]:
                 raise Refused("the draft does not pass its check now: " + "; ".join(report["problems"]))
             record = dr.approve(report, draft, root=job.root)
@@ -575,7 +582,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             job.data["approval"] = {"draft_sha256": seen, "contract_sha256": record["contract_sha256"], "task": TASK,
                                     "max_usd": cap, "max_iterations": max_iterations, "at": deps.clock(),
                                     "by": os.environ.get("USER"), "feasibility": record["feasibility"],
-                                    "baseline": baseline_errors(report)}
+                                    "baseline": baseline_errors(report), "web": bool(web)}
             job.note(deps, "approved", draft=seen[:12], contract=record["contract_sha256"][:12])
             r = _agent(job, cfg, deps, sandbox_cfg)
     return job, r
@@ -704,6 +711,10 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
         contract = json.loads((job.root / "fixtures" / "contracts" / f"{job.data['approval']['task']}.json")
                               .read_text(encoding="utf-8"))
         profile = contract.get("budget_profile")
+        web = "read_docs" in (contract.get("tools") or [])
+        why = web_problem(cfg.get("web"), contract) if web else None
+        if why:             # the approved grant is used again: checked against this config before anything is asked
+            raise Refused(f"job {job.id}: {why}; nothing was retried")
         by_profile = (cfg.get("router") or {}).get("agent_max_usd") or {}
         want = float(max_usd if max_usd is not None else by_profile.get(profile, by_profile.get("default", 0.5)))
         cap = round(min(want, left_usd(job)), 6)
@@ -717,7 +728,10 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
                  f"{prev} ended: {s['end']} after {s['steps']} steps"
                  + {True: ", files changed", False: ", no file changed"}.get(s["wrote"], ""),
                  f"profile {profile}; max input {ctrun.settings(acfg)['max_input_tokens']}; one attempt ${need:.2f}; "
-                 f"agent cap ${cap:.4f}"]
+                 f"agent cap ${cap:.4f}",
+                 *([f"network: ReadDocs on {len(cfg['web']['hosts'])} allowlisted hosts "
+                    f"({', '.join(sorted(cfg['web']['hosts']))}), granted at approve; this stage downloads again"]
+                   if web else [])]
         text = _limits_text(job, "retry the agent", lines)
         with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
             job.note(deps, "retry", stage=sid, by=os.environ.get("USER"))
