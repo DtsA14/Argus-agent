@@ -4,7 +4,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status); riwayat semua butir yang sudah selesai (bukti, angka, PR) ada di
 [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-27 (SWE batch 1–3, #200, #202, #204; Reconciliation diperbarui).
+Terakhir diperbarui: 2026-10-28 (run ulang 21379 `resolved`, #206–#212; batch 4 preflight).
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -90,12 +90,20 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **Tiga celah batch 3** (#204, `docs/reviews/SPEC_AGENT_BUDGET_GAPS.md`): petunjuk setelah `max_steps` tanpa menulis, output
     drafter per model (DeepSeek 32.000), drafter melihat profil efektif coder (juga `rewrite_problems`). verify PASS (1690 passed,
     sandbox skipped 0), mutan 11/11
-- [ ] **Agen melihat jalur panggilan dari traceback** (`docs/reviews/SPEC_LOCATE_FROM_TRACEBACK.md`, #206): penelusuran `21379`
-    (potongan error membuang `mod.py:169`, attempt 1 tanpa error, `SearchFiles` menolak path berkas 11×, "No matches" palsu 5×).
-    Spek menunggu review K1–K4; lalu `21379` diulang, dilaporkan terpisah
-- [ ] **SWE batch 4** (usul, sesudah #206, Reconciliation bagian 7 keputusan 1): lima instance yang layak di Python 3.12 tapi tidak dipilih di
-    batch 1 (`24562` core/numbers, `24066` physics.units, `23824` physics.hep, `22456` codegen, `23262` utilities/lambdify), tanpa
-    bocoran, di `main` dengan #204; Menunggu keputusan Atha
+- [x] **Agen melihat jalur panggilan dari traceback** (#206): frame pemanggil di potongan error, baseline merah draf di attempt 1,
+    `SearchFiles` per berkas
+- [x] **Drafter menjaga traceback dan melihat jalur panggilan** (#208): tes yang menelan traceback ditolak, satu pertanyaan scope,
+    daftar untuk manusia, `argus redraft --note` (job `human_steered`)
+- [x] **Node skipped disebut, drafter 24 langkah** (#210); **langkah submit sesudah `max_steps`** (#211)
+- [x] **Run ulang `21379`** (#207, #209, #212): `resolved` (1/1, 91/91), job $0,2773, seluruh run ulang $0,3288; dilaporkan terpisah.
+    Agen hanya menyentuh `mod.py`, tangkapan sempit di sekitar `gcd` (`pilots/swe_v0/rerun_21379/RESULT.md`)
+- [ ] **SWE batch 4** (`pilots/swe_v0/batch4/PREFLIGHT.md`): lima instance sympy (`24562`, `24066`, `23824`, `22456`, `23262`),
+    environment `sympy` (3.12), tanpa bocoran, **harness tidak diubah selama batch**, izin di muka 1 redraft + 1 retry per instance.
+    Menunggu "go live". SWE-rebench ditunda (Atha 2026-10-28: beban environment per repo)
+- [ ] Kandidat spek sesudah batch 4 (dari 21379): `ReadFile` per rentang baris (agen `a1` habis konteks membaca 3 berkas besar utuh;
+    K4 #206); gerbang writable glob/lebar vs regresi sempit (catatan Atha: `sympy/core/*.py` dijaga 16 tes); drafter membaca sampai
+    dipaksa berhenti (16/16/24/23 langkah)
+- [ ] Langkah submit (#211) dan pertanyaan scope (#208) belum pernah terpakai di run live
 - [ ] Approve tanpa oracle lebih lama (batch 3: ±5–7 menit per draf, batch 1 median 45 detik); bila batch 4 sama, pertimbangkan
     ringkasan yang membantu menilai isi tes tanpa patch maintainer
 - [ ] Layar batas tahap drafter (`code`, `redraft`, resume) dan layar `retry`/resume agen tidak menyebut environment dan image;
