@@ -1,0 +1,77 @@
+stage: j20261028_065812_5cb1-d1
+writable: ['sympy/core/numbers.py']
+validation target sympy -m pytest sympy/core/tests/test_rational_string_args.py | required: ['sympy/core/tests/test_rational_string_args.py::test_rational_str_over_str', 'sympy/core/tests/test_rational_string_args.py::test_rational_decimal_str_over_str', 'sympy/core/tests/test_rational_string_args.py::test_rational_str_over_decimal_str', 'sympy/core/tests/test_rational_string_args.py::test_rational_str_over_negative_str']
+validation regression_numbers sympy -m pytest sympy/core/tests/test_numbers.py::test_Rational_new sympy/core/tests/test_numbers.py::test_Integer_new sympy/core/tests/test_numbers.py::test_Number_new sympy/core/tests/test_numbers.py::test_Number_cmp sympy/core/tests/test_numbers.py::test_Rational_cmp sympy/core/tests/test_numbers.py::test_Float sympy/core/tests/test_numbers.py::test_mod_inverse sympy/core/tests/test_numbers.py::test_abc | required: ['sympy/core/tests/test_numbers.py::test_Rational_new', 'sympy/core/tests/test_numbers.py::test_Integer_new', 'sympy/core/tests/test_numbers.py::test_Number_new', 'sympy/core/tests/test_numbers.py::test_Number_cmp', 'sympy/core/tests/test_numbers.py::test_Rational_cmp', 'sympy/core/tests/test_numbers.py::test_Float', 'sympy/core/tests/test_numbers.py::test_mod_inverse', 'sympy/core/tests/test_numbers.py::test_abc']
+validation regression_sympify sympy -m pytest sympy/core/tests/test_sympify.py::test_sympify1 sympy/core/tests/test_sympify.py::test_sympify3 sympy/core/tests/test_sympify.py::test_sympify_text sympy/core/tests/test_sympify.py::test_sympify_float sympy/core/tests/test_sympify.py::test_sympify_bool | required: ['sympy/core/tests/test_sympify.py::test_sympify1', 'sympy/core/tests/test_sympify.py::test_sympify3', 'sympy/core/tests/test_sympify.py::test_sympify_text', 'sympy/core/tests/test_sympify.py::test_sympify_float', 'sympy/core/tests/test_sympify.py::test_sympify_bool']
+---- WHY
+sympy/core/numbers.py:1636: in __new__
+    q = Rational(q)
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/numbers.py:1623: in __new__
+E   TypeError: invalid input: 0.250.25
+sympy/core/tests/test_rational_string_args.py:35: in test_rational_str_over_decimal_str
+    result = _rational('0.5', '0.25')
+sympy/core/tests/test_rational_string_args.py:17: in _rational
+E   AssertionError: Rational('0.5', '0.25') raised TypeError: invalid input: 0.250.25
+sympy/core/tests/test_rational_string_args.py:15: in _rational
+    return Rational(*args, **kwargs)
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/numbers.py:1636: in __new__
+    q = Rational(q)
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/numbers.py:1623: in __new__
+E   TypeError: invalid input: -100-100
+sympy/core/tests/test_rational_string_args.py:40: in test_rational_str_over_negative_str
+    result = _rational('0.5', '-100')
+sympy/core/tests/test_rational_string_args.py:17: in _rational
+E   AssertionError: Rational('0.5', '-100') raised TypeError: invalid input: -100-100
+============================== 4 failed in Xs ===============================
+----
+changed_tests: []
+==== sympy/core/tests/test_rational_string_args.py
+"""Rational() must parse string arguments before combining them.
+
+``Rational('0.5', '100')`` returned ``1/100100`` instead of ``1/200`` because
+the string denominator was scaled with ``q *= p.q`` as a Python string
+(``'100' * 2 == '100100'``) instead of as a number.
+"""
+
+from sympy import Rational
+
+
+def _rational(*args, **kwargs):
+    # Call Rational and report any exception as a failure of this test, so the
+    # traceback shows which call raised it.
+    try:
+        return Rational(*args, **kwargs)
+    except Exception as exc:
+        raise AssertionError(
+            "Rational(%s) raised %s: %s"
+            % (", ".join(repr(a) for a in args), type(exc).__name__, exc)
+        ) from exc
+
+
+def test_rational_str_over_str():
+    result = _rational('0.5', '100')
+    assert result == Rational(1, 200), result
+    assert result == Rational(0.5, 100), result
+
+
+def test_rational_decimal_str_over_str():
+    result = _rational('1.5', '2')
+    assert result == Rational(3, 4), result
+
+
+def test_rational_str_over_decimal_str():
+    result = _rational('0.5', '0.25')
+    assert result == Rational(2), result
+
+
+def test_rational_str_over_negative_str():
+    result = _rational('0.5', '-100')
+    assert result == Rational(-1, 200), result
+
+['Drafter: $0.0222, 15 model calls, 4 submits, 14 steps (ended: submitted).']

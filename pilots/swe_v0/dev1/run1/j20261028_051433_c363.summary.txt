@@ -1,0 +1,53 @@
+stage: j20261028_051433_c363-d1
+writable: ['sympy/physics/hep/gamma_matrices.py']
+validation target sympy -m pytest sympy/physics/hep/tests/test_kahane_leading_gamma_order.py | required: ['sympy/physics/hep/tests/test_kahane_leading_gamma_order.py::test_leading_gammas_before_contraction', 'sympy/physics/hep/tests/test_kahane_leading_gamma_order.py::test_three_leading_gammas_before_contraction']
+validation regression sympy -m pytest sympy/physics/hep/tests/test_gamma_matrices.py | required: ['sympy/physics/hep/tests/test_gamma_matrices.py::test_kahane_algorithm', 'sympy/physics/hep/tests/test_gamma_matrices.py::test_kahane_simplify1', 'sympy/physics/hep/tests/test_gamma_matrices.py::test_gamma_matrix_class', 'sympy/physics/hep/tests/test_gamma_matrices.py::test_gamma_matrix_trace']
+---- WHY
+sympy/physics/hep/tests/test_kahane_leading_gamma_order.py:28: in test_leading_gammas_before_contraction
+E   assert False
+E    +  where False = equals(((4 * GammaMatrix(rho)) * GammaMatrix(sigma)))
+E    +    where equals = 4*GammaMatrix(sigma)*GammaMatrix(rho).equals
+E    +    and   GammaMatrix(rho) = G(rho)
+E    +    and   GammaMatrix(sigma) = G(sigma)
+========================= 2 failed, 1 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/physics/hep/tests/test_kahane_leading_gamma_order.py
+"""Order of leading, uncontracted gamma matrices in kahane_simplify().
+
+kahane_simplify() removes the gamma matrices in front of the first contracted
+index, runs Kahane's algorithm and then puts those leading matrices back in
+front of every resulting term.  They must be put back in their original
+order; only the matrices coming from the contracted part may be reversed by
+the algorithm.
+"""
+
+from sympy.physics.hep.gamma_matrices import GammaMatrix as G, LorentzIndex, \
+    kahane_simplify
+from sympy.tensor.tensor import tensor_indices
+
+
+def test_leading_gammas_after_contraction():
+    mu, rho, sigma = tensor_indices("mu, rho, sigma", LorentzIndex)
+
+    t = G(mu)*G(-mu)*G(rho)*G(sigma)
+    r = kahane_simplify(t)
+    assert r.equals(4*G(rho)*G(sigma))
+
+
+def test_leading_gammas_before_contraction():
+    mu, rho, sigma = tensor_indices("mu, rho, sigma", LorentzIndex)
+
+    t = G(rho)*G(sigma)*G(mu)*G(-mu)
+    r = kahane_simplify(t)
+    assert r.equals(4*G(rho)*G(sigma))
+
+
+def test_three_leading_gammas_before_contraction():
+    mu, rho, sigma, tau = tensor_indices("mu, rho, sigma, tau", LorentzIndex)
+
+    t = G(rho)*G(sigma)*G(tau)*G(mu)*G(-mu)
+    r = kahane_simplify(t)
+    assert r.equals(4*G(rho)*G(sigma)*G(tau))
+
+['Drafter: $0.0118, 14 model calls, 2 submits, 13 steps (ended: submitted).']

@@ -1,0 +1,1 @@
+24562 approved by Claude under Atha's 'full auto' (delegated, not Atha's y) 2026-10-28T07:00:40Z; no red flags: writable numbers.py only, no old test changed, red by AssertionError, issue MWE included

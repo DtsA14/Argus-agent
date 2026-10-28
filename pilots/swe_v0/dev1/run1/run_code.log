@@ -1,0 +1,12 @@
+harness 5466b94 Merge pull request #215 from DtsA14/fast-agent-read-search
+batch spent $0.0000 over 0 jobs; next stage cap $1.00; fits $3.00: True
+sympy__sympy-24562: start 2026-10-28T05:12:32Z
+sympy__sympy-24562: end rc=0 job=j20261028_051232_d2e8 drafter finished: DRAFTED ($0.0136) job j20261028_051232_d2e8: AWAITING_APPROVAL 
+batch spent $0.0136 over 1 jobs; next stage cap $1.00; fits $3.00: True
+sympy__sympy-23824: start 2026-10-28T05:14:32Z
+sympy__sympy-23824: end rc=0 job=j20261028_051433_c363 drafter finished: DRAFTED ($0.0118) job j20261028_051433_c363: AWAITING_APPROVAL 
+batch spent $0.0254 over 2 jobs; next stage cap $1.00; fits $3.00: True
+sympy__sympy-21379: start 2026-10-28T05:16:12Z
+sympy__sympy-21379: end rc=0 job=j20261028_051613_1861 drafter finished: DRAFTED ($0.0312) job j20261028_051613_1861: AWAITING_APPROVAL 
+batch spent $0.0566 over 3 jobs; next stage cap $0.00; fits $3.00: True
+DEVCODEDONE
