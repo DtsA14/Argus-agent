@@ -13,6 +13,9 @@ Rules (each checked here, before any connection where it can be):
 - redirects are not followed by the client: each Location is checked with every rule above, at most `redirects` hops;
 - one page is at most page_bytes, within timeout_s for all its hops, of a text content type; its text at most page_text
   characters. Anything that does not fit is a refusal, never a partial page.
+- a refusal is a code from REASONS, rendered from a fixed template with the harness's own values (limits, the HTTP status
+  number): never text the server chose (a header, an error message, a redirect target), which would reach the model
+  outside the fence.
 """
 import hashlib
 import html.parser
@@ -35,6 +38,38 @@ EMBEDDED_V6 = [ipaddress.ip_network(n) for n in ("2002::/16", "64:ff9b::/96", "6
 
 class TooLarge(Exception):
     pass
+
+
+# Every refusal after the agent's own URL passed check_url. Transient ones (TRANSIENT) are not kept for the run.
+REASONS = {
+    "url": "the URL is not allowed",
+    "redirect_refused": "the page redirects to a URL that is not allowed",
+    "redirects": "the page redirects more than {redirects} times",
+    "resolve": "the host could not be resolved",
+    "address": "the host has an address that is not public",
+    "connection": "the connection to the host failed",
+    "tls": "the host's TLS certificate was not accepted",
+    "timeout": "the page did not arrive within {timeout_s} seconds",
+    "too_large": "the page is larger than {page_bytes} bytes",
+    "http_status": "the host answered HTTP {status}",
+    "server_error": "the host answered HTTP {status} (a server error; it may work later)",
+    "content_type": "the page is not text/html, text/plain or application/json",
+    "decode": "the page could not be read as its content type",
+    "text_long": "the page text is longer than {page_text} characters",
+    "failed": "the downloader failed",
+}
+TRANSIENT = {"resolve", "connection", "timeout", "server_error", "failed"}
+
+
+def reason(code, limits, status=None):
+    """The text of a refusal code, from the harness's values only."""
+    st = status if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599 else "?"
+    return REASONS.get(code, "the downloader refused the page").format(status=st, **limits)
+
+
+def refused(code, limits, chain, status=None):
+    return {"ok": False, "code": code, "reason": reason(code, limits, status), "chain": chain,
+            **({"status": status} if status is not None else {})}
 
 
 def now():
@@ -187,14 +222,15 @@ def to_text(body, content_type):
     return re.sub(r"\n{3,}", "\n\n", text).strip("\n")
 
 
-def _reason(e):
-    if isinstance(e, ssl.SSLCertVerificationError):
-        return f"the TLS certificate was not accepted: {e}"
+def _code(e):
+    """The refusal code of an exception; never its message (it may carry text the server sent)."""
+    if isinstance(e, ssl.SSLError):
+        return "tls"
     if isinstance(e, (socket.timeout, TimeoutError)):
-        return "the page timed out"
+        return "timeout"
     if isinstance(e, TooLarge):
-        return f"the page is too large ({e})"
-    return f"the page could not be read: {type(e).__name__}: {e}"
+        return "too_large"
+    return "connection"
 
 
 def fetch(url, hosts, limits, *, resolve=resolve, get=get_once):
@@ -203,39 +239,42 @@ def fetch(url, hosts, limits, *, resolve=resolve, get=get_once):
     while True:
         why = check_url(url, hosts, limits)
         if why:
-            return {"ok": False, "reason": why, "chain": chain}
+            if not chain:                                   # the agent's own URL: its reason names only what it wrote
+                return {"ok": False, "code": "url", "reason": why, "chain": chain}
+            return refused("redirect_refused", limits, chain)   # a Location the server chose: not repeated
         chain.append(url)
         parts = urlsplit(url)
         try:
             addrs = list(resolve(parts.netloc))
-        except OSError as e:
-            return {"ok": False, "reason": f"the host could not be resolved: {e}", "chain": chain}
+        except OSError:
+            return refused("resolve", limits, chain)
         if not addrs or not all(ip_ok(a) for a in addrs):
-            return {"ok": False, "reason": f"the host has an address that is not public ({', '.join(addrs) or 'none'})",
-                    "chain": chain}
-        ip = addrs[0]
-        try:
-            status, headers, body = get(parts.netloc, ip, parts.path or "/", deadline=deadline,
-                                        max_bytes=limits["page_bytes"])
-        except (OSError, http.client.HTTPException, TooLarge, ssl.SSLError) as e:
-            return {"ok": False, "reason": _reason(e), "chain": chain}
+            return refused("address", limits, chain)
+        for n, ip in enumerate(addrs):                      # the next checked address only if this one did not connect
+            try:
+                status, headers, body = get(parts.netloc, ip, parts.path or "/", deadline=deadline,
+                                            max_bytes=limits["page_bytes"])
+                break
+            except (OSError, http.client.HTTPException, TooLarge, ssl.SSLError) as e:
+                code = _code(e)
+                if code != "connection" or isinstance(e, http.client.HTTPException) or n == len(addrs) - 1:
+                    return refused(code, limits, chain)
         if status in REDIRECTS:
             if len(chain) > limits["redirects"]:
-                return {"ok": False, "reason": f"more than {limits['redirects']} redirects", "chain": chain}
+                return refused("redirects", limits, chain)
             url = urljoin(url, headers.get("location") or "")
             continue
         if status != 200:
-            return {"ok": False, "reason": f"HTTP {status}", "chain": chain}
+            return refused("server_error" if 500 <= status <= 599 else "http_status", limits, chain, status=status)
         ctype = (headers.get("content-type") or "").split(";", 1)[0].strip().lower()
         if ctype not in TYPES:
-            return {"ok": False, "reason": f"the content type {ctype or 'none'!r} is not read", "chain": chain}
+            return refused("content_type", limits, chain)
         try:
             text = to_text(body, ctype)
-        except ValueError as e:
-            return {"ok": False, "reason": f"the page could not be read as {ctype}: {e}", "chain": chain}
+        except ValueError:
+            return refused("decode", limits, chain)
         if len(text) > limits["page_text"]:
-            return {"ok": False, "reason": f"the page text is longer than {limits['page_text']} characters",
-                    "chain": chain}
+            return refused("text_long", limits, chain)
         return {"ok": True, "url": chain[0], "final_url": url, "chain": chain, "status": status, "content_type": ctype,
                 "bytes": len(body), "ip": ip, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "text": text}
 
@@ -248,8 +287,8 @@ def main(argv):
     try:
         req = json.loads(argv[1])
         out = fetch(req["url"], req["hosts"], req["limits"])
-    except Exception as e:                                   # one JSON answer, whatever happened
-        out = {"ok": False, "reason": f"the downloader failed: {type(e).__name__}", "chain": []}
+    except Exception:                                        # one JSON answer, whatever happened
+        out = {"ok": False, "code": "failed", "reason": REASONS["failed"], "chain": []}
     sys.stdout.write(json.dumps(out))
     return 0
 

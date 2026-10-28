@@ -711,6 +711,10 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
         contract = json.loads((job.root / "fixtures" / "contracts" / f"{job.data['approval']['task']}.json")
                               .read_text(encoding="utf-8"))
         profile = contract.get("budget_profile")
+        web = "read_docs" in (contract.get("tools") or [])
+        why = web_problem(cfg.get("web"), contract) if web else None
+        if why:             # the approved grant is used again: checked against this config before anything is asked
+            raise Refused(f"job {job.id}: {why}; nothing was retried")
         by_profile = (cfg.get("router") or {}).get("agent_max_usd") or {}
         want = float(max_usd if max_usd is not None else by_profile.get(profile, by_profile.get("default", 0.5)))
         cap = round(min(want, left_usd(job)), 6)
@@ -724,7 +728,10 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
                  f"{prev} ended: {s['end']} after {s['steps']} steps"
                  + {True: ", files changed", False: ", no file changed"}.get(s["wrote"], ""),
                  f"profile {profile}; max input {ctrun.settings(acfg)['max_input_tokens']}; one attempt ${need:.2f}; "
-                 f"agent cap ${cap:.4f}"]
+                 f"agent cap ${cap:.4f}",
+                 *([f"network: ReadDocs on {len(cfg['web']['hosts'])} allowlisted hosts "
+                    f"({', '.join(sorted(cfg['web']['hosts']))}), granted at approve; this stage downloads again"]
+                   if web else [])]
         text = _limits_text(job, "retry the agent", lines)
         with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
             job.note(deps, "retry", stage=sid, by=os.environ.get("USER"))
