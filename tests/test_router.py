@@ -945,3 +945,73 @@ def test_the_cli_retries_with_a_key_file(env, monkeypatch, tmp_path):
     rc = cli.main(["--jobs-dir", str(env.jobs), "retry", "jtest", "--max-usd", "0.3", "--key-file", str(f), "--yes"],
                   deps=env.deps)
     assert rc == 2 and got["job"] == "jtest" and got["max_usd"] == 0.3 and got["deps"].key_file == str(f)
+
+
+# ---- the review's outcome: applied in a commit, or rejected with why ----------------------------------------------
+
+def _commit_patch(env, edit=None):
+    patch = env.job().runs / "jtest-a1" / "review" / "changes.patch"
+    td.git(env.repo, "apply", str(patch))
+    if edit:
+        edit()
+    td.git(env.repo, "add", "-A")
+    td.git(env.repo, "commit", "-qm", "apply the review package")
+    return subprocess.run(["git", "-C", str(env.repo), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def test_applied_records_the_commit_and_that_the_patch_went_in_as_it_was(env):
+    env.code()
+    env.approve()
+    sha = _commit_patch(env)
+    job = rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+    e = job.data["log"][-1]
+    assert job.data["state"] == rj.APPLIED and e["old"] == rj.REVIEW_READY and e["commit"] == sha
+    assert e["as_is"] is True
+    patch = job.runs / "jtest-a1" / "review" / "changes.patch"
+    assert e["patch_sha256"] == hashlib.sha256(patch.read_bytes()).hexdigest()
+    assert f"applied: commit {sha} (the patch as it was)" in rj.status("jtest", jobs_dir=env.jobs)
+    with pytest.raises(rj.Refused, match="nothing to abandon"):
+        rj.abandon("jtest", "late", deps=env.deps, jobs_dir=env.jobs)
+
+
+def test_applied_tells_a_patch_rewritten_before_its_commit(env):
+    env.code()
+    env.approve()
+    _commit_patch(env, edit=lambda: (env.repo / "src" / "shop.py").write_text(td.FIXED + "\n# touched by hand\n"))
+    job = rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs, note="comment added")
+    assert job.data["log"][-1]["as_is"] is False
+    assert "(changes that differ from the patch)" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_applied_is_refused_for_an_unknown_commit_or_a_job_not_ready(env):
+    env.code()
+    with pytest.raises(rj.Refused, match="only a valid review package is applied"):
+        rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+    env.approve()
+    for bad in ("0" * 40, "--output=/tmp/x"):
+        with pytest.raises(rj.Refused, match="failed"):
+            rj.applied("jtest", bad, deps=env.deps, jobs_dir=env.jobs)
+    assert env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_review_package_rejected_says_why_and_cannot_be_applied_after(env):
+    env.code()
+    env.approve()
+    rj.reject("jtest", "an attack test found two defects", deps=env.deps, jobs_dir=env.jobs)
+    job = env.job()
+    assert job.data["state"] == rj.REJECTED and job.data["log"][-1]["old"] == rj.REVIEW_READY
+    assert "why: an attack test found two defects" in rj.status("jtest", jobs_dir=env.jobs)
+    with pytest.raises(rj.Refused, match="REJECTED"):
+        rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+
+
+def test_the_cli_records_applied_and_prints_the_status(env, capsys):
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import argus
+    env.code()
+    env.approve()
+    sha = _commit_patch(env)
+    assert argus.main(["--jobs-dir", str(env.jobs), "applied", "jtest", "--commit", sha[:10]], deps=env.deps) == 0
+    assert f"applied: commit {sha}" in capsys.readouterr().out and env.job().data["state"] == rj.APPLIED
+    assert argus.main(["--jobs-dir", str(env.jobs), "applied", "jtest", "--commit", sha], deps=env.deps) == 2

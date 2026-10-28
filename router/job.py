@@ -3,6 +3,8 @@
   argus code     a new job: intake of the target repository at a commit, then the drafter            -> AWAITING_APPROVAL
   argus approve  the human approves the draft they saw (its sha), then the agent and the review package -> REVIEW_READY
   argus reject / redraft / resume / status
+  argus applied  the human applied the review package's patch in a commit of the target repository        -> APPLIED
+                 (reject also closes a review package that will not be applied)                           -> REJECTED
   argus retry    the agent again on the approved contract (a new stage, told how the previous one ended)
 
 A job lives in jobs/<id>/: job.json (state, inputs, stages, approval, the human's decisions with their times), its own
@@ -49,7 +51,7 @@ BASE, TASK = "base", "task"                 # the intake and the task inside a j
 
 NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL = "NEW", "DRAFTING", "DRAFT_FAILED", "AWAITING_APPROVAL"
 AGENT_RUNNING, AGENT_FAILED, REVIEW_READY, REVIEW_INVALID = "AGENT_RUNNING", "AGENT_FAILED", "REVIEW_READY", "REVIEW_INVALID"
-REJECTED, BLOCKED, ABANDONED = "REJECTED", "BLOCKED", "ABANDONED"
+REJECTED, BLOCKED, ABANDONED, APPLIED = "REJECTED", "BLOCKED", "ABANDONED", "APPLIED"
 LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
          (DRAFTING, AWAITING_APPROVAL), (DRAFTING, DRAFT_FAILED), (DRAFTING, BLOCKED),
          (DRAFT_FAILED, DRAFTING), (DRAFT_FAILED, REJECTED), (DRAFT_FAILED, BLOCKED),
@@ -58,7 +60,8 @@ LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
          (AWAITING_APPROVAL, BLOCKED),
          (AGENT_RUNNING, REVIEW_READY), (AGENT_RUNNING, REVIEW_INVALID), (AGENT_RUNNING, AGENT_FAILED),
          (AGENT_RUNNING, BLOCKED),
-         (AGENT_FAILED, AGENT_RUNNING), (AGENT_FAILED, BLOCKED)} | \
+         (AGENT_FAILED, AGENT_RUNNING), (AGENT_FAILED, BLOCKED),
+         (REVIEW_READY, APPLIED), (REVIEW_READY, REJECTED), (REVIEW_INVALID, REJECTED)} | \
         {(s, ABANDONED) for s in (NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL, AGENT_RUNNING, AGENT_FAILED, BLOCKED)}
 JOB_ID = re.compile(r"^j[0-9a-z_]{1,40}$")
 KEY_SHAPE = {"anthropic": "sk-ant-"}
@@ -762,18 +765,48 @@ def abandon(job_id, reason, *, deps, jobs_dir=JOBS):
     lock, so a job whose stage is still running cannot be abandoned under it."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
-        if job.data["state"] in (REVIEW_READY, REVIEW_INVALID, REJECTED, ABANDONED):
+        if job.data["state"] in (REVIEW_READY, REVIEW_INVALID, REJECTED, ABANDONED, APPLIED):
             raise Refused(f"job {job.id} is {job.data['state']}: there is nothing to abandon")
         job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"))
         return job
 
 
 def reject(job_id, reason, *, deps, jobs_dir=JOBS):
+    """Reject a draft waiting for approval, or a review package that will not be applied (its outcome, with why)."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
-        if job.data["state"] not in (AWAITING_APPROVAL, DRAFT_FAILED):
-            raise Refused(f"job {job.id} is {job.data['state']}: only a draft waiting for approval is rejected")
+        if job.data["state"] not in (AWAITING_APPROVAL, DRAFT_FAILED, REVIEW_READY, REVIEW_INVALID):
+            raise Refused(f"job {job.id} is {job.data['state']}: only a draft waiting for approval or a review package "
+                          "is rejected")
         job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"))
+        return job
+
+
+def patch_id(repo, diff):
+    """git patch-id --stable of a diff: the same for the same changes whatever their line numbers and whitespace."""
+    out = intake.git(repo, "patch-id", "--stable", data=diff).split()
+    return out[0].decode() if out else None
+
+
+def applied(job_id, commit, *, deps, jobs_dir=JOBS, note=None):
+    """Record that the human applied the review package in `commit` of the target repository: the commit as git
+    resolves it, the patch's sha256 as it is on disk now, and whether the commit's changes are the patch's as they
+    are (git patch-id), so a patch rewritten before it was committed is told apart from one applied as it was."""
+    job = open_job(job_id, jobs_dir)
+    with job.lock():
+        if job.data["state"] != REVIEW_READY:
+            raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
+        repo = job.data["inputs"]["repo"]
+        patch = Path(last_agent(job)[1]["review"]["dir"]) / "changes.patch"
+        try:
+            sha = intake.git(repo, "rev-parse", "--verify", "--end-of-options", f"{commit}^{{commit}}").decode().strip()
+            mine = patch_id(repo, patch.read_bytes())
+            theirs = patch_id(repo, intake.git(repo, "show", "--no-color", "--no-ext-diff", "--format=", sha))
+        except intake.IntakeError as e:
+            raise Refused(f"job {job.id}: {e}") from None
+        job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(patch.read_bytes()).hexdigest(),
+                 as_is=None if mine is None or theirs is None else mine == theirs, by=os.environ.get("USER"),
+                 **({"note": note} if note else {}))
         return job
 
 
@@ -893,6 +926,12 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     out += _attempt_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
         out += _review_lines(job, last_agent(job)[1]["review"])
+    if d["state"] == APPLIED:
+        why = _why(job)
+        as_is = {True: "the patch as it was", False: "changes that differ from the patch"}.get(why.get("as_is"),
+                                                                                             "changes not compared")
+        out.append(f"applied: commit {why.get('commit')} ({as_is})" + (f" (by {why['by']})" if why.get("by") else "")
+                   + (f"; note: {why['note']}" if why.get("note") else ""))
     if d["state"] in (DRAFT_FAILED, AGENT_FAILED, BLOCKED, REJECTED, ABANDONED):
         why = _why(job)
         out.append(f"why: {why.get('reason') or 'not recorded'}" + (f" (by {why['by']})" if why.get("by") else ""))
