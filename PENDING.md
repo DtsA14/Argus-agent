@@ -26,8 +26,9 @@ Diputuskan Atha 2026-10-28 (Reconciliation bagian 7). SWE-bench turun jadi **±2
 angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
 
 - [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`, lokal): dashboard ledger Argus dari folder `jobs/`.
-  Setiap fitur = satu job Argus. Issue `~/argus-ledger-issues/` (001–004 **ditulis Claude atas delegasi Atha**); approve "y" Atha.
-  **7 task, agen 7/7 di attempt pertama, total $0,2998, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Drafter gagal sekali
+  Setiap fitur = satu job Argus. Issue `~/argus-ledger-issues/` (001–010 **ditulis Claude atas delegasi Atha**). Sejak tahap 6
+  **jalur cepat** (Atha 2026-10-28): Claude approve draf, review patch, cek, dan commit sendiri; dari Atha hanya "go live" per job.
+  **8 task, agen 8/8 di attempt pertama, total $0,3471, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Drafter gagal sekali
   (tahap 4 d1: batas 500 karakter item rencana tidak disebut di pesan error → #223), redraft lolos 1 submit.
 
   | Tahap | Fitur | Job | Agen | Biaya | Cek di data asli |
@@ -39,13 +40,21 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   | fix `e3ce976` | "running" hanya untuk DRAFTING/AGENT_RUNNING | `…111834_0ac4` | 23 | $0,0418 | 0 job running (benar) |
   | 4 `a4d6cc1` | SQLite `import`/`history`, skema v1, SQL berparameter | `…113909_2235` | 5 | $0,0620 | folder dihapus, history = summary |
   | 5 `a503bdb` | login: PBKDF2, cookie HMAC 12 jam, middleware | `…121336_0231` | 14 | $0,0344 | uji serangan sandbox: semua ditolak |
+  | 6 `54fd0e0` | hardening 008: cookie `Secure` default, key ≥ 32, body login ≤ 4096 (413) | `…143850_e07b` | 11 | $0,0473 | 74 tes; 17 uji serangan + data asli 38 job |
 
   - Temuan dogfooding: tahap 0 kurang hitung job yang dihentikan (`usd` null di `job.json`) → tahap 1. Mode fitur drafter **tidak
     perlu**: drafter menulis tes fitur yang merah karena assertion (impor di dalam tes, CLI lewat subprocess).
-  - [ ] **Hardening login** (dari review tahap 5, Atha 2026-10-28): flag `Secure` pada cookie (wajib di belakang HTTPS); batas percobaan
-    login (brute force); sesi yang bisa dicabut (sekarang tanpa state: cookie curian berlaku sampai 12 jam); panjang minimum
-    `secret_key`; batas ukuran body `POST /login`
-  - [ ] Kecil: docstring `api.py` masih menyebut aturan "running" lama
+  - [~] **Hardening login** (dari review tahap 5, Atha 2026-10-28): `Secure`, panjang `secret_key`, batas body, docstring "running":
+    **selesai di tahap 6** (008: draf pertama dengan blok "Why they fail now" per tes dari #225, 11 alasan terlihat; drafter 3 submit).
+    Sisa, satu "go live" untuk dua job berurutan: **009** batas percobaan login per alamat (429 + `Retry-After`, tanpa PBKDF2 saat
+    diblokir) dan **010** sesi yang bisa dicabut (logout mencabut di server; `revoke-sessions` lewat SQLite; format cookie tetap,
+    jadi tes lama tidak berubah)
+  - [ ] **Gate "tes menelan traceback" salah tolak** (draf 008 submit 2 dari 3; submit 1 karena tes yang sudah hijau diwajibkan):
+    pesan tes yang **mengharapkan** exception ("must raise ValueError", kode lama tidak me-raise apa pun) dan `TypeError` di titik
+    panggilan (argumen tak dikenal: tidak mungkin ada frame repo) dianggap menelan. Drafter mengakali dengan mengganti kalimat;
+    satu submit terbuang. Aturan lama punya celah yang sama (jarang kena karena ekor kosong). Usul jalur ketat: catat di red check
+    exception yang benar-benar di-raise di kode repo selama tes (`sys.monitoring` RAISE, Python ≥ 3.12; aturan nama untuk 3.9),
+    tolak hanya bila nama di pesan = exception yang di-raise lalu tertangkap tanpa rantai
   - [ ] Tahap 3b: interaksi JavaScript + tes Playwright (image dengan Chromium; ±2–3 PR jalur ketat), bila ada kebutuhan JS
   - Ukuran: PR di-merge tanpa ditulis ulang, menit review Atha per PR, biaya per PR yang di-merge, insiden (scope, tes dilonggarkan,
     error ditelan). Bukan resolve rate.
@@ -156,11 +165,17 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     sampai 1,77× perkiraan), batas input diskalakan, plafon `large_usd` 1,2 juta token (override router; eval tidak berubah)
 - [x] **Dev set 1** (#218, `pilots/swe_v0/dev1/RESULT.md`, bukan klaim): `23824` dan `21379` `resolved`; `24562` gagal karena mutu patch
     (`numbers.py` rusak saat import), retry dihentikan Atha. $0,4968
-- [ ] Jalur cepat berikutnya: **blok "Why they fail now" memuat semua tes merah** (argus-ledger tahap 2–3a: blok tertutup warning
-    deprecation Starlette, hanya satu nama tes terlihat); `estimate_miss` per run di `status` (H3 spek margin); `swe_grade.py`
+- [x] **Blok "Why they fail now" per tes dari red check** (#225, jalur ketat, `docs/reviews/SPEC_RED_TESTS_PER_NODE.md`): ekor
+    2.000 karakter di argus-ledger tahap 2–3a tidak memuat satu pun seksi kegagalan (19 tes merah), jadi blok review kosong dan gate
+    "tes menelan traceback" **tidak menilai apa pun** (fail-open). Red check sekarang mencatat per tes pesan, nama exception dari
+    kata-kata tes sendiri, dan berkas repo di traceback beserta rantainya; gate dinilai per tes, fail-closed. Review sesi sebelah dan
+    `/code-review medium` (9 temuan, mis. `DID NOT RAISE` dan penjelasan `assert` pytest dihitung sebagai exception) ditutup.
+    Mutan 27/27, `verify.sh` PASS (1797 passed, sandbox skipped 0)
+- [ ] Jalur cepat berikutnya: `estimate_miss` per run di `status` (H3 spek margin); `swe_grade.py`
     mencatat nama tes draf yang gagal di atas patch maintainer; tes lama yang diubah drafter otomatis wajib (`22456` d1).
     (Exit code 4 sudah: #220 menampilkan stderr.)
-- [ ] **`verify.sh` penuh sebelum batch berikutnya**: sesudah #220 dan #221 baru tes terkait (aturan jalur cepat)
+- [x] **`verify.sh` penuh sesudah #220–#223**: lulus di #225 (`69df7b2`, 1797 passed, sandbox skipped 0); tetap wajib sebelum
+    batch berikutnya bila ada PR jalur cepat sesudahnya
 - [ ] Kandidat sisa dari 21379: gerbang writable glob/lebar vs regresi sempit (dev set `21379`: writable 4 berkas di 3 paket);
     drafter membaca sampai dipaksa berhenti
 - [ ] Langkah submit (#211) dan pertanyaan scope (#208) belum pernah terpakai di run live

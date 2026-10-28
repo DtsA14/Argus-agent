@@ -128,11 +128,12 @@ variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di r
 
 ## 6. Gap terbuka, diurutkan menurut nilai sekarang
 
-1. **Task fitur di aplikasi nyata** (arah 2026-10-28): `argus-ledger` tahap 0–5 selesai, **7 task, agen 7/7 di attempt pertama,
-   $0,2998** (CLI, biaya dari ledger, API FastAPI di environment baru `ledger_py312` #221, halaman HTML, SQLite, login), semuanya
-   dicek di data ledger asli; login juga dengan uji serangan. Satu kegagalan drafter karena pesan error harness (#223).
-   Mode fitur drafter tidak perlu. Berikutnya: interaksi JS + Playwright (3b) bila perlu, SQLite, login; issue ditulis Atha
-   sendiri (001–004 ditulis Claude atas delegasi).
+1. **Task fitur di aplikasi nyata** (arah 2026-10-28): `argus-ledger` tahap 0–6 selesai, **8 task, agen 8/8 di attempt pertama,
+   $0,3471** (CLI, biaya dari ledger, API FastAPI di environment baru `ledger_py312` #221, halaman HTML, SQLite, login, hardening
+   login), semuanya dicek di data ledger asli; login dan hardening juga dengan uji serangan. Satu kegagalan drafter karena pesan
+   error harness (#223). Dogfooding juga menemukan celah gate: ekor output yang tidak memuat satu pun tes membuat cek "tes
+   menelan traceback" lolos tanpa menilai (#225). Mode fitur drafter tidak perlu. Berikutnya: hardening 009–010 (satu "go live",
+   berurutan), lalu JS + Playwright (3b) bila perlu. Issue 001–010 ditulis Claude atas delegasi; argus-ledger jalur cepat.
 2. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): batch 3 3/4, batch 4 3/5. Sekarang alat regresi (±20% usaha), bukan
    tujuan; batch 5 di harness sesudah #215–#217 untuk melihat efeknya di instance baru.
 3. **Efek petunjuk #204** (`max_steps` tanpa menulis) dan output drafter 32.000: ada di kode, belum di run live.
@@ -165,3 +166,6 @@ Diputuskan 2026-10-28 (Atha):
   bertahap CLI → filter → API → HTML → SQLite → login). Mode fitur di drafter hanya bila tahap 0 membuktikan perlu.
 - **M7/M8 di parkiran** (belum diputuskan), selain yang dibutuhkan task nyata. Web search lalu deep research sesudah tahap awal
   `argus-ledger`. Tawaran marketplace skill (Agensi.io) **nanti**.
+- (sore) Urutan: blok "Why they fail now" per tes (#225, jalur ketat, di-merge Atha) → hardening login argus-ledger (008 selesai,
+  009–010 satu batch berurutan) → `verify.sh` + batch SWE 5 → web search ditunda sampai ada task yang butuh dokumentasi.
+  **argus-ledger jalur cepat:** Claude approve draf, review, dan commit; dari Atha hanya "go live" per job.
