@@ -48,6 +48,7 @@ llm:
   base_delay: 1.0                   # seconds; exponential with jitter, Retry-After wins when present
   min_output_tokens: 64
   input_margin: 1.2                 # safety factor on heuristic input counts (Anthropic counts exactly)
+  input_margin_by_model: {}          # SPEC_HEURISTIC_INPUT_MARGIN H1: per model, replaces input_margin (router: DeepSeek)
   # D5: Anthropic prompt caching (markers added only to what is sent; hashes and memo keys unchanged). Off by default,
   # turned on explicitly for a pilot; a role may override it (roles.<role>.prompt_cache). Only ttl 5m; Haiku 5.5 is
   # not cached in D5. While on, every input token is reserved at the dearer of input and 5-minute write: no hit is assumed.
@@ -163,6 +164,14 @@ router:
     drafter.attempt_tokens: 2000000    # (cache hits included) ran out at $0.018 of $0.70; the USD caps bind
     code_task.auto_validate: true
     code_task.max_steps: 30            # 12 ended sympy-24562 and -21379 (SWE v0 batches 3-4) before any write; USD caps bind
+    # SPEC_HEURISTIC_INPUT_MARGIN: 950 DeepSeek calls billed up to 1.77x the estimate at margin 1.2 (13% above 1.0), so
+    # a call could pass the check before sending and still exceed the reservation. 2.5 (Atha) is used for the worst case
+    # of tokens and USD alike; the input limits scale by 2.5/1.2 so the billed context they allow stays the same.
+    llm.input_margin_by_model: {"deepseek:deepseek-flash": 2.5, "deepseek:deepseek-v4-pro": 2.5}
+    code_task.max_input_tokens_by_model: {"deepseek:deepseek-flash": 125000, "deepseek:deepseek-v4-pro": 125000}
+    drafter.max_input_tokens: 416000
+    # H2: large_usd's token ceiling bound before its USD (sympy-24562: 400,000 tokens at $0.036 of $0.45)
+    code_task.profiles.large_usd.attempt_tokens: 1200000
     drafter.validation_timeout_s: 120  # the drafted validations' timeout; 261 router validations: p99 59 s, max 66 s; a hang cost 300 s each
     llm.prompt_cache.enabled: true
 

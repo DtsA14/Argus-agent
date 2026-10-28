@@ -1,6 +1,7 @@
 # Spec: margin input heuristik dari ledger, dan plafon token attempt `large_usd`
 
-Status: **draf, menunggu review Atha** (jalur ketat: menyentuh cek sebelum kirim di `harness/llm.py` dan budget profile).
+Status: **disetujui** (Atha 2026-10-28: margin **2,5**, H1 lewat override router, H2 1,2 juta). Jalur ketat: menyentuh cek
+sebelum kirim di `harness/llm.py` dan budget profile. H3 (tampilan `estimate_miss`) ditunda ke jalur cepat: hanya tampilan.
 Pemicu: dev set sesudah #215/#216, `sympy__sympy-24562` job `j20261028_051232_d2e8`, retry `a2` berakhir `FAILED_BUDGET`.
 
 ## 1. Kejadian
@@ -92,3 +93,13 @@ Verifikasi: `verify.sh` penuh (jalur ketat), mutants untuk tes 1–3.
 1. Margin 2,2 dari maksimum terukur, atau lebih konservatif, misalnya 2,5?
 2. H1 lewat override router (usul), atau di `config.yaml` untuk semua?
 3. H2 1,2 juta setuju?
+
+## 7. Implementasi (sesudah keputusan)
+
+- `harness/llm.py`: margin = `llm.input_margin_by_model[str(model)]`, selain itu `llm.input_margin`. Satu tempat, jadi
+  worst case token dan USD memakai est yang sama (`_output_cap`, `_worst_usd`).
+- `config.yaml`: `llm.input_margin_by_model: {}` (eval tidak berubah). Override router: DeepSeek 2,5;
+  `code_task.max_input_tokens_by_model` 125.000 (= 60.000 × 2,5/1,2); `drafter.max_input_tokens` 416.000
+  (≈ 200.000 × 2,5/1,2); `code_task.profiles.large_usd.attempt_tokens` 1.200.000.
+- Tes `tests/test_input_margin.py` (5): margin per model, model tanpa entri, replay langkah 18 `24562` (margin 1,2
+  mengirim lalu lewat 184 token; 2,5 menolak sebelum kirim), skala batas input, plafon `large_usd`. Mutants 5/5.

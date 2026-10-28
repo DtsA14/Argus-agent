@@ -311,7 +311,9 @@ class LLMCaller:
         if counter is not None:
             self.count, self.exact = counter, True
         else:
-            self.count, self.exact = provider_counter(self.model, float(llm.get("input_margin", 1.2)))
+            # SPEC_HEURISTIC_INPUT_MARGIN H1: a margin per model from the ledger, else input_margin
+            margin = (llm.get("input_margin_by_model") or {}).get(str(self.ref), llm.get("input_margin", 1.2))
+            self.count, self.exact = provider_counter(self.model, float(margin))
         self.sleep, self.now = sleep, now
         self.full_prompts = self._full_prompt_logging(cfg)
 
