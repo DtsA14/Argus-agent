@@ -1,0 +1,664 @@
+"""A JSON API and server-rendered HTML pages over one Argus jobs directory.
+
+``create_app(jobs_dir)`` returns a FastAPI app over the same numbers
+``python -m ledger summary`` prints:
+
+- ``GET /jobs``: every job, oldest first, with its state, stage count, cost and
+  whether it is running (its state is ``DRAFTING`` or ``AGENT_RUNNING``);
+- ``GET /jobs/{job_id}``: one job plus one entry per stage, each with the cost
+  of its own run (404 when the id is not a job of the directory);
+- ``GET /summary``: the totals of the summary's last lines;
+- ``GET /ui``: the same jobs as a plain HTML table, oldest first, with a filter
+  per state present in the directory (``/ui?state=REVIEW_READY``) and the
+  totals of the shown jobs;
+- ``GET /ui/jobs/{job_id}``: one job as an HTML page with a table of its stages
+  (404, as an HTML page, when the id is not a job of the directory).
+
+The reading is done by ``ledger.summary`` (``job_entries``, ``usd_text`` and
+``usd_number_text``), so the API, the pages and the command line never
+disagree. Money stays integer nano-dollars; the JSON ``cost_usd`` is only the
+four-decimal text of it and the pages prefix the same text with ``$``. The
+pages are built with the standard library only (``html.escape`` for every value
+of ``job.json``, ``urllib.parse.quote`` for the links), so no template engine
+is needed; every link of a page is a plain path of the same app.
+
+The app is built by a factory, so several directories can be served at once:
+``TestClient(create_app("jobs"))`` and no globals.
+"""
+
+import math
+import os
+import time
+from collections import OrderedDict, deque
+from html import escape
+from urllib.parse import parse_qs, quote
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+
+from .auth import (
+    SESSION_COOKIE,
+    SESSION_SECONDS,
+    SessionRevocations,
+    fresh_session_value,
+    session_expiry,
+    session_is_valid,
+    session_value,
+    verify_password,
+)
+from .summary import job_entries, usd_number_text, usd_text
+
+_SLASHES = ("/", "\\")
+
+#: The most bytes of body ``POST /login`` reads: a login form is tiny, so
+#: anything bigger is refused (413) instead of being buffered whole.
+LOGIN_BODY_LIMIT = 4096
+
+#: The shortest accepted ``secret_key`` (``len`` of the text), with a password
+#: hash: a shorter key is too little to sign a session cookie with.
+SECRET_KEY_MIN_LENGTH = 32
+
+#: The most client addresses whose failed logins are remembered at once; when
+#: the store is full, the address with the oldest last failure is dropped.
+MAX_TRACKED_ADDRESSES = 10000
+
+_STYLE = (
+    "body{font:16px/1.4 sans-serif;margin:2rem;}"
+    "table{border-collapse:collapse;margin:1rem 0;}"
+    "th,td{border:1px solid #ccc;padding:.2rem .6rem;text-align:left;}"
+    "th.cost,td.cost{text-align:right;}"
+    "p.filters a{margin-right:.8rem;}"
+    "dl{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;}"
+    "dt{font-weight:bold;}"
+    "dd{margin:0;}"
+)
+
+
+def _is_job_id(job_id):
+    """Return True when ``job_id`` can be a job id at all.
+
+    A job id with a slash or a dot segment could name something outside the
+    jobs directory, so it is refused before any lookup; the directory listing
+    is the only source of what a job is anyway.
+    """
+    if not isinstance(job_id, str) or not job_id.strip():
+        return False
+    if job_id in (".", ".."):
+        return False
+    if any(separator in job_id for separator in _SLASHES):
+        return False
+    if ".." in job_id or "\x00" in job_id:
+        return False
+    return True
+
+
+def _job_json(entry):
+    """Return one job of ``job_entries`` as the JSON body of ``/jobs``."""
+    return {
+        "job": entry["id"],
+        "state": entry["state"],
+        "created_at": entry["created_at"],
+        "stages": entry["stages"],
+        "cost_nano": entry["nano"],
+        "cost_usd": usd_number_text(entry["nano"]),
+        "running": entry["running"],
+    }
+
+
+def _stage_json(detail):
+    """Return one stage of ``job_entries`` as a ``stages_detail`` item."""
+    return {
+        "stage": detail["stage"],
+        "kind": detail["kind"],
+        "status": detail["status"],
+        "cost_nano": detail["cost_nano"],
+        "cost_usd": usd_number_text(detail["cost_nano"]),
+    }
+
+
+def _find(entries, job_id):
+    """Return the entry whose job id is ``job_id``, or None."""
+    for entry in entries:
+        if entry["id"] == job_id:
+            return entry
+    return None
+
+
+# ---------------------------------------------------------------------------
+# the HTML pages (standard library only: html.escape and text building)
+# ---------------------------------------------------------------------------
+
+
+def _document(title, body):
+    """Return a whole HTML document with ``title`` and ``body``."""
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="en">\n'
+        "<head>\n"
+        '<meta charset="utf-8">\n'
+        "<title>{title}</title>\n"
+        "<style>{style}</style>\n"
+        "</head>\n"
+        "<body>\n"
+        "{body}\n"
+        "</body>\n"
+        "</html>\n"
+    ).format(title=escape(str(title)), style=_STYLE, body=body)
+
+
+def _html(body, status_code=200, title="argus-ledger"):
+    """Return ``body`` as an HTML response (``text/html; charset=utf-8``)."""
+    return HTMLResponse(_document(title, body), status_code=status_code)
+
+
+def _text(value):
+    """Return ``value`` as HTML-escaped text: job.json never becomes markup."""
+    return escape(str(value))
+
+
+def _job_href(job_id):
+    """Return the path of one job's page, the id percent-encoded for a URL."""
+    return "/ui/jobs/" + quote(str(job_id), safe="")
+
+
+def _state_href(state):
+    """Return the path of the jobs page filtered by ``state``."""
+    return "/ui?state=" + quote(str(state), safe="")
+
+
+def _plural(count, singular, plural):
+    """Return ``"1 stage"``/``"3 stages"`` style text."""
+    return "{} {}".format(count, singular if count == 1 else plural)
+
+
+def _page_entries(directory):
+    """Return the jobs the pages show, oldest first.
+
+    Every job of ``job_entries`` is one row. A job id is a value of
+    ``job.json`` and may hold a ``/``; such a job lands one directory deeper
+    than the flat ``jobs/<id>/job.json`` layout, inside a directory that is not
+    a job itself. The pages therefore also look one level into a directory
+    without a readable ``job.json``: whatever jobs are found there are read by
+    ``job_entries`` too, so their numbers are the ones of the JSON API.
+    """
+    entries, _skipped = job_entries(directory)
+    seen = set(entry["dir"] for entry in entries)
+    found = list(entries)
+
+    try:
+        names = sorted(os.listdir(directory))
+    except OSError:
+        names = []
+    for name in names:
+        child = os.path.join(directory, name)
+        if child in seen or not os.path.isdir(child):
+            continue
+        if os.path.isfile(os.path.join(child, "job.json")):
+            continue  # a job of its own (or one the summary skips): not a parent
+        nested, _nested_skipped = job_entries(child)
+        for entry in nested:
+            if entry["dir"] not in seen:
+                seen.add(entry["dir"])
+                found.append(entry)
+
+    found.sort(key=lambda entry: (entry["key"], entry["id"]))
+    return found
+
+
+def _filter_html(entries):
+    """Return the filter bar: one link per state present, plus ``all``.
+
+    The counts are for the whole directory, so a filter page can always show
+    every state that exists (and not only the one it shows).
+    """
+    counts = {}
+    for entry in entries:
+        counts[entry["state"]] = counts.get(entry["state"], 0) + 1
+
+    links = ['<a href="/ui">all</a>']
+    for state in sorted(counts):
+        links.append(
+            '<a href="{href}">{label}</a>'.format(
+                href=escape(_state_href(state), quote=True),
+                label=_text("{} ({})".format(state, counts[state])),
+            )
+        )
+    return '<p class="filters">states: {}</p>'.format(" ".join(links))
+
+
+def _jobs_table(entries):
+    """Return the table of jobs: one row per job, oldest first."""
+    rows = ["<table>", "<thead>", "<tr>"]
+    rows.append("<th>job</th><th>state</th><th>stages</th>"
+                '<th class="cost">cost</th><th>running</th>')
+    rows.extend(["</tr>", "</thead>", "<tbody>"])
+    for entry in entries:
+        rows.append(
+            '<tr><td><a href="{href}">{job}</a></td><td>{state}</td>'
+            '<td>{stages}</td><td class="cost">{cost}</td><td>{running}</td></tr>'.format(
+                href=escape(_job_href(entry["id"]), quote=True),
+                job=_text(entry["id"]),
+                state=_text(entry["state"]),
+                stages=_text(_plural(entry["stages"], "stage", "stages")),
+                cost=_text(usd_text(entry["nano"])),
+                running="running" if entry["running"] else "",
+            )
+        )
+    rows.extend(["</tbody>", "</table>"])
+    return "\n".join(rows)
+
+
+def _totals_html(entries):
+    """Return the totals line under the table: ``2 jobs, $0.2349``."""
+    total_nano = sum(entry["nano"] for entry in entries)
+    return "<p>{}, {}</p>".format(
+        _text(_plural(len(entries), "job", "jobs")), _text(usd_text(total_nano))
+    )
+
+
+def _jobs_page(entries, shown):
+    """Return the body of ``/ui``: the filter bar, the table, the totals."""
+    parts = ["<h1>jobs</h1>"]
+    if entries:
+        parts.append(_filter_html(entries))
+    if shown:
+        parts.append(_jobs_table(shown))
+        parts.append(_totals_html(shown))
+    else:
+        parts.append("<p>No jobs.</p>")
+    return "\n".join(parts)
+
+
+def _job_page(entry):
+    """Return the body of ``/ui/jobs/{job_id}``: the job and its stages."""
+    parts = [
+        "<h1>job {}</h1>".format(_text(entry["id"])),
+        '<p><a href="/ui">all jobs</a></p>',
+        "<dl>",
+        "<dt>id</dt><dd>{}</dd>".format(_text(entry["id"])),
+        "<dt>state</dt><dd>{}</dd>".format(_text(entry["state"])),
+        "<dt>created_at</dt><dd>{}</dd>".format(_text(entry["created_at"])),
+        "<dt>cost</dt><dd>{}</dd>".format(_text(usd_text(entry["nano"]))),
+        "<dt>running</dt><dd>{}</dd>".format("running" if entry["running"] else "no"),
+        "</dl>",
+        '<table class="stages">',
+        "<thead><tr><th>stage</th><th>kind</th><th>status</th>"
+        '<th class="cost">cost</th></tr></thead>',
+        "<tbody>",
+    ]
+    for detail in entry["stage_details"]:
+        parts.append(
+            '<tr><td>{stage}</td><td>{kind}</td><td>{status}</td>'
+            '<td class="cost">{cost}</td></tr>'.format(
+                stage=_text(detail["stage"]),
+                kind=_text(detail["kind"]),
+                status=_text(detail["status"]),
+                cost=_text(usd_text(detail["cost_nano"])),
+            )
+        )
+    parts.extend(["</tbody>", "</table>"])
+    return "\n".join(parts)
+
+
+def _no_such_job_page(job_id):
+    """Return the 404 page of an unknown (or invalid) job id."""
+    body = [
+        "<h1>no such job: {}</h1>".format(_text(job_id)),
+        '<p><a href="/ui">all jobs</a></p>',
+    ]
+    return _html("\n".join(body), status_code=404, title="no such job")
+
+
+def _login_page(error=""):
+    """Return the body of ``/login``: one password field posting to /login.
+
+    The page holds nothing of the password hash nor of the secret key, and an
+    ``error`` ("wrong password", or "too many attempts, try again later") says
+    nothing about which part of a failed attempt was wrong.
+    """
+    parts = ["<h1>login</h1>"]
+    if error:
+        parts.append('<p class="error">{}</p>'.format(_text(error)))
+    parts.append(
+        '<form method="post" action="/login">'
+        '<p><label>password '
+        '<input type="password" name="password" autocomplete="current-password">'
+        "</label></p>"
+        '<p><button type="submit">log in</button></p>'
+        "</form>"
+    )
+    return "\n".join(parts)
+
+
+def _login_html(error="", status_code=200):
+    """Return the login page as an HTML response."""
+    return _html(_login_page(error), status_code=status_code, title="login")
+
+
+def _too_long_html():
+    """Return the 413 page of a login body over ``LOGIN_BODY_LIMIT``.
+
+    It is an HTML page like the login form's errors and holds nothing of the
+    posted body, the password hash or the secret key.
+    """
+    return _login_html(
+        "the login form is too long (at most {} bytes)".format(LOGIN_BODY_LIMIT),
+        status_code=413,
+    )
+
+
+def _too_many_html(retry_after):
+    """Return the 429 page of an address with too many failed logins.
+
+    It is the login page with the one message of the limit and a
+    ``Retry-After`` header of whole seconds; it holds nothing of the posted
+    body, the password hash or the secret key, and sets no cookie.
+    """
+    response = _login_html("too many attempts, try again later", status_code=429)
+    response.headers["Retry-After"] = str(int(retry_after))
+    return response
+
+
+async def _login_body(request, limit=LOGIN_BODY_LIMIT):
+    """Return ``(body, too_long)``: at most ``limit`` bytes of the request body.
+
+    A Content-Length over the limit is refused before a single byte is read;
+    otherwise the body is read in chunks (``request.stream()``) and the reading
+    stops as soon as the limit is passed, so a long or endless body is never
+    buffered whole.
+    """
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            if int(declared) > limit:
+                return b"", True
+        except (TypeError, ValueError):
+            pass  # an unusable header is no promise: read and count instead
+    chunks = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > limit:
+            return b"", True
+        chunks.append(chunk)
+    return b"".join(chunks), False
+
+
+def _client_key(request):
+    """Return the key the failed logins of ``request`` are counted under.
+
+    Every client address (``request.client.host``) is a key of its own; a
+    request without a client at all counts under one shared key (``None``), so
+    a server that reports no address still has a limit.
+    """
+    client = request.client
+    host = getattr(client, "host", None) if client is not None else None
+    return host or None
+
+
+class _FailedLogins:
+    """A bounded, in-memory count of the failed logins of every client address.
+
+    ``failures`` keeps, per key, the times (``clock()`` seconds) of the failed
+    logins still inside the ``window`` of ``window_seconds``: a failure of the
+    window or older is forgotten, and a key without a failure inside the
+    window is dropped. Keys are kept in the order of their last failure (the
+    key of a recorded failure moves to the end), so that the store, which holds
+    at most ``max_addresses`` keys, can drop the oldest last failure first.
+
+    A key is blocked once it has ``max_failures`` failures inside the window;
+    ``retry_after`` then returns the whole seconds until its oldest counted
+    failure leaves the window. A successful login clears the key. Nothing here
+    is written anywhere: a restart forgets every count.
+    """
+
+    def __init__(self, max_failures, window_seconds, clock, max_addresses=None):
+        self.max_failures = max(1, int(max_failures))
+        self.window = max(0.0, float(window_seconds))
+        self.clock = clock
+        self.max_addresses = max(
+            1,
+            int(MAX_TRACKED_ADDRESSES if max_addresses is None else max_addresses),
+        )
+        self._failures = OrderedDict()  # key -> deque of failure times
+
+    def _inside(self, key, now):
+        """Forget the failures of ``key`` outside the window; return the rest."""
+        failures = self._failures.get(key)
+        if failures is None:
+            return None
+        cutoff = now - self.window
+        while failures and failures[0] <= cutoff:
+            failures.popleft()
+        if not failures:
+            del self._failures[key]
+            return None
+        return failures
+
+    def retry_after(self, key):
+        """Return the Retry-After seconds while ``key`` is blocked, else None."""
+        now = self.clock()
+        failures = self._inside(key, now)
+        if failures is None or len(failures) < self.max_failures:
+            return None
+        remaining = failures[0] + self.window - now
+        return max(1, int(math.ceil(remaining)))
+
+    def record_failure(self, key):
+        """Count one failed login of ``key`` at the current ``clock()``."""
+        now = self.clock()
+        failures = self._inside(key, now)
+        if failures is None:
+            failures = deque()
+            self._failures[key] = failures
+        else:
+            self._failures.move_to_end(key)
+        failures.append(now)
+        while len(self._failures) > self.max_addresses:
+            self._failures.popitem(last=False)  # the oldest last failure
+
+    def clear(self, key):
+        """Forget every failure of ``key`` (a successful login)."""
+        self._failures.pop(key, None)
+
+
+def create_app(jobs_dir, password_hash=None, secret_key=None, secure_cookie=True,
+               max_failed_logins=5, login_window_seconds=900, clock=None,
+               session_db=None):
+    """Return a FastAPI app serving the Argus jobs directory ``jobs_dir``.
+
+    Without ``password_hash`` nothing is locked, exactly as before. With one
+    (and a ``secret_key`` of at least ``SECRET_KEY_MIN_LENGTH`` characters,
+    required then, else ``ValueError``) the pages and the API need a session:
+    ``GET /login`` shows a password form, ``POST /login`` sets the signed
+    ``ledger_session`` cookie, ``POST /logout`` revokes it on the server and
+    clears it; without a session the ``/ui`` pages answer 303 to ``/login`` and
+    the JSON endpoints answer 401 ``{"detail": "login required"}``.
+
+    ``session_db`` is the SQLite file that keeps the revocations (a logout
+    stores the SHA-256 of the cookie value there, and
+    ``ledger.auth.revoke_all_sessions`` records a "not before" moment); a
+    missing file is created, and it is read at each request, so a change made by
+    ``python -m ledger revoke-sessions`` is seen without a restart. With None
+    (the default) the revocations are kept in memory and are lost on a restart.
+    A session_db that cannot be read never lets a session in: every request
+    then counts as no session.
+
+    The session cookie is ``Secure`` by default, so a browser only sends it
+    over HTTPS; ``secure_cookie=False`` leaves the attribute out, for a server
+    reached over plain HTTP on localhost only. ``POST /login`` reads at most
+    ``LOGIN_BODY_LIMIT`` bytes of body and answers 413 (an HTML page, no cookie)
+    beyond that.
+
+    Failed logins (a wrong or missing password) are counted per client address
+    in memory: once an address has ``max_failed_logins`` of them inside the
+    last ``login_window_seconds``, ``POST /login`` from it answers 429 with the
+    login page, "too many attempts, try again later" and a ``Retry-After`` of
+    the whole seconds until its oldest counted failure leaves the window,
+    without checking the password and without setting a cookie. A 413 is not a
+    failed login, a successful login clears the address's failures, at most
+    ``MAX_TRACKED_ADDRESSES`` addresses are kept, and a restart forgets them.
+    ``clock`` (``time.monotonic`` by default) is the source of the times, so a
+    test can move them without sleeping.
+    """
+    directory = os.fspath(jobs_dir)
+    if isinstance(directory, bytes):
+        directory = directory.decode("utf-8", "replace")
+    directory = str(directory)
+
+    if password_hash is not None:
+        if not secret_key:
+            raise ValueError(
+                "a password hash needs a secret_key for the session cookie"
+            )
+        if not isinstance(secret_key, str) or len(secret_key) < SECRET_KEY_MIN_LENGTH:
+            raise ValueError(
+                "the secret_key must be at least {} characters long".format(
+                    SECRET_KEY_MIN_LENGTH
+                )
+            )
+
+    app = FastAPI(title="argus-ledger", version="1.0.0")
+
+    failed_logins = _FailedLogins(
+        max_failed_logins,
+        login_window_seconds,
+        time.monotonic if clock is None else clock,
+    )
+
+    # The revoked sessions: a SQLite file when one is given (the tables are
+    # created now, a missing file is created too), in memory otherwise. The
+    # store is read at each request, so a change made by another app or by
+    # ``python -m ledger revoke-sessions`` is seen without a restart.
+    revocations = SessionRevocations(session_db)
+
+    if password_hash is not None:
+        @app.middleware("http")
+        async def _require_session(request: Request, call_next):
+            """Let only a valid session reach the pages and the API."""
+            path = request.url.path
+            if path in ("/login", "/logout"):
+                return await call_next(request)
+            cookie = request.cookies.get(SESSION_COOKIE)
+            if session_is_valid(cookie, secret_key) and not revocations.is_revoked(
+                cookie
+            ):
+                return await call_next(request)
+            if path == "/ui" or path.startswith("/ui/"):
+                return RedirectResponse(url="/login", status_code=303)
+            return JSONResponse({"detail": "login required"}, status_code=401)
+
+        @app.get("/login")
+        def login_page():
+            """The login form; always reachable, even with a session."""
+            return _login_html()
+
+        @app.post("/login")
+        async def login(request: Request):
+            """Check the posted password, set the session cookie or answer 401."""
+            client_key = _client_key(request)
+            retry_after = failed_logins.retry_after(client_key)
+            if retry_after is not None:
+                return _too_many_html(retry_after)
+            body, too_long = await _login_body(request)
+            if too_long:
+                return _too_long_html()
+            try:
+                fields = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True)
+            except (UnicodeError, ValueError):
+                fields = {}
+            password = (fields.get("password") or [""])[0]
+            if verify_password(password, password_hash):
+                failed_logins.clear(client_key)
+                response = RedirectResponse(url="/ui", status_code=303)
+                response.set_cookie(
+                    SESSION_COOKIE,
+                    fresh_session_value(secret_key, revocations),
+                    max_age=SESSION_SECONDS,
+                    httponly=True,
+                    secure=bool(secure_cookie),
+                    samesite="lax",
+                    path="/",
+                )
+                return response
+            failed_logins.record_failure(client_key)
+            return _login_html("wrong password", status_code=401)
+
+        @app.post("/logout")
+        def logout(request: Request):
+            """Revoke the presented session on the server, then clear the cookie.
+
+            Only a correctly signed, unexpired, not already revoked cookie is
+            recorded (the SHA-256 of the value, never the value); a logout
+            without such a session stores nothing. The browser is then sent to
+            the login page with the cookie cleared.
+            """
+            cookie = request.cookies.get(SESSION_COOKIE)
+            if session_is_valid(cookie, secret_key) and not revocations.is_revoked(
+                cookie
+            ):
+                revocations.revoke(cookie)
+            response = RedirectResponse(url="/login", status_code=303)
+            response.delete_cookie(
+                SESSION_COOKIE,
+                path="/",
+                httponly=True,
+                secure=bool(secure_cookie),
+                samesite="lax",
+            )
+            return response
+
+    @app.get("/jobs")
+    def list_jobs():
+        """Every job of the directory, oldest first."""
+        entries, _skipped = job_entries(directory)
+        return [_job_json(entry) for entry in entries]
+
+    @app.get("/jobs/{job_id}")
+    def job_detail(job_id: str):
+        """One job with the cost of each of its stages' runs."""
+        entries, _skipped = job_entries(directory)
+        entry = _find(entries, job_id) if _is_job_id(job_id) else None
+        if entry is None:
+            raise HTTPException(
+                status_code=404, detail="no such job: {}".format(job_id)
+            )
+        body = _job_json(entry)
+        body["stages_detail"] = [
+            _stage_json(detail) for detail in entry["stage_details"]
+        ]
+        return body
+
+    @app.get("/summary")
+    def summary():
+        """The numbers of the summary's last lines, as one object."""
+        entries, skipped = job_entries(directory)
+        total_nano = sum(entry["nano"] for entry in entries)
+        return {
+            "jobs": len(entries),
+            "cost_nano": total_nano,
+            "cost_usd": usd_number_text(total_nano),
+            "skipped": skipped,
+        }
+
+    @app.get("/ui")
+    def jobs_page(state: str = ""):
+        """The jobs of the directory as one HTML page, oldest first."""
+        entries = _page_entries(directory)
+        wanted = state if isinstance(state, str) else ""
+        if wanted:
+            shown = [entry for entry in entries if entry["state"] == wanted]
+        else:
+            shown = list(entries)
+        return _html(_jobs_page(entries, shown), title="jobs")
+
+    @app.get("/ui/jobs/{job_id}")
+    def job_page(job_id: str):
+        """One job and its stages as one HTML page."""
+        entries = _page_entries(directory)
+        entry = _find(entries, job_id) if _is_job_id(job_id) else None
+        if entry is None:
+            return _no_such_job_page(job_id)
+        return _html(_job_page(entry), title="job {}".format(job_id))
+
+    return app

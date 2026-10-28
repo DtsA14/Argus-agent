@@ -6,6 +6,7 @@ effect: a write replaces the whole file atomically, so running it twice leaves t
 not). The result text of that uncommitted run was never seen by a committed step, so it need not match; it is still
 kept free of timings and of "created" versus "overwritten" so replays read the same.
 """
+import ast
 import hashlib
 import json
 import os
@@ -29,6 +30,12 @@ MAX_WRITE = 200_000
 # lines and MAX_READ characters. A file larger than MAX_READ read without a range returns its first part and says so.
 READ_MAX_FILE = 2_000_000
 READ_MAX_LINES = 400
+# A file over READ_WHOLE_MAX characters read without a range (argus-ledger 010/010b: six attempts ran out of context
+# after reading whole files of 21,000-34,000 characters): a Python file that parses shows its outline (classes and
+# functions with their lines, at most OUTLINE_MAX_ENTRIES), any other file its first READ_WHOLE_MAX characters.
+READ_WHOLE_MAX = 12_000
+OUTLINE_MAX_ENTRIES = 300
+OUTLINE_LINE = 160
 # ListFiles: at most LIST_MAX_FILES paths per call; past that it says how many more and to narrow the path.
 LIST_MAX_FILES = 300
 # WriteFile on an existing file that keeps less than SHRINK_WARN of its lines says so (sympy-24562: the agent replaced
@@ -150,6 +157,40 @@ def claims_doc(args):
         field = {"file_changed": "path"}.get(c.get("claim"), "evidence")
         out.append({"claim": c.get("claim"), field: c.get(field, "")})
     return {"claims": out, "summary": args.get("summary")}
+
+
+def _outline(path, text, count):
+    """A large Python file read without a range: its classes and functions (methods one level in) as "L<first>-<last>
+    def name(args)", or None when it does not parse or defines none. Parsed with ast only, never run."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return None
+    entries = []
+
+    def add(node, indent):
+        kind = "class" if isinstance(node, ast.ClassDef) else "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+        sig = "" if kind == "class" else "(" + ast.unparse(node.args) + ")"
+        first = min([node.lineno] + [d.lineno for d in node.decorator_list])
+        line = f"L{first}-{node.end_lineno} {indent}{kind} {node.name}{sig}"
+        entries.append(line if len(line) <= OUTLINE_LINE else line[:OUTLINE_LINE - 3] + "...")
+
+    defs = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    for node in tree.body:
+        if isinstance(node, defs):
+            add(node, "")
+            if isinstance(node, ast.ClassDef):
+                for sub in node.body:
+                    if isinstance(sub, defs):
+                        add(sub, "  ")
+    if not entries:
+        return None
+    more = len(entries) - OUTLINE_MAX_ENTRIES
+    head = (f"[{path}: {count} lines, {len(text)} characters, more than {READ_WHOLE_MAX} to read whole: its classes and "
+            "functions with their lines. Read the lines you need with start_line/end_line; the lines between them "
+            "(imports, constants) are not listed]")
+    return "\n".join([head, *entries[:OUTLINE_MAX_ENTRIES]]
+                     + ([f"... {more} more; read a range to see them"] if more > 0 else [])) + "\n"
 
 
 class Toolbox:
@@ -276,16 +317,22 @@ class Toolbox:
         if not isinstance(start, int) or not isinstance(end, int) or start < 0 or end < 0 or (end and end < max(start, 1)):
             return "Rejected: start_line and end_line must be whole numbers, 0 or 1-based, with end_line >= start_line."
         text = self.jail.read_text(path, max_bytes=READ_MAX_FILE)
-        if not start and not end and len(text) <= MAX_READ:
+        whole = not start and not end
+        if whole and len(text) <= READ_WHOLE_MAX:
             return text                                                 # the whole file, as before line ranges
         lines = text.splitlines(keepends=True)
+        if whole and path.endswith(".py"):
+            outline = _outline(path, text, len(lines))
+            if outline:
+                return outline
+        cap = READ_WHOLE_MAX if whole else MAX_READ
         first = max(start, 1)
         last = min(end or first + READ_MAX_LINES - 1, first + READ_MAX_LINES - 1, len(lines))
         if first > len(lines):
             return f"{path} has {len(lines)} lines; start_line {first} is past its end."
         part, size = [], 0
         for n in range(first, last + 1):
-            if size + len(lines[n - 1]) > MAX_READ and part:
+            if size + len(lines[n - 1]) > cap and part:
                 last = n - 1
                 break
             part.append(lines[n - 1])
