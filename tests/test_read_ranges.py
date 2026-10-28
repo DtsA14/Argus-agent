@@ -114,3 +114,9 @@ def test_router_jobs_give_the_agent_30_steps_and_config_yaml_keeps_12_for_the_ev
     from runner import load_config
     cfg = load_config()
     assert cfg["code_task"]["max_steps"] == 12 and cfg["router"]["overrides"]["code_task.max_steps"] == 30
+
+
+def test_router_jobs_draft_validations_with_a_120_second_timeout():
+    from runner import load_config
+    cfg = load_config()
+    assert cfg["router"]["overrides"]["drafter.validation_timeout_s"] == 120
