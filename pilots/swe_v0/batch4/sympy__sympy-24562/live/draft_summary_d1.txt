@@ -1,0 +1,74 @@
+stage: j20261028_030146_c6ca-d1
+writable: ['sympy/core/numbers.py']
+validation target sympy -m pytest sympy/core/tests/test_rational_strings.py | required: ['sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_value', 'sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_match_numeric_args', 'sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_numerator_and_denominator']
+validation regression sympy -m pytest sympy/core/tests/test_numbers.py::test_Rational_new sympy/core/tests/test_numbers.py::test_Rational_cmp sympy/core/tests/test_numbers.py::test_Rational_int | required: ['sympy/core/tests/test_numbers.py::test_Rational_new', 'sympy/core/tests/test_numbers.py::test_Rational_cmp', 'sympy/core/tests/test_numbers.py::test_Rational_int']
+---- WHY
+sympy/core/tests/test_rational_strings.py:41: in test_rational_two_decimal_string_args_value
+E   AssertionError: Rational('0.5', '100') == 1/100100, expected 1/200
+sympy/core/tests/test_rational_strings.py:46: in test_rational_two_decimal_string_args_match_numeric_args
+E   AssertionError: Rational('0.5', '100') == 1/100100, expected the same value as Rational(0.5, 100), 1/200
+sympy/core/tests/test_rational_strings.py:56: in test_rational_two_decimal_string_args_numerator_and_denominator
+E   AssertionError: Rational('0.5', '100') has p, q = 1, 100100, expected 1, 200
+============================== 3 failed in Xs ===============================
+----
+changed_tests: []
+==== sympy/core/tests/test_rational_strings.py
+"""Tests for building a Rational from two string arguments.
+
+Rational('0.5', '100') must give the same exact value as Rational(0.5, 100),
+namely 1/200.
+"""
+
+from sympy import Rational, S
+
+
+def _rational_from_strings(p, q):
+    """Return Rational(p, q) for string arguments, reporting errors as failures."""
+    try:
+        return Rational(p, q)
+    except Exception as exc:
+        raise AssertionError(
+            "Rational(%r, %r) raised %s: %s" % (p, q, type(exc).__name__, exc)
+        ) from exc
+
+
+def _num_den_from_strings(p, q):
+    """Return the (p, q) parts of Rational(p, q) for string arguments."""
+    try:
+        r = Rational(p, q)
+        return (r.p, r.q)
+    except Exception as exc:
+        raise AssertionError(
+            "Rational(%r, %r) gave no numerator/denominator (%s: %s)"
+            % (p, q, type(exc).__name__, exc)
+        ) from exc
+
+
+def test_rational_two_decimal_string_args_value():
+    r = _rational_from_strings('0.5', '100')
+    try:
+        equal = (r == Rational(1, 200))
+    except Exception as exc:
+        raise AssertionError(
+            "comparing Rational('0.5', '100') with Rational(1, 200) raised %s: %s"
+            % (type(exc).__name__, exc)
+        ) from exc
+    assert equal, "Rational('0.5', '100') == %s, expected %s" % (r, Rational(1, 200))
+
+
+def test_rational_two_decimal_string_args_match_numeric_args():
+    r = _rational_from_strings('0.5', '100')
+    assert r == Rational(0.5, 100), (
+        "Rational('0.5', '100') == %s, expected the same value as "
+        "Rational(0.5, 100), %s" % (r, Rational(0.5, 100)))
+    assert r == Rational(S.Half, 100), (
+        "Rational('0.5', '100') == %s, expected the same value as "
+        "Rational(S.Half, 100), %s" % (r, Rational(S.Half, 100)))
+
+
+def test_rational_two_decimal_string_args_numerator_and_denominator():
+    num, den = _num_den_from_strings('0.5', '100')
+    assert (num, den) == (1, 200), (
+        "Rational('0.5', '100') has p, q = %s, %s, expected 1, 200" % (num, den))
+
+['Drafter: $0.0749, 23 model calls, 2 submits, 22 steps (ended: submitted).']

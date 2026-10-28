@@ -1,0 +1,70 @@
+diff --git a/sympy/physics/units/tests/test_collect_factor_and_dimension.py b/sympy/physics/units/tests/test_collect_factor_and_dimension.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..4148a957a71ade2dafee1649ed6d756496459f9f
+--- /dev/null
++++ b/sympy/physics/units/tests/test_collect_factor_and_dimension.py
+@@ -0,0 +1,47 @@
++"""Tests for dimensionless function arguments in ``UnitSystem``.
++
++``UnitSystem._collect_factor_and_dimension`` has to notice that an argument
++which is dimensionless according to the dimension system -- ``second/(ohm*farad)``
++has the dimension ``Dimension(time/(capacitance*impedance))``, which the SI
++dimension system knows to be dimensionless -- makes a function such as ``exp``
++dimensionless, instead of propagating the dimension of the argument.
++"""
++
++from sympy.functions.elementary.exponential import exp
++from sympy.physics.units import farad, ohm, second
++from sympy.physics.units.definitions.dimension_definitions import Dimension
++from sympy.physics.units.systems.si import SI
++
++
++def dimensionless_expression():
++    # dimensionless for the dimension system, but not structurally Dimension(1)
++    return second/(ohm*farad)
++
++
++def test_expression_is_dimensionless():
++    expr = dimensionless_expression()
++    dim = SI._collect_factor_and_dimension(expr)[1]
++    assert SI.get_dimension_system().is_dimensionless(dim)
++
++
++def test_exp_of_dimensionless_expression_is_dimensionless():
++    arg = dimensionless_expression()
++    expr = exp(arg)
++    try:
++        factor, dim = SI._collect_factor_and_dimension(expr)
++    except Exception as exc:
++        raise AssertionError(
++            "collecting the factor and the dimension of %s raised %s, but its"
++            " argument is dimensionless" % (expr, exc)) from exc
++    assert dim == Dimension(1)
++
++
++def test_number_added_to_exp_of_dimensionless_expression():
++    expr = 100 + exp(dimensionless_expression())
++    try:
++        factor, dim = SI._collect_factor_and_dimension(expr)
++    except Exception as exc:
++        raise AssertionError(
++            "collecting the factor and the dimension of %s raised %s, but the"
++            " argument of exp is dimensionless" % (expr, exc)) from exc
++    assert dim == Dimension(1)
+diff --git a/sympy/physics/units/unitsystem.py b/sympy/physics/units/unitsystem.py
+index 3daf84c10869436bb4868a23230c4e91be8c1a35..e4389bbf8298bfb06c0fd37e261861863a5fe7f4 100644
+--- a/sympy/physics/units/unitsystem.py
++++ b/sympy/physics/units/unitsystem.py
+@@ -192,8 +192,10 @@ def _collect_factor_and_dimension(self, expr):
+         elif isinstance(expr, Function):
+             fds = [self._collect_factor_and_dimension(
+                 arg) for arg in expr.args]
+-            return (expr.func(*(f[0] for f in fds)),
+-                    *(d[1] for d in fds))
++            dimension_system = self.get_dimension_system()
++            dims = [Dimension(1) if dimension_system.is_dimensionless(d[1])
++                    else d[1] for d in fds]
++            return (expr.func(*(f[0] for f in fds)), *dims)
+         elif isinstance(expr, Dimension):
+             return S.One, expr
+         else:

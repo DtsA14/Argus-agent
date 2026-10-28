@@ -1,0 +1,17 @@
+== drafter stage d1 (job j20261028_030146_c6ca) ==
+model deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits
+overrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}
+job cap $1.00; spent $0.0000; left $1.0000
+(--yes: approved in chat; no [y/N] asked)
+drafter running in j20261028_030146_c6ca-d1 (usually 1-3 minutes; it prints nothing until it ends). Do not start another job for this task: if this stops or the terminal closes, continue it with `argus resume j20261028_030146_c6ca`.
+drafter finished: DRAFTED ($0.0749)
+job j20261028_030146_c6ca: AWAITING_APPROVAL
+repo /home/ubuntu/swe/sympy at b1cb676cf92dd1a48365b731979833375b188bf2
+environment sympy, image de306e046ab6
+money: cap $1.00, spent $0.0749
+  d1 draft: DRAFTED cap $0.7500 spent $0.0749
+draft 5fd55a77710c (/home/ubuntu/pilot3a_live/jobs/j20261028_030146_c6ca/runs/j20261028_030146_c6ca-d1/DRAFT_REVIEW.md)
+writable: sympy/core/numbers.py
+validation target (env sympy): python -m pytest sympy/core/tests/test_rational_strings.py
+validation regression (env sympy): python -m pytest sympy/core/tests/test_numbers.py::test_Rational_new sympy/core/tests/test_numbers.py::test_Rational_cmp sympy/core/tests/test_numbers.py::test_Rational_int
+approve: argus approve j20261028_030146_c6ca --sha 5fd55a77710c

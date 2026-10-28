@@ -1,0 +1,73 @@
+stage: j20261028_030915_ef15-d2
+writable: ['sympy/codegen/ast.py']
+validation target sympy -m pytest sympy/codegen/tests/test_ast_invariance.py | required: ['sympy/codegen/tests/test_ast_invariance.py::test_String_args_hold_the_text', 'sympy/codegen/tests/test_ast_invariance.py::test_String_func_of_args', 'sympy/codegen/tests/test_ast_invariance.py::test_QuotedString_func_of_args', 'sympy/codegen/tests/test_ast_invariance.py::test_Comment_func_of_args']
+validation regression_ast sympy -m pytest sympy/codegen/tests/test_ast.py | required: ['sympy/codegen/tests/test_ast.py::test_Assignment', 'sympy/codegen/tests/test_ast.py::test_AugAssign', 'sympy/codegen/tests/test_ast.py::test_Assignment_printing', 'sympy/codegen/tests/test_ast.py::test_CodeBlock', 'sympy/codegen/tests/test_ast.py::test_CodeBlock_topological_sort', 'sympy/codegen/tests/test_ast.py::test_CodeBlock_free_symbols', 'sympy/codegen/tests/test_ast.py::test_CodeBlock_cse', 'sympy/codegen/tests/test_ast.py::test_CodeBlock_cse__issue_14118', 'sympy/codegen/tests/test_ast.py::test_For', 'sympy/codegen/tests/test_ast.py::test_none', 'sympy/codegen/tests/test_ast.py::test_String', 'sympy/codegen/tests/test_ast.py::test_Comment', 'sympy/codegen/tests/test_ast.py::test_Node', 'sympy/codegen/tests/test_ast.py::test_Type', 'sympy/codegen/tests/test_ast.py::test_Type__from_expr', 'sympy/codegen/tests/test_ast.py::test_Type__cast_check__integers', 'sympy/codegen/tests/test_ast.py::test_Attribute', 'sympy/codegen/tests/test_ast.py::test_Variable', 'sympy/codegen/tests/test_ast.py::test_Pointer', 'sympy/codegen/tests/test_ast.py::test_Declaration', 'sympy/codegen/tests/test_ast.py::test_IntBaseType', 'sympy/codegen/tests/test_ast.py::test_FloatType', 'sympy/codegen/tests/test_ast.py::test_Type__cast_check__floating_point', 'sympy/codegen/tests/test_ast.py::test_Type__cast_check__complex_floating_point', 'sympy/codegen/tests/test_ast.py::test_While', 'sympy/codegen/tests/test_ast.py::test_Scope', 'sympy/codegen/tests/test_ast.py::test_Print', 'sympy/codegen/tests/test_ast.py::test_FunctionPrototype_and_FunctionDefinition', 'sympy/codegen/tests/test_ast.py::test_Return', 'sympy/codegen/tests/test_ast.py::test_FunctionCall', 'sympy/codegen/tests/test_ast.py::test_ast_replace']
+---- WHY
+sympy/codegen/tests/test_ast_invariance.py:23: in test_String_func_of_args
+E   AssertionError: String.func(*String.args) raised TypeError: No value for 'text' given and attribute has no default (args was ())
+sympy/codegen/tests/test_ast_invariance.py:33: in test_QuotedString_func_of_args
+    rebuilt = qs.func(*qs.args)
+sympy/codegen/ast.py:237: in __new__
+E   TypeError: No value for 'text' given and attribute has no default
+sympy/codegen/tests/test_ast_invariance.py:35: in test_QuotedString_func_of_args
+E   AssertionError: QuotedString.func(*QuotedString.args) raised TypeError: No value for 'text' given and attribute has no default (args was ())
+sympy/codegen/tests/test_ast_invariance.py:47: in test_Comment_func_of_args
+E   AssertionError: Comment.func(*Comment.args) raised TypeError: No value for 'text' given and attribute has no default (args was ())
+============================== 4 failed in Xs ===============================
+----
+changed_tests: []
+==== sympy/codegen/tests/test_ast_invariance.py
+"""Argument invariance of ``sympy.codegen.ast.String``.
+
+``expr.func(*expr.args) == expr`` must hold for every ``Basic`` subclass, and
+``String`` is one of them.  It used to be excluded from that invariance: the
+text was listed in ``not_in_args``, so ``String('foo').args`` was ``()`` and
+only ``expr.func(**expr.kwargs()) == expr`` worked.
+"""
+
+from sympy.codegen.ast import String, QuotedString, Comment
+
+
+def test_String_args_hold_the_text():
+    # the text has to be the argument of the instance, not an attribute that
+    # is hidden from ``Basic.args``
+    assert String('foobar').args == ('foobar',)
+
+
+def test_String_func_of_args():
+    st = String('foobar')
+    try:
+        rebuilt = st.func(*st.args)
+    except Exception as exc:
+        raise AssertionError(
+            'String.func(*String.args) raised %s: %s (args was %r)'
+            % (type(exc).__name__, exc, st.args)) from exc
+    assert rebuilt == String('foobar')
+    assert rebuilt == st
+
+
+def test_QuotedString_func_of_args():
+    qs = QuotedString('foobar')
+    try:
+        rebuilt = qs.func(*qs.args)
+    except Exception as exc:
+        raise AssertionError(
+            'QuotedString.func(*QuotedString.args) raised %s: %s (args was %r)'
+            % (type(exc).__name__, exc, qs.args)) from exc
+    assert rebuilt == QuotedString('foobar')
+    assert rebuilt == qs
+
+
+def test_Comment_func_of_args():
+    cm = Comment('a comment')
+    try:
+        rebuilt = cm.func(*cm.args)
+    except Exception as exc:
+        raise AssertionError(
+            'Comment.func(*Comment.args) raised %s: %s (args was %r)'
+            % (type(exc).__name__, exc, cm.args)) from exc
+    assert rebuilt == cm
+    assert isinstance(rebuilt, Comment)
+    assert rebuilt.text == 'a comment'
+
+['Drafter: $0.0647, 18 model calls, 1 submits, 17 steps (ended: submitted).']

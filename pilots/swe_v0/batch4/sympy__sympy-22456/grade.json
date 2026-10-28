@@ -1,0 +1,62 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_String": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_Assignment": "pass",
+    "test_AugAssign": "pass",
+    "test_Assignment_printing": "pass",
+    "test_CodeBlock": "pass",
+    "test_CodeBlock_topological_sort": "pass",
+    "test_CodeBlock_free_symbols": "pass",
+    "test_CodeBlock_cse": "pass",
+    "test_CodeBlock_cse__issue_14118": "pass",
+    "test_For": "pass",
+    "test_none": "pass",
+    "test_Comment": "pass",
+    "test_Node": "pass",
+    "test_Type": "pass",
+    "test_Type__from_expr": "pass",
+    "test_Type__cast_check__integers": "pass",
+    "test_Attribute": "pass",
+    "test_Variable": "pass",
+    "test_Pointer": "pass",
+    "test_Declaration": "pass",
+    "test_IntBaseType": "pass",
+    "test_FloatType": "pass",
+    "test_Type__cast_check__floating_point": "pass",
+    "test_Type__cast_check__complex_floating_point": "pass",
+    "test_While": "pass",
+    "test_Scope": "pass",
+    "test_Print": "pass",
+    "test_FunctionPrototype_and_FunctionDefinition": "pass",
+    "test_Return": "pass",
+    "test_FunctionCall": "pass"
+  },
+  "patch_sha256": "360722113bd43fd4675430ec7b4ac5c20d263a27e6fc2c1639e0009e14d93ece",
+  "test_patch_sha256": "0e7e2aba8dd7e6fd5244381f47b6857a71163f1c483f7e9b9785aebf546d6840",
+  "base_commit": "a3475b3f9ac662cd425157dd3bdb93ad7111c090",
+  "environment": "sympy",
+  "image": "sha256:de306e046ab6347cbd56ffb62dd75fcf71c51999c5a5fbf60117e36bd11fe412",
+  "test_files": [
+    "sympy/codegen/tests/test_ast.py"
+  ],
+  "run": {
+    "tests_run": 31,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 0
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/codegen/tests/test_ast_invariance.py"
+    ],
+    "status": "fail",
+    "tests_run": 4,
+    "failures": 1,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}

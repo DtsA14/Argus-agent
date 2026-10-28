@@ -1,0 +1,111 @@
+stage: j20261028_030915_ef15-d1
+writable: ['sympy/codegen/ast.py']
+validation target sympy -m pytest sympy/codegen/tests/test_string_arg_invariance.py | required: ['sympy/codegen/tests/test_string_arg_invariance.py::test_String_arg_invariance', 'sympy/codegen/tests/test_string_arg_invariance.py::test_String_arg_invariance_of_text', 'sympy/codegen/tests/test_string_arg_invariance.py::test_QuotedString_arg_invariance', 'sympy/codegen/tests/test_string_arg_invariance.py::test_Comment_arg_invariance']
+validation ast_regression sympy -m pytest sympy/codegen/tests/test_ast.py | required: ['sympy/codegen/tests/test_ast.py::test_String', 'sympy/codegen/tests/test_ast.py::test_Comment', 'sympy/codegen/tests/test_ast.py::test_Type', 'sympy/codegen/tests/test_ast.py::test_IntBaseType', 'sympy/codegen/tests/test_ast.py::test_Print', 'sympy/codegen/tests/test_ast.py::test_ast_replace', 'sympy/codegen/tests/test_ast.py::test_none']
+validation codegen_regression sympy -m pytest sympy/codegen/tests/test_cnodes.py | required: []
+---- WHY
+sympy/codegen/tests/test_string_arg_invariance.py:13: in _invariant
+    return expr.func(*expr.args)
+sympy/codegen/ast.py:237: in __new__
+E   TypeError: No value for 'text' given and attribute has no default
+sympy/codegen/tests/test_string_arg_invariance.py:36: in test_QuotedString_arg_invariance
+    assert _invariant(expr) == expr
+sympy/codegen/tests/test_string_arg_invariance.py:15: in _invariant
+E   AssertionError: QuotedString does not support argument invariance: expr.func(*expr.args) raised TypeError: No value for 'text' given and attribute has no...
+sympy/codegen/tests/test_string_arg_invariance.py:41: in test_Comment_arg_invariance
+    assert _invariant(expr) == expr
+sympy/codegen/tests/test_string_arg_invariance.py:15: in _invariant
+E   AssertionError: Comment does not support argument invariance: expr.func(*expr.args) raised TypeError: No value for 'text' given and attribute has no default
+========================= 4 failed, 2 passed in Xs ==========================
+----
+changed_tests: ['sympy/codegen/tests/test_cnodes.py']
+
+
+The draft changes 1 existing test file(s). The harness checked that no old test is lost unless listed in removed, that no test function changes unless it is required or listed in modified, and that no test of these files is skipped or xfail unless it was before. It cannot tell whether a test got weaker: read the diff.
+
+No warnings (K3).
+
+### `sympy/codegen/tests/test_cnodes.py`
+
+- modified `test_sizeof`: ``String`` is given arguments so that ``expr.func(*expr.args) == expr`` holds for it; the default ``atoms()`` filter (``not node.args``) therefore no longer selects ``String`` nodes. Asking for ``String`` atoms keeps the intent of the assertion and holds both before and after the change.
+
+Diff from the intake version:
+
+```diff
+--- a/sympy/codegen/tests/test_cnodes.py
++++ b/sympy/codegen/tests/test_cnodes.py
+@@ -78,7 +78,7 @@
+     assert ccode(sz) == 'sizeof(%s)' % typename
+     assert sz.func(*sz.args) == sz
+     assert not sz.is_Atom
+-    assert sz.atoms() == {String('unsigned int'), String('sizeof')}
++    assert sz.atoms(String) == {String('unsigned int'), String('sizeof')}
+ 
+ 
+ def test_struct():
+```
+
+
+==== sympy/codegen/tests/test_string_arg_invariance.py
+"""Argument invariance of ``sympy.codegen.ast.String``.
+
+``String`` is a ``Basic`` subclass, so ``expr.func(*expr.args) == expr`` has
+to hold for it just as it does for e.g. ``Attribute`` or ``Variable``.
+"""
+
+from sympy.codegen.ast import Comment, QuotedString, String
+
+
+def _invariant(expr):
+    """Return ``expr.func(*expr.args)``, failing as an assertion on error."""
+    try:
+        return expr.func(*expr.args)
+    except Exception as exc:
+        raise AssertionError(
+            "%s does not support argument invariance: "
+            "expr.func(*expr.args) raised %s: %s"
+            % (type(expr).__name__, type(exc).__name__, exc)) from exc
+
+
+def test_String_arg_invariance():
+    expr = String('foo')
+    assert _invariant(expr) == expr
+
+
+def test_String_arg_invariance_of_text():
+    text = 'set s = "a b c";'
+    expr = String(text)
+    rebuilt = _invariant(expr)
+    assert rebuilt == expr
+    assert rebuilt.text == text
+
+
+def test_QuotedString_arg_invariance():
+    expr = QuotedString('bar')
+    assert _invariant(expr) == expr
+
+
+def test_Comment_arg_invariance():
+    expr = Comment('a comment')
+    assert _invariant(expr) == expr
+
+
+def test_String_kwargs_constructor_still_works():
+    expr = String('foo')
+    assert expr.func(**expr.kwargs()) == expr
+    assert str(expr) == 'foo'
+    assert repr(expr) == "String('foo')"
+
+
+def test_String_free_symbols():
+    # ``text`` lives in ``args`` and ``Basic.free_symbols`` calls
+    # ``.free_symbols`` on every argument, so it must not raise.
+    try:
+        free = String('foo').free_symbols
+    except Exception as exc:
+        raise AssertionError(
+            "String.free_symbols raised %s: %s"
+            % (type(exc).__name__, exc)) from exc
+    assert free == set()
+
+['Drafter: $0.0716, 17 model calls, 3 submits, 16 steps (ended: submitted).']

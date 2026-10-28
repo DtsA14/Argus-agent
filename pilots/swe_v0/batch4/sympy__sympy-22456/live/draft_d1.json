@@ -1,0 +1,124 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/codegen/ast.py"
+    ],
+    "steps": [
+      "In ``sympy/codegen/ast.py`` remove ``String.not_in_args = ['text']`` so that ``String.text`` is passed to ``Basic.__new__`` and stored in ``Basic._args``; then ``String('foo').args == ('foo',)`` and ``String('foo').func('foo') == String('foo')``.",
+      "Keep ``String.is_Atom = True`` (``test_ast.py::test_String`` asserts ``st.is_Atom``) and keep ``_construct_text`` raising ``TypeError`` for non-``str`` input, so ``func(*args)`` rebuilds the same instance and ``String(String('x'))`` still returns the argument unchanged.",
+      "Give ``String`` a ``free_symbols`` property that returns ``set()``: ``Basic.free_symbols`` calls ``.free_symbols`` on every element of ``args`` and ``text`` is a plain ``str``.",
+      "Check that nodes embedding ``String`` (``Type``, ``Attribute``, ``Print``, ``FunctionCall``, ``Variable``, ``Label``...) still rebuild and print identically: ``repr``/``sstr`` come from ``__slots__`` (``text`` was already printed), so ``repr(String('foo')) == \"String('foo')\"`` must not change.",
+      "Run the validations: the new invariance tests, ``sympy/codegen/tests/test_ast.py`` and the cnodes/fnodes regression."
+    ],
+    "risks": [
+      "Removing ``not_in_args`` puts a plain Python ``str`` into ``args``; ``Basic.free_symbols`` calls ``arg.free_symbols`` for each argument, so ``String('foo').free_symbols`` raises ``AttributeError: 'str' object has no attribute 'free_symbols'`` unless ``String`` overrides it.",
+      "``Basic.atoms()`` collects nodes with ``not node.args``, so ``String`` stops counting as an atom there; that is why ``test_cnodes.py::test_sizeof`` is adjusted to ask for ``String`` atoms. Do not \"fix\" this by changing ``Basic.atoms`` in sympy/core/basic.py, which is not writable.",
+      "Dropping ``is_Atom = True`` (or otherwise making ``String`` non-atomic) fails ``sympy/codegen/tests/test_ast.py::test_String``.",
+      "Leaking the new ``args`` into printing: ``repr``/``sstr`` must stay ``String('foo')`` / ``foo`` (they read ``__slots__``, not ``args``), and ``kwargs()`` must keep returning ``{'text': ...}``.",
+      "Storing something other than the exact ``text`` string in ``args`` (a wrapper, a sympified object) breaks ``_construct_text``'s ``TypeError`` contract, ``str(String)`` and equality with the rebuilt instance."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/codegen/ast.py"
+      ],
+      "protected": [
+        "sympy/codegen/tests/**",
+        "sympy/**/tests/**",
+        "sympy/**/test_*.py",
+        "sympy/testing/**",
+        "conftest.py",
+        "pytest.ini"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/codegen/tests/test_string_arg_invariance.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 6,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/codegen/tests/test_string_arg_invariance.py::test_String_arg_invariance",
+          "sympy/codegen/tests/test_string_arg_invariance.py::test_String_arg_invariance_of_text",
+          "sympy/codegen/tests/test_string_arg_invariance.py::test_QuotedString_arg_invariance",
+          "sympy/codegen/tests/test_string_arg_invariance.py::test_Comment_arg_invariance"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "ast_regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/codegen/tests/test_ast.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 30,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/codegen/tests/test_ast.py::test_String",
+          "sympy/codegen/tests/test_ast.py::test_Comment",
+          "sympy/codegen/tests/test_ast.py::test_Type",
+          "sympy/codegen/tests/test_ast.py::test_IntBaseType",
+          "sympy/codegen/tests/test_ast.py::test_Print",
+          "sympy/codegen/tests/test_ast.py::test_ast_replace",
+          "sympy/codegen/tests/test_ast.py::test_none"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "codegen_regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/codegen/tests/test_cnodes.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 10,
+        "max_skipped": 0,
+        "must_pass": [],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/codegen/tests/test_string_arg_invariance.py",
+      "content": "\"\"\"Argument invariance of ``sympy.codegen.ast.String``.\n\n``String`` is a ``Basic`` subclass, so ``expr.func(*expr.args) == expr`` has\nto hold for it just as it does for e.g. ``Attribute`` or ``Variable``.\n\"\"\"\n\nfrom sympy.codegen.ast import Comment, QuotedString, String\n\n\ndef _invariant(expr):\n    \"\"\"Return ``expr.func(*expr.args)``, failing as an assertion on error.\"\"\"\n    try:\n        return expr.func(*expr.args)\n    except Exception as exc:\n        raise AssertionError(\n            \"%s does not support argument invariance: \"\n            \"expr.func(*expr.args) raised %s: %s\"\n            % (type(expr).__name__, type(exc).__name__, exc)) from exc\n\n\ndef test_String_arg_invariance():\n    expr = String('foo')\n    assert _invariant(expr) == expr\n\n\ndef test_String_arg_invariance_of_text():\n    text = 'set s = \"a b c\";'\n    expr = String(text)\n    rebuilt = _invariant(expr)\n    assert rebuilt == expr\n    assert rebuilt.text == text\n\n\ndef test_QuotedString_arg_invariance():\n    expr = QuotedString('bar')\n    assert _invariant(expr) == expr\n\n\ndef test_Comment_arg_invariance():\n    expr = Comment('a comment')\n    assert _invariant(expr) == expr\n\n\ndef test_String_kwargs_constructor_still_works():\n    expr = String('foo')\n    assert expr.func(**expr.kwargs()) == expr\n    assert str(expr) == 'foo'\n    assert repr(expr) == \"String('foo')\"\n\n\ndef test_String_free_symbols():\n    # ``text`` lives in ``args`` and ``Basic.free_symbols`` calls\n    # ``.free_symbols`` on every argument, so it must not raise.\n    try:\n        free = String('foo').free_symbols\n    except Exception as exc:\n        raise AssertionError(\n            \"String.free_symbols raised %s: %s\"\n            % (type(exc).__name__, exc)) from exc\n    assert free == set()\n"
+    }
+  ],
+  "unverifiable": [
+    "The general claim that ``expr.func(*expr.args) == expr`` should hold for *any* ``Basic`` subclass: only ``String`` and its subclasses (``QuotedString``, ``Comment``) are checked here; the rest of the library is out of the issue's scope.",
+    "The doctest examples in the ``String`` docstring (``>>> f`` / ``print(repr(f))``) are not run by pytest, so a fix that leaves them stale or wrong is not caught by these validations.",
+    "That ``sympy/core/tests/test_args.py::test_sympy__codegen__ast__String`` still passes is not required by a validation (its ``_test_args`` helper only checks recreatability, so it passes before and after, but that file is not run here).",
+    "``sympy/codegen/tests/test_fnodes.py`` (Fortran printing, ``fcode`` of nodes embedding ``String``) is not used as a regression because six of its tests skip in the sandbox (no Fortran compiler), and skipped tests are not allowed in a validation; ``sympy/utilities/tests/test_codegen.py`` and the code-printer suites are likewise not run, so a change in the ``ccode``/``fcode`` output of ``String`` beyond ``sympy/codegen/tests`` would only be caught by reviewers."
+  ],
+  "changed_tests": [
+    {
+      "path": "sympy/codegen/tests/test_cnodes.py",
+      "content": "from sympy.core.symbol import symbols\nfrom sympy.printing.codeprinter import ccode\nfrom sympy.codegen.ast import Declaration, Variable, float64, int64, String, CodeBlock\nfrom sympy.codegen.cnodes import (\n    alignof, CommaOperator, goto, Label, PreDecrement, PostDecrement, PreIncrement, PostIncrement,\n    sizeof, union, struct\n)\n\nx, y = symbols('x y')\n\n\ndef test_alignof():\n    ax = alignof(x)\n    assert ccode(ax) == 'alignof(x)'\n    assert ax.func(*ax.args) == ax\n\n\ndef test_CommaOperator():\n    expr = CommaOperator(PreIncrement(x), 2*x)\n    assert ccode(expr) == '(++(x), 2*x)'\n    assert expr.func(*expr.args) == expr\n\n\ndef test_goto_Label():\n    s = 'early_exit'\n    g = goto(s)\n    assert g.func(*g.args) == g\n    assert g != goto('foobar')\n    assert ccode(g) == 'goto early_exit'\n\n    l1 = Label(s)\n    assert ccode(l1) == 'early_exit:'\n    assert l1 == Label('early_exit')\n    assert l1 != Label('foobar')\n\n    body = [PreIncrement(x)]\n    l2 = Label(s, body)\n    assert l2.name == String(\"early_exit\")\n    assert l2.body == CodeBlock(PreIncrement(x))\n    assert ccode(l2) == (\"early_exit:\\n\"\n        \"++(x);\")\n\n    body = [PreIncrement(x), PreDecrement(y)]\n    l2 = Label(s, body)\n    assert l2.name == String(\"early_exit\")\n    assert l2.body == CodeBlock(PreIncrement(x), PreDecrement(y))\n    assert ccode(l2) == (\"early_exit:\\n\"\n        \"{\\n   ++(x);\\n   --(y);\\n}\")\n\n\ndef test_PreDecrement():\n    p = PreDecrement(x)\n    assert p.func(*p.args) == p\n    assert ccode(p) == '--(x)'\n\n\ndef test_PostDecrement():\n    p = PostDecrement(x)\n    assert p.func(*p.args) == p\n    assert ccode(p) == '(x)--'\n\n\ndef test_PreIncrement():\n    p = PreIncrement(x)\n    assert p.func(*p.args) == p\n    assert ccode(p) == '++(x)'\n\n\ndef test_PostIncrement():\n    p = PostIncrement(x)\n    assert p.func(*p.args) == p\n    assert ccode(p) == '(x)++'\n\n\ndef test_sizeof():\n    typename = 'unsigned int'\n    sz = sizeof(typename)\n    assert ccode(sz) == 'sizeof(%s)' % typename\n    assert sz.func(*sz.args) == sz\n    assert not sz.is_Atom\n    assert sz.atoms(String) == {String('unsigned int'), String('sizeof')}\n\n\ndef test_struct():\n    vx, vy = Variable(x, type=float64), Variable(y, type=float64)\n    s = struct('vec2', [vx, vy])\n    assert s.func(*s.args) == s\n    assert s == struct('vec2', (vx, vy))\n    assert s != struct('vec2', (vy, vx))\n    assert str(s.name) == 'vec2'\n    assert len(s.declarations) == 2\n    assert all(isinstance(arg, Declaration) for arg in s.declarations)\n    assert ccode(s) == (\n        \"struct vec2 {\\n\"\n        \"   double x;\\n\"\n        \"   double y;\\n\"\n        \"}\")\n\n\ndef test_union():\n    vx, vy = Variable(x, type=float64), Variable(y, type=int64)\n    u = union('dualuse', [vx, vy])\n    assert u.func(*u.args) == u\n    assert u == union('dualuse', (vx, vy))\n    assert str(u.name) == 'dualuse'\n    assert len(u.declarations) == 2\n    assert all(isinstance(arg, Declaration) for arg in u.declarations)\n    assert ccode(u) == (\n        \"union dualuse {\\n\"\n        \"   double x;\\n\"\n        \"   int64_t y;\\n\"\n        \"}\")\n",
+      "modified": [
+        {
+          "node": "test_sizeof",
+          "reason": "``String`` is given arguments so that ``expr.func(*expr.args) == expr`` holds for it; the default ``atoms()`` filter (``not node.args``) therefore no longer selects ``String`` nodes. Asking for ``String`` atoms keeps the intent of the assertion and holds both before and after the change."
+        }
+      ]
+    }
+  ]
+}

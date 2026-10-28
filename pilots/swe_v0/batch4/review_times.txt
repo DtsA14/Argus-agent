@@ -1,0 +1,13 @@
+24562 summary_sent 2026-10-28T03:16:54Z (batched, one message)
+24066 summary_sent 2026-10-28T03:16:54Z (batched, one message)
+22456 summary_sent 2026-10-28T03:16:54Z (batched, one message)
+23262 summary_sent 2026-10-28T03:16:54Z (batched, one message)
+24562 y_received 2026-10-28T03:20:04Z
+24066 y_received 2026-10-28T03:20:04Z
+23262 y_received 2026-10-28T03:20:04Z
+22456 held (not approved) 2026-10-28T03:20:04Z
+22456 redraft_plain_ok 2026-10-28T03:23:08Z
+24562 retry_preapproved 2026-10-28T03:24:59Z
+22456 d2 summary_sent 2026-10-28T03:28:32Z
+22456 d2 y_received 2026-10-28T03:49:25Z
+22456 retry_preapproved 2026-10-28T03:50:45Z

@@ -1,0 +1,67 @@
+stage: j20261028_030554_244f-d1
+writable: ['sympy/physics/units/unitsystem.py']
+validation target sympy -m pytest sympy/physics/units/tests/test_collect_factor_and_dimension.py | required: ['sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_exp_of_dimensionless_expression_is_dimensionless', 'sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_number_added_to_exp_of_dimensionless_expression']
+validation regression sympy -m pytest sympy/physics/units/tests/test_unitsystem.py sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency sympy/physics/units/tests/test_quantities.py::test_issue_20288 sympy/physics/units/tests/test_quantities.py::test_get_dimensional_expr_with_function sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative sympy/physics/units/tests/test_quantities.py::test_issue_22164 | required: ['sympy/physics/units/tests/test_unitsystem.py::test_definition', 'sympy/physics/units/tests/test_unitsystem.py::test_str_repr', 'sympy/physics/units/tests/test_unitsystem.py::test_convert_to', 'sympy/physics/units/tests/test_unitsystem.py::test_extend', 'sympy/physics/units/tests/test_unitsystem.py::test_dim', 'sympy/physics/units/tests/test_unitsystem.py::test_is_consistent', 'sympy/physics/units/tests/test_unitsystem.py::test_get_units_non_prefixed', 'sympy/physics/units/tests/test_unitsystem.py::test_derived_units_must_exist_in_unit_system', 'sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency', 'sympy/physics/units/tests/test_quantities.py::test_issue_20288', 'sympy/physics/units/tests/test_quantities.py::test_get_dimensional_expr_with_function', 'sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative', 'sympy/physics/units/tests/test_quantities.py::test_issue_22164']
+---- WHY
+sympy/physics/units/tests/test_collect_factor_and_dimension.py:36: in test_exp_of_dimensionless_expression_is_dimensionless
+E   assert Dimension(time/(capacitance*impedance)) == Dimension(1)
+E    +  where Dimension(1) = Dimension(1)
+sympy/physics/units/tests/test_collect_factor_and_dimension.py:42: in test_number_added_to_exp_of_dimensionless_expression
+    factor, dim = SI._collect_factor_and_dimension(expr)
+sympy/physics/units/unitsystem.py:179: in _collect_factor_and_dimension
+E   ValueError: Dimension of "exp(second/(farad*ohm))" is Dimension(time/(capacitance*impedance)), but it should be Dimension(1)
+sympy/physics/units/tests/test_collect_factor_and_dimension.py:44: in test_number_added_to_exp_of_dimensionless_expression
+E   AssertionError: collecting the factor and the dimension of exp(second/(farad*ohm)) + 100 raised Dimension of "exp(second/(farad*ohm))" is Dimension(time/...
+========================= 2 failed, 1 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/physics/units/tests/test_collect_factor_and_dimension.py
+"""Tests for dimensionless function arguments in ``UnitSystem``.
+
+``UnitSystem._collect_factor_and_dimension`` has to notice that an argument
+which is dimensionless according to the dimension system -- ``second/(ohm*farad)``
+has the dimension ``Dimension(time/(capacitance*impedance))``, which the SI
+dimension system knows to be dimensionless -- makes a function such as ``exp``
+dimensionless, instead of propagating the dimension of the argument.
+"""
+
+from sympy.functions.elementary.exponential import exp
+from sympy.physics.units import farad, ohm, second
+from sympy.physics.units.definitions.dimension_definitions import Dimension
+from sympy.physics.units.systems.si import SI
+
+
+def dimensionless_expression():
+    # dimensionless for the dimension system, but not structurally Dimension(1)
+    return second/(ohm*farad)
+
+
+def test_expression_is_dimensionless():
+    expr = dimensionless_expression()
+    dim = SI._collect_factor_and_dimension(expr)[1]
+    assert SI.get_dimension_system().is_dimensionless(dim)
+
+
+def test_exp_of_dimensionless_expression_is_dimensionless():
+    arg = dimensionless_expression()
+    expr = exp(arg)
+    try:
+        factor, dim = SI._collect_factor_and_dimension(expr)
+    except Exception as exc:
+        raise AssertionError(
+            "collecting the factor and the dimension of %s raised %s, but its"
+            " argument is dimensionless" % (expr, exc)) from exc
+    assert dim == Dimension(1)
+
+
+def test_number_added_to_exp_of_dimensionless_expression():
+    expr = 100 + exp(dimensionless_expression())
+    try:
+        factor, dim = SI._collect_factor_and_dimension(expr)
+    except Exception as exc:
+        raise AssertionError(
+            "collecting the factor and the dimension of %s raised %s, but the"
+            " argument of exp is dimensionless" % (expr, exc)) from exc
+    assert dim == Dimension(1)
+
+['Drafter: $0.0526, 9 model calls, 1 submits, 8 steps (ended: submitted).']

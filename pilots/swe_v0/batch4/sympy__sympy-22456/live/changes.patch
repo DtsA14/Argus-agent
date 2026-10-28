@@ -1,0 +1,103 @@
+diff --git a/sympy/codegen/ast.py b/sympy/codegen/ast.py
+index a02714b17452cdc77008292d461997139419b358..91de5416a4e89569b5d6a9315f5edae68f2942b7 100644
+--- a/sympy/codegen/ast.py
++++ b/sympy/codegen/ast.py
+@@ -895,7 +895,6 @@ class String(Token):
+ 
+     """
+     __slots__ = ('text',)
+-    not_in_args = ['text']
+     is_Atom = True
+ 
+     @classmethod
+@@ -904,6 +903,32 @@ def _construct_text(cls, text):
+             raise TypeError("Argument text is not a string type.")
+         return text
+ 
++    @property
++    def free_symbols(self):
++        # ``text`` is a plain Python string, i.e. it cannot have free symbols
++        # and it does not support the ``Basic`` interface used by the default
++        # implementation of ``free_symbols``.
++        return set()
++
++    # ``text`` is a plain Python string and not a ``Basic`` instance, so the
++    # pattern matching machinery of ``Basic`` (which assumes that all
++    # arguments are ``Basic``) cannot be used.  Since a ``String`` has no
++    # sub-expressions (it is an atom), matching it reduces to an equality
++    # test.
++    def match(self, pattern, old=False):
++        pattern = sympify(pattern)
++        if self == pattern:
++            return {}
++        return None
++
++    def matches(self, expr, repl_dict=None, old=False):
++        expr = sympify(expr)
++        if self == expr:
++            if repl_dict is None:
++                return {}
++            return repl_dict.copy()
++        return None
++
+     def _sympystr(self, printer, *args, **kwargs):
+         return self.text
+ 
+diff --git a/sympy/codegen/tests/test_ast_invariance.py b/sympy/codegen/tests/test_ast_invariance.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..02d71ce89ffcbaf5a320ffc2f5cad8a4bf7b23a8
+--- /dev/null
++++ b/sympy/codegen/tests/test_ast_invariance.py
+@@ -0,0 +1,52 @@
++"""Argument invariance of ``sympy.codegen.ast.String``.
++
++``expr.func(*expr.args) == expr`` must hold for every ``Basic`` subclass, and
++``String`` is one of them.  It used to be excluded from that invariance: the
++text was listed in ``not_in_args``, so ``String('foo').args`` was ``()`` and
++only ``expr.func(**expr.kwargs()) == expr`` worked.
++"""
++
++from sympy.codegen.ast import String, QuotedString, Comment
++
++
++def test_String_args_hold_the_text():
++    # the text has to be the argument of the instance, not an attribute that
++    # is hidden from ``Basic.args``
++    assert String('foobar').args == ('foobar',)
++
++
++def test_String_func_of_args():
++    st = String('foobar')
++    try:
++        rebuilt = st.func(*st.args)
++    except Exception as exc:
++        raise AssertionError(
++            'String.func(*String.args) raised %s: %s (args was %r)'
++            % (type(exc).__name__, exc, st.args)) from exc
++    assert rebuilt == String('foobar')
++    assert rebuilt == st
++
++
++def test_QuotedString_func_of_args():
++    qs = QuotedString('foobar')
++    try:
++        rebuilt = qs.func(*qs.args)
++    except Exception as exc:
++        raise AssertionError(
++            'QuotedString.func(*QuotedString.args) raised %s: %s (args was %r)'
++            % (type(exc).__name__, exc, qs.args)) from exc
++    assert rebuilt == QuotedString('foobar')
++    assert rebuilt == qs
++
++
++def test_Comment_func_of_args():
++    cm = Comment('a comment')
++    try:
++        rebuilt = cm.func(*cm.args)
++    except Exception as exc:
++        raise AssertionError(
++            'Comment.func(*Comment.args) raised %s: %s (args was %r)'
++            % (type(exc).__name__, exc, cm.args)) from exc
++    assert rebuilt == cm
++    assert isinstance(rebuilt, Comment)
++    assert rebuilt.text == 'a comment'

@@ -1,0 +1,83 @@
+diff --git a/sympy/utilities/lambdify.py b/sympy/utilities/lambdify.py
+index da67263b19d5706e8350104eda713e203d675fa1..7adb21c3b463a489ef2a71a599fe428b710d388b 100644
+--- a/sympy/utilities/lambdify.py
++++ b/sympy/utilities/lambdify.py
+@@ -961,7 +961,13 @@ def _recursive_to_string(doprint, arg):
+             left, right = "()"
+         else:
+             raise NotImplementedError("unhandled type: %s, %s" % (type(arg), arg))
+-        return left +', '.join(_recursive_to_string(doprint, e) for e in arg) + right
++        inner = ', '.join(_recursive_to_string(doprint, e) for e in arg)
++        # A one-element tuple needs a trailing comma, otherwise the
++        # parentheses are just grouping and the generated code returns the
++        # element itself rather than a tuple.
++        if isinstance(arg, tuple) and len(arg) == 1:
++            inner += ','
++        return left + inner + right
+     elif isinstance(arg, str):
+         return arg
+     else:
+diff --git a/sympy/utilities/tests/test_lambdify_tuple_one_element.py b/sympy/utilities/tests/test_lambdify_tuple_one_element.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..2acabef8c79d303d98e139d8054e53c76c1a5dd0
+--- /dev/null
++++ b/sympy/utilities/tests/test_lambdify_tuple_one_element.py
+@@ -0,0 +1,58 @@
++"""Tests for lambdify printing of tuples with a single element.
++
++``lambdify([], (1,))`` must generate ``return (1,)``; the missing comma
++made the generated function return the integer ``1`` instead of a tuple.
++"""
++
++import inspect
++
++from sympy.core.symbol import Symbol
++from sympy.utilities.lambdify import lambdify
++
++x = Symbol('x')
++
++
++def test_single_element_tuple_constant():
++    f = lambdify([], tuple([1]))
++    result = f()
++    assert isinstance(result, tuple), \
++        "lambdify returned {!r}, which is not a tuple".format(result)
++    assert result == (1,)
++
++
++def test_single_element_tuple_symbol():
++    f = lambdify([x], (x,))
++    result = f(2)
++    assert isinstance(result, tuple), \
++        "lambdify returned {!r}, which is not a tuple".format(result)
++    assert result == (2,)
++
++
++def test_single_element_tuple_in_generated_source():
++    f = lambdify([], tuple([1]))
++    source = inspect.getsource(f)
++    assert "(1,)" in source, \
++        "generated source has no one-element tuple:\n{}".format(source)
++
++
++def test_nested_single_element_tuple():
++    f = lambdify([x], ((x,), x + 1))
++    result = f(2)
++    assert isinstance(result[0], tuple), \
++        "lambdify returned {!r} for the nested tuple".format(result[0])
++    assert result == ((2,), 3)
++
++
++def test_empty_tuple_is_unchanged():
++    f = lambdify([], tuple())
++    result = f()
++    assert isinstance(result, tuple), \
++        "lambdify returned {!r}, which is not a tuple".format(result)
++    assert result == ()
++
++
++def test_several_element_tuple_is_unchanged():
++    f = lambdify([], (1, 2))
++    assert f() == (1, 2)
++    g = lambdify([x], (x, x + 1))
++    assert g(3) == (3, 4)

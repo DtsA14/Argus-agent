@@ -1,0 +1,194 @@
+{
+  "job": "j20261028_030146_c6ca",
+  "kind": "code",
+  "state": "AGENT_FAILED",
+  "created_at": "2026-10-28T03:01:46Z",
+  "max_usd": 1.0,
+  "inputs": {
+    "repo": "/home/ubuntu/swe/sympy",
+    "commit": "b1cb676cf92dd1a48365b731979833375b188bf2",
+    "issue": "Rational calc value error\npython 3.11, sympy 1.11.1\nwhen calc Rational('0.5', '100'), the value is 1/100100; but Rational(0.5, 100) the value is 1/200, this value is the true value, and the version of sympy 1.8 is normal",
+    "exclude": [],
+    "environment": "sympy"
+  },
+  "environment_image": "sha256:de306e046ab6347cbd56ffb62dd75fcf71c51999c5a5fbf60117e36bd11fe412",
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "j20261028_030146_c6ca-d1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-28T03:01:46Z",
+      "ended_at": "2026-10-28T03:05:53Z",
+      "status": "DRAFTED",
+      "usd": 0.07489176,
+      "draft_sha256": "5fd55a77710c3b388bd0ff50132f0fb90e2ab4a60c62e060f423155a30b6d1b2"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "j20261028_030146_c6ca-a1",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-28T03:20:27Z",
+      "ended_at": "2026-10-28T03:22:07Z",
+      "status": "FAILED_ACCEPTANCE",
+      "usd": 0.025199688,
+      "profile": "large_usd"
+    },
+    "a2": {
+      "kind": "agent",
+      "run_id": "j20261028_030146_c6ca-a2",
+      "cap_usd": 0.75,
+      "started_at": "2026-10-28T03:25:00Z",
+      "carry": {
+        "carried": true,
+        "from": "a1",
+        "stopped": {
+          "end": "max_steps",
+          "steps": 12,
+          "wrote": false,
+          "read": [
+            "sympy/core/numbers.py"
+          ]
+        }
+      },
+      "ended_at": "2026-10-28T03:26:23Z",
+      "status": "FAILED_ACCEPTANCE",
+      "usd": 0.019636488,
+      "profile": "large_usd"
+    }
+  },
+  "approval": {
+    "draft_sha256": "5fd55a77710c3b388bd0ff50132f0fb90e2ab4a60c62e060f423155a30b6d1b2",
+    "contract_sha256": "c127996560426db10c676e9b6b631a746c24fbd68d9b649eea7a7859574a8e3e",
+    "task": "task",
+    "max_usd": 0.75,
+    "max_iterations": 3,
+    "at": "2026-10-28T03:20:27Z",
+    "by": "ubuntu",
+    "feasibility": "unproven",
+    "baseline": [
+      {
+        "id": "validation:target",
+        "excerpt": "sympy/core/tests/test_rational_strings.py:41: in test_rational_two_decimal_string_args_value\nE   AssertionError: Rational('0.5', '100') == 1/100100, expected 1/200\nsympy/core/tests/test_rational_strings.py:46: in test_rational_two_decimal_string_args_match_numeric_args\nE   AssertionError: Rational('0.5', '100') == 1/100100, expected the same value as Rational(0.5, 100), 1/200\nsympy/core/tests/test_rational_strings.py:56: in test_rational_two_decimal_string_args_numerator_and_denominator\nE   AssertionError: Rational('0.5', '100') has p, q = 1, 100100, expected 1, 200\n============================== 3 failed in Xs ==============================="
+      }
+    ]
+  },
+  "log": [
+    {
+      "at": "2026-10-28T03:01:46Z",
+      "what": "created",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-28T03:01:46Z",
+      "what": "intaken",
+      "files": 1944
+    },
+    {
+      "at": "2026-10-28T03:01:46Z",
+      "what": "limits_shown",
+      "screen": "== drafter stage d1 (job j20261028_030146_c6ca) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-28T03:01:46Z",
+      "what": "confirmed_by_flag",
+      "screen": "== drafter stage d1 (job j20261028_030146_c6ca) ==\nmodel deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits\noverrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'llm.prompt_cache.enabled': True}\njob cap $1.00; spent $0.0000; left $1.0000"
+    },
+    {
+      "at": "2026-10-28T03:01:46Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-28T03:01:46Z",
+      "what": "state",
+      "old": "NEW",
+      "new": "DRAFTING",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-28T03:05:53Z",
+      "what": "state",
+      "old": "DRAFTING",
+      "new": "AWAITING_APPROVAL",
+      "stage": "d1"
+    },
+    {
+      "at": "2026-10-28T03:20:13Z",
+      "what": "limits_shown",
+      "screen": "== approve and run the agent (job j20261028_030146_c6ca) ==\ndraft 5fd55a77710c (from stage j20261028_030146_c6ca-d1)\nwritable: sympy/core/numbers.py\nenvironment sympy, image de306e046ab6\nvalidation target (env sympy): python -m pytest sympy/core/tests/test_rational_strings.py; required: sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_value, sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_match_numeric_args, sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_numerator_and_denominator\nvalidation regression (env sympy): python -m pytest sympy/core/tests/test_numbers.py::test_Rational_new sympy/core/tests/test_numbers.py::test_Rational_cmp sympy/core/tests/test_numbers.py::test_Rational_int; required: sympy/core/tests/test_numbers.py::test_Rational_new, sympy/core/tests/test_numbers.py::test_Rational_cmp, sympy/core/tests/test_numbers.py::test_Rational_int\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0749; left $0.9251"
+    },
+    {
+      "at": "2026-10-28T03:20:13Z",
+      "what": "confirmed_by_flag",
+      "screen": "== approve and run the agent (job j20261028_030146_c6ca) ==\ndraft 5fd55a77710c (from stage j20261028_030146_c6ca-d1)\nwritable: sympy/core/numbers.py\nenvironment sympy, image de306e046ab6\nvalidation target (env sympy): python -m pytest sympy/core/tests/test_rational_strings.py; required: sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_value, sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_match_numeric_args, sympy/core/tests/test_rational_strings.py::test_rational_two_decimal_string_args_numerator_and_denominator\nvalidation regression (env sympy): python -m pytest sympy/core/tests/test_numbers.py::test_Rational_new sympy/core/tests/test_numbers.py::test_Rational_cmp sympy/core/tests/test_numbers.py::test_Rational_int; required: sympy/core/tests/test_numbers.py::test_Rational_new, sympy/core/tests/test_numbers.py::test_Rational_cmp, sympy/core/tests/test_numbers.py::test_Rational_int\ntools added: ['edit_file', 'search_files']; profile large_usd; one attempt $0.45\nagent cap $0.7500, 3 attempts; no reference patch (unproven)\njob cap $1.00; spent $0.0749; left $0.9251"
+    },
+    {
+      "at": "2026-10-28T03:20:13Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-28T03:20:27Z",
+      "what": "approved",
+      "draft": "5fd55a77710c",
+      "contract": "c12799656042"
+    },
+    {
+      "at": "2026-10-28T03:20:27Z",
+      "what": "state",
+      "old": "AWAITING_APPROVAL",
+      "new": "AGENT_RUNNING",
+      "stage": "a1"
+    },
+    {
+      "at": "2026-10-28T03:22:07Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "AGENT_FAILED",
+      "stage": "a1",
+      "reason": "stagnant: the same criteria failed 2 attempts in a row"
+    },
+    {
+      "at": "2026-10-28T03:25:00Z",
+      "what": "limits_shown",
+      "screen": "== retry the agent (job j20261028_030146_c6ca) ==\nagent stage a2 (retry of a1), approved contract c12799656042\na1 ended: max_steps after 12 steps, no file changed\nprofile large_usd; max input 60000; one attempt $0.45; agent cap $0.7500\njob cap $1.00; spent $0.1001; left $0.8999"
+    },
+    {
+      "at": "2026-10-28T03:25:00Z",
+      "what": "confirmed_by_flag",
+      "screen": "== retry the agent (job j20261028_030146_c6ca) ==\nagent stage a2 (retry of a1), approved contract c12799656042\na1 ended: max_steps after 12 steps, no file changed\nprofile large_usd; max input 60000; one attempt $0.45; agent cap $0.7500\njob cap $1.00; spent $0.1001; left $0.8999"
+    },
+    {
+      "at": "2026-10-28T03:25:00Z",
+      "what": "key_from_file",
+      "path": "/home/ubuntu/.config/argus/deepseek_key"
+    },
+    {
+      "at": "2026-10-28T03:25:00Z",
+      "what": "retry",
+      "stage": "a2",
+      "by": "ubuntu"
+    },
+    {
+      "at": "2026-10-28T03:25:00Z",
+      "what": "state",
+      "old": "AGENT_FAILED",
+      "new": "AGENT_RUNNING",
+      "stage": "a2"
+    },
+    {
+      "at": "2026-10-28T03:26:23Z",
+      "what": "state",
+      "old": "AGENT_RUNNING",
+      "new": "AGENT_FAILED",
+      "stage": "a2",
+      "reason": "stagnant: the same criteria failed 2 attempts in a row"
+    }
+  ],
+  "intake": {
+    "commit": "b1cb676cf92dd1a48365b731979833375b188bf2",
+    "tree": "c49c6e39e65cf6b3a5463adc3b2b1196996b01ef",
+    "files": 1944,
+    "snapshot_sha256": "b02d4f89d81d0864d51e953c8c8288c7742246d7601aedb2bb068ae3b3c039d3"
+  }
+}

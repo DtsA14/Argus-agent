@@ -1,0 +1,101 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/physics/units/unitsystem.py"
+    ],
+    "steps": [
+      "In the `Function` branch of `UnitSystem._collect_factor_and_dimension`, get the dimension system once and test each argument's dimension with `is_dimensionless` instead of relying on structural equality with `Dimension(1)`.",
+      "When every argument of the function is dimensionless, return the collected factor together with `Dimension(1)` so that `exp(second/(ohm*farad))` is reported as dimensionless.",
+      "Keep the existing handling for functions whose arguments are not dimensionless (raise `ValueError` or keep propagating the argument dimensions), so that `1 - exp(u/w)` still raises and `exp(pH)`-style calls keep their current result.",
+      "Keep `expr.func(*(f[0] for f in fds))` as the factor so that the scaling part of the call is preserved."
+    ],
+    "risks": [
+      "Comparing the argument dimension with `Dimension(1)` structurally instead of using `is_dimensionless` leaves the bug (time/(capacitance*impedance) is only dimensionally dimensionless).",
+      "Rejecting (or discarding) every argument dimension that is not structurally `Dimension(1)` would change existing behaviour such as `_collect_factor_and_dimension(exp(-log(cH)))` and break `exp(pH)` in `test_factor_and_dimension`.",
+      "Returning `Dimension(1)` for every function call, without checking the argument, would hide real errors and break `test_check_unit_consistency`, which requires `1 - exp(u/w)` to raise `ValueError`.",
+      "Dropping the collected factor of the arguments (returning only the dimension) would break all callers of the tuple.",
+      "Handling only one-argument functions while accidentally changing the returned tuple length for multi-argument functions."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/physics/units/unitsystem.py"
+      ],
+      "protected": [
+        "sympy/physics/units/tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/physics/units/tests/test_collect_factor_and_dimension.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_exp_of_dimensionless_expression_is_dimensionless",
+          "sympy/physics/units/tests/test_collect_factor_and_dimension.py::test_number_added_to_exp_of_dimensionless_expression"
+        ],
+        "environment": "sympy"
+      },
+      {
+        "id": "regression",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/physics/units/tests/test_unitsystem.py",
+          "sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_20288",
+          "sympy/physics/units/tests/test_quantities.py::test_get_dimensional_expr_with_function",
+          "sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_22164"
+        ],
+        "timeout_s": 300,
+        "min_tests": 13,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/physics/units/tests/test_unitsystem.py::test_definition",
+          "sympy/physics/units/tests/test_unitsystem.py::test_str_repr",
+          "sympy/physics/units/tests/test_unitsystem.py::test_convert_to",
+          "sympy/physics/units/tests/test_unitsystem.py::test_extend",
+          "sympy/physics/units/tests/test_unitsystem.py::test_dim",
+          "sympy/physics/units/tests/test_unitsystem.py::test_is_consistent",
+          "sympy/physics/units/tests/test_unitsystem.py::test_get_units_non_prefixed",
+          "sympy/physics/units/tests/test_unitsystem.py::test_derived_units_must_exist_in_unit_system",
+          "sympy/physics/units/tests/test_quantities.py::test_check_unit_consistency",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_20288",
+          "sympy/physics/units/tests/test_quantities.py::test_get_dimensional_expr_with_function",
+          "sympy/physics/units/tests/test_quantities.py::test_dimensional_expr_of_derivative",
+          "sympy/physics/units/tests/test_quantities.py::test_issue_22164"
+        ],
+        "environment": "sympy"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/physics/units/tests/test_collect_factor_and_dimension.py",
+      "content": "\"\"\"Tests for dimensionless function arguments in ``UnitSystem``.\n\n``UnitSystem._collect_factor_and_dimension`` has to notice that an argument\nwhich is dimensionless according to the dimension system -- ``second/(ohm*farad)``\nhas the dimension ``Dimension(time/(capacitance*impedance))``, which the SI\ndimension system knows to be dimensionless -- makes a function such as ``exp``\ndimensionless, instead of propagating the dimension of the argument.\n\"\"\"\n\nfrom sympy.functions.elementary.exponential import exp\nfrom sympy.physics.units import farad, ohm, second\nfrom sympy.physics.units.definitions.dimension_definitions import Dimension\nfrom sympy.physics.units.systems.si import SI\n\n\ndef dimensionless_expression():\n    # dimensionless for the dimension system, but not structurally Dimension(1)\n    return second/(ohm*farad)\n\n\ndef test_expression_is_dimensionless():\n    expr = dimensionless_expression()\n    dim = SI._collect_factor_and_dimension(expr)[1]\n    assert SI.get_dimension_system().is_dimensionless(dim)\n\n\ndef test_exp_of_dimensionless_expression_is_dimensionless():\n    arg = dimensionless_expression()\n    expr = exp(arg)\n    try:\n        factor, dim = SI._collect_factor_and_dimension(expr)\n    except Exception as exc:\n        raise AssertionError(\n            \"collecting the factor and the dimension of %s raised %s, but its\"\n            \" argument is dimensionless\" % (expr, exc)) from exc\n    assert dim == Dimension(1)\n\n\ndef test_number_added_to_exp_of_dimensionless_expression():\n    expr = 100 + exp(dimensionless_expression())\n    try:\n        factor, dim = SI._collect_factor_and_dimension(expr)\n    except Exception as exc:\n        raise AssertionError(\n            \"collecting the factor and the dimension of %s raised %s, but the\"\n            \" argument of exp is dimensionless\" % (expr, exc)) from exc\n    assert dim == Dimension(1)\n"
+    }
+  ],
+  "unverifiable": [
+    "Whether a fix keeps the current result of `_collect_factor_and_dimension(exp(-log(cH)))`, which `test_quantities.py::test_factor_and_dimension` asserts as `(1, volume/amount_of_substance)`: a stricter fix that rejects every argument that is not dimensionless according to the dimension system makes that call raise, so that assertion is deliberately left out of the validations (either choice is accepted).",
+    "Which exception path rejects a function of a dimensionful argument (the `Function` branch itself raising `ValueError`, or the enclosing `Add`): only the fact that `1 - exp(u/w)` and `1 + exp(second)` raise `ValueError` is checked.",
+    "The numerical factor of `exp(<quantity>)` (the scale factors of the argument multiplied and exponentiated) is not asserted, only the returned dimension.",
+    "Functions of more than one argument, for which the current code returns a tuple of the wrong length, are not covered."
+  ]
+}
