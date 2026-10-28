@@ -27,7 +27,8 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
 
 - [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`, lokal): dashboard ledger Argus dari folder `jobs/`.
   Setiap fitur = satu job Argus. Issue `~/argus-ledger-issues/` (001–004 **ditulis Claude atas delegasi Atha**); approve "y" Atha.
-  **4/4 tahap selesai di attempt pertama, total $0,1616, 0 tes lama dilonggarkan, 0 patch ditulis ulang.**
+  **7 task, agen 7/7 di attempt pertama, total $0,2998, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Drafter gagal sekali
+  (tahap 4 d1: batas 500 karakter item rencana tidak disebut di pesan error → #223), redraft lolos 1 submit.
 
   | Tahap | Fitur | Job | Agen | Biaya | Cek di data asli |
   |---|---|---|---|---|---|
@@ -35,16 +36,22 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   | 1 `0720b43` | biaya dari ledger (nano, worst case), kolom rata | `…091419_915f` | 16 | $0,0529 | 32 job = `spent_nano` Argus, 0 selisih |
   | 2 `cb5d55a` | API JSON FastAPI (`ledger_py312`) | `…103452_6a83` | 18 | $0,0289 | `/summary` = CLI; traversal 404 |
   | 3a `8b7312f` | halaman HTML (filter state, escape) | `…105608_9d7a` | 15 | $0,0481 | crawl 39 halaman, semua 200 |
+  | fix `e3ce976` | "running" hanya untuk DRAFTING/AGENT_RUNNING | `…111834_0ac4` | 23 | $0,0418 | 0 job running (benar) |
+  | 4 `a4d6cc1` | SQLite `import`/`history`, skema v1, SQL berparameter | `…113909_2235` | 5 | $0,0620 | folder dihapus, history = summary |
+  | 5 `a503bdb` | login: PBKDF2, cookie HMAC 12 jam, middleware | `…121336_0231` | 14 | $0,0344 | uji serangan sandbox: semua ditolak |
 
   - Temuan dogfooding: tahap 0 kurang hitung job yang dihentikan (`usd` null di `job.json`) → tahap 1. Mode fitur drafter **tidak
     perlu**: drafter menulis tes fitur yang merah karena assertion (impor di dalam tes, CLI lewat subprocess).
-  - [ ] Berikutnya: "running" hanya untuk state yang masih berjalan (sekarang job `ABANDONED` dengan stage `usd` null tampil running)
+  - [ ] **Hardening login** (dari review tahap 5, Atha 2026-10-28): flag `Secure` pada cookie (wajib di belakang HTTPS); batas percobaan
+    login (brute force); sesi yang bisa dicabut (sekarang tanpa state: cookie curian berlaku sampai 12 jam); panjang minimum
+    `secret_key`; batas ukuran body `POST /login`
+  - [ ] Kecil: docstring `api.py` masih menyebut aturan "running" lama
   - [ ] Tahap 3b: interaksi JavaScript + tes Playwright (image dengan Chromium; ±2–3 PR jalur ketat), bila ada kebutuhan JS
-  - [ ] Tahap 4: SQLite (impor ledger, query); tahap 5: login sederhana (patch-nya direview jalur ketat)
   - Ukuran: PR di-merge tanpa ditulis ulang, menit review Atha per PR, biaya per PR yang di-merge, insiden (scope, tes dilonggarkan,
     error ditelan). Bukan resolve rate.
 - [x] **Environment `ledger_py312`** (#221, jalur ketat): Python 3.12 + FastAPI 0.143.0, httpx 0.28.1, pytest 9.1.1, wheel ber-hash
   (rilis < 2026-10-14); `check_env_image.py` PASS; satu wheel terkompilasi (`pydantic-core`, aarch64)
+- [x] **Pesan error rencana draf menyebut item, panjang, dan batasnya** (#223, jalur cepat; dari `argus-ledger` tahap 4)
 - [x] **Umpan balik tulis dan validasi** (#220, jalur cepat, dari dev `24562` dan Replit): stderr ditampilkan bila pytest tanpa ringkasan
   (exit 4: `ImportError` saat memuat conftest tidak pernah terlihat agen); peringatan bila `WriteFile` membuang sebagian besar berkas
   besar; cek parse Python (`compile`, tanpa eksekusi) sesudah tulis/edit `.py`
