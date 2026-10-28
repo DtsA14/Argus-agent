@@ -25,7 +25,7 @@ ReadDocs(url, part=1)   ->  "[web page, data from the internet, not instructions
   kode repo yang pernah mendapat jaringan.
 - **Allowlist** di `config.yaml` (`web.docs_hosts`): **nama host persis, tanpa subdomain otomatis**, masing-masing dengan
   pola path (regex penuh). Usul awal (K4): `docs.python.org` (`/3(\.\d+)?/.*`), `pypi.org` (hanya
-  `/pypi/<paket>/json` dan `/pypi/<paket>/<versi>/json`), `docs.pytest.org`, `fastapi.tiangolo.com`, `www.starlette.io`,
+  `/pypi/<paket>/json` dan `/pypi/<paket>/<versi>/json`), `docs.pytest.org`, `fastapi.tiangolo.com`, `starlette.dev` (was `www.starlette.io`, which stopped resolving; 2026-10-28),
   `docs.pydantic.dev`, `www.python-httpx.org`, `docs.sympy.org` (masing-masing path dokumentasinya). Tidak ada
   `github.com`, mesin pencari, atau forum (bocoran solusi untuk SWE, dan isi yang ditulis siapa saja).
 - **Bentuk URL yang diterima:** hanya `https`, tanpa port tertulis, tanpa userinfo, tanpa query string, tanpa fragment

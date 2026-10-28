@@ -391,3 +391,11 @@ def test_retry_says_the_network_grant_and_checks_it_again(tmp_path):
     c["web"]["environments"] = ["argus"]
     job, r = rj.retry("jtest", cfg=e.cfg, deps=e.deps, sandbox_cfg={}, jobs_dir=e.jobs)
     assert any("network: ReadDocs on" in t and "granted at approve" in t for t in e.confirms[n:])
+
+
+def test_the_allowlist_is_the_reviewed_set_of_hosts():
+    """A change to web.hosts is a strict-lane change: this list changes with it, in the same reviewed PR. starlette.dev
+    replaced www.starlette.io on 2026-10-28 (the old host stopped resolving; www.starlette.dev redirects to it)."""
+    assert sorted(load_config()["web"]["hosts"]) == [
+        "docs.pydantic.dev", "docs.pytest.org", "docs.python.org", "docs.sympy.org", "fastapi.tiangolo.com", "pypi.org",
+        "starlette.dev", "www.python-httpx.org"]
