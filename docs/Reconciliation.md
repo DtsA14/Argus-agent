@@ -128,13 +128,14 @@ variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di r
 
 ## 6. Gap terbuka, diurutkan menurut nilai sekarang
 
-1. **Task fitur di aplikasi nyata** (arah 2026-10-28): `argus-ledger` tahap 0–8 selesai, **10 task di `main`, $0,5094** (agen 8/10 di attempt
+1. **Task fitur di aplikasi nyata** (arah 2026-10-28): `argus-ledger` tahap 0–9 selesai, **11 task di `main`, $0,5366** (agen 9/11 di attempt
    pertama; 010 tidak di-merge karena uji serangan menemukan 2 cacat yang lolos dari tesnya; 010b lewat retry sesudah 4
    `context_limit`, ditangani #227) (CLI, biaya dari ledger, API FastAPI di environment baru `ledger_py312` #221, halaman HTML, SQLite, login, hardening
    login), semuanya dicek di data ledger asli; login dan hardening juga dengan uji serangan. Satu kegagalan drafter karena pesan
    error harness (#223). Dogfooding juga menemukan celah gate: ekor output yang tidak memuat satu pun tes membuat cek "tes
-   menelan traceback" lolos tanpa menilai (#225). Mode fitur drafter tidak perlu. Berikutnya: spek web search (jembatan pertama Alur A
-   dan B), lalu JS + Playwright (3b) bila perlu. Issue 001–010 ditulis Claude atas delegasi; argus-ledger jalur cepat.
+   menelan traceback" lolos tanpa menilai (#225). Mode fitur drafter tidak perlu. ReadDocs (akses web tahap 1, #229) di `main`; pilot
+   K7 (tahap 9): agen tidak memakainya pada fitur yang umum, manfaat belum terbukti. Berikutnya: JS + Playwright (3b) bila perlu;
+   mesin pencari hanya bila ReadDocs terbukti kurang. Issue 001–011 ditulis Claude atas delegasi; argus-ledger jalur cepat.
 2. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): batch 3 3/4, batch 4 3/5. Sekarang alat regresi (±20% usaha), bukan
    tujuan; batch 5 di harness sesudah #215–#217 untuk melihat efeknya di instance baru.
 3. **Efek petunjuk #204** (`max_steps` tanpa menulis) dan output drafter 32.000: ada di kode, belum di run live.

@@ -28,7 +28,7 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
 - [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`, lokal): dashboard ledger Argus dari folder `jobs/`.
   Setiap fitur = satu job Argus. Issue `~/argus-ledger-issues/` (001–010 **ditulis Claude atas delegasi Atha**). Sejak tahap 6
   **jalur cepat** (Atha 2026-10-28): Claude approve draf, review patch, cek, dan commit sendiri; dari Atha hanya "go live" per job.
-  **10 task di `main` (tahap 0–8), total $0,5094, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Agen 8/10 di attempt
+  **11 task di `main` (tahap 0–9), total $0,5366, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Agen 9/11 di attempt
   pertama; 010b butuh retry (5 attempt, 4 `context_limit`); 010 ($0,0575) DONE tapi **tidak di-merge** (2 cacat yang lolos
   dari tesnya, ditemukan uji serangan). Drafter gagal sekali
   (tahap 4 d1: batas 500 karakter item rencana tidak disebut di pesan error → #223), redraft lolos 1 submit.
@@ -45,6 +45,7 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   | 6 `54fd0e0` | hardening 008: cookie `Secure` default, key ≥ 32, body login ≤ 4096 (413) | `…143850_e07b` | 11 | $0,0473 | 74 tes; 17 uji serangan + data asli 38 job |
   | 7 `ae66c31` | 009: batas login gagal per alamat (429 + `Retry-After`, tanpa PBKDF2 saat diblokir) | `…145520_0b94` | 8 | $0,0338 | brute force 20 tebakan: 5 hash, 15× 429 |
   | – | 010: sesi bisa dicabut, **tidak di-merge** (logout palsu tersimpan tanpa batas; login di detik yang sama memberi nilai yang dicabut) | `…150342_8c2b` | 6+18 | $0,0575 | uji serangan: 2 gagal |
+  | 9 `a72135c` | 011: trusted hosts, gzip ≥ 1000, `/jobs.csv`, API docs mati bawaan (pilot ReadDocs K7, lengan A `--web`) | `…173015_9964` | 24 | $0,0272 | 125 tes; CSV = CLI di 38 job; uji tahap 6–8 |
   | 8 `759c59c` | 010b: logout mencabut sesi valid (SHA-256), `revoke-sessions` SQLite, fail-closed | `…152604_5fde` | retry, 5 attempt | $0,0810 | 103 tes; uji tahap 6–8 + data asli |
 
   - Temuan dogfooding: tahap 0 kurang hitung job yang dihentikan (`usd` null di `job.json`) → tahap 1. Mode fitur drafter **tidak
@@ -78,8 +79,16 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   `context_limit` karena output validasi); tes browser dengan kode Playwright (tahap 3b `argus-ledger`: image dengan Chromium, server di
   localhost dalam sandbox, pola aksi → cek hasil melawan "Potemkin interface"). Tahap 3a memakai pola anti-Potemkin tanpa
   browser: tes mengikuti setiap link
-- [ ] **Web search sebagai tool** (sesudah tahap awal `argus-ledger`; jalur ketat): sandbox sekarang tanpa jaringan; isi web dilabeli
-  data, hasil di-memo (crash-resume), biaya search masuk ledger. Dipakai coder (dokumentasi) dan nanti riset
+- [x] **ReadDocs, akses web tahap 1** (#229, jalur ketat, `docs/reviews/SPEC_WEB_TOOLS.md`): halaman dokumentasi dari host persis di
+  allowlist, diberikan manusia lewat `argus approve --web` (hanya env `argus`/`ledger_py312`), pengunduh di proses anak tanpa
+  environment, IP dipin + TLS ke host asli, redirect dicek per hop, ledger unduhan, penolakan tanpa teks server. Review GPT,
+  `/security-review` (tanpa temuan), `/code-review medium` (10 temuan diperbaiki); mutan 56/56; verify PASS (1947, sandbox 0)
+  - **Pilot K7** (issue 011, dua job): A `--web` dan B tanpa web sama-sama DONE di attempt 1 dengan patch hampir identik (saling
+    lulus tes, 125); **agen A tidak pernah memanggil ReadDocs** (fitur umum, model sudah tahu). A $0,0272 vs B $0,0411 (selisih dari
+    drafter, 1 vs 3 submit). Manfaat belum terbukti; tunggu task dengan API langka/baru dari kebutuhan nyata, bukan dibuat-buat
+  - [~] `www.starlette.io` mati (dokumentasi pindah ke `starlette.dev`): PR jalur ketat menunggu "merge"
+- [ ] **Mesin pencari (tahap 2)**: hanya bila ReadDocs terbukti kurang (agen tidak tahu halaman mana); spek sendiri, biaya per
+  panggilan masuk ledger
 - [ ] **Deep research** (sesudah web search): kerangka orchestrator → workers → synthesize → evaluator sudah ada; gate kutipan
   (klaim ↔ sumber yang benar-benar di-fetch) belum ada (gap ADR-006 non-kode)
 - [ ] Email Agensi.io (marketplace skill, 2026-10-28): **nanti**. Nilai Argus ada di kode yang menegakkan jaminan, bukan di
