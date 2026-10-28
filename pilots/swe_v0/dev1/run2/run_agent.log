@@ -1,0 +1,2 @@
+a1: agent finished: FAILED_ACCEPTANCE ($0.1801)   a1 attempts: 1 finished after 16 steps, files changed; 2 reservation_exhausted after 28 steps, files changed; 3 max_steps after 30 steps, files changed why: max_iterations 
+batch spent $0.2023 over 1 jobs; next stage cap $0.75; fits $3.00: True

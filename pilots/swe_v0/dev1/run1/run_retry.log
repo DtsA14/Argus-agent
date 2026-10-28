@@ -1,0 +1,4 @@
+batch spent $0.1211 over 3 jobs; next stage cap $1.00; fits $3.00: True
+24562 retry: agent finished: FAILED_BUDGET ($0.0931)   a2 attempts: 1 finished after 12 steps, files changed; 2 reservation_exhausted after 11 steps, files changed; 3 reservation_exhausted after 19 steps, files changed 
+batch spent $0.2142 over 3 jobs; next stage cap $0.00; fits $3.00: True
+DEVRETRYDONE

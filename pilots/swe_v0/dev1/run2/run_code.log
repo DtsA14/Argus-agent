@@ -1,0 +1,6 @@
+harness 1a6c14a Merge pull request #217 from DtsA14/spec-attempt-token-ceiling
+batch spent $0.0000 over 0 jobs; next stage cap $1.00; fits $3.00: True
+sympy__sympy-24562: start 2026-10-28T06:58:11Z
+sympy__sympy-24562: end rc=0 job=j20261028_065812_5cb1 drafter finished: DRAFTED ($0.0222) job j20261028_065812_5cb1: AWAITING_APPROVAL 
+batch spent $0.0222 over 1 jobs; next stage cap $0.00; fits $3.00: True
+DEV2CODEDONE

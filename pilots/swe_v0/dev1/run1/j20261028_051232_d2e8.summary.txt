@@ -1,0 +1,87 @@
+stage: j20261028_051232_d2e8-d1
+writable: ['sympy/core/numbers.py']
+validation target sympy -m pytest sympy/core/tests/test_rational_two_string_args.py | required: ['sympy/core/tests/test_rational_two_string_args.py::test_rational_two_string_arguments', 'sympy/core/tests/test_rational_two_string_args.py::test_rational_two_string_arguments_agrees_with_float_argument', 'sympy/core/tests/test_rational_two_string_args.py::test_rational_two_string_arguments_unreduced', 'sympy/core/tests/test_rational_two_string_args.py::test_rational_numerator_rational_denominator_string', 'sympy/core/tests/test_rational_two_string_args.py::test_rational_two_fraction_strings']
+validation regression sympy -m pytest sympy/core/tests/test_numbers.py::test_seterr sympy/core/tests/test_numbers.py::test_mod sympy/core/tests/test_numbers.py::test_divmod sympy/core/tests/test_numbers.py::test_igcd sympy/core/tests/test_numbers.py::test_igcd_lehmer sympy/core/tests/test_numbers.py::test_igcd2 sympy/core/tests/test_numbers.py::test_ilcm sympy/core/tests/test_numbers.py::test_igcdex sympy/core/tests/test_numbers.py::test_Integer_new sympy/core/tests/test_numbers.py::test_Rational_new sympy/core/tests/test_numbers.py::test_Number_new sympy/core/tests/test_numbers.py::test_Number_cmp sympy/core/tests/test_numbers.py::test_Rational_cmp sympy/core/tests/test_numbers.py::test_Float | required: ['sympy/core/tests/test_numbers.py::test_seterr', 'sympy/core/tests/test_numbers.py::test_mod', 'sympy/core/tests/test_numbers.py::test_divmod', 'sympy/core/tests/test_numbers.py::test_igcd', 'sympy/core/tests/test_numbers.py::test_igcd_lehmer', 'sympy/core/tests/test_numbers.py::test_igcd2', 'sympy/core/tests/test_numbers.py::test_ilcm', 'sympy/core/tests/test_numbers.py::test_igcdex', 'sympy/core/tests/test_numbers.py::test_Integer_new', 'sympy/core/tests/test_numbers.py::test_Rational_new', 'sympy/core/tests/test_numbers.py::test_Number_new', 'sympy/core/tests/test_numbers.py::test_Number_cmp', 'sympy/core/tests/test_numbers.py::test_Rational_cmp', 'sympy/core/tests/test_numbers.py::test_Float']
+---- WHY
+sympy/core/tests/test_rational_two_string_args.py:21: in test_rational_two_string_arguments_unreduced
+E   AssertionError: assert 1/11 == 1/2
+E    +  where 1/11 = Rational('1.5', '3')
+E    +  and   1/2 = Rational(1, 2)
+sympy/core/tests/test_rational_two_string_args.py:25: in test_rational_numerator_rational_denominator_string
+E   AssertionError: assert 1/100100 == 1/200
+E    +  where 1/100100 = Rational(1/2, '100')
+E    +    where 1/2 = S.Half
+E    +  and   1/200 = Rational(1, 200)
+sympy/core/tests/test_rational_two_string_args.py:30: in test_rational_two_fraction_strings
+    value = Rational('3/4', '1/2')
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/numbers.py:1636: in __new__
+    q = Rational(q)
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/numbers.py:1607: in __new__
+E   TypeError: invalid input: 1/21/21/21/2
+sympy/core/tests/test_rational_two_string_args.py:32: in test_rational_two_fraction_strings
+E   AssertionError: Rational('3/4', '1/2') raised TypeError: invalid input: 1/21/21/21/2
+========================= 5 failed, 3 passed in Xs ==========================
+----
+changed_tests: []
+==== sympy/core/tests/test_rational_two_string_args.py
+"""Tests for Rational() built from two string arguments.
+
+Rational('0.5', '100') must mean (1/2) / 100 == 1/200, exactly like
+Rational(0.5, 100) does.  It used to give 1/100100 because the string
+denominator was repeated by p.q ('100' * 2 -> '100100') instead of being
+multiplied as a number.
+"""
+
+from sympy import Rational, S
+
+
+def test_rational_two_string_arguments():
+    assert Rational('0.5', '100') == Rational(1, 200)
+
+
+def test_rational_two_string_arguments_agrees_with_float_argument():
+    assert Rational('0.5', '100') == Rational(0.5, 100)
+
+
+def test_rational_two_string_arguments_unreduced():
+    assert Rational('1.5', '3') == Rational(1, 2)
+
+
+def test_rational_numerator_rational_denominator_string():
+    assert Rational(S.Half, '100') == Rational(1, 200)
+
+
+def test_rational_two_fraction_strings():
+    try:
+        value = Rational('3/4', '1/2')
+    except Exception as exc:
+        raise AssertionError(
+            "Rational('3/4', '1/2') raised %s: %s"
+            % (type(exc).__name__, exc)) from exc
+    assert value == Rational(3, 2)
+
+
+def test_rational_integer_strings_unchanged():
+    assert Rational('1', '100') == Rational(1, 100)
+    assert Rational(1, '100') == Rational(1, 100)
+    assert Rational('2', '4') == Rational(1, 2)
+
+
+def test_rational_single_string_argument_unchanged():
+    assert Rational('0.5') == S.Half
+    assert Rational('1e-2/3.2') == Rational(1, 320)
+
+
+def test_rational_invalid_string_denominator_still_raises():
+    try:
+        Rational('0.5', 'x')
+    except (TypeError, ValueError):
+        pass
+    else:
+        raise AssertionError("Rational('0.5', 'x') should raise")
+
+['Drafter: $0.0136, 13 model calls, 3 submits, 12 steps (ended: submitted).']

@@ -1,0 +1,35 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_kahane_simplify1": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_kahane_algorithm": "pass",
+    "test_gamma_matrix_class": "pass"
+  },
+  "patch_sha256": "72f19e784b88f2cca730fffc8c919a138d72127d6853c323737483fe8f3f4c7f",
+  "test_patch_sha256": "f82a3d336dbbdc82040ee6fd0a9b6433e42a714cdb3b0a5d0fd52e1383e61aa9",
+  "base_commit": "39de9a2698ad4bb90681c0fdb70b30a78233145f",
+  "environment": "sympy",
+  "image": "sha256:de306e046ab6347cbd56ffb62dd75fcf71c51999c5a5fbf60117e36bd11fe412",
+  "test_files": [
+    "sympy/physics/hep/tests/test_gamma_matrices.py"
+  ],
+  "run": {
+    "tests_run": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 0
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/physics/hep/tests/test_kahane_leading_gamma_order.py"
+    ],
+    "status": "pass",
+    "tests_run": 3,
+    "failures": 0,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}

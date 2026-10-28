@@ -1,0 +1,57 @@
+stage: j20261028_051613_1861-d1
+writable: ['sympy/core/mod.py', 'sympy/core/expr.py', 'sympy/functions/elementary/hyperbolic.py', 'sympy/polys/polytools.py']
+validation target sympy_py39 -m pytest sympy/core/tests/test_issue_piecewise_subs.py | required: ['sympy/core/tests/test_issue_piecewise_subs.py::test_subs_int_to_float_with_piecewise_hyperbolic']
+validation regressionsubs sympy_py39 -m pytest sympy/core/tests/test_subs.py::test_issue_19326 sympy/core/tests/test_subs.py::test_issue_13333 sympy/core/tests/test_subs.py::test_issue_12657 sympy/core/tests/test_subs.py::test_Subs_subs sympy/core/tests/test_subs.py::test_issue_17823 sympy/core/tests/test_subs.py::test_issue_19558 | required: ['sympy/core/tests/test_subs.py::test_issue_19326', 'sympy/core/tests/test_subs.py::test_issue_13333', 'sympy/core/tests/test_subs.py::test_issue_12657', 'sympy/core/tests/test_subs.py::test_Subs_subs', 'sympy/core/tests/test_subs.py::test_issue_17823', 'sympy/core/tests/test_subs.py::test_issue_19558']
+validation regressionpiecewise sympy_py39 -m pytest sympy/functions/elementary/tests/test_piecewise.py | required: []
+---- WHY
+sympy/core/function.py:473: in __new__
+    result = super().__new__(cls, *args, **options)
+sympy/core/cache.py:72: in wrapper
+    retval = cfunc(*args, **kwargs)
+sympy/core/function.py:285: in __new__
+    evaluated = cls.eval(*args)
+sympy/core/mod.py:169: in eval
+    G = gcd(p, q)
+sympy/polys/polytools.py:5306: in gcd
+    (F, G), opt = parallel_poly_from_expr((f, g), *gens, **args)
+sympy/polys/polytools.py:4340: in parallel_poly_from_expr
+    return _parallel_poly_from_expr(exprs, opt)
+sympy/polys/polytools.py:4399: in _parallel_poly_from_expr
+E   sympy.polys.polyerrors.PolynomialError: Piecewise generators do not make sense
+sympy/core/tests/test_issue_piecewise_subs.py:25: in test_subs_int_to_float_with_piecewise_hyperbolic
+E   AssertionError: subs({1: 1.0}) raised PolynomialError: Piecewise generators do not make sense
+==================== 1 failed, 1 passed, 1 warning in Xs ====================
+----
+changed_tests: []
+==== sympy/core/tests/test_issue_piecewise_subs.py
+from sympy import Piecewise, exp, sinh, symbols
+from sympy.core.cache import clear_cache
+from sympy.core.expr import Expr
+
+
+def test_subs_int_to_float_piecewise_complex_symbols():
+    # control: with plain (complex) symbols the substitution works today
+    clear_cache()
+    x, y, z = symbols('x y z')
+    expr = exp(sinh(Piecewise((x, y > x), (y, True)) / z))
+    res = expr.subs({1: 1.0})
+    assert isinstance(res, Expr)
+    assert res.has(Piecewise)
+
+
+def test_subs_int_to_float_with_piecewise_hyperbolic():
+    # substituting 1 -> 1.0 must not raise PolynomialError
+    # ("Piecewise generators do not make sense") when the symbols are real
+    clear_cache()
+    x, y, z = symbols('x y z', real=True)
+    expr = exp(sinh(Piecewise((x, y > x), (y, True)) / z))
+    try:
+        res = expr.subs({1: 1.0})
+    except Exception as exc:
+        raise AssertionError(
+            'subs({1: 1.0}) raised %s: %s' % (type(exc).__name__, exc)) from exc
+    assert isinstance(res, Expr)
+    assert res.has(Piecewise)
+    assert res.free_symbols == {x, y, z}
+
+['Drafter: $0.0312, 26 model calls, 5 submits, 25 steps (ended: submitted).']

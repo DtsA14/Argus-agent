@@ -1,0 +1,10 @@
+batch spent $0.0566 over 3 jobs; next stage cap $1.00; fits $3.00: True
+24562: agent finished: FAILED_ACCEPTANCE ($0.0543)   a1 attempts: 1 reservation_exhausted after 16 steps, no file changed; 2 output_truncated after 14 steps, files changed; 3 reservation_exhausted after 25 steps, files changed 
+batch spent $0.1109 over 3 jobs; next stage cap $1.00; fits $3.00: True
+23824: agent finished: DONE ($0.0015)   a1 attempts: 1 finished after 5 steps, files changed 
+23824 grade: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 2/2 pass approved tests on the maintainers' fix: pass 
+batch spent $0.1124 over 3 jobs; next stage cap $1.00; fits $3.00: True
+21379: agent finished: DONE ($0.0087)   a1 attempts: 1 finished after 14 steps, files changed 
+21379 grade: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 91/91 pass approved tests on the maintainers' fix: pass 
+batch spent $0.1211 over 3 jobs; next stage cap $0.00; fits $3.00: True
+DEVAPPROVEDONE
