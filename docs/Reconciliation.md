@@ -128,8 +128,9 @@ variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di r
 
 ## 6. Gap terbuka, diurutkan menurut nilai sekarang
 
-1. **Task fitur di aplikasi nyata** (arah 2026-10-28): `argus-ledger` tahap 0–3a selesai, **4/4 di attempt pertama, $0,1616**
-   (CLI, biaya dari ledger, API FastAPI di environment baru `ledger_py312` #221, halaman HTML), semuanya dicek di data ledger asli.
+1. **Task fitur di aplikasi nyata** (arah 2026-10-28): `argus-ledger` tahap 0–5 selesai, **7 task, agen 7/7 di attempt pertama,
+   $0,2998** (CLI, biaya dari ledger, API FastAPI di environment baru `ledger_py312` #221, halaman HTML, SQLite, login), semuanya
+   dicek di data ledger asli; login juga dengan uji serangan. Satu kegagalan drafter karena pesan error harness (#223).
    Mode fitur drafter tidak perlu. Berikutnya: interaksi JS + Playwright (3b) bila perlu, SQLite, login; issue ditulis Atha
    sendiri (001–004 ditulis Claude atas delegasi).
 2. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): batch 3 3/4, batch 4 3/5. Sekarang alat regresi (±20% usaha), bukan
