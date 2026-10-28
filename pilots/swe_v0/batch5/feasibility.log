@@ -1,0 +1,31 @@
+sympy__sympy-16450 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 38/38 pass 
+sympy__sympy-16450 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_posify': 'fail'} PASS_TO_PASS: 38/38 pass 
+sympy__sympy-16766 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 7/7 pass 
+sympy__sympy-16766 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_PythonCodePrinter': 'fail'} PASS_TO_PASS: 7/7 pass 
+sympy__sympy-16886 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 42/42 pass 
+sympy__sympy-16886 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_encode_morse': 'fail'} PASS_TO_PASS: 42/42 pass 
+sympy__sympy-17655 gold: resolved: True FAIL_TO_PASS: 2/2 pass PASS_TO_PASS: 9/9 pass 
+sympy__sympy-17655 empty: resolved: False FAIL_TO_PASS: 0/2 pass; not passing: {'test_point': 'fail', 'test_point3D': 'fail'} PASS_TO_PASS: 9/9 pass 
+sympy__sympy-18189 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 41/41 pass 
+sympy__sympy-18189 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_diophantine': 'fail'} PASS_TO_PASS: 41/41 pass 
+sympy__sympy-18211 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 54/54 pass 
+sympy__sympy-18211 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_18188': 'fail'} PASS_TO_PASS: 54/54 pass 
+sympy__sympy-18698 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 147/147 pass 
+sympy__sympy-18698 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_factor_terms': 'fail'} PASS_TO_PASS: 147/147 pass 
+sympy__sympy-18763 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 141/141 pass 
+sympy__sympy-18763 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_latex_subs': 'fail'} PASS_TO_PASS: 141/141 pass 
+sympy__sympy-19040 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 148/148 pass 
+sympy__sympy-19040 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_5786': 'fail'} PASS_TO_PASS: 148/148 pass 
+sympy__sympy-19346 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 40/40 pass 
+sympy__sympy-19346 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_dict': 'fail'} PASS_TO_PASS: 40/40 pass 
+sympy__sympy-19637 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 40/40 pass 
+sympy__sympy-19637 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_kernS': 'fail'} PASS_TO_PASS: 40/40 pass 
+sympy__sympy-19954 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 56/56 pass 
+sympy__sympy-19954 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_sylow_subgroup': 'fail'} PASS_TO_PASS: 56/56 pass 
+sympy__sympy-20428 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 154/154 pass 
+sympy__sympy-20428 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_issue_20427': 'fail'} PASS_TO_PASS: 154/154 pass 
+sympy__sympy-20590 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 21/21 pass 
+sympy__sympy-20590 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_immutable': 'fail'} PASS_TO_PASS: 21/21 pass 
+sympy__sympy-20801 gold: resolved: True FAIL_TO_PASS: 1/1 pass PASS_TO_PASS: 96/96 pass 
+sympy__sympy-20801 empty: resolved: False FAIL_TO_PASS: 0/1 pass; not passing: {'test_zero_not_false': 'fail'} PASS_TO_PASS: 96/96 pass 
+FEASDONE
