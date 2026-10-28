@@ -197,7 +197,7 @@ web:
     pypi.org: '/pypi/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)?/json'
     docs.pytest.org: '/en/[A-Za-z0-9._~/-]*'
     fastapi.tiangolo.com: '/[A-Za-z0-9._~/-]*'
-    www.starlette.io: '/[A-Za-z0-9._~/-]*'
+    starlette.dev: '/[A-Za-z0-9._~/-]*'   # was www.starlette.io, which stopped resolving (2026-10-28)
     docs.pydantic.dev: '/[A-Za-z0-9._~/-]*'
     www.python-httpx.org: '/[A-Za-z0-9._~/-]*'
     docs.sympy.org: '/[A-Za-z0-9._~/-]*'
