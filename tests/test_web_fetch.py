@@ -47,6 +47,7 @@ def test_allowed_urls(url):
     ("https://docs.python.org/3/library/json html", "path"),
     ("https://docs.python.org/2/library/json.html", "path"),           # not the host's path pattern
     ("https://pypi.org/project/fastapi/", "path"),
+    ("https://pypi.org/pypi/fastapi/json/simple", "path"),               # the pattern is matched whole, not as a prefix
     ("https://docs.python.org.evil.com/3/x.html", "host"),
     ("https://evil.docs.python.org/3/x.html", "host"),                  # no subdomains of an entry
     ("https://python.org/3/x.html", "host"),
@@ -69,7 +70,7 @@ def test_refused_urls_name_why(url, why):
                                 "0.0.0.0", "224.0.0.1", "255.255.255.255", "192.0.2.1", "198.18.0.1", "::1", "::",
                                 "fe80::1", "fc00::1", "fd12::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1",
                                 "::ffff:169.254.169.254", "2002:7f00:1::1", "64:ff9b::a00:1", "2001:db8::1",
-                                "::127.0.0.1"])
+                                "::127.0.0.1", "::ffff:8.8.8.8"])
 def test_non_global_addresses_are_refused(ip):
     assert not wf.ip_ok(ip)
 

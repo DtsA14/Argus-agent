@@ -7,8 +7,8 @@ empty environment: no API key and no proxy setting can reach it. It prints one J
 Rules (each checked here, before any connection where it can be):
 - the URL: https, an exact allowlisted host, no port, no userinfo, no query, no fragment, a plain path ([A-Za-z0-9._~/-],
   no "..", no percent-encoding) matching the host's path pattern, at most url_len characters;
-- the host is resolved once per hop and every address must be global (IPv4-mapped and other embedded IPv4 forms judged
-  as the IPv4 they carry); the connection goes to the first checked address (http.client never resolves again) with
+- the host is resolved once per hop and every address must be global (IPv4-mapped, IPv4-compatible, 6to4, NAT64 and
+  Teredo forms refused outright); the connection goes to the first checked address (http.client never resolves again) with
   TLS verified against the real host name (the default context: CERT_REQUIRED, check_hostname);
 - redirects are not followed by the client: each Location is checked with every rule above, at most `redirects` hops;
 - one page is at most page_bytes, within timeout_s for all its hops, of a text content type; its text at most page_text
@@ -79,8 +79,8 @@ def ip_ok(text):
         return False
     if ip.version == 6:
         if ip.ipv4_mapped is not None:
-            ip = ip.ipv4_mapped
-        elif any(ip in n for n in EMBEDDED_V6):
+            return False                                     # a real host never resolves to ::ffff:a.b.c.d
+        if any(ip in n for n in EMBEDDED_V6):
             return False                                     # 6to4, NAT64, Teredo: an IPv4 address in disguise
         elif ip in ipaddress.ip_network("::/96"):
             return False                                     # IPv4-compatible (deprecated) and :: itself

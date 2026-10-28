@@ -150,6 +150,7 @@ def test_the_text_of_an_attempt_is_bounded_and_a_repeated_step_is_counted_once(t
     assert not read(b, url(1), 1, "k4").startswith("Refused")          # 350
     assert not read(b, url(1), 1, "k4").startswith("Refused")          # the same step again: still 350
     assert not read(b, url(1), 2, "k5").startswith("Refused")          # 450
+    assert not read(b, url(1), 2, "k5").startswith("Refused")          # the last step again, at the limit: still 450
     assert "limit of 450" in read(b, url(1), 3, "k6")
 
 
@@ -164,6 +165,7 @@ def test_every_fetch_is_an_event_without_the_text(tmp_path):
 @pytest.mark.parametrize("change", [
     {"final_url": "https://evil.example/3/x.html"}, {"ip": "10.0.0.1"}, {"status": 302}, {"sha256": "0" * 64},
     {"bytes": 10 ** 9}, {"chain": []}, {"content_type": "image/png"}, {"text": 5},
+    {"chain": [url(1), "https://evil.example/3/x.html", url(1)]},
 ])
 def test_an_answer_that_breaks_a_rule_is_a_refusal(change):
     good = Spawn()(url(1), WEB["hosts"], WEB["limits"])
