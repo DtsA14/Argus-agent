@@ -162,6 +162,7 @@ router:
     budget.max_tokens: 3000000         # 1,200,000 until router pilot #1 on DeepSeek: tokens re-sent at every step
     drafter.attempt_tokens: 2000000    # (cache hits included) ran out at $0.018 of $0.70; the USD caps bind
     code_task.auto_validate: true
+    code_task.max_steps: 30            # 12 ended sympy-24562 and -21379 (SWE v0 batches 3-4) before any write; USD caps bind
     llm.prompt_cache.enabled: true
 
 retry:

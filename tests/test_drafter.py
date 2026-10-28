@@ -379,8 +379,8 @@ def test_a_bad_submit_is_answered_without_running_anything(root, tmp_path, vlog)
 # ---- inputs ---------------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("over, why", [
-    ({"issue": ""}, "at most 2000 characters"),
-    ({"issue": "x" * 2001}, "at most 2000 characters"),
+    ({"issue": ""}, "at most 8000 characters"),
+    ({"issue": "x" * 8001}, "at most 8000 characters"),
     ({"intake_name": "nosuch"}, "no intake named 'nosuch'"),
     ({"intake_name": "Bad Name"}, "is not an intake name"),
 ])

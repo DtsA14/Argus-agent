@@ -151,17 +151,20 @@ def error_excerpt(tail, limit=EXCERPT_CHARS):
     return "\n".join(shown + ([summary] if summary else []))[:limit]
 
 
-def system_prompt(tools):
+def system_prompt(tools, version=2):
+    """version=1: the ListFiles and ReadFile lines as before line ranges (audits of runs recorded with them)."""
     names = {t.__name__ for t in tools}
     lines = ["You are a software agent. You fix one issue in a copy of a repository, using only the tools below.",
              "", "Tools:"]
-    desc = {"ListFiles": "list every file of the repository",
+    desc = {"ListFiles": "list the files of the repository, or of one directory (at most 300)",
             "SearchFiles": "find a literal text in the repository's files (path:line: text, at most 20 lines)",
-            "ReadFile": "read one file",
+            "ReadFile": "read one file, whole or a range of lines (start_line, end_line; at most 400 lines)",
             "WriteFile": "replace a whole file; only files in the writable scope can be written",
             "EditFile": "replace one exact piece of text that occurs once in a file; for changing part of a file",
             "RunValidation": "run one of the contract's validation commands in a sandbox and see the result",
             "Finish": "end the attempt with your claims"}
+    if version == 1:
+        desc.update({"ListFiles": "list every file of the repository", "ReadFile": "read one file"})
     lines += [f"- {n}: {desc[n]}" for n in desc if n in names]
     lines += ["", "Rules:",
               "- Protected files (for example the tests) must not change. Fix the code, not the tests.",

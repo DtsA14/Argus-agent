@@ -25,6 +25,12 @@ from tools.fs import PathEscape, PathJail
 
 MAX_READ = 100_000
 MAX_WRITE = 200_000
+# ReadFile line ranges: a file up to READ_MAX_FILE bytes can be read in parts; one part returns at most READ_MAX_LINES
+# lines and MAX_READ characters. A file larger than MAX_READ read without a range returns its first part and says so.
+READ_MAX_FILE = 2_000_000
+READ_MAX_LINES = 400
+# ListFiles: at most LIST_MAX_FILES paths per call; past that it says how many more and to narrow the path.
+LIST_MAX_FILES = 300
 
 # SearchFiles (docs/reviews/DESIGN_SEARCHFILES.md): bounds on the input, the work done and the output of one call.
 SEARCH_MAX_TEXT = 200          # characters of the literal text
@@ -36,12 +42,17 @@ SEARCH_MAX_FILE = 256_000      # a larger file is not read (and is reported)
 
 
 class ListFiles(BaseModel):
-    """List every file in the workspace (paths relative to the repository root)."""
+    """List the files of the workspace (paths relative to the repository root), at most 300; past that it says how
+    many more there are. Give a directory to list only the files under it."""
+    path: str = Field(default="", description="Optional: only list files under this directory, e.g. src")
 
 
 class ReadFile(BaseModel):
-    """Read one text file of the workspace."""
+    """Read one text file of the workspace, whole or a range of its lines. A part shows at most 400 lines; a large file
+    read without a range shows its first part and its line count. SearchFiles gives line numbers to aim a range."""
     path: str = Field(description="Path relative to the repository root, e.g. src/calc.py")
+    start_line: int = Field(default=0, description="Optional: first line to show (1-based); 0 reads from the start")
+    end_line: int = Field(default=0, description="Optional: last line to show (inclusive); 0 reads up to 400 lines")
 
 
 class SearchFiles(BaseModel):
@@ -89,8 +100,26 @@ GATED = {"ListFiles": "list_files", "SearchFiles": "search_files", "ReadFile": "
 TIMING = re.compile(r"in \d+(\.\d+)?s\b")
 
 
-def offered(allowed):
-    return [t for t in TOOLS if t is Finish or GATED[t.__name__] in allowed]
+class _ListFilesV1(BaseModel):
+    """List every file in the workspace (paths relative to the repository root)."""
+
+
+class _ReadFileV1(BaseModel):
+    """Read one text file of the workspace."""
+    path: str = Field(description="Path relative to the repository root, e.g. src/calc.py")
+
+
+_ListFilesV1.__name__ = "ListFiles"
+_ReadFileV1.__name__ = "ReadFile"
+# The schemas of ListFiles and ReadFile before line ranges (tool version 1): only for auditing runs recorded with them
+# (scripts/audit_run.py); a run never offers them.
+V1 = {"ListFiles": _ListFilesV1, "ReadFile": _ReadFileV1}
+
+
+def offered(allowed, version=2):
+    """The tools offered for `allowed`. version=1: ListFiles and ReadFile as before line ranges (audits of old runs)."""
+    tools = [t for t in TOOLS if t is Finish or GATED[t.__name__] in allowed]
+    return [V1.get(t.__name__, t) for t in tools] if version == 1 else tools
 
 
 def claims_doc(args):
@@ -146,7 +175,20 @@ class Toolbox:
             return {"content": f"No such file: {args.get('path')!r}", "finished": False}
 
     def listfiles(self, args):
-        return "\n".join(sorted(snapshot(self.workspace)))
+        under = args.get("path") or ""
+        if not isinstance(under, str):
+            return "Rejected: path must be a directory path."
+        files = sorted(snapshot(self.workspace))
+        if under not in ("", ".", "./"):
+            prefix = "/".join(self.jail.parts(under)) + "/"           # PathEscape: '..', absolute, NUL
+            files = [f for f in files if f.startswith(prefix)]
+            if not files:
+                return f"No files under {under!r}."
+        out = files[:LIST_MAX_FILES]
+        if len(files) > LIST_MAX_FILES:
+            out.append(f"... {len(files) - LIST_MAX_FILES} more files not shown: give a directory as path, or use "
+                       "SearchFiles.")
+        return "\n".join(out)
 
     def searchfiles(self, args):
         """Literal, case-sensitive search over regular files under the workspace (or under `path`, or in the one
@@ -211,7 +253,28 @@ class Toolbox:
         return "\n".join(out)
 
     def readfile(self, args):
-        return self.jail.read_text(str(args.get("path", "")), max_bytes=MAX_READ)
+        path = str(args.get("path", ""))
+        start, end = args.get("start_line") or 0, args.get("end_line") or 0
+        if not isinstance(start, int) or not isinstance(end, int) or start < 0 or end < 0 or (end and end < max(start, 1)):
+            return "Rejected: start_line and end_line must be whole numbers, 0 or 1-based, with end_line >= start_line."
+        text = self.jail.read_text(path, max_bytes=READ_MAX_FILE)
+        if not start and not end and len(text) <= MAX_READ:
+            return text                                                 # the whole file, as before line ranges
+        lines = text.splitlines(keepends=True)
+        first = max(start, 1)
+        last = min(end or first + READ_MAX_LINES - 1, first + READ_MAX_LINES - 1, len(lines))
+        if first > len(lines):
+            return f"{path} has {len(lines)} lines; start_line {first} is past its end."
+        part, size = [], 0
+        for n in range(first, last + 1):
+            if size + len(lines[n - 1]) > MAX_READ and part:
+                last = n - 1
+                break
+            part.append(lines[n - 1])
+            size += len(lines[n - 1])
+        head = f"[{path}: lines {first}-{last} of {len(lines)}"
+        head += "]\n" if last == len(lines) and first == 1 else "; read another range with start_line/end_line]\n"
+        return head + "".join(part)
 
     def _writable(self, path, tool):
         """(normalised path, None) when path may be written, else (None, the reason). The same rules for every write."""

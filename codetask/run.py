@@ -197,7 +197,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
     lim0 = settings(cfg)
     caller = LLMCaller(cfg, cfg["code_task"]["role"], log, model=(models or {}).get(cfg["code_task"]["role"]))
     from tools.sandbox import tool_version
-    versions = {"ListFiles": "1", "SearchFiles": "2", "ReadFile": "1", "WriteFile": "1", "EditFile": "1", "Finish": "1",
+    versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "2", "WriteFile": "1", "EditFile": "1", "Finish": "1",
                 "RunValidation": f"1:{tool_version(scfg)}"}
     attempt_fn = make_attempt(caller, memo, log, tokens=lim0["attempt_tokens"], usd=lim0["attempt_usd"],
                               max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher,
