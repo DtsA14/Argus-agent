@@ -343,5 +343,9 @@ sandbox:
     # after scripts/check_env_image.py has passed for that exact image id.
     sympy_py39:
       image: null
+    # ledger_py312: Python 3.12 + FastAPI, httpx and pytest for the argus-ledger practice app (PENDING.md, stage 2);
+    # defined in environments/ledger_py312/, built and checked like sympy_py39.
+    ledger_py312:
+      image: null
     argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
       image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker
