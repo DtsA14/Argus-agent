@@ -1,0 +1,52 @@
+diff --git a/sympy/core/mod.py b/sympy/core/mod.py
+index b4f3de25234b254760cce551b5a39afc09e71711..fd1cb77057b14713c0594bd6ca56ebb6977ae793 100644
+--- a/sympy/core/mod.py
++++ b/sympy/core/mod.py
+@@ -41,6 +41,7 @@ def eval(cls, p, q):
+         from sympy.core.singleton import S
+         from sympy.core.exprtools import gcd_terms
+         from sympy.polys.polytools import gcd
++        from sympy.polys.polyerrors import PolynomialError
+ 
+         def doit(p, q):
+             """Try to return p % q if both are numbers or +/-p is known
+@@ -166,7 +167,11 @@ def doit(p, q):
+         # XXX other possibilities?
+ 
+         # extract gcd; any further simplification should be done by the user
+-        G = gcd(p, q)
++        try:
++            G = gcd(p, q)
++        except PolynomialError:
++            # e.g. a Piecewise in p or q cannot be handled by the polys
++            G = S.One
+         if G != 1:
+             p, q = [
+                 gcd_terms(i/G, clear=False, fraction=False) for i in (p, q)]
+diff --git a/sympy/core/tests/test_issue_piecewise_subs.py b/sympy/core/tests/test_issue_piecewise_subs.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f50c4010e13695c1c95e9ad5c57df100d7cb8e9e
+--- /dev/null
++++ b/sympy/core/tests/test_issue_piecewise_subs.py
+@@ -0,0 +1,21 @@
++from sympy import cosh, exp, log, Piecewise, sin, sinh, symbols, tanh
++from sympy.core.basic import Basic
++from sympy.core.cache import clear_cache
++
++
++def _subs_without_error(expr):
++    try:
++        result = expr.subs({1: 1.0})
++    except Exception as exc:
++        raise AssertionError(
++            "subs({1: 1.0}) raised %s: %s" % (type(exc).__name__, exc)
++        ) from exc
++    assert isinstance(result, Basic)
++
++
++def test_subs_int_to_float_with_piecewise_hyperbolic_argument():
++    x, y, z = symbols('x y z', real=True)
++    pw = Piecewise((x, y > x), (y, True)) / z
++    for func in (sinh, cosh, tanh, sin, log):
++        clear_cache()
++        _subs_without_error(exp(func(pw)))

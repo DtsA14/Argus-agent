@@ -1,0 +1,136 @@
+{
+  "draft_version": 1,
+  "base": "base",
+  "plan": {
+    "files": [
+      "sympy/core/mod.py",
+      "sympy/polys/polytools.py",
+      "sympy/core/function.py"
+    ],
+    "risks": [
+      "Catching the PolynomialError too broadly could hide real errors and change Mod/expr evaluation results.",
+      "A guard placed in the wrong layer could leave the Piecewise as a generator in later gcd/poly calls (failing elsewhere).",
+      "Only the sinh variant may be addressed, leaving the cosh/tanh variants broken.",
+      "Returning an unevaluated form could change printing or equality in existing tests."
+    ],
+    "steps": [
+      "Reproduce with the new test: exp(sinh(Piecewise((x, y > x), (y, True))/z)).subs({1: 1.0}) with real x, y, z.",
+      "Follow the traceback: Mod.eval calls gcd(p, q), which reaches _parallel_poly_from_expr and raises PolynomialError because a generator is a Piecewise.",
+      "Make the Mod/gcd path handle non-polynomial (Piecewise-containing) arguments gracefully instead of raising. e.g. catch PolynomialError and leave the Mod unevaluated or fall back to the non-gcd branch.",
+      "Run the new test and the existing subs and Piecewise regression tests."
+    ]
+  },
+  "contract": {
+    "scope": {
+      "writable": [
+        "sympy/core/*.py",
+        "sympy/functions/elementary/*.py",
+        "sympy/polys/polytools.py"
+      ],
+      "protected": [
+        "**/test_*.py",
+        "**/tests/**",
+        "**/conftest.py",
+        "pytest.ini",
+        "setup.py",
+        "setup.cfg",
+        "bin/**",
+        "sympy/testing/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "target",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/core/tests/test_issue_piecewise_subs.py"
+        ],
+        "timeout_s": 300,
+        "min_tests": 1,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/core/tests/test_issue_piecewise_subs.py::test_subs_int_to_float_with_piecewise_hyperbolic_argument"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "regression_subs",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/core/tests/test_subs.py::test_issue_8886",
+          "sympy/core/tests/test_subs.py::test_issue_12657",
+          "sympy/core/tests/test_subs.py::test_issue_13333",
+          "sympy/core/tests/test_subs.py::test_issue_15234",
+          "sympy/core/tests/test_subs.py::test_issue_11746",
+          "sympy/core/tests/test_subs.py::test_issue_17823",
+          "sympy/core/tests/test_subs.py::test_issue_19326",
+          "sympy/core/tests/test_subs.py::test_issue_19558"
+        ],
+        "timeout_s": 300,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/core/tests/test_subs.py::test_issue_8886",
+          "sympy/core/tests/test_subs.py::test_issue_12657",
+          "sympy/core/tests/test_subs.py::test_issue_13333",
+          "sympy/core/tests/test_subs.py::test_issue_15234",
+          "sympy/core/tests/test_subs.py::test_issue_11746",
+          "sympy/core/tests/test_subs.py::test_issue_17823",
+          "sympy/core/tests/test_subs.py::test_issue_19326",
+          "sympy/core/tests/test_subs.py::test_issue_19558"
+        ],
+        "environment": "sympy_py39"
+      },
+      {
+        "id": "regression_piecewise",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_14787",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_8458",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_16417",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_eval_rewrite_as_KroneckerDelta",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_identical_conds_issue",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_7370",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_16715",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_20360"
+        ],
+        "timeout_s": 300,
+        "min_tests": 8,
+        "max_skipped": 0,
+        "must_pass": [
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_14787",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_8458",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_16417",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_eval_rewrite_as_KroneckerDelta",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_identical_conds_issue",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_7370",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_16715",
+          "sympy/functions/elementary/tests/test_piecewise.py::test_issue_20360"
+        ],
+        "environment": "sympy_py39"
+      }
+    ],
+    "budget_profile": "large_usd",
+    "tools": [
+      "edit_file",
+      "search_files"
+    ]
+  },
+  "new_tests": [
+    {
+      "path": "sympy/core/tests/test_issue_piecewise_subs.py",
+      "content": "from sympy import cosh, exp, log, Piecewise, sin, sinh, symbols, tanh\nfrom sympy.core.basic import Basic\nfrom sympy.core.cache import clear_cache\n\n\ndef _subs_without_error(expr):\n    try:\n        result = expr.subs({1: 1.0})\n    except Exception as exc:\n        raise AssertionError(\n            \"subs({1: 1.0}) raised %s: %s\" % (type(exc).__name__, exc)\n        ) from exc\n    assert isinstance(result, Basic)\n\n\ndef test_subs_int_to_float_with_piecewise_hyperbolic_argument():\n    x, y, z = symbols('x y z', real=True)\n    pw = Piecewise((x, y > x), (y, True)) / z\n    for func in (sinh, cosh, tanh, sin, log):\n        clear_cache()\n        _subs_without_error(exp(func(pw)))\n"
+    }
+  ],
+  "unverifiable": [
+    "The issue reports the error for cosh/tanh and other unary functions too; the new test only checks that subs does not raise, not that every such variant is fixed by the change.",
+    "The issue also reports that the error disappears on a second call without clearing the cache; that caching behaviour is not asserted.",
+    "The exact returned expression of subs({1: 1.0}) is not asserted (only that no exception is raised)."
+  ]
+}
