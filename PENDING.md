@@ -213,7 +213,16 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     dites. Mutants 21/21 + 10/10 (review), verify.sh PASS 26efd8f. Merged #244; pilot (`pilots/staging_v0/p1/RESULT.md`):
     deploy 6606 → deploy 013 → rollback ke 6606 → deploy 013, semua smoke pass, tiap langkah < 3 s, 4 "go live"; rollback
     hanya mundur (kembali ke 013 = deploy baru). Staging berakhir di 013 (`804e13a`)
-- [ ] **Berikutnya (rencana):** tugas upgrade dependency dua lengan lewat staging (spek sendiri + image env baru)
+- [x] **Upgrade dependency v0** (jalur ketat, `docs/reviews/SPEC_DEP_UPGRADE_V0.md`, #246): cek awal: stack terbaru
+    tidak butuh perubahan kode (task agen dua lengan ditunda); env `ledger_py312_up1`/`ledger_staging_up1` (fastapi
+    0.143.2, httpx2), `argus stage check`, rilis = commit di satu runtime, rollback memakai image rekaman. Mutants 23/23,
+    verify.sh PASS 44dceca. Pilot (`pilots/dep_upgrade_v0/p1/RESULT.md`): check → deploy up1 → rollback ke image v0 →
+    deploy up1, semua sesuai PLAN.md, **satu "go live"** (U4)
+- [ ] **Staging hardening** (jalur ketat, PR terpisah): temuan /code-review staging v0: catatan log sesudah state,
+    state.json rusak → reconcile mematikan live, `docker rm` tanpa cek hasil, timeout `docker logs` melewatkan stop,
+    smoke sebelum uvicorn listen (retry)
+- [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
+- [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
     dependency jarang); kecil: `fetched` di HANDOFF.md sebagai UTC, bukan epoch
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
