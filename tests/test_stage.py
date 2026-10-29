@@ -1,0 +1,367 @@
+"""SPEC_STAGING_V0: staging deploys only a reviewed, applied commit, in a container with no network and a read-only root
+on a Unix socket; the smoke test runs from the host; a failed smoke test leaves the previous release live; rollback
+starts the previous release and smoke-tests it. The docker tests need the checked ledger_staging image; without it they
+are skipped with "SANDBOX NOT AVAILABLE", which scripts/verify.sh does not count as passing."""
+import http.server
+import json
+import os
+import socket
+import socketserver
+import subprocess
+import sys
+import threading
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+
+from router import job as rj  # noqa: E402
+from router import stage as sg  # noqa: E402
+from runner import load_config  # noqa: E402
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Unix sockets and docker on the VM")
+
+SUMMARY = {"jobs": 2, "cost_nano": 2500000, "cost_usd": "0.0025", "skipped": 0}
+
+# A small stand-in for argus-ledger (same create_app shape), good or broken; the real app is in its own repository.
+APP = '''import json, os
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+BROKEN = {broken}
+
+
+def _jobs(d):
+    out = []
+    for name in sorted(os.listdir(d)):
+        job = json.load(open(os.path.join(d, name, "job.json")))
+        nano = 0
+        for run in os.listdir(os.path.join(d, name, "runs")):
+            started, final = {{}}, {{}}
+            for line in open(os.path.join(d, name, "runs", run, "events.jsonl")):
+                e = json.loads(line)
+                if e["event"] == "llm_call_started":
+                    started[e["call_id"]] = e["worst_usd_nano"]
+                elif e["event"] == "llm_call":
+                    final[e["call_id"]] = e["usd_nano"]
+            nano += sum(final.get(c, w) for c, w in started.items())
+        out.append({{"job": job["job"], "nano": nano}})
+    return out
+
+
+def create_app(jobs_dir, allowed_hosts=None):
+    app = FastAPI()
+
+    @app.get("/summary")
+    def summary():
+        jobs = _jobs(jobs_dir)
+        nano = sum(j["nano"] for j in jobs) + (1 if BROKEN else 0)
+        return {{"jobs": len(jobs), "cost_nano": nano, "cost_usd": "%.4f" % (nano / 1e9), "skipped": 0}}
+
+    @app.get("/jobs")
+    def jobs():
+        return [{{"job": j["job"]}} for j in _jobs(jobs_dir)]
+
+    @app.get("/ui")
+    def ui():
+        return HTMLResponse("<!DOCTYPE html><html><body>jobs</body></html>")
+
+    if allowed_hosts is not None:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts), www_redirect=False)
+    return app
+'''
+
+
+def git(cwd, *args):
+    return subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=cwd, check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+@pytest.fixture
+def repo(tmp_path):
+    """A target repository with two commits: a good app, then a broken one (its summary is off by one nano-dollar)."""
+    r = tmp_path / "repo"
+    (r / "ledger").mkdir(parents=True)
+    (r / "ledger" / "__init__.py").write_text("")
+    git(tmp_path, "init", "-q", str(r))
+    commits = {}
+    for name, broken in (("good", False), ("broken", True), ("good2", False)):
+        (r / "ledger" / "api.py").write_text(APP.format(broken=broken) + f"# {name}\n")
+        git(r, "add", "-A")
+        git(r, "commit", "-qm", name)
+        commits[name] = git(r, "rev-parse", "HEAD")
+    return r, commits
+
+
+def applied_job(jobs, job_id, repo, commit, *, state=rj.APPLIED, as_is=True):
+    d = jobs / job_id
+    d.mkdir(parents=True)
+    log = [{"at": "2026-10-29T00:00:00Z", "what": "state", "old": rj.REVIEW_READY, "new": state, "commit": commit,
+            "as_is": as_is, "patch_sha256": "0" * 64}]
+    (d / "job.json").write_text(json.dumps({"job": job_id, "kind": "code", "state": state, "inputs": {"repo": str(repo)},
+                                            "stages": {}, "log": log}))
+    return job_id
+
+
+class Said:
+    def __init__(self):
+        self.lines = []
+
+    def __call__(self, text):
+        self.lines.append(text)
+
+
+def deps(yes=True):
+    return rj.Deps(confirm=lambda text: False, assume_yes=yes, echo=Said(), clock=lambda: "2026-10-29T00:00:00Z")
+
+
+# ---- without docker -------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("state, as_is, why", [
+    (rj.REVIEW_READY, True, "only an APPLIED job"),
+    (rj.APPLIED, False, "differ from the reviewed patch"),
+    (rj.APPLIED, None, "differ from the reviewed patch"),
+])
+def test_only_an_applied_job_with_its_reviewed_patch_is_deployed(tmp_path, repo, state, as_is, why):
+    r, c = repo
+    jid = applied_job(tmp_path / "jobs", "jx", r, c["good"], state=state, as_is=as_is)
+    st = sg.Staging(tmp_path / "staging", run=lambda *a, **k: pytest.fail("docker must not run"))
+    with pytest.raises(sg.Refused, match=why):
+        st.build(rj.open_job(jid, tmp_path / "jobs"))
+    assert not (tmp_path / "staging" / "releases").exists()
+
+
+def test_a_release_whose_source_changed_after_the_build_is_refused(tmp_path, repo):
+    r, c = repo
+    jid = applied_job(tmp_path / "jobs", "jx", r, c["good"])
+    st = sg.Staging(tmp_path / "staging", run=lambda *a, **k: pytest.fail("docker must not run"))
+    rec = st.build(rj.open_job(jid, tmp_path / "jobs"))
+    assert rec["commit"] == c["good"] and "# good" in (st.dir(rec["release"]) / "src" / "ledger" / "api.py").read_text()
+    api = st.dir(rec["release"]) / "src" / "ledger" / "api.py"
+    api.chmod(0o644)
+    api.write_text("changed")
+    with pytest.raises(sg.Refused, match="differs from what was built"):
+        st.build(rj.open_job(jid, tmp_path / "jobs"))
+    with pytest.raises(sg.Refused, match="not one that was built, or its source changed"):
+        st.start(rec["release"], "sha256:x")
+
+
+@pytest.mark.parametrize("name", ["athena-api", "argus-staging-ledger-", "argus-staging-ledger-x; rm -rf /",
+                                  "argus-staging-ledgerj1-0123456789ab"])
+def test_only_staging_containers_are_ever_removed(tmp_path, name):
+    calls = []
+    st = sg.Staging(tmp_path, run=lambda *a, **k: calls.append(a) or (0, "", ""))
+    with pytest.raises(sg.Refused, match="not a staging container"):
+        st.remove(name)
+    assert calls == []
+
+
+def inspect(d, release, image, **over):
+    h = {"NetworkMode": "none", "ReadonlyRootfs": True, "CapDrop": ["ALL"], "CapAdd": None,
+         "SecurityOpt": ["no-new-privileges"], "Privileged": False}
+    cfg = {"User": "1001:1001", "Labels": {sg.LABEL: release}}
+    mounts = [{"Destination": "/app", "Source": str(d / "src"), "RW": False},
+              {"Destination": "/entry", "Source": str(d / "entry"), "RW": False},
+              {"Destination": "/data", "Source": str(d / "data"), "RW": False},
+              {"Destination": "/run/argus", "Source": str(d / "sock"), "RW": True}]
+    c = {"HostConfig": h, "Config": cfg, "Image": image, "Mounts": mounts}
+    for k, v in over.items():
+        where, key = k.split("__")
+        if where == "Mounts":
+            c["Mounts"] = v
+        else:
+            {"h": h, "cfg": cfg}[where][key] = v
+    return c
+
+
+@pytest.mark.parametrize("over, problem", [
+    ({}, None),
+    ({"h__NetworkMode": "bridge"}, "network"),
+    ({"h__ReadonlyRootfs": False}, "writable"),
+    ({"h__CapDrop": []}, "capabilities"),
+    ({"h__CapAdd": ["NET_ADMIN"]}, "capabilities"),
+    ({"h__SecurityOpt": []}, "no-new-privileges"),
+    ({"h__Privileged": True}, "privileged"),
+    ({"cfg__User": "0"}, "root"),
+    ({"cfg__User": ""}, "root"),
+    ({"cfg__Labels": {}}, "label"),
+    ({"Mounts__": []}, "mounts"),
+])
+def test_a_container_without_the_required_isolation_is_refused(tmp_path, over, problem):
+    release, image = "jx-0123456789ab", "sha256:" + "a" * 64
+    d = tmp_path / "releases" / release
+    c = inspect(d, release, image, **over)
+    st = sg.Staging(tmp_path, run=lambda *a, **k: (0, json.dumps([c]), ""))
+    got = st.isolation_problems("n", release, image, d)
+    assert (got == []) if problem is None else any(problem in p for p in got), got
+
+
+def test_a_writable_source_mount_or_another_image_is_refused(tmp_path):
+    release, image = "jx-0123456789ab", "sha256:" + "a" * 64
+    d = tmp_path / "releases" / release
+    c = inspect(d, release, image)
+    c["Mounts"][0]["RW"] = True
+    c["Image"] = "sha256:" + "b" * 64
+    st = sg.Staging(tmp_path, run=lambda *a, **k: (0, json.dumps([c]), ""))
+    got = st.isolation_problems("n", release, image, d)
+    assert any("/app" in p for p in got) and any("image" in p for p in got)
+
+
+class UnixHTTP(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+
+
+def serve(path, answers):
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            status, body = answers(self.headers.get("Host"), self.path)
+            self.send_response(status)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+        def address_string(self):
+            return "unix"
+    dfd = os.open(Path(path).parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:                                   # bound through the directory's fd: tmp paths pass the 107-byte limit
+        srv = UnixHTTP(f"/proc/self/fd/{dfd}/{Path(path).name}", H)
+    finally:
+        os.close(dfd)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def good(host, path):
+    if host != sg.HOST:
+        return 400, b"Invalid host header"
+    return {"/summary": (200, json.dumps(SUMMARY).encode()),
+            "/jobs": (200, json.dumps([{"job": "jstaging_done"}, {"job": "jstaging_failed"}]).encode()),
+            "/ui": (200, b"<!DOCTYPE html><html></html>")}.get(path, (404, b""))
+
+
+@pytest.mark.parametrize("answers, failed", [
+    (good, []),
+    (lambda h, p: (200, json.dumps({**SUMMARY, "cost_nano": 1}).encode()) if p == "/summary" and h == sg.HOST
+     else good(h, p), ["staging.local /summary -> 200"]),
+    (lambda h, p: (307, b"") if h != sg.HOST else good(h, p), ["evil.example /summary -> 400"]),
+    (lambda h, p: (500, b"") if p == "/ui" else good(h, p), ["staging.local /ui -> 200"]),
+])
+def test_the_smoke_test_checks_every_answer(tmp_path, answers, failed):
+    st = sg.Staging(tmp_path, wait_s=1)
+    d = st.dir("jx-0123456789ab") / "sock"
+    d.mkdir(parents=True)
+    srv = serve(d / "app.sock", answers)
+    try:
+        results = st.smoke("jx-0123456789ab")
+    finally:
+        srv.shutdown()
+    assert [c for c, ok, _ in results if not ok] == failed
+
+
+def test_a_smoke_test_without_a_socket_fails_every_check(tmp_path):
+    st = sg.Staging(tmp_path, wait_s=0.2)
+    (st.dir("jx-0123456789ab") / "sock").mkdir(parents=True)
+    assert not any(ok for _, ok, _ in st.smoke("jx-0123456789ab"))
+
+
+def test_rollback_without_an_earlier_release_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(sg, "runtime_image", lambda cfg: "sha256:" + "a" * 64)
+    st = sg.Staging(tmp_path, run=lambda *a, **k: pytest.fail("docker must not run"))
+    with pytest.raises(sg.Refused, match="no earlier release"):
+        sg.rollback(cfg=None, deps=deps(), staging=st)
+
+
+def test_the_deploy_is_confirmed_before_anything_starts(tmp_path, repo, monkeypatch):
+    r, c = repo
+    jid = applied_job(tmp_path / "jobs", "jx", r, c["good"])
+    monkeypatch.setattr(sg, "runtime_image", lambda cfg: "sha256:" + "a" * 64)
+    st = sg.Staging(tmp_path / "staging", run=lambda *a, **k: pytest.fail("docker must not run"))
+    with pytest.raises(sg.Refused, match="not confirmed"):
+        sg.deploy(jid, cfg=None, deps=deps(yes=False), jobs_dir=tmp_path / "jobs", staging=st)
+    assert st.state()["live"] is None
+
+
+def test_no_role_has_a_staging_tool():
+    from codetask import tools as tl
+    cfg = load_config()
+    names = set(tl.GATED) | {t for ts in (cfg.get("tools") or {}).values() for t in ts}
+    assert not [n for n in names if "stage" in n.lower() or "deploy" in n.lower()]
+    src = Path(sg.__file__).read_text()
+    assert "LLMCaller" not in src and "build_chat_model" not in src
+
+
+# ---- with docker: the real runtime image ------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def image():
+    from approve_draft import sandbox_cfg
+    cfg = load_config()
+    cfg["sandbox"] = sandbox_cfg()
+    try:
+        return sg.runtime_image(cfg)
+    except sg.Refused as e:
+        pytest.skip(f"SANDBOX NOT AVAILABLE: {e}")
+
+
+@pytest.fixture
+def staging(tmp_path, image, monkeypatch):
+    monkeypatch.setattr(sg, "runtime_image", lambda cfg: image)
+    st = sg.Staging(tmp_path / "staging")
+    yield st
+    for release in st.releases():
+        st.run("rm", "-f", sg.PREFIX + release)
+
+
+def test_deploy_a_failed_smoke_test_and_rollback_in_the_real_container(tmp_path, repo, staging, image):
+    r, c = repo
+    jobs = tmp_path / "jobs"
+    good, broken, good2 = (applied_job(jobs, f"j{n}", r, c[n]) for n in ("good", "broken", "good2"))
+    d = deps()
+
+    first = sg.deploy(good, cfg=None, deps=d, jobs_dir=jobs, staging=staging)
+    assert staging.state() == {"live": first, "history": [first]}
+    name = sg.PREFIX + first
+    h = json.loads(staging.run("inspect", name)[1])[0]["HostConfig"]
+    assert h["NetworkMode"] == "none" and h["ReadonlyRootfs"] is True
+    assert "staged" in [e["what"] for e in rj.open_job(good, jobs).data["log"]]
+
+    # a release that fails its smoke test is stopped; the first stays live and still answers
+    with pytest.raises(sg.Refused, match="failed its smoke test.*still live"):
+        sg.deploy(broken, cfg=None, deps=d, jobs_dir=jobs, staging=staging)
+    assert staging.state()["live"] == first and all(ok for _, ok, _ in staging.smoke(first))
+    running = staging.run("ps", "--format", "{{.Names}}")[1].split()
+    assert name in running and not [n for n in running if broken in n]
+
+    second = sg.deploy(good2, cfg=None, deps=d, jobs_dir=jobs, staging=staging)
+    running = staging.run("ps", "--format", "{{.Names}}")[1].split()
+    assert sg.PREFIX + second in running and name not in running
+    assert staging.state()["history"] == [first, second]
+
+    back = sg.rollback(cfg=None, deps=d, staging=staging)
+    assert back == first and staging.state() == {"live": first, "history": [first]}
+    running = staging.run("ps", "--format", "{{.Names}}")[1].split()
+    assert name in running and sg.PREFIX + second not in running
+    assert all(ok for _, ok, _ in staging.smoke(first))
+    assert list((staging.dir(first) / "logs").iterdir())
+    with pytest.raises(sg.Refused, match="no earlier release"):
+        sg.rollback(cfg=None, deps=d, staging=staging)
+    assert "staging live: " + first in sg.status(staging=staging)
+
+
+def test_the_container_cannot_reach_the_network_or_write_its_source(tmp_path, repo, staging, image):
+    r, c = repo
+    jid = applied_job(tmp_path / "jobs", "jg", r, c["good"])
+    rel = sg.deploy(jid, cfg=None, deps=deps(), jobs_dir=tmp_path / "jobs", staging=staging)
+    probe = ("import socket, pathlib\n"
+             "try:\n    socket.create_connection(('1.1.1.1', 53), timeout=2); print('NET')\n"
+             "except OSError: print('nonet')\n"
+             "try:\n    pathlib.Path('/app/x').write_text('x'); print('WROTE')\n"
+             "except OSError: print('ro')\n"
+             "try:\n    pathlib.Path('/etc/x').write_text('x'); print('WROTE')\n"
+             "except OSError: print('ro')\n")
+    code, out, err = staging.run("exec", sg.PREFIX + rel, "python3", "-c", probe)
+    assert code == 0 and out.split() == ["nonet", "ro", "ro"], (out, err)

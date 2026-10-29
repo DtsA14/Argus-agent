@@ -1,6 +1,6 @@
 # Spek: staging v0, target deployment minimal untuk argus-ledger
 
-Status: **draf untuk keputusan Atha**, 2026-10-29. Jalur ketat: langkah pertama Argus yang punya efek di luar sandbox
+Status: **disetujui Atha 2026-10-29** (§5). Jalur ketat: langkah pertama Argus yang punya efek di luar sandbox
 (container yang terus berjalan di VM). Berlaku penuh AGENTS.md: spek → tes yang gagal di kode lama → kode → mutants →
 `/code-review medium` + `/security-review` → `verify.sh` sekali → "merge" Atha.
 
@@ -65,10 +65,37 @@ rollback. Log container (`docker logs`, 200 baris terakhir) disalin ke direktori
    **rollback** ke 013 dan smoke lagi.
 3. Sesudah itu baru task upgrade dependency dua lengan melewati staging (spek terpisah; image environment baru).
 
-## 5. Pertanyaan untuk Atha
+## 5. Keputusan Atha (2026-10-29)
 
-1. Unix socket tanpa jaringan (usul; paling aman, smoke dari host) atau TCP `127.0.0.1:<port>` (lebih mirip production,
-   butuh `--network bridge` dan container bisa keluar ke internet)?
-2. Data staging: job sintetis dari fixture tes (usul) atau salinan read-only dari `~/pilot3a_live/jobs` (lebih nyata, berisi
-   issue dan ledger asli, hanya di VM)?
-3. Deploy dijalankan Claude sesudah "go live" per deploy (usul), atau hanya oleh Atha?
+1. **Unix socket tanpa jaringan** untuk pilot pertama: permukaan serangan minimal; jaringan tidak ditambah hanya demi
+   kemiripan dengan production.
+2. **Job sintetis dari fixture tes**, bukan salinan job nyata; fixture cukup untuk jalur sukses, gagal, dan rollback.
+3. **Claude boleh men-deploy sesudah "go live" untuk setiap deployment**, hanya ke staging, hanya artefak yang sudah
+   direview, dan rollback harus tersedia. Production sungguhan butuh persetujuan terpisah dari Atha.
+
+Tujuan pilot: membuktikan research → coding → acceptance → deployment staging end-to-end dengan akses minimum dan hasil
+yang bisa diverifikasi.
+
+## 6. Implementasi (2026-10-29)
+
+- `environments/ledger_staging/` (S1): pin `ledger_py312` + `uvicorn==0.54.0`, `click==8.5.0` (berkas diunggah sebelum
+  2026-10-15, wheel py3 dengan hash). Image `sha256:4ab2ff53a34f…` dibangun `build_env_from_base.sh`, lolos
+  `check_env_image.py` (isolasi, tanpa shell/git/pip, versi). Terdaftar di `sandbox.environments`, **tidak** di
+  `web.environments`.
+- `router/stage.py`: `deploy` = build (sekali, lalu dicek setiap kali) + konfirmasi + start + `docker inspect` + smoke +
+  switch; `rollback`; `status`. Hanya job `APPLIED` dengan `as_is: true` (patch yang direview, apa adanya). Rilis dibangun
+  dari `git archive` commit itu, read-only; entry `staging_app.py` dari harness; data = salinan baru
+  `fixtures/staging/jobs` per start, read-only. Container `argus-staging-ledger-<rilis>` dengan label rilis; hanya nama
+  itu yang pernah dihentikan.
+- Isolasi diperiksa dari `docker inspect` sebelum smoke: `NetworkMode none`, root read-only, `CapDrop ALL` tanpa
+  `CapAdd`, `no-new-privileges`, tidak privileged, user bukan root, image = image runtime yang dicek, label rilis, tepat
+  empat mount (`/app`, `/entry`, `/data` read-only; `/run/argus` tulis). Selain itu: dihentikan dan ditolak.
+- Smoke (S4) dari host lewat socket: `/summary` = angka fixture persis (2 job, 2.500.000 nano), `/jobs` = dua id,
+  `/ui` HTML, `Host: evil.example` → 400. Socket dihubungkan lewat fd direktori (`/proc/self/fd`), karena path socket
+  maksimal 107 byte.
+- CLI: `argus stage deploy <job> [--yes]`, `argus stage rollback [--yes]`, `argus stage status`. `--yes` = "go live" di
+  chat (tidak ada key di langkah ini).
+- Tes `tests/test_stage.py` (30, modul sandbox: dilewati = gagal di `verify.sh`): penolakan job, sumber yang berubah,
+  nama container asing, setiap syarat isolasi, setiap cek smoke, konfirmasi; dengan docker sungguhan: deploy, rilis
+  rusak gagal smoke dan yang lama tetap live, rilis kedua, rollback, tanpa rilis sebelumnya ditolak, dan dari dalam
+  container tidak ada jaringan dan tidak bisa menulis. Mutants 21/21.
