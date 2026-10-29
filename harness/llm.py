@@ -211,6 +211,15 @@ def _text(m):
     return "".join(parts)
 
 
+def _sent_text(m):
+    """What the heuristic counter counts: `_text` plus the reasoning_content ArgusChatDeepSeek sends back for every
+    earlier reply (SPEC_ESTIMATE_REASONING E1). Only that key: the memo restores it alone, so a live and a resumed run
+    count the same context alike; tests/test_estimate_reasoning.py checks every adapter sends nothing else uncounted.
+    Not part of prompt_hash, so memo keys stay as they were."""
+    rc = (getattr(m, "additional_kwargs", None) or {}).get("reasoning_content")
+    return _text(m) + (rc if isinstance(rc, str) else "")
+
+
 def prompt_hash(messages, tools):
     payload = [(type(m).__name__, _text(m)) for m in messages]
     names = sorted(getattr(t, "name", None) or getattr(t, "__name__", str(t)) for t in (tools or []))
@@ -228,11 +237,11 @@ def _tool_schema_text(t):
 
 def heuristic_counter(margin):
     """~3 characters per token is pessimistic for English and Indonesian text; the margin adds more room.
-    Counts the whole context: message content, assistant tool calls with their arguments, tool results,
-    and the tool schemas."""
+    Counts the whole context: message content, assistant tool calls with their arguments, earlier reasoning sent
+    back, tool results, and the tool schemas."""
 
     def count(messages, tools):
-        chars = sum(len(_text(m)) for m in messages)
+        chars = sum(len(_sent_text(m)) for m in messages)
         chars += sum(len(_tool_schema_text(t)) for t in (tools or []))
         return int((chars / 3 + 8 * len(messages)) * margin) + 1
 
