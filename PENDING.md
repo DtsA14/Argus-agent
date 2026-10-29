@@ -200,8 +200,8 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     di `status`. Audit: 0 USD lewat cap, 2 reservasi token lewat (dua FAILED_BUDGET, sekarang harness-affected). Merged #240
 - [~] **Harga peak di batas jendela** (jalur ketat, `docs/reviews/SPEC_PEAK_EDGES.md`, PR #241): worst case sebelum kirim
     selalu ×peak (0 dari 1.182 panggilan agen dan 0 dari 837 drafter akan terhambat), biaya ledger = pengali tertinggi
-    antara mulai dan selesai (field `peak`), baris peringatan peak di layar konfirmasi router. Mutants 14/14. Menunggu
-    review, `verify.sh`, "merge"
+    antara mulai dan selesai (field `peak`), baris peringatan peak di layar konfirmasi router. Mutants 14/14 + 9/9 (review), verify.sh PASS d6be15b. Menunggu
+    "merge"
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
     pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) → spek counter reasoning (#240)
 - [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
