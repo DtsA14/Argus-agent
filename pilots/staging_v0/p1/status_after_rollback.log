@@ -1,0 +1,4 @@
+staging live: j20261029_054325_6606-324012a60a7a
+  job j20261029_054325_6606, commit 324012a60a7a
+  last smoke: pass at 2026-10-29T13:48:44Z
+rollback would start: nothing (no earlier release)
