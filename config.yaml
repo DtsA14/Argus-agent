@@ -154,9 +154,21 @@ drafter:
 # W2b ledger (worst drafter run $0.29 + one `large` agent attempt $0.45 = $0.74, room for one median redraft). Each stage
 # is capped by what is left of the job, recorded when it starts. overrides: applied to every stage's config (the setup
 # the W2b pilots ran with); shown before each live stage.
+# SPEC_RESEARCH_STAGE: the research stage r1 (argus code --research). Read-only tools and ReadDocs; SubmitHandoff is
+# checked by the harness (every url downloaded in the run, every quote in its page, the installed version).
+research:
+  role: researcher
+  attempt_tokens: 400000
+  attempt_usd: 0.25
+  max_input_tokens: 100000
+  max_output_tokens_by_model: {"deepseek:deepseek-flash": 16000, "deepseek:deepseek-v4-pro": 16000}
+  max_steps: 20
+  max_submits: 3
+
 router:
   job_max_usd: 1.00
   draft_max_usd: 0.75
+  research_max_usd: 0.30   # SPEC_RESEARCH_STAGE r1, one stage (Atha 2026-10-29)
   agent_max_usd: {default: 0.50, large_usd: 0.75}   # by the profile the drafter chose (drafter.agent_profiles)
   overrides:
     budget.max_tokens: 3000000         # 1,200,000 until router pilot #1 on DeepSeek: tokens re-sent at every step
@@ -187,6 +199,7 @@ tools:
   evaluator: []
   coder: [list_files, read_file, write_file, run_validation]   # code tasks (codetask/); Finish is not gated
   drafter: [list_files, search_files, read_file]   # W2b; read-only. SubmitDraft is not gated (it ends the run, as Finish)
+  researcher: [list_files, search_files, read_file, read_docs]   # SPEC_RESEARCH_STAGE r1: never a tool that writes or runs
 
 # ReadDocs (docs/reviews/SPEC_WEB_TOOLS.md): documentation pages for the coder, granted only by the human at approve
 # (argus approve --web) and only for jobs whose validations all run in one of `environments` (never the SWE images).
@@ -264,6 +277,12 @@ roles:
     # DeepSeek V4.1 Flash, thinking mode (as coder). Pilot #2: 1 drafter run instead of 3, at about the same cost.
     model: "deepseek:deepseek-flash"
     max_output_tokens: 16384
+    timeout_s: 180
+    params: {extra_body: {thinking: {type: enabled}}}
+  researcher:
+    # SPEC_RESEARCH_STAGE r1: the drafter's model and thinking mode; its output cap per model is research.max_output_tokens_by_model.
+    model: "deepseek:deepseek-flash"
+    max_output_tokens: 16000
     timeout_s: 180
     params: {extra_body: {thinking: {type: enabled}}}
   orchestrator:

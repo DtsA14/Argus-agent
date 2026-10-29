@@ -1,6 +1,6 @@
 # Spek: stage riset `r1` di router (Alur A → B, pilot pertama)
 
-Status: **draf untuk keputusan Atha**, 2026-10-29. Jalur ketat: stage baru yang memanggil model dan membuka jaringan
+Status: **disetujui Atha 2026-10-29** (§8: gate `research-ok` ya, cap $0,30, pilot dua lengan). Jalur ketat: stage baru yang memanggil model dan membuka jaringan
 (ReadDocs), dengan ledger dan crash-resume. Berlaku penuh AGENTS.md: spek → tes yang gagal di kode lama → kode → mutants →
 `/code-review medium` + `/security-review` → `verify.sh` sekali di commit final → "merge" Atha.
 
@@ -126,3 +126,13 @@ dengan biaya lebih rendah, itu temuan: riset belum perlu untuk bug kelas ini (se
    terpisah". Alternatif: A langsung lanjut ke drafter bila gate lolos (lebih cepat, satu keputusan lebih sedikit).
 2. Cap r1 **$0,30** per stage (drafter $0,75; riset biasanya ≤ 10 langkah baca). Setuju?
 3. Pilot dua lengan (A dengan riset, B tanpa) pada issue 013 sesudah merge?
+
+## 9. Implementasi (2026-10-29)
+
+`codetask/research.py` (loop sendiri, pola `make_drafting`), `router/job.py` (state, `_research`, `research_ok`,
+`job_issue` untuk drafter dan kontrak agen, `status`), `scripts/argus.py` (`code --research`, `research-ok`),
+`tools/web.py` (`page_path`, `stored_page`: gate dan ReadDocs membaca halaman tersimpan dengan cara yang sama),
+`config.yaml` (`research`, `roles.researcher`, `tools.researcher`, `router.research_max_usd`). Tes:
+`tests/test_research.py` (49). Mutants 24/24. Tambahan dari mutants: kutipan 20–600 karakter juga bila ada di halaman,
+SubmitHandoff bersama tool lain tidak menjalankan apa pun, tiga langkah terakhir hanya menawarkan SubmitHandoff, submit
+yang sudah di-commit tidak dinilai ulang saat resume.

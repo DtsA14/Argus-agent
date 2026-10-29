@@ -47,6 +47,8 @@ def main(argv=None, deps=None):
     c.add_argument("--exclude", action="append", default=[])
     c.add_argument("--environment", help="the sandbox environment of the job's validations (its image is pinned for "
                    "the whole job); without it, the drafter's configured one, nothing pinned")
+    c.add_argument("--research", action="store_true", help="start with the research stage r1: read-only tools and ReadDocs "
+                   "(granted by this confirmation; needs --environment in web.environments); docs/reviews/SPEC_RESEARCH_STAGE.md")
     sub.add_parser("list")
     sub.add_parser("status").add_argument("job")
     sub.add_parser("resume").add_argument("job")
@@ -62,6 +64,9 @@ def main(argv=None, deps=None):
     a.add_argument("--reference-patch")
     a.add_argument("--web", action="store_true", help="grant the agent ReadDocs (documentation pages from the hosts in "
                    "config web.hosts); refused for an environment off web.environments")
+    q = sub.add_parser("research-ok")
+    q.add_argument("job")
+    q.add_argument("--sha", required=True, help="the handoff sha status shows (at least 12 characters)")
     t = sub.add_parser("retry")
     t.add_argument("job")
     t.add_argument("--max-usd", type=float)
@@ -74,7 +79,7 @@ def main(argv=None, deps=None):
         r.add_argument("job")
         r.add_argument("reason")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok"):   # the live commands
             p.add_argument("--key-file", help="read the API key from this 0600 file instead of typing it")
             p.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     o = ap.parse_args(argv)
@@ -107,7 +112,9 @@ def main(argv=None, deps=None):
         if o.cmd == "code":
             issue = o.issue if o.issue is not None else Path(o.issue_file).read_text(encoding="utf-8")
             job = rj.start_code(repo=o.repo, commit=o.commit, issue=issue, cfg=cfg, deps=deps, exclude=o.exclude,
-                                max_usd=o.max_usd, jobs_dir=o.jobs_dir, environment=o.environment)
+                                max_usd=o.max_usd, jobs_dir=o.jobs_dir, environment=o.environment, research=o.research)
+        elif o.cmd == "research-ok":
+            job, _ = rj.research_ok(o.job, sha=o.sha, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
         elif o.cmd == "approve":
             job, _ = rj.approve(o.job, sha=o.sha, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
                                 max_iterations=o.max_iterations, reference_patch=o.reference_patch, jobs_dir=o.jobs_dir,
@@ -128,7 +135,7 @@ def main(argv=None, deps=None):
               + "`argus status <job>` shows where it stopped. Do not start a new job for the same task.", file=sys.stderr)
         return 130
     print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
-    return 0 if job.data["state"] in (rj.AWAITING_APPROVAL, rj.REVIEW_READY) else 1
+    return 0 if job.data["state"] in (rj.AWAITING_APPROVAL, rj.REVIEW_READY, rj.AWAITING_RESEARCH_REVIEW) else 1
 
 
 if __name__ == "__main__":

@@ -52,7 +52,13 @@ BASE, TASK = "base", "task"                 # the intake and the task inside a j
 NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL = "NEW", "DRAFTING", "DRAFT_FAILED", "AWAITING_APPROVAL"
 AGENT_RUNNING, AGENT_FAILED, REVIEW_READY, REVIEW_INVALID = "AGENT_RUNNING", "AGENT_FAILED", "REVIEW_READY", "REVIEW_INVALID"
 REJECTED, BLOCKED, ABANDONED, APPLIED = "REJECTED", "BLOCKED", "ABANDONED", "APPLIED"
+# SPEC_RESEARCH_STAGE: the research stage r1 before the drafter (argus code --research)
+RESEARCHING, AWAITING_RESEARCH_REVIEW = "RESEARCHING", "AWAITING_RESEARCH_REVIEW"
+RESEARCH_INCONCLUSIVE, RESEARCH_FAILED = "RESEARCH_INCONCLUSIVE", "RESEARCH_FAILED"
 LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
+         (NEW, RESEARCHING), (RESEARCHING, AWAITING_RESEARCH_REVIEW), (RESEARCHING, RESEARCH_INCONCLUSIVE),
+         (RESEARCHING, RESEARCH_FAILED), (RESEARCHING, BLOCKED),
+         (AWAITING_RESEARCH_REVIEW, DRAFTING), (AWAITING_RESEARCH_REVIEW, REJECTED), (AWAITING_RESEARCH_REVIEW, BLOCKED),
          (DRAFTING, AWAITING_APPROVAL), (DRAFTING, DRAFT_FAILED), (DRAFTING, BLOCKED),
          (DRAFT_FAILED, DRAFTING), (DRAFT_FAILED, REJECTED), (DRAFT_FAILED, BLOCKED),
          (DRAFT_FAILED, AGENT_RUNNING),           # an accepted draft stays approvable after a failed redraft
@@ -62,7 +68,8 @@ LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
          (AGENT_RUNNING, BLOCKED),
          (AGENT_FAILED, AGENT_RUNNING), (AGENT_FAILED, BLOCKED),
          (REVIEW_READY, APPLIED), (REVIEW_READY, REJECTED), (REVIEW_INVALID, REJECTED)} | \
-        {(s, ABANDONED) for s in (NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL, AGENT_RUNNING, AGENT_FAILED, BLOCKED)}
+        {(s, ABANDONED) for s in (NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL, AGENT_RUNNING, AGENT_FAILED, BLOCKED,
+                                  RESEARCHING, AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE, RESEARCH_FAILED)}
 JOB_ID = re.compile(r"^j[0-9a-z_]{1,40}$")
 KEY_SHAPE = {"anthropic": "sk-ant-"}
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-_]?")
@@ -92,7 +99,7 @@ class Deps:
 
     def __init__(self, *, confirm=None, get_key=None, isatty=None, models=None, validate=None, preflight=None,
                  env_preflight=None, clock=now, echo=print, red=None, key_file=None, assume_yes=False,
-                 key_forbidden=(ROOT,)):
+                 key_forbidden=(ROOT,), web_spawn=None):
         import getpass
         import sys
         self.confirm = confirm or (lambda text: input(text + "\nLanjut? [y/N] ").strip().lower() == "y")
@@ -103,6 +110,7 @@ class Deps:
         # docs/reviews/SPEC_ROUTER_KEY_FILE.md: the key from a 0600 file outside every repository (--key-file), and,
         # only with it, the [y/N] answered by the human in chat (--yes)
         self.key_file, self.assume_yes, self.key_forbidden = key_file, assume_yes, tuple(key_forbidden)
+        self.web_spawn = web_spawn                 # ReadDocs's downloader, injected by tests (default: a child process)
 
 
 # ---- the job file and its lock -----------------------------------------------------------------------------------
@@ -410,12 +418,18 @@ def new_job_id():
 
 
 def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs_dir=JOBS, job_id=None,
-               environment=None):
+               environment=None, research=False):
     """A new job: intake, then the first drafter stage. Returns the job. environment: the sandbox environment its
     validations run in, with the image it resolves to now pinned for the whole job; None is the job as before
-    (the drafter's configured environment, nothing pinned)."""
+    (the drafter's configured environment, nothing pinned). research: the human grants the research stage r1 and its
+    ReadDocs (SPEC_RESEARCH_STAGE); r1 runs instead of the drafter, which starts at research-ok."""
     if not isinstance(issue, str) or not issue.strip():
         raise Refused("the issue is empty")
+    if research:
+        w = cfg.get("web") or {}
+        if environment not in (w.get("environments") or []) or not w.get("hosts") or not w.get("limits"):
+            raise Refused(f"--research needs --environment, one of web.environments ({', '.join(w.get('environments') or [])}); "
+                          "no job was created")
     image = None
     if environment is not None:
         image, problem = environment_pin(cfg, environment)
@@ -445,8 +459,99 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
             raise Refused(f"intake failed: {e}") from e
         job.data["intake"] = {k: rec[k] for k in ("commit", "tree", "files", "snapshot_sha256")}
         job.note(deps, "intaken", files=rec["files"])
-        _draft(job, cfg, deps, 1)
+        if research:
+            _research(job, cfg, deps)
+        else:
+            _draft(job, cfg, deps, 1)
     return job
+
+
+def handoff_path(job):
+    return job.runs / job.data["stages"]["r1"]["run_id"] / "handoff.json"
+
+
+HANDOFF_LABEL = "Reviewed research handoff (r1):"
+
+
+def job_issue(job):
+    """The issue the drafter and the agent's contract get: the human's issue, and after research-ok the reviewed
+    handoff, rendered from the bytes whose sha was approved (SPEC_RESEARCH_STAGE 3)."""
+    issue = job.data["inputs"]["issue"]
+    ok = job.data.get("research_ok")
+    if not ok:
+        return issue
+    from codetask.research import render
+    return f"{issue}\n\n{HANDOFF_LABEL}\n{render(json.loads(ok['handoff']))}"
+
+
+def _research(job, cfg, deps, resume=False):
+    """Start the research stage r1 (its cap fixed now), or resume it with the cap it started with."""
+    from codetask.research import INCONCLUSIVE, RESEARCHED, research_settings, run_research
+    stage = job.data["stages"].get("r1")
+    if stage is None:
+        cap = round(min(float((cfg.get("router") or {}).get("research_max_usd", 0.30)), left_usd(job)), 6)
+        need = research_settings(stage_config(cfg, 1e9))["attempt_usd"]
+        if cap < need:
+            job.move(BLOCKED, deps, reason=f"budget: ${cap:.4f} left for the research, one attempt needs ${need:.2f}")
+            raise Refused(f"job {job.id}: not enough of the job cap left for the research (BLOCKED)")
+    else:
+        cap = stage["cap_usd"]
+    scfg = stage_config(job_config(job, cfg), cap)
+    lim = research_settings(scfg)
+    role = scfg["research"]["role"]
+    w = scfg.get("web") or {}
+    text = _limits_text(job, "research stage r1" + (" (resume)" if resume else ""),
+                        [f"model {scfg['roles'][role]['model']}; stage cap ${cap:.4f}; one attempt "
+                         f"${lim['attempt_usd']:.2f}; {lim['max_steps']} steps, {lim['max_submits']} submits",
+                         f"network: ReadDocs on {len(w.get('hosts') or {})} allowlisted hosts "
+                         f"({', '.join(sorted(w.get('hosts') or {}))}), granted by this confirmation",
+                         "tools: read-only (ListFiles, SearchFiles, ReadFile, ReadDocs); nothing is written or run"])
+    with live(deps, scfg, [role], text, job=job):
+        if stage is None:
+            job.data["stages"]["r1"] = {"kind": "research", "run_id": f"{job.id}-r1", "cap_usd": cap,
+                                        "started_at": deps.clock()}
+            job.move(RESEARCHING, deps, stage="r1")
+        run_id = job.data["stages"]["r1"]["run_id"]
+        again = (job.runs / run_id / "checkpoints.sqlite").exists()
+        deps.echo(running(job, "research", run_id))
+        r = run_research(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job.data["inputs"]["issue"],
+                         environment=job.data["inputs"]["environment"], max_usd=cap, resume=again, models=deps.models,
+                         root=job.root, web_spawn=deps.web_spawn)
+    st = job.data["stages"]["r1"]
+    st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
+    deps.echo(f"research finished: {r['status']} (${r['usd_billed']:.4f})")
+    if r["status"] in (RESEARCHED, INCONCLUSIVE):
+        st["handoff_sha256"] = hashlib.sha256(handoff_path(job).read_bytes()).hexdigest()
+        job.move(AWAITING_RESEARCH_REVIEW if r["status"] == RESEARCHED else RESEARCH_INCONCLUSIVE, deps, stage="r1")
+    else:
+        job.move(RESEARCH_FAILED, deps, stage="r1", reason=r.get("stop_reason"))
+    return r
+
+
+def research_ok(job_id, *, sha, cfg, deps, jobs_dir=JOBS):
+    """The reviewer accepts the handoff status showed (sha): the drafter stage d1 starts with it in its issue."""
+    from codetask.research import MAX_ISSUE, render
+    job = open_job(job_id, jobs_dir)
+    with job.lock():
+        _check_environment(job, cfg)
+        if job.data["state"] != AWAITING_RESEARCH_REVIEW:
+            raise Refused(f"job {job.id} is {job.data['state']}, not AWAITING_RESEARCH_REVIEW")
+        raw = handoff_path(job).read_bytes()
+        seen = hashlib.sha256(raw).hexdigest()
+        if seen != job.data["stages"]["r1"].get("handoff_sha256"):
+            raise Refused(f"the handoff is {seen[:12]}, not the one the research stage wrote; nothing was accepted")
+        if not sha or len(sha) < 12 or not seen.startswith(sha):
+            raise Refused(f"the handoff is {seen[:12]}, not the {sha!r} given: accept the handoff status shows "
+                          "(at least its first 12 characters)")
+        text = raw.decode("utf-8")
+        issue = f"{job.data['inputs']['issue']}\n\n{HANDOFF_LABEL}\n{render(json.loads(text))}"
+        if len(issue) > MAX_ISSUE:
+            raise Refused(f"the issue with the handoff has {len(issue)} characters, more than {MAX_ISSUE}; nothing "
+                          "was accepted")
+        job.data["research_ok"] = {"handoff_sha256": seen, "handoff": text, "at": deps.clock(),
+                                   "by": os.environ.get("USER")}
+        job.note(deps, "research_ok", handoff=seen[:12])
+        return job, _draft(job, cfg, deps, 1)
 
 
 NOTE_MAX = 1000                  # SPEC_DRAFT_CALL_PATH 2.4: characters of a reviewer's note to the drafter
@@ -483,7 +588,7 @@ def _draft(job, cfg, deps, n, note=None):
         run_id = job.data["stages"][sid]["run_id"]
         again = (job.runs / run_id / "checkpoints.sqlite").exists()
         deps.echo(running(job, "drafter", run_id))
-        r = run_drafter(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job.data["inputs"]["issue"],
+        r = run_drafter(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job_issue(job),
                         max_usd=cap, resume=again, models=deps.models, validate=deps.validate,
                         preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root, red=deps.red,
                         note=job.data["stages"][sid].get("note"))
@@ -591,7 +696,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
         with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
             if draft_sha(path) != seen:                 # changed while the human was reading
                 raise Refused("the draft changed after it was shown; nothing was approved")
-            report = dr.check(draft, task=TASK, issue=job.data["inputs"]["issue"], max_usd=cap,
+            report = dr.check(draft, task=TASK, issue=job_issue(job), max_usd=cap,
                               max_iterations=max_iterations, reference_patch=reference_patch,
                               sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root,
                               profiles=sorted((cfg.get("code_task") or {}).get("profiles") or {}),
@@ -679,6 +784,8 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
     with job.lock():
         _check_environment(job, cfg)
         state = job.data["state"]
+        if state == RESEARCHING:
+            return job, _research(job, cfg, deps, resume=True)
         if state == DRAFTING:
             n = max(int(k[1:]) for k, s in job.data["stages"].items() if s["kind"] == "draft")
             return job, _draft(job, cfg, deps, n)
@@ -796,7 +903,8 @@ def reject(job_id, reason, *, deps, jobs_dir=JOBS):
     """Reject a draft waiting for approval, or a review package that will not be applied (its outcome, with why)."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
-        if job.data["state"] not in (AWAITING_APPROVAL, DRAFT_FAILED, REVIEW_READY, REVIEW_INVALID):
+        if job.data["state"] not in (AWAITING_APPROVAL, DRAFT_FAILED, REVIEW_READY, REVIEW_INVALID,
+                                     AWAITING_RESEARCH_REVIEW):
             raise Refused(f"job {job.id} is {job.data['state']}: only a draft waiting for approval or a review package "
                           "is rejected")
         job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"))
@@ -936,6 +1044,20 @@ def branch_name(job_id):
     return f"argus/{job_id}"
 
 
+def _handoff_lines(job):
+    """The research handoff to review (SPEC_RESEARCH_STAGE 3): its sha, where it is, and what comes next."""
+    path = handoff_path(job)
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    h = json.loads(path.read_text(encoding="utf-8"))
+    out = [f"handoff {sha[:12]} ({path.parent / 'HANDOFF.md'}): {h['verdict']}, "
+           f"{h['dependency']['package']}=={h['dependency']['version']}, {len(h['sources'])} quote(s) checked"]
+    if job.data["state"] == AWAITING_RESEARCH_REVIEW:
+        out.append(f"next: argus research-ok {job.id} --sha {sha[:12]}  |  argus reject {job.id} \"<why>\"")
+    else:
+        out.append(f"the documentation did not settle it; next: argus abandon {job.id} \"<why>\"")
+    return out
+
+
 def status(job_id, *, jobs_dir=JOBS, cfg=None):
     """A read-only summary (no lock): state, money, stages, and the draft to approve with its sha. With cfg, also
     whether the job's pinned environment image is still the one the config resolves."""
@@ -966,6 +1088,8 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                 *changed_lines(job, draft),
                 *call_path_lines(path, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
+    if d["state"] in (AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE):
+        out += _handoff_lines(job)
     out += _attempt_lines(job)
     out += _estimate_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
@@ -976,14 +1100,15 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                                                                                              "changes not compared")
         out.append(f"applied: commit {why.get('commit')} ({as_is})" + (f" (by {why['by']})" if why.get("by") else "")
                    + (f"; note: {why['note']}" if why.get("note") else ""))
-    if d["state"] in (DRAFT_FAILED, AGENT_FAILED, BLOCKED, REJECTED, ABANDONED):
+    if d["state"] in (DRAFT_FAILED, AGENT_FAILED, BLOCKED, REJECTED, ABANDONED, RESEARCH_FAILED):
         why = _why(job)
         out.append(f"why: {why.get('reason') or 'not recorded'}" + (f" (by {why['by']})" if why.get("by") else ""))
         if d["state"] == AGENT_FAILED:
             out.append(_agent_result(job))
         nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
                AGENT_FAILED: [f"argus retry {job.id}", f'argus abandon {job.id} "<why>"'],
-               BLOCKED: [f'argus abandon {job.id} "<why>"']}.get(d["state"])
+               BLOCKED: [f'argus abandon {job.id} "<why>"'],
+               RESEARCH_FAILED: [f'argus abandon {job.id} "<why>"']}.get(d["state"])
         if nxt:
             out.append("next: " + "  |  ".join(nxt))
     return "\n".join(map(clean, out))

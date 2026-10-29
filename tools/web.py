@@ -132,6 +132,28 @@ def _lines(path):
     return out
 
 
+def page_path(run_dir, url):
+    """Where the page (or definite refusal) asked for as `url` is kept in a run."""
+    return Path(run_dir) / "web" / "pages" / (hashlib.sha256(url.encode("utf-8")).hexdigest() + ".json")
+
+
+def _stored(path):
+    try:
+        page = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None                                    # missing, or left empty by a crash: as if never stored
+    return page if isinstance(page, dict) and isinstance(page.get("ok"), bool) else None
+
+
+def stored_page(run_dir, url):
+    """The page this run downloaded for `url` ({"ok": True, "text", ...}), or None: never fetched, a refusal, or not
+    readable (SPEC_RESEARCH_STAGE G1). Nothing is downloaded here."""
+    if not isinstance(url, str):
+        return None
+    page = _stored(page_path(run_dir, url))
+    return page if page and page["ok"] is True and isinstance(page.get("text"), str) else None
+
+
 class DocsReader:
     """The ReadDocs pages of one run (<run_dir>/web) for one attempt. web: the frozen config {hosts, limits}."""
 
@@ -150,17 +172,10 @@ class DocsReader:
                 out[rec["id"]]["bytes"] = rec["bytes"]
         return out
 
-    def _stored(self, path):
-        try:
-            page = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return None                                # missing, or left empty by a crash: as if never stored
-        return page if isinstance(page, dict) and isinstance(page.get("ok"), bool) else None
-
     def _page(self, url, text_room):
         """The stored page (or definite refusal) of url, fetched now within the budgets if there is none."""
-        path = self.dir / "pages" / (hashlib.sha256(url.encode("utf-8")).hexdigest() + ".json")
-        page = self._stored(path)
+        path = page_path(self.dir.parent, url)
+        page = _stored(path)
         if page is not None:
             return page
         why = wf.check_url(url, self.hosts, self.limits)
