@@ -48,3 +48,9 @@ Sesudah run 1: #216 (timeout validasi router 120 s) dan #217 (margin input heuri
 3. Kandidat jalur cepat: validasi dengan pytest exit code 4 (gagal collect/import) diberi umpan balik khusus ke agen
    ("berkasmu tidak bisa di-import"), supaya langkah tidak habis dengan berkas yang rusak.
 4. Waktu run didominasi latensi model (±9 s per panggilan thinking). 30 langkah × 3 attempt bisa ±15 menit per stage.
+
+## Koreksi diagnosis (2026-10-29, sesudah batch 5)
+
+`24562` (`j20261028_051232_d2e8`, `j20261028_065812_5cb1`): `EditFile` menolak `sympy/core/numbers.py` (136 KB) 17 dan 14 kali.
+"Mutu patch" (butir 2) adalah akibatnya: tanpa `EditFile` agen menulis ulang berkas 4.487 baris dengan `WriteFile` dan merusaknya.
+Perbaikan: `EditFile` sampai 2 MB (PR sesudah batch 5).

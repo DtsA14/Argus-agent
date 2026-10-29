@@ -87,3 +87,9 @@ Per instance: `issue.txt`, `grade.json` (bila dinilai), `live/` (job, draf, `DRA
 setiap tahap, ringkasan draf yang dikirim). Skrip dan log batch: `run_code.*`, `run_approve.*`, `run_redraft.*`, `spent.py`,
 `draft_summary.py`. Grading dijalankan dua kali untuk `24066` dan `23262`: yang pertama ditolak `swe_grade.py` karena path patch
 relatif (kesalahan perintah Claude, tidak ada hasil yang dibaca), yang kedua dengan path absolut.
+
+## Koreksi diagnosis (2026-10-29, sesudah batch 5)
+
+`24562` (`j20261028_030146_c6ca`): kedua stage agen ditolak `EditFile` di `sympy/core/numbers.py` (136 KB, batas 100.000 byte; 7
+kali). "Tidak pernah menulis" dan butir 1 di atas disebabkan batas harness itu, bukan kemampuan agen. #215 mengangkat batas
+`ReadFile` saja. Angka 3/5 tidak berubah. Perbaikan: `EditFile` sampai 2 MB (PR sesudah batch 5).

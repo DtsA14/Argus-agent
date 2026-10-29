@@ -185,8 +185,11 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     atas izin eksplisit), $0,8746. `20428` unresolved: kontrak benar tapi tidak cukup (fix di konstruksi Poly, di luar writable).
     `20801`, `19954` gagal di agen dua kali (`max_steps` tanpa menulis, `context_limit`; #227 tidak mencegahnya); `19954` a1
     FAILED_BUDGET (token 0,8% di atas perkiraan). Gate menelan traceback: 1 tolak yang wajar, 0 salah tolak
-- [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (a) agen di berkas besar: baca/cari tanpa menulis sampai `max_steps` (3 dari 3
-    kegagalan agen di batch 4–5 + 010b) — ukur dulu apa yang dibaca per attempt sebelum spek; (b) drafter: cari titik nilai salah
+- [x] **`EditFile` untuk berkas besar** (jalur cepat, dari identifikasi batch 5): `EditFile` membaca dengan batas 100.000 byte dan
+    menolak `numbers.py`, `perm_groups.py`, `polytools.py`; 9 job SWE sejak 2026-10-24 (`21379` batch 3, `24562` batch 4 + dev set,
+    `20801`/`19954` batch 5). Sekarang sampai 2 MB (`EDIT_MAX_FILE`). Diagnosis lama "agen tidak pernah menulis" dikoreksi di RESULT
+- [ ] Dev set sesudah perbaikan `EditFile` (`20801`, `19954`, `24562`; bukan klaim; butuh "go live")
+- [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
     pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) `estimate_miss` per run di `status` (H3 spek margin, `19954`)
 - [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
     300, issue 8.000 karakter, `max_steps` agen 30 (override router); audit run lama tetap memakai skema tool versi 1

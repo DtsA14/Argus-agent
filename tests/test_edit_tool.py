@@ -212,3 +212,47 @@ def test_reply_details_reports_what_the_provider_said_and_none_otherwise():
     assert reply_details(m) == {"reasoning_tokens": 2505, "stop_reason": "max_tokens"}
     assert reply_details(AIMessage(content="x")) == {"reasoning_tokens": None, "stop_reason": None}
     assert reply_details(AIMessage(content="x", response_metadata={"finish_reason": "length"}))["stop_reason"] == "length"
+
+
+# ---- large files (SWE batch 5: sympy files of 117-182 KB were refused, so agents could not apply a fix they had found) --
+
+def _big(n_bytes):
+    body, i = [], 0
+    while sum(map(len, body)) < n_bytes:
+        body.append(f"def f{i}(x):\n    return x + {i}\n\n\n")
+        i += 1
+    return "".join(body)
+
+
+@pytest.mark.parametrize("size", [150_000, 250_000])     # over MAX_READ; the second also over MAX_WRITE
+def test_a_file_larger_than_a_read_or_a_write_is_edited_in_place(tmp_path, size):
+    import codetask.tools as ct
+    assert size > ct.MAX_READ and size < ct.EDIT_MAX_FILE
+    box, ws = setup(tmp_path)
+    text = _big(size)
+    (ws / "src" / "big.py").write_text(text)
+    out = edit(box, "src/big.py", "def f7(x):\n    return x + 7\n", "def f7(x):\n    return x - 7\n")
+    assert out.startswith("src/big.py edited: 1 occurrence replaced"), out
+    assert (ws / "src" / "big.py").read_text() == text.replace("return x + 7\n", "return x - 7\n", 1)
+
+
+def test_a_file_over_the_edit_limit_is_refused_and_left_as_it_was(tmp_path, monkeypatch):
+    import codetask.tools as ct
+    monkeypatch.setattr(ct, "EDIT_MAX_FILE", 50_000)
+    box, ws = setup(tmp_path)
+    text = _big(60_000)
+    (ws / "src" / "big.py").write_text(text)
+    out = edit(box, "src/big.py", "def f7(x):\n    return x + 7\n", "def f7(x):\n    return x - 7\n")
+    assert "larger than 50000 bytes" in out
+    assert (ws / "src" / "big.py").read_text() == text
+
+
+def test_an_edit_that_would_grow_a_file_over_the_limit_changes_nothing(tmp_path, monkeypatch):
+    import codetask.tools as ct
+    monkeypatch.setattr(ct, "EDIT_MAX_FILE", 50_000)
+    box, ws = setup(tmp_path)
+    text = _big(45_000)
+    (ws / "src" / "big.py").write_text(text)
+    out = edit(box, "src/big.py", "def f7(x):\n", "def f7(x):\n" + "    # pad\n" * 1000)
+    assert "would be larger than 50000 bytes; nothing changed" in out
+    assert (ws / "src" / "big.py").read_text() == text
