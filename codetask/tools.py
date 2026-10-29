@@ -54,9 +54,11 @@ SHRINK_MIN_LINES = 200
 SEARCH_MAX_TEXT = 200          # characters of the literal text
 SEARCH_MAX_MATCHES = 20        # result lines returned
 SEARCH_MAX_LINE = 200          # characters kept of each matching line
-SEARCH_MAX_FILES = 500         # files read per call
-SEARCH_MAX_BYTES = 2_000_000   # bytes read per call
-SEARCH_MAX_FILE = 256_000      # a larger file is not read (and is reported)
+# The work bounds cover a repository the size of sympy (34 MB, 2,094 files; a whole-tree search ~1 s): at 500 files and
+# 2 MB, 209 SWE searches stopped after ~150 files, 124 of them "No matches in the files searched" (2026-10-29).
+SEARCH_MAX_FILES = 5_000       # files read per call
+SEARCH_MAX_BYTES = 64_000_000  # bytes read per call
+SEARCH_MAX_FILE = READ_MAX_FILE  # a larger file is not read (and is reported); one ReadFile can read in parts
 
 
 class ListFiles(BaseModel):
