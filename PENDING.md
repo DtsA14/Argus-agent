@@ -208,10 +208,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     pilot dua lengan issue 013 (`pilots/research_v0/p1/RESULT.md`): A riset $0,0179, B tanpa riset $0,0085, keduanya DONE
     dengan fix identik (`www_redirect=False`, ledger `804e13a`); drafter B sudah tahu dari ingatan (seperti K7). Riset
     menambah bukti untuk reviewer, bukan hasil
-- [~] **Staging v0** (jalur ketat, `docs/reviews/SPEC_STAGING_V0.md`, PR #244): image `ledger_staging` (+uvicorn),
+- [x] **Staging v0** (jalur ketat, `docs/reviews/SPEC_STAGING_V0.md`, PR #244): image `ledger_staging` (+uvicorn),
     `argus stage deploy|rollback|status`, container tanpa jaringan, read-only, Unix socket, smoke dari host, rollback
-    dites. Mutants 21/21 + 10/10 (review), verify.sh PASS 26efd8f. Menunggu "merge"; lalu pilot (deploy 6606 dan 013, rollback) dengan "go
-    live" per deploy
+    dites. Mutants 21/21 + 10/10 (review), verify.sh PASS 26efd8f. Merged #244; pilot (`pilots/staging_v0/p1/RESULT.md`):
+    deploy 6606 → deploy 013 → rollback ke 6606 → deploy 013, semua smoke pass, tiap langkah < 3 s, 4 "go live"; rollback
+    hanya mundur (kembali ke 013 = deploy baru). Staging berakhir di 013 (`804e13a`)
+- [ ] **Berikutnya (rencana):** tugas upgrade dependency dua lengan lewat staging (spek sendiri + image env baru)
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
     dependency jarang); kecil: `fetched` di HANDOFF.md sebagai UTC, bukan epoch
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah

@@ -1,0 +1,13 @@
+== staging rollback ==
+live now: j20261029_115742_bffd-804e13a33c44
+start again: j20261029_054325_6606-324012a60a7a
+staging only: no production, no users, no credentials
+(--yes: approved in chat; no [y/N] asked)
+staging live: j20261029_054325_6606-324012a60a7a
+  job j20261029_054325_6606, commit 324012a60a7a
+  last smoke: pass at 2026-10-29T13:48:44Z
+rollback would start: nothing (no earlier release)
+
+real	0m2.851s
+user	0m0.933s
+sys	0m0.255s
