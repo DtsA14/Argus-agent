@@ -396,5 +396,9 @@ sandbox:
     # defined in environments/ledger_py312/, built and checked like sympy_py39.
     ledger_py312:
       image: null
+    # ledger_staging (docs/reviews/SPEC_STAGING_V0.md S1): ledger_py312 plus uvicorn, the runtime image of the staging
+    # container; built and checked like ledger_py312. Never in web.environments.
+    ledger_staging:
+      image: null
     argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
       image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker

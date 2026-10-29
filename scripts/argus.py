@@ -20,6 +20,7 @@ Applying the review package's patch to the target repository stays with the huma
 ended without success, 2 refused.
 """
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from approve_draft import sandbox_cfg  # noqa: E402  (scripts/ is on sys.path when this file runs)
+from acceptance import intake  # noqa: E402
 from models.registry import ConfigError  # noqa: E402
 from router import job as rj  # noqa: E402
 from runner import load_config  # noqa: E402
@@ -74,6 +76,13 @@ def main(argv=None, deps=None):
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
     p.add_argument("--note")
+    g = sub.add_parser("stage", help="staging v0 (docs/reviews/SPEC_STAGING_V0.md): deploy | rollback | status")
+    gs = g.add_subparsers(dest="stage_cmd", required=True)
+    gd = gs.add_parser("deploy")
+    gd.add_argument("job")
+    for p_ in (gd, gs.add_parser("rollback")):
+        p_.add_argument("--yes", action="store_true", help="the deployment was approved in chat (\"go live\")")
+    gs.add_parser("status")
     for name in ("reject", "abandon"):
         r = sub.add_parser(name)
         r.add_argument("job")
@@ -84,6 +93,25 @@ def main(argv=None, deps=None):
             p.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     o = ap.parse_args(argv)
     deps = deps or rj.Deps()
+    if o.cmd == "stage":
+        from router import stage as sg
+        try:
+            if o.stage_cmd == "status":
+                print(sg.status())
+                return 0
+            deps.assume_yes = o.yes                      # no key is involved: --yes alone is the approval in chat
+            cfg = load_config(o.config)
+            cfg["sandbox"] = sandbox_cfg(o.config)
+            if o.stage_cmd == "deploy":
+                sg.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
+            else:
+                sg.rollback(cfg=cfg, deps=deps)
+        except (rj.Refused, ConfigError, OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:
+            print(f"refused: {type(e).__name__ + ': ' if not isinstance(e, rj.Refused) else ''}{e}", file=sys.stderr)
+            print(sg.status())
+            return 2
+        print(sg.status())
+        return 0
     if getattr(o, "key_file", None) or getattr(o, "yes", False):
         deps.key_file, deps.assume_yes = o.key_file, o.yes
         deps.key_forbidden = (rj.ROOT, Path(o.jobs_dir)) + ((Path(o.repo),) if getattr(o, "repo", None) else ())

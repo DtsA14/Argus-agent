@@ -1,0 +1,2 @@
+{"event": "llm_call_started", "call_id": "c1", "worst_usd_nano": 3000000}
+{"event": "llm_call", "call_id": "c1", "status": "ok", "usd_nano": 1200000}

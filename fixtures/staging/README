@@ -1,0 +1,3 @@
+Synthetic jobs the staging container serves (docs/reviews/SPEC_STAGING_V0.md, Atha 2026-10-29: no real jobs).
+Two jobs, 2,500,000 nano-dollars in all: one APPLIED with two priced calls, one AGENT_FAILED with a call cut off
+(charged at its worst case). The smoke test checks these numbers, so a release that reads them wrongly fails.
