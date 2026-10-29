@@ -210,7 +210,7 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     menambah bukti untuk reviewer, bukan hasil
 - [~] **Staging v0** (jalur ketat, `docs/reviews/SPEC_STAGING_V0.md`, PR #244): image `ledger_staging` (+uvicorn),
     `argus stage deploy|rollback|status`, container tanpa jaringan, read-only, Unix socket, smoke dari host, rollback
-    dites. Mutants 21/21. Menunggu review, `verify.sh`, "merge"; lalu pilot (deploy 6606 dan 013, rollback) dengan "go
+    dites. Mutants 21/21 + 10/10 (review), verify.sh PASS 26efd8f. Menunggu "merge"; lalu pilot (deploy 6606 dan 013, rollback) dengan "go
     live" per deploy
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
     dependency jarang); kecil: `fetched` di HANDOFF.md sebagai UTC, bukan epoch
