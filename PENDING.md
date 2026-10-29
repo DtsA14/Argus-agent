@@ -188,7 +188,8 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **`EditFile` untuk berkas besar** (jalur cepat, dari identifikasi batch 5): `EditFile` membaca dengan batas 100.000 byte dan
     menolak `numbers.py`, `perm_groups.py`, `polytools.py`; 9 job SWE sejak 2026-10-24 (`21379` batch 3, `24562` batch 4 + dev set,
     `20801`/`19954` batch 5). Sekarang sampai 2 MB (`EDIT_MAX_FILE`). Diagnosis lama "agen tidak pernah menulis" dikoreksi di RESULT
-- [ ] Dev set sesudah perbaikan `EditFile` (`20801`, `19954`, `24562`; bukan klaim; butuh "go live")
+- [x] **Dev set 2** sesudah perbaikan `EditFile` (`pilots/swe_v0/dev2/RESULT.md`, bukan klaim): `20801`, `19954`, `24562` **3/3
+    `resolved`**, masing-masing 1 attempt, 3–7 langkah, $0,0615 total; patch setara dengan upstream
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
     pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) `estimate_miss` per run di `status` (H3 spek margin, `19954`)
 - [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
