@@ -180,6 +180,14 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     Agen hanya menyentuh `mod.py`, tangkapan sempit di sekitar `gcd` (`pilots/swe_v0/rerun_21379/RESULT.md`)
 - [x] **SWE batch 4** (#214, `pilots/swe_v0/batch4/RESULT.md`): **3/5 `resolved`** (3/4 tanpa `23824` *harness-blocked*), tanpa bocoran,
     harness beku, $0,4260, 5 balasan Atha. `24562` gagal (agen tidak pernah menulis); `22456` d1 ditahan, redraft polos
+- [x] **SWE batch 5** (`pilots/swe_v0/batch5/RESULT.md`, sympy 1.6–1.8 di `sympy_py39`, harness `aee6aef` beku): **2/5 `resolved`**
+    (1/4 tanpa campur tangan; `18189` *human-steered*: d1 ditahan Atha karena tes mengunci pasangan bukan solusi, redraft `--note`
+    atas izin eksplisit), $0,8746. `20428` unresolved: kontrak benar tapi tidak cukup (fix di konstruksi Poly, di luar writable).
+    `20801`, `19954` gagal di agen dua kali (`max_steps` tanpa menulis, `context_limit`; #227 tidak mencegahnya); `19954` a1
+    FAILED_BUDGET (token 0,8% di atas perkiraan). Gate menelan traceback: 1 tolak yang wajar, 0 salah tolak
+- [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (a) agen di berkas besar: baca/cari tanpa menulis sampai `max_steps` (3 dari 3
+    kegagalan agen di batch 4–5 + 010b) — ukur dulu apa yang dibaca per attempt sebelum spek; (b) drafter: cari titik nilai salah
+    pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) `estimate_miss` per run di `status` (H3 spek margin, `19954`)
 - [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
     300, issue 8.000 karakter, `max_steps` agen 30 (override router); audit run lama tetap memakai skema tool versi 1
 - [x] **Timeout validasi router 120 s** (#216; 261 validasi: p99 59 s, maks 66 s)

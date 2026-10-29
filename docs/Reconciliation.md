@@ -136,8 +136,9 @@ variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di r
    menelan traceback" lolos tanpa menilai (#225). Mode fitur drafter tidak perlu. ReadDocs (akses web tahap 1, #229) di `main`; pilot
    K7 (tahap 9): agen tidak memakainya pada fitur yang umum, manfaat belum terbukti. Berikutnya: JS + Playwright (3b) bila perlu;
    mesin pencari hanya bila ReadDocs terbukti kurang. Issue 001–011 ditulis Claude atas delegasi; argus-ledger jalur cepat.
-2. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): batch 3 3/4, batch 4 3/5. Sekarang alat regresi (±20% usaha), bukan
-   tujuan; batch 5 di harness sesudah #215–#217 untuk melihat efeknya di instance baru.
+2. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): batch 3 3/4, batch 4 3/5, batch 5 2/5 (1/4 tanpa campur tangan;
+   sympy 1.6–1.8). Sekarang alat regresi (±20% usaha), bukan tujuan. Batch 5: dua kegagalan agen (`max_steps`/`context_limit` di
+   berkas besar, #227 tidak mencegahnya) dan satu kontrak yang terlalu sempit.
 3. **Efek petunjuk #204** (`max_steps` tanpa menulis) dan output drafter 32.000: ada di kode, belum di run live.
 4. **Eval set yang tidak jenuh** (M5): instance SWE sebagai eval regresi harness; bukan ukuran model selama terkontaminasi.
 5. **Menit kerja manusia** (M5): jumlah keputusan, waktu mesin, dan waktu ringkasan → "y" terukur; menit Atha belum ditanyakan.
