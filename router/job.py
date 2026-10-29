@@ -1,6 +1,8 @@
 """Router v0 (docs/reviews/SPEC_ROUTER_V0.md): a code task as one resumable job.
 
   argus code     a new job: intake of the target repository at a commit, then the drafter            -> AWAITING_APPROVAL
+                 with --research, first the research stage r1 (read-only, ReadDocs) -> AWAITING_RESEARCH_REVIEW
+  argus research-ok  the reviewer accepts the handoff they saw (its sha); the drafter gets it in its issue
   argus approve  the human approves the draft they saw (its sha), then the agent and the review package -> REVIEW_READY
   argus reject / redraft / resume / status
   argus applied  the human applied the review package's patch in a commit of the target repository        -> APPLIED
@@ -442,7 +444,9 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
     if job.file.exists():
         raise Refused(f"job {job_id} already exists")
     router = cfg.get("router") or {}
-    cap = float(max_usd if max_usd is not None else router.get("job_max_usd", 1.0))
+    # SPEC_RESEARCH_STAGE: the research stage is paid on top of the job cap sized for drafter + agent, not from it
+    cap = float(max_usd if max_usd is not None else router.get("job_max_usd", 1.0)
+                + (router.get("research_max_usd", 0.30) if research else 0))
     if not cap > 0:
         raise Refused("the job cap must be positive")
     with job.lock():
@@ -470,9 +474,6 @@ def handoff_path(job):
     return job.runs / job.data["stages"]["r1"]["run_id"] / "handoff.json"
 
 
-HANDOFF_LABEL = "Reviewed research handoff (r1):"
-
-
 def job_issue(job):
     """The issue the drafter and the agent's contract get: the human's issue, and after research-ok the reviewed
     handoff, rendered from the bytes whose sha was approved (SPEC_RESEARCH_STAGE 3)."""
@@ -480,8 +481,8 @@ def job_issue(job):
     ok = job.data.get("research_ok")
     if not ok:
         return issue
-    from codetask.research import render
-    return f"{issue}\n\n{HANDOFF_LABEL}\n{render(json.loads(ok['handoff']))}"
+    from codetask.research import issue_with
+    return issue_with(issue, json.loads(ok["handoff"]))
 
 
 def _research(job, cfg, deps, resume=False):
@@ -530,7 +531,7 @@ def _research(job, cfg, deps, resume=False):
 
 def research_ok(job_id, *, sha, cfg, deps, jobs_dir=JOBS):
     """The reviewer accepts the handoff status showed (sha): the drafter stage d1 starts with it in its issue."""
-    from codetask.research import MAX_ISSUE, render
+    from codetask.research import MAX_ISSUE
     job = open_job(job_id, jobs_dir)
     with job.lock():
         _check_environment(job, cfg)
@@ -543,13 +544,12 @@ def research_ok(job_id, *, sha, cfg, deps, jobs_dir=JOBS):
         if not sha or len(sha) < 12 or not seen.startswith(sha):
             raise Refused(f"the handoff is {seen[:12]}, not the {sha!r} given: accept the handoff status shows "
                           "(at least its first 12 characters)")
-        text = raw.decode("utf-8")
-        issue = f"{job.data['inputs']['issue']}\n\n{HANDOFF_LABEL}\n{render(json.loads(text))}"
-        if len(issue) > MAX_ISSUE:
-            raise Refused(f"the issue with the handoff has {len(issue)} characters, more than {MAX_ISSUE}; nothing "
-                          "was accepted")
-        job.data["research_ok"] = {"handoff_sha256": seen, "handoff": text, "at": deps.clock(),
+        job.data["research_ok"] = {"handoff_sha256": seen, "handoff": raw.decode("utf-8"), "at": deps.clock(),
                                    "by": os.environ.get("USER")}
+        n = len(job_issue(job))                    # exactly what the drafter and the contract will get
+        if n > MAX_ISSUE:
+            del job.data["research_ok"]
+            raise Refused(f"the issue with the handoff has {n} characters, more than {MAX_ISSUE}; nothing was accepted")
         job.note(deps, "research_ok", handoff=seen[:12])
         return job, _draft(job, cfg, deps, 1)
 
@@ -905,8 +905,8 @@ def reject(job_id, reason, *, deps, jobs_dir=JOBS):
     with job.lock():
         if job.data["state"] not in (AWAITING_APPROVAL, DRAFT_FAILED, REVIEW_READY, REVIEW_INVALID,
                                      AWAITING_RESEARCH_REVIEW):
-            raise Refused(f"job {job.id} is {job.data['state']}: only a draft waiting for approval or a review package "
-                          "is rejected")
+            raise Refused(f"job {job.id} is {job.data['state']}: only a research handoff or a draft waiting for review, "
+                          "or a review package, is rejected (abandon closes the others)")
         job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"))
         return job
 
@@ -1045,12 +1045,21 @@ def branch_name(job_id):
 
 
 def _handoff_lines(job):
-    """The research handoff to review (SPEC_RESEARCH_STAGE 3): its sha, where it is, and what comes next."""
+    """The research handoff to review (SPEC_RESEARCH_STAGE 3): its sha, where it is, and what comes next. A handoff file
+    that is missing, unreadable or not the one the stage wrote is said so, and research-ok is not offered."""
     path = handoff_path(job)
-    sha = hashlib.sha256(path.read_bytes()).hexdigest()
-    h = json.loads(path.read_text(encoding="utf-8"))
-    out = [f"handoff {sha[:12]} ({path.parent / 'HANDOFF.md'}): {h['verdict']}, "
-           f"{h['dependency']['package']}=={h['dependency']['version']}, {len(h['sources'])} quote(s) checked"]
+    try:
+        raw = path.read_bytes()
+        h = json.loads(raw.decode("utf-8"))
+        sha = hashlib.sha256(raw).hexdigest()
+        head = (f"{h['verdict']}, {h['dependency']['package']}=={h['dependency']['version']}, "
+                f"{len(h['sources'])} quote(s) checked")
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return [f"handoff {path}: cannot be read ({type(e).__name__}); next: argus abandon {job.id} \"<why>\""]
+    if sha != job.data["stages"]["r1"].get("handoff_sha256"):
+        return [f"handoff {path}: changed after the research stage wrote it ({sha[:12]}, recorded "
+                f"{str(job.data['stages']['r1'].get('handoff_sha256'))[:12]}); next: argus abandon {job.id} \"<why>\""]
+    out = [f"handoff {sha[:12]} ({path.parent / 'HANDOFF.md'}): {head}"]
     if job.data["state"] == AWAITING_RESEARCH_REVIEW:
         out.append(f"next: argus research-ok {job.id} --sha {sha[:12]}  |  argus reject {job.id} \"<why>\"")
     else:

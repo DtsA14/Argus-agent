@@ -43,6 +43,7 @@ from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_
 from models.registry import ModelRef
 from tools import web
 
+from .drafter import FINAL_STEPS, _write, final_from
 from .review import fence
 from .run import ROOT, RunExists, cache_totals
 from .tools import GATED, ListFiles, ReadDocs, ReadFile, SearchFiles, Toolbox
@@ -56,7 +57,6 @@ BLOCKED, FAILED_BUDGET = "BLOCKED", "FAILED_BUDGET"
 SUPPORTED, INSUFFICIENT = "SUPPORTED", "INSUFFICIENT_EVIDENCE"
 LIMITS = {"problem": 2000, "api_behavior": 3000, "recommended_change": 3000}
 QUOTE_MIN, QUOTE_MAX, SOURCES_MAX, UNCERTAINTY_MAX, UNCERTAINTIES_MAX = 20, 600, 5, 1000, 10
-FINAL_STEPS = 3
 STEPS_LEFT_NOTE = ("Harness: {n} steps left of {max}. Submit the handoff soon with SubmitHandoff: a run that ends "
                    "without an accepted handoff has none, whatever was read.")
 FINAL_NOTE = "Harness: the last {n} steps. Only SubmitHandoff is offered now; submit what you have."
@@ -137,6 +137,27 @@ def ws(text):
     return " ".join(text.split())
 
 
+def quoted_in(text, quote):
+    """Whether `quote` is in `text` as whole words (both whitespace-normalized by the caller): a quote that starts or
+    ends inside a word ("supported" out of "unsupported") is not a quote of the page."""
+    i = text.find(quote)
+    while i >= 0:
+        j = i + len(quote)
+        if not (i > 0 and text[i - 1].isalnum() and quote[0].isalnum()) and \
+                not (j < len(text) and text[j].isalnum() and quote[-1].isalnum()):
+            return True
+        i = text.find(quote, i + 1)
+    return False
+
+
+HANDOFF_LABEL = "Reviewed research handoff (r1):"
+
+
+def issue_with(issue, handoff):
+    """The issue the drafter and the agent's contract get after research-ok: the human's issue and the handoff."""
+    return f"{issue}\n\n{HANDOFF_LABEL}\n{render(handoff)}"
+
+
 def _text(args, key, limit, problems, required=True):
     v = args.get(key, "")
     if not isinstance(v, str):
@@ -149,7 +170,7 @@ def _text(args, key, limit, problems, required=True):
     return v
 
 
-def gate(args, *, installed, run_dir):
+def gate(args, *, installed, run_dir, part_chars):
     """(problems, handoff): the problems of a SubmitHandoff (SPEC_RESEARCH_STAGE G1-G5), and when there are none the
     handoff to keep, with each source's page as the run stored it (url, fetched_at, sha256)."""
     problems = []
@@ -194,8 +215,9 @@ def gate(args, *, installed, run_dir):
             problems.append(f"G1 source {i}: {url!r} is not a page ReadDocs downloaded in this run; read it first, "
                             "and give the url exactly as you asked for it")
             continue
-        if quote not in ws(page["text"]):
-            problems.append(f"G2 source {i}: the quote is not in the text of {url!r} as downloaded; copy it exactly")
+        if not any(quoted_in(ws(t), quote) for t in web.served_texts(run_dir, url, part_chars)):
+            problems.append(f"G2 source {i}: the quote is not, as whole words, in the parts of {url!r} you read; "
+                            "copy it exactly from a part you read")
             continue
         kept.append({"url": url, "quote": quote, "fetched_at": page.get("fetched_at"), "sha256": page.get("sha256"),
                      "final_url": page.get("final_url")})
@@ -220,7 +242,8 @@ def render(handoff):
              "", "Problem:", fence(handoff["problem"]), "", "Relevant API behavior:", fence(handoff["api_behavior"]),
              "", "Documentation (each quote checked by the harness against the downloaded page):"]
     for s in handoff["sources"]:
-        lines += [f"- {s['url']} (fetched {s['fetched_at']}, sha256 {str(s['sha256'])[:12]})", fence(s["quote"])]
+        moved = f", redirected to {s['final_url']}" if s.get("final_url") not in (None, s["url"]) else ""
+        lines += [f"- {s['url']} (fetched {s['fetched_at']}{moved}, sha256 {str(s['sha256'])[:12]})", fence(s["quote"])]
     if not handoff["sources"]:
         lines.append("- none")
     lines += ["", "Recommended code change:", fence(handoff["recommended_change"] or "(none)"), "", "Uncertainties:"]
@@ -237,10 +260,6 @@ def task_prompt(inputs, files, policy):
         "  " + ", ".join(f"{n}=={v}" for n, v in pkgs),
         "ReadDocs hosts: " + ", ".join(sorted(policy["web"]["hosts"])) + ".",
         f"SubmitHandoff is checked at most {policy['max_submits']} times; you have {policy['max_steps']} steps."])
-
-
-def final_from(max_steps):
-    return max_steps - FINAL_STEPS if max_steps >= 2 * FINAL_STEPS + 1 else max_steps
 
 
 def make_researching(caller, memo, log, *, lim, gate_submit, crasher):
@@ -335,9 +354,14 @@ def make_researching(caller, memo, log, *, lim, gate_submit, crasher):
     return researching
 
 
-def make_gate_submit(*, policy, run_dir, log):
+def make_gate_submit(*, policy, run_dir, log, issue):
     def gate_submit(args, n):
-        problems, handoff = gate(args, installed=policy["installed"], run_dir=run_dir)
+        problems, handoff = gate(args, installed=policy["installed"], run_dir=run_dir,
+                                 part_chars=policy["web"]["limits"]["part_chars"])
+        if not problems and len(issue_with(issue, handoff)) > MAX_ISSUE:
+            problems = [f"the issue with this handoff has {len(issue_with(issue, handoff))} characters, more than "
+                        f"{MAX_ISSUE}; shorten the handoff"]
+            handoff = None
         log.emit("handoff_checked", submit=n, ok=not problems, problems=problems[:20])
         if not problems:
             return {"content": "Accepted: the handoff passed the harness gate. The research is done.",
@@ -385,12 +409,6 @@ class State(TypedDict, total=False):
     tokens_used: int
     usd_used: float
     elapsed_s: float
-
-
-def _write(path, text):
-    tmp = Path(str(path) + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
 
 
 def review_text(run_id, inputs, state, cost):
@@ -463,7 +481,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         docs = web.DocsReader(policy["web"], run_dir, 1, log, **({"spawn": web_spawn} if web_spawn else {}))
         box = Toolbox(str(source), READ_ONLY, {}, policy["tools"], log, crasher=crasher, role=role, docs=docs)
         run = make_researching(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"]},
-                               gate_submit=make_gate_submit(policy=policy, run_dir=run_dir, log=log), crasher=crasher)
+                               gate_submit=make_gate_submit(policy=policy, run_dir=run_dir, log=log,
+                                                             issue=inputs["issue"]), crasher=crasher)
         a = run(task_id, box, task_prompt(inputs, state["files"], policy))
         out = {"research": {"end": a["end"], "steps": a["steps"], "submits": a["submits"]},
                "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}

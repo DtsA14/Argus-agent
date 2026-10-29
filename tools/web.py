@@ -154,6 +154,27 @@ def stored_page(run_dir, url):
     return page if page and page["ok"] is True and isinstance(page.get("text"), str) else None
 
 
+def served_texts(run_dir, url, part_chars):
+    """The text of `url` that ReadDocs served to the model in this run, as runs of consecutive parts (SPEC_RESEARCH_STAGE
+    G2): a part the model never got is not in it, so a quote from memory of an unread part does not pass."""
+    page = stored_page(run_dir, url)
+    if page is None:
+        return []
+    parts = set()
+    for path in sorted((Path(run_dir) / "web").glob("served_*.jsonl")):
+        parts |= {r["part"] for r in _lines(path) if r.get("url") == url and isinstance(r.get("part"), int)
+                  and not isinstance(r.get("part"), bool) and r["part"] >= 1}
+    runs, out = [], []
+    for n in sorted(parts):
+        if runs and runs[-1][-1] == n - 1:
+            runs[-1].append(n)
+        else:
+            runs.append([n])
+    for r in runs:
+        out.append(page["text"][(r[0] - 1) * part_chars: r[-1] * part_chars])
+    return out
+
+
 class DocsReader:
     """The ReadDocs pages of one run (<run_dir>/web) for one attempt. web: the frozen config {hosts, limits}."""
 

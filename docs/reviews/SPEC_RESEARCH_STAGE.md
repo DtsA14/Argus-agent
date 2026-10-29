@@ -136,3 +136,21 @@ dengan biaya lebih rendah, itu temuan: riset belum perlu untuk bug kelas ini (se
 `tests/test_research.py` (49). Mutants 24/24. Tambahan dari mutants: kutipan 20–600 karakter juga bila ada di halaman,
 SubmitHandoff bersama tool lain tidak menjalankan apa pun, tiga langkah terakhir hanya menawarkan SubmitHandoff, submit
 yang sudah di-commit tidak dinilai ulang saat resume.
+
+## 10. Review (/code-review medium, /security-review; 2026-10-29)
+
+Security: tidak ada temuan. Code review, diperbaiki (mutants 8/8):
+- **G2 hanya bagian yang benar-benar dibaca:** kutipan dicek terhadap bagian halaman yang ReadDocs berikan ke model di run
+  ini (bagian berurutan boleh disambung), bukan seluruh halaman tersimpan; kutipan dari ingatan atas bagian yang tidak
+  dibaca ditolak.
+- **G2 kata utuh:** kutipan tidak boleh mulai atau berakhir di tengah kata ("supported" dari "unsupported").
+- Gate menolak handoff yang membuat issue + handoff melebihi `MAX_ISSUE` (dulu baru ditolak di `research-ok`, sesudah
+  uangnya keluar); `research-ok` mengecek panjang dari `job_issue` yang sama dengan yang diterima drafter.
+- Cap job dengan `--research` = `job_max_usd` + `research_max_usd` (riset tidak memakan jatah drafter + agen).
+- `HANDOFF.md` menulis `redirected to <final_url>` bila halaman di-redirect.
+- `status` tidak crash pada handoff yang rusak atau berubah; `research-ok` tidak ditawarkan.
+- Pesan `reject` dan docstring router menyebut alur riset; `final_from`/`_write` dipakai dari drafter.
+
+Tidak diubah: `RESEARCH_FAILED` tetap berakhir dengan abandon (job baru murah, ≤ $0,30; run gagal adalah terminal seperti
+run lain); `installed_packages` tidak memakai `scripts/check_env_image.pinned` (skrip, bukan modul; nama dinormalisasi
+PEP 503 di sini).

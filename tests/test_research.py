@@ -104,8 +104,11 @@ def stored(tmp_path):
     return tmp_path / "run"
 
 
+PART = load_config()["web"]["limits"]["part_chars"]
+
+
 def check(run_dir, **over):
-    return rs.gate(handoff(**over), installed=INSTALLED, run_dir=run_dir)
+    return rs.gate(handoff(**over), installed=INSTALLED, run_dir=run_dir, part_chars=PART)
 
 
 def test_a_handoff_whose_url_quote_and_version_hold_passes(stored):
@@ -343,7 +346,7 @@ def test_research_ok_starts_the_drafter_with_the_handoff_in_its_issue(env):
     assert job.data["state"] == rj.AWAITING_APPROVAL
     content = env.drafter.calls[0]["messages"][1].content
     prompt = content if isinstance(content, str) else "".join(b["text"] for b in content)
-    assert rj.HANDOFF_LABEL in prompt and QUOTE in prompt and td.ISSUE in prompt
+    assert rs.HANDOFF_LABEL in prompt and QUOTE in prompt and td.ISSUE in prompt
     assert rj.job_issue(job).startswith(td.ISSUE) and QUOTE in rj.job_issue(job)
 
 
@@ -401,7 +404,7 @@ def test_the_approved_contract_carries_the_reviewed_handoff(env):
     rj.research_ok("jtest", sha=handoff_sha(env)[:12], cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
     job, _ = env.approve()
     contract = json.loads((job.root / "fixtures" / "contracts" / f"{job.data['approval']['task']}.json").read_text())
-    assert rj.HANDOFF_LABEL in contract["inputs"]["issue"] and QUOTE in contract["inputs"]["issue"]
+    assert rs.HANDOFF_LABEL in contract["inputs"]["issue"] and QUOTE in contract["inputs"]["issue"]
 
 
 # ---- mutation-check additions -------------------------------------------------------------------------------------
@@ -478,3 +481,70 @@ def test_research_ok_is_refused_unless_the_job_awaits_the_research_review(env):
     research(env)
     with pytest.raises(rj.Refused, match="not AWAITING_RESEARCH_REVIEW"):
         rj.research_ok("jtest", sha=handoff_sha(env)[:12], cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+
+
+# ---- review fixes -------------------------------------------------------------------------------------------------
+
+def long_page(tmp_path, parts_read, text):
+    reader = web.DocsReader(load_config()["web"], tmp_path / "run", 1, rs.EventLog(tmp_path / "e.jsonl"),
+                            spawn=Spawn(text=text))
+    for n in parts_read:
+        assert reader.read(URL, n, f"k{n}")["ok"]
+    return tmp_path / "run"
+
+
+def test_g2_a_quote_from_a_part_never_read_is_refused(tmp_path):
+    text = "a" * (PART - 1) + " " + "b" * (PART - 1) + " " + QUOTE + " " + "c" * PART   # the quote is in part 3
+    run_dir = long_page(tmp_path, [1], text)
+    assert any(p.startswith("G2") for p in check(run_dir)[0])
+    assert web.DocsReader(load_config()["web"], run_dir, 1, rs.EventLog(tmp_path / "e.jsonl"),
+                          spawn=Spawn(text=text)).read(URL, 3, "k3")["ok"]
+    assert check(run_dir)[0] == []
+
+
+def test_g2_a_quote_across_two_parts_read_passes_and_across_a_gap_does_not(tmp_path):
+    text = "a" * (PART - 40) + " " + QUOTE + " " + "b" * PART * 2                  # parts 1 and 2
+    assert check(long_page(tmp_path / "x", [1, 2], text))[0] == []
+    assert any(p.startswith("G2") for p in check(long_page(tmp_path / "y", [1, 3], text))[0])
+
+
+def test_g2_a_quote_must_match_whole_words(tmp_path):
+    text = PAGE + " This option is unsupported on Python 3.12 and later."
+    run_dir = long_page(tmp_path, [1], text)
+    assert any(p.startswith("G2") for p in check(run_dir, sources=[{"url": URL,
+                                                                     "quote": "supported on Python 3.12 and later"}])[0])
+    assert check(run_dir, sources=[{"url": URL, "quote": "unsupported on Python 3.12 and later"}])[0] == []
+
+
+def test_a_handoff_that_would_not_fit_the_issue_is_refused_by_the_gate(stored):
+    policy = {"installed": INSTALLED, "web": load_config()["web"], "max_submits": 3}
+    gate = rs.make_gate_submit(policy=policy, run_dir=stored, log=rs.EventLog(stored / "g.jsonl"),
+                               issue="x" * (rs.MAX_ISSUE - 200))
+    record = gate(handoff(), 1)
+    assert not record["finished"] and "more than" in record["content"]
+    assert rs.make_gate_submit(policy=policy, run_dir=stored, log=rs.EventLog(stored / "g.jsonl"),
+                               issue=ISSUE)(handoff(), 1)["finished"]
+
+
+def test_a_redirected_source_shows_where_it_went():
+    h = rs.render({**handoff(), "sources": [{"url": URL, "quote": QUOTE, "fetched_at": 1,
+                                                                 "sha256": "ab" * 32, "final_url": URL + "v2/"}]})
+    assert f", redirected to {URL}v2/" in h
+    assert ", redirected to" not in rs.render({**handoff(), "sources": [{"url": URL, "quote": QUOTE, "fetched_at": 1,
+                                                                    "sha256": "ab" * 32, "final_url": URL}]})
+
+
+@pytest.mark.parametrize("damage, said", [("corrupt", "cannot be read"), ("changed", "changed after")])
+def test_status_says_when_the_handoff_file_is_not_the_one_written(env, damage, said):
+    research(env)
+    path = rj.handoff_path(rj.open_job("jtest", env.jobs))
+    path.write_text("{" if damage == "corrupt" else path.read_text().replace("Pass", "Do not pass"))
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert said in text and "research-ok" not in text
+
+
+def test_a_research_job_gets_the_research_cap_on_top_of_the_job_cap(env):
+    job = research(env)
+    r = env.cfg["router"]
+    assert job.data["max_usd"] == pytest.approx(r["job_max_usd"] + r["research_max_usd"])
+    assert env.code(job_id="jplain").data["max_usd"] == pytest.approx(r["job_max_usd"])
