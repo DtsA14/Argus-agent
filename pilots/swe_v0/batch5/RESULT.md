@@ -73,3 +73,11 @@ dengan batas `MAX_READ` 100.000 byte dan menolak `numbers.py` (117 KB) dan `perm
   menyarankan `EditFile`, yang menolak berkas itu. Token dan context habis di situ (termasuk FAILED_BUDGET a1).
 Sejak 2026-10-24: 9 job SWE kena penolakan ini (batch 3 `21379`, batch 4 dan dev set `24562`, batch 5). Angka 2/5 tidak berubah.
 Perbaikan: `EditFile` sampai 2 MB (PR sesudah batch 5); `20801`, `19954`, `24562` diulang sebagai dev set (bukan klaim).
+
+## Koreksi: `19954` a1 harness-affected (2026-10-29, `SPEC_ESTIMATE_REASONING.md`)
+
+`FAILED_BUDGET` di `a1` (1.210.037 dari 1.200.000 token) bukan sekadar "penjaga bekerja benar". Penyebabnya bug harness:
+counter heuristik tidak menghitung `reasoning_content` yang dikirim balik ke DeepSeek, sehingga input tagihan sampai 1,10×
+perkiraan di a1 dan 1,91× di a2, meski margin sudah 2,5. `19954` dicatat **harness-affected** (counter dan `EditFile`),
+terpisah dari kegagalan model; angka 2/5 tidak berubah. Tidak dijalankan ulang di batch 5. Dev set 2 (`../dev2/`) memakai
+harness sesudah `EditFile` tetapi sebelum fix counter, dan merupakan data tersendiri, bukan klaim.

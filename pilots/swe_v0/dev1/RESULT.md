@@ -54,3 +54,11 @@ Sesudah run 1: #216 (timeout validasi router 120 s) dan #217 (margin input heuri
 `24562` (`j20261028_051232_d2e8`, `j20261028_065812_5cb1`): `EditFile` menolak `sympy/core/numbers.py` (136 KB) 17 dan 14 kali.
 "Mutu patch" (butir 2) adalah akibatnya: tanpa `EditFile` agen menulis ulang berkas 4.487 baris dengan `WriteFile` dan merusaknya.
 Perbaikan: `EditFile` sampai 2 MB (PR sesudah batch 5).
+
+## Koreksi: `24562` run 1 a2 harness-affected (2026-10-29, `SPEC_ESTIMATE_REASONING.md`)
+
+`FAILED_BUDGET` di retry `a2` (`j20261028_051232_d2e8`, 400.184 dari 400.000 token) disebabkan bug harness: counter heuristik
+tidak menghitung `reasoning_content` yang dikirim balik ke DeepSeek (79.307 karakter sebelum langkah 18), jadi langkah itu
+lolos cek sebelum kirim lalu melewati reservasi. Dicatat **harness-affected**, terpisah dari kegagalan model (aturan sama
+dengan `23824`). Run 1 juga sudah harness-affected oleh batas `EditFile` 100 KB (koreksi di atas). Angka tidak berubah;
+tidak dijalankan ulang di dev set ini.

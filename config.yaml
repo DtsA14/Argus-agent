@@ -163,12 +163,14 @@ router:
     drafter.attempt_tokens: 2000000    # (cache hits included) ran out at $0.018 of $0.70; the USD caps bind
     code_task.auto_validate: true
     code_task.max_steps: 30            # 12 ended sympy-24562 and -21379 (SWE v0 batches 3-4) before any write; USD caps bind
-    # SPEC_HEURISTIC_INPUT_MARGIN: 950 DeepSeek calls billed up to 1.77x the estimate at margin 1.2 (13% above 1.0), so
-    # a call could pass the check before sending and still exceed the reservation. 2.5 (Atha) is used for the worst case
-    # of tokens and USD alike; the input limits scale by 2.5/1.2 so the billed context they allow stays the same.
-    llm.input_margin_by_model: {"deepseek:deepseek-flash": 2.5, "deepseek:deepseek-v4-pro": 2.5}
-    code_task.max_input_tokens_by_model: {"deepseek:deepseek-flash": 125000, "deepseek:deepseek-v4-pro": 125000}
-    drafter.max_input_tokens: 416000
+    # SPEC_ESTIMATE_REASONING: the heuristic counter did not count the reasoning_content sent back to DeepSeek, so calls
+    # were billed up to 1.91x the estimate even at margin 2.5 (SPEC_HEURISTIC_INPUT_MARGIN's 2.5 covered that gap).
+    # Counted, 2,006 DeepSeek calls bill at most 0.68x the estimate at 1.5 (Atha: 1.5). The input limits are the raw
+    # tokens x 1.5: agent 100,000 and drafter ~166,000 raw, the context the uncounted reasoning already allowed (largest
+    # billed 108,065 and 127,856); DeepSeek's context is above 393,216 (its max_tokens bound), so 100,000 + 32,000 fits.
+    llm.input_margin_by_model: {"deepseek:deepseek-flash": 1.5, "deepseek:deepseek-v4-pro": 1.5}
+    code_task.max_input_tokens_by_model: {"deepseek:deepseek-flash": 150000, "deepseek:deepseek-v4-pro": 150000}
+    drafter.max_input_tokens: 250000
     # H2: large_usd's token ceiling bound before its USD (sympy-24562: 400,000 tokens at $0.036 of $0.45)
     code_task.profiles.large_usd.attempt_tokens: 1200000
     drafter.validation_timeout_s: 120  # the drafted validations' timeout; 261 router validations: p99 59 s, max 66 s; a hang cost 300 s each

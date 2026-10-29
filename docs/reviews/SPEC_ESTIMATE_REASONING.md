@@ -1,6 +1,7 @@
 # Spek: counter heuristik menghitung `reasoning_content` yang dikirim, dan `estimate_miss` di `status`
 
-Status: **draf untuk keputusan Atha**, 2026-10-29. Jalur ketat: menyentuh cek sebelum kirim di `harness/llm.py` (uang).
+Status: **disetujui** (Atha 2026-10-29: satu PR jalur ketat, margin 1,5, batas mentah agen 100.000). Jalur ketat: menyentuh
+cek sebelum kirim di `harness/llm.py` (uang).
 Asal: kandidat (c) batch 5 (H3 di `SPEC_HEURISTIC_INPUT_MARGIN.md`, "hanya tampilan"). Data untuk H3 menunjukkan
 penyebabnya bukan margin, melainkan bug penghitungan; jadi spek ini lebih luas dari H3. **Scope creep yang disengaja**,
 ditandai di sini sebelum ada kode.
@@ -54,7 +55,9 @@ Input tagihan terbesar sejauh ini: agen 108.065 token (95 dari 1.181 panggilan >
 ## 4. Perubahan
 
 **E1. Counter heuristik menghitung semua yang dikirim.** `_text` dipakai oleh counter **dan** `prompt_hash`. Jadi counter
-mendapat fungsinya sendiri, `_sent_text(m)` = `_text(m)` + `additional_kwargs["reasoning_content"]` bila ada. `prompt_hash`
+mendapat fungsinya sendiri, `_sent_text(m)` = `_text(m)` + seluruh `additional_kwargs` kecuali `tool_calls` (salinan provider
+dari tool call yang sudah dihitung `_text`). Ini mencakup `reasoning_content` dan field lain yang mungkin dikirim adapter;
+kelebihan hitung aman (est lebih besar), kekurangan tidak. `prompt_hash`
 dan kunci memo **tidak berubah**, karena run lama harus tetap bisa di-resume dari memo-nya. Reasoning sebuah langkah sudah
 ditentukan oleh balasan yang di-commit sebelum langkah berikutnya, jadi identitas input tetap utuh (bagian 6).
 
@@ -63,9 +66,15 @@ tetap):
 - `llm.input_margin_by_model` DeepSeek: 2,5 → **1,5** (maks terukur 0,68; cadangan ±47%).
 - Batas input ditulis dalam satuan est. Karena est sekarang ikut menghitung reasoning, angkanya dihitung dari batas token
   **mentah** yang dimaksud:
-  - agen `code_task.max_input_tokens_by_model`: **150.000** est = 100.000 mentah × 1,5. Saat ini batas mentah efektifnya
-    50.000 (125.000 / 2,5) di atas hitungan yang kurang. Kalau dibiarkan 50.000 dengan hitungan yang benar, 95 panggilan agen
-    yang dulu lolos akan kena `context_limit`.
+  - agen `code_task.max_input_tokens_by_model`: **150.000** est = 100.000 mentah × 1,5. **Ini mempertahankan perilaku lama,
+    bukan menaikkan batas.** Di atas kertas batasnya 50.000 mentah (125.000 / 2,5), tetapi karena reasoning tidak terhitung,
+    konteks yang benar-benar diterima agen sampai ±108.000 token. Kalau batas tetap 50.000 dengan hitungan yang benar, 95 dari
+    1.181 panggilan agen yang dulu lolos akan diblokir (`context_limit`): perilaku agen berubah, dan batch sesudahnya tidak bisa
+    dibandingkan dengan batch sebelumnya.
+  - Context window: referensi API DeepSeek (`api-docs.deepseek.com/api/create-chat-completion`, dicek 2026-10-29) menyebut
+    `max_tokens` "between 1 and 384K (393216)" dan "the total length of input tokens and generated tokens is limited by the
+    model's context length". Jadi context > 393.216 token, dan 100.000 input + 32.000 `max_tokens` output (132.000) muat.
+    Angka context-nya sendiri tidak tercantum di dokumen yang dicek. Input terbesar yang pernah diterima: 127.856.
   - drafter `drafter.max_input_tokens`: 416.000 → **250.000** est (≈ 166.000 mentah × 1,5, sama dengan batas mentahnya
     sekarang).
   - `large_usd.attempt_tokens` 1.200.000 tidak berubah.
@@ -78,18 +87,45 @@ Hanya tampilan, membaca ledger yang sudah ada.
 
 1. Counter heuristik: sebuah AIMessage dengan `reasoning_content` 60.000 karakter menaikkan est sebesar ≥ 60.000 / 3 × margin.
    Gagal kalau reasoning tidak dihitung.
-2. **Counter ⊇ payload:** untuk percakapan dengan reasoning, tool call, dan tool result, setiap string di payload
-   `ArgusChatDeepSeek._get_request_payload` (tanpa kirim) ikut terhitung di `_sent_text`. Gagal kalau ada field baru yang
-   dikirim tetapi tidak dihitung. Ini penjaga struktural, supaya bug yang sama tidak muncul lagi dari field lain.
+2. **Counter ⊇ payload, untuk semua adapter** (permintaan Atha: harness multi-provider). Setiap kind di
+   `models.registry.BUILDERS` harus masuk salah satu kelompok: dihitung exact oleh provider (`anthropic`: counter API
+   provider atas pesan yang sama), tidak pernah mengirim (`fake`), atau heuristik (`openai`, `openai_compatible`,
+   `deepseek`). Kind baru yang belum ditempatkan membuat tes gagal. Untuk setiap adapter heuristik, payload
+   `_get_request_payload` (dibangun tanpa kirim) dari percakapan dengan reasoning, tool call berargumen unicode, dan tool
+   result: est pada margin 1,0 ≥ (jumlah karakter semua string di `messages` payload) / 3. Gagal kalau ada field yang
+   dikirim tetapi tidak dihitung, dari adapter mana pun.
 3. `prompt_hash` tidak berubah oleh `reasoning_content`, dan hash percakapan lama sama dengan sebelumnya (resume memo lama).
-4. Replay langkah 22 `19954` a2 (panjang reasoning kumulatif seperti di memo, sintetis): dengan E1 + margin 1,5, worst case
-   sebelum kirim ≥ input tagihan 64.534 + output; tanpa E1 gagal.
+4. Replay dua langkah yang tercatat (bagian dihitung = `est_input` lama, reasoning kumulatif dari memo):
+   - `24562` a2 attempt 3 langkah 18: est 33.003 pada 1,2, reasoning 79.307 karakter, sisa 46.859, tagihan 45.296 + 1.747.
+     Dengan E1 + 1,5: est ≥ tagihan, dan panggilan ditolak sebelum kirim (dulu terkirim lalu lewat 184 token).
+   - `19954` a2 attempt 1 langkah 22: est 39.980 pada 2,5, reasoning 208.378 karakter, tagihan 64.534: est ≥ tagihan.
+   Tanpa E1 keduanya gagal. Tes lama `test_input_margin.py` yang mengunci margin 2,5, skala 2,5/1,2, dan replay tanpa
+   reasoning diganti tes ini.
 5. Override router: margin DeepSeek 1,5, batas agen 150.000, drafter 250.000; `config.yaml` tidak berubah.
 6. `status`: stage dengan 3 `estimate_miss` dari 10 panggilan menulis `estimate misses: 3 of 10 calls, max 1.91`; stage tanpa
    miss tidak menulis baris itu.
 
 Verifikasi: mutants untuk tes 1–4, `/code-review medium` + `/security-review`, `verify.sh` penuh sekali di commit final,
 lalu "merge" Atha.
+
+## 5a. Audit uang yang sudah keluar (permintaan Atha)
+
+Semua ledger di VM (169 run: `~/*/runs`, `~/*/jobs/*/runs`), 2026-10-29:
+- **USD: tidak ada yang lewat.** 0 `budget_violation` dengan `usd_used > usd_reserved`; 0 dari 2.533 panggilan `ok` dengan
+  biaya tagihan > `worst_usd` sebelum kirim (DeepSeek maks 0,93×; Anthropic maks 1,00× di panggilan yang output-nya
+  `max_tokens`, counter exact); 0 job lewat `max_usd`, 0 stage lewat `cap_usd`. Untuk DeepSeek ini **bukan** karena
+  jaminannya bekerja: worst case USD menghitung semua input dengan harga penuh ($0,15/M), sedangkan hampir semua input yang
+  tertagih adalah cache read ($0,003/M). Est yang terlalu rendah tertutup oleh selisih harga itu.
+- **Token: dua reservasi lewat**, keduanya dihentikan oleh guard `EstimateExceeded` (pengaman kedua) dengan status
+  `FAILED_BUDGET`:
+  - `j20261028_051232_d2e8-a2` (`sympy__sympy-24562`, dev set 1): 400.184 dari 400.000 token, $0,0363 dari $0,45;
+  - `j20261029_002951_8b7e-a1` (`sympy__sympy-19954`, batch 5): 1.210.037 dari 1.200.000 token, $0,1108 dari $0,45.
+- 136 event `estimate_miss` di semua ledger (134 di 23 run router).
+
+**Hasil yang tercemar:** kedua `FAILED_BUDGET` di atas dicatat sebagai **harness-affected** (aturan sama dengan `23824`),
+terpisah dari kegagalan model, di `pilots/swe_v0/dev1/RESULT.md` dan `pilots/swe_v0/batch5/RESULT.md`. Angka batch tidak
+diubah, dan instance itu tidak dijalankan ulang di batch yang sama sesudah fix (harness-nya sudah beda). Run ulang hanya
+di batch berikutnya, sebagai data tersendiri.
 
 ## 6. Yang tidak diubah, dan batas klaim
 
@@ -102,9 +138,10 @@ lalu "merge" Atha.
 - Biaya: est lebih jujur, dan margin turun dari 2,5 ke 1,5. Panggilan awal (tanpa reasoning) memesan lebih sedikit dari
   sekarang, panggilan akhir lebih banyak. Uang sebenarnya tidak berubah.
 
-## 7. Pertanyaan untuk Atha
+## 7. Keputusan Atha (2026-10-29)
 
-1. Scope: E1 + E2 + E3 dalam satu PR jalur ketat (usul), atau E3 dulu (cepat) dan E1/E2 terpisah?
-2. Margin DeepSeek sesudah E1: **1,5** (usul), 1,2 (maks terukur 0,85, cadangan 15%), atau tetap 2,5 (aman, tetapi batas
-   input harus naik ke 250.000 / 416.000 est supaya konteks tidak menyusut)?
-3. Batas mentah agen 100.000 token (usul; maks yang pernah diterima 108.065) atau tetap 50.000 (lebih banyak `context_limit`)?
+1. Satu PR jalur ketat: E3 baru berarti di atas counter yang benar; E3 duluan berarti angka di `status` berubah makna besok.
+2. Margin 1,5: 0,85 pada 1,2 diukur dari 2.006 panggilan lama; jaminan uang tidak boleh bergantung pada task berikutnya
+   yang mirip (kode lebih padat, teks non-Inggris). Cadangan ±32% murah.
+3. Batas mentah agen 100.000: mempertahankan perilaku lama (lihat E2), bukan menaikkan batas.
+4. Tambahan: tes penjaga untuk semua adapter (tes 2); audit uang (bagian 5a); hasil tercemar dicatat harness-affected.

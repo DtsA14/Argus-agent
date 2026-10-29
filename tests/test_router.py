@@ -1015,3 +1015,13 @@ def test_the_cli_records_applied_and_prints_the_status(env, capsys):
     assert argus.main(["--jobs-dir", str(env.jobs), "applied", "jtest", "--commit", sha[:10]], deps=env.deps) == 0
     assert f"applied: commit {sha}" in capsys.readouterr().out and env.job().data["state"] == rj.APPLIED
     assert argus.main(["--jobs-dir", str(env.jobs), "applied", "jtest", "--commit", sha], deps=env.deps) == 2
+
+
+def test_status_shows_the_estimate_misses_of_a_stage(env, monkeypatch):
+    """SPEC_ESTIMATE_REASONING E3: a stage whose ledger has estimate_miss events gets one line in status."""
+    job = failed_a1(env, monkeypatch, ends=A1_ENDS + [
+        {"event": "llm_call", "call_id": "c1", "status": "ok"}, {"event": "llm_call", "call_id": "c2", "status": "ok"},
+        {"event": "estimate_miss", "call_id": "c2", "est_input": 1000, "input_tokens": 1250}])
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert "  a1 estimate misses: 1 of 2 calls, max 1.25" in text
+    assert "d1 estimate misses" not in text and job.data["stages"]["d1"]["run_id"]

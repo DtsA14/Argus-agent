@@ -889,6 +889,28 @@ def _attempt_lines(job):
     return out
 
 
+def _estimate_lines(job):
+    """SPEC_ESTIMATE_REASONING E3: per stage whose ledger has estimate_miss events (billed input above the estimate it
+    was reserved with), how many of its sent calls and the largest billed / estimated input. Read only."""
+    out = []
+    for sid, s in job.data["stages"].items():
+        if not s.get("run_id"):
+            continue
+        try:
+            evs = parse_lines((job.runs / s["run_id"] / "events.jsonl").read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        misses = [e for e in evs if e.get("event") == "estimate_miss"]
+        if not misses:
+            continue
+        calls = sum(1 for e in evs if e.get("event") == "llm_call" and e.get("status") != "refused")
+        ratios = [e["input_tokens"] / e["est_input"] for e in misses
+                  if isinstance(e.get("input_tokens"), int) and isinstance(e.get("est_input"), int) and e["est_input"] > 0]
+        out.append(f"  {sid} estimate misses: {len(misses)} of {calls} calls"
+                   + (f", max {max(ratios):.2f}" if ratios else ""))
+    return out
+
+
 def branch_name(job_id):
     return f"argus/{job_id}"
 
@@ -924,6 +946,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                 *call_path_lines(path, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     out += _attempt_lines(job)
+    out += _estimate_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
         out += _review_lines(job, last_agent(job)[1]["review"])
     if d["state"] == APPLIED:
