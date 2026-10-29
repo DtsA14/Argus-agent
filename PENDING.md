@@ -28,7 +28,7 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
 - [~] **Aplikasi latihan `argus-ledger`** (repo terpisah, `~/argus-ledger`, lokal): dashboard ledger Argus dari folder `jobs/`.
   Setiap fitur = satu job Argus. Issue `~/argus-ledger-issues/` (001–010 **ditulis Claude atas delegasi Atha**). Sejak tahap 6
   **jalur cepat** (Atha 2026-10-28): Claude approve draf, review patch, cek, dan commit sendiri; dari Atha hanya "go live" per job.
-  **11 task di `main` (tahap 0–9), total $0,5366, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Agen 9/11 di attempt
+  **12 task di `main` (tahap 0–10), total $0,5688, 0 tes lama dilonggarkan, 0 patch ditulis ulang.** Agen 10/12 di attempt
   pertama; 010b butuh retry (5 attempt, 4 `context_limit`); 010 ($0,0575) DONE tapi **tidak di-merge** (2 cacat yang lolos
   dari tesnya, ditemukan uji serangan). Drafter gagal sekali
   (tahap 4 d1: batas 500 karakter item rencana tidak disebut di pesan error → #223), redraft lolos 1 submit.
@@ -46,6 +46,7 @@ angka yang boleh diklaim); **±80% ke task nyata** lewat dogfooding.
   | 7 `ae66c31` | 009: batas login gagal per alamat (429 + `Retry-After`, tanpa PBKDF2 saat diblokir) | `…145520_0b94` | 8 | $0,0338 | brute force 20 tebakan: 5 hash, 15× 429 |
   | – | 010: sesi bisa dicabut, **tidak di-merge** (logout palsu tersimpan tanpa batas; login di detik yang sama memberi nilai yang dicabut) | `…150342_8c2b` | 6+18 | $0,0575 | uji serangan: 2 gagal |
   | 9 `a72135c` | 011: trusted hosts, gzip ≥ 1000, `/jobs.csv`, API docs mati bawaan (pilot ReadDocs K7, lengan A `--web`) | `…173015_9964` | 24 | $0,0272 | 125 tes; CSV = CLI di 38 job; uji tahap 6–8 |
+  | 10 `324012a` | 012: `ledger report` (tabel Markdown per stage: calls, token, attempts, `max_in/est`, biaya; dari kebutuhan RESULT batch) | `…054325_6606` | 15 | $0,0322 | 5 job asli: total $0,4910 = `spent_nano`, 236 calls, token input sama; id path/symlink ditolak; **cacat:** `Infinity`/`1e400` di token → crash (`OverflowError`) → 012b |
   | 8 `759c59c` | 010b: logout mencabut sesi valid (SHA-256), `revoke-sessions` SQLite, fail-closed | `…152604_5fde` | retry, 5 attempt | $0,0810 | 103 tes; uji tahap 6–8 + data asli |
 
   - Temuan dogfooding: tahap 0 kurang hitung job yang dihentikan (`usd` null di `job.json`) → tahap 1. Mode fitur drafter **tidak
