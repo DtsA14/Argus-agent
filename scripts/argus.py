@@ -76,10 +76,18 @@ def main(argv=None, deps=None):
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
     p.add_argument("--note")
-    g = sub.add_parser("stage", help="staging v0 (docs/reviews/SPEC_STAGING_V0.md): deploy | rollback | status")
+    g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md): "
+                                     "deploy | rollback | status | check")
     gs = g.add_subparsers(dest="stage_cmd", required=True)
     gd = gs.add_parser("deploy")
     gd.add_argument("job")
+    from router.stage import ENVIRONMENT as STAGING_DEFAULT, RUNTIMES as STAGING_RUNTIMES
+    gd.add_argument("--runtime", default=STAGING_DEFAULT, choices=sorted(STAGING_RUNTIMES),
+                    help="the staging runtime; another than the default needs a passed `stage check` of the commit")
+    gc = gs.add_parser("check", help="the job's commit's tests in a sandbox environment (no model, no deploy)")
+    gc.add_argument("job")
+    gc.add_argument("--env", required=True, choices=sorted(e for e in STAGING_RUNTIMES.values() if e),
+                    help="the sandbox environment of a staging runtime")
     for p_ in (gd, gs.add_parser("rollback")):
         p_.add_argument("--yes", action="store_true", help="the deployment was approved in chat (\"go live\")")
     gs.add_parser("status")
@@ -95,18 +103,25 @@ def main(argv=None, deps=None):
     deps = deps or rj.Deps()
     if o.cmd == "stage":
         from router import stage as sg
+        from tools import sandbox as sb
         try:
             if o.stage_cmd == "status":
                 print(sg.status())
                 return 0
-            deps.assume_yes = o.yes                      # no key is involved: --yes alone is the approval in chat
             cfg = load_config(o.config)
             cfg["sandbox"] = sandbox_cfg(o.config)
+            if o.stage_cmd == "check":                   # the sandbox only: nothing outside it changes
+                rec = sg.check(o.job, o.env, cfg=cfg, jobs_dir=o.jobs_dir)
+                print(f"stage check {'PASS' if rec['ok'] else 'FAIL'}: commit {rec['commit'][:12]} in {rec['environment']} "
+                      f"{rec['image'][:19]}, {rec['tests_run']} tests" + (f"; {rec['why']}" if rec["why"] else ""))
+                return 0 if rec["ok"] else 1
+            deps.assume_yes = o.yes                      # no key is involved: --yes alone is the approval in chat
             if o.stage_cmd == "deploy":
-                sg.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
+                sg.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, runtime=o.runtime)
             else:
                 sg.rollback(cfg=cfg, deps=deps)
-        except (rj.Refused, ConfigError, OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:
+        except (rj.Refused, ConfigError, OSError, intake.IntakeError, subprocess.TimeoutExpired,
+                sb.SandboxUnavailable) as e:
             print(f"refused: {type(e).__name__ + ': ' if not isinstance(e, rj.Refused) else ''}{e}", file=sys.stderr)
             print(sg.status())
             return 2

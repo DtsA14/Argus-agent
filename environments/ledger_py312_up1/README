@@ -1,0 +1,7 @@
+Upgrade 1 of ledger_py312 (docs/reviews/SPEC_DEP_UPGRADE_V0.md U1). Same base (digest in `base`) and pins as ledger_py312,
+except: fastapi 0.143.0 -> 0.143.2, and httpx 0.28.1 (with httpcore and certifi) replaced by httpx2 2.13.1 (with httpcore2
+2.13.1 and truststore 0.10.5), which starlette's TestClient prefers (with httpx it warns that httpx is deprecated). Every
+file was uploaded before 2026-10-16 (two weeks or more before the build on 2026-10-29); py3 wheels with their sha256,
+pydantic-core as in ledger_py312. Pre-check 2026-10-29 (venv, not this image): argus-ledger 804e13a passes 124/124 with
+-W error::DeprecationWarning. Built by scripts/build_env_from_base.sh ledger_py312_up1; checked by
+scripts/check_env_image.py ledger_py312_up1. Not in web.environments (Atha 2026-10-29).
