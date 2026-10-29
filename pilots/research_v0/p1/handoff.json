@@ -1,0 +1,52 @@
+{
+  "verdict": "SUPPORTED",
+  "problem": "`create_app` installs Starlette's `TrustedHostMiddleware` with only `allowed_hosts` (ledger/api.py:735-736), so the middleware keeps its default www-redirect behaviour: with `allowed_hosts=[\"www.dashboard.example\"]`, a request whose Host is `dashboard.example` is not rejected but answered with a 307 redirect to `http://www.dashboard.example/...`, contradicting the README \"Production\" section (README.md:272) and the `create_app` docstring (ledger/api.py:539-541), which promise 400 `Invalid host header` for every Host that is not one of the names. Only a host with no www counterpart (e.g. `evil.example`) gets the documented 400 today.",
+  "api_behavior": "The documented `TrustedHostMiddleware` takes a `www_redirect` argument that is on by default and turns a non-www host into a redirect to its www counterpart; hosts that do not validate are the ones that get a 400. So the redirect is the documented default behaviour of the middleware that `create_app` currently uses without that argument, and the documented way to get the 400 instead is to pass `www_redirect=False`. Allowed hosts are matched by name, with `*.example.com` style wildcards for subdomains, so turning the redirect off does not change name or wildcard matching. FastAPI's `app.add_middleware(...)` accepts such keyword arguments for the middleware class, and the middleware added last stays the outermost, so the existing position of the call (added last in `create_app`) keeps the current order.",
+  "recommended_change": "In ledger/api.py, change the middleware registration to `app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts), www_redirect=False)` (keeping it added last and everything else, including `allowed_hosts=None` skipping the middleware, as it is). Nothing else in the code needs to change; the README and docstring already describe the wanted 400 behaviour.",
+  "dependency": {
+    "package": "starlette",
+    "version": "1.8.0"
+  },
+  "sources": [
+    {
+      "url": "https://starlette.dev/middleware/",
+      "quote": "www_redirect - If set to True, requests to non-www versions of the allowed hosts will be redirected to their www counterparts. Defaults to True.",
+      "fetched_at": 1793275071.118654,
+      "sha256": "84fe19c8e5897678206f2c7279b44ea092dd99bbaa1a4066575354314ce958e6",
+      "final_url": "https://starlette.dev/middleware/"
+    },
+    {
+      "url": "https://starlette.dev/middleware/",
+      "quote": "If an incoming request does not validate correctly then a 400 response will be sent.",
+      "fetched_at": 1793275071.118654,
+      "sha256": "84fe19c8e5897678206f2c7279b44ea092dd99bbaa1a4066575354314ce958e6",
+      "final_url": "https://starlette.dev/middleware/"
+    },
+    {
+      "url": "https://starlette.dev/middleware/",
+      "quote": "allowed_hosts - A list of domain names that should be allowed as hostnames. Wildcard domains such as *.example.com are supported for matching subdomains.",
+      "fetched_at": 1793275071.118654,
+      "sha256": "84fe19c8e5897678206f2c7279b44ea092dd99bbaa1a4066575354314ce958e6",
+      "final_url": "https://starlette.dev/middleware/"
+    },
+    {
+      "url": "https://fastapi.tiangolo.com/tutorial/middleware/",
+      "quote": "When you add multiple middlewares using either @app.middleware() decorator or app.add_middleware() method, each new middleware wraps the application, forming a stack. The last middleware added is the outermost, and the first is the innermost.",
+      "fetched_at": 1793275084.1018186,
+      "sha256": "2de5b31f2bcab5c438b5140f590e1948efd455a7e210b3694dd2b3b65b8fb293",
+      "final_url": "https://fastapi.tiangolo.com/tutorial/middleware/"
+    },
+    {
+      "url": "https://starlette.dev/release-notes/",
+      "quote": "1.8.0 (October 13, 2026)",
+      "fetched_at": 1793275078.6646671,
+      "sha256": "fdc04d7a6dd9e83ad9f08d7e32ce68c0722f750e7a2403160febc73544470cb9",
+      "final_url": "https://starlette.dev/release-notes/"
+    }
+  ],
+  "uncertainties": [
+    "The middleware page at starlette.dev/middleware/ is the current documentation and is not pinned to the installed starlette 1.8.0; it also documents features from later releases (the release notes page shows 1.10.0 as the newest), so I cannot quote a 1.8.0-specific page for `www_redirect`. The 1.8.0 release-notes entry does not announce any change to `www_redirect`, and it is not listed as removed in 1.0/1.8.0, but the docs page itself does not name a version.",
+    "The documentation does not give the exact 400 body text (`Invalid host header`); it only says a 400 response is sent. That body text comes from the repository's README, not from the quoted docs.",
+    "The documentation does not spell out every matching detail (e.g. how ports in the Host header or a literal `*` entry are treated); it only states name matching plus `*.example.com` wildcards."
+  ]
+}

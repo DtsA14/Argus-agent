@@ -205,7 +205,11 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **Stage riset r1, Alur A → B** (jalur ketat, `docs/reviews/SPEC_RESEARCH_STAGE.md`, PR #242): `argus code --research`,
     tool baca-saja + ReadDocs, `SubmitHandoff` dengan gate harness (URL diambil di run, kutipan persis di halaman, versi
     terpasang), `INSUFFICIENT_EVIDENCE` sebagai hasil, `research-ok` sebelum drafter. Mutants 24/24 + 8/8 (review), verify.sh PASS 24552a5. Merged #242;
-    berikutnya pilot dua lengan issue 013 (argus-ledger, host www: 307 bukan 400), butuh "go live"
+    pilot dua lengan issue 013 (`pilots/research_v0/p1/RESULT.md`): A riset $0,0179, B tanpa riset $0,0085, keduanya DONE
+    dengan fix identik (`www_redirect=False`, ledger `804e13a`); drafter B sudah tahu dari ingatan (seperti K7). Riset
+    menambah bukti untuk reviewer, bukan hasil
+- [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
+    dependency jarang); kecil: `fetched` di HANDOFF.md sebagai UTC, bukan epoch
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
     pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) → spek counter reasoning (#240)
 - [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
