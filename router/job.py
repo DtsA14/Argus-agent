@@ -877,7 +877,7 @@ def _attempt_lines(job):
     for sid in agent_stages(job):
         log = job.runs / job.data["stages"][sid]["run_id"] / "events.jsonl"
         try:
-            evs = parse_lines(log.read_text(encoding="utf-8"))
+            evs = parse_lines(log.read_text(encoding="utf-8", errors="replace"))      # a cut multibyte last line
         except OSError:
             continue
         wrote = {e.get("iteration"): e.get("wrote") for e in evs if e.get("event") == "attempt_summary"}
@@ -891,19 +891,19 @@ def _attempt_lines(job):
 
 def _estimate_lines(job):
     """SPEC_ESTIMATE_REASONING E3: per stage whose ledger has estimate_miss events (billed input above the estimate it
-    was reserved with), how many of its sent calls and the largest billed / estimated input. Read only."""
+    was reserved with), how many of its billed (ok) calls and the largest billed / estimated input. Read only."""
     out = []
     for sid, s in job.data["stages"].items():
         if not s.get("run_id"):
             continue
         try:
-            evs = parse_lines((job.runs / s["run_id"] / "events.jsonl").read_text(encoding="utf-8"))
+            evs = parse_lines((job.runs / s["run_id"] / "events.jsonl").read_text(encoding="utf-8", errors="replace"))
         except OSError:
             continue
         misses = [e for e in evs if e.get("event") == "estimate_miss"]
         if not misses:
             continue
-        calls = sum(1 for e in evs if e.get("event") == "llm_call" and e.get("status") != "refused")
+        calls = sum(1 for e in evs if e.get("event") == "llm_call" and e.get("status") == "ok")      # billed input
         ratios = [e["input_tokens"] / e["est_input"] for e in misses
                   if isinstance(e.get("input_tokens"), int) and isinstance(e.get("est_input"), int) and e["est_input"] > 0]
         out.append(f"  {sid} estimate misses: {len(misses)} of {calls} calls"

@@ -55,15 +55,17 @@ Input tagihan terbesar sejauh ini: agen 108.065 token (95 dari 1.181 panggilan >
 ## 4. Perubahan
 
 **E1. Counter heuristik menghitung semua yang dikirim.** `_text` dipakai oleh counter **dan** `prompt_hash`. Jadi counter
-mendapat fungsinya sendiri, `_sent_text(m)` = `_text(m)` + seluruh `additional_kwargs` kecuali `tool_calls` (salinan provider
-dari tool call yang sudah dihitung `_text`). Ini mencakup `reasoning_content` dan field lain yang mungkin dikirim adapter;
-kelebihan hitung aman (est lebih besar), kekurangan tidak. `prompt_hash`
-dan kunci memo **tidak berubah**, karena run lama harus tetap bisa di-resume dari memo-nya. Reasoning sebuah langkah sudah
-ditentukan oleh balasan yang di-commit sebelum langkah berikutnya, jadi identitas input tetap utuh (bagian 6).
+mendapat fungsinya sendiri, `_sent_text(m)` = `_text(m)` + `additional_kwargs["reasoning_content"]` bila berupa string.
+Hanya kunci itu, karena itulah satu-satunya yang dikirim adapter dari `additional_kwargs` (`ArgusChatDeepSeek`). Memo juga
+hanya memulihkan kunci itu, jadi run live dan run yang di-resume menghitung konteks yang sama secara sama. Kalau ada adapter
+yang kelak mengirim field lain, tes 2 gagal. `prompt_hash` dan kunci memo **tidak berubah**, karena run lama harus tetap bisa
+di-resume dari memo-nya. Reasoning sebuah langkah sudah ditentukan oleh balasan yang di-commit sebelum langkah berikutnya,
+jadi identitas input tetap utuh (bagian 6).
 
 **E2. Margin dan batas input mengikuti hitungan yang benar** (override router, sama seperti #217; `config.yaml` dan eval
 tetap):
-- `llm.input_margin_by_model` DeepSeek: 2,5 → **1,5** (maks terukur 0,68; cadangan ±47%).
+- `llm.input_margin_by_model` DeepSeek: 2,5 → **1,5**. Rasio tagihan / est terbesar yang terukur 0,68, artinya est
+  ±47% di atas tagihan terbesar (tagihan 32% di bawah est).
 - Batas input ditulis dalam satuan est. Karena est sekarang ikut menghitung reasoning, angkanya dihitung dari batas token
   **mentah** yang dimaksud:
   - agen `code_task.max_input_tokens_by_model`: **150.000** est = 100.000 mentah × 1,5. **Ini mempertahankan perilaku lama,
@@ -80,7 +82,8 @@ tetap):
   - `large_usd.attempt_tokens` 1.200.000 tidak berubah.
 
 **E3. `estimate_miss` di `status` (H3 asli).** `argus status` menulis satu baris per stage yang ledger-nya memuat event
-`estimate_miss`: `estimate misses: <n> of <calls> calls, max <input/est>` (dua desimal). Stage tanpa miss: tidak ada baris.
+`estimate_miss`: `estimate misses: <n> of <calls> calls, max <input/est>` (dua desimal); `<calls>` = panggilan `ok`, yang inputnya
+  ditagih (error dan refused tidak punya input tagihan). Stage tanpa miss: tidak ada baris.
 Hanya tampilan, membaca ledger yang sudah ada.
 
 ## 5. Tes (masing-masing harus gagal kalau jaminannya dirusak; mutants)
@@ -92,8 +95,10 @@ Hanya tampilan, membaca ledger yang sudah ada.
    provider atas pesan yang sama), tidak pernah mengirim (`fake`), atau heuristik (`openai`, `openai_compatible`,
    `deepseek`). Kind baru yang belum ditempatkan membuat tes gagal. Untuk setiap adapter heuristik, payload
    `_get_request_payload` (dibangun tanpa kirim) dari percakapan dengan reasoning, tool call berargumen unicode, dan tool
-   result: est pada margin 1,0 ≥ (jumlah karakter semua string di `messages` payload) / 3. Gagal kalau ada field yang
-   dikirim tetapi tidak dihitung, dari adapter mana pun.
+   result dan satu tool: karakter yang dihitung counter ≥ karakter semua nilai string di payload (`messages` dan `tools`),
+   tanpa jatah 8 token per pesan. Yang tidak dibandingkan hanya kunci dict dan kata format (`assistant`, `function`, ...),
+   yang memang diwakili jatah itu. Id tool call di fixture panjangnya 200 karakter, supaya id yang dikirim tetapi tidak
+   dihitung juga ketahuan. Gagal kalau ada field yang dikirim tetapi tidak dihitung, dari adapter mana pun.
 3. `prompt_hash` tidak berubah oleh `reasoning_content`, dan hash percakapan lama sama dengan sebelumnya (resume memo lama).
 4. Replay dua langkah yang tercatat (bagian dihitung = `est_input` lama, reasoning kumulatif dari memo):
    - `24562` a2 attempt 3 langkah 18: est 33.003 pada 1,2, reasoning 79.307 karakter, sisa 46.859, tagihan 45.296 + 1.747.
@@ -142,6 +147,6 @@ di batch berikutnya, sebagai data tersendiri.
 
 1. Satu PR jalur ketat: E3 baru berarti di atas counter yang benar; E3 duluan berarti angka di `status` berubah makna besok.
 2. Margin 1,5: 0,85 pada 1,2 diukur dari 2.006 panggilan lama; jaminan uang tidak boleh bergantung pada task berikutnya
-   yang mirip (kode lebih padat, teks non-Inggris). Cadangan ±32% murah.
+   yang mirip (kode lebih padat, teks non-Inggris). Cadangan ±32% (tagihan terbesar 0,68 dari est) murah.
 3. Batas mentah agen 100.000: mempertahankan perilaku lama (lihat E2), bukan menaikkan batas.
 4. Tambahan: tes penjaga untuk semua adapter (tes 2); audit uang (bagian 5a); hasil tercemar dicatat harness-affected.

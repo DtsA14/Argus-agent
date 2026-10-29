@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import tool
+from langchain_core.utils.function_calling import convert_to_openai_tool
 
 import harness.llm as hl
 from harness.events import EventLog
@@ -17,15 +19,16 @@ from runner import load_config
 
 DEEPSEEK = "deepseek:deepseek-flash"
 REASONING = "think " * 10_000                                          # 60,000 characters
+CALL_ID = "call_" + "0" * 200                  # long, so a sent id that goes uncounted shows (see the adapter guard)
 
 
 def conversation(reasoning=REASONING):
     """One agent attempt as it is sent: a tool call with its reasoning, the tool's result, and a reply."""
     call = {"name": "EditFile", "args": {"path": "sympy/core/numbers.py", "old_text": "if not self:\n" * 50,
-                                         "new_text": "naïve € ünïcödé\n" * 50}, "id": "call_0", "type": "tool_call"}
+                                         "new_text": "naïve € ünïcödé\n" * 50}, "id": CALL_ID, "type": "tool_call"}
     return [SystemMessage("You fix one issue. " * 200), HumanMessage("S(0.0) == S.false returns True. " * 100),
             AIMessage("", tool_calls=[call], additional_kwargs={"reasoning_content": reasoning}),
-            ToolMessage("Edited sympy/core/numbers.py: 1 replacement. " * 40, tool_call_id="call_0"),
+            ToolMessage("Edited sympy/core/numbers.py: 1 replacement. " * 40, tool_call_id=CALL_ID),
             AIMessage("Done: the Boolean check comes first.", additional_kwargs={"reasoning_content": reasoning[:9_000]})]
 
 
@@ -51,35 +54,47 @@ def test_every_adapter_kind_is_placed():
     assert set(registry.BUILDERS) == EXACT | NOT_SENT | set(HEURISTIC)
 
 
-def _strings(x):
+@tool
+def EditFile(path: str, old_text: str, new_text: str) -> str:
+    """Replace old_text with new_text in the file at path (exactly one occurrence)."""
+    return ""
+
+
+# Fixed words of the request format (roles, the tool type); dict keys are left out too. Both are what the counter's
+# 8 tokens per message stand for, so they are not compared: every other string of the request is.
+STRUCTURE = {"system", "user", "assistant", "tool", "function"}
+
+
+def _values(x):
     if isinstance(x, str):
-        yield x
+        if x not in STRUCTURE:
+            yield x
     elif isinstance(x, dict):
-        for k, v in x.items():
-            yield from _strings(k)
-            yield from _strings(v)
+        for v in x.values():
+            yield from _values(v)
     elif isinstance(x, (list, tuple)):
         for v in x:
-            yield from _strings(v)
+            yield from _values(v)
 
 
-def _sent_chars(model, msgs):
-    """Characters of every string in the request's messages, as the adapter builds it (nothing is sent)."""
-    return sum(len(s) for s in _strings(model._get_request_payload(msgs)["messages"]))
+def _sent_chars(model, msgs, tools=()):
+    """Characters of the strings in the request the adapter builds (nothing is sent): messages and tool schemas."""
+    payload = model._get_request_payload(msgs, **({"tools": [convert_to_openai_tool(t) for t in tools]} if tools else {}))
+    return sum(len(s) for s in _values([payload["messages"], payload.get("tools", [])]))
 
 
 @pytest.mark.parametrize("kind", sorted(HEURISTIC))
-def test_the_heuristic_counts_at_least_every_string_an_adapter_sends(kind, monkeypatch):
+def test_the_heuristic_counts_every_string_an_adapter_sends(kind, monkeypatch):
     monkeypatch.setenv("ARGUS_TEST_KEY", "sk-test")
     ref, pcfg = HEURISTIC[kind]
     model = registry.BUILDERS[kind](registry.ModelRef.parse(ref), {"api_key_env": "ARGUS_TEST_KEY", **pcfg}, {})
     count, exact = hl.provider_counter(model, 1.0)
     assert not exact
     msgs = conversation()
-    sent = _sent_chars(model, msgs)
-    assert count(msgs, None) >= sent / 3, (kind, count(msgs, None), sent / 3)
+    counted = (count(msgs, [EditFile]) - 1 - 8 * len(msgs) + 1) * 3     # its characters: int((c/3 + 8n) * 1.0) + 1
+    assert counted >= _sent_chars(model, msgs, [EditFile]), kind
     if kind == "deepseek":                                              # it sends the reasoning: counted, not just
-        assert sent > _sent_chars(model, without_reasoning(msgs)) + len(REASONING)   # covered by the other fields
+        assert _sent_chars(model, msgs) > _sent_chars(model, without_reasoning(msgs)) + len(REASONING)   # covered
 
 
 def test_anthropic_is_counted_by_its_provider():
@@ -91,7 +106,7 @@ def test_reasoning_stays_out_of_the_prompt_hash():
     """Memo keys carry prompt_hash: runs committed before this change resume from their memo."""
     msgs = conversation()
     assert hl.prompt_hash(msgs, None) == hl.prompt_hash(without_reasoning(msgs), None)
-    assert hl.prompt_hash(msgs, None) == "c0521daa0a7c5a9d"
+    assert hl.prompt_hash(msgs, None) == "0a0c454768562993"
 
 
 def caller(tmp_path, cfg):
@@ -126,6 +141,10 @@ def test_recorded_steps_are_estimated_above_what_was_billed(tmp_path, name, est_
     assert est >= billed, (name, est)
     if left is not None:
         assert est > left and c._output_cap(est, hl.Reservation(tokens=left, usd=0.45)) < c.min_output  # refused
+        # as it happened: counted without the reasoning at the old margin, it was sent and ran over
+        old = hl.heuristic_counter(margin)[0](without_reasoning(msgs), None)
+        cap = c._output_cap(old, hl.Reservation(tokens=left, usd=0.45))
+        assert cap >= c.min_output and old + cap < billed
 
 
 def test_router_margin_and_input_limits():
@@ -153,4 +172,4 @@ def test_status_lines_count_the_estimate_misses_of_each_stage(tmp_path):
     _ledger(tmp_path / "j-a1" / "events.jsonl", calls + miss)
     job = SimpleNamespace(runs=tmp_path, data={"stages": {"d1": {"run_id": "j-d1"}, "a1": {"run_id": "j-a1"},
                                                           "a2": {"run_id": "j-gone"}, "a3": {}}})
-    assert rj._estimate_lines(job) == ["  a1 estimate misses: 3 of 10 calls, max 1.91"]
+    assert rj._estimate_lines(job) == ["  a1 estimate misses: 3 of 9 calls, max 1.91"]     # billed calls only

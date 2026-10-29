@@ -212,12 +212,12 @@ def _text(m):
 
 
 def _sent_text(m):
-    """What the heuristic counter counts: `_text` plus what an adapter can send from the message besides it, its
-    additional_kwargs (ArgusChatDeepSeek sends every earlier reply's reasoning_content back). Not part of
-    prompt_hash, so memo keys stay as they were (SPEC_ESTIMATE_REASONING E1). additional_kwargs' tool_calls is the
-    provider's copy of the tool calls `_text` already counts."""
-    extra = {k: v for k, v in (getattr(m, "additional_kwargs", None) or {}).items() if k != "tool_calls"}
-    return _text(m) + (json.dumps(extra, default=str, ensure_ascii=False, sort_keys=True) if extra else "")
+    """What the heuristic counter counts: `_text` plus the reasoning_content ArgusChatDeepSeek sends back for every
+    earlier reply (SPEC_ESTIMATE_REASONING E1). Only that key: the memo restores it alone, so a live and a resumed run
+    count the same context alike; tests/test_estimate_reasoning.py checks every adapter sends nothing else uncounted.
+    Not part of prompt_hash, so memo keys stay as they were."""
+    rc = (getattr(m, "additional_kwargs", None) or {}).get("reasoning_content")
+    return _text(m) + (rc if isinstance(rc, str) else "")
 
 
 def prompt_hash(messages, tools):
