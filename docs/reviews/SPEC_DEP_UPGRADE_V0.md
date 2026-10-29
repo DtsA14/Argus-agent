@@ -113,6 +113,25 @@ menambah atau mengulang langkah, dan melapor. Langkah sesudah berhenti butuh "go
 - Dihapus karena tidak terjangkau (mutant selamat): cek runtime di `image_changed` (runtime bagian dari nama rilis) dan
   cek keanggotaan `RUNTIMES` di `tested`/`release_name` (sudah di `runtime_image`, yang dipanggil lebih dulu).
 
+## 7a. Review (/code-review medium #246, /security-review; 2026-10-29)
+
+Security: tidak ada temuan. Catatan (bukan celah): `stage check` menilai dari output kode tes commit itu sendiri; sebuah
+`conftest.py` bisa melaporkan lolos. Diterima: commit-nya yang sudah direview, dan kode yang sama berjalan di container
+staging. Code review, diperbaiki (mutants 23/23, termasuk 18 sebelumnya):
+- **Check tidak memegang lock staging:** direktori sementara unik per check, catatan ditulis dengan lock berkasnya
+  sendiri; rollback darurat tidak menunggu check sampai 10 menit.
+- **Check yang berhenti di tengah** (sandbox mati, archive beda, timeout docker) tetap dicatat `ok: false`, dan karena
+  itu catatan terakhir, pass lama untuk pasangan yang sama tidak lagi diterima.
+- `cleanup_failed` dari sandbox = tidak lolos.
+- **Check mengikat image runtime juga:** catatan menyimpan `runtime_image` pasangan; runtime yang dibangun ulang butuh
+  check baru.
+- **Rilis staging v0 (tanpa `image`)** hanya berjalan di `V0_IMAGE` (`sha256:4ab2ff53a34f…`, satu-satunya image staging
+  v0); `ledger_staging` yang dibangun ulang → rollback ke rilis lama ditolak.
+- Setiap runtime di `RUNTIMES` dicek saat import memberi nama rilis yang valid; satu pembaca JSONL (`_jsonl`); CLI
+  memakai `choices` dari `RUNTIMES`.
+- Tidak diubah: aturan lolos check tidak memakai `judge_result` validasi (perlu `-W error::DeprecationWarning`, yang
+  tidak diizinkan di argv validasi); aturannya ditulis di `check()` dan dites per kondisi.
+
 ## 8. Task agen dua lengan (ditunda)
 
 Pertanyaan Alur A tetap terbuka: apakah riset membantu bila jawaban **tidak** ada di ingatan model? Upgrade ini tidak

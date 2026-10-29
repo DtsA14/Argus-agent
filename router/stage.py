@@ -28,6 +28,7 @@ import re
 import shutil
 import socket
 import subprocess
+import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -47,6 +48,8 @@ ENVIRONMENT = "ledger_staging"
 # SPEC_DEP_UPGRADE_V0 U3: each staging runtime and the sandbox environment whose `stage check` a commit must have passed
 # before it runs on that runtime. The default one needs none (its releases are those staging v0 deployed).
 RUNTIMES = {"ledger_staging": None, "ledger_staging_up1": "ledger_py312_up1"}
+# The one image staging v0 ever ran (SPEC_STAGING_V0 §6): its releases recorded no image, so this is theirs.
+V0_IMAGE = "sha256:4ab2ff53a34f46ccecde0c8030298bcb37be41d7c565847590de4875a5578f5a"
 CHECK_ARGV = ["python3", "-I", "-B", "-m", "pytest", *va.PYTEST_FIXED, "-W", "error::DeprecationWarning"]
 CHECK_TIMEOUT_S = 600
 PREFIX = "argus-staging-ledger-"
@@ -54,6 +57,7 @@ LABEL = "argus.staging.release"
 HOST = "staging.local"
 ENTRY = f'from ledger.api import create_app\n\napp = create_app("/data/jobs", allowed_hosts=["{HOST}"])\n'
 RELEASE = re.compile(r"^j[0-9a-z_]{1,40}-[0-9a-f]{12}(\.[a-z0-9]{1,12})?$")   # .<runtime> unless the default
+SUFFIX = re.compile(r"^[a-z0-9]{1,12}$")
 LIMITS = ["--memory", "256m", "--pids-limit", "64", "--cpus", "1"]
 WANT_LIMITS = {"Memory": 256 * 1024 * 1024, "PidsLimit": 64, "NanoCpus": 1_000_000_000}   # LIMITS as docker shows them
 MOUNTS = {"/app": False, "/entry": False, "/data": False, "/run/argus": True}   # destination: writable
@@ -105,19 +109,8 @@ class Staging:
                     + "\n")
 
     def releases(self):
-        out = {}
-        try:
-            lines = self.log_path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            return out
-        for line in lines:
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue
-            if e.get("event") == "built" and isinstance(e.get("release"), str):
-                out[e["release"]] = e
-        return out
+        return {e["release"]: e for e in _jsonl(self.log_path)
+                if e.get("event") == "built" and isinstance(e.get("release"), str)}
 
     @contextmanager
     def lock(self):
@@ -178,19 +171,14 @@ class Staging:
         return rec
 
     def checks(self):
-        try:
-            lines = self.checks_path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            return []
-        out = []
-        for line in lines:
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue                               # a line cut by a crash
-            if isinstance(e, dict):
-                out.append(e)
-        return out
+        return _jsonl(self.checks_path)
+
+    def record_check(self, rec):
+        """Append one check record; its own lock (not the staging lock), so a check never blocks a deploy."""
+        self.base.mkdir(parents=True, exist_ok=True)
+        with open(self.checks_path, "a", encoding="utf-8") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.write(json.dumps(rec) + "\n")
 
     def tested(self, commit, runtime, cfg):
         """The passed `stage check` a deploy of `commit` on `runtime` (one of RUNTIMES, as runtime_image ensured) needs
@@ -201,11 +189,12 @@ class Staging:
         image, problem = rj.environment_pin(cfg, environment)
         if problem:
             raise Refused(f"sandbox environment {environment} cannot be used: {problem}")
+        runtime_now = runtime_image(cfg, runtime)
         last = [e for e in self.checks() if e.get("commit") == commit and e.get("environment") == environment
-                and e.get("image") == image]
+                and e.get("image") == image and e.get("runtime_image") == runtime_now]
         if not last or last[-1].get("ok") is not True:
             raise Refused(f"commit {commit[:12]} has no passed `argus stage check` in {environment} (image "
-                          f"{image[:19]}): it does not run on {runtime}"
+                          f"{image[:19]}, for {runtime} {runtime_now[:19]}): it does not run on {runtime}"
                           + (f" (last check: {last[-1].get('why')})" if last else ""))
         return last[-1]
 
@@ -378,6 +367,23 @@ def _get(sock_path, host, url):
         conn.close()
 
 
+def _jsonl(path):
+    """The objects of a JSONL file; a line cut by a crash, or one that is not an object, is skipped."""
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    out = []
+    for line in lines:
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(e, dict):
+            out.append(e)
+    return out
+
+
 def _sha(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -471,9 +477,10 @@ def runtime_image(cfg, runtime=ENVIRONMENT):
 
 def image_changed(rec, runtime, image):
     """Refused when a release was built for another image than its runtime resolves to now (the runtime itself is part
-    of the release's name). A release from before SPEC_DEP_UPGRADE_V0 recorded no image: it runs on the pinned one."""
-    if rec.get("image") is not None and rec["image"] != image:
-        raise Refused(f"release {rec['release']} was built for image {rec['image'][:19]} of {runtime}, which now "
+    of the release's name). A release from before SPEC_DEP_UPGRADE_V0 recorded no image: staging v0 ran V0_IMAGE."""
+    built = rec.get("image") or (V0_IMAGE if runtime == ENVIRONMENT else None)
+    if built != image:
+        raise Refused(f"release {rec['release']} was built for image {str(built)[:19]} of {runtime}, which now "
                       f"resolves to {str(image)[:19]}; nothing was changed")
 
 
@@ -562,18 +569,7 @@ def status(*, staging=None):
     if live and live in rels:
         lines.append(f"  job {rels[live]['job']}, commit {rels[live]['commit'][:12]}, runtime "
                      f"{rels[live].get('runtime', ENVIRONMENT)}")
-    smokes = []
-    try:
-        log_lines = st.log_path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        log_lines = []
-    for line in log_lines:
-        try:
-            e = json.loads(line)
-        except ValueError:
-            continue                                   # a line cut by a crash; the others still count
-        if isinstance(e, dict) and e.get("event") == "smoke" and e.get("release") == live:
-            smokes.append(e)
+    smokes = [e for e in _jsonl(st.log_path) if e.get("event") == "smoke" and e.get("release") == live]
     if smokes:
         lines.append(f"  last smoke: {'pass' if smokes[-1]['ok'] else 'FAIL'} at {smokes[-1]['at']}")
     prev = state["history"][-2] if len(state["history"]) >= 2 else None
@@ -586,7 +582,8 @@ def check(job_id, environment, *, cfg, jobs_dir=rj.JOBS, staging=None, run=sb.ru
     """SPEC_DEP_UPGRADE_V0 U2: the applied commit's own test suite in sandbox environment `environment` (the sandbox
     flags of a validation; workspace read-only), deprecation warnings as errors. Passed only with exit code 0, a
     consistent pytest summary, at least one test, none failed or skipped, and the run not cut short. Recorded in
-    env_checks.jsonl, passed or not; no model, no container that outlives the run."""
+    env_checks.jsonl, passed, failed or stopped, with the image of the paired runtime it covers. It trusts the reviewed
+    test code: a conftest in the commit could report a pass (the same code runs in staging anyway). No model."""
     st = staging or Staging()
     if environment not in {e for e in RUNTIMES.values() if e}:
         raise Refused(f"{environment!r} is not the sandbox environment of a staging runtime "
@@ -596,31 +593,38 @@ def check(job_id, environment, *, cfg, jobs_dir=rj.JOBS, staging=None, run=sb.ru
     image, problem = rj.environment_pin(cfg, environment)
     if problem:
         raise Refused(f"sandbox environment {environment} cannot be used: {problem}")
-    with st.lock():
-        d = st.base / "checks" / f"{commit[:12]}.{environment}"
-        if d.exists():
-            _writable(d)
-            shutil.rmtree(d)
-        try:
-            unpack(repo, commit, d / "src")
-            sandbox = {**(cfg.get("sandbox") or {}), "environment": environment, "timeout_s": CHECK_TIMEOUT_S}
-            r = run(CHECK_ARGV, workdir=d / "src", cfg=sandbox)
-        finally:
-            if d.exists():
-                _writable(d)
-                shutil.rmtree(d)
-        parsed = va.parse_pytest(r.get("stdout") or "")
-        problems = [why for bad, why in (
-            (r.get("timed_out"), "timed out"), (r.get("output_limit_exceeded"), "output limit exceeded"),
-            (r.get("truncated"), "output truncated"), (r.get("exit_code") != 0, f"exit code {r.get('exit_code')}"),
-            (parsed["outcome"] != "OK", f"pytest outcome {parsed['outcome']}"),
-            (not parsed["consistent"], "pytest output inconsistent"),
-            (not parsed["tests_run"], "no test ran"), (parsed["skipped"], f"{parsed['skipped']} skipped")) if bad]
-        rec = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "job": job.id, "commit": commit,
-               "environment": environment, "image": image, "ok": not problems, "why": "; ".join(problems) or None,
-               "tests_run": parsed["tests_run"],
-               "failed": sorted(n for n, x in parsed["tests"].items() if x in ("FAIL", "ERROR"))[:20],
-               "output_tail": ((r.get("stdout") or "") + (r.get("stderr") or ""))[-1500:]}
-        with open(st.checks_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec) + "\n")
+    runtime = next(r for r, e in RUNTIMES.items() if e == environment)
+    runtime_now = runtime_image(cfg, runtime)              # the pair a passed check covers (U3)
+    rec = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "job": job.id, "commit": commit,
+           "environment": environment, "image": image, "runtime": runtime, "runtime_image": runtime_now}
+    (st.base / "checks").mkdir(parents=True, exist_ok=True)
+    d = Path(tempfile.mkdtemp(prefix=f"{commit[:12]}.{environment}.", dir=st.base / "checks"))
+    try:                                                   # no staging lock: a rollback never waits for a check
+        unpack(repo, commit, d / "src")
+        sandbox = {**(cfg.get("sandbox") or {}), "environment": environment, "timeout_s": CHECK_TIMEOUT_S}
+        r = run(CHECK_ARGV, workdir=d / "src", cfg=sandbox)
+    except BaseException as e:                             # stopped: recorded as not passed, then raised
+        st.record_check({**rec, "ok": False, "why": f"stopped: {type(e).__name__}: {str(e)[:200]}", "tests_run": None,
+                         "failed": [], "output_tail": ""})
+        raise
+    finally:
+        _writable(d)
+        shutil.rmtree(d)
+    parsed = va.parse_pytest(r.get("stdout") or "")
+    problems = [why for bad, why in (
+        (r.get("timed_out"), "timed out"), (r.get("output_limit_exceeded"), "output limit exceeded"),
+        (r.get("cleanup_failed"), "sandbox container removal not confirmed"),
+        (r.get("truncated"), "output truncated"), (r.get("exit_code") != 0, f"exit code {r.get('exit_code')}"),
+        (parsed["outcome"] != "OK", f"pytest outcome {parsed['outcome']}"),
+        (not parsed["consistent"], "pytest output inconsistent"),
+        (not parsed["tests_run"], "no test ran"), (parsed["skipped"], f"{parsed['skipped']} skipped")) if bad]
+    rec.update(ok=not problems, why="; ".join(problems) or None, tests_run=parsed["tests_run"],
+               failed=sorted(n for n, x in parsed["tests"].items() if x in ("FAIL", "ERROR"))[:20],
+               output_tail=((r.get("stdout") or "") + (r.get("stderr") or ""))[-1500:])
+    st.record_check(rec)
     return rec
+
+
+for _runtime in RUNTIMES:                                  # every runtime gives valid release names (U3)
+    assert _runtime == ENVIRONMENT or (_runtime.startswith(ENVIRONMENT + "_")
+                                       and SUFFIX.match(_runtime.removeprefix(ENVIRONMENT + "_"))), _runtime

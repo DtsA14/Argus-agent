@@ -81,11 +81,13 @@ def main(argv=None, deps=None):
     gs = g.add_subparsers(dest="stage_cmd", required=True)
     gd = gs.add_parser("deploy")
     gd.add_argument("job")
-    gd.add_argument("--runtime", default="ledger_staging", help="the staging runtime (router/stage.py RUNTIMES); "
-                    "another than ledger_staging needs a passed `stage check` of the commit")
+    from router.stage import ENVIRONMENT as STAGING_DEFAULT, RUNTIMES as STAGING_RUNTIMES
+    gd.add_argument("--runtime", default=STAGING_DEFAULT, choices=sorted(STAGING_RUNTIMES),
+                    help="the staging runtime; another than the default needs a passed `stage check` of the commit")
     gc = gs.add_parser("check", help="the job's commit's tests in a sandbox environment (no model, no deploy)")
     gc.add_argument("job")
-    gc.add_argument("--env", required=True, help="the sandbox environment of a staging runtime, e.g. ledger_py312_up1")
+    gc.add_argument("--env", required=True, choices=sorted(e for e in STAGING_RUNTIMES.values() if e),
+                    help="the sandbox environment of a staging runtime")
     for p_ in (gd, gs.add_parser("rollback")):
         p_.add_argument("--yes", action="store_true", help="the deployment was approved in chat (\"go live\")")
     gs.add_parser("status")

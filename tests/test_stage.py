@@ -494,11 +494,10 @@ def two_runtimes(tmp_path, monkeypatch):
     return st, images, started
 
 
-def passed_check(st, commit, ok=True, image=SANDBOX_UP1, environment="ledger_py312_up1"):
-    st.base.mkdir(parents=True, exist_ok=True)
-    with open(st.checks_path, "a") as f:
-        f.write(json.dumps({"at": "t", "commit": commit, "environment": environment, "image": image, "ok": ok,
-                            "why": None if ok else "exit code 1", "tests_run": 3}) + "\n")
+def passed_check(st, commit, ok=True, image=SANDBOX_UP1, environment="ledger_py312_up1",
+                 runtime_image=IMAGES["ledger_staging_up1"]):
+    st.record_check({"at": "t", "commit": commit, "environment": environment, "image": image, "ok": ok,
+                     "runtime_image": runtime_image, "why": None if ok else "exit code 1", "tests_run": 3})
 
 
 def test_rollback_starts_the_earlier_release_on_the_image_it_recorded(tmp_path, repo, two_runtimes):
@@ -537,7 +536,8 @@ def test_a_release_whose_image_changed_since_its_build_is_refused(tmp_path, repo
 
 
 @pytest.mark.parametrize("record", [None, {"ok": False}, {"image": "sha256:" + "9" * 64},
-                                    {"environment": "ledger_py312"}, {"commit": "other"}])
+                                    {"environment": "ledger_py312"}, {"commit": "other"},
+                                    {"runtime_image": "sha256:" + "8" * 64}])
 def test_a_new_runtime_needs_a_passed_check_of_that_commit(tmp_path, repo, two_runtimes, record):
     r, c = repo
     st, images, started = two_runtimes
@@ -577,8 +577,9 @@ def test_a_check_runs_only_in_a_paired_environment_that_resolves(tmp_path, repo,
     never = lambda *a, **k: pytest.fail("the sandbox must not run")      # noqa: E731
     with pytest.raises(sg.Refused, match="not the sandbox environment of a staging runtime"):
         sg.check(jid, "argus", cfg={}, jobs_dir=tmp_path / "jobs", staging=st, run=never)
-    monkeypatch.setattr(rj, "environment_pin", lambda cfg, name, root=None: (None, "no image"))
-    with pytest.raises(sg.Refused, match="cannot be used: no image"):
+    monkeypatch.setattr(rj, "environment_pin", lambda cfg, name, root=None:
+                        (None, "no image") if name == "ledger_py312_up1" else ("sha256:" + "2" * 64, None))
+    with pytest.raises(sg.Refused, match="sandbox environment ledger_py312_up1 cannot be used: no image"):
         sg.check(jid, "ledger_py312_up1", cfg={}, jobs_dir=tmp_path / "jobs", staging=st, run=never)
     assert st.checks() == []
 
@@ -668,3 +669,78 @@ def test_rollback_across_an_upgrade_in_the_real_containers(tmp_path, tested_repo
     finally:
         for release in st.releases():
             st.run("rm", "-f", sg.PREFIX + release)
+
+
+def test_a_release_from_staging_v0_rolls_back_only_onto_the_v0_image(tmp_path, repo, two_runtimes):
+    r, c = repo
+    st, images, started = two_runtimes
+    jobs = tmp_path / "jobs"
+    images["ledger_staging"] = sg.V0_IMAGE
+    first = sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg={}, deps=deps(), jobs_dir=jobs, staging=st)
+    lines = st.log_path.read_text().splitlines()                # as staging v0 wrote it: no runtime, no image
+    old = json.loads(lines[0])
+    del old["runtime"], old["image"]
+    st.log_path.write_text("\n".join([json.dumps(old)] + lines[1:]) + "\n")
+    passed_check(st, c["good2"])
+    sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg={}, deps=deps(), jobs_dir=jobs, staging=st,
+              runtime="ledger_staging_up1")
+    images["ledger_staging"] = "sha256:" + "3" * 64              # ledger_staging rebuilt since
+    with pytest.raises(sg.Refused, match="was built for image sha256:4ab2ff53"):
+        sg.rollback(cfg={}, deps=deps(), staging=st)
+    images["ledger_staging"] = sg.V0_IMAGE
+    assert sg.rollback(cfg={}, deps=deps(), staging=st) == first and started[-1] == (first, sg.V0_IMAGE)
+
+
+def pytest_output(tmp_path, body):
+    """Real verbose pytest output (the validation's flags) of a one-file suite, as the sandbox would return it."""
+    d = tmp_path / "suite"
+    d.mkdir()
+    (d / "test_x.py").write_text(body)
+    flags = [f for f in sg.va.PYTEST_FIXED if f not in ("--rootdir", "/workspace")]
+    r = subprocess.run([sys.executable, "-m", "pytest", *flags, str(d)], capture_output=True, text=True, cwd=d)
+    return {"exit_code": r.returncode, "stdout": r.stdout, "stderr": r.stderr}
+
+
+@pytest.fixture
+def checkable(tmp_path, repo, two_runtimes):
+    r, c = repo
+    st, images, started = two_runtimes
+    return st, applied_job(tmp_path / "jobs", "jx", r, c["good"]), c["good"]
+
+
+def test_a_check_records_the_runtime_image_and_does_not_take_the_staging_lock(tmp_path, checkable):
+    st, jid, commit = checkable
+    out = pytest_output(tmp_path, "def test_a():\n    pass\n")
+    with st.lock():                                             # a deploy or rollback running meanwhile
+        rec = sg.check(jid, "ledger_py312_up1", cfg={}, jobs_dir=tmp_path / "jobs", staging=st,
+                       run=lambda argv, workdir, cfg: out)
+    assert rec["ok"] is True and rec["runtime_image"] == IMAGES["ledger_staging_up1"], rec
+    assert st.checks() == [rec] and not list((st.base / "checks").iterdir())
+
+
+def test_a_check_whose_container_was_not_removed_does_not_pass(tmp_path, checkable):
+    st, jid, commit = checkable
+    out = {**pytest_output(tmp_path, "def test_a():\n    pass\n"), "cleanup_failed": True}
+    rec = sg.check(jid, "ledger_py312_up1", cfg={}, jobs_dir=tmp_path / "jobs", staging=st,
+                   run=lambda argv, workdir, cfg: out)
+    assert rec["ok"] is False and "removal not confirmed" in rec["why"]
+
+
+def test_a_check_that_stops_is_recorded_and_outweighs_an_earlier_pass(tmp_path, checkable):
+    st, jid, commit = checkable
+    passed_check(st, commit)
+    assert st.tested(commit, "ledger_staging_up1", {})
+
+    def down(argv, workdir, cfg):
+        raise sg.sb.SandboxUnavailable("docker is down")
+    with pytest.raises(sg.sb.SandboxUnavailable):
+        sg.check(jid, "ledger_py312_up1", cfg={}, jobs_dir=tmp_path / "jobs", staging=st, run=down)
+    assert st.checks()[-1]["ok"] is False and "docker is down" in st.checks()[-1]["why"]
+    with pytest.raises(sg.Refused, match="no passed"):
+        st.tested(commit, "ledger_staging_up1", {})
+    assert not list((st.base / "checks").iterdir())
+
+
+def test_every_runtime_gives_valid_release_names():
+    for runtime in sg.RUNTIMES:
+        assert sg.RELEASE.match(sg.release_name(type("J", (), {"id": "jx"}), "0" * 40, runtime))
