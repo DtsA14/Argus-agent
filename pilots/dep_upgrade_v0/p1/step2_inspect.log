@@ -1,0 +1,4 @@
+container argus-staging-ledger-j20261029_115742_bffd-804e13a33c44.up1
+image=sha256:4edca09d18424d891f962547d66e3e79ae96b844790783f04b759d0defcdf3a8 net=none ro=true capdrop=[ALL] capadd=[] user=1001:1001 sec=[no-new-privileges] priv=false
+staging containers: 1
+port8000=404

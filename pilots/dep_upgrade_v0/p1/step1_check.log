@@ -1,0 +1,5 @@
+stage check PASS: commit 804e13a33c44 in ledger_py312_up1 sha256:59288cff2053, 124 tests
+
+real	0m43.916s
+user	0m0.995s
+sys	0m0.243s
