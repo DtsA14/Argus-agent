@@ -1,0 +1,13 @@
+{
+  "job": "jstaging_failed",
+  "state": "AGENT_FAILED",
+  "created_at": "2026-10-02T10:00:00Z",
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "jstaging_failed-d1",
+      "cap_usd": 0.75,
+      "status": "DRAFTED"
+    }
+  }
+}

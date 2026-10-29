@@ -99,3 +99,23 @@ yang bisa diverifikasi.
   nama container asing, setiap syarat isolasi, setiap cek smoke, konfirmasi; dengan docker sungguhan: deploy, rilis
   rusak gagal smoke dan yang lama tetap live, rilis kedua, rollback, tanpa rilis sebelumnya ditolak, dan dari dalam
   container tidak ada jaringan dan tidak bisa menulis. Mutants 21/21.
+
+## 7. Review (/code-review medium, /security-review; 2026-10-29)
+
+Security: tidak ada temuan. Code review, semua diperbaiki (mutants 10/10):
+- **Fixture tidak ter-commit:** aturan `jobs/` dan `runs/` di `.gitignore` mencocokkan `fixtures/staging/jobs/`; sekarang
+  dikecualikan, dan sebuah tes memeriksa kelima berkasnya dilacak git.
+- **Archive = tree commit:** sesudah `git archive`, isi dibandingkan dengan `git ls-tree` commit (path dan hash blob);
+  `.gitattributes` `export-ignore`/`export-subst` yang mengubah isi → ditolak.
+- `start` (juga rollback) memeriksa source **dan** entry terhadap rekaman build; entry harus persis entry harness.
+- `no-new-privileges` hanya diterima persis (`:false`/`=false` ditolak); batas memori, pids dan CPU juga dicek dari
+  `docker inspect`.
+- Konfirmasi sebelum build (jawaban N tidak meninggalkan rilis atau rekaman); build yang tertinggal read-only tanpa
+  rekaman dibangun ulang.
+- Rilis baru dicatat live sebelum yang lama dihentikan; gagal mencatat → container baru dihentikan, yang lama tetap live.
+  Setiap deploy/rollback mulai dengan menghentikan container staging lain yang bukan rilis live (by label dan nama).
+- CLI menangkap `IntakeError` dan `TimeoutExpired`; `status` melewati baris log yang terpotong.
+
+Batas klaim (dari security review, tidak diubah): container berjalan dengan uid host, jadi kode di dalamnya bisa mengganti
+`app.sock` dengan symlink; smoke hanya mengirim GET tetap dan data sintetis. Base commit yang di-apply tidak dibandingkan
+dengan base review, dan `patch-id` mengabaikan spasi (dua-duanya bergantung pada operator, seperti `applied` sekarang).

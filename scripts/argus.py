@@ -20,6 +20,7 @@ Applying the review package's patch to the target repository stays with the huma
 ended without success, 2 refused.
 """
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from approve_draft import sandbox_cfg  # noqa: E402  (scripts/ is on sys.path when this file runs)
+from acceptance import intake  # noqa: E402
 from models.registry import ConfigError  # noqa: E402
 from router import job as rj  # noqa: E402
 from runner import load_config  # noqa: E402
@@ -104,8 +106,8 @@ def main(argv=None, deps=None):
                 sg.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
             else:
                 sg.rollback(cfg=cfg, deps=deps)
-        except (rj.Refused, ConfigError, OSError) as e:
-            print(f"refused: {e}", file=sys.stderr)
+        except (rj.Refused, ConfigError, OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:
+            print(f"refused: {type(e).__name__ + ': ' if not isinstance(e, rj.Refused) else ''}{e}", file=sys.stderr)
             print(sg.status())
             return 2
         print(sg.status())

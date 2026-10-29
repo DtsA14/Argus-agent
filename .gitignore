@@ -10,3 +10,6 @@ runs/
 .verify-pytest.out
 # router v0 jobs: snapshots of target repositories (may be private code)
 jobs/
+# SPEC_STAGING_V0: the synthetic jobs staging serves are fixtures, not router jobs or runs
+!fixtures/staging/jobs/
+!fixtures/staging/jobs/**/runs/

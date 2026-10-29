@@ -144,7 +144,7 @@ def test_a_release_whose_source_changed_after_the_build_is_refused(tmp_path, rep
     api.write_text("changed")
     with pytest.raises(sg.Refused, match="differs from what was built"):
         st.build(rj.open_job(jid, tmp_path / "jobs"))
-    with pytest.raises(sg.Refused, match="not one that was built, or its source changed"):
+    with pytest.raises(sg.Refused, match="source or entry changed"):
         st.start(rec["release"], "sha256:x")
 
 
@@ -160,7 +160,7 @@ def test_only_staging_containers_are_ever_removed(tmp_path, name):
 
 def inspect(d, release, image, **over):
     h = {"NetworkMode": "none", "ReadonlyRootfs": True, "CapDrop": ["ALL"], "CapAdd": None,
-         "SecurityOpt": ["no-new-privileges"], "Privileged": False}
+         "SecurityOpt": ["no-new-privileges"], "Privileged": False, **sg.WANT_LIMITS}
     cfg = {"User": "1001:1001", "Labels": {sg.LABEL: release}}
     mounts = [{"Destination": "/app", "Source": str(d / "src"), "RW": False},
               {"Destination": "/entry", "Source": str(d / "entry"), "RW": False},
@@ -268,9 +268,14 @@ def test_a_smoke_test_without_a_socket_fails_every_check(tmp_path):
     assert not any(ok for _, ok, _ in st.smoke("jx-0123456789ab"))
 
 
+def only_ps(*a, **k):
+    """docker as a read-only `ps` with nothing running; any other command fails the test."""
+    return (0, "", "") if a and a[0] == "ps" else pytest.fail(f"docker {a[:1]} must not run")
+
+
 def test_rollback_without_an_earlier_release_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(sg, "runtime_image", lambda cfg: "sha256:" + "a" * 64)
-    st = sg.Staging(tmp_path, run=lambda *a, **k: pytest.fail("docker must not run"))
+    st = sg.Staging(tmp_path, run=only_ps)
     with pytest.raises(sg.Refused, match="no earlier release"):
         sg.rollback(cfg=None, deps=deps(), staging=st)
 
@@ -279,10 +284,10 @@ def test_the_deploy_is_confirmed_before_anything_starts(tmp_path, repo, monkeypa
     r, c = repo
     jid = applied_job(tmp_path / "jobs", "jx", r, c["good"])
     monkeypatch.setattr(sg, "runtime_image", lambda cfg: "sha256:" + "a" * 64)
-    st = sg.Staging(tmp_path / "staging", run=lambda *a, **k: pytest.fail("docker must not run"))
+    st = sg.Staging(tmp_path / "staging", run=only_ps)
     with pytest.raises(sg.Refused, match="not confirmed"):
         sg.deploy(jid, cfg=None, deps=deps(yes=False), jobs_dir=tmp_path / "jobs", staging=st)
-    assert st.state()["live"] is None
+    assert st.state()["live"] is None and st.releases() == {} and not (tmp_path / "staging" / "releases").exists()
 
 
 def test_no_role_has_a_staging_tool():
@@ -365,3 +370,103 @@ def test_the_container_cannot_reach_the_network_or_write_its_source(tmp_path, re
              "except OSError: print('ro')\n")
     code, out, err = staging.run("exec", sg.PREFIX + rel, "python3", "-c", probe)
     assert code == 0 and out.split() == ["nonet", "ro", "ro"], (out, err)
+
+
+# ---- review fixes -------------------------------------------------------------------------------------------------
+
+def test_the_fixture_jobs_are_tracked_by_git():
+    out = subprocess.run(["git", "ls-files", "fixtures/staging/jobs"], cwd=sg.ROOT, capture_output=True, text=True).stdout
+    assert len(out.split()) == 5 and "runs/jstaging_done-a1/events.jsonl" in out
+
+
+def test_a_build_left_read_only_without_its_record_is_rebuilt(tmp_path, repo):
+    r, c = repo
+    jid = applied_job(tmp_path / "jobs", "jx", r, c["good"])
+    st = sg.Staging(tmp_path / "staging", run=only_ps)
+    rec = st.build(rj.open_job(jid, tmp_path / "jobs"))
+    st.log_path.unlink()                               # the record is lost; the read-only directory is left
+    again = st.build(rj.open_job(jid, tmp_path / "jobs"))
+    assert again["src_digest"] == rec["src_digest"]
+
+
+def test_a_changed_entry_is_refused_also_on_rollback(tmp_path, repo):
+    r, c = repo
+    jid = applied_job(tmp_path / "jobs", "jx", r, c["good"])
+    st = sg.Staging(tmp_path / "staging", run=only_ps)
+    rec = st.build(rj.open_job(jid, tmp_path / "jobs"))
+    entry = st.dir(rec["release"]) / "entry" / "staging_app.py"
+    entry.chmod(0o644)
+    entry.write_text('from ledger.api import create_app\napp = create_app("/data/jobs")\n')
+    with pytest.raises(sg.Refused, match="source or entry changed"):
+        st.start(rec["release"], "sha256:x")
+
+
+def test_an_archive_that_is_not_the_commits_tree_is_refused(tmp_path, repo):
+    r, c = repo
+    (r / ".gitattributes").write_text("ledger/api.py export-ignore\n")
+    git(r, "add", "-A")
+    git(r, "commit", "-qm", "ignore api in archives")
+    jid = applied_job(tmp_path / "jobs", "jx", r, git(r, "rev-parse", "HEAD"))
+    st = sg.Staging(tmp_path / "staging", run=only_ps)
+    with pytest.raises(sg.Refused, match="missing ledger/api.py"):
+        st.build(rj.open_job(jid, tmp_path / "jobs"))
+    assert st.releases() == {}
+
+
+@pytest.mark.parametrize("opts", [["no-new-privileges:false"], ["no-new-privileges=false"],
+                                  ["no-new-privileges", "no-new-privileges:false"], ["no-new-privileges:maybe"]])
+def test_no_new_privileges_switched_off_is_refused(tmp_path, opts):
+    release, image = "jx-0123456789ab", "sha256:" + "a" * 64
+    d = tmp_path / "releases" / release
+    c = inspect(d, release, image, h__SecurityOpt=opts)
+    st = sg.Staging(tmp_path, run=lambda *a, **k: (0, json.dumps([c]), ""))
+    assert any("no-new-privileges" in p for p in st.isolation_problems("n", release, image, d))
+
+
+@pytest.mark.parametrize("key, value", [("Memory", 0), ("PidsLimit", -1), ("NanoCpus", 0)])
+def test_a_container_without_its_limits_is_refused(tmp_path, key, value):
+    release, image = "jx-0123456789ab", "sha256:" + "a" * 64
+    d = tmp_path / "releases" / release
+    c = inspect(d, release, image, **{f"h__{key}": value})
+    st = sg.Staging(tmp_path, run=lambda *a, **k: (0, json.dumps([c]), ""))
+    assert any(f"limit {key}" in p for p in st.isolation_problems("n", release, image, d))
+
+
+def test_a_staging_container_that_is_not_live_is_stopped_before_a_deploy(tmp_path, repo, monkeypatch):
+    r, c = repo
+    jid = applied_job(tmp_path / "jobs", "jx", r, c["good"])
+    monkeypatch.setattr(sg, "runtime_image", lambda cfg: "sha256:" + "a" * 64)
+    calls = []
+
+    def run(*a, **k):
+        calls.append(a)
+        if a[0] == "ps":
+            return 0, "argus-staging-ledger-jold-0123456789ab\nathena-api\n", ""
+        return 0, "", ""
+    st = sg.Staging(tmp_path / "staging", run=run)
+    with pytest.raises(sg.Refused, match="not confirmed"):
+        sg.deploy(jid, cfg=None, deps=deps(yes=False), jobs_dir=tmp_path / "jobs", staging=st)
+    assert ("rm", "-f", "argus-staging-ledger-jold-0123456789ab") in calls
+    assert not [a for a in calls if "athena-api" in a]
+
+
+def test_status_reads_past_a_cut_line(tmp_path):
+    st = sg.Staging(tmp_path)
+    st.base.mkdir(parents=True, exist_ok=True)
+    st._save({"live": "jx-0123456789ab", "history": ["jx-0123456789ab"]})
+    st.log_path.write_text('{"event": "smoke", "release": "jx-0123456789ab", "ok": false, "at": "t1"}\n{"event": "sm\n'
+                           '{"event": "smoke", "release": "jx-0123456789ab", "ok": true, "at": "t2"}\n')
+    assert "last smoke: pass at t2" in sg.status(staging=st)
+
+
+def test_a_failure_to_record_the_new_release_stops_it_and_keeps_the_old_live(tmp_path, repo, staging, image, monkeypatch):
+    r, c = repo
+    jobs = tmp_path / "jobs"
+    first = sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=staging)
+
+    def broken_save(state):
+        raise OSError("disk full")
+    monkeypatch.setattr(staging, "_save", broken_save)
+    with pytest.raises(OSError, match="disk full"):
+        sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=staging)
+    assert staging.running() == [sg.PREFIX + first] and staging.state()["live"] == first

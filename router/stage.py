@@ -41,6 +41,7 @@ HOST = "staging.local"
 ENTRY = f'from ledger.api import create_app\n\napp = create_app("/data/jobs", allowed_hosts=["{HOST}"])\n'
 RELEASE = re.compile(r"^j[0-9a-z_]{1,40}-[0-9a-f]{12}$")
 LIMITS = ["--memory", "256m", "--pids-limit", "64", "--cpus", "1"]
+WANT_LIMITS = {"Memory": 256 * 1024 * 1024, "PidsLimit": 64, "NanoCpus": 1_000_000_000}   # LIMITS as docker shows them
 MOUNTS = {"/app": False, "/entry": False, "/data": False, "/run/argus": True}   # destination: writable
 SOCKET_WAIT_S = 30
 # SPEC_STAGING_V0 S4: what the synthetic jobs must give (fixtures/staging/README); a release that reads them wrongly fails
@@ -126,18 +127,22 @@ class Staging:
     def build(self, job):
         """The release of an applied job: its applied commit, archived read-only. Built once; checked every time."""
         commit, repo = reviewed_commit(job)
-        release = f"{job.id}-{commit[:12]}"
+        release = release_name(job, commit)
         d = self.dir(release)
         known = self.releases().get(release)
         if known is None:
-            if d.exists():
-                shutil.rmtree(d)                       # left by a build that stopped before its record
+            if d.exists():                             # left by a build that stopped before its record
+                _writable(d)
+                shutil.rmtree(d)
             src = d / "src"
             src.mkdir(parents=True)
             archive = intake.git(repo, "archive", "--format=tar", commit)
             r = subprocess.run(["tar", "-x", "-C", str(src)], input=archive, capture_output=True, timeout=120)
             if r.returncode:
                 raise Refused(f"the release could not be unpacked: {r.stderr[:200]!r}")
+            diff = tree_differences(repo, commit, src)
+            if diff:                                   # e.g. .gitattributes export-ignore or export-subst
+                raise Refused(f"the archive of {commit[:12]} is not the commit's tree: " + "; ".join(diff[:5]))
             (d / "entry").mkdir()
             (d / "entry" / "staging_app.py").write_text(ENTRY, encoding="utf-8")
             _read_only(d / "src")
@@ -146,10 +151,24 @@ class Staging:
                      "src_digest": digest(snapshot(d / "src")), "entry_sha256": _sha(ENTRY.encode()),
                      "archive_sha256": _sha(archive)}
             self.note("built", **known)
-        if known["commit"] != commit or digest(snapshot(d / "src")) != known["src_digest"] or \
-                _sha((d / "entry" / "staging_app.py").read_bytes()) != known["entry_sha256"]:
-            raise Refused(f"release {release} differs from what was built (source, entry or commit changed)")
+        if known["commit"] != commit:
+            raise Refused(f"release {release} differs from what was built (commit changed)")
+        self.verify(release)
         return known
+
+    def verify(self, release):
+        """The built record of a release whose source and entry are still as they were built, or Refused."""
+        d, rec = self.dir(release), self.releases().get(release)
+        if rec is None:
+            raise Refused(f"release {release} is not one that was built")
+        try:
+            same = digest(snapshot(d / "src")) == rec["src_digest"] and \
+                _sha((d / "entry" / "staging_app.py").read_bytes()) == rec["entry_sha256"] == _sha(ENTRY.encode())
+        except OSError:
+            same = False
+        if not same:
+            raise Refused(f"release {release} differs from what was built (source or entry changed)")
+        return rec
 
     def _fresh_data(self, d):
         data = d / "data"
@@ -162,9 +181,7 @@ class Staging:
     def start(self, release, image):
         """Start a release's container; it is refused (and removed) unless docker shows the isolation of S3."""
         d = self.dir(release)
-        rec = self.releases().get(release)
-        if rec is None or digest(snapshot(d / "src")) != rec["src_digest"]:
-            raise Refused(f"release {release} is not one that was built, or its source changed")
+        self.verify(release)
         self._fresh_data(d)
         sock = d / "sock"
         if sock.exists():
@@ -203,8 +220,13 @@ class Staging:
             problems.append("root file system is writable")
         if "ALL" not in (h.get("CapDrop") or []) or h.get("CapAdd"):
             problems.append("capabilities not all dropped")
-        if not any(str(o).startswith("no-new-privileges") for o in h.get("SecurityOpt") or []):
+        if not any(str(o) in ("no-new-privileges", "no-new-privileges:true", "no-new-privileges=true")
+                   for o in h.get("SecurityOpt") or []) or \
+                any("no-new-privileges" in str(o) and "false" in str(o) for o in h.get("SecurityOpt") or []):
             problems.append("no-new-privileges missing")
+        for key, want_v in WANT_LIMITS.items():
+            if h.get(key) != want_v:
+                problems.append(f"limit {key} is {h.get(key)!r}, not {want_v}")
         if h.get("Privileged"):
             problems.append("privileged")
         user = str(cfg.get("User") or "")
@@ -252,12 +274,30 @@ class Staging:
             raise Refused(f"{name!r} is not a staging container")
         self.run("rm", "-f", name)
 
-    def switch(self, release, image, deps, why):
-        """Start `release`, smoke-test it, and only then stop the live one. Returns the smoke results."""
+    def running(self):
+        """Names of the staging containers docker runs now (by label; only names this module would give)."""
+        code, out, _ = self.run("ps", "--filter", f"label={LABEL}", "--format", "{{.Names}}")
+        return [n for n in out.split() if n.startswith(PREFIX) and RELEASE.match(n[len(PREFIX):])] if code == 0 else []
+
+    def reconcile(self):
+        """Stop every staging container that is not the live release (left by a command that stopped half-way)."""
+        live = self.state()["live"]
+        for name in self.running():
+            if name != PREFIX + str(live):
+                self.remove(name)
+                self.note("stopped", release=name[len(PREFIX):], why="not the live release (reconciled)")
+
+    def switch(self, release, image, deps, why, commit_state):
+        """Start `release` and smoke-test it; only when it passes, record it live (commit_state) and stop the one that
+        was live. A failure before the record removes the new container: the live one is never left without a record."""
         live = self.state()["live"]
         name = self.start(release, image)
-        results = self.smoke(release)
-        self.logs(name, release, "smoke")
+        try:
+            results = self.smoke(release)
+            self.logs(name, release, "smoke")
+        except BaseException:
+            self.remove(name)
+            raise
         ok = all(r[1] for r in results)
         self.note("smoke", release=release, ok=ok, results=[list(r) for r in results], why=why)
         if not ok:
@@ -266,8 +306,16 @@ class Staging:
             failed = "; ".join(f"{c}: {d}" for c, k, d in results if not k)
             raise Refused(f"release {release} failed its smoke test ({failed}); it was stopped, "
                           + (f"{live} is still live" if live else "nothing is live"))
+        try:
+            commit_state()
+        except BaseException:
+            self.remove(name)
+            raise
         if live and live != release:
-            self.logs(PREFIX + live, live, "stop")
+            try:
+                self.logs(PREFIX + live, live, "stop")
+            except OSError:
+                pass                                   # the logs are a convenience; the stop is not
             self.remove(PREFIX + live)
             self.note("stopped", release=live, why=f"{why}: {release} is live")
         return results
@@ -309,6 +357,39 @@ def _writable(path):
             p.chmod(0o755 if p.is_dir() else 0o644)
 
 
+def release_name(job, commit):
+    return f"{job.id}-{commit[:12]}"
+
+
+def _git_blob_sha(data):
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def tree_differences(repo, commit, src):
+    """What differs between the commit's tree (git ls-tree) and the unpacked archive: a missing or extra path, or a
+    file whose content is not the commit's blob. Submodules (commits) are not part of an archive and not compared."""
+    out = intake.git(repo, "ls-tree", "-r", "-z", "--full-tree", commit).decode("utf-8", "surrogateescape")
+    want = {}
+    for entry in filter(None, out.split("\0")):
+        meta, path = entry.split("\t", 1)
+        mode, kind, sha = meta.split()
+        if kind == "blob":
+            want[path] = (mode, sha)
+    have = {}
+    for p in Path(src).rglob("*"):
+        rel = p.relative_to(src).as_posix()
+        if p.is_symlink():
+            have[rel] = ("120000", _git_blob_sha(os.readlink(p).encode("utf-8", "surrogateescape")))
+        elif p.is_file():
+            have[rel] = ("file", _git_blob_sha(p.read_bytes()))
+    diff = [f"missing {p}" for p in sorted(set(want) - set(have))] + [f"extra {p}" for p in sorted(set(have) - set(want))]
+    for p in sorted(set(want) & set(have)):
+        mode, sha = want[p]
+        if have[p][1] != sha or (mode == "120000") != (have[p][0] == "120000"):
+            diff.append(f"content of {p}")
+    return diff
+
+
 def reviewed_commit(job):
     """(commit, repo) of an APPLIED job whose commit holds the review package's patch as it was (SPEC_STAGING_V0 3.1:
     only reviewed artefacts go to staging)."""
@@ -344,21 +425,26 @@ def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, staging=None):
     job = rj.open_job(job_id, jobs_dir)
     image = runtime_image(cfg)
     with st.lock():
-        rec = st.build(job)
+        st.reconcile()
+        commit, repo = reviewed_commit(job)
+        release = release_name(job, commit)
         state = st.state()
-        if state["live"] == rec["release"]:
-            raise Refused(f"release {rec['release']} is already live")
+        if state["live"] == release:
+            raise Refused(f"release {release} is already live")
         text = "\n".join([f"== staging deploy (job {job.id}) ==",
-                          f"release {rec['release']}: {rec['repo']} at {rec['commit'][:12]} (applied as reviewed)",
+                          f"release {release}: {repo} at {commit[:12]} (applied as reviewed)",
                           f"image {ENVIRONMENT} {image[:19]}; no network, read-only, Unix socket; synthetic data",
                           f"live now: {state['live'] or 'nothing'}; rollback after this: {state['live'] or 'none'}",
                           "staging only: no production, no users, no credentials"])
         _confirm(deps, text)
-        st.switch(rec["release"], image, deps, "deploy")
-        state["history"] = [r for r in state["history"] if r != rec["release"]] + [rec["release"]]
-        state["live"] = rec["release"]
-        st._save(state)
-        st.note("live", release=rec["release"], by="deploy")
+        rec = st.build(job)
+
+        def record():
+            state["history"] = [r for r in state["history"] if r != release] + [release]
+            state["live"] = release
+            st._save(state)
+            st.note("live", release=release, by="deploy")
+        st.switch(release, image, deps, "deploy", record)
     with job.lock():
         job.note(deps, "staged", release=rec["release"])
     return rec["release"]
@@ -368,6 +454,7 @@ def rollback(*, cfg, deps, staging=None):
     st = staging or Staging()
     image = runtime_image(cfg)
     with st.lock():
+        st.reconcile()
         state = st.state()
         if not state["live"] or len(state["history"]) < 2:
             raise Refused("there is no earlier release to roll back to")
@@ -375,10 +462,12 @@ def rollback(*, cfg, deps, staging=None):
         text = "\n".join(["== staging rollback ==", f"live now: {current}", f"start again: {previous}",
                           "staging only: no production, no users, no credentials"])
         _confirm(deps, text)
-        st.switch(previous, image, deps, "rollback")
-        state["history"], state["live"] = state["history"][:-1], previous
-        st._save(state)
-        st.note("live", release=previous, by="rollback", replaced=current)
+
+        def record():
+            state["history"], state["live"] = state["history"][:-1], previous
+            st._save(state)
+            st.note("live", release=previous, by="rollback", replaced=current)
+        st.switch(previous, image, deps, "rollback", record)
     return previous
 
 
@@ -391,12 +480,16 @@ def status(*, staging=None):
         lines.append(f"  job {rels[live]['job']}, commit {rels[live]['commit'][:12]}")
     smokes = []
     try:
-        for line in st.log_path.read_text(encoding="utf-8").splitlines():
+        log_lines = st.log_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        log_lines = []
+    for line in log_lines:
+        try:
             e = json.loads(line)
-            if e.get("event") == "smoke" and e.get("release") == live:
-                smokes.append(e)
-    except (OSError, ValueError):
-        pass
+        except ValueError:
+            continue                                   # a line cut by a crash; the others still count
+        if isinstance(e, dict) and e.get("event") == "smoke" and e.get("release") == live:
+            smokes.append(e)
     if smokes:
         lines.append(f"  last smoke: {'pass' if smokes[-1]['ok'] else 'FAIL'} at {smokes[-1]['at']}")
     prev = state["history"][-2] if len(state["history"]) >= 2 else None

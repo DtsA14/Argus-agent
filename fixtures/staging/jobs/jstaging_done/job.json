@@ -1,0 +1,19 @@
+{
+  "job": "jstaging_done",
+  "state": "APPLIED",
+  "created_at": "2026-10-01T10:00:00Z",
+  "stages": {
+    "d1": {
+      "kind": "draft",
+      "run_id": "jstaging_done-d1",
+      "cap_usd": 0.75,
+      "status": "DRAFTED"
+    },
+    "a1": {
+      "kind": "agent",
+      "run_id": "jstaging_done-a1",
+      "cap_usd": 0.5,
+      "status": "DONE"
+    }
+  }
+}
