@@ -62,3 +62,14 @@ Argus). Bukan tingkat sukses model; instance publik 2019–2021. **Lebih rendah*
 
 `20801`, `19954`: `abandon` (retry sudah dipakai). `20428`, `19346`, `18189`: `reject "batch 5: graded, not applied"` (#233); tidak ada
 patch yang diterapkan ke sympy.
+
+## Koreksi diagnosis (2026-10-29, sesudah batch 5)
+
+Bagian "Kenapa gagal" untuk `20801` dan `19954` **salah sasaran**: penyebabnya batas harness, bukan pola baca agen. `EditFile` membaca
+dengan batas `MAX_READ` 100.000 byte dan menolak `numbers.py` (117 KB) dan `perm_groups.py` (182 KB).
+- `20801`: agen menemukan fix (cek `Boolean` sebelum `if not self` di `Float.__eq__`), `EditFile` ditolak, sisa langkah habis mencari
+  jalan lain; `Finish` "No change made ... `EditFile` refuses that file because it is larger than the 100000-byte tool limit".
+- `19954`: sesudah penolakan agen memakai `WriteFile` dan menimpa seluruh berkas (5.262 → 401 → 103 baris); peringatan harness
+  menyarankan `EditFile`, yang menolak berkas itu. Token dan context habis di situ (termasuk FAILED_BUDGET a1).
+Sejak 2026-10-24: 9 job SWE kena penolakan ini (batch 3 `21379`, batch 4 dan dev set `24562`, batch 5). Angka 2/5 tidak berubah.
+Perbaikan: `EditFile` sampai 2 MB (PR sesudah batch 5); `20801`, `19954`, `24562` diulang sebagai dev set (bukan klaim).

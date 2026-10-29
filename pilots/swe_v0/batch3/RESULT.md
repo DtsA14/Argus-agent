@@ -58,3 +58,9 @@ Keputusan Atha untuk run: "go live" (keempat tahap `code`), "y" approve ×4, "re
 Waktu dari ringkasan dikirim sampai "y" (`review_times.txt`): `21847` 5 menit 26 detik; `21379` dan `24661` disetujui bersama ±6–7
 menit setelah ringkasan masing-masing; `21612` (d2): waktu kirim ringkasan tidak tercatat. Lebih lama dari batch 1 (median 45 detik),
 karena ringkasan tanpa hasil patch resmi menuntut Atha menilai isi tes sendiri (mis. syarat `clear_cache()` di `21379`).
+
+## Koreksi diagnosis (2026-10-29, sesudah batch 5)
+
+`21379` (`j20261027_151552_7cdd`): `EditFile` menolak `sympy/polys/polytools.py` dan `sympy/core/expr.py` ("file larger than 100000
+bytes", 6 kali). "Tidak pernah menulis" sebagian disebabkan batas itu, bukan hanya oleh agen. Angka hasil tidak berubah. Perbaikan:
+`EditFile` sampai 2 MB (PR sesudah batch 5).

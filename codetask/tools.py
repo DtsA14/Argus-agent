@@ -33,6 +33,10 @@ MAX_WRITE = 200_000
 # lines and MAX_READ characters. A file larger than MAX_READ read without a range returns its first part and says so.
 READ_MAX_FILE = 2_000_000
 READ_MAX_LINES = 400
+# EditFile reads and writes back files up to READ_MAX_FILE bytes: the model sends only the replaced text, so the file's
+# size is not bounded by MAX_WRITE (SWE batch 5: EditFile refused sympy files of 117-182 KB, the agents found the fix
+# and could not apply it, or rewrote the whole file with WriteFile and broke it).
+EDIT_MAX_FILE = READ_MAX_FILE
 # A file over READ_WHOLE_MAX characters read without a range (argus-ledger 010/010b: six attempts ran out of context
 # after reading whole files of 21,000-34,000 characters): a Python file that parses shows its outline (classes and
 # functions with their lines, at most OUTLINE_MAX_ENTRIES), any other file its first READ_WHOLE_MAX characters.
@@ -490,7 +494,7 @@ class Toolbox:
         norm, problem = self._writable(path, "EditFile")
         if problem:
             return problem
-        current = self.jail.read_text(norm, max_bytes=MAX_READ)  # FileNotFoundError, PathEscape: reported by run()
+        current = self.jail.read_text(norm, max_bytes=EDIT_MAX_FILE)  # FileNotFoundError, PathEscape: by run()
         if "\ufffd" in current:
             return f"Rejected: {norm} is not plain UTF-8 text; nothing changed."
         key = _sha(step_key.encode("utf-8"))
@@ -510,8 +514,8 @@ class Toolbox:
             return (f"Rejected: old_text occurs {n} times in {norm}; include more surrounding text so that it occurs "
                     f"exactly once. Nothing changed.")
         result = current.replace(old, new, 1)
-        if len(result.encode("utf-8")) > MAX_WRITE:
-            return f"Rejected: the edited file would be larger than {MAX_WRITE} bytes; nothing changed."
+        if len(result.encode("utf-8")) > EDIT_MAX_FILE:
+            return f"Rejected: the edited file would be larger than {EDIT_MAX_FILE} bytes; nothing changed."
         after = _sha(result.encode("utf-8"))
         if entry is None:
             self._record(key, norm, cur, after)
