@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 class WindowError(ValueError):
@@ -73,3 +73,29 @@ def cost_usd(price, *, input_tokens, output_tokens, cache_read_tokens=0, cache_w
     usd = (fresh * price["input"] + cache_read_tokens * cache_rate + output_tokens * price["output"]
            + cache_write_tokens * price.get("cache_write_5m", 0) + cache_write_1h_tokens * price.get("cache_write_1h", 0))
     return usd / 1_000_000 * multiplier
+
+
+WIB = timezone(timedelta(hours=7))
+
+
+def peak_line(provider, price, window, now, soon_s=1800):
+    """The router's peak warning (SPEC_PEAK_EDGES P3): one line when `provider` is at its peak price at `now`, or goes to
+    it within `soon_s`; None otherwise, and for a price without a multiplier above 1. Window hours are whole hours."""
+    mult = (price or {}).get("peak_multiplier", 1)
+    if not window or mult <= 1:
+        return None
+    now = now.astimezone(timezone.utc)
+    hour = now.replace(minute=0, second=0, microsecond=0)
+    times = lambda t: f"{t:%H:%M} UTC = {t.astimezone(WIB):%H:%M} WIB"
+    tail = "off-peak costs about half" if mult == 2 else f"off-peak costs 1/{mult:g}"
+    if is_peak(window, now):
+        end = hour + timedelta(hours=1)
+        for _ in range(24 * 8):                       # a week and a day: any weekly window ends in it
+            if not is_peak(window, end):
+                break
+            end += timedelta(hours=1)
+        return f"peak: {provider} is at {mult:g}x now (until {times(end)}); {tail}"
+    start = hour + timedelta(hours=1)
+    if (start - now).total_seconds() <= soon_s and is_peak(window, start):
+        return f"peak: {provider} goes to {mult:g}x at {times(start)}; {tail}"
+    return None

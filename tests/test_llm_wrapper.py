@@ -76,14 +76,14 @@ def test_max_tokens_is_the_tightest_limit(tmp_path, tokens, usd, expected):
     assert fake.calls[0]["kwargs"]["max_tokens"] == expected
 
 
-def test_peak_hours_halve_the_output_cap_for_deepseek(tmp_path):
+def test_the_output_cap_for_deepseek_is_at_the_peak_price_at_any_hour(tmp_path):
+    """SPEC_PEAK_EDGES P1: the worst case is priced at peak off-peak too (tests/test_peak_edges.py)."""
     usd = (100 * 0.15 + 1000 * 0.60) / 1e6
     off, f1, _ = make(tmp_path / "a", [reply()], est_in=100, model_ref="deepseek:deepseek-flash", now=OFF_PEAK)
     peak, f2, _ = make(tmp_path / "b", [reply()], est_in=100, model_ref="deepseek:deepseek-flash", now=PEAK)
     off.call(MSGS, Reservation(tokens=10**9, usd=usd))
     peak.call(MSGS, Reservation(tokens=10**9, usd=usd))
-    assert f1.calls[0]["kwargs"]["max_tokens"] == 1000                        # (615 - 15) / 0.60
-    assert f2.calls[0]["kwargs"]["max_tokens"] == int((615 - 2 * 15) / 1.20)  # 487: input and output both doubled
+    assert f1.calls[0]["kwargs"]["max_tokens"] == f2.calls[0]["kwargs"]["max_tokens"] == int((615 - 2 * 15) / 1.20)  # 487
 
 
 # ---- charging and the ledger -----------------------------------------------------

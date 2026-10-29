@@ -160,9 +160,13 @@ def cache_totals(events, cfg):
         if e.get("cache_creation") is not None:
             creation = (creation or 0) + e["cache_creation"]
         price = cfg.get("prices", {}).get(e.get("model"))
-        plain = cost_usd(price, input_tokens=e.get("input_tokens") or 0, output_tokens=e.get("output_tokens") or 0,
-                         window=cfg.get("peak_windows", {}).get(str(e.get("model")).split(":")[0]),
-                         now=datetime.fromtimestamp(e["ts"], timezone.utc))
+        tok = {"input_tokens": e.get("input_tokens") or 0, "output_tokens": e.get("output_tokens") or 0}
+        if "peak" in e:                  # SPEC_PEAK_EDGES P2: at the multiplier the ledger charged (start or end)
+            plain = cost_usd(price, **tok)
+            plain = None if plain is None else plain * ((price.get("peak_multiplier", 1) if e["peak"] else 1))
+        else:
+            plain = cost_usd(price, **tok, window=cfg.get("peak_windows", {}).get(str(e.get("model")).split(":")[0]),
+                             now=datetime.fromtimestamp(e["ts"], timezone.utc))
         if plain is not None and e.get("usd_nano") is not None:
             saved += to_nano(plain) - e["usd_nano"]
     return {"cache_read_tokens": read, "cache_creation_tokens": creation, "usd_saved_estimate": saved / 1e9}
