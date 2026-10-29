@@ -38,7 +38,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from models.pricing import cost_usd, multiplier
+from models.pricing import WindowError, cost_usd, multiplier
 from models.registry import (ConfigError, ModelRef, build_chat_model, cache_usage, price_for, usage_from_message,
                              window_for)
 
@@ -343,17 +343,22 @@ class LLMCaller:
         """USD of a call at peak multiplier `mult`, or None when the model is unpriced (never reported as $0)."""
         if self.price is None:
             return None
-        return cost_usd(self.price, input_tokens=tin, output_tokens=tout, cache_read_tokens=cached,
-                        cache_write_tokens=write_5m, cache_write_1h_tokens=write_1h, window=None) * mult
+        usd = cost_usd(self.price, input_tokens=tin, output_tokens=tout, cache_read_tokens=cached,
+                       cache_write_tokens=write_5m, cache_write_1h_tokens=write_1h, window=None)
+        return None if usd is None else usd * mult      # an unknown cost stays None, never a guess
 
     def _worst_mult(self):
         """SPEC_PEAK_EDGES P1: before sending, a provider with a peak window is always priced at its peak, whatever the
         hour, so a call that runs into the window (or is billed by its start) never costs more than its worst case."""
         return max(1, self.price.get("peak_multiplier", 1)) if (self.price and self.window) else 1
 
-    def _actual_mult(self, start, end):
-        """SPEC_PEAK_EDGES P2: the higher multiplier of a call's start and end, never below either billing rule."""
-        return max(multiplier(self.price, self.window, start), multiplier(self.price, self.window, end))
+    def _end_mult(self, start_mult, end):
+        """SPEC_PEAK_EDGES P2: the higher multiplier of a call's start and end, never below either billing rule. The
+        call was sent and paid for: a clock that fails at the end (WindowError) costs the peak, it does not raise."""
+        try:
+            return max(start_mult, multiplier(self.price, self.window, end))
+        except WindowError:
+            return self._worst_mult()
 
     def _worst_usd(self, tin, tout):
         """The most a call can cost: no cache hit, and with caching on every input token may be written (D5)."""
@@ -425,7 +430,8 @@ class LLMCaller:
                                                                for m in messages])
             # Written before sending: if the process dies mid-request, reconcile_ledger() finds this
             # started event without a final one and charges the worst case.
-            started_at = self._now()
+            # the window and the clock are checked here, before sending (WindowError: nothing sent, nothing charged)
+            start_mult = multiplier(self.price, self.window, self._now())
             emit("llm_call_started", call_id=call_id, attempt=attempt, est_input=est_in, max_tokens=cap,
                  worst_tokens=worst_tokens, worst_usd_nano=worst_nano, worst_usd=_usd(worst_nano))
 
@@ -459,7 +465,7 @@ class LLMCaller:
                 continue
 
             latency = round(time.monotonic() - t0, 3)
-            mult = self._actual_mult(started_at, self._now())
+            mult = self._end_mult(start_mult, self._now())
             tin, tout, cached = usage_from_message(msg)
             cu = cache_usage(msg)
             if tin == 0 and tout == 0:

@@ -149,3 +149,72 @@ def test_no_peak_line_on_the_confirm_screen_off_peak(tmp_path):
     e.deps.get_key = lambda: "sk-" + "a" * 32
     e.code()                                           # Friday 00:00 UTC
     assert "peak:" not in e.confirms[0]
+
+
+# ---- review fixes ----------------------------------------------------------------------------------------------
+
+def test_an_unknown_cost_after_sending_is_null_and_charged(tmp_path):
+    """DeepSeek's price has no write rate: a reply reporting a cache write has no known cost (null, never a crash)."""
+    r = reply(input_tokens=900, output_tokens=500)
+    r.usage_metadata["input_token_details"]["cache_creation"] = 100
+    c, _, log, _ = make(tmp_path, Clock(at(THU, 12)), script=[r])
+    res = Reservation(tokens=10**9, usd=1.0)
+    c.call(MSGS, res)
+    (done,) = ledger(log, "llm_call")
+    assert done["status"] == "ok" and done["usd_nano"] is None and res.used_tokens == 1400
+
+
+@pytest.mark.parametrize("window, clock", [
+    ({"utc_hours": [[1, 25]]}, Clock(at(THU, 12))),
+    ({"utc_hours": [[1, 4]], "weekdays_only": "yes"}, Clock(at(THU, 12))),
+    (None, Clock(datetime(2026, 10, 15, 12))),            # naive: the default window of config.yaml
+], ids=["hour out of range", "weekdays_only not a bool", "naive clock"])
+def test_a_bad_window_or_clock_is_refused_before_sending(tmp_path, window, clock):
+    from models.pricing import WindowError
+    c, fake, log, _ = make(tmp_path, clock)
+    if window is not None:
+        c.window = window
+    res = Reservation(tokens=10**9, usd=1.0)
+    with pytest.raises(WindowError):
+        c.call(MSGS, res)
+    assert fake.calls == [] and res.used_tokens == 0 and not ledger(log, "llm_call_started")
+
+
+def test_a_clock_that_fails_after_the_reply_charges_the_peak(tmp_path):
+    c, fake, log, cfg = make(tmp_path, Clock(at(THU, 12), datetime(2026, 10, 15, 12, 1)))
+    res = Reservation(tokens=10**9, usd=1.0)
+    c.call(MSGS, res)
+    (done,) = ledger(log, "llm_call")
+    assert done["usd"] == pytest.approx(plain(cfg, DS, 2, input_tokens=900, output_tokens=500), rel=1e-6)
+    assert done["peak"] is True and res.used_tokens == 1400
+
+
+def test_a_peak_that_lasts_days_ends_where_it_ends():
+    window = {"utc_hours": [[0, 24]], "weekdays_only": True}
+    assert peak_line("deepseek", PRICE, window, at(THU, 2)) == \
+        "peak: deepseek is at 2x now (until 00:00 UTC = 07:00 WIB); off-peak costs about half"
+    monday = at(THU, 2) - timedelta(days=3)
+    line = peak_line("deepseek", PRICE, window, monday)
+    assert "until 00:00 UTC" in line                   # Saturday 00:00, not two days on (Wednesday 02:00)
+
+
+def test_a_bad_window_does_not_crash_the_confirm_screen():
+    from types import SimpleNamespace
+    from router.job import _peak_lines
+    cfg = copy.deepcopy(load_config())
+    cfg["peak_windows"]["deepseek"] = {"utc_hours": [[1, 25]]}
+    lines = _peak_lines(SimpleNamespace(clock=lambda: "2026-10-15T02:00:00Z"), cfg, ["coder"])
+    assert lines == ["peak: the deepseek peak window in the config cannot be read; the stage will refuse to call it"]
+
+
+@pytest.mark.parametrize("peak, saved", [(True, 0), (False, 0)])
+def test_cache_savings_use_the_multiplier_the_ledger_charged(peak, saved):
+    """A call that started at peak and ended off-peak (ts off-peak) was charged x2: nothing was saved, not minus x1."""
+    from codetask.run import cache_totals
+    from harness.llm import to_nano
+    cfg = load_config()
+    mult = 2 if peak else 1
+    usd = plain(cfg, DS, mult, input_tokens=900, output_tokens=500)
+    e = {"event": "llm_call", "status": "ok", "model": DS, "input_tokens": 900, "output_tokens": 500, "cache_read": 0,
+         "usd_nano": to_nano(usd), "peak": peak, "ts": at(THU, 4, 0, 20).timestamp()}
+    assert cache_totals([e], cfg)["usd_saved_estimate"] == pytest.approx(saved, abs=1e-9)

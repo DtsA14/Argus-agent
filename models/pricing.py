@@ -90,7 +90,7 @@ def peak_line(provider, price, window, now, soon_s=1800):
     tail = "off-peak costs about half" if mult == 2 else f"off-peak costs 1/{mult:g}"
     if is_peak(window, now):
         end = hour + timedelta(hours=1)
-        for _ in range(48):
+        for _ in range(24 * 8):                       # a week and a day: any weekly window ends in it
             if not is_peak(window, end):
                 break
             end += timedelta(hours=1)

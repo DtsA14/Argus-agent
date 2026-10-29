@@ -292,7 +292,7 @@ def _needs_key(cfg, roles):
 def _peak_lines(deps, cfg, roles):
     """SPEC_PEAK_EDGES P3: a warning per provider of the stage's models at (or within 30 minutes of) its peak price.
     Only shown: it neither refuses nor delays the stage."""
-    from models.pricing import peak_line
+    from models.pricing import WindowError, peak_line
     from models.registry import ModelRef, price_for, window_for
     try:
         now = datetime.strptime(deps.clock(), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -300,7 +300,10 @@ def _peak_lines(deps, cfg, roles):
         now = datetime.now(timezone.utc)
     lines = []
     for ref in sorted({ModelRef.parse(cfg["roles"][role]["model"]) for role in roles}, key=str):
-        line = peak_line(ref.provider, price_for(cfg, ref), window_for(cfg, ref.provider), now)
+        try:
+            line = peak_line(ref.provider, price_for(cfg, ref), window_for(cfg, ref.provider), now)
+        except WindowError:                             # shown only: the stage's own LLMCaller refuses a bad window
+            line = f"peak: the {ref.provider} peak window in the config cannot be read; the stage will refuse to call it"
         if line and line not in lines:
             lines.append(line)
     return lines

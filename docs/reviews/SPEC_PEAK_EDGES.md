@@ -81,3 +81,12 @@ lalu "merge" Atha.
 1. P1: worst case **selalu ×peak** (bukan jangkauan 900 s): sederhana dan absolut, tanpa hambatan terukur.
 2. P3: **peringatan saja**, tanpa `--allow-peak`. "Jangan sampai ngirit tapi menghambat kerja Argus."
 3. Jadwal batch: Claude menunda run ke off-peak bila tidak mendesak; bukan aturan keras.
+
+## 8. Review (/code-review medium, /security-review; 2026-10-29)
+
+Security: tidak ada temuan. Code review, diperbaiki: biaya tak diketahui sesudah kirim tetap `null` (bukan TypeError
+sebelum ledger dan charge); jendela dan clock diperiksa **sebelum** kirim (WindowError: tidak ada yang dikirim), clock
+yang gagal sesudah balasan dihitung ×peak; `cache_totals` memakai `peak` di ledger; batas akhir peak dicari sampai 8 hari;
+jendela rusak tidak membuat layar konfirmasi crash (baris peringatan, LLMCaller tetap menolak). Tidak diubah:
+fallback clock router ke jam sekarang (format `deps.clock` tetap dari `now()`), dan `harness/budget.py`/`attempt_usd` yang
+memakai ×peak tanpa syarat jendela (lebih konservatif, bukan celah).
