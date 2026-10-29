@@ -1,0 +1,20 @@
+== retry the agent (job j20261029_002359_b9a1) ==
+agent stage a2 (retry of a1), approved contract 14eee162660a
+a1 ended: finished after 19 steps, files changed
+profile large_usd; max input 60000; one attempt $0.45; agent cap $0.7500
+job cap $1.00; spent $0.1474; left $0.8526
+(--yes: approved in chat; no [y/N] asked)
+agent running in j20261029_002359_b9a1-a2 (usually 1-3 minutes; it prints nothing until it ends). Do not start another job for this task: if this stops or the terminal closes, continue it with `argus resume j20261029_002359_b9a1`.
+agent finished: FAILED_ACCEPTANCE ($0.1854)
+job j20261029_002359_b9a1: AGENT_FAILED
+repo /home/ubuntu/swe/sympy at e11d3fed782146eebbffdc9ced0364b223b84b6c
+environment sympy_py39, image 146db0c5d665
+money: cap $1.00, spent $0.3328
+  d1 draft: DRAFTED cap $0.7500 spent $0.0124
+  a1 agent: FAILED_ACCEPTANCE cap $0.7500 spent $0.1350
+  a2 agent: FAILED_ACCEPTANCE cap $0.7500 spent $0.1854
+  a1 attempts: 1 max_steps after 30 steps, no file changed; 2 finished after 16 steps, files changed; 3 finished after 19 steps, files changed
+  a2 attempts: 1 max_steps after 30 steps, no file changed; 2 context_limit after 27 steps, files changed; 3 max_steps after 30 steps, no file changed
+why: max_iterations
+agent result: FAILED_ACCEPTANCE, 3 attempt(s), failing: artifact:SUMMARY.json, claims, validation:logic, validation:numbers, validation:target
+next: argus retry j20261029_002359_b9a1  |  argus abandon j20261029_002359_b9a1 "<why>"

@@ -1,0 +1,73 @@
+{
+  "resolved": true,
+  "FAIL_TO_PASS": {
+    "test_dict": "pass"
+  },
+  "PASS_TO_PASS": {
+    "test_printmethod": "pass",
+    "test_more_than_255_args_issue_10259": "pass",
+    "test_Function": "pass",
+    "test_Geometry": "pass",
+    "test_Singletons": "pass",
+    "test_Integer": "pass",
+    "test_list": "pass",
+    "test_Matrix": "pass",
+    "test_empty_Matrix": "pass",
+    "test_Rational": "pass",
+    "test_Float": "pass",
+    "test_Symbol": "pass",
+    "test_Symbol_two_assumptions": "pass",
+    "test_Symbol_no_special_commutative_treatment": "pass",
+    "test_Wild": "pass",
+    "test_Dummy": "pass",
+    "test_Dummy_assumption": "pass",
+    "test_Dummy_from_Symbol": "pass",
+    "test_tuple": "pass",
+    "test_WildFunction": "pass",
+    "test_settins": "pass",
+    "test_AlgebraicNumber": "pass",
+    "test_PolyRing": "pass",
+    "test_FracField": "pass",
+    "test_PolyElement": "pass",
+    "test_FracElement": "pass",
+    "test_FractionField": "pass",
+    "test_PolynomialRingBase": "pass",
+    "test_DMP": "pass",
+    "test_FiniteExtension": "pass",
+    "test_ExtensionElement": "pass",
+    "test_BooleanAtom": "pass",
+    "test_Integers": "pass",
+    "test_Naturals": "pass",
+    "test_Naturals0": "pass",
+    "test_Reals": "pass",
+    "test_matrix_expressions": "pass",
+    "test_Cycle": "pass",
+    "test_Permutation": "pass",
+    "test_diffgeom": "pass"
+  },
+  "patch_sha256": "e4d78bd7774922a8da551fde91c6340d03157548e8f9d60b1ab17418fd748e34",
+  "test_patch_sha256": "793eca615bc60287ca9d13ac542d8ea53aa37f484bde2335d99821a892fc0d76",
+  "base_commit": "94fb720696f5f5d12bad8bc813699fd696afd2fb",
+  "environment": "sympy_py39",
+  "image": "sha256:146db0c5d665f1067e56568740d369fe55b3a7b0cae719401f28ded80dd72be5",
+  "test_files": [
+    "sympy/printing/tests/test_repr.py"
+  ],
+  "run": {
+    "tests_run": 44,
+    "failures": 2,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 1
+  },
+  "drafter_tests_on_reference": {
+    "files": [
+      "sympy/printing/tests/test_repr_dict_set.py"
+    ],
+    "status": "pass",
+    "tests_run": 5,
+    "failures": 0,
+    "errors": 0
+  },
+  "note": "graded SWE-bench style by Argus (not the official harness); not comparable to leaderboards"
+}

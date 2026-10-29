@@ -1,0 +1,19 @@
+== drafter stage d2 (job j20261029_003513_dc49) ==
+model deepseek:deepseek-flash; stage cap $0.7500; one attempt $0.70; 5 submits
+overrides: {'budget.max_tokens': 3000000, 'drafter.attempt_tokens': 2000000, 'code_task.auto_validate': True, 'code_task.max_steps': 30, 'llm.input_margin_by_model': {'deepseek:deepseek-flash': 2.5, 'deepseek:deepseek-v4-pro': 2.5}, 'code_task.max_input_tokens_by_model': {'deepseek:deepseek-flash': 125000, 'deepseek:deepseek-v4-pro': 125000}, 'drafter.max_input_tokens': 416000, 'code_task.profiles.large_usd.attempt_tokens': 1200000, 'drafter.validation_timeout_s': 120, 'llm.prompt_cache.enabled': True}
+job cap $1.00; spent $0.0146; left $0.9854
+(--yes: approved in chat; no [y/N] asked)
+drafter running in j20261029_003513_dc49-d2 (usually 1-3 minutes; it prints nothing until it ends). Do not start another job for this task: if this stops or the terminal closes, continue it with `argus resume j20261029_003513_dc49`.
+drafter finished: DRAFTED ($0.0323)
+job j20261029_003513_dc49: AWAITING_APPROVAL
+repo /home/ubuntu/swe/sympy at 1923822ddf8265199dbd9ef9ce09641d3fd042b9
+environment sympy_py39, image 146db0c5d665
+money: cap $1.00, spent $0.0470
+human-steered: a redraft was given a reviewer's note
+  d1 draft: DRAFTED cap $0.7500 spent $0.0146
+  d2 draft: DRAFTED cap $0.7500 spent $0.0323; note: In test_permute_with_reordered_syms_keeps_syms_order the expected set for x**2 +...
+draft 9e534376a32e (/home/ubuntu/pilot3a_live/jobs/j20261029_003513_dc49/runs/j20261029_003513_dc49-d2/DRAFT_REVIEW.md)
+writable: sympy/solvers/diophantine.py
+validation target (env sympy_py39): python -m pytest sympy/solvers/tests/test_diophantine_permute_syms.py
+validation regression (env sympy_py39): python -m pytest sympy/solvers/tests/test_diophantine.py::test_input_format sympy/solvers/tests/test_diophantine.py::test_univariate sympy/solvers/tests/test_diophantine.py::test_classify_diop sympy/solvers/tests/test_diophantine.py::test_linear sympy/solvers/tests/test_diophantine.py::test_DN sympy/solvers/tests/test_diophantine.py::test_diop_ternary_quadratic_normal sympy/solvers/tests/test_diophantine.py::test_diop_ternary_quadratic sympy/solvers/tests/test_diophantine.py::test_diophantine sympy/solvers/tests/test_diophantine.py::test_diop_general_sum_of_squares_quick sympy/solvers/tests/test_diophantine.py::test_diop_sum_of_even_powers sympy/solvers/tests/test_diophantine.py::test_diophantine_permute_sign sympy/solvers/tests/test_diophantine.py::test_issue_9538 sympy/solvers/tests/test_diophantine.py::test__can_do_sum_of_squares
+approve: argus approve j20261029_003513_dc49 --sha 9e534376a32e

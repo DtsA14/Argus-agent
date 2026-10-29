@@ -1,0 +1,14 @@
+batch spent $0.0896 over 5 jobs; next stage cap $1.00; fits $3.00: True
+20801: approve start 2026-10-29T01:12:50Z
+20801: end 2026-10-29T01:24:17Z rc=0 agent finished: FAILED_ACCEPTANCE ($0.1350) job j20261029_002359_b9a1: AGENT_FAILED 
+batch spent $0.2570 over 5 jobs; next stage cap $1.00; fits $3.00: True
+20428: approve start 2026-10-29T01:24:17Z
+20428: end 2026-10-29T01:29:08Z rc=0 agent finished: DONE ($0.0385) job j20261029_002608_ad53: REVIEW_READY 
+batch spent $0.2955 over 5 jobs; next stage cap $1.00; fits $3.00: True
+19954: approve start 2026-10-29T01:29:08Z
+19954: end 2026-10-29T01:43:50Z rc=0 agent finished: FAILED_BUDGET ($0.1860) job j20261029_002951_8b7e: AGENT_FAILED 
+batch spent $0.5818 over 5 jobs; next stage cap $1.00; fits $3.00: True
+19346: approve start 2026-10-29T01:43:50Z
+19346: end 2026-10-29T01:44:52Z rc=0 agent finished: DONE ($0.0032) job j20261029_003305_8bb4: REVIEW_READY 
+batch spent $0.6024 over 5 jobs; next stage cap $0.00; fits $3.00: True
+BATCHAPPROVEDONE
