@@ -1,0 +1,5 @@
+Runtime image of the argus-ledger staging container for upgrade 1 (docs/reviews/SPEC_DEP_UPGRADE_V0.md U1): the pins of
+ledger_py312_up1 plus uvicorn==0.54.0 and click==8.5.0 as in ledger_staging. Staging deploys a release on it only after
+`argus stage check` passed for that commit in ledger_py312_up1 (U3). Built by scripts/build_env_from_base.sh
+ledger_staging_up1; checked by scripts/check_env_image.py ledger_staging_up1. Distroless: no shell, pip or git.
+Never in web.environments.

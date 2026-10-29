@@ -6,8 +6,14 @@ VM, smoke-tested from the host, with a tested rollback. No model is called here,
                              smoke test; only when it passes is the previous release stopped
   argus stage rollback       the release that was live before the current one, started and smoke-tested the same way
   argus stage status         what is live, its last smoke test, and what a rollback would start
+  argus stage check <job> --env E   the job's commit's own tests in sandbox environment E (no model): the evidence a
+                             deploy on that environment's staging runtime needs (SPEC_DEP_UPGRADE_V0 U2)
 
-Every container runs from the checked runtime image (environment ledger_staging) with --network none, a read-only root,
+A release is a commit on one runtime (SPEC_DEP_UPGRADE_V0 U3): ledger_staging by default, or another staging runtime of
+RUNTIMES once `stage check` passed for that commit in its paired sandbox environment. The release records the runtime's
+image, and a rollback starts the earlier release on the image it recorded, never on today's default.
+
+Every container runs from the checked runtime image of its release with --network none, a read-only root,
 no capabilities, no-new-privileges, this user's uid (not root) and limits; the release's source, the harness's entry
 module and the synthetic data (fixtures/staging/jobs) are mounted read-only, and only the socket directory is writable.
 `docker inspect` must show exactly that before the smoke test runs. Only containers named argus-staging-ledger-* and
@@ -29,17 +35,25 @@ from pathlib import Path
 from acceptance import intake
 from acceptance.workspace import digest, snapshot
 
+from acceptance import validation as va
+from tools import sandbox as sb
+
 from . import job as rj
 
 ROOT = Path(__file__).resolve().parent.parent
 STAGING = Path.home() / "argus-staging"
 FIXTURE = ROOT / "fixtures" / "staging" / "jobs"
 ENVIRONMENT = "ledger_staging"
+# SPEC_DEP_UPGRADE_V0 U3: each staging runtime and the sandbox environment whose `stage check` a commit must have passed
+# before it runs on that runtime. The default one needs none (its releases are those staging v0 deployed).
+RUNTIMES = {"ledger_staging": None, "ledger_staging_up1": "ledger_py312_up1"}
+CHECK_ARGV = ["python3", "-I", "-B", "-m", "pytest", *va.PYTEST_FIXED, "-W", "error::DeprecationWarning"]
+CHECK_TIMEOUT_S = 600
 PREFIX = "argus-staging-ledger-"
 LABEL = "argus.staging.release"
 HOST = "staging.local"
 ENTRY = f'from ledger.api import create_app\n\napp = create_app("/data/jobs", allowed_hosts=["{HOST}"])\n'
-RELEASE = re.compile(r"^j[0-9a-z_]{1,40}-[0-9a-f]{12}$")
+RELEASE = re.compile(r"^j[0-9a-z_]{1,40}-[0-9a-f]{12}(\.[a-z0-9]{1,12})?$")   # .<runtime> unless the default
 LIMITS = ["--memory", "256m", "--pids-limit", "64", "--cpus", "1"]
 WANT_LIMITS = {"Memory": 256 * 1024 * 1024, "PidsLimit": 64, "NanoCpus": 1_000_000_000}   # LIMITS as docker shows them
 MOUNTS = {"/app": False, "/entry": False, "/data": False, "/run/argus": True}   # destination: writable
@@ -69,6 +83,7 @@ class Staging:
     def __init__(self, base=STAGING, run=docker, fixture=FIXTURE, wait_s=SOCKET_WAIT_S):
         self.base, self.run, self.fixture, self.wait_s = Path(base), run, Path(fixture), wait_s
         self.state_path, self.log_path = self.base / "state.json", self.base / "releases.jsonl"
+        self.checks_path = self.base / "env_checks.jsonl"
 
     # ---- records ----------------------------------------------------------------------------------------------
 
@@ -124,32 +139,24 @@ class Staging:
             raise Refused(f"{release!r} is not a release name")
         return self.base / "releases" / release
 
-    def build(self, job):
-        """The release of an applied job: its applied commit, archived read-only. Built once; checked every time."""
+    def build(self, job, runtime=ENVIRONMENT, image=None):
+        """The release of an applied job on `runtime` (whose image is `image`): its applied commit, archived read-only.
+        Built once; checked every time."""
         commit, repo = reviewed_commit(job)
-        release = release_name(job, commit)
+        release = release_name(job, commit, runtime)
         d = self.dir(release)
         known = self.releases().get(release)
         if known is None:
             if d.exists():                             # left by a build that stopped before its record
                 _writable(d)
                 shutil.rmtree(d)
-            src = d / "src"
-            src.mkdir(parents=True)
-            archive = intake.git(repo, "archive", "--format=tar", commit)
-            r = subprocess.run(["tar", "-x", "-C", str(src)], input=archive, capture_output=True, timeout=120)
-            if r.returncode:
-                raise Refused(f"the release could not be unpacked: {r.stderr[:200]!r}")
-            diff = tree_differences(repo, commit, src)
-            if diff:                                   # e.g. .gitattributes export-ignore or export-subst
-                raise Refused(f"the archive of {commit[:12]} is not the commit's tree: " + "; ".join(diff[:5]))
+            archive = unpack(repo, commit, d / "src")
             (d / "entry").mkdir()
             (d / "entry" / "staging_app.py").write_text(ENTRY, encoding="utf-8")
-            _read_only(d / "src")
             _read_only(d / "entry")
             known = {"release": release, "job": job.id, "repo": repo, "commit": commit,
                      "src_digest": digest(snapshot(d / "src")), "entry_sha256": _sha(ENTRY.encode()),
-                     "archive_sha256": _sha(archive)}
+                     "archive_sha256": _sha(archive), "runtime": runtime, "image": image}
             self.note("built", **known)
         if known["commit"] != commit:
             raise Refused(f"release {release} differs from what was built (commit changed)")
@@ -169,6 +176,38 @@ class Staging:
         if not same:
             raise Refused(f"release {release} differs from what was built (source or entry changed)")
         return rec
+
+    def checks(self):
+        try:
+            lines = self.checks_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+        out = []
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue                               # a line cut by a crash
+            if isinstance(e, dict):
+                out.append(e)
+        return out
+
+    def tested(self, commit, runtime, cfg):
+        """The passed `stage check` a deploy of `commit` on `runtime` (one of RUNTIMES, as runtime_image ensured) needs
+        (U3), or Refused; None for the default."""
+        environment = RUNTIMES[runtime]
+        if environment is None:
+            return None
+        image, problem = rj.environment_pin(cfg, environment)
+        if problem:
+            raise Refused(f"sandbox environment {environment} cannot be used: {problem}")
+        last = [e for e in self.checks() if e.get("commit") == commit and e.get("environment") == environment
+                and e.get("image") == image]
+        if not last or last[-1].get("ok") is not True:
+            raise Refused(f"commit {commit[:12]} has no passed `argus stage check` in {environment} (image "
+                          f"{image[:19]}): it does not run on {runtime}"
+                          + (f" (last check: {last[-1].get('why')})" if last else ""))
+        return last[-1]
 
     def _fresh_data(self, d):
         data = d / "data"
@@ -357,8 +396,24 @@ def _writable(path):
             p.chmod(0o755 if p.is_dir() else 0o644)
 
 
-def release_name(job, commit):
-    return f"{job.id}-{commit[:12]}"
+def release_name(job, commit, runtime=ENVIRONMENT):
+    """<job>-<commit12>, plus .<suffix> on a runtime other than the default (ledger_staging_up1 -> .up1)."""
+    base = f"{job.id}-{commit[:12]}"
+    return base if runtime == ENVIRONMENT else f"{base}.{runtime.removeprefix(ENVIRONMENT + '_')}"
+
+
+def unpack(repo, commit, src):
+    """git archive of `commit` unpacked into `src` (made here, left read-only), checked against the commit's tree."""
+    Path(src).mkdir(parents=True)
+    archive = intake.git(repo, "archive", "--format=tar", commit)
+    r = subprocess.run(["tar", "-x", "-C", str(src)], input=archive, capture_output=True, timeout=120)
+    if r.returncode:
+        raise Refused(f"the release could not be unpacked: {r.stderr[:200]!r}")
+    diff = tree_differences(repo, commit, src)
+    if diff:                                           # e.g. .gitattributes export-ignore or export-subst
+        raise Refused(f"the archive of {commit[:12]} is not the commit's tree: " + "; ".join(diff[:5]))
+    _read_only(src)
+    return archive
 
 
 def _git_blob_sha(data):
@@ -405,11 +460,29 @@ def reviewed_commit(job):
     return commit, job.data["inputs"]["repo"]
 
 
-def runtime_image(cfg):
-    image, problem = rj.environment_pin(cfg, ENVIRONMENT)
+def runtime_image(cfg, runtime=ENVIRONMENT):
+    if runtime not in RUNTIMES:
+        raise Refused(f"{runtime!r} is not a staging runtime (known: {sorted(RUNTIMES)})")
+    image, problem = rj.environment_pin(cfg, runtime)
     if problem:
         raise Refused(f"the staging runtime image cannot be used: {problem}")
     return image
+
+
+def image_changed(rec, runtime, image):
+    """Refused when a release was built for another image than its runtime resolves to now (the runtime itself is part
+    of the release's name). A release from before SPEC_DEP_UPGRADE_V0 recorded no image: it runs on the pinned one."""
+    if rec.get("image") is not None and rec["image"] != image:
+        raise Refused(f"release {rec['release']} was built for image {rec['image'][:19]} of {runtime}, which now "
+                      f"resolves to {str(image)[:19]}; nothing was changed")
+
+
+def release_image(cfg, rec):
+    """(runtime, image) a built release starts on: its recorded runtime, still resolving to its recorded image."""
+    runtime = rec.get("runtime", ENVIRONMENT)
+    image = runtime_image(cfg, runtime)
+    image_changed(rec, runtime, image)
+    return runtime, image
 
 
 def _confirm(deps, text):
@@ -420,24 +493,30 @@ def _confirm(deps, text):
         raise Refused("not confirmed; nothing was changed")
 
 
-def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, staging=None):
+def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, staging=None, runtime=ENVIRONMENT):
     st = staging or Staging()
     job = rj.open_job(job_id, jobs_dir)
-    image = runtime_image(cfg)
+    image = runtime_image(cfg, runtime)
     with st.lock():
         st.reconcile()
         commit, repo = reviewed_commit(job)
-        release = release_name(job, commit)
+        release = release_name(job, commit, runtime)
         state = st.state()
         if state["live"] == release:
             raise Refused(f"release {release} is already live")
+        check = st.tested(commit, runtime, cfg)
+        known = st.releases().get(release)
+        if known is not None:
+            image_changed(known, runtime, image)
         text = "\n".join([f"== staging deploy (job {job.id}) ==",
                           f"release {release}: {repo} at {commit[:12]} (applied as reviewed)",
-                          f"image {ENVIRONMENT} {image[:19]}; no network, read-only, Unix socket; synthetic data",
+                          f"image {runtime} {image[:19]}; no network, read-only, Unix socket; synthetic data",
+                          *([f"tested: stage check passed in {check['environment']} at {check['at']} "
+                             f"({check['tests_run']} tests)"] if check else []),
                           f"live now: {state['live'] or 'nothing'}; rollback after this: {state['live'] or 'none'}",
                           "staging only: no production, no users, no credentials"])
         _confirm(deps, text)
-        rec = st.build(job)
+        rec = st.build(job, runtime, image)
 
         def record():
             state["history"] = [r for r in state["history"] if r != release] + [release]
@@ -452,14 +531,18 @@ def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, staging=None):
 
 def rollback(*, cfg, deps, staging=None):
     st = staging or Staging()
-    image = runtime_image(cfg)
     with st.lock():
         st.reconcile()
         state = st.state()
         if not state["live"] or len(state["history"]) < 2:
             raise Refused("there is no earlier release to roll back to")
         current, previous = state["history"][-1], state["history"][-2]
-        text = "\n".join(["== staging rollback ==", f"live now: {current}", f"start again: {previous}",
+        rec = st.releases().get(previous)
+        if rec is None:
+            raise Refused(f"release {previous} is not one that was built")
+        runtime, image = release_image(cfg, rec)       # the image it ran on, not today's default (U3)
+        text = "\n".join(["== staging rollback ==", f"live now: {current}",
+                          f"start again: {previous} on {runtime} {image[:19]}",
                           "staging only: no production, no users, no credentials"])
         _confirm(deps, text)
 
@@ -477,7 +560,8 @@ def status(*, staging=None):
     live = state["live"]
     lines = [f"staging live: {live or 'nothing'}"]
     if live and live in rels:
-        lines.append(f"  job {rels[live]['job']}, commit {rels[live]['commit'][:12]}")
+        lines.append(f"  job {rels[live]['job']}, commit {rels[live]['commit'][:12]}, runtime "
+                     f"{rels[live].get('runtime', ENVIRONMENT)}")
     smokes = []
     try:
         log_lines = st.log_path.read_text(encoding="utf-8").splitlines()
@@ -493,5 +577,50 @@ def status(*, staging=None):
     if smokes:
         lines.append(f"  last smoke: {'pass' if smokes[-1]['ok'] else 'FAIL'} at {smokes[-1]['at']}")
     prev = state["history"][-2] if len(state["history"]) >= 2 else None
-    lines.append(f"rollback would start: {prev or 'nothing (no earlier release)'}")
+    lines.append(f"rollback would start: {prev or 'nothing (no earlier release)'}"
+                 + (f" on {rels[prev].get('runtime', ENVIRONMENT)}" if prev in rels else ""))
     return "\n".join(lines)
+
+
+def check(job_id, environment, *, cfg, jobs_dir=rj.JOBS, staging=None, run=sb.run_command):
+    """SPEC_DEP_UPGRADE_V0 U2: the applied commit's own test suite in sandbox environment `environment` (the sandbox
+    flags of a validation; workspace read-only), deprecation warnings as errors. Passed only with exit code 0, a
+    consistent pytest summary, at least one test, none failed or skipped, and the run not cut short. Recorded in
+    env_checks.jsonl, passed or not; no model, no container that outlives the run."""
+    st = staging or Staging()
+    if environment not in {e for e in RUNTIMES.values() if e}:
+        raise Refused(f"{environment!r} is not the sandbox environment of a staging runtime "
+                      f"({sorted(e for e in RUNTIMES.values() if e)})")
+    job = rj.open_job(job_id, jobs_dir)
+    commit, repo = reviewed_commit(job)
+    image, problem = rj.environment_pin(cfg, environment)
+    if problem:
+        raise Refused(f"sandbox environment {environment} cannot be used: {problem}")
+    with st.lock():
+        d = st.base / "checks" / f"{commit[:12]}.{environment}"
+        if d.exists():
+            _writable(d)
+            shutil.rmtree(d)
+        try:
+            unpack(repo, commit, d / "src")
+            sandbox = {**(cfg.get("sandbox") or {}), "environment": environment, "timeout_s": CHECK_TIMEOUT_S}
+            r = run(CHECK_ARGV, workdir=d / "src", cfg=sandbox)
+        finally:
+            if d.exists():
+                _writable(d)
+                shutil.rmtree(d)
+        parsed = va.parse_pytest(r.get("stdout") or "")
+        problems = [why for bad, why in (
+            (r.get("timed_out"), "timed out"), (r.get("output_limit_exceeded"), "output limit exceeded"),
+            (r.get("truncated"), "output truncated"), (r.get("exit_code") != 0, f"exit code {r.get('exit_code')}"),
+            (parsed["outcome"] != "OK", f"pytest outcome {parsed['outcome']}"),
+            (not parsed["consistent"], "pytest output inconsistent"),
+            (not parsed["tests_run"], "no test ran"), (parsed["skipped"], f"{parsed['skipped']} skipped")) if bad]
+        rec = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "job": job.id, "commit": commit,
+               "environment": environment, "image": image, "ok": not problems, "why": "; ".join(problems) or None,
+               "tests_run": parsed["tests_run"],
+               "failed": sorted(n for n, x in parsed["tests"].items() if x in ("FAIL", "ERROR"))[:20],
+               "output_tail": ((r.get("stdout") or "") + (r.get("stderr") or ""))[-1500:]}
+        with open(st.checks_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    return rec

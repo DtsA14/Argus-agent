@@ -400,5 +400,12 @@ sandbox:
     # container; built and checked like ledger_py312. Never in web.environments.
     ledger_staging:
       image: null
+    # ledger_py312_up1 / ledger_staging_up1 (docs/reviews/SPEC_DEP_UPGRADE_V0.md U1): upgrade 1 (fastapi 0.143.2, httpx2
+    # instead of httpx); built and checked like ledger_py312. The staging runtime is paired with its sandbox environment in
+    # router/stage.py (RUNTIMES). Never in web.environments.
+    ledger_py312_up1:
+      image: null
+    ledger_staging_up1:
+      image: null
     argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
       image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker
