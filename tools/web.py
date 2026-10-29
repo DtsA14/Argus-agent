@@ -132,6 +132,49 @@ def _lines(path):
     return out
 
 
+def page_path(run_dir, url):
+    """Where the page (or definite refusal) asked for as `url` is kept in a run."""
+    return Path(run_dir) / "web" / "pages" / (hashlib.sha256(url.encode("utf-8")).hexdigest() + ".json")
+
+
+def _stored(path):
+    try:
+        page = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None                                    # missing, or left empty by a crash: as if never stored
+    return page if isinstance(page, dict) and isinstance(page.get("ok"), bool) else None
+
+
+def stored_page(run_dir, url):
+    """The page this run downloaded for `url` ({"ok": True, "text", ...}), or None: never fetched, a refusal, or not
+    readable (SPEC_RESEARCH_STAGE G1). Nothing is downloaded here."""
+    if not isinstance(url, str):
+        return None
+    page = _stored(page_path(run_dir, url))
+    return page if page and page["ok"] is True and isinstance(page.get("text"), str) else None
+
+
+def served_texts(run_dir, url, part_chars):
+    """The text of `url` that ReadDocs served to the model in this run, as runs of consecutive parts (SPEC_RESEARCH_STAGE
+    G2): a part the model never got is not in it, so a quote from memory of an unread part does not pass."""
+    page = stored_page(run_dir, url)
+    if page is None:
+        return []
+    parts = set()
+    for path in sorted((Path(run_dir) / "web").glob("served_*.jsonl")):
+        parts |= {r["part"] for r in _lines(path) if r.get("url") == url and isinstance(r.get("part"), int)
+                  and not isinstance(r.get("part"), bool) and r["part"] >= 1}
+    runs, out = [], []
+    for n in sorted(parts):
+        if runs and runs[-1][-1] == n - 1:
+            runs[-1].append(n)
+        else:
+            runs.append([n])
+    for r in runs:
+        out.append(page["text"][(r[0] - 1) * part_chars: r[-1] * part_chars])
+    return out
+
+
 class DocsReader:
     """The ReadDocs pages of one run (<run_dir>/web) for one attempt. web: the frozen config {hosts, limits}."""
 
@@ -150,17 +193,10 @@ class DocsReader:
                 out[rec["id"]]["bytes"] = rec["bytes"]
         return out
 
-    def _stored(self, path):
-        try:
-            page = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return None                                # missing, or left empty by a crash: as if never stored
-        return page if isinstance(page, dict) and isinstance(page.get("ok"), bool) else None
-
     def _page(self, url, text_room):
         """The stored page (or definite refusal) of url, fetched now within the budgets if there is none."""
-        path = self.dir / "pages" / (hashlib.sha256(url.encode("utf-8")).hexdigest() + ".json")
-        page = self._stored(path)
+        path = page_path(self.dir.parent, url)
+        page = _stored(path)
         if page is not None:
             return page
         why = wf.check_url(url, self.hosts, self.limits)

@@ -198,10 +198,14 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     dari kandidat (c)): `reasoning_content` yang dikirim balik ke DeepSeek tidak dihitung, tagihan sampai 1,91× est di margin 2,5;
     dihitung, 0 dari 2.006 panggilan lewat. Margin DeepSeek 1,5, batas agen 150.000 / drafter 250.000 est, `estimate misses`
     di `status`. Audit: 0 USD lewat cap, 2 reservasi token lewat (dua FAILED_BUDGET, sekarang harness-affected). Merged #240
-- [~] **Harga peak di batas jendela** (jalur ketat, `docs/reviews/SPEC_PEAK_EDGES.md`, PR #241): worst case sebelum kirim
+- [x] **Harga peak di batas jendela** (jalur ketat, `docs/reviews/SPEC_PEAK_EDGES.md`, PR #241): worst case sebelum kirim
     selalu ×peak (0 dari 1.182 panggilan agen dan 0 dari 837 drafter akan terhambat), biaya ledger = pengali tertinggi
-    antara mulai dan selesai (field `peak`), baris peringatan peak di layar konfirmasi router. Mutants 14/14 + 9/9 (review), verify.sh PASS d6be15b. Menunggu
-    "merge"
+    antara mulai dan selesai (field `peak`), baris peringatan peak di layar konfirmasi router. Mutants 14/14 + 9/9 (review),
+    verify.sh PASS d6be15b. Merged #241
+- [x] **Stage riset r1, Alur A → B** (jalur ketat, `docs/reviews/SPEC_RESEARCH_STAGE.md`, PR #242): `argus code --research`,
+    tool baca-saja + ReadDocs, `SubmitHandoff` dengan gate harness (URL diambil di run, kutipan persis di halaman, versi
+    terpasang), `INSUFFICIENT_EVIDENCE` sebagai hasil, `research-ok` sebelum drafter. Mutants 24/24 + 8/8 (review), verify.sh PASS 24552a5. Merged #242;
+    berikutnya pilot dua lengan issue 013 (argus-ledger, host www: 307 bukan 400), butuh "go live"
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
     pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) → spek counter reasoning (#240)
 - [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
