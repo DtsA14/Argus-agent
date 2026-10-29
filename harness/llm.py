@@ -339,26 +339,34 @@ class LLMCaller:
     def _now(self):
         return self.now() if callable(self.now) else (self.now or datetime.now(timezone.utc))
 
-    def _usd(self, tin, tout, cached=0, write_5m=0, write_1h=0):
-        """USD of a call, or None when the model is unpriced (never reported as $0)."""
+    def _usd(self, tin, tout, cached=0, write_5m=0, write_1h=0, *, mult):
+        """USD of a call at peak multiplier `mult`, or None when the model is unpriced (never reported as $0)."""
         if self.price is None:
             return None
         return cost_usd(self.price, input_tokens=tin, output_tokens=tout, cache_read_tokens=cached,
-                        cache_write_tokens=write_5m, cache_write_1h_tokens=write_1h, window=self.window, now=self._now())
+                        cache_write_tokens=write_5m, cache_write_1h_tokens=write_1h, window=None) * mult
+
+    def _worst_mult(self):
+        """SPEC_PEAK_EDGES P1: before sending, a provider with a peak window is always priced at its peak, whatever the
+        hour, so a call that runs into the window (or is billed by its start) never costs more than its worst case."""
+        return max(1, self.price.get("peak_multiplier", 1)) if (self.price and self.window) else 1
+
+    def _actual_mult(self, start, end):
+        """SPEC_PEAK_EDGES P2: the higher multiplier of a call's start and end, never below either billing rule."""
+        return max(multiplier(self.price, self.window, start), multiplier(self.price, self.window, end))
 
     def _worst_usd(self, tin, tout):
         """The most a call can cost: no cache hit, and with caching on every input token may be written (D5)."""
-        plain = self._usd(tin, tout)
+        plain = self._usd(tin, tout, mult=self._worst_mult())
         if not self.cache or plain is None:
             return plain
-        return max(plain, self._usd(tin, tout, write_5m=tin))
+        return max(plain, self._usd(tin, tout, write_5m=tin, mult=self._worst_mult()))
 
     def _output_cap(self, est_in, res):
         """Largest max_tokens that keeps tokens and USD within the reservation (worst case: no cache hits)."""
         cap = min(self.max_output, res.tokens_left - est_in)
         if self.price is not None:
-            mult = multiplier(self.price, self.window, self._now())
-            out_rate = self.price["output"] * mult / 1_000_000
+            out_rate = self.price["output"] * self._worst_mult() / 1_000_000
             usd_after_input = res.usd_left - self._worst_usd(est_in, 0)
             cap = min(cap, int(usd_after_input / out_rate) if out_rate > 0 else cap)
         return cap
@@ -417,6 +425,7 @@ class LLMCaller:
                                                                for m in messages])
             # Written before sending: if the process dies mid-request, reconcile_ledger() finds this
             # started event without a final one and charges the worst case.
+            started_at = self._now()
             emit("llm_call_started", call_id=call_id, attempt=attempt, est_input=est_in, max_tokens=cap,
                  worst_tokens=worst_tokens, worst_usd_nano=worst_nano, worst_usd=_usd(worst_nano))
 
@@ -450,18 +459,20 @@ class LLMCaller:
                 continue
 
             latency = round(time.monotonic() - t0, 3)
+            mult = self._actual_mult(started_at, self._now())
             tin, tout, cached = usage_from_message(msg)
             cu = cache_usage(msg)
             if tin == 0 and tout == 0:
                 tok, nano, charged = worst_tokens, worst_nano, "worst_case_no_usage"
             else:
-                tok, nano, charged = tin + tout, to_nano(self._usd(tin, tout, cached, cu["write_5m"], cu["write_1h"])), "actual"
+                tok, nano, charged = (tin + tout, to_nano(self._usd(tin, tout, cached, cu["write_5m"], cu["write_1h"],
+                                                                     mult=mult)), "actual")
             truncated = is_truncated(msg)
             try:
                 emit("llm_call", call_id=call_id, status="ok", attempt=attempt, est_input=est_in, max_tokens=cap,
                      input_tokens=tin, output_tokens=tout, cache_read=cached, cache_creation=cu["creation"], tokens=tok,
                      usd_nano=nano, usd=_usd(nano), charged=charged, latency_s=latency, truncated=truncated,
-                     **reply_details(msg))
+                     peak=mult > 1, **reply_details(msg))
             finally:
                 reservation.charge(tok, nano)
             if cu["write_1h"]:                   # D5 asks only for 5 minutes: priced at the 1-hour rate, and reported

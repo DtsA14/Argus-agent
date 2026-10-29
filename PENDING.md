@@ -194,10 +194,13 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **Batas kerja `SearchFiles`** (jalur cepat, dari audit batas tool 2026-10-29): 500 berkas / 2 MB per pencarian berhenti di
     209 pencarian SWE (124 "No matches in the files searched"), berkas > 256 KB dilewati; sekarang 5.000 berkas / 64 MB, berkas
     sampai 2 MB (`= READ_MAX_FILE`); seluruh sympy ±1 s. Batas output (20 baris, 200 karakter) tidak berubah
-- [~] **Counter heuristik menghitung reasoning yang dikirim** (jalur ketat, `docs/reviews/SPEC_ESTIMATE_REASONING.md`, PR #240;
+- [x] **Counter heuristik menghitung reasoning yang dikirim** (jalur ketat, `docs/reviews/SPEC_ESTIMATE_REASONING.md`, PR #240;
     dari kandidat (c)): `reasoning_content` yang dikirim balik ke DeepSeek tidak dihitung, tagihan sampai 1,91× est di margin 2,5;
     dihitung, 0 dari 2.006 panggilan lewat. Margin DeepSeek 1,5, batas agen 150.000 / drafter 250.000 est, `estimate misses`
-    di `status`. Audit: 0 USD lewat cap, 2 reservasi token lewat (dua FAILED_BUDGET, sekarang harness-affected). Menunggu
+    di `status`. Audit: 0 USD lewat cap, 2 reservasi token lewat (dua FAILED_BUDGET, sekarang harness-affected). Merged #240
+- [~] **Harga peak di batas jendela** (jalur ketat, `docs/reviews/SPEC_PEAK_EDGES.md`, PR #241): worst case sebelum kirim
+    selalu ×peak (0 dari 1.182 panggilan agen dan 0 dari 837 drafter akan terhambat), biaya ledger = pengali tertinggi
+    antara mulai dan selesai (field `peak`), baris peringatan peak di layar konfirmasi router. Mutants 14/14. Menunggu
     review, `verify.sh`, "merge"
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
     pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) → spek counter reasoning (#240)

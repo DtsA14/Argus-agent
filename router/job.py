@@ -289,6 +289,23 @@ def _needs_key(cfg, roles):
     return sorted(set(out))
 
 
+def _peak_lines(deps, cfg, roles):
+    """SPEC_PEAK_EDGES P3: a warning per provider of the stage's models at (or within 30 minutes of) its peak price.
+    Only shown: it neither refuses nor delays the stage."""
+    from models.pricing import peak_line
+    from models.registry import ModelRef, price_for, window_for
+    try:
+        now = datetime.strptime(deps.clock(), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        now = datetime.now(timezone.utc)
+    lines = []
+    for ref in sorted({ModelRef.parse(cfg["roles"][role]["model"]) for role in roles}, key=str):
+        line = peak_line(ref.provider, price_for(cfg, ref), window_for(cfg, ref.provider), now)
+        if line and line not in lines:
+            lines.append(line)
+    return lines
+
+
 def read_key_file(path, forbidden):
     """The key in a file the router may use (SPEC_ROUTER_KEY_FILE.md K2): a regular file (no symlink) of this user,
     readable by nobody else, outside every forbidden directory (repositories, jobs/). One newline at the end is
@@ -328,6 +345,7 @@ def live(deps, cfg, roles, text, job=None):
         raise Refused("a live stage needs a terminal: the key is typed, never passed (or use --key-file)")
     if deps.key_file and len(keys) > 1:
         raise Refused(f"--key-file holds one key; this stage needs {len(keys)}")
+    text = "\n".join([text, *_peak_lines(deps, cfg, roles)])
     # SPEC_ROUTER_STATUS.md 2.1: the human's decisions and their times, for the supervision measure
     if job is not None:
         job.note(deps, "limits_shown", screen=text)

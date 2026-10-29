@@ -1,6 +1,6 @@
 # Spek: harga peak di batas jendela, dan peringatan peak di router
 
-Status: **draf untuk keputusan Atha**, 2026-10-29. Jalur ketat: P1 dan P2 menyentuh worst case sebelum kirim dan biaya di
+Status: **disetujui Atha 2026-10-29** (§7). Jalur ketat: P1 dan P2 menyentuh worst case sebelum kirim dan biaya di
 ledger (`harness/llm.py`). P3 hanya tampilan di layar konfirmasi router.
 
 ## 1. Keadaan sekarang
@@ -33,52 +33,51 @@ aktual dengan pengali **saat selesai**.
 
 ## 4. Perubahan
 
-**P1. Worst case memakai pengali tertinggi di `[sekarang, sekarang + H]`.** `H` = `llm.peak_lookahead_s`, default **900 s**
-(di atas latensi maksimum terukur, 606 s). `models/pricing.py` mendapat `max_multiplier(price, window, start, seconds)`:
-pengali peak bila ada satu saat di rentang itu yang jatuh di jendela, lalu dipakai `_worst_usd` dan `_output_cap`.
-Akibatnya, mendekati 01:00 dan 06:00 UTC, reservasi sudah memakai harga peak 15 menit lebih awal.
-- Panggilan yang masih berjalan lebih lama dari `H` dan menyeberang ke peak tetap bisa lewat. Guard `budget_violation`
-  tetap menjadi pengaman kedua, dan kasus itu tercatat. Ini dinyatakan sebagai batas klaim, bukan jaminan absolut.
+**P1. Worst case sebelum kirim selalu memakai ×peak** untuk provider yang punya jendela peak (`peak_multiplier` di
+`_worst_usd` dan `_output_cap`), apa pun jamnya, sama seperti estimasi budget node (`harness/budget.py`). Tidak ada lagi
+ketergantungan pada lama panggilan: biaya satu panggilan tidak pernah melebihi worst case-nya karena jam berganti.
+Model tanpa jendela (Anthropic) tidak berubah.
+- Biayanya: reservasi USD di jam off-peak terasa separuh. Dari data, tidak ada yang terhambat: seandainya worst case
+  selalu ×2, **0 dari 1.182** panggilan agen dan **0 dari 837** panggilan drafter akan dibatasi USD lebih awal (ruang
+  paling sempit di drafter masih 3,2× output yang terjadi). Batas token dan input tidak tersentuh.
 
-**P2. Biaya aktual = pengali tertinggi antara waktu mulai dan waktu selesai.** `cost_usd` untuk satu panggilan dihitung
-dengan `max(multiplier(start), multiplier(end))` (start = saat `llm_call_started`). Ledger jadi tidak pernah di bawah
-tagihan untuk kedua aturan penagihan. Kalau DeepSeek ternyata menagih menurut waktu selesai, pilihan ini kadang
-memperkirakan lebih mahal, arah yang aman. Field baru di `llm_call`: `peak` (bool, pengali yang dipakai > 1).
+**P2. Biaya aktual = pengali tertinggi antara waktu mulai dan waktu selesai.** Waktu mulai dibaca tepat sebelum
+`llm_call_started`, waktu selesai sesudah balasan. Ledger jadi tidak pernah di bawah tagihan untuk kedua aturan
+penagihan; kalau DeepSeek menagih menurut waktu selesai, kadang lebih mahal di catatan (arah yang aman). Field baru di
+`llm_call` ok: `peak` (bool, pengali yang dipakai > 1). Karena pengali aktual ≤ ×peak, biaya ≤ worst case (P1).
 
-**P3. Peringatan peak di router.** Layar konfirmasi `argus code`, `approve`, `retry`, dan `redraft` (teks yang juga
-dicatat sebagai `limits_shown`) mendapat satu baris bila sekarang, atau dalam `H` ke depan, jam peak model stage itu:
-`peak: DeepSeek is at 2x now (until 04:00 UTC = 11:00 WIB); off-peak saves about half`. Hanya peringatan: tidak menolak
-dan tidak menunda (`refuse_peak` kalibrasi tidak berubah). Waktu WIB ditulis supaya Atha tidak perlu menghitung.
+**P3. Peringatan peak di router.** Layar konfirmasi `argus code`, `approve`, `retry`, `redraft`, dan `resume` (teks yang
+juga dicatat sebagai `limits_shown`) mendapat satu baris bila model stage itu sedang di jam peak, atau jam peak mulai
+dalam 30 menit:
+`peak: deepseek is at 2x now (until 04:00 UTC = 11:00 WIB); off-peak costs about half` atau
+`peak: deepseek goes to 2x at 01:00 UTC = 08:00 WIB; ...`. Hanya peringatan: tidak menolak dan tidak menunda
+(`refuse_peak` kalibrasi tidak berubah).
 
 ## 5. Tes (masing-masing harus gagal kalau jaminannya dirusak; mutants)
 
-1. `max_multiplier`: 00:59:30 dengan H 900 → 2; 00:44:00 → 1; Sabtu 00:59:30 → 1; 03:59:59 → 2; rentang yang melewati dua
-   jendela (03:55 dengan H 9.000) → 2.
-2. Worst case sebelum kirim pada 00:59:30 (off-peak) memakai ×2. Gagal kalau `_worst_usd` atau `_output_cap` memakai
-   pengali saat ini.
-3. Replay batas: panggilan mulai 00:59:30, selesai 01:00:10 (clock palsu). Biaya di ledger ≤ worst case sebelum kirim, dan
-   reservasi tidak terlampaui.
-4. P2: panggilan mulai 03:59:50 (peak), selesai 04:00:20. Biaya di ledger = harga ×2 dan `peak: true`. Gagal kalau biaya
-   memakai waktu selesai saja.
-5. Panggilan yang seluruhnya off-peak dan jauh dari jendela: biaya dan worst case tidak berubah dari sekarang (×1). Ini
-   penjaga supaya perubahan tidak menaikkan harga di jam biasa.
-6. P3: layar konfirmasi pada 02:00 UTC hari Kamis memuat baris `peak:` dengan `04:00 UTC = 11:00 WIB`; pada 12:00 UTC tidak;
-   pada 00:50 UTC (peak dalam H) memuat baris yang menyebut mulai 01:00 UTC.
+1. Worst case dan `max_tokens` sebelum kirim sama di jam peak, off-peak hari kerja, dan Sabtu (semua ×peak). Gagal kalau
+   `_worst_usd` atau `_output_cap` memakai pengali saat ini.
+2. Batas jendela: mulai 00:59:30 (off-peak), selesai 01:00:10 (clock palsu): biaya di ledger ×2 dan ≤ worst case di
+   `llm_call_started`; reservasi tidak terlampaui.
+3. P2: mulai 03:59:50 (peak), selesai 04:00:20: biaya ×2 dan `peak: true`. Gagal kalau biaya memakai waktu selesai saja.
+   Kebalikannya (mulai off-peak, selesai peak) juga ×2.
+4. Seluruhnya off-peak: biaya ×1 dan `peak: false` (perubahan tidak menaikkan biaya yang tercatat).
+5. Model tanpa jendela: worst case dan biaya tidak berubah.
+6. P3: Kamis 02:00 UTC memuat `until 04:00 UTC = 11:00 WIB`; 00:45 UTC memuat `at 01:00 UTC = 08:00 WIB`; 00:20 dan
+   12:00 UTC dan Sabtu 02:00 tidak memuat baris `peak:`; baris itu ada di `limits_shown`.
 
-Verifikasi: mutants untuk tes 1–5, `/code-review medium` + `/security-review`, `verify.sh` penuh sekali di commit final,
+Verifikasi: mutants untuk tes 1–6, `/code-review medium` + `/security-review`, `verify.sh` penuh sekali di commit final,
 lalu "merge" Atha.
 
 ## 6. Yang tidak diubah, dan batas klaim
 
-- Jendela dan pengali di `config.yaml`, model Anthropic (tanpa jendela peak), `harness/budget.py` (sudah selalu ×peak).
+- Jendela dan pengali di `config.yaml`, `harness/budget.py` (sudah selalu ×peak), estimasi `cache_totals` (hanya
+  laporan).
 - Libur nasional Tiongkok tetap tidak dimodelkan (perkiraan lebih mahal, aman).
-- "Ditolak sebelum kirim" tetap bergantung pada lama panggilan ≤ H untuk harga. Yang absolut hanya bila worst case selalu
-  memakai ×peak (lihat pertanyaan 1).
+- Untuk token, counter heuristik tetap bukan cap absolut (AGENTS.md); P1 hanya menutup celah jam.
 
-## 7. Pertanyaan untuk Atha
+## 7. Keputusan Atha (2026-10-29)
 
-1. P1: jangkauan **H = 900 s** (usul; menyisakan sedikit celah untuk panggilan > 15 menit), atau worst case **selalu
-   ×peak**? Selalu ×peak berarti absolut, tetapi reservasi USD off-peak tinggal separuh: `_output_cap` dan sisa attempt
-   lebih cepat terbatas. Sejauh ini USD jarang mengikat ($0,036 dari $0,45 di `24562`).
-2. P3: peringatan saja (usul), atau `argus code`/`approve` menolak di jam peak kecuali ada `--allow-peak` (seperti kalibrasi)?
-3. Batch berikutnya dijadwalkan off-peak: di luar 08–11 dan 13–17 WIB pada hari kerja?
+1. P1: worst case **selalu ×peak** (bukan jangkauan 900 s): sederhana dan absolut, tanpa hambatan terukur.
+2. P3: **peringatan saja**, tanpa `--allow-peak`. "Jangan sampai ngirit tapi menghambat kerja Argus."
+3. Jadwal batch: Claude menunda run ke off-peak bila tidak mendesak; bukan aturan keras.
