@@ -147,3 +147,22 @@ def test_the_same_search_gives_the_same_result(ws, tmp_path):
     b = box(ws, tmp_path)
     assert search(b, "report_key") == search(b, "report_key")            # safe to run again after a crash
     assert sorted(Path(p).name for p in ws.rglob("*")) == sorted(Path(p).name for p in ws.rglob("*"))
+
+
+def test_a_search_over_a_tree_larger_than_the_old_bounds_is_complete(ws, tmp_path):
+    # SWE runs: 209 searches over sympy (34 MB) stopped after ~150 files (2 MB), 124 of them "No matches in the files
+    # searched"; the work bounds now cover a repository of that size, the output bounds are unchanged
+    big = ws / "src" / "many"
+    big.mkdir()
+    for i in range(600):                                                 # 600 files, 2.4 MB: past 500 files and 2 MB
+        (big / f"m{i:03d}.py").write_text(f"# {i}\n" + "x = 1\n" * 680)
+    (big / "m599.py").write_text("def clear_denoms(f):\n" + "x = 1\n" * 680)
+    out = search(box(ws, tmp_path), "def clear_denoms")
+    assert out.splitlines() == ["src/many/m599.py:1: def clear_denoms(f):"]
+
+
+def test_a_file_as_large_as_read_file_reads_is_searched(ws, tmp_path):
+    assert ct.SEARCH_MAX_FILE == ct.READ_MAX_FILE
+    (ws / "src" / "ode.py").write_text("x = 1\n" * 300_000 + "def dsolve(eq):\n")   # 1.8 MB, over the old 256 KB
+    out = search(box(ws, tmp_path), "def dsolve")
+    assert out.splitlines() == ["src/ode.py:300001: def dsolve(eq):"]

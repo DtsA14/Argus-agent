@@ -190,6 +190,9 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     `20801`/`19954` batch 5). Sekarang sampai 2 MB (`EDIT_MAX_FILE`). Diagnosis lama "agen tidak pernah menulis" dikoreksi di RESULT
 - [x] **Dev set 2** sesudah perbaikan `EditFile` (`pilots/swe_v0/dev2/RESULT.md`, bukan klaim): `20801`, `19954`, `24562` **3/3
     `resolved`**, masing-masing 1 attempt, 3–7 langkah, $0,0615 total; patch setara dengan upstream
+- [x] **Batas kerja `SearchFiles`** (jalur cepat, dari audit batas tool 2026-10-29): 500 berkas / 2 MB per pencarian berhenti di
+    209 pencarian SWE (124 "No matches in the files searched"), berkas > 256 KB dilewati; sekarang 5.000 berkas / 64 MB, berkas
+    sampai 2 MB (`= READ_MAX_FILE`); seluruh sympy ±1 s. Batas output (20 baris, 200 karakter) tidak berubah
 - [ ] **Sesudah batch 5 (kandidat, belum diputuskan):** (b) drafter: cari titik nilai salah
     pertama kali muncul, bukan hanya gejala di issue (`20428`); (c) `estimate_miss` per run di `status` (H3 spek margin, `19954`)
 - [x] **Jalur cepat #1** (#215): `ReadFile` per rentang baris (berkas > 100 KB tidak lagi ditolak), `ListFiles` per direktori dan maks
