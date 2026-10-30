@@ -35,6 +35,36 @@ from router import job as rj  # noqa: E402
 from runner import load_config  # noqa: E402
 
 
+def stage_viewer(o, deps):
+    """argus stage viewer-deploy|viewer-rollback|viewer-status|viewer-smoke|proxy (SPEC_PWA_VIEWER S)."""
+    from router import stage_viewer as sv
+    from tools import sandbox as sb
+    if o.stage_cmd == "proxy":
+        sv.serve()
+        return 0
+    if o.stage_cmd == "viewer-smoke":
+        results = sv.smoke(sv.Viewer(), sv.PORT)
+        for check, ok, detail in results:
+            print(f"{'ok  ' if ok else 'FAIL'} {check}: {detail}")
+        return 0 if results and all(r[1] for r in results) else 1
+    try:
+        if o.stage_cmd == "viewer-deploy":
+            cfg = load_config(o.config)
+            cfg["sandbox"] = sandbox_cfg(o.config)
+            deps.assume_yes = o.yes
+            sv.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
+        elif o.stage_cmd == "viewer-rollback":
+            deps.assume_yes = o.yes
+            sv.rollback(deps=deps)
+    except (rj.Refused, ConfigError, OSError, ValueError, intake.IntakeError, subprocess.TimeoutExpired,
+            sb.SandboxUnavailable) as e:
+        print(f"refused: {type(e).__name__ + ': ' if not isinstance(e, rj.Refused) else ''}{e}", file=sys.stderr)
+        print(sv.status())
+        return 2
+    print(sv.status())
+    return 0
+
+
 def main(argv=None, deps=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config")
@@ -77,8 +107,8 @@ def main(argv=None, deps=None):
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
     p.add_argument("--note")
-    g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md): "
-                                     "deploy | rollback | status | check")
+    g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md, "
+                                     "SPEC_PWA_VIEWER.md): deploy | rollback | status | check | viewer-* | proxy")
     gs = g.add_subparsers(dest="stage_cmd", required=True)
     gd = gs.add_parser("deploy")
     gd.add_argument("job")
@@ -89,8 +119,13 @@ def main(argv=None, deps=None):
     gc.add_argument("job")
     gc.add_argument("--env", required=True, choices=sorted(e for e in STAGING_RUNTIMES.values() if e),
                     help="the sandbox environment of a staging runtime")
-    for p_ in (gd, gs.add_parser("rollback")):
+    gvd = gs.add_parser("viewer-deploy", help="the viewer job's applied commit, built in pwa_node22 and published")
+    gvd.add_argument("job")
+    for p_ in (gd, gs.add_parser("rollback"), gvd, gs.add_parser("viewer-rollback")):
         p_.add_argument("--yes", action="store_true", help="the deployment was approved in chat (\"go live\")")
+    gs.add_parser("viewer-status")
+    gs.add_parser("viewer-smoke", help="the smoke test of the live viewer release through the proxy on 127.0.0.1:8710")
+    gs.add_parser("proxy", help="the viewer's proxy on 127.0.0.1:8710, forever (systemd --user)")
     gs.add_parser("status")
     for name, text in (("refresh", "a new snapshot of the real jobs' ledgers (allowlisted fields, validated, atomic)"),
                        ("monitor", "refresh, then the smoke test of the live release; recorded; changes no container"),
@@ -114,6 +149,8 @@ def main(argv=None, deps=None):
                 text = sg.status()
                 print(text)
                 return 2 if text.startswith(sg.STATE_PROBLEM) else 0
+            if o.stage_cmd.startswith("viewer-") or o.stage_cmd == "proxy":   # never a container of argus-ledger
+                return stage_viewer(o, deps)
             cfg = load_config(o.config)
             cfg["sandbox"] = sandbox_cfg(o.config)
             if o.stage_cmd in ("refresh", "monitor", "report"):   # no container is started, stopped or replaced
@@ -126,7 +163,8 @@ def main(argv=None, deps=None):
                         print(f"  excluded {e['job']}: {e['why']}")
                     return 0
                 if o.stage_cmd == "monitor":
-                    rec = sd.monitor(st, Path(o.jobs_dir))
+                    from router import stage_viewer as sv
+                    rec = sd.monitor(st, Path(o.jobs_dir), viewer=sv.Viewer(ledger=st))
                     print(json.dumps(rec, sort_keys=True))
                     return {True: 0, None: 0}.get(rec.get("ok"), 1)
                 print(f"report: {sd.report(st, sg._get)}")

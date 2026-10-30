@@ -445,9 +445,11 @@ def _append(path, rec):
         f.write(json.dumps(rec, sort_keys=True) + "\n")
 
 
-def monitor(st, source, *, clock=time.gmtime):
+def monitor(st, source, *, clock=time.gmtime, viewer=None):
     """Refresh, then smoke-test the live release against the active snapshot; one record in monitor.jsonl. Never a
-    docker start, stop or rm, never state.json, never the active snapshot removed (A5). Returns the record."""
+    docker start, stop or rm, never state.json, never the active snapshot removed (A5). With `viewer`
+    (SPEC_PWA_VIEWER S3), the viewer's live release is smoke-tested too, through the always-on proxy; its release is
+    never changed, and a failed viewer smoke test fails the run. Returns the record."""
     rec = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", clock())}
     try:
         with refresh_lock(st.data):
@@ -469,10 +471,27 @@ def monitor(st, source, *, clock=time.gmtime):
             else:
                 rec["ok"] = False
                 rec.setdefault("why", "nothing is live")
+            if viewer is not None:
+                rec["viewer"] = _viewer_smoke(viewer)
+                if rec["viewer"] and not rec["viewer"]["ok"] and rec["ok"]:
+                    rec["ok"] = False
     except Refused as e:                              # busy: another refresh or monitor; nothing was touched
         rec.update(ok=None, why=str(e)[:300])
     _append(st.base / "monitor.jsonl", rec)
     return rec
+
+
+def _viewer_smoke(viewer):
+    """{release, ok, smoke} of the viewer's live release (the data lock is held by monitor), or None: nothing live."""
+    from . import stage_viewer as sv
+    try:
+        live = viewer.state()["live"]
+    except rj.Refused as e:
+        return {"release": None, "ok": False, "why": str(e)[:300]}
+    if not live:
+        return None
+    results = sv.smoke(viewer, sv.PORT, held=True)
+    return {"release": live, "ok": all(r[1] for r in results), "smoke": [list(r) for r in results]}
 
 
 def busy(rec):
