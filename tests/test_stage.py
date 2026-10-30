@@ -792,7 +792,7 @@ def test_a_failure_to_log_the_new_release_leaves_the_old_one_live_in_the_state_t
 
 
 @pytest.mark.parametrize("content", ["{", "", "[]", '{"live": "x"}', '{"live": "x", "history": ["y"]}',
-                                     '{"live": null, "history": [1]}'])
+                                     '{"live": null, "history": [1]}', '{"live": "x", "history": ["x", "y"]}'])
 def test_an_unreadable_state_refuses_deploy_and_rollback_and_stops_nothing(tmp_path, repo, fake_docker, content):
     r, c = repo
     st, up, calls = fake_docker
@@ -814,11 +814,14 @@ def test_a_fresh_staging_has_nothing_live(tmp_path):
     assert st.state() == {"live": None, "history": []}
 
 
-@pytest.mark.parametrize("err, refused", [("Error response from daemon: No such container: x", False),
-                                          ("permission denied while trying to connect to the docker daemon", True)])
-def test_a_container_that_was_not_removed_is_not_reported_stopped(tmp_path, err, refused):
-    st = sg.Staging(tmp_path, run=lambda *a, **k: (1, "", err))
-    if refused:
+@pytest.mark.parametrize("still_there", [False, True])
+def test_a_container_that_was_not_removed_is_not_reported_stopped(tmp_path, still_there):
+    def run(*a, **k):
+        if a[0] == "rm":
+            return 1, "", "some docker error"
+        return (0 if still_there else 1), "", ""                  # docker inspect: is it still there?
+    st = sg.Staging(tmp_path, run=run)
+    if still_there:
         with pytest.raises(sg.Refused, match="could not be removed"):
             st.remove(sg.PREFIX + "jx-0123456789ab")
     else:
@@ -878,3 +881,95 @@ def test_a_failure_to_log_a_rollback_leaves_the_current_release_live(tmp_path, r
     with pytest.raises(OSError, match="disk full"):
         sg.rollback(cfg=None, deps=deps(), staging=st)
     assert st.state()["live"] == second and up == {sg.PREFIX + second}
+
+
+def failing_rm(calls, up):
+    """docker for fake_docker whose rm always fails and leaves the container running."""
+    def run(*a, **k):
+        calls.append(a)
+        if a[0] == "ps":
+            return 0, "\n".join(sorted(up)), ""
+        if a[0] == "rm":
+            return 1, "", "daemon hiccup"
+        if a[0] == "inspect":
+            return (0 if a[-1] in up else 1), "", ""
+        return 0, "", ""
+    return run
+
+
+def test_a_record_failure_closes_the_live_event_it_left(tmp_path, repo, fake_docker, monkeypatch):
+    r, c = repo
+    st, up, calls = fake_docker
+    jobs = tmp_path / "jobs"
+    first = sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    monkeypatch.setattr(st, "_save", lambda state: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError, match="disk full"):
+        sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    second = [e for e in sg._jsonl(st.log_path) if e.get("release", "").startswith("jb-")]
+    assert [e["event"] for e in second][-2:] == ["live", "stopped"] and up == {sg.PREFIX + first}
+
+
+def test_an_old_release_that_cannot_be_stopped_does_not_fail_a_deploy_that_went_live(tmp_path, repo, fake_docker):
+    r, c = repo
+    st, up, calls = fake_docker
+    jobs = tmp_path / "jobs"
+    first = sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    st.run = failing_rm(calls, up)
+    d = deps()
+    second = sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg=None, deps=d, jobs_dir=jobs, staging=st)
+    assert st.state()["live"] == second and "staged" in [e["what"] for e in rj.open_job("jb", jobs).data["log"]]
+    assert any(first in line and "could not be stopped" in line for line in d.echo.lines)
+    assert [e["event"] for e in sg._jsonl(st.log_path)][-1] == "stop_failed"
+
+
+def test_a_failed_cleanup_does_not_hide_why_the_deploy_failed(tmp_path, repo, fake_docker, monkeypatch):
+    r, c = repo
+    st, up, calls = fake_docker
+    st.run = failing_rm(calls, up)
+    monkeypatch.setattr(st, "smoke", lambda release: (_ for _ in ()).throw(RuntimeError("socket broke")))
+    with pytest.raises(RuntimeError, match="socket broke"):
+        sg.deploy(applied_job(tmp_path / "jobs", "ja", r, c["good"]), cfg=None, deps=deps(),
+                  jobs_dir=tmp_path / "jobs", staging=st)
+
+
+def test_a_hung_docker_logs_after_a_passed_smoke_does_not_fail_the_deploy(tmp_path, repo, fake_docker, monkeypatch):
+    r, c = repo
+    st, up, calls = fake_docker
+    monkeypatch.setattr(st, "logs", lambda name, release, what: (_ for _ in ()).throw(
+        subprocess.TimeoutExpired(["docker", "logs"], 15)))
+    rel = sg.deploy(applied_job(tmp_path / "jobs", "ja", r, c["good"]), cfg=None, deps=deps(),
+                    jobs_dir=tmp_path / "jobs", staging=st)
+    assert st.state()["live"] == rel and up == {sg.PREFIX + rel}
+
+
+def test_copying_logs_waits_only_briefly(tmp_path):
+    seen = []
+    st = sg.Staging(tmp_path, run=lambda *a, **k: seen.append(k) or (0, "", ""))
+    st.dir("jx-0123456789ab").mkdir(parents=True)
+    st.logs(sg.PREFIX + "jx-0123456789ab", "jx-0123456789ab", "stop")
+    assert seen and 0 < seen[0]["timeout"] <= 15
+
+
+def test_a_dangling_state_link_is_not_a_fresh_staging(tmp_path):
+    st = sg.Staging(tmp_path)
+    tmp_path.mkdir(exist_ok=True)
+    st.state_path.symlink_to(tmp_path / "gone.json")
+    with pytest.raises(sg.Refused, match="state.json"):
+        st.state()
+
+
+def test_status_exits_2_when_the_state_cannot_be_used(tmp_path, monkeypatch):
+    import argus
+    st = sg.Staging(tmp_path)
+    st.base.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(sg, "Staging", lambda: st)
+    assert argus.main(["stage", "status"]) == 0
+    st.state_path.write_text("{")
+    assert argus.main(["stage", "status"]) == 2
+
+
+def test_a_socket_that_never_listens_says_so(tmp_path):
+    st = sg.Staging(tmp_path, wait_s=0.5)
+    (st.dir("jx-0123456789ab") / "sock").mkdir(parents=True)
+    results = st.smoke("jx-0123456789ab")
+    assert results and all(not ok and "did not accept a connection within" in d for _, ok, d in results)

@@ -62,6 +62,8 @@ LIMITS = ["--memory", "256m", "--pids-limit", "64", "--cpus", "1"]
 WANT_LIMITS = {"Memory": 256 * 1024 * 1024, "PidsLimit": 64, "NanoCpus": 1_000_000_000}   # LIMITS as docker shows them
 MOUNTS = {"/app": False, "/entry": False, "/data": False, "/run/argus": True}   # destination: writable
 SOCKET_WAIT_S = 30
+LOGS_TIMEOUT_S = 15                                        # copying logs is a convenience: never worth a long wait
+STATE_PROBLEM = "staging state: "                          # how status() starts when state.json cannot be used
 # SPEC_STAGING_V0 S4: what the synthetic jobs must give (fixtures/staging/README); a release that reads them wrongly fails
 SMOKE = [(HOST, "/summary", 200, lambda b: json.loads(b) == {"jobs": 2, "cost_nano": 2500000, "cost_usd": "0.0025",
                                                                "skipped": 0}),
@@ -94,16 +96,17 @@ class Staging:
     def state(self):
         """{"live", "history"}; nothing live only when there is no state file yet. An unreadable or malformed one is
         Refused: read as "nothing live" it would make reconcile() stop the live release and lose the rollback history."""
-        if not self.state_path.exists():
-            return {"live": None, "history": []}
         try:
+            if not os.path.lexists(self.state_path):   # a dangling symlink is not "no state"
+                return {"live": None, "history": []}
             s = json.loads(self.state_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
             s, why = None, f"{type(e).__name__}: {e}"
         else:
             why = "not a staging state"
         if isinstance(s, dict) and isinstance(s.get("history"), list) and \
-                all(isinstance(r, str) for r in s["history"]) and (s.get("live") is None or s["live"] in s["history"]):
+                all(isinstance(r, str) for r in s["history"]) and \
+                (s.get("live") is None or (s["history"] and s["live"] == s["history"][-1])):
             return s
         raise Refused(f"{self.state_path} is unreadable ({why}); nothing was changed: restore it by hand "
                       f"(releases.jsonl has every built, live and stopped event)")
@@ -239,7 +242,7 @@ class Staging:
             raise Refused(f"the container did not start: {err.strip()[:300]}")
         problems = self.isolation_problems(name, release, image, d)
         if problems:
-            self.remove(name)
+            self.discard(name, "not isolated")
             raise Refused(f"container {name} is not isolated as required: " + "; ".join(problems))
         return name
 
@@ -287,12 +290,16 @@ class Staging:
         """[(check, ok, detail)] of S4, through the release's socket from this host."""
         path = self.dir(release) / "sock" / "app.sock"
         deadline = time.monotonic() + self.wait_s
-        while time.monotonic() < deadline:             # until the app listens: the file exists from bind(), before
-            try:                                       # listen(), and a connect then is refused
-                _connect(path).close()
+        while True:                                    # until the app listens: the file exists from bind(), before
+            left = deadline - time.monotonic()         # listen(), and a connect then is refused
+            if left <= 0:
+                return [(f"{host} {url} -> {status}", False, f"the socket did not accept a connection within "
+                         f"{self.wait_s}s") for host, url, status, _ in SMOKE]
+            try:
+                _connect(path, timeout=min(left, 10)).close()
                 break
             except OSError:
-                time.sleep(0.2)
+                time.sleep(min(0.2, max(left, 0)))
         out = []
         for host, url, status, body_ok in SMOKE:
             check = f"{host} {url} -> {status}"
@@ -305,7 +312,7 @@ class Staging:
         return out
 
     def logs(self, name, release, what):
-        code, out, err = self.run("logs", "--tail", "200", name)
+        code, out, err = self.run("logs", "--tail", "200", name, timeout=LOGS_TIMEOUT_S)
         d = self.dir(release) / "logs"
         d.mkdir(exist_ok=True)
         (d / f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{what}.txt").write_text(out + err, encoding="utf-8")
@@ -315,8 +322,21 @@ class Staging:
         if not name.startswith(PREFIX) or not RELEASE.match(name[len(PREFIX):]):
             raise Refused(f"{name!r} is not a staging container")
         code, _, err = self.run("rm", "-f", name)
-        if code and "no such container" not in err.lower():
+        if code and self.run("inspect", "--type", "container", name)[0] == 0:
             raise Refused(f"container {name} could not be removed ({err.strip()[:200]}); it may still be running")
+
+    def discard(self, name, why):
+        """remove() on a path that already has its answer (a failure being raised, or a release already live): a
+        container that cannot be removed is noted, not raised; the next deploy or rollback reconciles it."""
+        try:
+            self.remove(name)
+            return True
+        except Refused as e:
+            try:
+                self.note("stop_failed", release=name[len(PREFIX):], why=why, error=str(e)[:300])
+            except OSError:
+                pass
+            return False
 
     def running(self):
         """Names of the staging containers docker runs now (by label; only names this module would give)."""
@@ -338,36 +358,48 @@ class Staging:
         name = self.start(release, image)
         try:
             results = self.smoke(release)
-            self.logs(name, release, "smoke")
         except BaseException:
-            self.remove(name)
+            self.discard(name, "smoke test stopped")
             raise
+        try:
+            self.logs(name, release, "smoke")
+        except Exception:                              # noqa: BLE001  (the logs are a convenience, never a verdict)
+            pass
         ok = all(r[1] for r in results)
         self.note("smoke", release=release, ok=ok, results=[list(r) for r in results], why=why)
         if not ok:
-            self.remove(name)
-            self.note("stopped", release=release, why="smoke_failed")
+            stopped = self.discard(name, "smoke_failed")
+            if stopped:
+                self.note("stopped", release=release, why="smoke_failed")
             failed = "; ".join(f"{c}: {d}" for c, k, d in results if not k)
-            raise Refused(f"release {release} failed its smoke test ({failed}); it was stopped, "
+            raise Refused(f"release {release} failed its smoke test ({failed}); "
+                          + ("it was stopped, " if stopped else "it could not be removed (the next command stops it), ")
                           + (f"{live} is still live" if live else "nothing is live"))
         try:
             commit_state()
         except BaseException:
-            self.remove(name)
+            if self.discard(name, "record failed"):
+                try:                                   # the live event may be in the log already: close it
+                    self.note("stopped", release=release, why="record failed; not live")
+                except OSError:
+                    pass
             raise
         if live and live != release:
             try:
                 self.logs(PREFIX + live, live, "stop")
             except Exception:                          # noqa: BLE001  (a hung `docker logs` too: the stop is not optional)
                 pass                                   # the logs are a convenience; the stop is not
-            self.remove(PREFIX + live)
-            self.note("stopped", release=live, why=f"{why}: {release} is live")
+            if self.discard(PREFIX + live, f"{why}: {release} is live"):
+                self.note("stopped", release=live, why=f"{why}: {release} is live")
+            else:
+                deps.echo(f"warning: {live} could not be stopped; {release} is live, and the next staging command "
+                          f"stops {live}")
         return results
 
 
-def _connect(sock_path):
+def _connect(sock_path, timeout=10):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(10)
+    s.settimeout(timeout)
     try:
         dfd = os.open(Path(sock_path).parent, os.O_RDONLY | os.O_DIRECTORY)
         try:                               # a socket path is at most 107 bytes: connect through the directory's fd
@@ -590,7 +622,7 @@ def status(*, staging=None):
     try:
         state = st.state()
     except Refused as e:
-        return f"staging state: {e}"
+        return f"{STATE_PROBLEM}{e}"
     rels = st.releases()
     live = state["live"]
     lines = [f"staging live: {live or 'nothing'}"]

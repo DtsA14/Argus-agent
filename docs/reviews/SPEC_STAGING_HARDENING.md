@@ -29,3 +29,18 @@ dipilih Claude, disetujui Atha. Tidak ada perilaku baru untuk operator selain pe
   bukan live; teks dibiarkan.
 - Format image `repo@sha256:…` vs id di `docker inspect`: pin kita selalu id (`sha256:`), tidak terjadi.
 - Symlink di rilis dan `snapshot` (`SPECIAL`): argus-ledger tidak punya symlink; dicatat sebagai batas.
+
+## Review (/code-review medium #249, 2026-10-30)
+
+Semua 10 temuan diperbaiki (mutants 17/17; 23/23 dari #246 tetap):
+- `_save` gagal sesudah event `live` tercatat → event `stopped` ("record failed; not live") menutupnya.
+- Rilis lama yang tidak bisa dihentikan sesudah rilis baru live **tidak** menggagalkan deploy/rollback: peringatan di
+  layar, event `stop_failed`, `job.note("staged")` tetap; perintah staging berikutnya me-`reconcile` container itu.
+- Pembersihan yang gagal (`discard`) tidak menutupi error aslinya (isolasi, smoke, record).
+- Menyalin log smoke tidak pernah menentukan hasil; `docker logs` dibatasi 15 s (`LOGS_TIMEOUT_S`).
+- `state.json` symlink yang putus atau tidak terbaca (mis. EACCES) → ditolak, bukan "staging baru"; `live` harus
+  `history[-1]`; `argus stage status` keluar 2 bila state tidak bisa dipakai.
+- Smoke menunggu dalam batas `SOCKET_WAIT_S` (timeout connect ≤ sisa waktu); socket yang tidak pernah mendengar →
+  semua cek gagal dengan "did not accept a connection within …".
+- `docker rm` yang gagal dicek dengan `docker inspect` (container masih ada → `Refused`), bukan teks "No such
+  container" (di VM ini `rm -f` atas container yang tidak ada keluar 0).
