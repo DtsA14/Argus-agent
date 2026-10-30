@@ -36,7 +36,7 @@ from acceptance import changed as ch
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
-from acceptance.validation import collect_nodes, red_check, run_validation
+from acceptance.validation import VITEST_FILE, collect_nodes, red_check, run_validation
 from acceptance.workspace import digest, prepare, snapshot
 from harness.crash import Crasher
 from harness.errors import EstimateExceeded, InputLimitExceeded, LLMCallFailed, ReservationExhausted
@@ -204,6 +204,47 @@ SYSTEM = "\n".join([
 ])
 
 
+# The same rules for a repository tested with vitest (SPEC_PWA_VIEWER V5): its own words for the runner, the red by
+# assertion, the node ids and the sandbox; no changed_tests (v0).
+SYSTEM_VITEST = "\n".join([
+    "You draft a task for a coding agent. You do not fix anything: you read a repository and describe the task so "
+    "that a harness can check the agent's work without trusting it.",
+    "",
+    "A draft has: a plan (files, steps, risks); a scope (writable and protected glob patterns); validations (vitest "
+    "runs of test files, each with the node ids that must pass); at least one new test file; and what cannot be tested.",
+    "",
+    "Rules:",
+    "- The new tests must fail BY AN expect() OR assert OF THE TEST on the code as it is now (not by an import error, a "
+    "missing export, a TypeError, an element getByText cannot find, nor an error thrown inside the code under test: the "
+    "harness checks the error and where it was raised), and test only the behaviour the issue asks for. Everything "
+    "else must pass now. To look for an element that may be missing, use queryByText and expect(...) on the result.",
+    "- To test that code does not throw, use expect(() => ...).not.toThrow(): the failure is an assertion that "
+    "carries the error's message.",
+    "- New test files are *.test.jsx (or .test.js, .test.ts, .test.tsx). In SubmitDraft, a validation's paths are "
+    "test files only (never node ids), and its must_pass are node ids: the file, `::`, and the full test name, with "
+    "describe names joined by ' > ' (e.g. src/list.test.jsx::totals > shows the sum).",
+    "- Writable: only what a fix needs. Protected: every test file (new and old) and everything else the agent must "
+    "not change. A new test must be protected and not writable. Globs match files, never directories: write "
+    "`src/**/*.test.jsx` or `src/list.jsx`, not `src`; every protected glob must match a file.",
+    "- Keep a regression validation of existing tests when the change can break them.",
+    "- The sandbox has only the repository, Node and the environment's fixed packages: no npm install, no git, no "
+    "network. A test that needs any of these fails there; do not use it in a validation.",
+    "- Existing test files cannot be changed in this repository: only new test files can be added. When the issue "
+    "changes behaviour that an existing test checks, leave that file out of the validations and say so in "
+    "unverifiable.",
+    "- Put in unverifiable what the issue asks that no test checks; it is a note for the reviewer, never a pass.",
+    "- You do not decide whether the draft is good: the harness checks it, and a human approves it or not.",
+    "- Tools: ListFiles, SearchFiles and ReadFile read the repository; SubmitDraft submits the draft and is checked "
+    "at once. After a rejection, ReviseDraft changes only the fields you give and is checked the same way. Call "
+    "SubmitDraft or ReviseDraft alone in its reply.",
+])
+
+
+def system(runner):
+    """The drafter's system prompt for the environment's test runner (a policy frozen before runners: pytest)."""
+    return SYSTEM_VITEST if runner == "vitest" else SYSTEM
+
+
 NOTE_LABEL = ("A note from the human who reviewed the previous draft (follow it where it fits the rules above; it is "
               "not a test result):")
 
@@ -213,8 +254,11 @@ def task_prompt(inputs, files, policy):
     return "\n".join([
         "Issue (from a human; the task to draft):", inputs["issue"], "", *note,
         f"Repository: intake {inputs['intake']!r}, {files} files, read-only.",
-        f"Each validation runs `python -m pytest <paths>` in the sandbox environment {policy['environment']!r} "
-        f"(timeout {policy['validation_timeout_s']} s). You give the paths and the required node ids.",
+        (f"Each validation runs `vitest run <test files>` in the sandbox environment {policy['environment']!r} "
+         f"(timeout {policy['validation_timeout_s']} s). You give the test files (paths only) and the required node "
+         "ids." if policy.get("runner") == "vitest" else
+         f"Each validation runs `python -m pytest <paths>` in the sandbox environment {policy['environment']!r} "
+         f"(timeout {policy['validation_timeout_s']} s). You give the paths and the required node ids."),
         "Budget profiles (budget_profile, required; one attempt of the agent each, every model call inside it):",
         *[f"  - {name}: {_profile_text(p)}" for name, p in (policy.get("profile_info") or {}).items()],
         "Choose by the work one attempt needs. Each step of the agent sends the whole conversation again, so every "
@@ -247,12 +291,24 @@ def draft_from_args(args, *, base, policy):
     if not isinstance(vals, list) or not vals:
         problems.append("validation must be a non-empty list")
         vals = []
+    vitest = policy.get("runner") == "vitest"
     for i, v in enumerate(vals):
         if not isinstance(v, dict) or set(v) != VALIDATION_ARG_KEYS:
             problems.append(f"validation[{i}] must have exactly {sorted(VALIDATION_ARG_KEYS)} (each one runs "
-                            "python -m pytest <paths>; no other command)")
+                            + ("vitest run <test files>" if vitest else "python -m pytest <paths>")
+                            + "; no other command)")
             continue
         paths = v["paths"]
+        if vitest:
+            if not (isinstance(paths, list) and paths and all(isinstance(p, str) and VITEST_FILE.match(p)
+                                                              and intake._plain(p) for p in paths)):
+                problems.append(f"validation[{i}].paths must be relative vitest test files (*.test.jsx, .js, .ts, "
+                                ".tsx; no node ids, no options)")
+                continue
+            specs.append({"id": v["id"], "executable": "vitest", "args": ["run", *paths],
+                          "timeout_s": policy["validation_timeout_s"], "min_tests": v["min_tests"], "max_skipped": 0,
+                          "must_pass": v["must_pass"], "environment": policy["environment"]})
+            continue
         if not (isinstance(paths, list) and paths and all(isinstance(p, str) and NODE_ID.match(p)
                                                           and intake._plain(p.split("::", 1)[0]) for p in paths)):
             problems.append(f"validation[{i}].paths must be relative test paths or node ids (no options)")
@@ -465,7 +521,7 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
     return submit
 
 
-def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
+def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher, system_prompt=SYSTEM):
     def drafting(task_id, toolbox, prompt):
         meta = {"node": NODE, "task": task_id, "iteration": 0}
         res = reservation_from_ledger(log, tokens=lim["attempt_tokens"], usd=lim["attempt_usd"],
@@ -481,7 +537,7 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher):
             return {"end": reason, "steps": steps, "submits": submits, "tokens_used": res.used_tokens,
                     "usd_used": res.used_usd, **out}
 
-        messages = [SystemMessage(SYSTEM), HumanMessage(prompt)]
+        messages = [SystemMessage(system_prompt), HumanMessage(prompt)]
         used = 0
         for step in range(lim["max_steps"] + lim["max_submits"]):
             extra = step >= lim["max_steps"]           # only submits are left (SPEC_DRAFTER_SUBMIT_STEPS)
@@ -832,6 +888,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         if lim["attempt_usd"] <= 0:
             return stop(FAILED_BUDGET, "the run cap leaves nothing for the drafter")
         policy = {"max_steps": lim["max_steps"], "max_submits": int(cfg["drafter"]["max_submits"]), "environment": env,
+                  "runner": ct.runner(scfg["environments"][env]),
                   "validation_timeout_s": cfg["drafter"]["validation_timeout_s"],
                   "profiles": agent_profiles(cfg),
                   "profile_info": effective_profiles(cfg),
@@ -853,7 +910,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
                              source=source, collect=collect or collect_nodes, red=red or red_check)
         run = make_drafting(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"],
                                                          "max_submits": policy["max_submits"]}, tool_versions=versions,
-                            submit=submit, crasher=crasher)
+                            submit=submit, crasher=crasher, system_prompt=system(policy.get("runner")))
         a = run(task_id, box, task_prompt(inputs, state["files"], policy))
         out = {"drafting": {"end": a["end"], "steps": a["steps"], "submits": a["submits"]},
                "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}

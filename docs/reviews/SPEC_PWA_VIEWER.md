@@ -36,7 +36,7 @@ ada di hasil, dan JSON berada di akhir output; selain itu **gagal tertutup**. `s
 pytest (`no_skip`). Batasnya sama dengan pytest dan ditulis di docstring: kode yang dites berjalan di proses yang sama
 dan bisa memalsukan output; ditahan oleh sandbox dan berkas tes yang dilindungi scope.
 
-**V3. Daftar tes** (`collect_nodes`): `vitest list --json --configLoader runner FILE ...` → node id seperti V2.
+**V3. Daftar tes** (`collect_nodes`): hanya dipakai `changed_tests`, yang ditolak untuk vitest di v0 (§9); jadi **tidak dibuat** di PR 1. Tes baru yang tidak terkumpul tetap tertangkap: baseline menyebut node wajib yang tidak berjalan ("was not collected").
 
 **V4. Merah karena assertion** (W2a, drafter): tes baru wajib gagal karena `AssertionError` (dari `expect`/`assert`)
 dan baris gagal teratas berada di berkas tes itu. Error lain (mis. `TestingLibraryElementError` dari `getByText`,
@@ -167,6 +167,7 @@ dipercaya hanya bila himpunan modul yang berjalan **sama persis** dengan berkas 
 tertutup.
 
 Isi PR 1:
+- Hasil PR 1 (Claude): image `pwa_node22` distroless (node + library + `/node_modules`, tanpa shell/npm/git), rootfs sama di dua build (id image tidak, seperti environment Python); `check_env_image.py pwa_node22` 6/6 PASS.
 - `acceptance/validation.py`: bentuk kontrak `{"executable": "vitest", "args": ["run", FILE, ...]}` (V1, tanpa `-t`
   di v0); satu skrip harness untuk validasi dan red check; `judge_result`, `collect_nodes`, `red_check` memilih
   runner dari `kind()`; record red check berbentuk sama dengan pytest (`outcome`, `type`, `assertion`, `path`,
@@ -180,6 +181,6 @@ Isi PR 1:
   error vitest untuk agen.
 - Environment `pwa_node22` (§3), `scripts/build_env_node.sh`, cek di `scripts/check_env_image.py`, `config.yaml`
   (`runner: vitest`; environment tanpa `runner` = pytest seperti sekarang).
-- E1 (dependency repo ⊆ lock environment) dicek di intake/validasi.
+- E1 (dependency repo ⊆ lock environment) **pindah ke PR 2** (build rilis): di PR 1 paket yang tidak ada di image membuat berkas tes gagal dimuat, dan itu sudah gagal tertutup dengan pesan yang menyebut impornya. Fixture `vitest_demo` dites cocok dengan lock.
 - Tes: unit (parser, judge, kontrak, draf) + integrasi di sandbox nyata dengan repo contoh (lulus, gagal karena
   assertion, gagal bukan assertion, impor gagal, filter substring, skip). Docker tidak tersedia = tes tidak lulus.

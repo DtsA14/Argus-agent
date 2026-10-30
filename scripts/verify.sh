@@ -47,12 +47,19 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
     export ARGUS_SANDBOX_IMAGE_SYMPY_PY39="$(tr -d '[:space:]' < .sandbox_image_sympy_py39)"
   fi
   echo "sandbox image (sympy_py39 environment): ${ARGUS_SANDBOX_IMAGE_SYMPY_PY39:-<none>}"
+  # SPEC_PWA_VIEWER (E): the pwa_node22 environment from its pinned Node image, so the vitest sandbox tests run instead
+  # of skipping. The builder container is the only step with network (npm ci of the sha512-locked packages).
+  if [ -z "${ARGUS_SANDBOX_IMAGE_PWA_NODE22:-}" ] && docker version >/dev/null 2>&1; then
+    bash scripts/build_env_node.sh pwa_node22
+    export ARGUS_SANDBOX_IMAGE_PWA_NODE22="$(tr -d '[:space:]' < .sandbox_image_pwa_node22)"
+  fi
+  echo "sandbox image (pwa_node22 environment): ${ARGUS_SANDBOX_IMAGE_PWA_NODE22:-<none>}"
   echo "docker: $(docker version --format 'client {{.Client.Version}} / server {{.Server.Version}} ({{.Server.Os}}/{{.Server.Arch}})' 2>/dev/null || echo 'not available')"
   echo "== pip freeze"
   "$VENV/bin/pip" freeze
   echo "== source sha256"
   find . -path ./"$VENV" -prune -o -path ./verification -prune -o \
-       \( -name '*.py' -o -name '*.yaml' -o -name '*.txt' -o -name '*.sh' -o -name '*.csv' \) -type f -print \
+       \( -name '*.py' -o -name '*.yaml' -o -name '*.txt' -o -name '*.sh' -o -name '*.csv' -o -name '*.js' -o -name '*.jsx' -o -name 'package*.json' \) -type f -print \
     | LC_ALL=C sort | xargs sha256sum
   echo "== pytest"
   set +e

@@ -20,7 +20,7 @@ import json
 import math
 import re
 
-from .validation import PYTEST_NODE, kind, validate_command
+from .validation import PYTEST_NODE, VITEST_NODE, kind, validate_command
 
 ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
@@ -164,10 +164,11 @@ def validate(c):
             if not _int(v.get("max_skipped")) or v.get("max_skipped", -1) < 0:
                 errors.append(f"{where}: max_skipped must be an integer >= 0")
             mp = v.get("must_pass", [])
-            node = PYTEST_NODE if kind(v) == "pytest" else TEST_ID
+            node, words = {"pytest": (PYTEST_NODE, "pytest node ids (path.py::name)"),
+                           "vitest": (VITEST_NODE, "vitest node ids (path.test.jsx::full test name, one line)")
+                           }.get(kind(v), (TEST_ID, "dotted test ids"))
             if not isinstance(mp, list) or not all(isinstance(x, str) and node.match(x) for x in mp):
-                errors.append(f"{where}: must_pass must be a list of "
-                              + ("pytest node ids (path.py::name)" if kind(v) == "pytest" else "dotted test ids"))
+                errors.append(f"{where}: must_pass must be a list of {words}")
             elif len(set(mp)) != len(mp):
                 errors.append(f"{where}: must_pass has duplicates")
             if "environment" in v and not (isinstance(v["environment"], str) and ID.match(v["environment"])):
@@ -248,6 +249,29 @@ def setup_problems(c, files, *, profiles, environments_configured):
         unknown = [n for n in environments(c) if n not in environments_configured]
         if unknown:               # the contract names an environment this config does not have: fail closed
             errors.append(f"unknown sandbox environment(s) {unknown} (configured: {sorted(environments_configured)})")
+        errors += runner_problems(c, environments_configured)
+    return errors
+
+
+def runner(environment_cfg):
+    """The test runner of a configured environment (SPEC_PWA_VIEWER section 9): "vitest", or "pytest" (also unittest:
+    both are Python) when the environment names none, as every environment before runners did."""
+    return (environment_cfg or {}).get("runner") or "pytest"
+
+
+def runner_problems(c, environments_configured):
+    """Each validation's command must be one its environment can run: vitest only in a vitest environment, Python
+    commands only in a Python one (no environment = the default Python image)."""
+    errors = []
+    for v in c["validation"]:
+        env = v.get("environment")
+        if env is not None and env not in environments_configured:
+            continue                                  # reported as unknown above
+        have = runner(environments_configured.get(env)) if env is not None else "pytest"
+        want = "vitest" if kind(v) == "vitest" else "pytest"
+        if have != want:
+            errors.append(f"validation {v['id']}: a {kind(v)} command cannot run in "
+                          + (f"environment {env!r}" if env else "the default image") + f" (its runner is {have})")
     return errors
 
 
