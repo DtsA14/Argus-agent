@@ -8,7 +8,7 @@ import conftest
 ROOT = Path(__file__).resolve().parent.parent
 SANDBOX_MODULES = {"test_acceptance_sandbox.py", "test_auto_validation.py", "test_codetask_crash.py", "test_draft.py",
                    "test_env_from_base.py", "test_eval_sandbox.py", "test_pytest_sandbox.py", "test_review.py", "test_sandbox.py", "test_stage.py",
-                   "test_swe_pilot.py"}
+                   "test_swe_pilot.py", "test_vitest_sandbox.py", "test_env_node.py"}
 
 
 def test_every_module_that_uses_the_sandbox_and_only_those_is_grouped():

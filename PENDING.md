@@ -111,7 +111,7 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
   2. **waktu terminal** dicatat otomatis oleh `go_live.sh` (mulai, kunci diketik, run selesai), ke log di luar repo;
   3. **menit kerja Atha opsional**: ditanya sekali di akhir pilot, satu angka kasar; "skip" dicatat `unknown`.
   Tujuannya: apakah Argus menghemat waktu manusia, bukan hanya biaya model. Pilot 3a–3b tetap `unknown`
-- [ ] **Repo selain Argus** (M6): semua pilot di repo Argus. Athena butuh image sandbox per proyek; JS (bulking-app) belum bisa divalidasi
+- [ ] **Repo selain Argus** (M6): semua pilot di repo Argus. Athena butuh image sandbox per proyek; JS **kini bisa divalidasi** (vitest, environment `pwa_node22`, #256), belum ada pilot JS live
 - [ ] **Pertanyaan B dari D5:** apakah ≥ 2 putaran perbaikan muat dalam satu attempt. `pilot3a5` dan `pilot3b1` tidak membutuhkannya; perlu
   task yang memang menuntut beberapa putaran
 - [ ] **Eval set yang tidak jenuh** (M5): v1 16/16 hanya untuk regresi. Perluas dari kegagalan nyata (mis. 3a v1), lalu bekukan hash; eval set
@@ -231,6 +231,15 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
 - [x] **Issue 014** (keputusan manusia per job; ditulis Claude): job `j20261030_060939_8433` DONE attempt 1, $0,0800,
     applied apa adanya (argus-ledger `1f31e34`), deploy ke staging 6/6 (`pilots/ledger_014/RESULT.md`); staging kini menampilkan
     keputusan per job dari data asli
+- [x] **Viewer PWA, PR 1** (`docs/reviews/SPEC_PWA_VIEWER.md`, #256, disetujui Atha 2026-10-30): validasi vitest (recorder milik
+    harness, record JSON di belakang nonce, tepat berkas yang diminta, red hanya `AssertionError` lewat frame dan rantai `cause`),
+    drafter vitest (prompt dan skema sendiri; pytest tidak berubah), scope vitest (config/`package.json`/`.npmrc` tidak writable,
+    workspace dengan `node_modules` tidak dijalankan), environment `pwa_node22` distroless dari lock sha512. Code review medium
+    10 temuan diperbaiki, security review tanpa temuan; mutants 54/56 (2 ekuivalen); verify.sh PASS e88c940. Batas v0: tes lama
+    vitest tidak bisa diubah (`changed_tests` hanya Python), tanpa `-t`
+- [ ] **Viewer PWA, PR 2** (jalur ketat, menunggu persetujuan Atha untuk mulai): build rilis statis tanpa jaringan + cek artifact
+    (A4), proxy `127.0.0.1:8710` GET allowlist (A1–A3, A5), E1 dependency repo ⊆ lock, smoke; lalu kerangka `argus-viewer` dan
+    issue 001 (jalur cepat)
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
 - [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau

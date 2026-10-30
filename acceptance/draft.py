@@ -7,8 +7,9 @@ What the draft never sets: the input repository (an intake, by name), the issue,
 Those come from the human approving it.
 
 Checks, all on the intake snapshot plus the draft's new tests, in the sandbox:
-  - the contract built from the draft is valid; each new test is a new .py file in the protected scope, never
-    writable, and has at least one required node (must_pass) of its own;
+  - the contract built from the draft is valid; each new test is a new test_*.py file (a *.test.js|jsx|ts|tsx file
+    when the draft's validations run vitest, SPEC_PWA_VIEWER; one runner per draft, no changed_tests for vitest) in
+    the protected scope, never writable, and has at least one required node (must_pass) of its own;
   - baseline red: every required node of a new test is collected and fails by assertion (FAIL). An error, a node not
     collected, any other failing or erroring test in that validation, or output that does not account for itself
     rejects the draft. Required nodes of existing tests pass, and every validation without new nodes passes;
@@ -43,7 +44,7 @@ from pathlib import Path
 from . import changed as ch
 from . import contract as ct
 from . import intake
-from .validation import MAX_NODES, collect_nodes, kind, red_check, run_validation
+from .validation import MAX_NODES, VITEST_FILE, collect_nodes, kind, red_check, run_validation
 from .workspace import diff, digest, snapshot
 
 VERSION = 1
@@ -102,6 +103,10 @@ def validate_draft(d):
     elif isinstance(c.get("tools"), list) and set(c["tools"]) & ct.HUMAN_TOOLS:
         errors.append(f"tools: {sorted(set(c['tools']) & ct.HUMAN_TOOLS)} are granted by the human at approve "
                       "(argus approve --web), never by a draft")
+    runners = draft_runners(c)
+    if len(runners) > 1:
+        errors.append(f"a draft's validations must all use one runner (vitest, or Python's), not {sorted(runners)}")
+    vitest = runners == {"vitest"}
     tests = d["new_tests"]
     if not isinstance(tests, list) or not tests:
         errors.append("new_tests must name at least one new test file")
@@ -113,7 +118,12 @@ def validate_draft(d):
                 continue
             path = t["path"]
             name = path.rsplit("/", 1)[-1] if isinstance(path, str) else ""
-            if not intake._plain(path) or not name.startswith("test_") or not name.endswith(".py"):
+            if len(runners) > 1:
+                pass                                  # which test files fit is unknown until there is one runner
+            elif vitest and not (isinstance(path, str) and intake._plain(path) and VITEST_FILE.match(path)):
+                errors.append(f"new_tests[{i}].path must be a plain relative path to a vitest test file "
+                              "(*.test.js, .jsx, .ts or .tsx)")
+            elif not vitest and (not intake._plain(path) or not name.startswith("test_") or not name.endswith(".py")):
                 errors.append(f"new_tests[{i}].path must be a plain relative path to a test_*.py file")
             if len(t["content"].encode("utf-8")) > MAX_TEST_BYTES:
                 errors.append(f"new_tests[{i}] is larger than {MAX_TEST_BYTES} bytes")
@@ -123,10 +133,21 @@ def validate_draft(d):
     why = _strings_problem("unverifiable", d["unverifiable"], limit=20)
     if why:
         errors.append(why + " (unverifiable may be empty)")
-    if "changed_tests" in d:
+    if "changed_tests" in d and vitest and d["changed_tests"]:
+        errors.append("changed_tests are not supported for vitest (SPEC_PWA_VIEWER v0: the old-test comparison is "
+                      "Python's AST; a vitest draft only adds test files)")
+    elif "changed_tests" in d:
         new_paths = [t.get("path") for t in tests if isinstance(t, dict)] if isinstance(tests, list) else []
         errors += ch.shape_problems(d["changed_tests"], new_paths, intake._plain, MAX_TEST_BYTES)
     return errors
+
+
+def draft_runners(c):
+    """{"vitest"} or {"pytest"} (unittest included: both Python) of a draft contract's validations; empty when they
+    cannot be read yet (their shape is checked elsewhere)."""
+    vals = c.get("validation") if isinstance(c, dict) else None
+    return {"vitest" if kind(v) == "vitest" else "pytest" for v in vals or [] if isinstance(v, dict)} \
+        if isinstance(vals, list) else set()
 
 
 def _sha(text):
@@ -188,8 +209,9 @@ def static_problems(draft, contract, base_files, old=None):
     owned = {n.split("::", 1)[0] for v in contract["validation"] for n in _new_nodes(v, new_paths)}
     problems += [f"new test {p} has no required node (must_pass) of its own" for p in sorted(new_paths - owned)]
     for v in contract["validation"]:
-        if _new_nodes(v, red_paths(draft)) and kind(v) != "pytest":
-            problems.append(f"validation {v['id']}: required nodes of new or changed tests need a pytest validation")
+        if _new_nodes(v, red_paths(draft)) and kind(v) not in ("pytest", "vitest"):
+            problems.append(f"validation {v['id']}: required nodes of new or changed tests need a pytest or vitest "
+                            "validation")
     return problems
 
 
@@ -241,6 +263,9 @@ def collection_problems(draft, contract, base_dir, ws, sandbox_cfg, collect=coll
 
 
 # A failure that is not an assertion of the test itself fails whatever the fix is (pilot W2b-3: KeyError in a drafted test)
+NOT_ASSERTION_HINT_VITEST = ("check with expect() first: expect(screen.queryByText(\"x\")).not.toBeNull() instead of "
+                             "getByText, expect(report).toHaveProperty(\"key\") before report.key, and build in the "
+                             "test every piece of data it uses")
 NOT_ASSERTION_HINT = ("check with an assert first: `assert \"key\" in report` before `report[\"key\"]`, `assert hasattr(obj, "
                       "\"name\")` before calling it, and build in the test (or its fixture) every piece of data it uses")
 
@@ -249,7 +274,8 @@ def red_by_assertion(spec, nodes, ws, sandbox_cfg, contract, red_files, red=red_
     """Problems unless every node failed by an assertion of a test file (docs/reviews/SPEC_W2A_RED_BY_ASSERTION.md): an
     AssertionError or pytest.fail.Exception whose last frame in the repository is a new or changed test file, or a
     protected, non-writable helper in the directory of one. Returns (problems, records)."""
-    got, why = red(nodes, str(ws), sandbox_cfg, timeout_s=spec["timeout_s"], environment=spec.get("environment"))
+    got, why = red(nodes, str(ws), sandbox_cfg, timeout_s=spec["timeout_s"], environment=spec.get("environment"),
+                   runner="vitest" if kind(spec) == "vitest" else "pytest")
     if got is None:
         return [f"validation {spec['id']}: how its required tests fail could not be read: {why}"], None
     sc, dirs = contract["scope"], {p.rsplit("/", 1)[0] + "/" for p in red_files if "/" in p}
@@ -266,8 +292,9 @@ def red_by_assertion(spec, nodes, ws, sandbox_cfg, contract, red_files, red=red_
         elif not isinstance(rec, dict) or rec.get("outcome") != "failed":
             problems.append(f"required test {n}: no record of how it fails (it must fail by an assertion)")
         elif not rec.get("assertion"):
+            hint = NOT_ASSERTION_HINT_VITEST if kind(spec) == "vitest" else NOT_ASSERTION_HINT
             problems.append(f"required test {n} fails with {rec.get('type')}, not by an assertion: it would fail "
-                            f"whatever the fix is; {NOT_ASSERTION_HINT}")
+                            f"whatever the fix is; {hint}")
         elif not test_file:
             problems.append(f"required test {n} fails by {rec.get('type')} raised in {path or 'no file of the repository'}"
                             ", not in a test file: the test itself checks nothing yet; assert on the result in the test")
@@ -298,8 +325,8 @@ def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validat
         if e.get("skip_violations"):          # W2a-ext: judge_result names them; a red validation is read here
             problems.append(f"validation {spec['id']}: skipped or xfail in a changed test file, and not marked so "
                             f"before the change: {', '.join(e['skip_violations'])}")
-        if kind(spec) == "pytest" and not e.get("consistent"):
-            problems.append(f"validation {spec['id']}: pytest output does not account for itself")
+        if kind(spec) in ("pytest", "vitest") and not e.get("consistent"):
+            problems.append(f"validation {spec['id']}: {kind(spec)} output does not account for itself")
         must = e.get("must_pass") or {}
         for n in spec.get("must_pass", []):
             got = must.get(n)

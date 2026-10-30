@@ -8,9 +8,14 @@ Two shapes are allowed:
       run as  python3 -I -B -m pytest <fixed harness options> TARGET ... ; the harness alone chooses the options
       (no plugins, ini overrides or rootdir from the contract) and pins the rootdir to /workspace, so node ids are
       relative to the workspace root.
-Both run with the workspace mounted read-only, so the check cannot change what it checks, and are judged from the
-runner's verbose per-test lines and its summary. A pytest run is trusted only when the per-test lines account for
-the summary exactly (same count per outcome, every collected test seen); otherwise the result fails closed.
+  vitest run FILE [FILE ...]      (docs/reviews/SPEC_PWA_VIEWER.md V; FILE: a relative *.test.js|jsx|ts|tsx path)
+      run as  node --input-type=module -e VITEST_RECORDER NONCE LIMITS FILE ... : the harness's own script starts vitest
+      from /node_modules with exactly these files (`include`, never vitest's substring filter) and its own recorder,
+      and prints one JSON record after a fresh nonce. Judged from that record, never from text: trusted only when it
+      ran exactly the requested files, every test was recorded once, vitest started, and nothing failed outside a test.
+All run with the workspace mounted read-only, so the check cannot change what it checks; unittest and pytest are
+judged from the runner's verbose per-test lines and its summary. A pytest run is trusted only when the per-test lines
+account for the summary exactly (same count per outcome, every collected test seen); otherwise the result fails closed.
 Node ids may contain spaces (parametrize ids often do): a line is the node id, one space, and the status word at the
 end (with pytest's reason in parentheses for skips and xfails). A line read wrongly cannot make a run pass: the counts
 would no longer match the summary. Required tests (must_pass) are written without spaces.
@@ -19,7 +24,9 @@ Limits (stated, not hidden): the result is read from the test runner's own outpu
 the same process. Code that deliberately forges unittest output from inside the process is not detected here; it
 is contained by the sandbox, and the protected test files (scope) keep the tests themselves honest.
 """
+import hashlib
 import json
+import os
 import re
 import secrets
 
@@ -51,7 +58,10 @@ NOT_RUN = {"skipped", "expected failure", "unexpected success"}
 
 
 def kind(spec):
-    """"pytest" or "unittest", from the command's own prefix (validate_command decides whether it is allowed)."""
+    """"vitest", "pytest" or "unittest", from the command's own executable and prefix (validate_command decides whether
+    it is allowed)."""
+    if spec.get("executable") == "vitest":
+        return "vitest"
     args = spec.get("args")
     return "pytest" if isinstance(args, list) and args[:2] == PYTEST_PREFIX else "unittest"
 
@@ -87,14 +97,32 @@ def validate_pytest(rest):
     return errors
 
 
+def validate_vitest(args):
+    if not args or args[0] != "run":
+        return ["a vitest validation must be ['run', FILE, ...] (the harness runs it once, never in watch mode)"]
+    files, errors = args[1:], []
+    if not files:
+        errors.append("a vitest validation must name at least one test file")
+    for f in files:
+        if f.startswith("-"):
+            errors.append(f"vitest option {f!r} is not allowed (the harness sets every option itself)")
+        elif not VITEST_FILE.match(f) or not _plain(f):
+            errors.append(f"vitest target {f!r} is not a plain relative test file (*.test.js, .jsx, .ts or .tsx)")
+    if len(set(files)) != len(files):
+        errors.append("a vitest validation names a test file twice")
+    return errors
+
+
 def validate_command(executable, args):
     """Problems with a validation command, or []."""
-    if executable != "python":
-        return [f"executable {executable!r} is not allowed (allowlist: python)"]
+    if executable not in ("python", "vitest"):
+        return [f"executable {executable!r} is not allowed (allowlist: python, vitest)"]
     if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
         return ["args must be a list of strings"]
     if len(args) > MAX_ARGS:
         return [f"at most {MAX_ARGS} args"]
+    if executable == "vitest":
+        return validate_vitest(args)
     if args[:2] == PYTEST_PREFIX:
         return validate_pytest(args[2:])
     if args[:3] != PREFIX:
@@ -114,11 +142,15 @@ def validate_command(executable, args):
     return errors
 
 
-def argv(spec):
-    """The exact argv run in the container (no shell). Verbose output is always on: it names each test."""
+def argv(spec, nonce=None):
+    """The exact argv run in the container (no shell). Verbose output is always on: it names each test. A vitest
+    command needs the run's nonce; without one (evidence) the recorder and the nonce are shown by name only."""
     errors = validate_command(spec["executable"], spec["args"])
     if errors:
         raise ValueError("; ".join(errors))
+    if kind(spec) == "vitest":
+        a = vitest_argv(nonce or "<nonce>", spec["args"][1:])
+        return a if nonce else [*a[:3], f"<harness vitest recorder sha256:{RECORDER_SHA}>", *a[4:]]
     if kind(spec) == "pytest":
         return ["python3", "-I", "-B", *PYTEST_PREFIX, *PYTEST_FIXED, *spec["args"][2:]]
     return ["python3", "-I", *spec["args"], "-v"]
@@ -246,8 +278,28 @@ def skip_violations(no_skip, tests):
                   and not any(n == a or n.startswith((a + "::", a + "[")) for a in allowed))
 
 
-def judge_result(spec, r):
-    """Criterion verdict for one validation run: ok only when every condition in the contract holds."""
+def criteria_problems(spec, parsed, must, skipped):
+    """The contract's own criteria, the same for every runner: at least min_tests ran, at most max_skipped were
+    skipped (named), and every required test is ok."""
+    problems = []
+    if parsed["tests_run"] is not None and parsed["tests_run"] < spec["min_tests"]:
+        problems.append(f"{parsed['tests_run']} tests ran, contract requires at least {spec['min_tests']}")
+    if parsed["skipped"] > spec["max_skipped"]:
+        named = ", ".join(skipped[:SKIPPED_NAMED]) + (f" and {len(skipped) - SKIPPED_NAMED} more"
+                                                      if len(skipped) > SKIPPED_NAMED else "")
+        problems.append(f"{parsed['skipped']} tests skipped, contract allows {spec['max_skipped']}"
+                        + (f": {named}" if named else ""))
+    for t, st in must.items():
+        if st != "ok":
+            problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")
+    return problems
+
+
+def judge_result(spec, r, nonce=None):
+    """Criterion verdict for one validation run: ok only when every condition in the contract holds. nonce: the one
+    a vitest run was given (its record is read only behind it)."""
+    if kind(spec) == "vitest":
+        return judge_vitest(spec, r, nonce)
     pytest = kind(spec) == "pytest"
     runner = "pytest" if pytest else "unittest"
     if pytest:
@@ -294,19 +346,49 @@ def judge_result(spec, r):
             problems.append(f"exit code {r.get('exit_code')}")
         if parsed["outcome"] not in (None, "OK"):
             problems.append(f"{runner} outcome {parsed['outcome']}")
-        if parsed["tests_run"] is not None and parsed["tests_run"] < spec["min_tests"]:
-            problems.append(f"{parsed['tests_run']} tests ran, contract requires at least {spec['min_tests']}")
-        if parsed["skipped"] > spec["max_skipped"]:
-            named = ", ".join(skipped[:SKIPPED_NAMED]) + (f" and {len(skipped) - SKIPPED_NAMED} more"
-                                                          if len(skipped) > SKIPPED_NAMED else "")
-            problems.append(f"{parsed['skipped']} tests skipped, contract allows {spec['max_skipped']}"
-                            + (f": {named}" if named else ""))
-        for t, st in must.items():
-            if st != "ok":
-                problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")
+        problems += criteria_problems(spec, parsed, must, skipped)
         if evidence.get("skip_violations"):
             problems.append("skipped or xfail in a changed test file, and not marked so before the change: "
                             + ", ".join(evidence["skip_violations"]))
+    return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail" if problems else "pass",
+            "reason": "; ".join(problems), "evidence": evidence}
+
+
+def judge_vitest(spec, r, nonce):
+    files = spec["args"][1:]
+    parsed = parse_vitest(r.get("stdout") or "", nonce, files) if nonce else parse_vitest("", "-", files)
+    must = {t: parsed["tests"].get(t) for t in spec.get("must_pass", [])}
+    evidence = {"argv": argv(spec), "exit_code": r.get("exit_code"), "timed_out": r.get("timed_out"),
+                "killed": r.get("killed"), "cleanup_failed": r.get("cleanup_failed"),
+                "output_limit_exceeded": r.get("output_limit_exceeded"), "truncated": r.get("truncated"),
+                "tests_run": parsed["tests_run"], "outcome": parsed["outcome"], "skipped": parsed["skipped"],
+                "failures": parsed["failures"], "errors": parsed["errors"], "must_pass": must, "runner": "vitest",
+                "consistent": parsed["consistent"], "output_tail": vitest_tail(parsed),
+                "stderr_tail": (r.get("stderr") or "")[-500:],
+                "failed_nodes": sorted(n for n, s in parsed["tests"].items() if s == "FAIL")[:MAX_NODES]}
+    if parsed["record"] is None and (r.get("stderr") or "").strip():
+        evidence["output_tail"] = ("no vitest record; stderr:\n" + r["stderr"])[-TAIL:]
+    if spec.get("environment"):
+        evidence["environment"] = spec["environment"]
+    skipped = sorted(n for n, s in parsed["tests"].items() if s == "skipped")
+    if skipped:
+        evidence["skipped_nodes"] = skipped[:MAX_NODES]
+    problems = []
+    if r.get("timed_out"):
+        problems.append(f"timed out after {spec['timeout_s']}s (container killed"
+                        + (", cleanup not confirmed)" if r.get("cleanup_failed") else ")"))
+    elif r.get("output_limit_exceeded"):
+        problems.append("output limit exceeded (container killed)")
+    elif r.get("truncated"):
+        problems.append("output truncated: the vitest record is incomplete")
+    else:
+        problems += parsed["distrust"]
+        if r.get("exit_code") != 0:
+            problems.append(f"exit code {r.get('exit_code')}")
+        if parsed["record"] is not None:
+            if parsed["outcome"] != "OK":
+                problems.append(f"vitest outcome {parsed['outcome']}")
+            problems += criteria_problems(spec, parsed, must, skipped)
     return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail" if problems else "pass",
             "reason": "; ".join(problems), "evidence": evidence}
 
@@ -454,19 +536,26 @@ def red_argv(nonce, nodes):
     return ["python3", "-I", "-B", "-c", RED_CHECK, nonce, json.dumps(RED_LIMITS, sort_keys=True), *nodes]
 
 
-def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None):
-    """({node id: {outcome, type, assertion, path}}, None) for the given pytest node ids, or (None, why) when the run or
-    its JSON could not be read."""
-    nonce = "ARGUS-RED-" + secrets.token_hex(16) + ":"
+def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None, runner="pytest"):
+    """({node id: {outcome, type, assertion, path}}, None) for the given pytest (or vitest) node ids, or (None, why)
+    when the run or its JSON could not be read."""
+    vitest = runner == "vitest"
+    nonce = vitest_nonce() if vitest else "ARGUS-RED-" + secrets.token_hex(16) + ":"
     cfg = {**(sandbox_cfg or {}), "timeout_s": timeout_s}
     if environment:
         cfg["environment"] = environment
+    if vitest and vitest_workspace_problems(workdir):
+        return None, "; ".join(vitest_workspace_problems(workdir))
+    command = vitest_argv(nonce, vitest_files(nodes)) if vitest else red_argv(nonce, nodes)
     try:
-        r = sb.run_command(red_argv(nonce, nodes), workdir=workdir, cfg=cfg, log=log, meta={"red_check": len(nodes)})
+        r = sb.run_command(command, workdir=workdir, cfg=cfg, log=log, meta={"red_check": len(nodes)})
     except sb.SandboxUnavailable as e:
         return None, f"sandbox unavailable: {e}"
     if r.get("timed_out") or r.get("output_limit_exceeded") or r.get("truncated"):
         return None, "the run timed out or its output was cut"
+    if vitest:
+        got, why = red_records(r.get("stdout"), nonce, nodes)
+        return (got, None) if got is not None else (None, f"{why} (exit code {r.get('exit_code')})")
     lines = [line[len(nonce):] for line in (r.get("stdout") or "").splitlines() if line.startswith(nonce)]
     try:
         got = json.loads(lines[-1]) if len(lines) == 1 else None
@@ -477,14 +566,216 @@ def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=N
     return got, None
 
 
+# Vitest (docs/reviews/SPEC_PWA_VIEWER.md V, section 9): one script of the harness, for validations and the red check
+# alike. It starts vitest from the environment's read-only /node_modules with exactly the requested files (`include`:
+# vitest's own file filter matches substrings), the runner config loader (vite's default writes into node_modules),
+# no cache, and a recorder of its own instead of any reporter of the repository. Per test: the state and, for a
+# failure, its first error: type, message (cut at RED_LIMITS), the names of other errors it mentions, and the
+# repository files of its stack frames and of its `cause` chain (frame lines only, read after the message, which the
+# code under test chooses; files under node_modules passed over), the deepest first, so `path` is where the error
+# itself was raised, like the pytest plugin's last repository frame, and `frames` (path:line) show the agent the way. Per module: the errors that
+# kept it from loading. `count` is every test seen, so two tests with one full name cannot hide each other. Printed
+# once, after the nonce; the process always exits 0, the record says what happened. Like any validation it is read
+# from the process that runs the code under test: a deliberate forgery from inside is contained by the sandbox, not
+# detected.
+VITEST_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)$")
+VITEST_NODE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)::[^\x00-\x1f\x7f]{1,300}$")
+VITEST_STATUS = {"passed": "ok", "failed": "FAIL", "skipped": "skipped", "pending": "skipped"}
+RED_OUTCOME = {"ok": "passed", "FAIL": "failed", "skipped": "skipped"}      # the pytest red check's words
+VITEST_RECORDER = r"""
+process.env.HOME = '/tmp'
+process.env.NO_COLOR = '1'
+const [nonce, limitsText, ...files] = process.argv.slice(1)
+const limits = JSON.parse(limitsText)
+const root = '/workspace/'
+const out = { tests: {}, modules: {}, count: 0, unhandled: [], fatal: null }
+const cut = (s, n) => { s = String(s); return s.length <= n ? s : s.slice(0, n - 3) + '...' }
+const rel = p => String(p).startsWith(root) ? String(p).slice(root.length) : String(p)
+const frames = e => {
+  // the stack's frames only: its first lines repeat the message, which the code under test chooses
+  let stack = String(e.stack || '')
+  const msg = String(e.message || ''), at = msg ? stack.indexOf(msg) : -1
+  stack = at < 0 ? stack : stack.slice(at + msg.length)
+  const got = []
+  for (const line of stack.split('\n')) {
+    const m = line.match(/^ {4}at (?:.* \()?\/workspace\/([^\s():]+):(\d+):\d+\)?$/)
+    if (m && !m[1].split('/').includes('node_modules')) got.push([m[1], m[2]])
+  }
+  return got
+}
+const chain = e => {
+  const out = [], seen = new Set()
+  for (let x = e; x && typeof x === 'object' && !seen.has(x) && out.length < limits.chain; x = x.cause) {
+    seen.add(x)
+    out.push(x)
+  }
+  return out
+}
+const names = msg => [...new Set(String(msg).match(/\b[A-Z]\w*(?:Error|Exception)\b/g) || [])]
+  .filter(n => n !== 'AssertionError').sort().slice(0, limits.names)
+const none = { type: null, message: null, message_names: [], path: null, where: null, repo_paths: [], frames: [] }
+const record = e => {
+  const f = frames(e), all = chain(e).flatMap(frames), paths = [], at = []
+  for (const [p, n] of all) {
+    if (!paths.includes(p)) paths.push(p)
+    if (!at.includes(p + ':' + n)) at.push(p + ':' + n)
+  }
+  return { type: cut(e.name || 'Error', 100), message: cut(e.message, limits.message), message_names: names(e.message),
+           path: f.length ? f[0][0] : null, where: f.length ? f[0][0] + ':' + f[0][1] : null,
+           repo_paths: paths.slice(0, limits.paths), frames: at.slice(0, limits.paths) }
+}
+const recorder = {
+  onTestRunEnd(modules, unhandled) {
+    for (const m of modules) {
+      const id = rel(m.moduleId)
+      out.modules[id] = { errors: m.errors().map(e => ({ name: cut(e.name || 'Error', 100),
+                                                         message: cut(e.message, limits.message) })) }
+      for (const t of m.children.allTests()) {
+        const r = t.result(), e = (r.errors || [])[0]
+        out.count += 1
+        out.tests[id + '::' + t.fullName] = { state: r.state, ...(e ? record(e) : none) }
+      }
+    }
+    out.unhandled = unhandled.map(e => cut((e.name || 'Error') + ': ' + e.message, limits.message))
+  },
+}
+try {
+  const { startVitest } = await import('/node_modules/vitest/dist/node.js')
+  const ctx = await startVitest('test', [], { run: true, watch: false, root: '/workspace', include: files,
+                                              reporters: [recorder], configLoader: 'runner', cache: false },
+                                { cacheDir: '/tmp/vite-cache', logLevel: 'silent' })
+  await ctx?.close()
+} catch (e) {
+  out.fatal = cut((e && e.message) || e, limits.message)
+}
+process.stdout.write('\n' + nonce + JSON.stringify(out) + '\n')
+process.exit(0)
+"""
+RECORDER_SHA = hashlib.sha256(VITEST_RECORDER.encode("utf-8")).hexdigest()[:16]
+TAIL = 2000
+
+
+def vitest_argv(nonce, files):
+    """The harness's own vitest run; never a contract command. Its limits go as an argument (no format template)."""
+    return ["node", "--input-type=module", "-e", VITEST_RECORDER, nonce, json.dumps(RED_LIMITS, sort_keys=True), *files]
+
+
+def vitest_nonce():
+    return "ARGUS-VITEST-" + secrets.token_hex(16) + ":"
+
+
+def vitest_record(stdout, nonce):
+    """The recorder's JSON: exactly one line after the nonce, of the expected shape; otherwise None."""
+    lines = [line[len(nonce):] for line in (stdout or "").splitlines() if line.startswith(nonce)]
+    if len(lines) != 1:
+        return None
+    try:
+        got = json.loads(lines[0])
+    except ValueError:
+        return None
+    if not (isinstance(got, dict) and isinstance(got.get("tests"), dict) and isinstance(got.get("modules"), dict)
+            and all(isinstance(v, dict) and v.get("state") in VITEST_STATUS for v in got["tests"].values())
+            and all(isinstance(v, dict) and isinstance(v.get("errors"), list) for v in got["modules"].values())
+            and isinstance(got.get("unhandled"), list)):
+        return None
+    return got
+
+
+def parse_vitest(stdout, nonce, files):
+    """Per-node statuses (pytest's words: ok, FAIL, skipped) and the counts, from the recorder's record, and why it
+    cannot be trusted (`distrust`, empty when it can)."""
+    rec = vitest_record(stdout, nonce)
+    if rec is None:
+        return {"tests": {}, "tests_run": None, "outcome": None, "skipped": 0, "failures": 0, "errors": 0,
+                "consistent": False, "distrust": ["no vitest record in the output"], "record": None}
+    tests = {n: VITEST_STATUS[v["state"]] for n, v in rec["tests"].items()}
+    load_errors = {m: v["errors"] for m, v in rec["modules"].items() if v["errors"]}
+    distrust = []
+    if rec.get("fatal"):
+        distrust.append(f"vitest could not start: {rec['fatal']}")
+    ran = set(rec["modules"])
+    strays = sorted(n for n in tests if n.split("::", 1)[0] not in ran)
+    if ran != set(files) or strays:
+        distrust.append(f"vitest did not run exactly the requested files (asked {sorted(files)}, ran {sorted(ran)}"
+                        + (f", tests outside them: {strays[:5]}" if strays else "") + ")")
+    if rec.get("count") != len(tests):
+        distrust.append(f"vitest record inconsistent: {rec.get('count')} tests seen, {len(tests)} named (two tests "
+                        "with the same full name?)")
+    if rec["unhandled"]:
+        distrust.append("unhandled errors outside the tests: " + "; ".join(map(str, rec["unhandled"][:5])))
+    failures = sum(1 for s in tests.values() if s == "FAIL")
+    errors = len(load_errors) + len(rec["unhandled"])
+    outcome = "NO TESTS RAN" if not tests else "FAILED" if failures or errors else "OK"
+    return {"tests": tests, "tests_run": len(tests), "outcome": outcome, "failures": failures, "errors": errors,
+            "skipped": sum(1 for s in tests.values() if s == "skipped"), "consistent": not distrust,
+            "distrust": distrust, "record": rec, "load_errors": load_errors}
+
+
+def vitest_tail(parsed):
+    """What the agent and the drafter read of a vitest run: each failure with its error and where it was raised, the
+    files that did not load, and why the run is not trusted; then the counts."""
+    rec, out = parsed["record"] or {}, []
+    for n, v in (rec.get("tests") or {}).items():
+        if v["state"] == "failed":
+            out.append(f"FAIL {n}\n  {v.get('type')}: {v.get('message')}"
+                       + "".join(f"\n  at {f}" for f in v.get("frames") or ([v["where"]] if v.get("where") else [])))
+    for m, errs in (parsed.get("load_errors") or {}).items():
+        out += [f"ERROR {m} (the file did not load)"] + [f"  {e.get('name')}: {e.get('message')}" for e in errs]
+    out += parsed["distrust"]
+    if parsed["tests_run"] is not None:
+        out.append(f"{parsed['tests_run'] - parsed['failures'] - parsed['skipped']} passed, {parsed['failures']} "
+                   f"failed, {parsed['skipped']} skipped, {parsed['errors']} errors")
+    return "\n".join(out)[-TAIL:]
+
+
+def red_records(stdout, nonce, nodes):
+    """({node: record in the pytest red check's shape} for the requested nodes, None), or (None, why) when there is
+    no record or it cannot be trusted (parse_vitest). assertion: the error is an AssertionError (expect and assert);
+    anything else is not a red by assertion."""
+    parsed = parse_vitest(stdout, nonce, vitest_files(nodes))
+    if parsed["distrust"]:
+        return None, "; ".join(parsed["distrust"])
+    rec = parsed["record"]
+    return {n: {"outcome": RED_OUTCOME[VITEST_STATUS[v["state"]]], "type": v.get("type"), "assertion": v.get("type") == "AssertionError",
+                "path": v.get("path"), "message": v.get("message"), "message_names": v.get("message_names") or [],
+                "repo_paths": v.get("repo_paths") or []}
+            for n, v in rec["tests"].items() if n in nodes}, None
+
+
+def vitest_workspace_problems(workdir):
+    """What vitest would load from the workspace besides the repository's own code (SPEC_PWA_VIEWER, review of PR 1): a
+    node_modules anywhere, or a package.json or .npmrc below the root, would shadow the environment's packages. Read
+    on the host before every vitest run, without following links; any of them refuses the run."""
+    found = []
+    for here, dirs, files in os.walk(workdir):
+        rel = os.path.relpath(here, workdir)
+        for d in dirs:
+            if d == "node_modules":
+                found.append(os.path.normpath(os.path.join(rel, d)))
+        if rel != ".":
+            found += [os.path.join(rel, f) for f in files if f in ("package.json", ".npmrc")]
+        dirs[:] = [d for d in dirs if d != "node_modules"]
+    return [f"the workspace has {p}: vitest would load packages from it instead of the environment's"
+            for p in sorted(found)[:5]]
+
+
+def vitest_files(nodes):
+    return list(dict.fromkeys(n.split("::", 1)[0] for n in nodes))
+
+
 def run_validation(spec, workdir, sandbox_cfg, log=None):
     """Run one validation command in the sandbox. No sandbox means blocked, never a pass and never a fallback."""
     cfg = {**(sandbox_cfg or {}), "timeout_s": spec["timeout_s"]}
     if spec.get("environment"):
         cfg["environment"] = spec["environment"]      # its own image, never the default one (tools/sandbox.settings)
+    nonce = vitest_nonce() if kind(spec) == "vitest" else None
+    shadow = vitest_workspace_problems(workdir) if nonce else []
+    if shadow:
+        return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail", "reason": "; ".join(shadow),
+                "evidence": {"argv": argv(spec), "runner": "vitest", "consistent": False, "output_tail": "; ".join(shadow)}}
     try:
-        r = sb.run_command(argv(spec), workdir=workdir, cfg=cfg, log=log, meta={"validation": spec["id"]})
+        r = sb.run_command(argv(spec, nonce), workdir=workdir, cfg=cfg, log=log, meta={"validation": spec["id"]})
     except sb.SandboxUnavailable as e:
         return {"id": f"validation:{spec['id']}", "layer": "C", "status": "blocked",
                 "reason": f"sandbox unavailable: {e}", "evidence": {"argv": argv(spec)}}
-    return judge_result(spec, r)
+    return judge_result(spec, r, nonce)

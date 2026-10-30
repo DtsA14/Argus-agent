@@ -407,5 +407,12 @@ sandbox:
       image: null
     ledger_staging_up1:
       image: null
+    # pwa_node22 (docs/reviews/SPEC_PWA_VIEWER.md E): Node 22 from its official image pinned by digest, with the exact
+    # npm packages of its lock (sha512 each) in a read-only /node_modules; defined in environments/pwa_node22/, built by
+    # scripts/build_env_node.sh, checked by scripts/check_env_image.py. Its validations run vitest, never pytest
+    # (runner; an environment without one runs Python's). Never in web.environments.
+    pwa_node22:
+      image: null
+      runner: vitest
     argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
       image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker

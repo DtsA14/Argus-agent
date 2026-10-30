@@ -841,3 +841,24 @@ def test_the_drafter_is_told_the_profiles_as_the_coder_model_runs_them(tmp_path)
                           "scope": {"writable": ["big.py"], "protected": []}}}
     assert cdr.rewrite_problems(draft, {"profile_info": eff}, tmp_path) == []
     assert cdr.rewrite_problems(draft, {"profile_info": eff_s}, tmp_path)
+
+
+# ---- SPEC_PWA_VIEWER V5: the runner of the drafter's environment is frozen in its policy and decides its prompt -----
+
+def test_a_vitest_environment_gives_the_drafter_its_runner_and_its_rules(root, tmp_path):
+    c = cfg()
+    env = c["drafter"]["environment"]
+    c["sandbox"]["environments"][env] = {**c["sandbox"]["environments"][env], "runner": "vitest"}
+    r, model, d = run(root, tmp_path, [SUBMIT], config=c)
+    assert [e["runner"] for e in events(d) if e["event"] == "drafter_policy"] == ["vitest"]
+    from codetask import drafter as cdr
+    assert model.calls[0]["messages"][0].content == cdr.SYSTEM_VITEST
+    submit = next(t for t in model.bound_tools if t.__name__ == "SubmitDraft")
+    assert submit in cdr.VITEST_SUBMIT_TOOLS and "changed_tests" not in submit.model_fields
+
+
+def test_a_python_environment_keeps_the_pytest_drafter(root, tmp_path):
+    r, model, d = run(root, tmp_path, [SUBMIT])
+    assert [e["runner"] for e in events(d) if e["event"] == "drafter_policy"] == ["pytest"]
+    from codetask import drafter as cdr
+    assert model.calls[0]["messages"][0].content == cdr.SYSTEM

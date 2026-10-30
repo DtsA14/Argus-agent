@@ -20,7 +20,7 @@ import json
 import math
 import re
 
-from .validation import PYTEST_NODE, kind, validate_command
+from .validation import PYTEST_NODE, VITEST_NODE, kind, validate_command
 
 ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
@@ -164,10 +164,11 @@ def validate(c):
             if not _int(v.get("max_skipped")) or v.get("max_skipped", -1) < 0:
                 errors.append(f"{where}: max_skipped must be an integer >= 0")
             mp = v.get("must_pass", [])
-            node = PYTEST_NODE if kind(v) == "pytest" else TEST_ID
+            node, words = {"pytest": (PYTEST_NODE, "pytest node ids (path.py::name)"),
+                           "vitest": (VITEST_NODE, "vitest node ids (path.test.jsx::full test name, one line)")
+                           }.get(kind(v), (TEST_ID, "dotted test ids"))
             if not isinstance(mp, list) or not all(isinstance(x, str) and node.match(x) for x in mp):
-                errors.append(f"{where}: must_pass must be a list of "
-                              + ("pytest node ids (path.py::name)" if kind(v) == "pytest" else "dotted test ids"))
+                errors.append(f"{where}: must_pass must be a list of {words}")
             elif len(set(mp)) != len(mp):
                 errors.append(f"{where}: must_pass has duplicates")
             if "environment" in v and not (isinstance(v["environment"], str) and ID.match(v["environment"])):
@@ -248,6 +249,50 @@ def setup_problems(c, files, *, profiles, environments_configured):
         unknown = [n for n in environments(c) if n not in environments_configured]
         if unknown:               # the contract names an environment this config does not have: fail closed
             errors.append(f"unknown sandbox environment(s) {unknown} (configured: {sorted(environments_configured)})")
+        errors += runner_problems(c, environments_configured)
+    if any(kind(v) == "vitest" for v in c["validation"]):
+        errors += vitest_scope_problems(c, files)
+    return errors
+
+
+# SPEC_PWA_VIEWER (review of PR 1): what the harness's vitest run loads besides the tests. Its config (and the plugins,
+# setup files and aliases it names) runs in the recorder's process and is read from the root only; package.json and
+# .npmrc there name the packages. None of it may be writable. A node_modules (or package.json) below the root, which
+# would shadow the environment's packages, is refused on the workspace itself before every run
+# (acceptance/validation.py vitest_workspace_problems), whatever the globs say.
+VITEST_LOADED = [f"{n}.{e}" for n in ("vite.config", "vitest.config", "vitest.workspace")
+                 for e in ("js", "mjs", "cjs", "ts", "mts", "cts", "json")] + ["package.json", ".npmrc"]
+
+
+def vitest_scope_problems(c, files):
+    """A vitest task's scope may not make writable anything vitest loads from the root besides the tests
+    (VITEST_LOADED), and its repository may not bring a node_modules of its own."""
+    errors = [f"writable glob {g!r} would let the agent write {p!r}, which vitest loads (config, packages)"
+              for g in c["scope"]["writable"] for p in VITEST_LOADED if glob_regex(g).match(p)]
+    if any(f.startswith("node_modules/") or "/node_modules/" in f for f in files):
+        errors.append("the repository has a node_modules directory: its packages would shadow the environment's")
+    return errors
+
+
+def runner(environment_cfg):
+    """The test runner of a configured environment (SPEC_PWA_VIEWER section 9): "vitest", or "pytest" (also unittest:
+    both are Python) when the environment names none, as every environment before runners did."""
+    return (environment_cfg or {}).get("runner") or "pytest"
+
+
+def runner_problems(c, environments_configured):
+    """Each validation's command must be one its environment can run: vitest only in a vitest environment, Python
+    commands only in a Python one (no environment = the default Python image)."""
+    errors = []
+    for v in c["validation"]:
+        env = v.get("environment")
+        if env is not None and env not in environments_configured:
+            continue                                  # reported as unknown above
+        have = runner(environments_configured.get(env)) if env is not None else "pytest"
+        want = "vitest" if kind(v) == "vitest" else "pytest"
+        if have != want:
+            errors.append(f"validation {v['id']}: a {kind(v)} command cannot run in "
+                          + (f"environment {env!r}" if env else "the default image") + f" (its runner is {have})")
     return errors
 
 

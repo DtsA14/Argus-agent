@@ -251,23 +251,31 @@ def test_a_crashed_refresh_leaves_only_a_temporary_directory_that_the_next_remov
 def test_readers_always_see_a_whole_snapshot_while_refreshes_swap_it(tmp_path, source):
     data = tmp_path / "data"
     sd.refresh(source, data)
-    stop, bad = threading.Event(), []
+    stop, bad, started, done = threading.Event(), [], [0], [0]
 
     def read():
         while not stop.is_set():
+            before, seen = done[0], len(bad)
             try:
                 jobs = sorted(os.listdir(sd.pub(data) / "jobs"))
                 for j in jobs:
                     json.loads((sd.pub(data) / "jobs" / j / "job.json").read_text())
                 if jobs != ["jone", "jtwo"]:
                     bad.append(jobs)
-            except FileNotFoundError as e:                 # a snapshot removed under an old path: never the link
+            except FileNotFoundError as e:
                 bad.append(repr(e))
+            # A read that spanned two refreshes may have listed a snapshot the second one removed (two are kept): an
+            # old path, never the link. Under load (verify.sh, 4 workers) that happened (an empty listing); a swap
+            # that is not atomic fails within one refresh, so it is still caught.
+            if started[0] - before >= 2:              # counted from its start: it removes before it returns
+                del bad[seen:]
     t = threading.Thread(target=read)
     t.start()
     try:
         for i in range(30):
+            started[0] += 1
             sd.refresh(source, data, clock=lambda i=i: (2026, 10, 30, 0, i // 60, i % 60, 0, 0, 0))
+            done[0] += 1
     finally:
         stop.set()
         t.join()

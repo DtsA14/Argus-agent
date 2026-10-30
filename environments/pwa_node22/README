@@ -1,0 +1,7 @@
+Sandbox environment for React PWA repositories tested with vitest (docs/reviews/SPEC_PWA_VIEWER.md E): Node 22 from the
+official image pinned by digest (base), and exactly the npm packages of package-lock.json (lockfile v3, every package
+from registry.npmjs.org with a sha512 integrity) in /node_modules, read-only, the parent of /workspace. Built by
+scripts/build_env_node.sh pwa_node22 (npm ci --ignore-scripts is the only step with network); checked by
+scripts/check_env_image.py pwa_node22 on fixtures/repos/vitest_demo. Distroless: node and its libraries, no shell, npm
+or git. Validations in it run vitest (config.yaml runner: vitest), never pytest. A new package is a new environment
+(the dependency upgrade path), never an install in a job. Never in web.environments.
