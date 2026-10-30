@@ -1,0 +1,13 @@
+ok   GET / -> 200 index.html of the release: 200 ebeaeb03d08b
+ok   GET /assets/index-CaWgFM3R.js -> 200 as recorded: 200 bfc3949ba45c
+ok   GET /assets/index-DAKQVjI2.css -> 200 as recorded: 200 1404a783d075
+ok   GET /icon-192.png -> 200 as recorded: 200 9f4269a3acab
+ok   GET /icon.svg -> 200 as recorded: 200 420d6d281b61
+ok   GET /manifest.webmanifest -> 200 as recorded: 200 b688a7eaaeda
+FAIL GET /api/summary -> 200 the snapshot's numbers, no-store: 502 no-store b'{"error": "argus-ledger did not answer with JSON"}'
+ok   Host evil.example -> 421: 421
+ok   POST / -> 405: 405
+ok   GET /../x -> 404: 404
+ok   GET /api/x -> 404: 404
+ok   listen 127.0.0.1:8710 only: listening: ['127.0.0.1:8710']
+exit=1

@@ -1,0 +1,17 @@
+--- /api/jobs
+HTTP/1.0 200 OK
+Server: argus-staging 
+Date: Fri, 30 Oct 2026 17:02:27 GMT
+Content-Type: application/json
+Content-Length: 9718
+Cache-Control: no-store
+Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+Connection: close
+
+[{"job":"j20261022_193403_3beb","state":"ABANDONED","created_at":"2026-10-22T19:34:03Z","stages":1,"decisions":1,"cost_nano":393710600,"cost_usd":"0.3937","running":false},{"job":"j20261022_193531_259d","state":"ABANDONED","created_at":"2026-10-22T19:35:31Z","stages":2,"decisions":2,"cost_nano":261240400,"cost_usd":"0.2612","running":false},{"job":"j20261023_031205_d0f8","state":"REVIEW_READY","created_at":"2026-10-23T03:12:05Z","stages":5,"decisions":4,"cost_nano":79194288,"cost_usd":"0.0792","running":false},{"job":"j20261023_062122_c7a4","state":"REVIEW_READY","created_at":"2026-10-23T06:21:22Z","stages":2,"decisions":1,"cost_nano":69648348,"cost_usd":"0.0696","running":false},{"job":"j20261023_104529_ca7d","state":"AGENT_FAILED","created_at":"2026-10-23T10:45:29Z","stages":2,"decisions":1,"cost_na
+--- SW fetch of /assets/index-CaWgFM3R.js
+404
+--- SW fetch of /sw.js
+200

@@ -1,0 +1,7 @@
+exit=0
+● argus-stage-proxy.service - Argus staging viewer proxy (127.0.0.1:8710)
+     Loaded: loaded (/home/ubuntu/.config/systemd/user/argus-stage-proxy.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-10-30 17:02:14 UTC; 2s ago
+   Main PID: 424014 (python)
+      Tasks: 1 (limit: 13008)
+uid_map:  0 0 4294967295
