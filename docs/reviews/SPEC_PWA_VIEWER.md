@@ -198,8 +198,9 @@ Isi (Claude, 2026-10-30), `router/stage_viewer.py`, tes `tests/test_stage_viewer
   read-only, `/out` satu-satunya mount writable, uid host, batas memori/pids/cpu.
 
 Keputusan Claude dalam batas spek (untuk dicek Atha):
-1. **sha `sw.js` yang direview = konstanta `SW_SHA256` di kode**, sekarang `None`: semua rilis ditolak sampai sha
-   `public/sw.js` kerangka `argus-viewer` dipin lewat perubahan jalur ketat.
+1. **sha `sw.js` yang direview = konstanta `SW_SHA256` di kode**. Awalnya `None` (semua rilis ditolak); dipin ke
+   `public/sw.js` kerangka `argus-viewer` 505e23b (`db58777a…`, network-first, tidak pernah `/api/`) lewat PR pin (jalur
+   ketat). `fixtures/repos/viewer_demo/public/sw.js` = salinan persisnya.
 2. **Gerbang deploy/rollback:** rilis kandidat di-smoke lewat proxy yang sama (kode yang sama) di port ephemeral
    `127.0.0.1` **sebelum** `current` di-swap; smoke live di 8710 (termasuk `ss -ltnH`) lewat `viewer-smoke` dan monitor,
    tidak menggerbang deploy (proxy belum dipasang sebelum pilot).

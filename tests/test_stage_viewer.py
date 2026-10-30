@@ -81,6 +81,7 @@ def test_a_dist_as_vite_builds_it_passes(tmp_path):
     ({"other.html": b"<script>localStorage.x=1</script>"}, "localStorage"),
     ({"sw.js": None}, "sw.js"),
     ({"sw.js": SW + b"\n// changed\n"}, "sw.js"),                           # not the reviewed service worker
+    ({"x.js": JS}, "x.js: a script at the top level"),                      # a second root-scope service worker
 ])
 def test_a_dist_that_breaks_a_rule_is_refused(tmp_path, files, problem):
     got = sv.artifact_problems(make_dist(tmp_path, **files), SW_SHA)
@@ -92,8 +93,21 @@ def test_the_reviewed_service_worker_may_use_the_cache_api(tmp_path):
     assert sv.artifact_problems(make_dist(tmp_path), SW_SHA) == []
 
 
+def test_the_pinned_service_worker_is_the_reviewed_one_of_the_fixture():
+    # fixtures/repos/viewer_demo/public/sw.js is a copy of the argus-viewer skeleton's, reviewed by Atha
+    assert sv.SW_SHA256 == SW_SHA == "db58777a410480de1dac10c17f730396dcaee0031ea693dbd03e2db418c7e0cf"
+    assert sv.Viewer("unused", ledger=object()).sw_sha256 == sv.SW_SHA256
+
+
+def test_the_default_pin_refuses_a_service_worker_that_differs_by_one_byte(tmp_path):
+    # without docker too: the real deploys below are the end-to-end proof, this one never skips
+    assert sv.artifact_problems(make_dist(tmp_path / "same"), sv.SW_SHA256) == []
+    other = SW.replace(b"argus-viewer-shell-v1", b"argus-viewer-shell-v2")
+    got = sv.artifact_problems(make_dist(tmp_path / "other", **{"sw.js": other}), sv.SW_SHA256)
+    assert got == ["sw.js is not the reviewed service worker"], got
+
+
 def test_without_a_reviewed_service_worker_every_release_is_refused(tmp_path):
-    assert sv.SW_SHA256 is None or len(sv.SW_SHA256) == 64
     got = sv.artifact_problems(make_dist(tmp_path), None)
     assert got and any("sw.js" in p for p in got), got
 
@@ -439,6 +453,17 @@ def test_files_come_from_the_published_release(proxy, viewer):
     assert got == 200 and headers["content-type"] == "application/manifest+json"
     got, headers, body = request(proxy, "GET", "/icon.png")
     assert (got, body) == (200, PNG) and headers["content-type"] == "image/png"
+
+
+def test_only_the_reviewed_sw_js_is_served_as_a_service_worker_script(proxy):
+    # browsers send Service-Worker: script when they fetch a service worker; any other file would escape the pin (A3)
+    got, _, body = request(proxy, "GET", "/sw.js", headers=["Service-Worker: script"])
+    assert (got, body) == (200, SW)
+    for path in ("/assets/index-abc123.js", "/assets/index-abc123.js?v=1", "/index.html", "/jobs/x"):
+        got, _, _ = request(proxy, "GET", path, headers=["Service-Worker: script"])
+        assert got == 404, path
+    got, _, body = request(proxy, "GET", "/assets/index-abc123.js")
+    assert (got, body) == (200, JS)                                            # as a plain script it is served
 
 
 def test_an_app_route_is_answered_with_index_html(proxy):
@@ -856,6 +881,35 @@ def test_a_real_deploy_and_rollback(tmp_path, viewer, viewer_repo, real_cfg):
     index = (viewer.base / "current" / "index.html").read_text()
     assert "/assets/" in index and "/src/main.jsx" not in index
     assert sv.rollback(deps=deps(), viewer=viewer) == first
+
+
+@pytest.fixture
+def pinned(tmp_path, ledger):
+    """A viewer as the commands make it: the service worker is the real default pin, never one given here."""
+    return sv.Viewer(tmp_path / "staging" / "apps" / "pinned", ledger=ledger)
+
+
+def test_a_real_deploy_with_the_default_pin_publishes_the_reviewed_service_worker(tmp_path, pinned, viewer_repo,
+                                                                                  real_cfg):
+    r, commit = viewer_repo
+    jobs = tmp_path / "jobs"
+    assert pinned.state()["live"] is None
+    release = sv.deploy(viewer_job(jobs, "jview", r, commit), cfg=real_cfg, deps=deps(), jobs_dir=jobs, viewer=pinned)
+    assert pinned.state()["live"] == release
+    assert hashlib.sha256((pinned.base / "current" / "sw.js").read_bytes()).hexdigest() == sv.SW_SHA256
+
+
+def test_a_real_deploy_with_another_service_worker_is_refused_by_the_default_pin(tmp_path, pinned, viewer_repo,
+                                                                                 real_cfg):
+    r, commit = viewer_repo
+    jobs = tmp_path / "jobs"
+    live = sv.deploy(viewer_job(jobs, "jview", r, commit), cfg=real_cfg, deps=deps(), jobs_dir=jobs, viewer=pinned)
+    (r / "public" / "sw.js").write_bytes(SW.replace(b"argus-viewer-shell-v1", b"argus-viewer-shell-v2"))
+    git(r, "commit", "-qam", "sw.js differs by one byte")
+    other = git(r, "rev-parse", "HEAD")
+    with pytest.raises(sv.Refused, match="sw.js is not the reviewed service worker"):
+        sv.deploy(viewer_job(jobs, "jother", r, other), cfg=real_cfg, deps=deps(), jobs_dir=jobs, viewer=pinned)
+    assert pinned.state()["live"] == live and pinned.published() == live
 
 
 # ---- code review of PR 2 ----------------------------------------------------------------------------------------------

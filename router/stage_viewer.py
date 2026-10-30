@@ -48,9 +48,10 @@ from . import stage_data as sd
 ENVIRONMENT = "pwa_node22"
 LOCK_FILE = sg.ROOT / "environments" / ENVIRONMENT / "package-lock.json"
 BIND, PORT = "127.0.0.1", 8710                     # Atha 2026-10-30: explicit, never 0.0.0.0 or "localhost"; never 8000
-# The service worker as reviewed (A3): the sha256 of the skeleton's public/sw.js once Atha reviewed it. None: no release
-# is published. Changing it is a strict-lane change of this file.
-SW_SHA256 = None
+# The service worker as reviewed (A3): the sha256 of public/sw.js of the argus-viewer skeleton (commit 505e23b, network
+# first app shell, never /api/), a copy of which is fixtures/repos/viewer_demo/public/sw.js. A release whose sw.js
+# differs is never published. Changing it is a strict-lane change of this file.
+SW_SHA256 = "db58777a410480de1dac10c17f730396dcaee0031ea693dbd03e2db418c7e0cf"
 BUILD_TIMEOUT_S = 300
 BUILD_ARGV = ["node", "/node_modules/vite/bin/vite.js", "build", "--configLoader", "runner", "--outDir", "/out",
               "--emptyOutDir", "--logLevel", "warn"]
@@ -165,6 +166,9 @@ def artifact_problems(dist, sw_sha256):
             if m and path != "sw.js":
                 problems.append(f"{path}: uses browser storage ({m.group().decode()}); API data is never kept in the "
                                 "browser")
+            if ext == ".js" and "/" not in path and path != "sw.js":
+                problems.append(f"{path}: a script at the top level could be registered as a service worker of the "
+                                "whole site; only the reviewed sw.js may be there")
             if path == "sw.js" and hashlib.sha256(data).hexdigest() != sw_sha256:
                 problems.append("sw.js is not the reviewed service worker" + ("" if sw_sha256 else
                                                                               " (none is pinned yet: SW_SHA256)"))
@@ -519,6 +523,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._error(421, "misdirected request")
         path = self.path
+        if "Service-Worker" in self.headers and path.split("?", 1)[0] != "/sw.js":
+            return self._error(404, "not found")       # A3: only the reviewed /sw.js may become a service worker
         if path == "/api" or path.startswith(("/api/", "/api?")):
             m = API.match(path)
             return self._api(f"/{m.group(1)}") if m else self._error(404, "not found")
