@@ -4,8 +4,14 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status). Riwayat butir yang sudah selesai (bukti, angka, PR): [`docs/reviews/PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md)
 (sampai 2026-10-30), [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) (sebelumnya) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-30 malam (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
+Terakhir diperbarui: 2026-10-30 malam, jalur cepat sesudahnya (#268) (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
 notifikasi monitor #259/#260). Dirapikan: semua butir `[x]` pindah ke arsip 2026-10-30.
+
+Jalur cepat 2026-10-30 (#268): `audit_run.py` membangun ulang balasan yang ditolak harness (tanpa tool call → `NUDGE`, call
+tidak valid, `Finish` bersama call lain; teksnya satu fungsi `rejected_reply` di `codetask/agent.py`); layar batas drafter,
+riset, `resume` agen, dan `retry` menyebut environment dan image; prompt drafter: satu entri `changed_tests` per berkas lama,
+berkas baru di `new_tests`; `scripts/pin_status.py`. Ditutup tanpa kode (sudah ada): judul `PR.md` dipotong di batas kata
+(83a75d5), `estimate misses` per tahap di `status` (#240 E3), larangan `git` di prompt drafter.
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -53,26 +59,26 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 - [ ] **Berkas yang dilindungi belum dipaksa harness.** `argus-viewer` bergantung pada skrip di luar repo yang dijalankan Claude;
   aturan drafter vitest hanya melarang config/`package.json`/`.npmrc` writable. Kandidat jalur ketat: daftar `PROTECTED` per
   repo dibaca harness dari commit base, dicek di cek draf dan di paket review. Prasyarat shadow mode dan UI approve
-- [ ] **Pin image per checkout disalin manual.** `~/pilot3a_live` butuh `.sandbox_image_pwa_node22*` dari `~/Argus-agent`
-  (job 001 ditolak sekali); `verify.sh` membangun ulang image dan menulis pin baru hanya di checkout tempat ia jalan
-  (`.sandbox_image_argus` sudah berbeda antar checkout). Kandidat: satu lokasi pin di luar checkout, atau cek di preflight
+- [~] **Pin image per checkout disalin manual.** `~/pilot3a_live` butuh `.sandbox_image_pwa_node22*` dari `~/Argus-agent`
+  (job 001 ditolak sekali); `verify.sh` menulis pin baru hanya di checkout tempat ia jalan (`.sandbox_image_argus` sudah
+  berbeda antar checkout). **Preflight ada** (jalur cepat 2026-10-30): `scripts/pin_status.py [--against DIR] [ENV ...]`
+  dari checkout yang menjalankan job (pin, image ada di Docker, cek lolos, sama dengan checkout lain). Sinkronisasinya
+  sendiri (satu lokasi pin) belum
 - [ ] **Smoke kandidat viewer tidak menguji lingkungan unit systemd** (pilot viewer #1: `PrivateTmp` lolos deploy, gagal di
   unit). Tes opsi unit ada (#263); smoke live lewat 8710 hanya di `viewer-smoke`/monitor, bukan gerbang deploy
 - [ ] **Kunci HP di `authorized_keys` VM** (2026-10-30): `restrict,port-forwarding,permitopen="127.0.0.1:8710"`, perintah
   paksa `sleep`; dites. Bukan di repo; dicatat di sini agar dicabut bila HP hilang (`~/.ssh/authorized_keys`, baris
   `iphone-viewer`)
 - [ ] `argus code` yang ditolak karena key (tanpa `--key-file`) tetap membuat job `NEW` (`j20261030_164146_9b3d`, di-abandon);
-  layar penolakan tidak menyebutnya. Kecil, jalur cepat
+  layar penolakan tidak menyebutnya. Kecil, tetapi menyentuh jalur key (`live()`): jalur ketat
 
 ### Kemampuan agen (jalur cepat, kandidat)
 
 - [ ] **Gate "tes menelan traceback" salah tolak** (argus-ledger 008): pesan tes yang mengharapkan exception, dan `TypeError` di
   titik panggilan, dianggap menelan. Usul jalur ketat: catat exception yang benar-benar di-raise di kode repo selama red check
   (`sys.monitoring` RAISE, Python ≥ 3.12)
-- [ ] `estimate_miss` per run di `status` (H3 spek margin); `swe_grade.py` mencatat nama tes draf yang gagal di atas patch
-  maintainer; tes lama yang diubah drafter otomatis wajib (`22456` d1)
-- [ ] Drafter: entri `changed_tests` duplikat/kosong atau berkas baru di `changed_tests` (W2b-3); regresi yang butuh `git`
-  (w2b2d3); masing-masing satu submit terbuang
+- [ ] Tes lama yang diubah drafter otomatis wajib (`22456` d1); `swe_grade.py` mencatat nama tes draf yang gagal di atas
+  patch maintainer (penilai: jalur ketat)
 - [ ] Kandidat sisa batch 5 / `21379`: drafter mencari titik nilai salah pertama kali muncul (`20428`); gerbang writable
   lebar vs regresi sempit; drafter membaca sampai dipaksa berhenti
 - [ ] Vitest v0: tes lama tidak bisa diubah (`changed_tests` hanya Python), tanpa `-t`; dibuka bila task viewer membutuhkannya
@@ -92,10 +98,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Kecil / rendah
 
-- [ ] `scripts/audit_run.py` belum menyisipkan pesan `NUDGE` saat membangun ulang langkah (belum terjadi live)
 - [ ] `check_against_repo` record task tidak membandingkan bit executable tes (baris dari patch agen #189); hapus atau tes
-- [ ] Judul `PR.md` dipotong 80 karakter di tengah kata
-- [ ] Layar batas tahap drafter dan `retry`/resume tidak menyebut environment dan image (preflight chat menghitungnya)
 - [ ] Router: cek bentuk kunci DeepSeek (hanya Anthropic yang dicek prefiksnya)
 - [ ] Router: `argus apply` (K6 v0); sekarang perintah apply dicetak `status` dan dijalankan Claude
 
@@ -110,10 +113,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ## Pekerjaan operasional (Atha, di luar repo)
 
-- [ ] Cabut kunci API yang dipakai untuk pilot 3a v2, D5, dan 3b di dashboard provider
-- [ ] Bersihkan sisa kunci di riwayat shell dan berkas env di VM; hapus SSH key tambahan yang tidak dipakai lagi (kunci HP
-  `iphone-viewer` tetap dipakai)
-- [ ] Cek key manual router pilot #3 (`grep -rlF -f ...`, kriteria 4); dari PC
+Selesai 2026-10-30 (Atha): kunci API pilot lama dicabut, sisa kunci di VM dibersihkan (cek key manual router #3 tidak
+diperlukan lagi: kuncinya sudah dicabut). Kunci HP `iphone-viewer` tetap dipakai.
 - [ ] Deploy harness sebagai service (systemd): operasional, bukan M9 (staging monitor dan proxy viewer sudah unit `--user`)
 
 ## Parking lot (roadmap `docs/FUTURE_ARCHITECTURE.md`)

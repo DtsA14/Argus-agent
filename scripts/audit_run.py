@@ -11,7 +11,7 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 import harness.llm as hl
-from codetask.agent import feedback_from, system_prompt, task_prompt
+from codetask.agent import feedback_from, rejected_reply, system_prompt, task_prompt
 from codetask.tools import offered
 from evals.runlog import read_events, read_memo, read_result, skipped_line
 from harness.llm import is_truncated
@@ -99,6 +99,11 @@ for it in range(contract["limits"].get("max_iterations", 5) if calls and sp is n
         if is_truncated(msg):                   # the harness ran none of its tool calls and ended the attempt
             print(f"      (reply cut off at max_tokens: {[c['name'] for c in msg.tool_calls or []]} not run)")
             break
+        rejected = rejected_reply(msg, step)
+        if rejected is not None:                # an invalid call, no call, or Finish beside other calls: none was run
+            print(f"      (reply rejected by the harness: {[c['name'] for c in msg.tool_calls or []]} not run)")
+            messages += rejected
+            continue
         for i, c in enumerate(msg.tool_calls or []):
             print(f"      -> {c['name']} {json.dumps(c['args'])[:160]}")
             tk = [k for k in memo if k.startswith('["tool", "agent"') and json.loads(k)[3] == it

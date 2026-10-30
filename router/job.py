@@ -506,7 +506,8 @@ def _research(job, cfg, deps, resume=False):
                          f"${lim['attempt_usd']:.2f}; {lim['max_steps']} steps, {lim['max_submits']} submits",
                          f"network: ReadDocs on {len(w.get('hosts') or {})} allowlisted hosts "
                          f"({', '.join(sorted(w.get('hosts') or {}))}), granted by this confirmation",
-                         "tools: read-only (ListFiles, SearchFiles, ReadFile, ReadDocs); nothing is written or run"])
+                         "tools: read-only (ListFiles, SearchFiles, ReadFile, ReadDocs); nothing is written or run",
+                         *environment_lines(job)])
     with live(deps, scfg, [role], text, job=job):
         if stage is None:
             job.data["stages"]["r1"] = {"kind": "research", "run_id": f"{job.id}-r1", "cap_usd": cap,
@@ -577,7 +578,7 @@ def _draft(job, cfg, deps, n, note=None):
     text = _limits_text(job, f"drafter stage {sid}" + (" (resume)" if resume else ""),
                         [f"model {scfg['roles'][scfg['drafter']['role']]['model']}; stage cap ${cap:.4f}; one attempt "
                          f"${lim['attempt_usd']:.2f}; {scfg['drafter']['max_submits']} submits",
-                         f"overrides: {(cfg.get('router') or {}).get('overrides') or {}}"])
+                         f"overrides: {(cfg.get('router') or {}).get('overrides') or {}}", *environment_lines(job)])
     with live(deps, scfg, [scfg["drafter"]["role"]], text, job=job):
         if not resume:
             job.data["stages"][sid] = {"kind": "draft", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
@@ -796,7 +797,8 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
                                   .read_text(encoding="utf-8"))
             acfg = stage_config(apply_profile(cfg, contract["budget_profile"]) if contract.get("budget_profile")
                                 else cfg, st["cap_usd"])
-            text = _limits_text(job, "resume the agent", [f"agent stage {st['run_id']}; stage cap ${st['cap_usd']:.4f}"])
+            text = _limits_text(job, "resume the agent", [f"agent stage {st['run_id']}; stage cap ${st['cap_usd']:.4f}",
+                                                          *environment_lines(job)])
             with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
                 return job, _agent(job, cfg, deps, sandbox_cfg, resume=True, sid=sid)
         raise Refused(f"job {job.id} is {state}: nothing to resume")
@@ -860,6 +862,7 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
                  + {True: ", files changed", False: ", no file changed"}.get(s["wrote"], ""),
                  f"profile {profile}; max input {ctrun.settings(acfg)['max_input_tokens']}; one attempt ${need:.2f}; "
                  f"agent cap ${cap:.4f}",
+                 *environment_lines(job),
                  *([f"network: ReadDocs on {len(cfg['web']['hosts'])} allowlisted hosts "
                     f"({', '.join(sorted(cfg['web']['hosts']))}), granted at approve; this stage downloads again"]
                    if web else [])]

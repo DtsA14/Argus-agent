@@ -700,6 +700,8 @@ def test_a_directory_glob_is_refused_at_submit_and_the_drafter_fixes_it_with_rev
         in seen
     assert r["status"] == dt.DRAFTED and vlog() == ["target", "regression"]       # the refused one ran nothing
     assert "not `tests`" in dt.SYSTEM
+    # W2b-3: duplicate or empty changed_tests entries and new files among them each cost a submit
+    assert "One entry per existing file" in dt.SYSTEM and "never a changed one" in dt.SYSTEM
 
 
 def test_a_profile_not_offered_to_the_drafter_is_refused(root, tmp_path, vlog):

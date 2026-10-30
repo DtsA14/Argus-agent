@@ -795,9 +795,9 @@ A1_ENDS = [{"event": "attempt_end", "iteration": 0, "reason": "context_limit", "
            {"event": "attempt_summary", "iteration": 1, "reason": "context_limit", "steps": 5, "wrote": False}]
 
 
-def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None):
+def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None, **code):
     """A job whose first agent stage failed like router pilot #3's: approved, then AGENT_FAILED."""
-    env.code()
+    env.code(**code)
 
     def run(*, run_id, runs_dir, **kw):
         d = Path(runs_dir) / run_id
@@ -809,9 +809,9 @@ def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None):
             (d / "verdict_1.json").write_text(json.dumps(verdict))
         return {"status": "FAILED_ACCEPTANCE", "stop_reason": "stagnant: the same criteria failed 2 attempts in a row",
                 "usd_billed": 0.0}
-    monkeypatch.setattr(ctrun, "run_code_task", run)
-    env.approve()
-    monkeypatch.undo()
+    with monkeypatch.context() as m:                   # undo only this patch, never the caller's or the fixtures'
+        m.setattr(ctrun, "run_code_task", run)
+        env.approve()
     assert env.job().data["state"] == rj.AGENT_FAILED
     return env.job()
 
