@@ -578,7 +578,7 @@ def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=N
 # from the process that runs the code under test: a deliberate forgery from inside is contained by the sandbox, not
 # detected.
 VITEST_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)$")
-VITEST_NODE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)::[^\r\n]{1,300}$")
+VITEST_NODE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)::[^\x00-\x1f\x7f]{1,300}$")
 VITEST_STATUS = {"passed": "ok", "failed": "FAIL", "skipped": "skipped", "pending": "skipped"}
 VITEST_RECORDER = r"""
 process.env.HOME = '/tmp'

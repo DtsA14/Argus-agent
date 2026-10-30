@@ -171,8 +171,8 @@ def contract(*vals):
 
 def test_vitest_node_ids_may_have_spaces_but_not_newlines():
     assert ct.validate(contract()) == []
-    bad = contract(spec(must=[FILE + "::a\nb"]))
-    assert any("must_pass" in e for e in ct.validate(bad))
+    for ch in ("\n", "\r", "\x1b", "\x00", "\x7f"):     # printed in logs and screens: no control characters
+        assert any("must_pass" in e for e in ct.validate(contract(spec(must=[FILE + "::a" + ch + "b"])))), repr(ch)
     assert any("must_pass" in e for e in ct.validate(contract(spec(must=["src/other.py::test_x"]))))
 
 
