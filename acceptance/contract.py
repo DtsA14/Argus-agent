@@ -250,6 +250,27 @@ def setup_problems(c, files, *, profiles, environments_configured):
         if unknown:               # the contract names an environment this config does not have: fail closed
             errors.append(f"unknown sandbox environment(s) {unknown} (configured: {sorted(environments_configured)})")
         errors += runner_problems(c, environments_configured)
+    if any(kind(v) == "vitest" for v in c["validation"]):
+        errors += vitest_scope_problems(c, files)
+    return errors
+
+
+# SPEC_PWA_VIEWER (review of PR 1): what the harness's vitest run loads besides the tests. Its config (and the plugins,
+# setup files and aliases it names) runs in the recorder's process and is read from the root only; package.json and
+# .npmrc there name the packages. None of it may be writable. A node_modules (or package.json) below the root, which
+# would shadow the environment's packages, is refused on the workspace itself before every run
+# (acceptance/validation.py vitest_workspace_problems), whatever the globs say.
+VITEST_LOADED = [f"{n}.{e}" for n in ("vite.config", "vitest.config", "vitest.workspace")
+                 for e in ("js", "mjs", "cjs", "ts", "mts", "cts", "json")] + ["package.json", ".npmrc"]
+
+
+def vitest_scope_problems(c, files):
+    """A vitest task's scope may not make writable anything vitest loads from the root besides the tests
+    (VITEST_LOADED), and its repository may not bring a node_modules of its own."""
+    errors = [f"writable glob {g!r} would let the agent write {p!r}, which vitest loads (config, packages)"
+              for g in c["scope"]["writable"] for p in VITEST_LOADED if glob_regex(g).match(p)]
+    if any(f.startswith("node_modules/") or "/node_modules/" in f for f in files):
+        errors.append("the repository has a node_modules directory: its packages would shadow the environment's")
     return errors
 
 

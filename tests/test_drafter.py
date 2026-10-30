@@ -853,6 +853,8 @@ def test_a_vitest_environment_gives_the_drafter_its_runner_and_its_rules(root, t
     assert [e["runner"] for e in events(d) if e["event"] == "drafter_policy"] == ["vitest"]
     from codetask import drafter as cdr
     assert model.calls[0]["messages"][0].content == cdr.SYSTEM_VITEST
+    submit = next(t for t in model.bound_tools if t.__name__ == "SubmitDraft")
+    assert submit in cdr.VITEST_SUBMIT_TOOLS and "changed_tests" not in submit.model_fields
 
 
 def test_a_python_environment_keeps_the_pytest_drafter(root, tmp_path):

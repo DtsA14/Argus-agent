@@ -18,7 +18,9 @@ ISOLATION = [f"src/isolation.test.js::{n}" for n in ("no network", "workspace is
                                                       "node_modules is read-only", "runs as nobody")]
 EXPECTED = {DEMO + "adds": "ok", DEMO + "group > nested name": "ok", DEMO + "renders": "ok",
             DEMO + "fails by assertion": "FAIL", DEMO + "fails in code": "FAIL", DEMO + "element not found": "FAIL",
-            DEMO + "message names a path": "FAIL", DEMO + "skipped": "skipped"}
+            DEMO + "message names a path": "FAIL", DEMO + "caught with its cause": "FAIL",
+            DEMO + "message with a stack line": "FAIL", DEMO + "awaits code that fails": "FAIL",
+            DEMO + "skipped": "skipped"}
 
 
 @pytest.fixture(scope="module")
@@ -57,7 +59,7 @@ def test_every_test_is_classified_the_same_way_in_two_runs(cfg, demo):
         e = v["evidence"]
         seen.append({n: s for n, s in e["must_pass"].items()} or None)
         assert v["status"] == "fail" and e["consistent"] is True, v["reason"]
-        assert (e["tests_run"], e["failures"], e["skipped"], e["errors"]) == (8, 4, 1, 0)
+        assert (e["tests_run"], e["failures"], e["skipped"], e["errors"]) == (11, 7, 1, 0)
         assert e["failed_nodes"] == sorted(n for n, s in EXPECTED.items() if s == "FAIL")
     nonce = va.vitest_nonce()
     r = sb.run_command(va.vitest_argv(nonce, ["src/demo.test.jsx"]), workdir=str(demo),
@@ -98,6 +100,21 @@ def test_the_red_check_tells_an_assertion_from_any_other_failure(cfg, demo):
     a, code, missing, ok, named = (got[n] for n in nodes)
     # where it was raised is read from the stack's "at" lines, never from a path the message happens to name
     assert (named["path"], named["repo_paths"]) == ("src/demo.test.jsx", ["src/demo.test.jsx"])
+    more = [DEMO + "caught with its cause", DEMO + "message with a stack line"]
+    got, why = va.red_check(more, str(demo), cfg, timeout_s=120, environment="pwa_node22", runner="vitest")
+    cause, forged = (got[n] for n in more)
+    # the cause's stack reaches the code under test, so the swallowed-error gate passes and the agent sees the way
+    assert (cause["assertion"], cause["path"]) == (True, "src/demo.test.jsx") and "src/boom.js" in cause["repo_paths"]
+    assert cause["message_names"] == ["TypeError"]
+    assert (forged["assertion"], forged["path"], forged["repo_paths"]) == (True, "src/demo.test.jsx",
+                                                                            ["src/demo.test.jsx"])
+    v = va.run_validation(spec("src/demo.test.jsx", max_skipped=1), str(demo), cfg)
+    block = v["evidence"]["output_tail"].split(f"FAIL {DEMO}caught with its cause\n", 1)[1].split("\nFAIL ", 1)[0]
+    assert "at src/demo.test.jsx:" in block and "at src/boom.js:3" in block      # the cause's frames too
+    got, why = va.red_check([DEMO + "awaits code that fails"], str(demo), cfg, timeout_s=120, environment="pwa_node22",
+                            runner="vitest")
+    later = got[DEMO + "awaits code that fails"]       # "at async /workspace/...": the awaiting test is on the way
+    assert later["path"] == "src/boom.js" and later["repo_paths"] == ["src/boom.js", "src/demo.test.jsx"]
     assert (a["outcome"], a["assertion"], a["type"], a["path"]) == ("failed", True, "AssertionError",
                                                                     "src/demo.test.jsx")
     assert (code["assertion"], code["type"], code["path"]) == (False, "TypeError", "src/boom.js")

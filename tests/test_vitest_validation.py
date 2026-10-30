@@ -151,12 +151,77 @@ def test_a_killed_or_cut_run_never_passes():
 def test_red_check_records_have_the_pytest_shape():
     r = recorded({RED: rec("failed", "AssertionError", FILE, "expected 0 to be 1"),
                   OK: rec("failed", "TestingLibraryElementError", FILE, "Unable to find an element")})
-    got = va.red_records(output(r), NONCE, [RED, OK])
-    assert got[RED]["outcome"] == "failed" and got[RED]["assertion"] is True and got[RED]["path"] == FILE
+    got, why = va.red_records(output(r), NONCE, [RED, OK])
+    assert why is None and got[RED]["outcome"] == "failed" and got[RED]["assertion"] is True
+    assert got[RED]["path"] == FILE
     assert got[OK]["assertion"] is False and got[OK]["type"] == "TestingLibraryElementError"
     assert set(got[RED]) >= {"outcome", "type", "assertion", "path", "message", "message_names", "repo_paths"}
-    assert va.red_records(output(r), NONCE, [FILE + "::missing"]) == {}
-    assert va.red_records("nothing", NONCE, [RED]) is None
+    assert va.red_records(output(r), NONCE, [FILE + "::missing"]) == ({}, None)
+    assert va.red_records("nothing", NONCE, [RED]) == (None, "no vitest record in the output")
+
+
+@pytest.mark.parametrize("record, why", [
+    (recorded({RED: rec("failed", "AssertionError", FILE)}, count=2), "inconsistent"),     # two tests, one name
+    (recorded({RED: rec("failed", "AssertionError", FILE)}, unhandled=["Error: x"]), "unhandled"),
+    (recorded({RED: rec("failed", "AssertionError", FILE)}, fatal="no config"), "could not start"),
+    (recorded({RED: rec("failed", "AssertionError", FILE)}, modules={FILE: {"errors": []}, "x.test.js": {"errors": []}}),
+     "did not run exactly"),
+])
+def test_the_red_check_trusts_a_record_no_more_than_a_validation_does(record, why):
+    got, reason = va.red_records(output(record), NONCE, [RED])
+    assert got is None and why in reason
+
+
+# --- what vitest loads besides the tests (review of PR 1) ---
+
+@pytest.mark.parametrize("paths, why", [
+    (["node_modules/vitest/index.js"], "node_modules"),
+    (["src/node_modules/react/index.js"], "src/node_modules"),
+    (["src/package.json"], "src/package.json"),
+    (["lib/.npmrc"], "lib/.npmrc"),
+])
+def test_a_workspace_that_would_shadow_the_environments_packages_is_never_run(tmp_path, monkeypatch, paths, why):
+    for p in ["package.json", "src/list.jsx", FILE, *paths]:
+        (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / p).write_text("x")
+
+    def never(*a, **k):
+        raise AssertionError("the sandbox must not be started")
+    monkeypatch.setattr(va.sb, "run_command", never)
+    v = va.run_validation(spec(must=[OK]), str(tmp_path), {})
+    assert v["status"] == "fail" and why in v["reason"], v["reason"]
+    got, reason = va.red_check([RED], str(tmp_path), {}, timeout_s=9, environment="pwa_node22", runner="vitest")
+    assert got is None and why in reason
+
+
+def test_a_root_package_json_and_the_repositorys_own_files_are_fine(tmp_path):
+    for p in ["package.json", "vite.config.js", "src/list.jsx", FILE]:
+        (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / p).write_text("x")
+    assert va.vitest_workspace_problems(str(tmp_path)) == []
+
+
+@pytest.mark.parametrize("glob, refused", [
+    ("**", True), ("*", True), ("*.js", True), ("vite.config.js", True), ("vitest.config.ts", True),
+    ("package.json", True), (".npmrc", True), ("src/**", False), ("src/list.jsx", False), ("src/*.jsx", False),
+])
+def test_a_vitest_scope_never_makes_the_config_or_the_packages_writable(glob, refused):
+    c = contract()
+    c["scope"]["writable"] = [glob]
+    problems = ct.setup_problems(c, {"src/list.jsx": "s", FILE: "s"}, profiles=None, environments_configured=None)
+    assert any("vitest loads" in p for p in problems) is refused, problems
+
+
+def test_a_repository_with_its_own_node_modules_is_refused_for_vitest():
+    problems = ct.setup_problems(contract(), {"src/list.jsx": "s", FILE: "s", "node_modules/react/index.js": "s"},
+                                 profiles=None, environments_configured=None)
+    assert any("node_modules" in p for p in problems)
+    py = contract({"id": "p", "executable": "python", "args": ["-m", "pytest", "t"], "timeout_s": 9, "min_tests": 1,
+                   "max_skipped": 0, "must_pass": []})
+    py["scope"]["writable"] = ["**"]
+    py["scope"]["protected"] = ["t/**"]
+    assert not [p for p in ct.setup_problems(py, {"t/x.py": "s"}, profiles=None, environments_configured=None)
+                if "vitest" in p or "node_modules" in p]
 
 
 # --- contract (section 9) ---
@@ -225,7 +290,9 @@ def test_one_draft_never_mixes_runners():
     d = draft()
     d["contract"]["validation"].append({"id": "p", "executable": "python", "args": ["-m", "pytest", "tests"],
                                         "timeout_s": 9, "min_tests": 1, "max_skipped": 0, "must_pass": []})
-    assert any("runner" in e for e in dr.validate_draft(d))
+    errors = dr.validate_draft(d)
+    assert any("runner" in e for e in errors)
+    assert not any("new_tests" in e for e in errors), errors      # no advice about test files before one runner
 
 
 def test_red_by_assertion_reads_vitest_records_like_pytest_ones():
@@ -243,6 +310,7 @@ def test_red_by_assertion_reads_vitest_records_like_pytest_ones():
     problems, _ = dr.red_by_assertion(spec(must=[RED]), [RED], "/ws", {}, c, {FILE},
                                       red=lambda *a, **k: (bad, None))
     assert problems and "TestingLibraryElementError" in problems[0]
+    assert "queryByText" in problems[0] and "hasattr" not in problems[0]       # the vitest hint, not Python's
 
 
 # --- the drafter (V5) ---
@@ -271,3 +339,41 @@ def test_the_drafter_is_told_its_runner():
     old = {k: v for k, v in POLICY.items() if k != "runner"}             # a policy frozen before runners existed
     assert "python -m pytest" in drafter.task_prompt({"issue": "i", "intake": "x"}, 3,
                                                      {**old, "profile_info": {}, "agent_tools": []})
+
+
+# --- the drafter's tools, call path and swallowed errors for vitest (review of PR 1) ---
+
+def schema(tool):
+    from langchain_core.utils.function_calling import convert_to_openai_tool
+    return convert_to_openai_tool(tool)["function"]
+
+
+def test_a_vitest_drafter_is_offered_the_same_tools_by_name_without_changed_tests():
+    vit = drafter.offered({"read_file"}, "vitest")
+    assert [t.__name__ for t in vit] == ["ReadFile", "SubmitDraft", "ReviseDraft"]
+    for t in vit[1:]:
+        s = schema(t)
+        assert s["name"] == t.__name__ and "changed_tests" not in s["parameters"]["properties"]
+        text = json.dumps(s)
+        assert "vitest" in text and "pytest" not in text
+    py = drafter.offered({"read_file"})
+    assert py[1:] == [drafter.SubmitDraft, drafter.ReviseDraft]                  # pytest's tools are unchanged
+    assert "changed_tests" in schema(py[1])["parameters"]["properties"]
+
+
+def test_the_scope_question_reads_the_vitest_call_path():
+    d = draft()
+    tail = f"FAIL {RED}\n  TypeError: x\n  at src/api.js:3\n  at src/list.jsx:9\n  at {FILE}:7\n1 passed, 1 failed"
+    report = {"baseline": {"t": {"status": "fail", "output_tail": tail}}}
+    assert drafter.call_path_outside(d, report) == ["src/api.js:3"]          # writable src/list.jsx and the test left out
+
+
+def test_a_swallowed_vitest_error_is_told_the_vitest_way():
+    d = draft()
+    rec_ = {"outcome": "failed", "type": "AssertionError", "assertion": True, "path": FILE, "message": "threw TypeError",
+            "message_names": ["TypeError"], "repo_paths": [FILE]}
+    out = drafter.swallowed_problems(d, {"baseline": {"t": {"red_check": {RED: rec_}}}})
+    assert len(out) == 1 and "cause: e" in out[0] and "pytest" not in out[0]
+    rec_["repo_paths"] = ["src/list.jsx", FILE]                                # the cause's stack reached the code
+    assert drafter.swallowed_problems(d, {"baseline": {"t": {"red_check": {RED: rec_}}}}) == []
+    assert "not.toThrow()" not in drafter.SYSTEM_VITEST.split("Never use")[0]

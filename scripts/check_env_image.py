@@ -40,7 +40,9 @@ VITEST_ISOLATION = [f"src/isolation.test.js::{n}" for n in ("no network", "works
                                                              "node_modules is read-only", "runs as nobody")]
 VITEST_EXPECTED = {f"src/demo.test.jsx::{n}": s for n, s in (
     ("adds", "ok"), ("group > nested name", "ok"), ("renders", "ok"), ("fails by assertion", "FAIL"),
-    ("fails in code", "FAIL"), ("element not found", "FAIL"), ("message names a path", "FAIL"), ("skipped", "skipped"))}
+    ("fails in code", "FAIL"), ("element not found", "FAIL"), ("message names a path", "FAIL"),
+    ("caught with its cause", "FAIL"), ("message with a stack line", "FAIL"),
+    ("awaits code that fails", "FAIL"), ("skipped", "skipped"))}
 NODE_PROBE = ("const fs = require('node:fs'); console.log('ARGUS-PROBE:' + JSON.stringify({node: process.versions.node, "
               "vitest: JSON.parse(fs.readFileSync('/node_modules/vitest/package.json')).version, "
               "sh: fs.existsSync('/bin/sh'), bash: fs.existsSync('/bin/bash'), git: fs.existsSync('/usr/bin/git'), "

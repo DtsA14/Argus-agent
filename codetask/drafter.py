@@ -157,6 +157,45 @@ class ReviseDraft(BaseModel):
     changed_tests: Optional[List[ChangedTest]] = None
 
 
+class VitestValidationArgs(BaseModel):
+    id: str = Field(description="A short lower-case id, e.g. target or regression")
+    paths: List[str] = Field(description="Test files only (*.test.jsx, .js, .ts, .tsx), never node ids; the harness "
+                                         "runs vitest run <paths>")
+    must_pass: List[str] = Field(description="vitest node ids that must pass after the fix: path::full test name, "
+                                             "describe names joined by ' > '")
+    min_tests: int = Field(description="The least number of tests this validation must run")
+
+
+def _vitest_submits():
+    """SubmitDraft and ReviseDraft as a drafter in a vitest environment is offered them (SPEC_PWA_VIEWER V5): the same
+    tools by name, with vitest validations and no changed_tests (v0). The pytest drafter's tools are unchanged."""
+    class SubmitDraft(BaseModel):
+        plan: PlanArgs
+        scope: ScopeArgs
+        validation: List[VitestValidationArgs] = Field(description="Every validation the agent's fix must pass")
+        new_tests: List[NewTest] = Field(description="At least one new test file (*.test.jsx) that shows the issue")
+        unverifiable: List[str] = Field(description="What the issue asks that no test can check (for the reviewer); "
+                                                    "may be empty")
+        budget_profile: str = Field(description="The agent's budget profile, one of those listed in the task: large "
+                                                "enough for one attempt to read what the fix needs and write it")
+        tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, "
+                                                                     "search_files)")
+
+    class ReviseDraft(BaseModel):
+        plan: Optional[PlanArgs] = None
+        scope: Optional[ScopeArgs] = None
+        validation: Optional[List[VitestValidationArgs]] = None
+        new_tests: Optional[List[NewTest]] = None
+        unverifiable: Optional[List[str]] = None
+        budget_profile: Optional[str] = None
+        tools: Optional[List[str]] = None
+
+    SubmitDraft.__doc__ = globals()["SubmitDraft"].__doc__
+    ReviseDraft.__doc__ = globals()["ReviseDraft"].__doc__
+    return SubmitDraft, ReviseDraft
+
+
+VITEST_SUBMIT_TOOLS = _vitest_submits()
 SUBMITS = ("SubmitDraft", "ReviseDraft")       # each one is checked, and counts toward max_submits
 READ_TOOLS = [ListFiles, SearchFiles, ReadFile]
 SUBMIT_KEYS = {"plan", "scope", "validation", "new_tests", "unverifiable", "budget_profile", "tools", "changed_tests"}
@@ -165,8 +204,9 @@ VALIDATION_ARG_KEYS = {"id", "paths", "must_pass", "min_tests"}
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
 
 
-def offered(allowed):
-    return [t for t in READ_TOOLS if GATED[t.__name__] in allowed] + [SubmitDraft, ReviseDraft]
+def offered(allowed, runner="pytest"):
+    submits = list(VITEST_SUBMIT_TOOLS) if runner == "vitest" else [SubmitDraft, ReviseDraft]
+    return [t for t in READ_TOOLS if GATED[t.__name__] in allowed] + submits
 
 
 SYSTEM = "\n".join([
@@ -218,8 +258,11 @@ SYSTEM_VITEST = "\n".join([
     "missing export, a TypeError, an element getByText cannot find, nor an error thrown inside the code under test: the "
     "harness checks the error and where it was raised), and test only the behaviour the issue asks for. Everything "
     "else must pass now. To look for an element that may be missing, use queryByText and expect(...) on the result.",
-    "- To test that code does not throw, use expect(() => ...).not.toThrow(): the failure is an assertion that "
-    "carries the error's message.",
+    "- To test that code does not throw, call it inside try and, in the catch block, throw an AssertionError with the "
+    "error as its cause: `import { AssertionError } from 'node:assert'` and "
+    "`throw Object.assign(new AssertionError({ message: `load() threw: ${e}` }), { cause: e })`. The harness then "
+    "shows where the error comes from (the agent needs it), and the test still fails by an assertion. Never use "
+    "expect(...).not.toThrow() for it: its failure keeps only the message, not where the error was raised.",
     "- New test files are *.test.jsx (or .test.js, .test.ts, .test.tsx). In SubmitDraft, a validation's paths are "
     "test files only (never node ids), and its must_pass are node ids: the file, `::`, and the full test name, with "
     "describe names joined by ' > ' (e.g. src/list.test.jsx::totals > shows the sum).",
@@ -389,11 +432,17 @@ def _evidence(report):
 
 # SPEC_DRAFT_CALL_PATH: what the failing baseline's traceback shows of the repository's code.
 _LOC = re.compile(r"^(\S+\.py):(\d+): in (\S+)")                  # pytest --tb=short: "path.py:12: in name"
+_LOC_VITEST = re.compile(r"^  at (\S+):(\d+)$")                       # vitest_tail: "  at src/api.js:12"
 CALL_PATH_MAX = 8
 SWALLOWED = ("validation {vid}: required test(s) {nodes} fail by an assertion that reports {names}, but the test "
              "output has no traceback of it (no line of the repository's code). Catch it in the test and, inside the "
              "except block, raise AssertionError(\"...\") from the exception, so pytest prints where the error comes "
              "from; the test still fails by an assert")
+SWALLOWED_VITEST = ("validation {vid}: required test(s) {nodes} fail by an assertion that reports {names}, but the "
+                    "test output has no stack of it (no line of the repository's code). Catch it in the test and, in "
+                    "the catch block, throw Object.assign(new AssertionError({{ message: ... }}), {{ cause: e }}) "
+                    "(AssertionError from node:assert), so the harness shows where the error comes from; the test "
+                    "still fails by an assertion")
 UNREAD = ("validation {vid}: required test {node} fails by an assertion, but its message and traceback files could not be "
           "read from the red check, so whether it keeps the traceback was not checked")
 ACCEPTED = ("Draft accepted: the shape, the scope and the baseline passed (every required new test fails by assertion "
@@ -420,7 +469,7 @@ def _repo_frames(tail, protected):
     """The location lines of the repository's own code (relative paths, not test files), in output order."""
     out = []
     for line in (tail or "").splitlines():
-        m = _LOC.match(line)
+        m = _LOC.match(line) or _LOC_VITEST.match(line)
         if m and _repo_code(m.group(1), protected):
             out.append(m)
     return out
@@ -438,7 +487,7 @@ def call_path_outside(draft, report, limit=CALL_PATH_MAX):
             if m.group(1) in seen or ct.matches(m.group(1), sc["writable"]):
                 continue
             seen.add(m.group(1))
-            out.append(f"{m.group(1)}:{m.group(2)} (in {m.group(3)})")
+            out.append(f"{m.group(1)}:{m.group(2)}" + (f" (in {m.group(3)})" if m.re is _LOC else ""))
     return out[:limit]
 
 
@@ -461,7 +510,8 @@ def swallowed_problems(draft, report):
                 continue
             names = sorted({x for x in named if isinstance(x, str) and x != "AssertionError"})
             if names:
-                out.append(SWALLOWED.format(vid=vid, nodes=n, names=", ".join(names)))
+                text = SWALLOWED_VITEST if dr.draft_runners(draft["contract"]) == {"vitest"} else SWALLOWED
+                out.append(text.format(vid=vid, nodes=n, names=", ".join(names)))
     return out
 
 
@@ -521,12 +571,12 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
     return submit
 
 
-def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher, system_prompt=SYSTEM):
+def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher, runner="pytest"):
     def drafting(task_id, toolbox, prompt):
         meta = {"node": NODE, "task": task_id, "iteration": 0}
         res = reservation_from_ledger(log, tokens=lim["attempt_tokens"], usd=lim["attempt_usd"],
                                       max_input=lim["max_input_tokens"], **meta)
-        tools = offered(toolbox.allowed)
+        tools = offered(toolbox.allowed, runner)
         submits, last, asked, held = 0, None, False, {}
 
         def end(reason, steps, **out):
@@ -537,7 +587,7 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher, sys
             return {"end": reason, "steps": steps, "submits": submits, "tokens_used": res.used_tokens,
                     "usd_used": res.used_usd, **out}
 
-        messages = [SystemMessage(system_prompt), HumanMessage(prompt)]
+        messages = [SystemMessage(system(runner)), HumanMessage(prompt)]
         used = 0
         for step in range(lim["max_steps"] + lim["max_submits"]):
             extra = step >= lim["max_steps"]           # only submits are left (SPEC_DRAFTER_SUBMIT_STEPS)
@@ -910,7 +960,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
                              source=source, collect=collect or collect_nodes, red=red or red_check)
         run = make_drafting(caller, memo, log, lim={**lim, "max_steps": policy["max_steps"],
                                                          "max_submits": policy["max_submits"]}, tool_versions=versions,
-                            submit=submit, crasher=crasher, system_prompt=system(policy.get("runner")))
+                            submit=submit, crasher=crasher, runner=policy.get("runner") or "pytest")
         a = run(task_id, box, task_prompt(inputs, state["files"], policy))
         out = {"drafting": {"end": a["end"], "steps": a["steps"], "submits": a["submits"]},
                "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}

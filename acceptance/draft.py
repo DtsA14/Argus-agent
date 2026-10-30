@@ -118,7 +118,9 @@ def validate_draft(d):
                 continue
             path = t["path"]
             name = path.rsplit("/", 1)[-1] if isinstance(path, str) else ""
-            if vitest and not (isinstance(path, str) and intake._plain(path) and VITEST_FILE.match(path)):
+            if len(runners) > 1:
+                pass                                  # which test files fit is unknown until there is one runner
+            elif vitest and not (isinstance(path, str) and intake._plain(path) and VITEST_FILE.match(path)):
                 errors.append(f"new_tests[{i}].path must be a plain relative path to a vitest test file "
                               "(*.test.js, .jsx, .ts or .tsx)")
             elif not vitest and (not intake._plain(path) or not name.startswith("test_") or not name.endswith(".py")):
@@ -261,6 +263,9 @@ def collection_problems(draft, contract, base_dir, ws, sandbox_cfg, collect=coll
 
 
 # A failure that is not an assertion of the test itself fails whatever the fix is (pilot W2b-3: KeyError in a drafted test)
+NOT_ASSERTION_HINT_VITEST = ("check with expect() first: expect(screen.queryByText(\"x\")).not.toBeNull() instead of "
+                             "getByText, expect(report).toHaveProperty(\"key\") before report.key, and build in the "
+                             "test every piece of data it uses")
 NOT_ASSERTION_HINT = ("check with an assert first: `assert \"key\" in report` before `report[\"key\"]`, `assert hasattr(obj, "
                       "\"name\")` before calling it, and build in the test (or its fixture) every piece of data it uses")
 
@@ -287,8 +292,9 @@ def red_by_assertion(spec, nodes, ws, sandbox_cfg, contract, red_files, red=red_
         elif not isinstance(rec, dict) or rec.get("outcome") != "failed":
             problems.append(f"required test {n}: no record of how it fails (it must fail by an assertion)")
         elif not rec.get("assertion"):
+            hint = NOT_ASSERTION_HINT_VITEST if kind(spec) == "vitest" else NOT_ASSERTION_HINT
             problems.append(f"required test {n} fails with {rec.get('type')}, not by an assertion: it would fail "
-                            f"whatever the fix is; {NOT_ASSERTION_HINT}")
+                            f"whatever the fix is; {hint}")
         elif not test_file:
             problems.append(f"required test {n} fails by {rec.get('type')} raised in {path or 'no file of the repository'}"
                             ", not in a test file: the test itself checks nothing yet; assert on the result in the test")

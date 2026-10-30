@@ -26,6 +26,7 @@ is contained by the sandbox, and the protected test files (scope) keep the tests
 """
 import hashlib
 import json
+import os
 import re
 import secrets
 
@@ -148,10 +149,8 @@ def argv(spec, nonce=None):
     if errors:
         raise ValueError("; ".join(errors))
     if kind(spec) == "vitest":
-        if nonce is None:
-            return [*vitest_argv("<nonce>", spec["args"][1:])[:3], f"<harness vitest recorder sha256:{RECORDER_SHA}>",
-                    *vitest_argv("<nonce>", spec["args"][1:])[4:]]
-        return vitest_argv(nonce, spec["args"][1:])
+        a = vitest_argv(nonce or "<nonce>", spec["args"][1:])
+        return a if nonce else [*a[:3], f"<harness vitest recorder sha256:{RECORDER_SHA}>", *a[4:]]
     if kind(spec) == "pytest":
         return ["python3", "-I", "-B", *PYTEST_PREFIX, *PYTEST_FIXED, *spec["args"][2:]]
     return ["python3", "-I", *spec["args"], "-v"]
@@ -279,6 +278,23 @@ def skip_violations(no_skip, tests):
                   and not any(n == a or n.startswith((a + "::", a + "[")) for a in allowed))
 
 
+def criteria_problems(spec, parsed, must, skipped):
+    """The contract's own criteria, the same for every runner: at least min_tests ran, at most max_skipped were
+    skipped (named), and every required test is ok."""
+    problems = []
+    if parsed["tests_run"] is not None and parsed["tests_run"] < spec["min_tests"]:
+        problems.append(f"{parsed['tests_run']} tests ran, contract requires at least {spec['min_tests']}")
+    if parsed["skipped"] > spec["max_skipped"]:
+        named = ", ".join(skipped[:SKIPPED_NAMED]) + (f" and {len(skipped) - SKIPPED_NAMED} more"
+                                                      if len(skipped) > SKIPPED_NAMED else "")
+        problems.append(f"{parsed['skipped']} tests skipped, contract allows {spec['max_skipped']}"
+                        + (f": {named}" if named else ""))
+    for t, st in must.items():
+        if st != "ok":
+            problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")
+    return problems
+
+
 def judge_result(spec, r, nonce=None):
     """Criterion verdict for one validation run: ok only when every condition in the contract holds. nonce: the one
     a vitest run was given (its record is read only behind it)."""
@@ -330,16 +346,7 @@ def judge_result(spec, r, nonce=None):
             problems.append(f"exit code {r.get('exit_code')}")
         if parsed["outcome"] not in (None, "OK"):
             problems.append(f"{runner} outcome {parsed['outcome']}")
-        if parsed["tests_run"] is not None and parsed["tests_run"] < spec["min_tests"]:
-            problems.append(f"{parsed['tests_run']} tests ran, contract requires at least {spec['min_tests']}")
-        if parsed["skipped"] > spec["max_skipped"]:
-            named = ", ".join(skipped[:SKIPPED_NAMED]) + (f" and {len(skipped) - SKIPPED_NAMED} more"
-                                                          if len(skipped) > SKIPPED_NAMED else "")
-            problems.append(f"{parsed['skipped']} tests skipped, contract allows {spec['max_skipped']}"
-                            + (f": {named}" if named else ""))
-        for t, st in must.items():
-            if st != "ok":
-                problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")
+        problems += criteria_problems(spec, parsed, must, skipped)
         if evidence.get("skip_violations"):
             problems.append("skipped or xfail in a changed test file, and not marked so before the change: "
                             + ", ".join(evidence["skip_violations"]))
@@ -381,15 +388,7 @@ def judge_vitest(spec, r, nonce):
         if parsed["record"] is not None:
             if parsed["outcome"] != "OK":
                 problems.append(f"vitest outcome {parsed['outcome']}")
-            if parsed["tests_run"] < spec["min_tests"]:
-                problems.append(f"{parsed['tests_run']} tests ran, contract requires at least {spec['min_tests']}")
-            if parsed["skipped"] > spec["max_skipped"]:
-                named = ", ".join(skipped[:SKIPPED_NAMED]) + (f" and {len(skipped) - SKIPPED_NAMED} more"
-                                                              if len(skipped) > SKIPPED_NAMED else "")
-                problems.append(f"{parsed['skipped']} tests skipped, contract allows {spec['max_skipped']}: {named}")
-            for t, st in must.items():
-                if st != "ok":
-                    problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")
+            problems += criteria_problems(spec, parsed, must, skipped)
     return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail" if problems else "pass",
             "reason": "; ".join(problems), "evidence": evidence}
 
@@ -545,6 +544,8 @@ def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=N
     cfg = {**(sandbox_cfg or {}), "timeout_s": timeout_s}
     if environment:
         cfg["environment"] = environment
+    if vitest and vitest_workspace_problems(workdir):
+        return None, "; ".join(vitest_workspace_problems(workdir))
     command = vitest_argv(nonce, vitest_files(nodes)) if vitest else red_argv(nonce, nodes)
     try:
         r = sb.run_command(command, workdir=workdir, cfg=cfg, log=log, meta={"red_check": len(nodes)})
@@ -553,8 +554,8 @@ def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=N
     if r.get("timed_out") or r.get("output_limit_exceeded") or r.get("truncated"):
         return None, "the run timed out or its output was cut"
     if vitest:
-        got = red_records(r.get("stdout"), nonce, nodes)
-        return (got, None) if got is not None else (None, f"no record of the run (exit code {r.get('exit_code')})")
+        got, why = red_records(r.get("stdout"), nonce, nodes)
+        return (got, None) if got is not None else (None, f"{why} (exit code {r.get('exit_code')})")
     lines = [line[len(nonce):] for line in (r.get("stdout") or "").splitlines() if line.startswith(nonce)]
     try:
         got = json.loads(lines[-1]) if len(lines) == 1 else None
@@ -570,9 +571,9 @@ def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=N
 # vitest's own file filter matches substrings), the runner config loader (vite's default writes into node_modules),
 # no cache, and a recorder of its own instead of any reporter of the repository. Per test: the state and, for a
 # failure, its first error: type, message (cut at RED_LIMITS), the names of other errors it mentions, and the
-# repository files of its stack frames ("at" lines only, never the message; node_modules passed over, a second layer:
-# vitest already drops those frames), the deepest
-# first, so `path` is where it was raised, like the pytest plugin's last repository frame. Per module: the errors that
+# repository files of its stack frames and of its `cause` chain (frame lines only, read after the message, which the
+# code under test chooses; files under node_modules passed over), the deepest first, so `path` is where the error
+# itself was raised, like the pytest plugin's last repository frame, and `frames` (path:line) show the agent the way. Per module: the errors that
 # kept it from loading. `count` is every test seen, so two tests with one full name cannot hide each other. Printed
 # once, after the nonce; the process always exits 0, the record says what happened. Like any validation it is read
 # from the process that runs the code under test: a deliberate forgery from inside is contained by the sandbox, not
@@ -580,6 +581,7 @@ def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=N
 VITEST_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)$")
 VITEST_NODE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)::[^\x00-\x1f\x7f]{1,300}$")
 VITEST_STATUS = {"passed": "ok", "failed": "FAIL", "skipped": "skipped", "pending": "skipped"}
+RED_OUTCOME = {"ok": "passed", "FAIL": "failed", "skipped": "skipped"}      # the pytest red check's words
 VITEST_RECORDER = r"""
 process.env.HOME = '/tmp'
 process.env.NO_COLOR = '1'
@@ -589,23 +591,38 @@ const root = '/workspace/'
 const out = { tests: {}, modules: {}, count: 0, unhandled: [], fatal: null }
 const cut = (s, n) => { s = String(s); return s.length <= n ? s : s.slice(0, n - 3) + '...' }
 const rel = p => String(p).startsWith(root) ? String(p).slice(root.length) : String(p)
-const frames = stack => {
+const frames = e => {
+  // the stack's frames only: its first lines repeat the message, which the code under test chooses
+  let stack = String(e.stack || '')
+  const msg = String(e.message || ''), at = msg ? stack.indexOf(msg) : -1
+  stack = at < 0 ? stack : stack.slice(at + msg.length)
   const got = []
-  for (const line of String(stack || '').split('\n')) {
-    const m = line.match(/^\s*at .*?\/workspace\/([^\s():]+):(\d+)/)
+  for (const line of stack.split('\n')) {
+    const m = line.match(/^ {4}at (?:.* \()?\/workspace\/([^\s():]+):(\d+):\d+\)?$/)
     if (m && !m[1].split('/').includes('node_modules')) got.push([m[1], m[2]])
   }
   return got
 }
+const chain = e => {
+  const out = [], seen = new Set()
+  for (let x = e; x && typeof x === 'object' && !seen.has(x) && out.length < limits.chain; x = x.cause) {
+    seen.add(x)
+    out.push(x)
+  }
+  return out
+}
 const names = msg => [...new Set(String(msg).match(/\b[A-Z]\w*(?:Error|Exception)\b/g) || [])]
   .filter(n => n !== 'AssertionError').sort().slice(0, limits.names)
-const none = { type: null, message: null, message_names: [], path: null, where: null, repo_paths: [] }
+const none = { type: null, message: null, message_names: [], path: null, where: null, repo_paths: [], frames: [] }
 const record = e => {
-  const f = frames(e.stack), paths = []
-  for (const [p] of f) if (!paths.includes(p)) paths.push(p)
+  const f = frames(e), all = chain(e).flatMap(frames), paths = [], at = []
+  for (const [p, n] of all) {
+    if (!paths.includes(p)) paths.push(p)
+    if (!at.includes(p + ':' + n)) at.push(p + ':' + n)
+  }
   return { type: cut(e.name || 'Error', 100), message: cut(e.message, limits.message), message_names: names(e.message),
            path: f.length ? f[0][0] : null, where: f.length ? f[0][0] + ':' + f[0][1] : null,
-           repo_paths: paths.slice(0, limits.paths) }
+           repo_paths: paths.slice(0, limits.paths), frames: at.slice(0, limits.paths) }
 }
 const recorder = {
   onTestRunEnd(modules, unhandled) {
@@ -701,7 +718,7 @@ def vitest_tail(parsed):
     for n, v in (rec.get("tests") or {}).items():
         if v["state"] == "failed":
             out.append(f"FAIL {n}\n  {v.get('type')}: {v.get('message')}"
-                       + (f"\n  at {v['where']}" if v.get("where") else ""))
+                       + "".join(f"\n  at {f}" for f in v.get("frames") or ([v["where"]] if v.get("where") else [])))
     for m, errs in (parsed.get("load_errors") or {}).items():
         out += [f"ERROR {m} (the file did not load)"] + [f"  {e.get('name')}: {e.get('message')}" for e in errs]
     out += parsed["distrust"]
@@ -712,16 +729,34 @@ def vitest_tail(parsed):
 
 
 def red_records(stdout, nonce, nodes):
-    """{node: record in the pytest red check's shape} for the requested nodes the recorder saw, or None without a
-    record. assertion: the error is an AssertionError (expect and assert); anything else is not a red by assertion."""
-    rec = vitest_record(stdout, nonce)
-    if rec is None:
-        return None
-    outcome = {"passed": "passed", "failed": "failed", "skipped": "skipped", "pending": "skipped"}
-    return {n: {"outcome": outcome[v["state"]], "type": v.get("type"), "assertion": v.get("type") == "AssertionError",
+    """({node: record in the pytest red check's shape} for the requested nodes, None), or (None, why) when there is
+    no record or it cannot be trusted (parse_vitest). assertion: the error is an AssertionError (expect and assert);
+    anything else is not a red by assertion."""
+    parsed = parse_vitest(stdout, nonce, vitest_files(nodes))
+    if parsed["distrust"]:
+        return None, "; ".join(parsed["distrust"])
+    rec = parsed["record"]
+    return {n: {"outcome": RED_OUTCOME[VITEST_STATUS[v["state"]]], "type": v.get("type"), "assertion": v.get("type") == "AssertionError",
                 "path": v.get("path"), "message": v.get("message"), "message_names": v.get("message_names") or [],
                 "repo_paths": v.get("repo_paths") or []}
-            for n, v in rec["tests"].items() if n in nodes}
+            for n, v in rec["tests"].items() if n in nodes}, None
+
+
+def vitest_workspace_problems(workdir):
+    """What vitest would load from the workspace besides the repository's own code (SPEC_PWA_VIEWER, review of PR 1): a
+    node_modules anywhere, or a package.json or .npmrc below the root, would shadow the environment's packages. Read
+    on the host before every vitest run, without following links; any of them refuses the run."""
+    found = []
+    for here, dirs, files in os.walk(workdir):
+        rel = os.path.relpath(here, workdir)
+        for d in dirs:
+            if d == "node_modules":
+                found.append(os.path.normpath(os.path.join(rel, d)))
+        if rel != ".":
+            found += [os.path.join(rel, f) for f in files if f in ("package.json", ".npmrc")]
+        dirs[:] = [d for d in dirs if d != "node_modules"]
+    return [f"the workspace has {p}: vitest would load packages from it instead of the environment's"
+            for p in sorted(found)[:5]]
 
 
 def vitest_files(nodes):
@@ -734,6 +769,10 @@ def run_validation(spec, workdir, sandbox_cfg, log=None):
     if spec.get("environment"):
         cfg["environment"] = spec["environment"]      # its own image, never the default one (tools/sandbox.settings)
     nonce = vitest_nonce() if kind(spec) == "vitest" else None
+    shadow = vitest_workspace_problems(workdir) if nonce else []
+    if shadow:
+        return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail", "reason": "; ".join(shadow),
+                "evidence": {"argv": argv(spec), "runner": "vitest", "consistent": False, "output_tail": "; ".join(shadow)}}
     try:
         r = sb.run_command(argv(spec, nonce), workdir=workdir, cfg=cfg, log=log, meta={"validation": spec["id"]})
     except sb.SandboxUnavailable as e:
