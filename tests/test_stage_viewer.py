@@ -129,6 +129,8 @@ def test_too_many_files_or_too_much_in_total_is_refused(tmp_path):
     assert any("files" in p for p in sv.artifact_problems(many, SW_SHA))
     big = make_dist(tmp_path / "big", **{f"b{i}.js": b"/" * (1024 * 1024 + 1) for i in range(5)})
     assert any("total" in p for p in sv.artifact_problems(big, SW_SHA))
+    one_more = make_dist(tmp_path / "one_more", **{f"d{i}.txt": b"x" for i in range(200 - 5 + 1)})
+    assert any("201 files" in p for p in sv.artifact_problems(one_more, SW_SHA))
     exact = make_dist(tmp_path / "exact", **{f"c{i}.txt": b"x" for i in range(200 - 5)})
     assert sv.artifact_problems(exact, SW_SHA) == []
 
@@ -248,9 +250,13 @@ def publish(viewer, name="jviewer-aaaaaaaaaaaa", **files):
 
 
 @pytest.fixture
-def viewer(tmp_path, ledger):
+def viewer(tmp_path, ledger, monkeypatch):
+    """A published release. Its own smoke test is left out here, so that a broken proxy fails the proxy's tests rather
+    than this fixture (the smoke test as a gate has tests of its own)."""
     v = sv.Viewer(tmp_path / "staging" / "apps" / "viewer", ledger=ledger, sw_sha256=SW_SHA)
-    publish(v)
+    with monkeypatch.context() as m:
+        m.setattr(sv, "smoke", lambda *a, **k: [("left out", True, "")])
+        publish(v)
     return v
 
 
@@ -388,6 +394,20 @@ def test_an_answer_that_is_not_json_is_not_passed_on(tmp_path, viewer, ledger):
         srv.shutdown()
         srv.server_close()
     assert got == 502 and b"alert" not in body and headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("status", [500, 302, 201, 403])
+def test_only_a_200_or_404_answer_is_passed_on(viewer, ledger, status):
+    ledger.upstream.close()
+    shutil.rmtree(ledger.dir(LEDGER_RELEASE) / "sock")
+    ledger.upstream = Upstream(ledger, sd.manifest(ledger.data), answers=lambda h, p: (status, b'{"detail": "x"}'))
+    srv = start(sv.make_server(viewer, port=0))
+    try:
+        got, headers, _ = request(srv, "GET", "/api/summary")
+    finally:
+        srv.shutdown()
+        srv.server_close()
+    assert got == 502 and headers["cache-control"] == "no-store"
 
 
 def test_the_api_is_only_read_from_the_live_releases_container(proxy, ledger, monkeypatch):
@@ -804,6 +824,7 @@ def test_the_real_build_runs_without_network_on_a_read_only_workspace(tmp_path, 
     commit = commit_config(r, NET_PROBE)
     src, out = tmp_path / "src", tmp_path / "out"
     sg.unpack(r, commit, src)
+    sd._writable(src)                                      # only the read-only mount keeps it as it is
     out.mkdir()
     res = sv.vite_build(src, out, sv.build_image(real_cfg))
     assert res["exit_code"] == 0, res
@@ -835,3 +856,82 @@ def test_a_real_deploy_and_rollback(tmp_path, viewer, viewer_repo, real_cfg):
     index = (viewer.base / "current" / "index.html").read_text()
     assert "/assets/" in index and "/src/main.jsx" not in index
     assert sv.rollback(deps=deps(), viewer=viewer) == first
+
+
+# ---- code review of PR 2 ----------------------------------------------------------------------------------------------
+
+def test_current_is_put_back_on_the_recorded_release_before_a_command(viewer):
+    first = viewer.state()["live"]
+    publish(viewer, "jnew-cccccccccccc", **{"assets/index-abc123.js": JS + b"//2"})
+    viewer._save({"live": first, "history": [first]})        # killed between the swap and the record
+    with pytest.raises(sv.Refused, match="earlier"):
+        sv.rollback(deps=deps(), viewer=viewer)
+    assert viewer.published() == first
+
+
+def test_a_release_whose_service_worker_is_no_longer_the_reviewed_one_is_not_published_again(viewer):
+    first = viewer.state()["live"]
+    publish(viewer, "jnew-cccccccccccc", **{"assets/index-abc123.js": JS + b"//2"})
+    viewer.sw_sha256 = "f" * 64                               # SW_SHA256 moved on to another reviewed sw.js
+    with pytest.raises(sv.Refused, match="sw.js"):
+        sv.rollback(deps=deps(), viewer=viewer)
+    assert viewer.state()["live"] == "jnew-cccccccccccc" and viewer.published() == "jnew-cccccccccccc"
+    assert first in viewer.releases()
+
+
+def test_a_known_release_built_on_another_image_is_not_published_again(tmp_path, viewer, viewer_repo, fake_build,
+                                                                       monkeypatch):
+    r, commit = viewer_repo
+    jobs = tmp_path / "jobs"
+    monkeypatch.setattr(sv, "smoke", lambda *a, **k: [("ok", True, "")])
+    job = viewer_job(jobs, "jview", r, commit)
+    sv.deploy(job, cfg={}, deps=deps(), jobs_dir=jobs, viewer=viewer)
+    sv.rollback(deps=deps(), viewer=viewer)
+    monkeypatch.setattr(sv, "build_image", lambda cfg: "sha256:" + "3" * 64)
+    with pytest.raises(sv.Refused, match="image"):
+        sv.deploy(job, cfg={}, deps=deps(), jobs_dir=jobs, viewer=viewer)
+    assert viewer.state()["live"] != f"jview-{commit[:12]}"
+
+
+def test_the_monitor_does_not_smoke_test_the_viewer_during_a_viewer_command(viewer, ledger, monkeypatch):
+    monkeypatch.setattr(sg.Staging, "smoke", lambda self, release, held=False: [("ledger", True, "")])
+    monkeypatch.setattr(sv, "smoke", lambda *a, **k: pytest.fail("the viewer lock is held"))
+    with viewer.lock():
+        rec = sd.monitor(ledger, sg.FIXTURE, viewer=viewer)
+    assert rec["viewer"]["ok"] is None and "another viewer command" in rec["viewer"]["why"]
+    assert rec["ok"] is True
+
+
+def test_the_smoke_test_checks_relative_assets_and_skips_app_links(tmp_path, ledger):
+    v = sv.Viewer(tmp_path / "rel", ledger=ledger, sw_sha256=SW_SHA)
+    index = (b'<html><head><script type="module" src="./assets/index-abc123.js"></script></head>'
+             b'<body><a href="/jobs/">jobs</a><a href="https://example.com/x.js">x</a></body></html>')
+    publish(v, **{"index.html": index})
+    srv = start(sv.make_server(v, port=0))
+    try:
+        results = sv.smoke(v, srv.server_address[1], listeners=None)
+        assert [r for r in results if not r[1]] == [], results
+        assert any(r[0] == "GET /assets/index-abc123.js -> 200 as recorded" for r in results), results
+        rel = Path(os.path.realpath(v.base / "current"))
+        (rel / "assets").chmod(0o755)
+        (rel / "assets" / "index-abc123.js").chmod(0o644)
+        (rel / "assets" / "index-abc123.js").write_bytes(b"changed")
+        assert not all(r[1] for r in sv.smoke(v, srv.server_address[1], listeners=None))
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_the_proxy_asks_docker_for_the_ledger_pid_once_and_again_after_a_restart(proxy, ledger, monkeypatch):
+    pids = [os.getpid() + 1, os.getpid()]                     # a stale pid first, as after a container restart
+    asked = []
+
+    def container_pid(self, release):
+        asked.append(release)
+        return pids[min(len(asked) - 1, 1)]
+    proxy.peer = (LEDGER_RELEASE, os.getpid() + 1)
+    monkeypatch.setattr(sg.Staging, "container_pid", container_pid)
+    assert request(proxy, "GET", "/api/summary")[0] == 502    # cached stale, docker still says stale
+    assert request(proxy, "GET", "/api/summary")[0] == 200    # docker asked again: the real pid
+    assert request(proxy, "GET", "/api/jobs")[0] == 200       # cached
+    assert len(asked) == 2

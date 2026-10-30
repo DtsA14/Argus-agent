@@ -26,6 +26,7 @@ import http.client
 import http.server
 import json
 import os
+import posixpath
 import re
 import secrets
 import shutil
@@ -75,8 +76,9 @@ SECURITY = {"Content-Security-Policy": "default-src 'self'; connect-src 'self'; 
                                        "base-uri 'none'; frame-ancestors 'none'",
             "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
 MAX_ANSWER = 1_000_000
+STATE_PROBLEM = "viewer state: "                            # how status() starts when state.json cannot be used
 CURRENT = re.compile(r"^releases/(" + sg.RELEASE.pattern.strip("^$") + r")$")
-REFS = re.compile(rb"""(?:src|href)\s*=\s*["'](/[^"'?#]*)""")
+REFS = re.compile(rb"""(?:src|href)\s*=\s*["']([^"'?#]*)""")
 
 
 class Refused(rj.Refused):
@@ -103,7 +105,7 @@ def dependency_problems(package_json, lock):
             continue
         for name, version in sorted(deps.items()):
             want = (locked.get(f"node_modules/{name}") or {}).get("version")
-            if version != want or not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
+            if version != want:                        # a range or a path is never the locked version
                 problems.append(f"{kind} {name} {version!r} is not in environment {ENVIRONMENT}'s lock "
                                 f"({'locked ' + want if want else 'not there'}); a new package is a new environment")
     return problems
@@ -268,6 +270,19 @@ class Viewer:
             return None
         return m.group(1) if m else None
 
+    def reconcile(self):
+        """`current` back on the release state.json records live: a command killed between the swap and the record
+        leaves them apart, and state.json (with its history) is what rollback goes by."""
+        live = self.state()["live"]
+        if self.published() == live and (live is not None or not os.path.lexists(self.base / "current")):
+            return
+        if live is None:
+            os.unlink(self.base / "current")
+        else:
+            self.verify(live)
+            _swap(self.base, f"releases/{live}")
+        self.note("reconciled", release=live)
+
     def verify(self, release):
         """The built record of a release whose dist is still file for file what was built, or Refused."""
         rec = self.releases().get(release)
@@ -294,7 +309,7 @@ class Viewer:
             sd._remove(d)
         d.parent.mkdir(parents=True, exist_ok=True)
         os.rename(dist, d)
-        _read_only(d)
+        sg._read_only(d)
         files = snapshot(d)
         self.note("built", release=release, **meta, files=files, dist_digest=digest(files),
                   sw_sha256=self.sw_sha256)
@@ -307,6 +322,9 @@ class Viewer:
         """Smoke-test `release` through a proxy of its own (an ephemeral port on 127.0.0.1), then swap `current` to it
         and record it live. Any failure before the record leaves `current` and state.json as they were."""
         self.verify(release)
+        problems = artifact_problems(self.dir(release), self.sw_sha256)
+        if problems:                                   # e.g. built before SW_SHA256 named another sw.js
+            raise Refused(f"release {release} is not published again: " + "; ".join(problems[:8]))
         state = self.state()
         srv = make_server(self, port=0, release=release)
         t = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
@@ -347,29 +365,26 @@ def _swap(base, target):
     os.replace(link, base / "current")
 
 
-def _read_only(path):
-    for p in sorted(Path(path).rglob("*"), reverse=True):
-        if not p.is_symlink():
-            p.chmod(0o555 if p.is_dir() else 0o444)
-    Path(path).chmod(0o555)
-
-
 # ---- commands ------------------------------------------------------------------------------------------------------
 
 def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, viewer=None):
     v = viewer or Viewer()
     job = rj.open_job(job_id, jobs_dir)
-    commit, repo = sg.reviewed_commit(job)
-    if job.data["inputs"].get("environment") != ENVIRONMENT:
-        raise Refused(f"job {job.id} ran in environment {job.data['inputs'].get('environment')!r}, not {ENVIRONMENT}: "
-                      "it is not a viewer job")
     image = build_image(cfg)
-    release = sg.release_name(job, commit)
     with v.lock():
+        commit, repo = sg.reviewed_commit(job)
+        if job.data["inputs"].get("environment") != ENVIRONMENT:
+            raise Refused(f"job {job.id} ran in environment {job.data['inputs'].get('environment')!r}, not "
+                          f"{ENVIRONMENT}: it is not a viewer job")
+        release = sg.release_name(job, commit)
+        v.reconcile()
         state = v.state()
         if state["live"] == release:
             raise Refused(f"release {release} is already live")
         known = v.releases().get(release)
+        if known is not None and known.get("image") != image:
+            raise Refused(f"release {release} was built on image {str(known.get('image'))[:19]}, and {ENVIRONMENT} "
+                          f"is {image[:19]} now; nothing was changed")
         sg._confirm(deps, "\n".join([
             f"== staging viewer deploy (job {job.id}) ==",
             f"release {release}: {repo} at {commit[:12]} (applied as reviewed)",
@@ -406,13 +421,14 @@ def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, viewer=None):
                 if os.path.lexists(tmp):
                     sd._remove(tmp)
     with job.lock():
-        job.note(deps, "staged", release=release)
+        job.note(deps, "staged", release=release, app="viewer")
     return release
 
 
 def rollback(*, deps, viewer=None):
     v = viewer or Viewer()
     with v.lock():
+        v.reconcile()
         state = v.state()
         if not state["live"] or len(state["history"]) < 2:
             raise Refused("there is no earlier viewer release to roll back to")
@@ -429,7 +445,7 @@ def status(viewer=None):
     try:
         state = v.state()
     except Refused as e:
-        return f"viewer state: {e}"
+        return f"{STATE_PROBLEM}{e}"
     rels, live = v.releases(), state["live"]
     lines = [f"viewer live: {live or 'nothing'}" + (f" (current -> {v.published()})" if v.published() != live else "")]
     if live in rels:
@@ -451,7 +467,7 @@ def make_server(viewer, port=PORT, release=None):
     """The proxy on BIND:port (0: an ephemeral port, for a release's own smoke test). `release`: serve that release's
     files instead of `current`'s."""
     srv = Server((BIND, port), Handler)
-    srv.viewer, srv.release = viewer, release
+    srv.viewer, srv.release, srv.peer = viewer, release, None   # peer: (ledger release, its container's pid)
     return srv
 
 
@@ -514,12 +530,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             live = ledger.state()["live"]
         except rj.Refused:
             live = None
-        peer = ledger.container_pid(live) if live else None
+        if not live:
+            return self._error(503, "argus-ledger is not live")
+        cached = self.server.peer
+        from_cache = bool(cached) and cached[0] == live
+        peer = cached[1] if from_cache else ledger.container_pid(live)
         if peer is None:
             return self._error(503, "argus-ledger is not live")
         try:
             conn = http.client.HTTPConnection("localhost", timeout=10)
-            conn.sock = sg._connect(ledger.dir(live) / "sock" / "app.sock", peer=peer)
+            try:
+                conn.sock = sg._connect(ledger.dir(live) / "sock" / "app.sock", peer=peer)
+            except OSError:
+                if not from_cache:
+                    raise
+                peer = ledger.container_pid(live)     # the container was restarted: ask docker once more
+                if peer is None:
+                    raise
+                conn.sock = sg._connect(ledger.dir(live) / "sock" / "app.sock", peer=peer)
+            self.server.peer = (live, peer)
             try:
                 conn.putrequest("GET", upstream, skip_host=True, skip_accept_encoding=True)
                 conn.putheader("Host", sg.HOST)
@@ -656,16 +685,17 @@ def smoke(viewer, port, *, release=None, listeners=listeners, held=False):
     def root():
         status, _, body = _ask(port, "GET", "/")
         index.append(body)
-        return status == 200 and _sha(body) == files.get("index.html"), f"{status} {_sha(body)[:12]}"
+        return status == 200 and sg._sha(body) == files.get("index.html"), f"{status} {sg._sha(body)[:12]}"
     check("GET / -> 200 index.html of the release", root)
     for ref in sorted(set(REFS.findall(index[0] if index else b""))):
         ref = ref.decode("utf-8", "replace")
-        if ref.startswith("//"):
-            continue
+        if ":" in ref or ref.startswith("//") or os.path.splitext(ref)[1] not in TYPES:
+            continue                                   # another site, a data: URL, or an app route (/jobs/)
+        ref = posixpath.normpath("/" + ref.removeprefix("./").lstrip("/"))
 
         def asset(ref=ref):
             status, _, body = _ask(port, "GET", ref)
-            return status == 200 and _sha(body) == files.get(ref.lstrip("/")), f"{status} {_sha(body)[:12]}"
+            return status == 200 and sg._sha(body) == files.get(ref.lstrip("/")), f"{status} {sg._sha(body)[:12]}"
         check(f"GET {ref} -> 200 as recorded", asset)
 
     def summary():
@@ -691,6 +721,3 @@ def smoke(viewer, port, *, release=None, listeners=listeners, held=False):
         check(f"listen {BIND}:{port} only", only)
     return out
 
-
-def _sha(data):
-    return hashlib.sha256(data).hexdigest()

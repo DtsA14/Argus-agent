@@ -237,9 +237,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     workspace dengan `node_modules` tidak dijalankan), environment `pwa_node22` distroless dari lock sha512. Code review medium
     10 temuan diperbaiki, security review tanpa temuan; mutants 54/56 (2 ekuivalen); verify.sh PASS e88c940. Batas v0: tes lama
     vitest tidak bisa diubah (`changed_tests` hanya Python), tanpa `-t`
-- [ ] **Viewer PWA, PR 2** (jalur ketat, menunggu persetujuan Atha untuk mulai): build rilis statis tanpa jaringan + cek artifact
-    (A4), proxy `127.0.0.1:8710` GET allowlist (A1–A3, A5), E1 dependency repo ⊆ lock, smoke; lalu kerangka `argus-viewer` dan
-    issue 001 (jalur cepat)
+- [~] **Viewer PWA, PR 2** (jalur ketat, `docs/reviews/SPEC_PWA_VIEWER.md` §10, menunggu approval Atha): `argus stage
+    viewer-deploy|viewer-rollback|viewer-status|viewer-smoke|proxy`; build rilis statis di `pwa_node22` tanpa jaringan,
+    cek artifact (A4), E1, tanpa browser storage, `sw.js` dipin (`SW_SHA256` masih `None`: belum ada rilis sampai kerangka
+    direview), swap `current` atomik sesudah smoke kandidat; proxy `127.0.0.1:8710` (Host, GET/HEAD, tiga path API ke
+    socket ledger dengan header sendiri, `no-store`, CSP); monitor ikut smoke viewer. Unit proxy belum dipasang (pilot).
+    Lalu kerangka `argus-viewer` + pin `SW_SHA256` (jalur ketat) dan issue 001 (jalur cepat)
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
 - [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau

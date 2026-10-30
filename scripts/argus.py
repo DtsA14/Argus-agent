@@ -42,12 +42,12 @@ def stage_viewer(o, deps):
     if o.stage_cmd == "proxy":
         sv.serve()
         return 0
-    if o.stage_cmd == "viewer-smoke":
-        results = sv.smoke(sv.Viewer(), sv.PORT)
-        for check, ok, detail in results:
-            print(f"{'ok  ' if ok else 'FAIL'} {check}: {detail}")
-        return 0 if results and all(r[1] for r in results) else 1
     try:
+        if o.stage_cmd == "viewer-smoke":
+            results = sv.smoke(sv.Viewer(), sv.PORT)
+            for check, ok, detail in results:
+                print(f"{'ok  ' if ok else 'FAIL'} {check}: {detail}")
+            return 0 if results and all(r[1] for r in results) else 1
         if o.stage_cmd == "viewer-deploy":
             cfg = load_config(o.config)
             cfg["sandbox"] = sandbox_cfg(o.config)
@@ -61,8 +61,9 @@ def stage_viewer(o, deps):
         print(f"refused: {type(e).__name__ + ': ' if not isinstance(e, rj.Refused) else ''}{e}", file=sys.stderr)
         print(sv.status())
         return 2
-    print(sv.status())
-    return 0
+    text = sv.status()
+    print(text)
+    return 2 if text.startswith(sv.STATE_PROBLEM) else 0
 
 
 def main(argv=None, deps=None):

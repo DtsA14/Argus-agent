@@ -473,7 +473,7 @@ def monitor(st, source, *, clock=time.gmtime, viewer=None):
                 rec.setdefault("why", "nothing is live")
             if viewer is not None:
                 rec["viewer"] = _viewer_smoke(viewer)
-                if rec["viewer"] and not rec["viewer"]["ok"] and rec["ok"]:
+                if rec["viewer"] and rec["viewer"]["ok"] is False and rec["ok"]:
                     rec["ok"] = False
     except Refused as e:                              # busy: another refresh or monitor; nothing was touched
         rec.update(ok=None, why=str(e)[:300])
@@ -490,7 +490,12 @@ def _viewer_smoke(viewer):
         return {"release": None, "ok": False, "why": str(e)[:300]}
     if not live:
         return None
-    results = sv.smoke(viewer, sv.PORT, held=True)
+    try:
+        with viewer.lock():                       # never between a viewer deploy's swap and its record
+            live = viewer.state()["live"]
+            results = sv.smoke(viewer, sv.PORT, held=True)
+    except sv.Refused as e:
+        return {"release": live, "ok": None, "why": str(e)[:300]}
     return {"release": live, "ok": all(r[1] for r in results), "smoke": [list(r) for r in results]}
 
 
