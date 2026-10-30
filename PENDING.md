@@ -223,6 +223,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     rollback ditolak sebelum `reconcile`, `stage status` exit 2; `docker rm` dicek lewat `docker inspect`; rilis lama yang
     gagal dihentikan → peringatan + `stop_failed`, bukan deploy gagal; `docker logs` maks 15 s dan tidak pernah menentukan
     hasil; smoke menunggu socket mendengar. Review: 10 temuan diperbaiki. Mutants 17/17, verify.sh PASS 296bfb9
+- [x] **Staging dengan data Argus asli + monitoring** (jalur ketat, `docs/reviews/SPEC_STAGING_REAL_DATA.md`, #251):
+    snapshot proyeksi allowlist, divalidasi, swap atomik; container hanya mount `data/pub`; smoke = angka harness; peer
+    socket = pid container; monitor `systemd --user` tiap 15 menit (lingering on); report escaped 0700/0600. Security review
+    2 temuan serius diperbaiki; mutants 44/44; verify.sh PASS 393bddb. Pilot (`pilots/staging_real_data/p1/RESULT.md`): 9/9
+    langkah, satu "go live"; monitor dari timer lolos
+- [ ] **Issue 014** (keputusan manusia per job; ditulis Claude): job Argus jalur cepat, lalu deploy lewat PLAN.md
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
 - [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
