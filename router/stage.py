@@ -6,6 +6,7 @@ VM, smoke-tested from the host, with a tested rollback. No model is called here,
                              smoke test; only when it passes is the previous release stopped
   argus stage rollback       the release that was live before the current one, started and smoke-tested the same way
   argus stage status         what is live, its last smoke test, and what a rollback would start
+  argus stage restart        the live release started again on its recorded image when its container is gone
   argus stage check <job> --env E   the job's commit's own tests in sandbox environment E (no model): the evidence a
                              deploy on that environment's staging runtime needs (SPEC_DEP_UPGRADE_V0 U2)
 
@@ -58,6 +59,9 @@ CHECK_ARGV = ["python3", "-I", "-B", "-m", "pytest", *va.PYTEST_FIXED, "-W", "er
 CHECK_TIMEOUT_S = 600
 PREFIX = "argus-staging-ledger-"
 LABEL = "argus.staging.release"
+# Every container also carries the resolved staging directory it belongs to: a command only lists and removes containers
+# of its own directory (a test's Staging(tmp_path) once removed the live release of ~/argus-staging, 2026-10-30).
+BASE_LABEL = "argus.staging.base"
 HOST = "staging.local"
 ENTRY = f'from ledger.api import create_app\n\napp = create_app("/data/jobs", allowed_hosts=["{HOST}"])\n'
 RELEASE = re.compile(r"^j[0-9a-z_]{1,40}-[0-9a-f]{12}(\.[a-z0-9]{1,12})?$")   # .<runtime> unless the default
@@ -102,8 +106,10 @@ class Refused(rj.Refused):
 class Staging:
     """The staging area: <base>/releases/<release>/{src,entry,data,sock,logs}, state.json and releases.jsonl."""
 
-    def __init__(self, base=STAGING, run=docker, wait_s=SOCKET_WAIT_S):
+    def __init__(self, base=STAGING, run=docker, wait_s=SOCKET_WAIT_S, prefix=PREFIX, label=LABEL):
         self.base, self.run, self.wait_s = Path(base), run, wait_s
+        self.prefix, self.label = prefix, label            # tests use names and a label of their own
+        self.base_label = str(self.base.resolve())
         self.data = self.base / "data"                     # snapshots of real jobs (stage_data), /data in the container
         self.state_path, self.log_path = self.base / "state.json", self.base / "releases.jsonl"
         self.checks_path = self.base / "env_checks.jsonl"
@@ -238,10 +244,11 @@ class Staging:
         if sock.exists():
             shutil.rmtree(sock)
         sock.mkdir(mode=0o700)
-        name = PREFIX + release
+        name = self.prefix + release
         self.remove(name)                               # a container of this release left by an earlier try
         code, out, err = self.run(
-            "run", "-d", "--name", name, "--label", f"{LABEL}={release}", "--network", "none", "--read-only",
+            "run", "-d", "--name", name, "--label", f"{self.label}={release}", "--label",
+            f"{BASE_LABEL}={self.base_label}", "--network", "none", "--read-only",
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", f"{os.getuid()}:{os.getgid()}",
             *LIMITS, "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "PYTHONPATH=/app",
             "-v", f"{d / 'src'}:/app:ro", "-v", f"{d / 'entry'}:/entry:ro", "-v", f"{sd.pub(self.data)}:/data:ro",
@@ -285,8 +292,10 @@ class Staging:
             problems.append(f"user {user!r} is root")
         if c.get("Image") != image:
             problems.append(f"image {c.get('Image')} is not {image}")
-        if (cfg.get("Labels") or {}).get(LABEL) != release:
+        if (cfg.get("Labels") or {}).get(self.label) != release:
             problems.append("release label missing")
+        if (cfg.get("Labels") or {}).get(BASE_LABEL) != self.base_label:
+            problems.append("staging directory label missing")
         want = {"/app": d / "src", "/entry": d / "entry", "/data": sd.pub(self.data), "/run/argus": d / "sock"}
         mounts = {m.get("Destination"): m for m in c.get("Mounts") or []}
         if set(mounts) != set(want):
@@ -306,7 +315,7 @@ class Staging:
     def container_pid(self, release):
         """The host pid of the release's container's main process (uvicorn), or None: the only peer the smoke test and
         the report talk to (security review: the socket directory is the container's, so app.sock could be a link)."""
-        code, out, _ = self.run("inspect", "--format", "{{.State.Pid}}", PREFIX + release)
+        code, out, _ = self.run("inspect", "--format", "{{.State.Pid}}", self.prefix + release)
         pid = out.strip()
         return int(pid) if code == 0 and pid.isdigit() and int(pid) > 0 else None
 
@@ -344,10 +353,26 @@ class Staging:
         d.mkdir(exist_ok=True)
         (d / f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{what}.txt").write_text(out + err, encoding="utf-8")
 
+    def owner(self, name):
+        """The staging directory label of container `name`, "" without one, or None when there is no such container."""
+        code, out, err = self.run("inspect", "--type", "container", "--format",
+                                  '{{index .Config.Labels "%s"}}' % BASE_LABEL, name)
+        if code == 0:
+            return "" if out.strip() == "<no value>" else out.strip()
+        if "no such container" in (err or "").lower():
+            return None
+        raise Refused(f"docker inspect {name} failed ({(err or '').strip()[:200]}); nothing was removed")
+
     def remove(self, name):
-        """Stop and remove one staging container; never any other."""
-        if not name.startswith(PREFIX) or not RELEASE.match(name[len(PREFIX):]):
+        """Stop and remove one staging container of this staging directory; never any other."""
+        if not name.startswith(self.prefix) or not RELEASE.match(name[len(self.prefix):]):
             raise Refused(f"{name!r} is not a staging container")
+        owner = self.owner(name)
+        if owner is None:
+            return                                     # nothing to remove
+        if owner != self.base_label:
+            raise Refused(f"container {name} belongs to staging {owner or '(no directory label)'}, not "
+                          f"{self.base_label}; it was not removed")
         code, _, err = self.run("rm", "-f", name)
         if code and self.run("inspect", "--type", "container", name)[0] == 0:
             raise Refused(f"container {name} could not be removed ({err.strip()[:200]}); it may still be running")
@@ -360,23 +385,25 @@ class Staging:
             return True
         except Refused as e:
             try:
-                self.note("stop_failed", release=name[len(PREFIX):], why=why, error=str(e)[:300])
+                self.note("stop_failed", release=name[len(self.prefix):], why=why, error=str(e)[:300])
             except OSError:
                 pass
             return False
 
     def running(self):
-        """Names of the staging containers docker runs now (by label; only names this module would give)."""
-        code, out, _ = self.run("ps", "--filter", f"label={LABEL}", "--format", "{{.Names}}")
-        return [n for n in out.split() if n.startswith(PREFIX) and RELEASE.match(n[len(PREFIX):])] if code == 0 else []
+        """Names of this staging directory's containers docker runs now (by its labels; only names it would give)."""
+        code, out, _ = self.run("ps", "--filter", f"label={self.label}", "--filter",
+                                f"label={BASE_LABEL}={self.base_label}", "--format", "{{.Names}}")
+        return [n for n in out.split() if n.startswith(self.prefix) and RELEASE.match(n[len(self.prefix):])] \
+            if code == 0 else []
 
     def reconcile(self):
         """Stop every staging container that is not the live release (left by a command that stopped half-way)."""
         live = self.state()["live"]
         for name in self.running():
-            if name != PREFIX + str(live):
+            if name != self.prefix + str(live):
                 self.remove(name)
-                self.note("stopped", release=name[len(PREFIX):], why="not the live release (reconciled)")
+                self.note("stopped", release=name[len(self.prefix):], why="not the live release (reconciled)")
 
     def switch(self, release, image, deps, why, commit_state):
         """Start `release` and smoke-test it; only when it passes, record it live (commit_state) and stop the one that
@@ -413,10 +440,10 @@ class Staging:
             raise
         if live and live != release:
             try:
-                self.logs(PREFIX + live, live, "stop")
+                self.logs(self.prefix + live, live, "stop")
             except Exception:                          # noqa: BLE001  (a hung `docker logs` too: the stop is not optional)
                 pass                                   # the logs are a convenience; the stop is not
-            if self.discard(PREFIX + live, f"{why}: {release} is live"):
+            if self.discard(self.prefix + live, f"{why}: {release} is live"):
                 self.note("stopped", release=live, why=f"{why}: {release} is live")
             else:
                 deps.echo(f"warning: {live} could not be stopped; {release} is live, and the next staging command "
@@ -652,6 +679,30 @@ def rollback(*, cfg, deps, staging=None):
             st._save(state)                            # last: a failure before it leaves the current release live
         st.switch(previous, image, deps, "rollback", record)
     return previous
+
+
+def restart(*, cfg, deps, staging=None):
+    """The release state.json records live, started again on the image digest its build recorded (which its runtime must
+    still resolve to, as for a rollback) when its container is not running (e.g. removed by a command of another staging
+    directory before BASE_LABEL, 2026-10-30). Refused while it runs. An exited container of that release is replaced
+    only when it is this directory's (remove()); no reconcile, no other container is stopped. Smoke-tested through
+    switch(); `restarted` is recorded only after a passed smoke test (a failed one stops it); state.json is unchanged."""
+    st = staging or Staging()
+    with st.lock():
+        live = st.state()["live"]
+        if not live:
+            raise Refused("nothing is live: there is no release to restart")
+        rec = st.releases().get(live)
+        if rec is None:
+            raise Refused(f"release {live} is not one that was built")
+        runtime, image = release_image(cfg, rec)
+        if st.container_pid(live) is not None:
+            raise Refused(f"release {live} is running; nothing was started or removed")
+        _confirm(deps, "\n".join(["== staging restart ==", f"start again: {live} on {runtime} {image[:19]} (its recorded image)",
+                                   "no other container is stopped; state.json is not changed",
+                                   "staging only: no production, no users, no credentials"]))
+        st.switch(live, image, deps, "restart", lambda: st.note("restarted", release=live, image=image))
+    return live
 
 
 def status(*, staging=None):

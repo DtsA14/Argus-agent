@@ -122,7 +122,8 @@ def main(argv=None, deps=None):
                     help="the sandbox environment of a staging runtime")
     gvd = gs.add_parser("viewer-deploy", help="the viewer job's applied commit, built in pwa_node22 and published")
     gvd.add_argument("job")
-    for p_ in (gd, gs.add_parser("rollback"), gvd, gs.add_parser("viewer-rollback")):
+    grs = gs.add_parser("restart", help="start the live release again on its recorded image when its container is gone")
+    for p_ in (gd, gs.add_parser("rollback"), grs, gvd, gs.add_parser("viewer-rollback")):
         p_.add_argument("--yes", action="store_true", help="the deployment was approved in chat (\"go live\")")
     gs.add_parser("viewer-status")
     gs.add_parser("viewer-smoke", help="the smoke test of the live viewer release through the proxy on 127.0.0.1:8710")
@@ -178,6 +179,8 @@ def main(argv=None, deps=None):
             deps.assume_yes = o.yes                      # no key is involved: --yes alone is the approval in chat
             if o.stage_cmd == "deploy":
                 sg.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, runtime=o.runtime)
+            elif o.stage_cmd == "restart":
+                sg.restart(cfg=cfg, deps=deps)
             else:
                 sg.rollback(cfg=cfg, deps=deps)
         except (rj.Refused, ConfigError, OSError, ValueError, intake.IntakeError, subprocess.TimeoutExpired,
