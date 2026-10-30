@@ -98,7 +98,6 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Kecil / rendah
 
-- [ ] `check_against_repo` record task tidak membandingkan bit executable tes (baris dari patch agen #189); hapus atau tes
 - [ ] Router: cek bentuk kunci DeepSeek (hanya Anthropic yang dicek prefiksnya)
 - [ ] Router: `argus apply` (K6 v0); sekarang perintah apply dicetak `status` dan dijalankan Claude
 
