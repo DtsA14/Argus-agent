@@ -180,7 +180,7 @@ def main(argv=None, deps=None):
             if o.stage_cmd == "deploy":
                 sg.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, runtime=o.runtime)
             elif o.stage_cmd == "restart":
-                sg.restart(deps=deps)
+                sg.restart(cfg=cfg, deps=deps)
             else:
                 sg.rollback(cfg=cfg, deps=deps)
         except (rj.Refused, ConfigError, OSError, ValueError, intake.IntakeError, subprocess.TimeoutExpired,

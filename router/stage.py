@@ -359,7 +359,7 @@ class Staging:
                                   '{{index .Config.Labels "%s"}}' % BASE_LABEL, name)
         if code == 0:
             return "" if out.strip() == "<no value>" else out.strip()
-        if "no such" in (err or "").lower():
+        if "no such container" in (err or "").lower():
             return None
         raise Refused(f"docker inspect {name} failed ({(err or '').strip()[:200]}); nothing was removed")
 
@@ -681,11 +681,12 @@ def rollback(*, cfg, deps, staging=None):
     return previous
 
 
-def restart(*, deps, staging=None):
-    """The release state.json records live, started again on the image its build recorded, when its container is gone
-    (e.g. removed by a command of another staging directory before BASE_LABEL, 2026-10-30). Refused while a container
-    of that name exists, running or not. Smoke-tested; recorded as `restarted` only when the smoke test passes. No
-    reconcile and no other container is stopped or removed; state.json is not changed."""
+def restart(*, cfg, deps, staging=None):
+    """The release state.json records live, started again on the image digest its build recorded (which its runtime must
+    still resolve to, as for a rollback) when its container is not running (e.g. removed by a command of another staging
+    directory before BASE_LABEL, 2026-10-30). Refused while it runs. An exited container of that release is replaced
+    only when it is this directory's (remove()); no reconcile, no other container is stopped. Smoke-tested through
+    switch(); `restarted` is recorded only after a passed smoke test (a failed one stops it); state.json is unchanged."""
     st = staging or Staging()
     with st.lock():
         live = st.state()["live"]
@@ -694,32 +695,13 @@ def restart(*, deps, staging=None):
         rec = st.releases().get(live)
         if rec is None:
             raise Refused(f"release {live} is not one that was built")
-        runtime = rec.get("runtime", ENVIRONMENT)
-        image = rec.get("image") or (V0_IMAGE if runtime == ENVIRONMENT else None)
-        if not (isinstance(image, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", image)):
-            raise Refused(f"release {live} recorded no image digest; nothing was started")
-        name = st.prefix + live
-        if st.owner(name) is not None:
-            raise Refused(f"container {name} exists (running or stopped); nothing was started or removed")
+        runtime, image = release_image(cfg, rec)
+        if st.container_pid(live) is not None:
+            raise Refused(f"release {live} is running; nothing was started or removed")
         _confirm(deps, "\n".join(["== staging restart ==", f"start again: {live} on {runtime} {image[:19]} (its recorded image)",
                                    "no other container is stopped; state.json is not changed",
                                    "staging only: no production, no users, no credentials"]))
-        st.start(live, image)
-        try:
-            results = st.smoke(live)
-        except BaseException:
-            st.discard(name, "restart smoke test stopped")
-            raise
-        ok = all(r[1] for r in results)
-        st.note("smoke", release=live, ok=ok, results=[list(r) for r in results], why="restart")
-        if not ok:
-            stopped = st.discard(name, "restart smoke_failed")
-            if stopped:
-                st.note("stopped", release=live, why="restart smoke_failed")
-            raise Refused(f"release {live} failed its smoke test after the restart ("
-                          + "; ".join(f"{c}: {d}" for c, k, d in results if not k) + "); "
-                          + ("it was stopped" if stopped else "it could not be removed"))
-        st.note("restarted", release=live, image=image)
+        st.switch(live, image, deps, "restart", lambda: st.note("restarted", release=live, image=image))
     return live
 
 

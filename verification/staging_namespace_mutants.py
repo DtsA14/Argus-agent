@@ -8,9 +8,9 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 S = "router/stage.py"
 T = ["tests/test_stage.py"]
 M = [
-    ("running() without the directory filter", S, ' "--filter",\n                                f"label={BASE_LABEL}={self.base_label}",', ",", T),
+    ("running() without the directory filter", S, ' "--filter",\n                                f"label={BASE_LABEL}={self.base_label}",', "", T),
     ("remove() without the directory check", S, "        if owner != self.base_label:", "        if False:", T),
-    ("remove() takes a daemon error for no container", S, '        if "no such" in (err or "").lower():',
+    ("remove() takes a daemon error for no container", S, '        if "no such container" in (err or "").lower():',
      "        if True:", T),
     ("tests share the real prefix and label", S, "        self.prefix, self.label = prefix, label",
      "        self.prefix, self.label = PREFIX, LABEL", T),
@@ -20,18 +20,15 @@ M = [
      '"--network"', T),
     ("isolation does not check the directory label", S,
      "        if (cfg.get(\"Labels\") or {}).get(BASE_LABEL) != self.base_label:", "        if False:", T),
-    ("restart while its container exists", S, "        if st.owner(name) is not None:", "        if False:", T),
-    ("restart on today's image", S, '        image = rec.get("image") or (V0_IMAGE if runtime == ENVIRONMENT else None)',
-     "        image = runtime_image(None, runtime)", T),
-    ("restart without a digest check", S,
-     '        if not (isinstance(image, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", image)):', "        if False:", T),
-    ("restart records a failed smoke test", S,
-     '        if not ok:\n            stopped = st.discard(name, "restart smoke_failed")',
-     '        if False:\n            stopped = st.discard(name, "restart smoke_failed")', T),
+    ("restart while it runs", S, "        if st.container_pid(live) is not None:", "        if False:", T),
+    ("restart ignores a moved pin", S, "        runtime, image = release_image(cfg, rec)\n        if st.container_pid",
+     '        runtime = rec.get("runtime", ENVIRONMENT)\n        image = runtime_image(cfg, runtime)\n        if st.container_pid', T),
+    ("a failed smoke test recorded", S, '        if not ok:\n            stopped = self.discard(name, "smoke_failed")',
+     '        if False:\n            stopped = self.discard(name, "smoke_failed")', T),
     ("restart reconciles", S, '        live = st.state()["live"]\n        if not live:\n            raise Refused("nothing is live: there',
      '        st.reconcile()\n        live = st.state()["live"]\n        if not live:\n            raise Refused("nothing is live: there', T),
-    ("restart not confirmed", S, '                                   "staging only: no production, no users, no credentials"]))\n        st.start(live, image)',
-     '                                   "staging only: no production, no users, no credentials"]) or True)\n        st.start(live, image)', T),
+    ("restart not confirmed", S, '        _confirm(deps, "\\n".join(["== staging restart ==",',
+     '        (lambda *a: None)(deps, "\\n".join(["== staging restart ==",', T),
     ("restart of nothing live", S, '        if not live:\n            raise Refused("nothing is live: there', '        if False:\n            raise Refused("nothing is live: there', T),
 ]
 

@@ -1105,6 +1105,10 @@ def labelled_docker(containers, calls=None):
             if labels is None:
                 return 1, "", f"Error: No such container: {a[-1]}"
             return 0, labels.get(sg.BASE_LABEL, "<no value>"), ""
+        if a[0] == "inspect" and "{{.State.Pid}}" in a:
+            labels = containers.get(a[-1])
+            return (0, "4321" if labels.get("running") == "True" else "0", "") if labels is not None else \
+                (1, "", f"Error: No such container: {a[-1]}")
         if a[0] == "rm":
             containers.pop(a[-1], None)
         return 0, "", ""
@@ -1172,7 +1176,9 @@ def test_a_test_deploy_leaves_a_container_of_the_real_staging_running(tmp_path, 
 
 # ---- argus stage restart -----------------------------------------------------------------------------------------------
 
-def restartable(tmp_path, live="jx-0123456789ab", image="sha256:" + "b" * 64, containers=None):
+def restartable(tmp_path, monkeypatch, live="jx-0123456789ab", image="sha256:" + "b" * 64, containers=None, pin=None):
+    """A staging whose live release's container is gone; start() is faked after the real remove() it begins with."""
+    monkeypatch.setattr(sg, "runtime_image", lambda cfg, runtime=sg.ENVIRONMENT: pin or image)
     calls, containers = [], ({} if containers is None else containers)
     st = Staging(tmp_path / "staging", run=labelled_docker(containers, calls))
     st.base.mkdir(parents=True)
@@ -1181,8 +1187,9 @@ def restartable(tmp_path, live="jx-0123456789ab", image="sha256:" + "b" * 64, co
     started = []
 
     def start(release, img):
+        sg.Staging.remove(st, st.prefix + release)
         started.append((release, img))
-        containers[st.prefix + release] = {sg.BASE_LABEL: st.base_label}
+        containers[st.prefix + release] = {sg.BASE_LABEL: st.base_label, "running": "True"}
         return st.prefix + release
     st.start = start
     st.smoke = lambda release: [("all", True, "")]
@@ -1190,10 +1197,9 @@ def restartable(tmp_path, live="jx-0123456789ab", image="sha256:" + "b" * 64, co
 
 
 def test_restart_starts_the_live_release_on_its_recorded_image_and_nothing_else(tmp_path, monkeypatch):
-    monkeypatch.setattr(sg, "runtime_image", lambda *a, **k: pytest.fail("today's image is not asked for"))
-    st, calls, started, _ = restartable(tmp_path)
+    st, calls, started, _ = restartable(tmp_path, monkeypatch)
     state = st.state_path.read_bytes()
-    assert sg.restart(deps=deps(), staging=st) == "jx-0123456789ab"
+    assert sg.restart(cfg=None, deps=deps(), staging=st) == "jx-0123456789ab"
     assert started == [("jx-0123456789ab", "sha256:" + "b" * 64)]
     assert not [a for a in calls if a[0] in ("ps", "rm")]           # no reconcile, nothing removed
     assert st.state_path.read_bytes() == state
@@ -1201,41 +1207,58 @@ def test_restart_starts_the_live_release_on_its_recorded_image_and_nothing_else(
     assert events[-2:] == ["smoke", "restarted"]
 
 
-@pytest.mark.parametrize("running", [True, False])
-def test_restart_is_refused_while_a_container_of_the_live_release_exists(tmp_path, running):
-    st, calls, started, _ = restartable(tmp_path, containers={
-        TEST_PREFIX + "jx-0123456789ab": {sg.BASE_LABEL: "x", "running": str(running)}})
-    with pytest.raises(sg.Refused, match="exists"):
-        sg.restart(deps=deps(), staging=st)
-    assert started == [] and not [a for a in calls if a[0] == "rm"]
+def test_restart_is_refused_while_the_live_release_runs(tmp_path, monkeypatch):
+    st, calls, started, containers = restartable(tmp_path, monkeypatch, containers={
+        TEST_PREFIX + "jx-0123456789ab": {sg.BASE_LABEL: "", "running": "True"}})
+    with pytest.raises(sg.Refused, match="is running"):
+        sg.restart(cfg=None, deps=deps(), staging=st)
+    assert started == [] and not [a for a in calls if a[0] == "rm"] and len(containers) == 1
+
+
+def test_an_exited_container_of_the_live_release_is_replaced_only_when_it_is_this_directorys(tmp_path, monkeypatch):
+    st, calls, started, containers = restartable(tmp_path / "a", monkeypatch)
+    containers[TEST_PREFIX + "jx-0123456789ab"] = {sg.BASE_LABEL: st.base_label, "running": "False"}
+    assert sg.restart(cfg=None, deps=deps(), staging=st) == "jx-0123456789ab"
+    assert ("rm", "-f", TEST_PREFIX + "jx-0123456789ab") in calls and started
+    for labels in ({"running": "False"}, {sg.BASE_LABEL: str(tmp_path / "other"), "running": "False"}):
+        st, calls, started, containers = restartable(tmp_path / f"b{len(labels)}", monkeypatch,
+                                                      containers={TEST_PREFIX + "jx-0123456789ab": labels})
+        with pytest.raises(sg.Refused, match="not removed"):
+            sg.restart(cfg=None, deps=deps(), staging=st)
+        assert started == [] and not [a for a in calls if a[0] == "rm"]
 
 
 @pytest.mark.parametrize("make, why", [
     (lambda st: st._save({"live": None, "history": ["jx-0123456789ab"]}), "nothing is live"),
     (lambda st: st._save({"live": "jy-0123456789ab", "history": ["jy-0123456789ab"]}), "not one that was built"),
-    (lambda st: st.note("built", release="jx-0123456789ab", job="jx", repo="r", commit="0" * 40,
-                        runtime="ledger_staging_up1", image="argus-sandbox:latest"), "no image digest"),
 ])
-def test_restart_without_a_recorded_live_release_and_image_is_refused(tmp_path, make, why):
-    st, calls, started, _ = restartable(tmp_path)
+def test_restart_without_a_recorded_live_release_is_refused(tmp_path, monkeypatch, make, why):
+    st, calls, started, _ = restartable(tmp_path, monkeypatch)
     make(st)
     with pytest.raises(sg.Refused, match=why):
-        sg.restart(deps=deps(), staging=st)
+        sg.restart(cfg=None, deps=deps(), staging=st)
     assert started == []
 
 
-def test_a_restart_whose_smoke_test_fails_is_stopped_and_not_recorded(tmp_path):
-    st, calls, started, containers = restartable(tmp_path)
+def test_restart_is_refused_when_the_runtime_no_longer_resolves_to_the_recorded_image(tmp_path, monkeypatch):
+    st, calls, started, _ = restartable(tmp_path, monkeypatch, pin="sha256:" + "c" * 64)
+    with pytest.raises(sg.Refused, match="now resolves"):
+        sg.restart(cfg=None, deps=deps(), staging=st)
+    assert started == []
+
+
+def test_a_restart_whose_smoke_test_fails_is_stopped_and_not_recorded(tmp_path, monkeypatch):
+    st, calls, started, containers = restartable(tmp_path, monkeypatch)
     st.smoke = lambda release: [("summary", False, "500")]
     with pytest.raises(sg.Refused, match="failed its smoke test"):
-        sg.restart(deps=deps(), staging=st)
+        sg.restart(cfg=None, deps=deps(), staging=st)
     assert containers == {} and "restarted" not in [e["event"] for e in sg._jsonl(st.log_path)]
 
 
-def test_a_restart_is_confirmed_before_anything_starts(tmp_path):
-    st, calls, started, _ = restartable(tmp_path)
+def test_a_restart_is_confirmed_before_anything_starts(tmp_path, monkeypatch):
+    st, calls, started, _ = restartable(tmp_path, monkeypatch)
     with pytest.raises(sg.Refused, match="not confirmed"):
-        sg.restart(deps=deps(yes=False), staging=st)
+        sg.restart(cfg=None, deps=deps(yes=False), staging=st)
     assert started == []
 
 
@@ -1245,10 +1268,12 @@ def test_restart_in_the_real_container_after_it_was_removed(tmp_path, repo, stag
     rel = sg.deploy(applied_job(jobs, "jg", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=staging)
     staging.run("rm", "-f", TEST_PREFIX + rel)
     assert staging.running() == []
-    assert sg.restart(deps=deps(), staging=staging) == rel
+    assert sg.restart(cfg=None, deps=deps(), staging=staging) == rel
     assert staging.running() == [TEST_PREFIX + rel] and all(ok for _, ok, _ in staging.smoke(rel))
-    with pytest.raises(sg.Refused, match="exists"):
-        sg.restart(deps=deps(), staging=staging)
+    with pytest.raises(sg.Refused, match="is running"):
+        sg.restart(cfg=None, deps=deps(), staging=staging)
+    staging.run("stop", TEST_PREFIX + rel)                    # exited, as after a reboot: replaced by the restart
+    assert sg.restart(cfg=None, deps=deps(), staging=staging) == rel and staging.running() == [TEST_PREFIX + rel]
 
 
 def test_a_container_whose_directory_cannot_be_read_is_not_removed(tmp_path):
