@@ -168,6 +168,13 @@ def main(argv=None, deps=None):
                     from router import stage_viewer as sv
                     rec = sd.monitor(st, Path(o.jobs_dir), viewer=sv.Viewer(ledger=st))
                     print(json.dumps(rec, sort_keys=True))
+                    from router import stage_alert as sa
+                    try:                                 # a notification never changes the monitor's verdict
+                        sent = sa.after_monitor(st.base)
+                    except Exception as e:               # noqa: BLE001
+                        sent = f"alert: {type(e).__name__}: {e}"
+                    if sent:
+                        print(f"alert: {sent}")
                     return {True: 0, None: 0}.get(rec.get("ok"), 1)
                 print(f"report: {sd.report(st, sg._get)}")
                 return 0
