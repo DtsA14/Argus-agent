@@ -1,0 +1,11 @@
+# Every 15 minutes (Atha 2026-10-30). Persistent=false: runs missed while the VM was off are not caught up.
+[Unit]
+Description=Argus staging monitor every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=false
+Unit=argus-stage-monitor.service
+
+[Install]
+WantedBy=timers.target

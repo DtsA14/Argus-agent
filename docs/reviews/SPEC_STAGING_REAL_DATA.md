@@ -108,3 +108,31 @@ disimpan. Isinya hanya field proyeksi (A1).
 `state.json`, dan tidak menghapus snapshot aktif. Refresh gagal → smoke tetap dijalankan atas snapshot aktif dan keduanya
 dicatat. Smoke gagal → dicatat; tidak ada rollback atau restart otomatis. Monitor yang crash meninggalkan direktori
 sementara saja (dibersihkan refresh berikutnya).
+
+## 7. Implementasi (2026-10-30)
+
+- `router/stage_data.py`: proyeksi allowlist (`JOB_FIELDS`, `STAGE_FIELDS`, `LOG_FIELDS`, `EVENT_FIELDS`, setiap
+  nilai dicek pola/tipe), `read_job` (O_NOFOLLOW, berkas biasa, `job.json` sebelum/sesudah, log tidak menyusut, 3
+  percobaan), `build` → `validate` (proyeksi ulang = dirinya sendiri, biaya tertulis = biaya terbaca, hanya berkas
+  snapshot, pindai pola key) → publikasi (`rename` direktori, read-only, symlink `jobs` diganti `os.replace`). Lebih
+  dari separuh job dikeluarkan → tidak dipublikasikan (format Argus berubah atau data rusak). GC menyimpan dua snapshot
+  terbaru dan tidak pernah menghapus yang aktif (juga bila jam mundur). `refresh_lock` (flock) dipakai refresh, monitor
+  dan smoke (deploy/rollback menunggu ≤ 60 s).
+- `router/stage.py`: `/data` = `~/argus-staging/data` read-only (tidak ada lagi salinan fixture per rilis); `start`
+  ditolak tanpa snapshot; `smoke_checks(manifest)`: jumlah job, id, dan `cost_nano` dari manifest (Σ
+  `reconcile_ledger` atas semua ledger `<job>-<stage>` yang tersalin); `status` menampilkan snapshot dan monitor
+  terakhir (gagal berturut-turut). Entry tidak berubah, jadi rilis lama tetap bisa di-rollback.
+- CLI: `argus stage refresh | monitor | report` (monitor exit 0 lolos/sibuk, 1 gagal). `deploy/systemd/`:
+  `argus-stage-monitor.service` (`Type=oneshot`, `TimeoutStartSec=300`) dan `.timer` (`OnCalendar=*:0/15`); dipasang
+  saat pilot.
+- Fixture `fixtures/staging/jobs`: `worst_tokens` ditambahkan di `llm_call_started` (Argus selalu menulisnya;
+  `reconcile_ledger` membutuhkannya untuk panggilan yang terputus). Ledger yang tidak bisa dihitung → job dikeluarkan,
+  bukan refresh crash.
+- Cek di data asli (direktori sementara): 54 job, 0 dikeluarkan, 4.176.849.024 nano (= harness), 2,4 MB, 0,6 s;
+  `python -m ledger report` untuk 54 job **identik** antara data asli dan proyeksi (urutan stage dijaga).
+- Tes: `tests/test_stage_data.py` (42: allowlist, eksklusi tanpa mengutip nilai, symlink/berkas lain/run lain, baca
+  yang berubah atau menyusut, validasi gagal tidak pernah terbit, read-only + GC + jam mundur, pembaca selama 30 swap
+  selalu melihat snapshot utuh, lock dipegang proses lain, empat refresh bersamaan, smoke menunggu lock, monitor:
+  refresh gagal/smoke gagal/sibuk/state rusak tidak mengubah apa pun, report di-escape + CSP + 0700/0600 + 10 terakhir,
+  angka smoke) dan di `tests/test_stage.py` dengan container sungguhan: snapshot baru terlihat tanpa restart (id
+  container sama), monitor lolos, report, `/data` tidak bisa ditulis. Mutants 34/34.
