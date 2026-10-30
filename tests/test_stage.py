@@ -744,3 +744,137 @@ def test_a_check_that_stops_is_recorded_and_outweighs_an_earlier_pass(tmp_path, 
 def test_every_runtime_gives_valid_release_names():
     for runtime in sg.RUNTIMES:
         assert sg.RELEASE.match(sg.release_name(type("J", (), {"id": "jx"}), "0" * 40, runtime))
+
+
+# ---- staging hardening (the /code-review findings on staging v0, Atha 2026-10-30) -------------------------------------
+
+@pytest.fixture
+def fake_docker(tmp_path, monkeypatch):
+    """Staging whose containers are names in a set: start/smoke/logs faked, docker ps and rm answered from the set."""
+    monkeypatch.setattr(sg, "runtime_image", lambda cfg, runtime=sg.ENVIRONMENT: "sha256:" + "a" * 64)
+    up, calls = set(), []
+
+    def run(*a, **k):
+        calls.append(a)
+        if a[0] == "ps":
+            return 0, "\n".join(sorted(up)), ""
+        if a[0] == "rm":
+            up.discard(a[-1])
+            return 0, "", ""
+        return 0, "", ""
+    st = sg.Staging(tmp_path / "staging", run=run)
+
+    def start(release, image):
+        up.add(sg.PREFIX + release)
+        return sg.PREFIX + release
+    monkeypatch.setattr(st, "start", start)
+    monkeypatch.setattr(st, "smoke", lambda release: [("all", True, "")])
+    monkeypatch.setattr(st, "logs", lambda name, release, what: None)
+    return st, up, calls
+
+
+def test_a_failure_to_log_the_new_release_leaves_the_old_one_live_in_the_state_too(tmp_path, repo, fake_docker,
+                                                                                    monkeypatch):
+    r, c = repo
+    st, up, calls = fake_docker
+    jobs = tmp_path / "jobs"
+    first = sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    note = st.note
+
+    def broken(event, **detail):
+        if event == "live":
+            raise OSError("disk full")
+        return note(event, **detail)
+    monkeypatch.setattr(st, "note", broken)
+    with pytest.raises(OSError, match="disk full"):
+        sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    assert st.state()["live"] == first and up == {sg.PREFIX + first}
+
+
+@pytest.mark.parametrize("content", ["{", "", "[]", '{"live": "x"}', '{"live": "x", "history": ["y"]}',
+                                     '{"live": null, "history": [1]}'])
+def test_an_unreadable_state_refuses_deploy_and_rollback_and_stops_nothing(tmp_path, repo, fake_docker, content):
+    r, c = repo
+    st, up, calls = fake_docker
+    jobs = tmp_path / "jobs"
+    sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    before = set(up)
+    st.state_path.write_text(content)
+    calls.clear()
+    with pytest.raises(sg.Refused, match="state.json"):
+        sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    with pytest.raises(sg.Refused, match="state.json"):
+        sg.rollback(cfg=None, deps=deps(), staging=st)
+    assert up == before and not [a for a in calls if a[0] == "rm"]
+    assert "state.json" in sg.status(staging=st)
+
+
+def test_a_fresh_staging_has_nothing_live(tmp_path):
+    st = sg.Staging(tmp_path / "none")
+    assert st.state() == {"live": None, "history": []}
+
+
+@pytest.mark.parametrize("err, refused", [("Error response from daemon: No such container: x", False),
+                                          ("permission denied while trying to connect to the docker daemon", True)])
+def test_a_container_that_was_not_removed_is_not_reported_stopped(tmp_path, err, refused):
+    st = sg.Staging(tmp_path, run=lambda *a, **k: (1, "", err))
+    if refused:
+        with pytest.raises(sg.Refused, match="could not be removed"):
+            st.remove(sg.PREFIX + "jx-0123456789ab")
+    else:
+        st.remove(sg.PREFIX + "jx-0123456789ab")
+
+
+def test_a_hung_docker_logs_does_not_keep_the_old_release_running(tmp_path, repo, fake_docker, monkeypatch):
+    r, c = repo
+    st, up, calls = fake_docker
+    jobs = tmp_path / "jobs"
+    sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+
+    def hung(name, release, what):
+        if what == "stop":
+            raise subprocess.TimeoutExpired(["docker", "logs"], 120)
+    monkeypatch.setattr(st, "logs", hung)
+    second = sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    assert up == {sg.PREFIX + second} and st.state()["live"] == second
+
+
+def test_the_smoke_test_waits_until_the_socket_listens(tmp_path):
+    st = sg.Staging(tmp_path, wait_s=5)
+    d = st.dir("jx-0123456789ab") / "sock"
+    d.mkdir(parents=True)
+    bound = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)    # uvicorn between bind() and listen()
+    dfd = os.open(d, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        bound.bind(f"/proc/self/fd/{dfd}/app.sock")
+    finally:
+        os.close(dfd)
+    servers = []
+
+    def listen_later():
+        bound.close()
+        os.unlink(d / "app.sock")
+        servers.append(serve(d / "app.sock", good))
+    timer = threading.Timer(0.6, listen_later)
+    timer.start()
+    try:
+        results = st.smoke("jx-0123456789ab")
+    finally:
+        timer.join()
+        for s in servers:
+            s.shutdown()
+    assert all(ok for _, ok, _ in results), results
+
+
+def test_a_failure_to_log_a_rollback_leaves_the_current_release_live(tmp_path, repo, fake_docker, monkeypatch):
+    r, c = repo
+    st, up, calls = fake_docker
+    jobs = tmp_path / "jobs"
+    sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    second = sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg=None, deps=deps(), jobs_dir=jobs, staging=st)
+    note = st.note
+    monkeypatch.setattr(st, "note", lambda event, **d: (_ for _ in ()).throw(OSError("disk full")) if event == "live"
+                        else note(event, **d))
+    with pytest.raises(OSError, match="disk full"):
+        sg.rollback(cfg=None, deps=deps(), staging=st)
+    assert st.state()["live"] == second and up == {sg.PREFIX + second}

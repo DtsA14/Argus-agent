@@ -92,11 +92,21 @@ class Staging:
     # ---- records ----------------------------------------------------------------------------------------------
 
     def state(self):
+        """{"live", "history"}; nothing live only when there is no state file yet. An unreadable or malformed one is
+        Refused: read as "nothing live" it would make reconcile() stop the live release and lose the rollback history."""
+        if not self.state_path.exists():
+            return {"live": None, "history": []}
         try:
             s = json.loads(self.state_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {"live": None, "history": []}
-        return s if isinstance(s, dict) and isinstance(s.get("history"), list) else {"live": None, "history": []}
+        except (OSError, ValueError) as e:
+            s, why = None, f"{type(e).__name__}: {e}"
+        else:
+            why = "not a staging state"
+        if isinstance(s, dict) and isinstance(s.get("history"), list) and \
+                all(isinstance(r, str) for r in s["history"]) and (s.get("live") is None or s["live"] in s["history"]):
+            return s
+        raise Refused(f"{self.state_path} is unreadable ({why}); nothing was changed: restore it by hand "
+                      f"(releases.jsonl has every built, live and stopped event)")
 
     def _save(self, state):
         tmp = self.state_path.with_suffix(".tmp")
@@ -277,8 +287,12 @@ class Staging:
         """[(check, ok, detail)] of S4, through the release's socket from this host."""
         path = self.dir(release) / "sock" / "app.sock"
         deadline = time.monotonic() + self.wait_s
-        while not path.exists() and time.monotonic() < deadline:
-            time.sleep(0.2)
+        while time.monotonic() < deadline:             # until the app listens: the file exists from bind(), before
+            try:                                       # listen(), and a connect then is refused
+                _connect(path).close()
+                break
+            except OSError:
+                time.sleep(0.2)
         out = []
         for host, url, status, body_ok in SMOKE:
             check = f"{host} {url} -> {status}"
@@ -300,7 +314,9 @@ class Staging:
         """Stop and remove one staging container; never any other."""
         if not name.startswith(PREFIX) or not RELEASE.match(name[len(PREFIX):]):
             raise Refused(f"{name!r} is not a staging container")
-        self.run("rm", "-f", name)
+        code, _, err = self.run("rm", "-f", name)
+        if code and "no such container" not in err.lower():
+            raise Refused(f"container {name} could not be removed ({err.strip()[:200]}); it may still be running")
 
     def running(self):
         """Names of the staging containers docker runs now (by label; only names this module would give)."""
@@ -342,23 +358,31 @@ class Staging:
         if live and live != release:
             try:
                 self.logs(PREFIX + live, live, "stop")
-            except OSError:
+            except Exception:                          # noqa: BLE001  (a hung `docker logs` too: the stop is not optional)
                 pass                                   # the logs are a convenience; the stop is not
             self.remove(PREFIX + live)
             self.note("stopped", release=live, why=f"{why}: {release} is live")
         return results
 
 
-def _get(sock_path, host, url):
-    conn = http.client.HTTPConnection("localhost", timeout=10)
+def _connect(sock_path):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(10)
-    dfd = os.open(Path(sock_path).parent, os.O_RDONLY | os.O_DIRECTORY)
-    try:                                   # a socket path is at most 107 bytes: connect through the directory's fd
-        s.connect(f"/proc/self/fd/{dfd}/{Path(sock_path).name}")
-    finally:
-        os.close(dfd)
-    conn.sock = s
+    try:
+        dfd = os.open(Path(sock_path).parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:                               # a socket path is at most 107 bytes: connect through the directory's fd
+            s.connect(f"/proc/self/fd/{dfd}/{Path(sock_path).name}")
+        finally:
+            os.close(dfd)
+    except BaseException:
+        s.close()
+        raise
+    return s
+
+
+def _get(sock_path, host, url):
+    conn = http.client.HTTPConnection("localhost", timeout=10)
+    conn.sock = _connect(sock_path)
     try:
         conn.request("GET", url, headers={"Host": host})
         r = conn.getresponse()
@@ -528,8 +552,8 @@ def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, staging=None, runtime=ENVIRON
         def record():
             state["history"] = [r for r in state["history"] if r != release] + [release]
             state["live"] = release
-            st._save(state)
             st.note("live", release=release, by="deploy")
+            st._save(state)                            # last: a failure before it leaves the old release live
         st.switch(release, image, deps, "deploy", record)
     with job.lock():
         job.note(deps, "staged", release=rec["release"])
@@ -555,15 +579,19 @@ def rollback(*, cfg, deps, staging=None):
 
         def record():
             state["history"], state["live"] = state["history"][:-1], previous
-            st._save(state)
             st.note("live", release=previous, by="rollback", replaced=current)
+            st._save(state)                            # last: a failure before it leaves the current release live
         st.switch(previous, image, deps, "rollback", record)
     return previous
 
 
 def status(*, staging=None):
     st = staging or Staging()
-    state, rels = st.state(), st.releases()
+    try:
+        state = st.state()
+    except Refused as e:
+        return f"staging state: {e}"
+    rels = st.releases()
     live = state["live"]
     lines = [f"staging live: {live or 'nothing'}"]
     if live and live in rels:
