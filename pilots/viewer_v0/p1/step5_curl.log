@@ -1,0 +1,19 @@
+--- /api/jobs
+HTTP/1.0 502 Bad Gateway
+Server: argus-staging 
+Date: Fri, 30 Oct 2026 16:53:33 GMT
+Content-Type: application/json
+Content-Length: 50
+Cache-Control: no-store
+Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+Connection: close
+
+{"error": "argus-ledger did not answer with JSON"}
+--- SW fetch of /assets/index-CaWgFM3R.js
+404
+--- plain /assets/index-CaWgFM3R.js
+200
+--- SW fetch of /sw.js
+200

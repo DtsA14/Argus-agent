@@ -1,0 +1,10 @@
+Created symlink /home/ubuntu/.config/systemd/user/default.target.wants/argus-stage-proxy.service → /home/ubuntu/pilot3a_live/deploy/systemd/argus-stage-proxy.service.
+exit=0
+● argus-stage-proxy.service - Argus staging viewer proxy (127.0.0.1:8710)
+     Loaded: loaded (/home/ubuntu/.config/systemd/user/argus-stage-proxy.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-10-30 16:53:23 UTC; 2s ago
+   Main PID: 420960 (python)
+      Tasks: 1 (limit: 13008)
+     Memory: 52.7M (peak: 52.7M)
+        CPU: 811ms
+     CGroup: /user.slice/user-1001.slice/user@1001.service/app.slice/argus-stage-proxy.service
