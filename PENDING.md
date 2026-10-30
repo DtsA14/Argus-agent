@@ -253,7 +253,12 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     persisnya; deploy nyata dengan pin default (bukan override konstruktor) diterima, `sw.js` beda satu byte ditolak dan
     rilis live tetap. Security review (1 MEDIUM, diperbaiki): service worker kedua di root lolos dari pin → proxy menjawab
     404 untuk fetch service worker selain `/sw.js`, A4 menolak `.js` lain di level atas. Code review medium 7 temuan (4
-    diperbaiki). Mutants 7/7, verify.sh PASS 9f8cb99. Lalu issue 001 (jalur cepat), lalu pilot PLAN.md: deploy + unit proxy + Termius
+    diperbaiki). Mutants 7/7, verify.sh PASS 9f8cb99.
+- [x] **Issue 001 viewer** (jalur cepat, job `j20261030_164214_d603`, $0.0198): daftar job + total dari `/api/summary` dan
+    `/api/jobs`; draft 10 tes (merah semua karena assertion), agen 1 percobaan 5 langkah; `check_protected` draft/patch/commit
+    ok; applied `e794a53` di `~/argus-viewer`
+- [~] **Pilot viewer v0 #1** (`pilots/viewer_v0/p1/PLAN.md`, satu "go live"): `viewer-deploy` job 001, unit proxy, smoke,
+    monitor; lalu Termius di HP Atha Lalu issue 001 (jalur cepat), lalu pilot PLAN.md: deploy + unit proxy + Termius
 - [x] **Staging: namespace per direktori + `argus stage restart`** (jalur ketat, temuan 2026-10-30, #258, restart 13:52 UTC): tes
     `Staging(tmp_path)` menghapus container live `~/argus-staging` lewat `reconcile()` (filter hanya label rilis);
     sejak 09:46 UTC staging argus-ledger mati, monitor gagal 12× tanpa ada yang tahu. Perbaikan: label
