@@ -1,13 +1,13 @@
 """SPEC_STAGING_REAL_DATA: the staging snapshot of real jobs is a projection through a field allowlist, read
 consistently, validated before it is published by an atomic symlink swap, never refreshed twice at once; the monitor
 never touches a container or the active snapshot; the report is escaped and private."""
-import fcntl
 import json
-import multiprocessing
 import os
 import stat
+import subprocess
 import sys
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -276,12 +276,21 @@ def test_readers_always_see_a_whole_snapshot_while_refreshes_swap_it(tmp_path, s
 
 # ---- A3: one refresh at a time ------------------------------------------------------------------------------------------
 
-def _hold(path, ready, release):
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
-    fcntl.flock(fd, fcntl.LOCK_EX)
-    ready.set()
-    release.wait(30)
-    os.close(fd)
+HOLD = ("import fcntl, os, sys\nfd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)\n"
+        "fcntl.flock(fd, fcntl.LOCK_EX)\nprint('held', flush=True)\nsys.stdin.read()\n")
+
+
+@contextmanager
+def holding(lock):
+    """Another process (a fresh interpreter, never a fork of this threaded one) holding `lock` until the block ends."""
+    p = subprocess.Popen([sys.executable, "-c", HOLD, str(lock)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         text=True)
+    try:
+        assert p.stdout.readline().strip() == "held"
+        yield
+    finally:
+        p.stdin.close()
+        p.wait(10)
 
 
 @pytest.fixture
@@ -289,14 +298,8 @@ def held_lock(tmp_path):
     """Another process holding the data lock, as a running refresh or monitor does."""
     data = tmp_path / "data"
     data.mkdir()
-    ctx = multiprocessing.get_context("fork")
-    ready, release = ctx.Event(), ctx.Event()
-    p = ctx.Process(target=_hold, args=(data / ".refresh.lock", ready, release))
-    p.start()
-    assert ready.wait(10)
-    yield data
-    release.set()
-    p.join(10)
+    with holding(data / ".refresh.lock"):
+        yield data
 
 
 def test_a_refresh_while_another_holds_the_lock_is_refused_and_changes_nothing(tmp_path, source, held_lock):
@@ -305,23 +308,16 @@ def test_a_refresh_while_another_holds_the_lock_is_refused_and_changes_nothing(t
     assert not os.path.lexists(sd.pub(held_lock) / "jobs") and not list(sd.pub(held_lock).glob("snap-*"))
 
 
-def _refresh_in_child(source, data, out):
-    try:
-        sd.refresh(Path(source), Path(data))
-        out.put("ok")
-    except sd.Refused as e:
-        out.put("busy" if "busy" in str(e) else repr(e))
+REFRESH = ("import sys\nfrom pathlib import Path\nsys.path.insert(0, sys.argv[1])\n"
+           "from router import stage_data as sd\ntry:\n    sd.refresh(Path(sys.argv[2]), Path(sys.argv[3]))\n"
+           "    print('ok')\nexcept sd.Refused as e:\n    print('busy' if 'busy' in str(e) else repr(e))\n")
 
 
 def test_two_refreshes_at_once_never_both_write(tmp_path, source):
-    ctx = multiprocessing.get_context("fork")
-    out, data = ctx.Queue(), tmp_path / "data"
-    ps = [ctx.Process(target=_refresh_in_child, args=(str(source), str(data), out)) for _ in range(4)]
-    for p in ps:
-        p.start()
-    for p in ps:
-        p.join(30)
-    got = sorted(out.get(timeout=5) for _ in ps)
+    data = tmp_path / "data"
+    ps = [subprocess.Popen([sys.executable, "-c", REFRESH, str(sg.ROOT), str(source), str(data)],
+                           stdout=subprocess.PIPE, text=True, cwd=sg.ROOT) for _ in range(4)]
+    got = sorted(p.communicate(timeout=60)[0].strip() for p in ps)
     assert set(got) <= {"ok", "busy"} and "ok" in got
     assert sd.current(data) and sd.manifest(data)["jobs"] == ["jone", "jtwo"] and not list(data.glob(".tmp-*"))
 
@@ -386,18 +382,8 @@ def test_a_failed_smoke_in_the_monitor_is_recorded_and_nothing_is_restarted(live
 def test_a_busy_monitor_is_skipped_and_touches_nothing(live, source, monkeypatch):
     st, smokes = live
     snap = sd.current(st.data)
-    fd = os.open(st.data / ".refresh.lock", os.O_RDWR)
-    ctx = multiprocessing.get_context("fork")
-    ready, release = ctx.Event(), ctx.Event()
-    p = ctx.Process(target=_hold, args=(st.data / ".refresh.lock", ready, release))
-    p.start()
-    try:
-        assert ready.wait(10)
+    with holding(st.data / ".refresh.lock"):
         rec = sd.monitor(st, source)
-    finally:
-        release.set()
-        p.join(10)
-        os.close(fd)
     assert rec["ok"] is None and "busy" in rec["why"] and smokes == [] and sd.current(st.data) == snap
     assert sd.monitor_summary(st) == (rec, 1)                   # busy is not a pass: a held lock must show
     assert "last monitor: BUSY" in sg.status(staging=st) and "1 failed in a row" in sg.status(staging=st)
