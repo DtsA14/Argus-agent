@@ -20,6 +20,7 @@ Applying the review package's patch to the target repository stays with the huma
 ended without success, 2 refused.
 """
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -91,6 +92,10 @@ def main(argv=None, deps=None):
     for p_ in (gd, gs.add_parser("rollback")):
         p_.add_argument("--yes", action="store_true", help="the deployment was approved in chat (\"go live\")")
     gs.add_parser("status")
+    for name, text in (("refresh", "a new snapshot of the real jobs' ledgers (allowlisted fields, validated, atomic)"),
+                       ("monitor", "refresh, then the smoke test of the live release; recorded; changes no container"),
+                       ("report", "the live release's summary and jobs as an escaped HTML page in ~/argus-staging/reports")):
+        gs.add_parser(name, help=text)
     for name in ("reject", "abandon"):
         r = sub.add_parser(name)
         r.add_argument("job")
@@ -111,6 +116,21 @@ def main(argv=None, deps=None):
                 return 2 if text.startswith(sg.STATE_PROBLEM) else 0
             cfg = load_config(o.config)
             cfg["sandbox"] = sandbox_cfg(o.config)
+            if o.stage_cmd in ("refresh", "monitor", "report"):   # no container is started, stopped or replaced
+                from router import stage_data as sd
+                st = sg.Staging()
+                if o.stage_cmd == "refresh":
+                    man = sd.refresh(Path(o.jobs_dir), st.data)
+                    print(f"refresh: {len(man['jobs'])} jobs, {len(man['excluded'])} excluded, ${man['cost_nano'] / 1e9:.4f}")
+                    for e in man["excluded"]:
+                        print(f"  excluded {e['job']}: {e['why']}")
+                    return 0
+                if o.stage_cmd == "monitor":
+                    rec = sd.monitor(st, Path(o.jobs_dir))
+                    print(json.dumps(rec, sort_keys=True))
+                    return {True: 0, None: 0}.get(rec.get("ok"), 1)
+                print(f"report: {sd.report(st, sg._get)}")
+                return 0
             if o.stage_cmd == "check":                   # the sandbox only: nothing outside it changes
                 rec = sg.check(o.job, o.env, cfg=cfg, jobs_dir=o.jobs_dir)
                 print(f"stage check {'PASS' if rec['ok'] else 'FAIL'}: commit {rec['commit'][:12]} in {rec['environment']} "
@@ -121,7 +141,7 @@ def main(argv=None, deps=None):
                 sg.deploy(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, runtime=o.runtime)
             else:
                 sg.rollback(cfg=cfg, deps=deps)
-        except (rj.Refused, ConfigError, OSError, intake.IntakeError, subprocess.TimeoutExpired,
+        except (rj.Refused, ConfigError, OSError, ValueError, intake.IntakeError, subprocess.TimeoutExpired,
                 sb.SandboxUnavailable) as e:
             print(f"refused: {type(e).__name__ + ': ' if not isinstance(e, rj.Refused) else ''}{e}", file=sys.stderr)
             print(sg.status())

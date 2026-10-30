@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from router import job as rj  # noqa: E402
 from router import stage as sg  # noqa: E402
+from router import stage_data as sd  # noqa: E402
 from runner import load_config  # noqa: E402
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Unix sockets and docker on the VM")
@@ -113,6 +114,12 @@ class Said:
         self.lines.append(text)
 
 
+def with_fixture(st):
+    """The synthetic jobs published as the staging data snapshot, as `argus stage refresh` publishes the real ones."""
+    sd.refresh(sg.FIXTURE, st.data)
+    return st
+
+
 def deps(yes=True):
     return rj.Deps(confirm=lambda text: False, assume_yes=yes, echo=Said(), clock=lambda: "2026-10-29T00:00:00Z")
 
@@ -164,7 +171,7 @@ def inspect(d, release, image, **over):
     cfg = {"User": "1001:1001", "Labels": {sg.LABEL: release}}
     mounts = [{"Destination": "/app", "Source": str(d / "src"), "RW": False},
               {"Destination": "/entry", "Source": str(d / "entry"), "RW": False},
-              {"Destination": "/data", "Source": str(d / "data"), "RW": False},
+              {"Destination": "/data", "Source": str(d.parent.parent / "data" / "pub"), "RW": False},
               {"Destination": "/run/argus", "Source": str(d / "sock"), "RW": True}]
     c = {"HostConfig": h, "Config": cfg, "Image": image, "Mounts": mounts}
     for k, v in over.items():
@@ -251,7 +258,8 @@ def good(host, path):
     (lambda h, p: (500, b"") if p == "/ui" else good(h, p), ["staging.local /ui -> 200"]),
 ])
 def test_the_smoke_test_checks_every_answer(tmp_path, answers, failed):
-    st = sg.Staging(tmp_path, wait_s=1)
+    st = with_fixture(sg.Staging(tmp_path, wait_s=1))
+    st.container_pid = lambda release: os.getpid()                 # the test's own server is the peer
     d = st.dir("jx-0123456789ab") / "sock"
     d.mkdir(parents=True)
     srv = serve(d / "app.sock", answers)
@@ -264,6 +272,7 @@ def test_the_smoke_test_checks_every_answer(tmp_path, answers, failed):
 
 def test_a_smoke_test_without_a_socket_fails_every_check(tmp_path):
     st = sg.Staging(tmp_path, wait_s=0.2)
+    st.container_pid = lambda release: os.getpid()
     (st.dir("jx-0123456789ab") / "sock").mkdir(parents=True)
     assert not any(ok for _, ok, _ in st.smoke("jx-0123456789ab"))
 
@@ -315,7 +324,7 @@ def image():
 @pytest.fixture
 def staging(tmp_path, image, monkeypatch):
     monkeypatch.setattr(sg, "runtime_image", lambda cfg, runtime=sg.ENVIRONMENT: image)
-    st = sg.Staging(tmp_path / "staging")
+    st = with_fixture(sg.Staging(tmp_path / "staging"))
     yield st
     for release in st.releases():
         st.run("rm", "-f", sg.PREFIX + release)
@@ -640,7 +649,7 @@ def tested_repo(tmp_path):
 
 def test_a_check_passes_only_without_failures_or_deprecations(tmp_path, tested_repo, real_cfg):
     r, c = tested_repo
-    jobs, st = tmp_path / "jobs", sg.Staging(tmp_path / "staging")
+    jobs, st = tmp_path / "jobs", with_fixture(sg.Staging(tmp_path / "staging"))
     ok = sg.check(applied_job(jobs, "jg", r, c["good"]), "ledger_py312_up1", cfg=real_cfg, jobs_dir=jobs, staging=st)
     assert ok["ok"] is True and ok["tests_run"] == 1, json.dumps(ok)
     bad = sg.check(applied_job(jobs, "jd", r, c["deprecated"]), "ledger_py312_up1", cfg=real_cfg, jobs_dir=jobs,
@@ -655,7 +664,7 @@ def test_a_check_passes_only_without_failures_or_deprecations(tmp_path, tested_r
 
 def test_rollback_across_an_upgrade_in_the_real_containers(tmp_path, tested_repo, real_cfg):
     r, c = tested_repo
-    jobs, st = tmp_path / "jobs", sg.Staging(tmp_path / "staging")
+    jobs, st = tmp_path / "jobs", with_fixture(sg.Staging(tmp_path / "staging"))
     try:
         first = sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg=real_cfg, deps=deps(), jobs_dir=jobs, staging=st)
         jb = applied_job(jobs, "jb", r, c["good2"])
@@ -843,7 +852,8 @@ def test_a_hung_docker_logs_does_not_keep_the_old_release_running(tmp_path, repo
 
 
 def test_the_smoke_test_waits_until_the_socket_listens(tmp_path):
-    st = sg.Staging(tmp_path, wait_s=5)
+    st = with_fixture(sg.Staging(tmp_path, wait_s=5))
+    st.container_pid = lambda release: os.getpid()
     d = st.dir("jx-0123456789ab") / "sock"
     d.mkdir(parents=True)
     bound = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)    # uvicorn between bind() and listen()
@@ -970,6 +980,77 @@ def test_status_exits_2_when_the_state_cannot_be_used(tmp_path, monkeypatch):
 
 def test_a_socket_that_never_listens_says_so(tmp_path):
     st = sg.Staging(tmp_path, wait_s=0.5)
+    st.container_pid = lambda release: os.getpid()
     (st.dir("jx-0123456789ab") / "sock").mkdir(parents=True)
     results = st.smoke("jx-0123456789ab")
     assert results and all(not ok and "did not accept a connection within" in d for _, ok, d in results)
+
+
+# ---- SPEC_STAGING_REAL_DATA in the real container ---------------------------------------------------------------------
+
+def test_a_refreshed_snapshot_is_served_without_a_restart_and_the_monitor_passes(tmp_path, repo, staging, image):
+    import shutil
+    r, c = repo
+    rel = sg.deploy(applied_job(tmp_path / "jobs", "jg", r, c["good"]), cfg=None, deps=deps(),
+                    jobs_dir=tmp_path / "jobs", staging=staging)
+    container = json.loads(staging.run("inspect", sg.PREFIX + rel)[1])[0]["Id"]
+    more = tmp_path / "more"
+    shutil.copytree(sg.FIXTURE, more)
+    shutil.copytree(more / "jstaging_done", more / "jstaging_more")
+    for f in (more / "jstaging_more").rglob("*"):
+        if f.is_file():
+            f.write_text(f.read_text().replace("jstaging_done", "jstaging_more"))
+    (more / "jstaging_more" / "runs" / "jstaging_done-a1").rename(more / "jstaging_more" / "runs" / "jstaging_more-a1")
+    (more / "jstaging_more" / "runs" / "jstaging_done-d1").rename(more / "jstaging_more" / "runs" / "jstaging_more-d1")
+    rec = sd.monitor(staging, more)
+    assert rec["ok"] is True and rec["refresh"]["jobs"] == 3, rec
+    summary = json.loads(sg._get(staging.dir(rel) / "sock" / "app.sock", sg.HOST, "/summary")[1])
+    assert summary["jobs"] == 3 and summary["cost_nano"] == sd.manifest(staging.data)["cost_nano"]
+    assert json.loads(staging.run("inspect", sg.PREFIX + rel)[1])[0]["Id"] == container   # the same container
+    d = sd.report(staging, sg._get)
+    assert "jstaging_more" in (d / "report.html").read_text()
+    code, out, err = staging.run("exec", sg.PREFIX + rel, "python3", "-c",
+                                 "import pathlib\ntry:\n    pathlib.Path('/data/x').write_text('x'); print('WROTE')\n"
+                                 "except OSError: print('ro')\n")
+    assert out.split() == ["ro"], (out, err)
+    code, out, err = staging.run("exec", sg.PREFIX + rel, "python3", "-c", "import os; print(sorted(os.listdir('/data')))")
+    names = json.loads(out.replace("'", '"'))
+    assert names and all(n == "jobs" or n.startswith("snap-") for n in names), names    # no lock, no build
+
+
+
+def test_a_socket_link_to_another_socket_is_never_followed(tmp_path):
+    st = with_fixture(sg.Staging(tmp_path / "s", wait_s=0.5))
+    st.container_pid = lambda release: os.getpid()
+    other = tmp_path / "other"
+    other.mkdir()
+    srv = serve(other / "x.sock", good)                         # another service of this host
+    d = st.dir("jx-0123456789ab") / "sock"
+    d.mkdir(parents=True)
+    (d / "app.sock").symlink_to(other / "x.sock")
+    try:
+        results = st.smoke("jx-0123456789ab")
+    finally:
+        srv.shutdown()
+    assert results and not any(ok for _, ok, _ in results)
+
+
+def test_a_socket_whose_peer_is_not_the_container_is_refused(tmp_path):
+    st = with_fixture(sg.Staging(tmp_path, wait_s=0.5))
+    st.container_pid = lambda release: os.getpid() + 1             # another process answers on the socket
+    d = st.dir("jx-0123456789ab") / "sock"
+    d.mkdir(parents=True)
+    srv = serve(d / "app.sock", good)
+    try:
+        results = st.smoke("jx-0123456789ab")
+    finally:
+        srv.shutdown()
+    assert results and not any(ok for _, ok, _ in results)
+    with pytest.raises(OSError, match="peer is pid"):
+        sg._get(d / "app.sock", sg.HOST, "/summary", peer=os.getpid() + 1)
+
+
+def test_no_container_pid_means_no_smoke_request(tmp_path):
+    st = with_fixture(sg.Staging(tmp_path, run=lambda *a, **k: (1, "", "no such container")))
+    results = st.smoke("jx-0123456789ab")
+    assert results and all(not ok and "not running" in d for _, ok, d in results)

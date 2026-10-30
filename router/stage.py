@@ -15,7 +15,8 @@ image, and a rollback starts the earlier release on the image it recorded, never
 
 Every container runs from the checked runtime image of its release with --network none, a read-only root,
 no capabilities, no-new-privileges, this user's uid (not root) and limits; the release's source, the harness's entry
-module and the synthetic data (fixtures/staging/jobs) are mounted read-only, and only the socket directory is writable.
+module and the published snapshot of real job ledgers (stage_data, SPEC_STAGING_REAL_DATA) are mounted read-only, and
+only the socket directory is writable.
 `docker inspect` must show exactly that before the smoke test runs. Only containers named argus-staging-ledger-* and
 labelled with their release are ever stopped. Staging only: production needs its own approval (Atha, 2026-10-29).
 """
@@ -27,6 +28,8 @@ import os
 import re
 import shutil
 import socket
+import stat
+import struct
 import subprocess
 import tempfile
 import time
@@ -40,6 +43,7 @@ from acceptance import validation as va
 from tools import sandbox as sb
 
 from . import job as rj
+from . import stage_data as sd
 
 ROOT = Path(__file__).resolve().parent.parent
 STAGING = Path.home() / "argus-staging"
@@ -64,13 +68,25 @@ MOUNTS = {"/app": False, "/entry": False, "/data": False, "/run/argus": True}   
 SOCKET_WAIT_S = 30
 LOGS_TIMEOUT_S = 15                                        # copying logs is a convenience: never worth a long wait
 STATE_PROBLEM = "staging state: "                          # how status() starts when state.json cannot be used
-# SPEC_STAGING_V0 S4: what the synthetic jobs must give (fixtures/staging/README); a release that reads them wrongly fails
-SMOKE = [(HOST, "/summary", 200, lambda b: json.loads(b) == {"jobs": 2, "cost_nano": 2500000, "cost_usd": "0.0025",
-                                                               "skipped": 0}),
-         (HOST, "/jobs", 200, lambda b: [j.get("job") or j.get("id") for j in json.loads(b)]
-          == ["jstaging_done", "jstaging_failed"]),
-         (HOST, "/ui", 200, lambda b: b.lstrip().lower().startswith(b"<!doctype html")),
-         ("evil.example", "/summary", 400, lambda b: b"Invalid host header" in b)]
+
+
+def smoke_checks(man):
+    """SPEC_STAGING_V0 S4 against the published snapshot (SPEC_STAGING_REAL_DATA D3): the numbers argus-ledger must
+    give are the harness's own, from the snapshot's manifest (job ids, Σ reconcile_ledger); no snapshot, no pass."""
+    jobs, nano = (man["jobs"], man["cost_nano"]) if man else (None, None)
+
+    def summary(b):
+        got = json.loads(b)
+        return man is not None and {k: got.get(k) for k in ("jobs", "cost_nano", "skipped")} == \
+            {"jobs": len(jobs), "cost_nano": nano, "skipped": 0}
+    return [(HOST, "/summary", 200, summary),
+            (HOST, "/jobs", 200, lambda b: man is not None
+             and sorted(j.get("job") or j.get("id") for j in json.loads(b)) == jobs),
+            (HOST, "/ui", 200, lambda b: b.lstrip().lower().startswith(b"<!doctype html")),
+            ("evil.example", "/summary", 400, lambda b: b"Invalid host header" in b)]
+
+
+SMOKE = smoke_checks(None)                                 # the checks' names (no snapshot: every one fails)
 
 
 def docker(*args, timeout=120):
@@ -86,8 +102,9 @@ class Refused(rj.Refused):
 class Staging:
     """The staging area: <base>/releases/<release>/{src,entry,data,sock,logs}, state.json and releases.jsonl."""
 
-    def __init__(self, base=STAGING, run=docker, fixture=FIXTURE, wait_s=SOCKET_WAIT_S):
-        self.base, self.run, self.fixture, self.wait_s = Path(base), run, Path(fixture), wait_s
+    def __init__(self, base=STAGING, run=docker, wait_s=SOCKET_WAIT_S):
+        self.base, self.run, self.wait_s = Path(base), run, wait_s
+        self.data = self.base / "data"                     # snapshots of real jobs (stage_data), /data in the container
         self.state_path, self.log_path = self.base / "state.json", self.base / "releases.jsonl"
         self.checks_path = self.base / "env_checks.jsonl"
 
@@ -211,19 +228,12 @@ class Staging:
                           + (f" (last check: {last[-1].get('why')})" if last else ""))
         return last[-1]
 
-    def _fresh_data(self, d):
-        data = d / "data"
-        if data.exists():
-            _writable(data)
-            shutil.rmtree(data)
-        shutil.copytree(self.fixture, data / "jobs")
-        _read_only(data)
-
     def start(self, release, image):
         """Start a release's container; it is refused (and removed) unless docker shows the isolation of S3."""
         d = self.dir(release)
         self.verify(release)
-        self._fresh_data(d)
+        if sd.current(self.data) is None:
+            raise Refused("no published data snapshot: run `argus stage refresh` first")
         sock = d / "sock"
         if sock.exists():
             shutil.rmtree(sock)
@@ -234,7 +244,7 @@ class Staging:
             "run", "-d", "--name", name, "--label", f"{LABEL}={release}", "--network", "none", "--read-only",
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", f"{os.getuid()}:{os.getgid()}",
             *LIMITS, "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "PYTHONPATH=/app",
-            "-v", f"{d / 'src'}:/app:ro", "-v", f"{d / 'entry'}:/entry:ro", "-v", f"{d / 'data'}:/data:ro",
+            "-v", f"{d / 'src'}:/app:ro", "-v", f"{d / 'entry'}:/entry:ro", "-v", f"{sd.pub(self.data)}:/data:ro",
             "-v", f"{sock}:/run/argus", "-w", "/app", image,
             "python3", "-m", "uvicorn", "--app-dir", "/entry", "staging_app:app", "--uds", "/run/argus/app.sock",
             "--workers", "1")
@@ -277,7 +287,7 @@ class Staging:
             problems.append(f"image {c.get('Image')} is not {image}")
         if (cfg.get("Labels") or {}).get(LABEL) != release:
             problems.append("release label missing")
-        want = {"/app": d / "src", "/entry": d / "entry", "/data": d / "data", "/run/argus": d / "sock"}
+        want = {"/app": d / "src", "/entry": d / "entry", "/data": sd.pub(self.data), "/run/argus": d / "sock"}
         mounts = {m.get("Destination"): m for m in c.get("Mounts") or []}
         if set(mounts) != set(want):
             problems.append(f"mounts {sorted(mounts)}")
@@ -286,25 +296,42 @@ class Staging:
                 problems.append(f"mount {dest} is not {want[dest]} ({'rw' if MOUNTS[dest] else 'ro'})")
         return problems
 
-    def smoke(self, release):
-        """[(check, ok, detail)] of S4, through the release's socket from this host."""
+    def smoke(self, release, held=False):
+        """[(check, ok, detail)] of S4, through the release's socket from this host, against the active snapshot. The
+        data lock is held throughout (waiting for a refresh up to LOCK_WAIT_S), so the snapshot cannot change midway;
+        `held`: the caller (monitor) holds it already."""
+        with (sd._nothing() if held else sd.refresh_lock(self.data, wait_s=sd.LOCK_WAIT_S)):
+            return self._smoke(release, smoke_checks(sd.manifest(self.data)))
+
+    def container_pid(self, release):
+        """The host pid of the release's container's main process (uvicorn), or None: the only peer the smoke test and
+        the report talk to (security review: the socket directory is the container's, so app.sock could be a link)."""
+        code, out, _ = self.run("inspect", "--format", "{{.State.Pid}}", PREFIX + release)
+        pid = out.strip()
+        return int(pid) if code == 0 and pid.isdigit() and int(pid) > 0 else None
+
+    def _smoke(self, release, checks):
         path = self.dir(release) / "sock" / "app.sock"
+        peer = self.container_pid(release)
+        if peer is None:
+            return [(f"{host} {url} -> {status}", False, "the release's container is not running (no pid)")
+                    for host, url, status, _ in checks]
         deadline = time.monotonic() + self.wait_s
         while True:                                    # until the app listens: the file exists from bind(), before
             left = deadline - time.monotonic()         # listen(), and a connect then is refused
             if left <= 0:
                 return [(f"{host} {url} -> {status}", False, f"the socket did not accept a connection within "
-                         f"{self.wait_s}s") for host, url, status, _ in SMOKE]
+                         f"{self.wait_s}s") for host, url, status, _ in checks]
             try:
-                _connect(path, timeout=min(left, 10)).close()
+                _connect(path, timeout=min(left, 10), peer=peer).close()
                 break
             except OSError:
                 time.sleep(min(0.2, max(left, 0)))
         out = []
-        for host, url, status, body_ok in SMOKE:
+        for host, url, status, body_ok in checks:
             check = f"{host} {url} -> {status}"
             try:
-                got, body = _get(path, host, url)
+                got, body = _get(path, host, url, peer=peer)
                 ok = got == status and bool(body_ok(body))
                 out.append((check, ok, f"{got} {body[:120]!r}"))
             except Exception as e:                      # noqa: BLE001  (any failure is a failed check, with its type)
@@ -397,24 +424,33 @@ class Staging:
         return results
 
 
-def _connect(sock_path, timeout=10):
+def _connect(sock_path, timeout=10, peer=None):
+    """A connection to the Unix socket at sock_path, which must be a socket itself (never a symlink to another one);
+    with `peer`, the process on the other end must be that pid (SO_PEERCRED), else OSError."""
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
-        dfd = os.open(Path(sock_path).parent, os.O_RDONLY | os.O_DIRECTORY)
+        name = Path(sock_path).name
+        dfd = os.open(Path(sock_path).parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:                               # a socket path is at most 107 bytes: connect through the directory's fd
-            s.connect(f"/proc/self/fd/{dfd}/{Path(sock_path).name}")
+            if not stat.S_ISSOCK(os.stat(name, dir_fd=dfd, follow_symlinks=False).st_mode):
+                raise OSError(f"{name} is not a socket (a link or another file)")
+            s.connect(f"/proc/self/fd/{dfd}/{name}")
         finally:
             os.close(dfd)
+        if peer is not None:               # also closes the race between the stat and the connect
+            pid = struct.unpack("3i", s.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))[0]
+            if pid != peer:
+                raise OSError(f"the socket's peer is pid {pid}, not the release's container ({peer})")
     except BaseException:
         s.close()
         raise
     return s
 
 
-def _get(sock_path, host, url):
+def _get(sock_path, host, url, peer=None):
     conn = http.client.HTTPConnection("localhost", timeout=10)
-    conn.sock = _connect(sock_path)
+    conn.sock = _connect(sock_path, peer=peer)
     try:
         conn.request("GET", url, headers={"Host": host})
         r = conn.getresponse()
@@ -573,7 +609,8 @@ def deploy(job_id, *, cfg, deps, jobs_dir=rj.JOBS, staging=None, runtime=ENVIRON
             image_changed(known, runtime, image)
         text = "\n".join([f"== staging deploy (job {job.id}) ==",
                           f"release {release}: {repo} at {commit[:12]} (applied as reviewed)",
-                          f"image {runtime} {image[:19]}; no network, read-only, Unix socket; synthetic data",
+                          f"image {runtime} {image[:19]}; no network, read-only, Unix socket; data snapshot "
+                          f"{(sd.manifest(st.data) or {}).get('at') or 'NONE (run stage refresh)'}",
                           *([f"tested: stage check passed in {check['environment']} at {check['at']} "
                              f"({check['tests_run']} tests)"] if check else []),
                           f"live now: {state['live'] or 'nothing'}; rollback after this: {state['live'] or 'none'}",
@@ -633,6 +670,13 @@ def status(*, staging=None):
     if smokes:
         lines.append(f"  last smoke: {'pass' if smokes[-1]['ok'] else 'FAIL'} at {smokes[-1]['at']}")
     prev = state["history"][-2] if len(state["history"]) >= 2 else None
+    man = sd.manifest(st.data)
+    lines.append(f"data snapshot: {man['at']}, {len(man['jobs'])} jobs, {len(man['excluded'])} excluded"
+                 if man else "data snapshot: none (argus stage refresh)")
+    last, failed = sd.monitor_summary(st)
+    if last:
+        lines.append(f"last monitor: {'pass' if last['ok'] else 'BUSY' if sd.busy(last) else 'FAIL'} at {last['at']}"
+                     + (f" ({failed} failed in a row)" if failed else ""))
     lines.append(f"rollback would start: {prev or 'nothing (no earlier release)'}"
                  + (f" on {rels[prev].get('runtime', ENVIRONMENT)}" if prev in rels else ""))
     return "\n".join(lines)

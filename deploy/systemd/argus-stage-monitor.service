@@ -1,0 +1,14 @@
+# SPEC_STAGING_REAL_DATA D4/A3/A5: one monitor run (refresh, then the smoke test of the live staging release).
+# Type=oneshot: while a run is active the timer starts no second one; the command also takes the data lock (flock)
+# and records "busy" if another refresh or monitor holds it. It never starts, stops or replaces a container.
+# Install (pilot, after "go live"): ln -s this file and the .timer into ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload && systemctl --user enable --now argus-stage-monitor.timer
+[Unit]
+Description=Argus staging monitor (refresh the real-data snapshot, smoke-test the live release)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/pilot3a_live
+ExecStart=%h/pilot3a_live/.venv-verify/bin/python scripts/argus.py stage monitor
+TimeoutStartSec=300
+Nice=10
