@@ -106,8 +106,9 @@ def main(argv=None, deps=None):
         from tools import sandbox as sb
         try:
             if o.stage_cmd == "status":
-                print(sg.status())
-                return 0
+                text = sg.status()
+                print(text)
+                return 2 if text.startswith(sg.STATE_PROBLEM) else 0
             cfg = load_config(o.config)
             cfg["sandbox"] = sandbox_cfg(o.config)
             if o.stage_cmd == "check":                   # the sandbox only: nothing outside it changes
