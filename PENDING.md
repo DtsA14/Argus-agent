@@ -228,7 +228,9 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     socket = pid container; monitor `systemd --user` tiap 15 menit (lingering on); report escaped 0700/0600. Security review
     2 temuan serius diperbaiki; mutants 44/44; verify.sh PASS 393bddb. Pilot (`pilots/staging_real_data/p1/RESULT.md`): 9/9
     langkah, satu "go live"; monitor dari timer lolos
-- [ ] **Issue 014** (keputusan manusia per job; ditulis Claude): job Argus jalur cepat, lalu deploy lewat PLAN.md
+- [x] **Issue 014** (keputusan manusia per job; ditulis Claude): job `j20261030_060939_8433` DONE attempt 1, $0,0800,
+    applied apa adanya (argus-ledger `1f31e34`), deploy ke staging 6/6 (`pilots/ledger_014/RESULT.md`); staging kini menampilkan
+    keputusan per job dari data asli
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
 - [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
