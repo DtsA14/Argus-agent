@@ -1,6 +1,6 @@
 # Spek: aplikasi kedua di staging, viewer argus-ledger (React PWA) yang ditulis agen
 
-Status: **draf** (Claude, 2026-10-30), menunggu keputusan Atha (§7). Jalur ketat untuk harness (§2 V, §3 E, §4 S);
+Status: **disetujui Atha 2026-10-30** (keputusan §7, tambahan §8; PR 1 dirinci di §9). Jalur ketat untuk harness (§2 V, §3 E, §4 S);
 jalur cepat untuk aplikasinya (§5). Menutup gap: M6 "JS belum bisa divalidasi" (bulking-app terhalang di sini), M9
 "satu aplikasi", agen di repo baru, dan untuk pertama kalinya hasil agen bisa **dipakai** Atha di HP, bukan hanya
 dibaca angka smoke-nya. Tahap 3b (Playwright/Chromium) **tidak** termasuk.
@@ -111,14 +111,75 @@ sah di `localhost`, jadi tanpa DNS/TLS. Belum diuji (butuh HP Atha); diuji di pi
    pernah terbaca, socket hanya ke container rilis (peer pid).
 7. `rollback` viewer tidak menyentuh argus-ledger dan sebaliknya.
 
-## 7. Keputusan untuk Atha
+## 7. Keputusan Atha (2026-10-30)
 
-1. **Proxy selalu hidup** (`systemd --user`, restart otomatis) atau **hanya saat dipakai** (`argus stage serve`,
-   mati sendiri sesudah N menit)? Saran Claude: selalu hidup; eksposurnya sama (hanya `127.0.0.1`, dan siapa pun yang
-   punya shell di VM sudah bisa membaca semuanya).
-2. **Port**: saran `8710` (bukan 8000).
-3. **Nama repo** `argus-viewer`, lokal saja seperti `argus-ledger`?
-4. **Urutan PR (jalur ketat):** PR 1 = V + E (runner vitest dan environment); PR 2 = S (rilis statis, proxy, smoke);
-   lalu kerangka repo dan issue 001 (jalur cepat). Pilot staging: satu `PLAN.md`, satu "go live".
-5. Dokumentasi React/vite untuk `ReadDocs` agen (`web.hosts`): **belum** (saran Claude), dibuka bila agen terbukti
-   kekurangan.
+1. **Proxy selalu hidup** (`systemd --user`), dengan syarat **bind eksplisit hanya ke `127.0.0.1`** dan tidak bisa
+   diakses dari jaringan publik.
+2. **Port 8710.**
+3. **Repo `argus-viewer` lokal saja.**
+4. **Dua PR terpisah:** PR 1 runner Vitest dan environment, PR 2 staging dan proxy. Keduanya jalur ketat, **tidak
+   di-merge sebelum approval Atha**. Staging/proxy tidak disentuh sebelum PR 1 selesai direview.
+5. Docs React/Vite untuk agen **belum** dibuka sampai ada kebutuhan nyata.
+
+## 8. Tambahan pengamanan Atha (dijamin dan dites; mutants)
+
+**A1. API proxy: hanya GET, allowlist eksplisit.** Tepat tiga bentuk path: `/api/summary`, `/api/jobs`,
+`/api/jobs/<id>` dengan `<id>` sesuai pola job Argus; tanpa query string; selain itu 404, selain GET/HEAD 405 (PR 2).
+
+**A2. Header forwarding dari client tidak dipercaya.** `X-Forwarded-*`, `Forwarded`, `X-Real-IP` dan sejenisnya
+diabaikan, tidak pernah diteruskan. Proxy membuat request baru ke socket ledger dengan header miliknya sendiri
+(`Host` tetap yang diterima ledger); tidak ada header client yang ikut. Keputusan akses hanya dari alamat listen
+(`127.0.0.1`) dan `Host` (S2) (PR 2).
+
+**A3. PWA tidak menyimpan data API/job di browser.** Tiga lapis:
+- Respons `/api/*` membawa `Cache-Control: no-store` (cache HTTP browser tidak menyimpan) (PR 2).
+- `sw.js` ditulis Claude di kerangka, dilindungi scope, hanya meng-cache daftar app shell tetap; staging menolak
+  rilis yang `sw.js`-nya berbeda dari versi yang direview (sha tercatat) (PR 2).
+- Build dipindai: kemunculan `localStorage`, `sessionStorage`, `indexedDB`, `caches.` atau `CacheStorage` di luar
+  `sw.js` → rilis ditolak. (Cek awal: bundle React 19 tidak memuat satu pun.) Batasnya ditulis: pemindaian teks
+  tidak menangkap akses yang disamarkan (`window["local" + "Storage"]`); lapis ini menangkap pemakaian biasa, bukan
+  niat jahat, dan kode aplikasi tetap direview di jalur cepat (PR 2).
+
+**A4. Validasi artifact build** (S1, PR 2): setiap entri `dist` diperiksa tanpa mengikuti link: symlink, hardlink
+(`st_nlink > 1`), device/fifo/socket → ditolak; nama path hanya `[A-Za-z0-9._-]` per segmen, tanpa `..`, tanpa
+segmen diawali titik, kedalaman ≤ 4; ekstensi dalam allowlist dan isi cocok tipe (HTML/JS/CSS/JSON/manifest UTF-8
+valid; PNG/ICO dengan magic bytes); ukuran per berkas ≤ 2 MB dan total ≤ 5 MB; jumlah berkas ≤ 200.
+
+**A5. Termius lewat SSH port forwarding, 8710 tidak terekspos.**
+- Proxy bind `127.0.0.1` secara eksplisit (bukan `0.0.0.0`, bukan `localhost` yang bisa resolve ke `::`);
+  smoke memeriksa lewat `ss -ltnH` bahwa satu-satunya listener di port 8710 adalah `127.0.0.1:8710` (PR 2).
+- Tidak ada perubahan firewall/iptables/security list OCI; port tidak pernah dibuka ke publik.
+- Panduan Termius untuk Atha (di pilot): *Port Forwarding → Local*, host = VM lewat SSH, **bind address di HP
+  `127.0.0.1`** (bukan `0.0.0.0`, supaya perangkat lain di Wi-Fi yang sama tidak bisa memakai forward-nya), port
+  lokal 8710 → tujuan `127.0.0.1:8710`.
+
+## 9. PR 1 secara rinci (runner Vitest dan environment)
+
+Cek mekanisme (Claude, scratchpad): vitest dijalankan **secara programatik** oleh skrip milik harness
+(`node --input-type=module -e SCRIPT nonce file...`, memanggil `startVitest` dari `/node_modules/vitest` dengan
+reporter perekam milik harness), setara plugin pytest red check: hasilnya JSON di belakang nonce, bukan teks yang
+di-parse. Perekam memberi per tes: status, tipe error (`AssertionError` vs `TestingLibraryElementError`), berkas
+`/workspace` teratas di stack, pesan; per modul: error impor. Nama dengan spasi dan `describe` (` > `) terbaca. Mode
+`collect` (`createVitest().collect`) memberi daftar tes tanpa menjalankannya.
+
+**Temuan:** filter berkas vitest mencocokkan **substring** (`src/App` menjalankan `src/App.test.jsx`). Jadi hasil
+dipercaya hanya bila himpunan modul yang berjalan **sama persis** dengan berkas yang diminta; selain itu gagal
+tertutup.
+
+Isi PR 1:
+- `acceptance/validation.py`: bentuk kontrak `{"executable": "vitest", "args": ["run", FILE, ...]}` (V1, tanpa `-t`
+  di v0); satu skrip harness untuk validasi dan red check; `judge_result`, `collect_nodes`, `red_check` memilih
+  runner dari `kind()`; record red check berbentuk sama dengan pytest (`outcome`, `type`, `assertion`, `path`,
+  `message`, `message_names`, `repo_paths`), jadi gate draf yang ada dipakai apa adanya.
+- `acceptance/contract.py`: node id vitest `FILE::NAMA` (boleh spasi, tanpa baris baru, ≤ 300 karakter); `no_skip`
+  tetap hanya pytest.
+- `acceptance/draft.py`: tes baru `*.test.js|jsx|ts|tsx` untuk environment ber-runner vitest, `test_*.py` untuk
+  pytest; `changed_tests` **ditolak** untuk vitest di v0 (perbandingan AST hanya Python; tes lama tidak bisa diubah,
+  hanya ditambah tes baru), dicatat sebagai batas.
+- `codetask/drafter.py`, `codetask/agent.py`: teks runner dan bentuk perintah dari `runner` environment; potongan
+  error vitest untuk agen.
+- Environment `pwa_node22` (§3), `scripts/build_env_node.sh`, cek di `scripts/check_env_image.py`, `config.yaml`
+  (`runner: vitest`; environment tanpa `runner` = pytest seperti sekarang).
+- E1 (dependency repo ⊆ lock environment) dicek di intake/validasi.
+- Tes: unit (parser, judge, kontrak, draf) + integrasi di sandbox nyata dengan repo contoh (lulus, gagal karena
+  assertion, gagal bukan assertion, impor gagal, filter substring, skip). Docker tidak tersedia = tes tidak lulus.
