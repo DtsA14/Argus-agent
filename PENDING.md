@@ -243,6 +243,13 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     direview), swap `current` atomik sesudah smoke kandidat; proxy `127.0.0.1:8710` (Host, GET/HEAD, tiga path API ke
     socket ledger dengan header sendiri, `no-store`, CSP); monitor ikut smoke viewer. Unit proxy belum dipasang (pilot).
     Lalu kerangka `argus-viewer` + pin `SW_SHA256` (jalur ketat) dan issue 001 (jalur cepat)
+- [~] **Staging: namespace per direktori + `argus stage restart`** (jalur ketat, temuan 2026-10-30): tes
+    `Staging(tmp_path)` menghapus container live `~/argus-staging` lewat `reconcile()` (filter hanya label rilis);
+    sejak 09:46 UTC staging argus-ledger mati, monitor gagal 12× tanpa ada yang tahu. Perbaikan: label
+    `argus.staging.base` (path ter-resolve) di `running()`, `remove()` (inspect sebelum `rm -f`) dan isolasi; tes memakai
+    prefix/label sendiri; `stage restart` (rilis live, image rekaman, smoke, tanpa reconcile). Lalu satu "go live" restart
+- [ ] **Notifikasi monitor gagal** (jalur cepat, Atha 2026-10-30): kegagalan monitor 2–3× berturut-turut harus sampai ke
+    Atha, bukan hanya terlihat di `stage status`
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
 - [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
