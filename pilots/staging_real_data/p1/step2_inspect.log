@@ -1,0 +1,6 @@
+container argus-staging-ledger-j20261029_115742_bffd-804e13a33c44
+image=sha256:4ab2ff53a34f46ccecde0c8030298bcb37be41d7c565847590de4875a5578f5a net=none ro=true capdrop=[ALL] capadd=[] user=1001:1001 sec=[no-new-privileges] priv=false
+data_mount=/home/ubuntu/argus-staging/data/pub rw=false
+data_ls ['jobs', 'snap-20261030T054638Z']
+staging containers: 1
+port8000=404

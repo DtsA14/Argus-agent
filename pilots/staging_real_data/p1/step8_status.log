@@ -1,0 +1,6 @@
+staging live: j20261029_115742_bffd-804e13a33c44.up1
+  job j20261029_115742_bffd, commit 804e13a33c44, runtime ledger_staging_up1
+  last smoke: pass at 2026-10-30T05:47:14Z
+data snapshot: 2026-10-30T06:00:32Z, 54 jobs, 0 excluded
+last monitor: pass at 2026-10-30T06:00:31Z
+rollback would start: j20261029_115742_bffd-804e13a33c44 on ledger_staging

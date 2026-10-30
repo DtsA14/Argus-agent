@@ -1,0 +1,6 @@
+Created symlink /home/ubuntu/.config/systemd/user/timers.target.wants/argus-stage-monitor.timer → /home/ubuntu/pilot3a_live/deploy/systemd/argus-stage-monitor.timer.
+NEXT                         LEFT LAST PASSED UNIT                      ACTIVATES
+Fri 2026-10-30 06:00:00 UTC 12min -         - argus-stage-monitor.timer argus-stage-monitor.service
+
+1 timers listed.
+Pass --all to see loaded but inactive timers, too.

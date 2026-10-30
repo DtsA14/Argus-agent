@@ -1,0 +1,13 @@
+{"at": "2026-10-30T06:00:31Z", "ok": true, "refresh": {"jobs": 54, "ok": true}, "release": "j20261029_115742_bffd-804e13a33c44.up1", "smoke": [["staging.local /summary -> 200", true, "200 b'{\"jobs\":54,\"cost_nano\":4176849024,\"cost_usd\":\"4.1768\",\"skipped\":0}'"], ["staging.local /jobs -> 200", true, "200 b'[{\"job\":\"j20261022_193403_3beb\",\"state\":\"ABANDONED\",\"created_at\":\"2026-10-22T19:34:03Z\",\"stages\":1,\"cost_nano\":393710600'"], ["staging.local /ui -> 200", true, "200 b'<!DOCTYPE html>\\n<html lang=\"en\">\\n<head>\\n<meta charset=\"utf-8\">\\n<title>jobs</title>\\n<style>body{font:16px/1.4 sans-serif;'"], ["evil.example /summary -> 400", true, "400 b'Invalid host header'"]], "snapshot": "2026-10-30T06:00:32Z"}
+○ argus-stage-monitor.service - Argus staging monitor (refresh the real-data snapshot, smoke-test the live release)
+     Loaded: loaded (/home/ubuntu/.config/systemd/user/argus-stage-monitor.service; linked; preset: enabled)
+     Active: inactive (dead) since Fri 2026-10-30 06:00:32 UTC; 8s ago
+TriggeredBy: ● argus-stage-monitor.timer
+    Process: 3709671 ExecStart=/home/ubuntu/pilot3a_live/.venv-verify/bin/python scripts/argus.py stage monitor (code=exited, status=0/SUCCESS)
+   Main PID: 3709671 (code=exited, status=0/SUCCESS)
+        CPU: 1.555s
+
+Oct 30 06:00:31 auto-retry-instance systemd[3164153]: Starting argus-stage-monitor.service - Argus staging monitor (refresh the real-data snapshot, smoke-test the live release)...
+Oct 30 06:00:32 auto-retry-instance python[3709671]: {"at": "2026-10-30T06:00:31Z", "ok": true, "refresh": {"jobs": 54, "ok": true}, "release": "j20261029_115742_bffd-804e13a33c44.up1", "smoke": [["staging.local /summary -> 200", true, "200 b'{\"jobs\":54,\"cost_nano\":4176849024,\"cost_usd\":\"4.1768\",\"skipped\":0}'"], ["staging.local /jobs -> 200", true, "200 b'[{\"job\":\"j20261022_193403_3beb\",\"state\":\"ABANDONED\",\"created_at\":\"2026-10-22T19:34:03Z\",\"stages\":1,\"cost_nano\":393710600'"], ["staging.local /ui -> 200", true, "200 b'<!DOCTYPE html>\\n<html lang=\"en\">\\n<head>\\n<meta charset=\"utf-8\">\\n<title>jobs</title>\\n<style>body{font:16px/1.4 sans-serif;'"], ["evil.example /summary -> 400", true, "400 b'Invalid host header'"]], "snapshot": "2026-10-30T06:00:32Z"}
+Oct 30 06:00:32 auto-retry-instance systemd[3164153]: Finished argus-stage-monitor.service - Argus staging monitor (refresh the real-data snapshot, smoke-test the live release).
+Oct 30 06:00:32 auto-retry-instance systemd[3164153]: argus-stage-monitor.service: Consumed 1.555s CPU time.
