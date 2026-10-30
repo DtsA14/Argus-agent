@@ -1,0 +1,6 @@
+viewer live: j20261030_164214_d603-e794a53775be
+  job j20261030_164214_d603, commit e794a53775be, image sha256:9ac2fb4376d2
+viewer rollback would publish: nothing (no earlier release)
+proxy: 127.0.0.1:8710
+exit=0
+1af21f1a2fc5 argus-staging-ledger-j20261030_060939_8433-1f31e34c1ff2.up1
