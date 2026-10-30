@@ -237,18 +237,27 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     workspace dengan `node_modules` tidak dijalankan), environment `pwa_node22` distroless dari lock sha512. Code review medium
     10 temuan diperbaiki, security review tanpa temuan; mutants 54/56 (2 ekuivalen); verify.sh PASS e88c940. Batas v0: tes lama
     vitest tidak bisa diubah (`changed_tests` hanya Python), tanpa `-t`
-- [~] **Viewer PWA, PR 2** (jalur ketat, `docs/reviews/SPEC_PWA_VIEWER.md` §10, menunggu approval Atha): `argus stage
+- [x] **Viewer PWA, PR 2** (jalur ketat, `docs/reviews/SPEC_PWA_VIEWER.md` §10, #257): `argus stage
     viewer-deploy|viewer-rollback|viewer-status|viewer-smoke|proxy`; build rilis statis di `pwa_node22` tanpa jaringan,
     cek artifact (A4), E1, tanpa browser storage, `sw.js` dipin (`SW_SHA256` masih `None`: belum ada rilis sampai kerangka
     direview), swap `current` atomik sesudah smoke kandidat; proxy `127.0.0.1:8710` (Host, GET/HEAD, tiga path API ke
     socket ledger dengan header sendiri, `no-store`, CSP); monitor ikut smoke viewer. Unit proxy belum dipasang (pilot).
     Lalu kerangka `argus-viewer` + pin `SW_SHA256` (jalur ketat) dan issue 001 (jalur cepat)
-- [~] **Staging: namespace per direktori + `argus stage restart`** (jalur ketat, temuan 2026-10-30): tes
+- [x] **Kerangka `argus-viewer`** (jalur cepat, repo lokal `~/argus-viewer` 505e23b, rencana disetujui Atha 2026-10-30):
+    React 19 + vite, `sw.js` app shell network-first (sw yang dipin tidak pernah diperbarui browser, jadi cache-first
+    akan menahan shell lama di HP; offline = layar kosong, batas tertulis di README), satu tes. Cek dengan kode Argus:
+    validasi lulus, red = `AssertionError`, E1 dan artifact bersih dengan pin. Berkas yang tidak boleh diubah agen:
+    `PROTECTED` (dibaca dari commit base) + `~/argus-viewer-issues/check_protected.py` (mode draft/patch/commit), dijalankan
+    saat approve draft dan sebelum `argus applied`
+- [~] **Pin `SW_SHA256`** (jalur ketat): sha `public/sw.js` kerangka (`db58777a…`), fixture `viewer_demo` memakai salinan
+    persisnya; deploy nyata dengan pin default (bukan override konstruktor) diterima, `sw.js` beda satu byte ditolak dan
+    rilis live tetap. Lalu issue 001 (jalur cepat), lalu pilot PLAN.md: deploy + unit proxy + Termius
+- [x] **Staging: namespace per direktori + `argus stage restart`** (jalur ketat, temuan 2026-10-30, #258, restart 13:52 UTC): tes
     `Staging(tmp_path)` menghapus container live `~/argus-staging` lewat `reconcile()` (filter hanya label rilis);
     sejak 09:46 UTC staging argus-ledger mati, monitor gagal 12× tanpa ada yang tahu. Perbaikan: label
     `argus.staging.base` (path ter-resolve) di `running()`, `remove()` (inspect sebelum `rm -f`) dan isolasi; tes memakai
     prefix/label sendiri; `stage restart` (rilis live, image rekaman, smoke, tanpa reconcile). Lalu satu "go live" restart
-- [ ] **Notifikasi monitor gagal** (jalur cepat, Atha 2026-10-30): kegagalan monitor 2–3× berturut-turut harus sampai ke
+- [x] **Notifikasi monitor gagal** (jalur cepat, Atha 2026-10-30, #259 + #260 ntfy-me.com): kegagalan monitor 2–3× berturut-turut harus sampai ke
     Atha, bukan hanya terlihat di `stage status`
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
 - [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru

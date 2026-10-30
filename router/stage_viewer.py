@@ -48,9 +48,10 @@ from . import stage_data as sd
 ENVIRONMENT = "pwa_node22"
 LOCK_FILE = sg.ROOT / "environments" / ENVIRONMENT / "package-lock.json"
 BIND, PORT = "127.0.0.1", 8710                     # Atha 2026-10-30: explicit, never 0.0.0.0 or "localhost"; never 8000
-# The service worker as reviewed (A3): the sha256 of the skeleton's public/sw.js once Atha reviewed it. None: no release
-# is published. Changing it is a strict-lane change of this file.
-SW_SHA256 = None
+# The service worker as reviewed (A3): the sha256 of public/sw.js of the argus-viewer skeleton (commit 505e23b, network
+# first app shell, never /api/), a copy of which is fixtures/repos/viewer_demo/public/sw.js. A release whose sw.js
+# differs is never published. Changing it is a strict-lane change of this file.
+SW_SHA256 = "db58777a410480de1dac10c17f730396dcaee0031ea693dbd03e2db418c7e0cf"
 BUILD_TIMEOUT_S = 300
 BUILD_ARGV = ["node", "/node_modules/vite/bin/vite.js", "build", "--configLoader", "runner", "--outDir", "/out",
               "--emptyOutDir", "--logLevel", "warn"]

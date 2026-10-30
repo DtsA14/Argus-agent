@@ -92,8 +92,13 @@ def test_the_reviewed_service_worker_may_use_the_cache_api(tmp_path):
     assert sv.artifact_problems(make_dist(tmp_path), SW_SHA) == []
 
 
+def test_the_pinned_service_worker_is_the_reviewed_one_of_the_fixture():
+    # fixtures/repos/viewer_demo/public/sw.js is a copy of the argus-viewer skeleton's, reviewed by Atha
+    assert sv.SW_SHA256 == SW_SHA == "db58777a410480de1dac10c17f730396dcaee0031ea693dbd03e2db418c7e0cf"
+    assert sv.Viewer("unused", ledger=object()).sw_sha256 == sv.SW_SHA256
+
+
 def test_without_a_reviewed_service_worker_every_release_is_refused(tmp_path):
-    assert sv.SW_SHA256 is None or len(sv.SW_SHA256) == 64
     got = sv.artifact_problems(make_dist(tmp_path), None)
     assert got and any("sw.js" in p for p in got), got
 
@@ -856,6 +861,35 @@ def test_a_real_deploy_and_rollback(tmp_path, viewer, viewer_repo, real_cfg):
     index = (viewer.base / "current" / "index.html").read_text()
     assert "/assets/" in index and "/src/main.jsx" not in index
     assert sv.rollback(deps=deps(), viewer=viewer) == first
+
+
+@pytest.fixture
+def pinned(tmp_path, ledger):
+    """A viewer as the commands make it: the service worker is the real default pin, never one given here."""
+    return sv.Viewer(tmp_path / "staging" / "apps" / "pinned", ledger=ledger)
+
+
+def test_a_real_deploy_with_the_default_pin_publishes_the_reviewed_service_worker(tmp_path, pinned, viewer_repo,
+                                                                                  real_cfg):
+    r, commit = viewer_repo
+    jobs = tmp_path / "jobs"
+    assert pinned.state()["live"] is None
+    release = sv.deploy(viewer_job(jobs, "jview", r, commit), cfg=real_cfg, deps=deps(), jobs_dir=jobs, viewer=pinned)
+    assert pinned.state()["live"] == release
+    assert hashlib.sha256((pinned.base / "current" / "sw.js").read_bytes()).hexdigest() == sv.SW_SHA256
+
+
+def test_a_real_deploy_with_another_service_worker_is_refused_by_the_default_pin(tmp_path, pinned, viewer_repo,
+                                                                                 real_cfg):
+    r, commit = viewer_repo
+    jobs = tmp_path / "jobs"
+    live = sv.deploy(viewer_job(jobs, "jview", r, commit), cfg=real_cfg, deps=deps(), jobs_dir=jobs, viewer=pinned)
+    (r / "public" / "sw.js").write_bytes(SW.replace(b"argus-viewer-shell-v1", b"argus-viewer-shell-v2"))
+    git(r, "commit", "-qam", "sw.js differs by one byte")
+    other = git(r, "rev-parse", "HEAD")
+    with pytest.raises(sv.Refused, match="sw.js is not the reviewed service worker"):
+        sv.deploy(viewer_job(jobs, "jother", r, other), cfg=real_cfg, deps=deps(), jobs_dir=jobs, viewer=pinned)
+    assert pinned.state()["live"] == live and pinned.published() == live
 
 
 # ---- code review of PR 2 ----------------------------------------------------------------------------------------------
