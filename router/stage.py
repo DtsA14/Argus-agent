@@ -28,6 +28,8 @@ import os
 import re
 import shutil
 import socket
+import stat
+import struct
 import subprocess
 import tempfile
 import time
@@ -242,7 +244,7 @@ class Staging:
             "run", "-d", "--name", name, "--label", f"{LABEL}={release}", "--network", "none", "--read-only",
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", f"{os.getuid()}:{os.getgid()}",
             *LIMITS, "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "PYTHONPATH=/app",
-            "-v", f"{d / 'src'}:/app:ro", "-v", f"{d / 'entry'}:/entry:ro", "-v", f"{self.data}:/data:ro",
+            "-v", f"{d / 'src'}:/app:ro", "-v", f"{d / 'entry'}:/entry:ro", "-v", f"{sd.pub(self.data)}:/data:ro",
             "-v", f"{sock}:/run/argus", "-w", "/app", image,
             "python3", "-m", "uvicorn", "--app-dir", "/entry", "staging_app:app", "--uds", "/run/argus/app.sock",
             "--workers", "1")
@@ -285,7 +287,7 @@ class Staging:
             problems.append(f"image {c.get('Image')} is not {image}")
         if (cfg.get("Labels") or {}).get(LABEL) != release:
             problems.append("release label missing")
-        want = {"/app": d / "src", "/entry": d / "entry", "/data": self.data, "/run/argus": d / "sock"}
+        want = {"/app": d / "src", "/entry": d / "entry", "/data": sd.pub(self.data), "/run/argus": d / "sock"}
         mounts = {m.get("Destination"): m for m in c.get("Mounts") or []}
         if set(mounts) != set(want):
             problems.append(f"mounts {sorted(mounts)}")
@@ -301,8 +303,19 @@ class Staging:
         with (sd._nothing() if held else sd.refresh_lock(self.data, wait_s=sd.LOCK_WAIT_S)):
             return self._smoke(release, smoke_checks(sd.manifest(self.data)))
 
+    def container_pid(self, release):
+        """The host pid of the release's container's main process (uvicorn), or None: the only peer the smoke test and
+        the report talk to (security review: the socket directory is the container's, so app.sock could be a link)."""
+        code, out, _ = self.run("inspect", "--format", "{{.State.Pid}}", PREFIX + release)
+        pid = out.strip()
+        return int(pid) if code == 0 and pid.isdigit() and int(pid) > 0 else None
+
     def _smoke(self, release, checks):
         path = self.dir(release) / "sock" / "app.sock"
+        peer = self.container_pid(release)
+        if peer is None:
+            return [(f"{host} {url} -> {status}", False, "the release's container is not running (no pid)")
+                    for host, url, status, _ in checks]
         deadline = time.monotonic() + self.wait_s
         while True:                                    # until the app listens: the file exists from bind(), before
             left = deadline - time.monotonic()         # listen(), and a connect then is refused
@@ -310,7 +323,7 @@ class Staging:
                 return [(f"{host} {url} -> {status}", False, f"the socket did not accept a connection within "
                          f"{self.wait_s}s") for host, url, status, _ in checks]
             try:
-                _connect(path, timeout=min(left, 10)).close()
+                _connect(path, timeout=min(left, 10), peer=peer).close()
                 break
             except OSError:
                 time.sleep(min(0.2, max(left, 0)))
@@ -318,7 +331,7 @@ class Staging:
         for host, url, status, body_ok in checks:
             check = f"{host} {url} -> {status}"
             try:
-                got, body = _get(path, host, url)
+                got, body = _get(path, host, url, peer=peer)
                 ok = got == status and bool(body_ok(body))
                 out.append((check, ok, f"{got} {body[:120]!r}"))
             except Exception as e:                      # noqa: BLE001  (any failure is a failed check, with its type)
@@ -411,24 +424,33 @@ class Staging:
         return results
 
 
-def _connect(sock_path, timeout=10):
+def _connect(sock_path, timeout=10, peer=None):
+    """A connection to the Unix socket at sock_path, which must be a socket itself (never a symlink to another one);
+    with `peer`, the process on the other end must be that pid (SO_PEERCRED), else OSError."""
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
-        dfd = os.open(Path(sock_path).parent, os.O_RDONLY | os.O_DIRECTORY)
+        name = Path(sock_path).name
+        dfd = os.open(Path(sock_path).parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:                               # a socket path is at most 107 bytes: connect through the directory's fd
-            s.connect(f"/proc/self/fd/{dfd}/{Path(sock_path).name}")
+            if not stat.S_ISSOCK(os.stat(name, dir_fd=dfd, follow_symlinks=False).st_mode):
+                raise OSError(f"{name} is not a socket (a link or another file)")
+            s.connect(f"/proc/self/fd/{dfd}/{name}")
         finally:
             os.close(dfd)
+        if peer is not None:               # also closes the race between the stat and the connect
+            pid = struct.unpack("3i", s.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))[0]
+            if pid != peer:
+                raise OSError(f"the socket's peer is pid {pid}, not the release's container ({peer})")
     except BaseException:
         s.close()
         raise
     return s
 
 
-def _get(sock_path, host, url):
+def _get(sock_path, host, url, peer=None):
     conn = http.client.HTTPConnection("localhost", timeout=10)
-    conn.sock = _connect(sock_path)
+    conn.sock = _connect(sock_path, peer=peer)
     try:
         conn.request("GET", url, headers={"Host": host})
         r = conn.getresponse()
@@ -653,7 +675,7 @@ def status(*, staging=None):
                  if man else "data snapshot: none (argus stage refresh)")
     last, failed = sd.monitor_summary(st)
     if last:
-        lines.append(f"last monitor: {'pass' if last['ok'] else 'FAIL'} at {last['at']}"
+        lines.append(f"last monitor: {'pass' if last['ok'] else 'BUSY' if sd.busy(last) else 'FAIL'} at {last['at']}"
                      + (f" ({failed} failed in a row)" if failed else ""))
     lines.append(f"rollback would start: {prev or 'nothing (no earlier release)'}"
                  + (f" on {rels[prev].get('runtime', ENVIRONMENT)}" if prev in rels else ""))

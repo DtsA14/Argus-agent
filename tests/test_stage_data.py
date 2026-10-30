@@ -64,7 +64,7 @@ def source(tmp_path):
 
 
 def snapshot_bytes(data):
-    return b"".join(p.read_bytes() for p in sorted((data / "jobs").rglob("*")) if p.is_file())
+    return b"".join(p.read_bytes() for p in sorted((sd.pub(data) / "jobs").rglob("*")) if p.is_file())
 
 
 # ---- A1: the allowlist -------------------------------------------------------------------------------------------------
@@ -73,11 +73,11 @@ def test_only_allowlisted_fields_are_published(tmp_path, source):
     data = tmp_path / "data"
     man = sd.refresh(source, data)
     assert man["jobs"] == ["jone", "jtwo"] and man["excluded"] == [] and man["cost_nano"] == 800
-    job = json.loads((data / "jobs" / "jone" / "job.json").read_text())
+    job = json.loads((sd.pub(data) / "jobs" / "jone" / "job.json").read_text())
     assert set(job) == {"job", "kind", "state", "created_at", "max_usd", "stages", "log"}
     assert set(job["stages"]["a1"]) == {"kind", "run_id", "status", "started_at", "ended_at", "usd"}
     assert job["log"] == [{"at": T, "what": "state", "old": "NEW", "new": "DRAFTING", "stage": "a1"}]
-    events = [json.loads(x) for x in (data / "jobs" / "jtwo" / "runs" / "jtwo-a1" / "events.jsonl").read_text()
+    events = [json.loads(x) for x in (sd.pub(data) / "jobs" / "jtwo" / "runs" / "jtwo-a1" / "events.jsonl").read_text()
               .splitlines()]
     assert [e["event"] for e in events] == ["llm_call_started", "llm_call", "attempt_end"]
     assert all("prompt_hash" not in e and "latency_s" not in e and "task" not in e for e in events)
@@ -137,37 +137,42 @@ def test_symlinks_other_files_and_other_runs_are_never_published(tmp_path, sourc
     man = sd.refresh(source, data)
     assert man["jobs"] == ["jone", "jtwo"] and man["cost_nano"] == 800
     assert [e["job"] for e in man["excluded"]] == ["jlink"]
-    files = sorted(p.relative_to(data / "jobs").as_posix() for p in (data / "jobs").rglob("*") if p.is_file())
+    files = sorted(p.relative_to(sd.pub(data) / "jobs").as_posix() for p in (sd.pub(data) / "jobs").rglob("*") if p.is_file())
     assert files == ["jone/job.json", "jone/runs/jone-a1/events.jsonl", "jtwo/job.json",
                      "jtwo/runs/jtwo-a1/events.jsonl"]
 
 
 # ---- A2: consistent, validated, atomic --------------------------------------------------------------------------------
 
-def test_a_job_that_keeps_changing_while_it_is_read_is_excluded(tmp_path, source, monkeypatch):
-    real, n = sd._regular, [0]
+def where(dir_fd):
+    return Path(os.readlink(f"/proc/self/fd/{dir_fd}"))
 
-    def changing(path):
-        if path.name == "job.json" and path.parent.name == "jone":
+
+def test_a_job_that_keeps_changing_while_it_is_read_is_excluded(tmp_path, source, monkeypatch):
+    real, n = sd._read_at, [0]
+
+    def changing(dir_fd, name):
+        if name == "job.json" and where(dir_fd).name == "jone":
             n[0] += 1
-            return real(path) + b" " * n[0]
-        return real(path)
-    monkeypatch.setattr(sd, "_regular", changing)
+            return real(dir_fd, name) + b" " * n[0]
+        return real(dir_fd, name)
+    monkeypatch.setattr(sd, "_read_at", changing)
     monkeypatch.setattr(sd.time, "sleep", lambda s: None)
     man = sd.refresh(source, tmp_path / "data")
     assert man["jobs"] == ["jtwo"] and "kept changing" in man["excluded"][0]["why"]
 
 
 def test_a_ledger_that_shrinks_while_it_is_read_is_excluded(tmp_path, source, monkeypatch):
-    real, seen = sd._regular, {}
+    real, seen = sd._read_at, {}
 
-    def shrinking(path):
-        b = real(path)
-        if path.name == "events.jsonl" and "jone" in str(path):
+    def shrinking(dir_fd, name):
+        b = real(dir_fd, name)
+        path = where(dir_fd)
+        if name == "events.jsonl" and "jone" in str(path):
             seen[path] = seen.get(path, 0) + 1
             return b if seen[path] % 2 else b[:10]
         return b
-    monkeypatch.setattr(sd, "_regular", shrinking)
+    monkeypatch.setattr(sd, "_read_at", shrinking)
     monkeypatch.setattr(sd.time, "sleep", lambda s: None)
     man = sd.refresh(source, tmp_path / "data")
     assert "jone" not in man["jobs"]
@@ -200,7 +205,7 @@ def test_a_snapshot_with_more_than_half_of_the_jobs_excluded_is_not_published(tm
 def test_a_snapshot_that_fails_validation_is_never_published(tmp_path, source, monkeypatch, breaks):
     data = tmp_path / "data"
     first = sd.refresh(source, data, clock=lambda: (2026, 10, 30, 1, 0, 0, 0, 0, 0))
-    before, snap = os.readlink(data / "jobs"), sd.current(data)
+    before, snap = os.readlink(sd.pub(data) / "jobs"), sd.current(data)
     real = sd.build
 
     def bad(src, tmp):
@@ -217,21 +222,22 @@ def test_a_snapshot_that_fails_validation_is_never_published(tmp_path, source, m
     monkeypatch.setattr(sd, "build", bad)
     with pytest.raises((sd.Refused, RuntimeError)):
         sd.refresh(source, data, clock=lambda: (2026, 10, 30, 2, 0, 0, 0, 0, 0))
-    assert os.readlink(data / "jobs") == before and sd.current(data) == snap
+    assert os.readlink(sd.pub(data) / "jobs") == before and sd.current(data) == snap
     assert sd.manifest(data)["at"] == first["at"] and not list(data.glob(".tmp-*"))
-    assert sorted(p.name for p in data.glob("snap-*")) == [snap.name]
+    assert sorted(p.name for p in sd.pub(data).glob("snap-*")) == [snap.name]
 
 
 def test_a_published_snapshot_is_read_only_and_the_two_newest_are_kept(tmp_path, source):
     data = tmp_path / "data"
     for hour in range(4):
         sd.refresh(source, data, clock=lambda h=hour: (2026, 10, 30, h, 0, 0, 0, 0, 0))
-    snaps = sorted(p.name for p in data.glob("snap-*"))
+    snaps = sorted(p.name for p in sd.pub(data).glob("snap-*"))
     assert snaps == ["snap-20261030T020000Z", "snap-20261030T030000Z"]
-    assert os.readlink(data / "jobs") == "snap-20261030T030000Z/jobs" and (data / "jobs").is_symlink()
-    f = data / "jobs" / "jone" / "job.json"
+    assert os.readlink(sd.pub(data) / "jobs") == "snap-20261030T030000Z/jobs" and (sd.pub(data) / "jobs").is_symlink()
+    f = sd.pub(data) / "jobs" / "jone" / "job.json"
     assert not (f.stat().st_mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
     assert not (f.parent.stat().st_mode & stat.S_IWUSR)
+    assert not (sd.current(data).stat().st_mode & stat.S_IWUSR)               # the snapshot directory itself
 
 
 def test_a_crashed_refresh_leaves_only_a_temporary_directory_that_the_next_removes(tmp_path, source):
@@ -250,9 +256,9 @@ def test_readers_always_see_a_whole_snapshot_while_refreshes_swap_it(tmp_path, s
     def read():
         while not stop.is_set():
             try:
-                jobs = sorted(os.listdir(data / "jobs"))
+                jobs = sorted(os.listdir(sd.pub(data) / "jobs"))
                 for j in jobs:
-                    json.loads((data / "jobs" / j / "job.json").read_text())
+                    json.loads((sd.pub(data) / "jobs" / j / "job.json").read_text())
                 if jobs != ["jone", "jtwo"]:
                     bad.append(jobs)
             except FileNotFoundError as e:                 # a snapshot removed under an old path: never the link
@@ -296,7 +302,7 @@ def held_lock(tmp_path):
 def test_a_refresh_while_another_holds_the_lock_is_refused_and_changes_nothing(tmp_path, source, held_lock):
     with pytest.raises(sd.Refused, match="busy"):
         sd.refresh(source, held_lock)
-    assert not os.path.lexists(held_lock / "jobs") and not list(held_lock.glob("snap-*"))
+    assert not os.path.lexists(sd.pub(held_lock) / "jobs") and not list(sd.pub(held_lock).glob("snap-*"))
 
 
 def _refresh_in_child(source, data, out):
@@ -345,6 +351,7 @@ def no_docker(*a, **k):
 @pytest.fixture
 def live(tmp_path, source, monkeypatch):
     st = sg.Staging(tmp_path / "staging", run=no_docker)
+    st.container_pid = lambda release: 4242
     st.base.mkdir(parents=True)
     st._save({"live": "jx-0123456789ab", "history": ["jx-0123456789ab"]})
     sd.refresh(source, st.data)
@@ -392,7 +399,8 @@ def test_a_busy_monitor_is_skipped_and_touches_nothing(live, source, monkeypatch
         p.join(10)
         os.close(fd)
     assert rec["ok"] is None and "busy" in rec["why"] and smokes == [] and sd.current(st.data) == snap
-    assert sd.monitor_summary(st) == (None, 0)                  # a skip is neither a pass nor a failure
+    assert sd.monitor_summary(st) == (rec, 1)                   # busy is not a pass: a held lock must show
+    assert "last monitor: BUSY" in sg.status(staging=st) and "1 failed in a row" in sg.status(staging=st)
 
 
 def test_a_monitor_with_an_unreadable_state_records_it_and_smokes_nothing(live, source):
@@ -412,7 +420,7 @@ def test_the_report_is_escaped_without_scripts_and_private(live, monkeypatch):
     answers = {"/summary": {"jobs": 1, "cost_usd": EVIL, "skipped": 0},
                "/jobs": [{"job": EVIL, "state": EVIL, "created_at": T, "stages": 1, "cost_usd": "0.1",
                           "running": False}]}
-    d = sd.report(st, lambda sock, host, url: (200, json.dumps(answers[url]).encode()))
+    d = sd.report(st, lambda sock, host, url, peer=None: (200, json.dumps(answers[url]).encode()))
     page = (d / "report.html").read_text()
     assert "<script" not in page.lower() and "&lt;script&gt;" in page and "&quot;" in page and "&#x27;" in page
     assert "Content-Security-Policy" in page and "default-src 'none'" in page
@@ -424,7 +432,7 @@ def test_only_the_last_ten_reports_are_kept(live):
     st, smokes = live
     answers = {"/summary": {"jobs": 0, "cost_usd": "0", "skipped": 0}, "/jobs": []}
     for i in range(12):
-        sd.report(st, lambda sock, host, url: (200, json.dumps(answers[url]).encode()),
+        sd.report(st, lambda sock, host, url, peer=None: (200, json.dumps(answers[url]).encode()),
                   clock=lambda i=i: (2026, 10, 30, 0, 0, i, 0, 0, 0))
     kept = sorted(p.name for p in (st.base / "reports").iterdir())
     assert len(kept) == 10 and kept[0] == "20261030T000002Z"
@@ -433,7 +441,7 @@ def test_only_the_last_ten_reports_are_kept(live):
 def test_a_report_of_an_answer_that_is_not_200_is_refused(live):
     st, smokes = live
     with pytest.raises(sd.Refused, match="answered 500"):
-        sd.report(st, lambda sock, host, url: (500, b""))
+        sd.report(st, lambda sock, host, url, peer=None: (500, b""))
 
 
 # ---- D3: the smoke test against the snapshot ------------------------------------------------------------------------
@@ -476,3 +484,42 @@ def test_a_key_that_a_too_wide_allowlist_would_let_through_is_still_stopped(tmp_
     with pytest.raises(sd.Refused, match="key pattern"):
         sd.refresh(source, data)
     assert sd.current(data) == snap and b"sk-ant" not in snapshot_bytes(data)
+
+
+
+# ---- the security review (2026-10-30) ---------------------------------------------------------------------------------
+
+def test_the_container_sees_only_published_snapshots_never_the_lock_or_a_build(tmp_path, source, monkeypatch):
+    data = tmp_path / "data"
+    sd.refresh(source, data)
+    seen = []
+    real = sd.validate
+
+    def look(tmp, man):
+        seen.extend(p.name for p in sd.pub(data).iterdir())        # what /data shows while a build is validated
+        return real(tmp, man)
+    monkeypatch.setattr(sd, "validate", look)
+    sd.refresh(source, data)
+    published = sorted(p.name for p in sd.pub(data).iterdir())
+    assert all(n == "jobs" or n.startswith("snap-") for n in seen + published), (seen, published)
+    assert (data / ".refresh.lock").exists() and not (sd.pub(data) / ".refresh.lock").exists()
+    assert "source" not in sd.manifest(data) and str(source) not in json.dumps(sd.manifest(data))
+
+
+def test_the_report_text_holds_only_numbers_from_the_app(live):
+    st, smokes = live
+    answers = {"/summary": {"jobs": "\x1b]0;pwned\x07", "cost_usd": "1.5\x1b[2J", "skipped": True}, "/jobs": []}
+    d = sd.report(st, lambda sock, host, url, peer=None: (200, json.dumps(answers[url]).encode()))
+    text = (d / "summary.txt").read_text()
+    assert "\x1b" not in text and "jobs ?  cost $?  skipped ?" in text
+
+
+def test_the_report_talks_only_to_the_releases_container(live):
+    st, smokes = live
+    peers = []
+    answers = {"/summary": {"jobs": 0, "cost_usd": "0", "skipped": 0}, "/jobs": []}
+    sd.report(st, lambda sock, host, url, peer=None: peers.append(peer) or (200, json.dumps(answers[url]).encode()))
+    assert peers == [4242, 4242]
+    st.container_pid = lambda release: None
+    with pytest.raises(sd.Refused, match="not running"):
+        sd.report(st, lambda sock, host, url, peer=None: pytest.fail("no request without the container"))

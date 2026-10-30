@@ -7,9 +7,10 @@
   argus stage report    /summary and /jobs of the live release, through its socket, as an escaped static HTML page and
                         a text summary in reports/ (0700, files 0600) (A4)
 
-Layout under ~/argus-staging/data (mounted read-only at /data in the container):
-  snap-<UTC>/manifest.json, snap-<UTC>/jobs/<job>/job.json, snap-<UTC>/jobs/<job>/runs/<run>/events.jsonl
-  jobs -> snap-<UTC>/jobs      (relative symlink; replaced with rename(), so a reader sees the old or the new one)
+Layout under ~/argus-staging/data (host only: .refresh.lock and the .tmp-* builds; the container never sees them):
+  pub/                         mounted read-only at /data in the container, and nothing else is
+  pub/snap-<UTC>/manifest.json, pub/snap-<UTC>/jobs/<job>/job.json, .../jobs/<job>/runs/<run>/events.jsonl
+  pub/jobs -> snap-<UTC>/jobs  (relative symlink; replaced with rename(), so a reader sees the old or the new one)
 """
 import fcntl
 import hashlib
@@ -155,41 +156,65 @@ def _jsonl(events):
 
 # ---- A2: one job, read consistently ----------------------------------------------------------------------------------
 
-def _regular(path):
-    """The bytes of a regular file that is not a symlink (O_NOFOLLOW), or OSError."""
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def _open_dir(name, dir_fd=None):
+    """A directory that is not a symlink, opened by its name in dir_fd (openat): a path swapped for a link after a
+    check can never redirect a read, since every step is one name in an already opened directory."""
+    return os.open(name, _DIR, dir_fd=dir_fd)
+
+
+def _read_at(dir_fd, name):
+    """The bytes of regular file `name` in dir_fd, never through a symlink (O_NOFOLLOW), or OSError."""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise OSError(f"{path} is not a regular file")
+            raise OSError(f"{name} is not a regular file")
         with os.fdopen(fd, "rb", closefd=False) as f:
             return f.read()
     finally:
         os.close(fd)
 
 
-def read_job(job_dir):
-    """(job.json bytes, {run: events bytes}) read so that they belong together: job.json is read before and after its
-    ledgers and must not change, and no ledger may shrink between two reads; otherwise tried again (READ_TRIES), then
-    Excluded. Run directories that are not <job>-<stage> and anything that is not a regular file are not read."""
-    job_id = job_dir.name
-    for _ in range(READ_TRIES):
-        before = _regular(job_dir / "job.json")
-        runs = {}
-        runs_dir = job_dir / "runs"
-        if runs_dir.is_dir() and not runs_dir.is_symlink():
-            for run in sorted(os.listdir(runs_dir)):
-                if not (run.startswith(job_id + "-") and STAGE.match(run[len(job_id) + 1:])):
+def read_job(source_fd, job_id):
+    """(job.json bytes, {run: events bytes}) of jobs/<job_id>, read through directory fds, so that they belong
+    together: job.json is read before and after its ledgers and must not change, and no ledger may shrink between two
+    reads; otherwise tried again (READ_TRIES), then Excluded. Run directories that are not <job>-<stage>, symlinks, and
+    anything that is not a regular file are not read."""
+    jfd = _open_dir(job_id, source_fd)
+    fds = [jfd]
+    try:
+        run_fds = {}
+        try:
+            rfd = _open_dir("runs", jfd)
+            fds.append(rfd)
+            for run in sorted(os.listdir(rfd)):
+                if run.startswith(job_id + "-") and STAGE.match(run[len(job_id) + 1:]):
+                    try:
+                        run_fds[run] = _open_dir(run, rfd)
+                        fds.append(run_fds[run])
+                    except OSError:
+                        continue                          # a symlink or not a directory: never read
+        except FileNotFoundError:
+            pass
+        for _ in range(READ_TRIES):
+            before = _read_at(jfd, "job.json")
+            runs = {}
+            for run, fd in run_fds.items():
+                try:
+                    runs[run] = _read_at(fd, "events.jsonl")
+                except FileNotFoundError:
                     continue
-                path = runs_dir / run / "events.jsonl"
-                if (runs_dir / run).is_symlink() or not os.path.lexists(path):
-                    continue
-                runs[run] = _regular(path)
-        after = _regular(job_dir / "job.json")
-        grew = all(len(_regular(job_dir / "runs" / r / "events.jsonl")) >= len(b) for r, b in runs.items())
-        if before == after and grew:
-            return before, runs
-        time.sleep(0.2)
-    raise Excluded("job.json or a ledger kept changing while it was read")
+            after = _read_at(jfd, "job.json")
+            grew = all(len(_read_at(run_fds[r], "events.jsonl")) >= len(b) for r, b in runs.items())
+            if before == after and grew:
+                return before, runs
+            time.sleep(0.2)
+        raise Excluded("job.json or a ledger kept changing while it was read")
+    finally:
+        for fd in fds:
+            os.close(fd)
 
 
 # ---- A2/A3: refresh ----------------------------------------------------------------------------------------------------
@@ -214,15 +239,21 @@ def refresh_lock(data, wait_s=0):
         os.close(fd)
 
 
+def pub(data):
+    """The published part of `data`: the only directory the container mounts (security review: the lock and the
+    builds stay outside it, so a release can neither hold the lock nor read a snapshot before it is validated)."""
+    return data / "pub"
+
+
 def current(data):
-    """The published snapshot directory `jobs` points to, or None."""
-    link = data / "jobs"
+    """The published snapshot directory `pub/jobs` points to, or None."""
+    link = pub(data) / "jobs"
     if not link.is_symlink():
         return None
     target = os.readlink(link)
     if not re.fullmatch(r"snap-\d{8}T\d{6}Z(-\d+)?/jobs", target):
         return None
-    snap = data / Path(target).parent
+    snap = pub(data) / Path(target).parent
     return snap if (snap / "manifest.json").is_file() else None
 
 
@@ -259,41 +290,63 @@ def build(source, tmp):
     """Project every job of `source` into tmp/jobs; the manifest of what was written. Nothing is published here."""
     jobs, excluded, total = {}, [], 0
     (tmp / "jobs").mkdir()
-    for job_dir in sorted(Path(source).iterdir()):
-        job_id = job_dir.name
-        if not JOB_ID.match(job_id) or job_dir.is_symlink() or not os.path.lexists(job_dir / "job.json"):
-            continue
-        try:
-            raw_job, raw_runs = read_job(job_dir)
-            try:
-                job = project_job(json.loads(raw_job), job_id)
-            except ValueError:
-                raise Excluded("job.json is not JSON") from None
-            runs, nano = {}, 0
-            for run, raw in raw_runs.items():
-                text = raw.decode("utf-8", "replace")
-                events = project_events(text)
-                try:
-                    same = ledger_nano(events) == ledger_nano(parse_lines(text))   # A2: the projection keeps the cost
-                except (KeyError, TypeError, ValueError):
-                    raise Excluded(f"the ledger of {run} cannot be costed") from None
-                if not same:
-                    raise Excluded(f"the cost of {run} changes in the projection")
-                runs[run], nano = events, nano + ledger_nano(events)
-        except Excluded as e:
-            excluded.append({"job": job_id, "why": str(e)[:200]})
-            continue
-        except OSError as e:
-            excluded.append({"job": job_id, "why": f"unreadable: {type(e).__name__}"})
-            continue
-        d = tmp / "jobs" / job_id
-        (d / "runs").mkdir(parents=True)
-        (d / "job.json").write_text(json.dumps(job, indent=1) + "\n", encoding="utf-8")   # stage order kept
-        for run, events in runs.items():
-            (d / "runs" / run).mkdir()
-            (d / "runs" / run / "events.jsonl").write_text(_jsonl(events), encoding="utf-8")
-        jobs[job_id], total = nano, total + nano
+    source_fd = _open_dir(str(source))
+    try:
+        names = sorted(n for n in os.listdir(source_fd) if JOB_ID.match(n))
+        for job_id in names:
+            got = _one(source_fd, job_id, excluded)
+            if got is None:
+                continue
+            job, runs, nano = got
+            d = tmp / "jobs" / job_id
+            (d / "runs").mkdir(parents=True)
+            (d / "job.json").write_text(json.dumps(job, indent=1) + "\n", encoding="utf-8")   # stage order kept
+            for run, events in runs.items():
+                (d / "runs" / run).mkdir()
+                (d / "runs" / run / "events.jsonl").write_text(_jsonl(events), encoding="utf-8")
+            jobs[job_id], total = nano, total + nano
+    finally:
+        os.close(source_fd)
     return {"jobs": sorted(jobs), "cost_nano": total, "per_job": jobs, "excluded": excluded}
+
+
+def _one(source_fd, job_id, excluded):
+    """(projected job, {run: projected events}, nano) of one job, or None: not a job (not a directory, a symlink, no
+    job.json), or excluded (noted in `excluded`, never with a value)."""
+    try:
+        jfd = _open_dir(job_id, source_fd)
+    except OSError:
+        return None
+    try:
+        os.stat("job.json", dir_fd=jfd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    finally:
+        os.close(jfd)
+    try:
+        raw_job, raw_runs = read_job(source_fd, job_id)
+        try:
+            job = project_job(json.loads(raw_job), job_id)
+        except ValueError:
+            raise Excluded("job.json is not JSON") from None
+        runs, nano = {}, 0
+        for run, raw in raw_runs.items():
+            text = raw.decode("utf-8", "replace")
+            events = project_events(text)
+            try:
+                same = ledger_nano(events) == ledger_nano(parse_lines(text))   # A2: the projection keeps the cost
+            except (KeyError, TypeError, ValueError):
+                raise Excluded(f"the ledger of {run} cannot be costed") from None
+            if not same:
+                raise Excluded(f"the cost of {run} changes in the projection")
+            runs[run], nano = events, nano + ledger_nano(events)
+    except Excluded as e:
+        excluded.append({"job": job_id, "why": str(e)[:200]})
+        return None
+    except OSError as e:
+        excluded.append({"job": job_id, "why": f"unreadable: {type(e).__name__}"})
+        return None
+    return job, runs, nano
 
 
 def validate(tmp, man):
@@ -351,23 +404,27 @@ def refresh(source, data, *, clock=time.gmtime, held=False):
                                 "(more than half: Argus's format changed, or the data is damaged)")
             if problems:
                 raise Refused("the snapshot was not published: " + "; ".join(problems[:5]))
-            man.update(at=time.strftime("%Y-%m-%dT%H:%M:%SZ", clock()), source=str(source))
+            man.update(at=time.strftime("%Y-%m-%dT%H:%M:%SZ", clock()))   # no host path: the container reads it
             (tmp / "manifest.json").write_text(json.dumps(man, indent=1, sort_keys=True) + "\n", encoding="utf-8")
             _read_only(tmp)
+            tmp.chmod(0o755)                            # moving a directory to another parent rewrites its ".."
+            out = pub(data)
+            out.mkdir(exist_ok=True)
             name, n = f"snap-{stamp}", 1
-            while os.path.lexists(data / name):
+            while os.path.lexists(out / name):
                 name, n = f"snap-{stamp}-{n}", n + 1
-            os.rename(tmp, data / name)
+            os.rename(tmp, out / name)
+            (out / name).chmod(0o555)                   # before the link points to it
         except BaseException:
             _remove(tmp)
             raise
-        link = data / f".jobs-{os.getpid()}"
+        link = out / f".jobs-{os.getpid()}"
         if os.path.lexists(link):
             os.unlink(link)
         os.symlink(f"{name}/jobs", link)
-        os.replace(link, data / "jobs")                  # atomic: readers see the old snapshot or the new one
+        os.replace(link, out / "jobs")                   # atomic: readers see the old snapshot or the new one
         live = current(data)
-        snaps = sorted(p for p in data.glob("snap-*") if p.is_dir())
+        snaps = sorted(p for p in out.glob("snap-*") if p.is_dir())
         for old in snaps[:-KEEP_SNAPSHOTS]:
             if old != live:
                 _remove(old)
@@ -418,9 +475,15 @@ def monitor(st, source, *, clock=time.gmtime):
     return rec
 
 
+def busy(rec):
+    return rec.get("ok") is None and str(rec.get("why", "")).startswith("busy")
+
+
 def monitor_summary(st):
-    """(last monitor record or None, failures in a row)."""
-    recs = [r for r in _records(st.base / "monitor.jsonl") if r.get("ok") is not None]
+    """(last monitor record or None, runs in a row that did not pass). A busy run counts as not passing: a lock held
+    for longer than one run is a problem to see, never a quiet pass (security review). A run skipped because the live
+    release changed during it counts as neither."""
+    recs = [r for r in _records(st.base / "monitor.jsonl") if r.get("ok") is not None or busy(r)]
     failed = 0
     for r in reversed(recs):
         if r.get("ok"):
@@ -459,9 +522,12 @@ def report(st, get, *, clock=time.gmtime):
     if not live:
         raise Refused("nothing is live")
     sock = st.dir(live) / "sock" / "app.sock"
+    peer = st.container_pid(live)
+    if peer is None:
+        raise Refused(f"the container of {live} is not running")
     out = {}
     for url in ("/summary", "/jobs"):
-        status, body = get(sock, HOST, url)
+        status, body = get(sock, HOST, url, peer=peer)
         if status != 200:
             raise Refused(f"{url} answered {status}")
         out[url] = json.loads(body)
@@ -489,8 +555,10 @@ def report(st, get, *, clock=time.gmtime):
         f"<p>jobs {_e(summary.get('jobs'))}, cost ${_e(summary.get('cost_usd'))}, skipped {_e(summary.get('skipped'))}"
         "</p>\n<table><tr><th>job</th><th>state</th><th>created</th><th>stages</th><th>cost $</th><th>running</th></tr>\n"
         f"{rows}</table></body></html>\n")
-    text = (f"release {live}\njobs {summary.get('jobs')}  cost ${summary.get('cost_usd')}  "
-            f"skipped {summary.get('skipped')}\n")
+    def plain(v, pattern=r"\d{1,12}(\.\d{1,12})?"):         # the app's values in a text file: digits or "?"
+        return str(v) if isinstance(v, (int, str)) and not isinstance(v, bool) and re.fullmatch(pattern, str(v)) else "?"
+    text = (f"release {live}\njobs {plain(summary.get('jobs'))}  cost ${plain(summary.get('cost_usd'))}  "
+            f"skipped {plain(summary.get('skipped'))}\n")
     for name, content in (("report.html", page), ("summary.txt", text)):
         fd = os.open(d / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:

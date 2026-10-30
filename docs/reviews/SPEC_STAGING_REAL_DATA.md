@@ -136,3 +136,22 @@ sementara saja (dibersihkan refresh berikutnya).
   refresh gagal/smoke gagal/sibuk/state rusak tidak mengubah apa pun, report di-escape + CSP + 0700/0600 + 10 terakhir,
   angka smoke) dan di `tests/test_stage.py` dengan container sungguhan: snapshot baru terlihat tanpa restart (id
   container sama), monitor lolos, report, `/data` tidak bisa ditulis. Mutants 34/34.
+
+## 8. Security review (2026-10-30), semua diperbaiki (mutants 44/44)
+
+1. **Container bisa memegang `.refresh.lock`** (lock ada di direktori yang di-mount; `flock` bekerja pada fd read-only):
+   rilis jahat bisa memblokir deploy/rollback penggantinya dan membuat monitor diam. **Perbaikan:** hanya
+   `data/pub/` (snapshot + symlink `jobs`) yang di-mount ke `/data`; lock dan `.tmp-*` build di `data/`, di luar mount
+   (dites juga di container sungguhan: `/data` hanya berisi `jobs` dan `snap-*`). Manifest tidak lagi menyimpan path
+   host. Monitor "busy" sekarang dihitung "tidak lolos berturut-turut" dan `status` menulis `BUSY`, tidak tersembunyi.
+2. **`app.sock` bisa diganti symlink** dari dalam container (direktori socket miliknya), sehingga smoke/report dari
+   host tersambung ke socket host lain. **Perbaikan:** `app.sock` harus socket (`lstat` lewat fd direktori, bukan
+   link), dan **peer harus pid proses utama container rilis itu** (`SO_PEERCRED` = `docker inspect .State.Pid`), yang
+   juga menutup race antara cek dan connect. Tanpa pid (container tidak jalan) → tidak ada request.
+3. **TOCTOU symlink** saat membaca `jobs/`: sekarang rantai `openat` (`O_DIRECTORY|O_NOFOLLOW` per komponen, berkas
+   `O_NOFOLLOW` + `S_ISREG`) dan pembacaan ulang lewat fd yang sama.
+4. **`summary.txt`** hanya menulis angka dari jawaban aplikasi (selain itu `?`); tidak ada karakter kontrol.
+5. Container tidak lagi melihat build sementara dan lock (lihat 1).
+6. **Unit systemd menjalankan kode dari `~/pilot3a_live` tiap 15 menit** tanpa pemicu manusia. Tidak ada jalur agen yang
+   menulis ke checkout Argus (patch agen hanya ke repo target, diterapkan manusia/Claude), jadi tidak diubah; dicatat
+   untuk keputusan Atha (alternatif: checkout read-only khusus di commit yang di-merge).
