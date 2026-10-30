@@ -52,6 +52,8 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
   if [ -z "${ARGUS_SANDBOX_IMAGE_PWA_NODE22:-}" ] && docker version >/dev/null 2>&1; then
     bash scripts/build_env_node.sh pwa_node22
     export ARGUS_SANDBOX_IMAGE_PWA_NODE22="$(tr -d '[:space:]' < .sandbox_image_pwa_node22)"
+    # the viewer's release build uses only a checked image (SPEC_PWA_VIEWER S1); without the check its tests skip
+    "$VENV/bin/python" scripts/check_env_image.py pwa_node22 || echo "pwa_node22 check FAILED (its tests will skip)"
   fi
   echo "sandbox image (pwa_node22 environment): ${ARGUS_SANDBOX_IMAGE_PWA_NODE22:-<none>}"
   echo "docker: $(docker version --format 'client {{.Client.Version}} / server {{.Server.Version}} ({{.Server.Os}}/{{.Server.Arch}})' 2>/dev/null || echo 'not available')"

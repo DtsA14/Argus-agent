@@ -1,0 +1,19 @@
+# SPEC_PWA_VIEWER S2/A5 (Atha 2026-10-30): the viewer's proxy, always on, listening on 127.0.0.1:8710 only (the address
+# is fixed in router/stage_viewer.py, never 0.0.0.0, never port 8000). No firewall, iptables or OCI security list change:
+# the phone reaches it through an SSH local forward (Termius, bind 127.0.0.1 on the phone). It writes nothing.
+# Install (pilot, after "go live"): ln -s this file into ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload && systemctl --user enable --now argus-stage-proxy.service
+[Unit]
+Description=Argus staging viewer proxy (127.0.0.1:8710)
+
+[Service]
+Type=simple
+WorkingDirectory=%h/pilot3a_live
+ExecStart=%h/pilot3a_live/.venv-verify/bin/python scripts/argus.py stage proxy
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

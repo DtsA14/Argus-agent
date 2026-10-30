@@ -184,3 +184,29 @@ Isi PR 1:
 - E1 (dependency repo ⊆ lock environment) **pindah ke PR 2** (build rilis): di PR 1 paket yang tidak ada di image membuat berkas tes gagal dimuat, dan itu sudah gagal tertutup dengan pesan yang menyebut impornya. Fixture `vitest_demo` dites cocok dengan lock.
 - Tes: unit (parser, judge, kontrak, draf) + integrasi di sandbox nyata dengan repo contoh (lulus, gagal karena
   assertion, gagal bukan assertion, impor gagal, filter substring, skip). Docker tidak tersedia = tes tidak lulus.
+
+## 10. PR 2 secara rinci (staging dan proxy)
+
+Isi (Claude, 2026-10-30), `router/stage_viewer.py`, tes `tests/test_stage_viewer.py`, fixture `fixtures/repos/viewer_demo`:
+- Perintah: `argus stage viewer-deploy <job> [--yes]`, `viewer-rollback [--yes]`, `viewer-status`, `viewer-smoke`,
+  `argus stage proxy` (unit `deploy/systemd/argus-stage-proxy.service`, **belum dipasang**: dipasang di pilot sesudah
+  "go live"). Monitor 15 menit ikut menjalankan smoke viewer bila ada rilis viewer yang live.
+- Area sendiri `~/argus-staging/apps/viewer/` (`releases/`, `current`, `state.json`, `releases.jsonl`): perintah viewer
+  tidak pernah menulis state/rilis argus-ledger atau menyalakan/mematikan container, dan sebaliknya (dites, §6.7).
+- Job viewer = job `APPLIED` apa adanya dengan environment `pwa_node22`. E1 dan cek workspace (tanpa `node_modules`,
+  tanpa `package.json`/`.npmrc` bersarang) **sebelum** build; build di container tanpa jaringan, root dan workspace
+  read-only, `/out` satu-satunya mount writable, uid host, batas memori/pids/cpu.
+
+Keputusan Claude dalam batas spek (untuk dicek Atha):
+1. **sha `sw.js` yang direview = konstanta `SW_SHA256` di kode**, sekarang `None`: semua rilis ditolak sampai sha
+   `public/sw.js` kerangka `argus-viewer` dipin lewat perubahan jalur ketat.
+2. **Gerbang deploy/rollback:** rilis kandidat di-smoke lewat proxy yang sama (kode yang sama) di port ephemeral
+   `127.0.0.1` **sebelum** `current` di-swap; smoke live di 8710 (termasuk `ss -ltnH`) lewat `viewer-smoke` dan monitor,
+   tidak menggerbang deploy (proxy belum dipasang sebelum pilot).
+3. **Berkas yang tidak ada:** `index.html` hanya untuk rute aplikasi (segmen terakhir tanpa titik, atau berakhir `/`);
+   berkas ber-ekstensi yang tidak ada → 404 (lebih ketat dari S2: aset hilang tidak dijawab HTML).
+4. Jawaban ledger diteruskan hanya bila status 200/404, `Content-Type` JSON, JSON valid dan ≤ 1 MB; selain itu 502.
+   Ledger tidak live → 503. Path statis membawa `Cache-Control: no-cache` (bukan `no-store`): pembaruan rilis langsung
+   terlihat, data API tetap `no-store`.
+5. `localhost:8710`/`127.0.0.1:8710` persis satu header `Host`; dua header `Host` → 421. Request yang tidak bisa
+   di-parse `http.server` (400/414) juga membawa header keamanan.
