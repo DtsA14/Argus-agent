@@ -139,3 +139,13 @@ def test_an_intake_record_is_still_checked_against_the_tree_alone(tmp_path, comm
     if kind is not None:
         rec["kind"] = kind
     assert intake.check_against_repo(rec, ws, "repo")
+
+
+def test_an_approved_new_tests_executable_bit_is_left_to_the_record_and_a_tree_files_bit_is_not(tmp_path, commit):
+    # PENDING (#189 line, Atha 2026-10-30: keep it and test it): an approved new test is not in the commit's tree, so
+    # its bit is not compared with the tree (intake.check compares it with the record); a tree file's bit still is
+    ws = layout(tmp_path / "ws", {**BASE, "tests/test_new.py": (NEW, True)})
+    rec = record(added={"tests/test_new.py": sha(NEW)})
+    assert intake.check_against_repo(rec, ws, "repo") == []
+    ws = layout(tmp_path / "ws2", {**BASE, "tests/test_new.py": (NEW, False), "pkg/mod.py": (b"X = 1\n", True)})
+    assert intake.check_against_repo(rec, ws, "repo") == ["executable bits differ from the commit"]
