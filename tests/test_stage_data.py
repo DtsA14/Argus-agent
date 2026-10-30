@@ -250,7 +250,10 @@ def test_a_crashed_refresh_leaves_only_a_temporary_directory_that_the_next_remov
 
 def test_readers_always_see_a_whole_snapshot_while_refreshes_swap_it(tmp_path, source):
     data = tmp_path / "data"
-    sd.refresh(source, data)
+    # Before the loop's names (a real clock's snap-<today>T<now> sorts after every snap-...T0000ss below: it was kept as
+    # one of the two newest, so each refresh removed the snapshot that had just been live, and a reader within one
+    # refresh could list it emptied; verify.sh saw that twice).
+    sd.refresh(source, data, clock=lambda: (2026, 10, 29, 0, 0, 0, 0, 0, 0))
     stop, bad, started, done = threading.Event(), [], [0], [0]
 
     def read():
