@@ -124,6 +124,16 @@ def test_the_approve_screen_names_the_environment_of_each_validation(tmp_path):
     assert "environment sympy, image eeeeeeeeeeee" in screen and "validation target (env sympy):" in screen
 
 
+def test_the_drafter_and_retry_screens_name_the_environment_and_image(tmp_path, monkeypatch):
+    # PENDING: the stage limits of the drafter and of a retry did not say which environment and image the job pinned
+    e = tr.Env(tmp_path, config=env_config())
+    tr.failed_a1(e, monkeypatch, environment="sympy")
+    tr.retry(e)
+    for title in ("drafter stage d1", "retry the agent"):
+        screen = [c for c in e.confirms if title in c][0]
+        assert "environment sympy, image eeeeeeeeeeee" in screen, title
+
+
 def test_the_cli_passes_the_environment(tmp_path, monkeypatch):
     import importlib.util
     spec = importlib.util.spec_from_file_location("argus_cli_e", ROOT / "scripts" / "argus.py")

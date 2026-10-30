@@ -272,6 +272,23 @@ def task_prompt(contract, feedback=None):
 NUDGE = "Use the tools to work on the issue, then call Finish."
 
 
+def rejected_reply(msg, step):
+    """The messages the harness answers a reply with when it runs none of its tool calls (an invalid call, no call, or
+    Finish beside other calls), or None when the reply's calls are run. scripts/audit_run.py rebuilds prompts with it."""
+    if invalid_call_errors(msg):
+        reason = "Rejected: " + "; ".join(invalid_call_errors(msg)) + ". Nothing in this reply was executed."
+        return [ToolMessage(reason, tool_call_id=i) for i in call_ids(msg, f"call_{step}")]
+    calls = list(msg.tool_calls or [])
+    if not calls:
+        return [HumanMessage(NUDGE)]
+    names = [c.get("name") for c in calls]
+    if "Finish" in names and len(calls) != 1:
+        reason = (f"Rejected: Finish must be the only tool call in its reply; this reply had {len(calls)} "
+                  f"calls {names}. Nothing in it was executed.")
+        return [ToolMessage(reason, tool_call_id=c.get("id") or f"call_{step}_{i}") for i, c in enumerate(calls)]
+    return None
+
+
 def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, crasher=None, max_input=None):
     crasher = crasher or Crasher()
 
@@ -372,20 +389,16 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
                 return end("output_truncated", step)
             if invalid_call_errors(msg):
                 log.emit("invalid_tool_call", step=step, tools=[c.get("name") for c in msg.invalid_tool_calls], **meta)
-                reason = "Rejected: " + "; ".join(invalid_call_errors(msg)) + ". Nothing in this reply was executed."
-                messages += [ToolMessage(reason, tool_call_id=i) for i in call_ids(msg, f"call_{step}")]
+                messages += rejected_reply(msg, step)
                 continue
             calls = list(msg.tool_calls or [])
             if not calls:
-                messages.append(HumanMessage(NUDGE))
+                messages += rejected_reply(msg, step)
                 continue
             names = [c.get("name") for c in calls]
             if "Finish" in names and len(calls) != 1:
                 log.emit("finish_rejected", step=step, tools=names, **meta)
-                reason = (f"Rejected: Finish must be the only tool call in its reply; this reply had {len(calls)} "
-                          f"calls {names}. Nothing in it was executed.")
-                messages += [ToolMessage(reason, tool_call_id=c.get("id") or f"call_{step}_{i}")
-                             for i, c in enumerate(calls)]
+                messages += rejected_reply(msg, step)
                 continue
             finished = False
             for i, c in enumerate(calls):

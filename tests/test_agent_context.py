@@ -355,6 +355,22 @@ def test_audit_run_rebuilds_the_truncation_hint(tmp_path, counter):
     assert "prompt_hash checked 3, mismatches 0" in audit(d)
 
 
+def test_audit_run_rebuilds_the_replies_the_harness_rejected(tmp_path, counter):
+    # PENDING (audit_run without NUDGE): a reply without a tool call, an invalid call, and Finish beside another call
+    per_message(counter)
+    none = tau.reply("thinking aloud", input_tokens=tau.IN, output_tokens=50)
+    bad = tau.reply(invalid_tool_calls=[{"name": "ReadFile", "args": "{not json", "id": "x1", "error": "bad json"}],
+                    input_tokens=tau.IN, output_tokens=50)
+    both = tau.reply(tool_calls=[{"name": "ReadFile", "args": {"path": "src/calc.py"}, "id": "r9"},
+                                 {"name": "Finish", "args": {"claims": tau.CLAIMS, "summary": "x"}, "id": "f9"}],
+                     input_tokens=tau.IN, output_tokens=50)
+    model = StrictScriptedChatModel(script=[none, bad, both, tau.WRITE, tau.FINISH])
+    r, d = go(tmp_path, model, config(100000))
+    assert r["status"] == st.DONE and ca.NUDGE in text(model.calls[1])
+    out = audit(d)
+    assert "prompt_hash checked 5, mismatches 0" in out and out.count("reply rejected by the harness") == 3
+
+
 # ---- SPEC_AGENT_BUDGET_GAPS 2.1: the hint after max_steps without writing --------------------------------------------
 
 STEPS = "It used all of its steps without changing any file"

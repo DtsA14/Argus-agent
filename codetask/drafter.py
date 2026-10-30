@@ -235,7 +235,9 @@ SYSTEM = "\n".join([
     "(never leave the test out of the validations). Its tests whose expectation changes are required and must fail "
     "now; every other test of the file stays and still passes, and its code stays as it is. A test you take out goes "
     "in removed, a test function whose code you change without requiring it goes in modified, each with a reason. "
-    "Never add a skip or xfail. Only test_*.py files can be changed; at most " + str(ch.MAX_FILES) + ".",
+    "Never add a skip or xfail. Only test_*.py files can be changed; at most " + str(ch.MAX_FILES) + ". One entry "
+    "per existing file, with its whole new content; a file that does not exist yet is a new test (new_tests), never "
+    "a changed one; leave changed_tests out when no existing test changes.",
     "- Put in unverifiable what the issue asks that no test checks; it is a note for the reviewer, never a pass.",
     "- You do not decide whether the draft is good: the harness checks it, and a human approves it or not.",
     "- Tools: ListFiles, SearchFiles and ReadFile read the repository; SubmitDraft submits the draft and is checked "
