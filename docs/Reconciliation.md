@@ -1,22 +1,18 @@
-# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-27)
+# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30)
 
-Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` `7fd5130` (#204). Status di bawah berasal dari kode
-(dicek langsung bila ditandai *dicek*), dari bukti di `verification/` dan `pilots/`, dan dari review di `docs/reviews/`. Laporan sebelumnya
-diarsipkan: [`reviews/RECONCILIATION_2026-10-24.md`](reviews/RECONCILIATION_2026-10-24.md),
+Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` sesudah #266. Status di bawah berasal
+dari kode, dari bukti di `verification/` dan `pilots/`, dan dari review di `docs/reviews/`. Laporan sebelumnya diarsipkan:
+[`reviews/RECONCILIATION_2026-10-27.md`](reviews/RECONCILIATION_2026-10-27.md) (dengan tambahan sampai 2026-10-30),
+[`reviews/RECONCILIATION_2026-10-24.md`](reviews/RECONCILIATION_2026-10-24.md),
 [`reviews/RECONCILIATION_2026-10-22.md`](reviews/RECONCILIATION_2026-10-22.md) dan
 [`reviews/RECONCILIATION_2026-10-21.md`](reviews/RECONCILIATION_2026-10-21.md); keputusannya tetap berlaku. Daftar kerja ada di
 [`PENDING.md`](../PENDING.md).
 
-Yang berubah sejak 2026-10-24: **tiga batch SWE sympy** (10 instance lagi, bagian 4b), batch 3 yang pertama **tanpa bocoran
-jawaban** (approve hanya dari isi draf; batch 1, 2, dan `23534` ditandai oracle-informed/oracle-assisted, review Atha 2026-10-27);
-**environment dari image Python resmi** (`sympy_py39`, Python 3.9.25, #201/#202); **anggaran output per model** untuk agen (#200,
-DeepSeek 32.000, plus petunjuk setelah `output_truncated`) dan untuk drafter (#204); petunjuk setelah `max_steps` tanpa menulis dan
-profil efektif untuk drafter (#204). Perubahan sebelumnya (router v0, DeepSeek bawaan, environment per job, SWE v0) di arsip 2026-10-24.
-
-**Tambahan 2026-10-28 sore:** batch 4 **3/5** tanpa bocoran (#214); alat baca agen (#215: `ReadFile` per rentang baris, `ListFiles`
-dibatasi, issue 8.000, `max_steps` 30), timeout validasi 120 s (#216), margin input heuristik per model (#217); dev set 1 (#218):
-dua instance yang dulu tidak pernah menulis sekarang `resolved`. **Arah baru** (bagian 7): coding agent untuk production, SWE-bench
-jadi alat regresi.
+Yang berubah sejak 2026-10-27: **arah coding agent untuk production** (2026-10-28) dengan dua aplikasi latihan; **`argus-ledger`**
+14 task di `main`; batch SWE 4 dan 5 serta dev set 1–2 (regresi); ReadDocs (#229), stage riset (#242), counter reasoning (#240),
+harga peak (#241); **staging** (#244, #246, #249, #251, #258) dengan monitor dan notifikasi (#259, #260); **aplikasi kedua
+`argus-viewer`** (React PWA, JS divalidasi dengan vitest di `pwa_node22`, #256, #257, #261, #263): dua issue ditulis agen,
+dirilis ke staging dan **dipakai Atha di HP** lewat SSH port forwarding.
 
 Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu, sisanya belum) · `[ ]` belum dimulai.
 
@@ -26,85 +22,62 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 |---|---|---|---|
 | M1–M2 harness, LLM nyata, sandbox | `[x]` | `harness/`, `tools/sandbox.py`; arsip `PENDING` | – |
 | M3 evaluasi | `[x]` | `docs/reviews/M3_CLOSING.md`; kalibrasi judge PASS | – |
-| General-task agent (dulu "M4 slice 1") | `[x]` | `codetask/`, `acceptance/`; Eval Set v1 16/16 | Eval Set v1 jenuh: regresi saja, bukan ukuran kemampuan |
-| **M4** multi-agent paralel dengan dependensi | `[ ]` | Graf riset (M1–M2) punya worker paralel lewat fan-out tanpa dependensi (`graph.py`); code task satu agen | Penjadwal dengan dependensi, batas sumber daya, multi-agent untuk code task. Belum ada bukti single-agent menjadi penghalang |
-| **M5** observability dan benchmark | `[~]` | Ledger per panggilan; `audit_run.py` (juga membangun ulang feedback berhenti, peringatan konteks, dan carry retry), `failure_trace.py`, `pilot_report.py` (`success_rate` dan `success_rate_all`); **log keputusan manusia dengan waktunya di `job.json`** (`limits_shown`, `confirmed`/`confirmed_by_flag`, `key_typed`/`key_from_file`, `approved`, `retry`; #185); penilai ala SWE-bench `scripts/swe_grade.py`; waktu ringkasan → "y" per draf (`review_times.txt`, batch 1–3) | Tracing/dashboard (*dicek*: tidak ada Langfuse/LangSmith/OTel); benchmark single vs multi; **menit kerja Atha** masih belum ditanyakan (yang terukur: jumlah keputusan, waktu mesin, waktu ringkasan → "y"); **eval set yang tidak jenuh**: 11 instance SWE sympy sudah dinilai, tapi terkontaminasi dan hanya 4 tanpa bocoran (bagian 4b) |
-| **M6** repo → PR | `[x]` MVP | W0–W5; 10 run live pilot (bagian 4a); drafter model live (W2b-1/2/3); router (bagian 4b); **repo selain Argus**: sympy, 11 instance dinilai, **3/4 `resolved` tanpa bocoran** (batch 3) dan 7/7 dengan bocoran (bagian 4b); **repo JS bisa divalidasi**: vitest di environment `pwa_node22` (#256, SPEC_PWA_VIEWER PR 1) | Tingkat sukses umum: belum ada (sampel tanpa bocoran 4); PR tetap dibuka manusia (disengaja); `argus apply` belum ada (perintahnya dicetak `status`); pertanyaan B D5 (≥ 2 putaran perbaikan dalam satu attempt) belum terjawab; JS: belum ada pilot live, tes lama vitest belum bisa diubah (`changed_tests` hanya Python), tanpa Playwright |
-| M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat slice terkecil bila dibutuhkan: pencatatan keputusan policy (bagian 2, ADR-007) |
+| General-task agent | `[x]` | `codetask/`, `acceptance/`; Eval Set v1 16/16 | Eval Set v1 jenuh: regresi saja |
+| **M4** multi-agent dengan dependensi | `[ ]` | Graf riset punya fan-out tanpa dependensi; code task satu agen | Belum ada bukti single-agent menjadi penghalang |
+| **M5** observability dan benchmark | `[~]` | Ledger per panggilan; `audit_run.py`, `failure_trace.py`, `pilot_report.py`; keputusan manusia dengan waktunya di `job.json` (#185; `argus-ledger` 014 menampilkannya); `swe_grade.py`; `argus-ledger report` (biaya per stage); jumlah keputusan per pilot di setiap `RESULT.md` | Tracing/dashboard; benchmark single vs multi; **menit kerja Atha** belum ditanyakan; **eval set yang tidak jenuh** |
+| **M6** repo → PR | `[x]` MVP | Repo Argus (pilot M6, W2b, router); **sympy** (SWE, bagian 4b); **`argus-ledger`** Python/FastAPI, 14 task (bagian 4c); **`argus-viewer`** JS/React, 2 task, vitest di `pwa_node22` (bagian 4c) | Tingkat sukses umum (SWE tanpa bocoran sampel kecil); PR/apply tetap oleh manusia/Claude (disengaja); `argus apply` belum ada; berkas yang dilindungi di repo JS dicek skrip di luar harness; vitest: tes lama belum bisa diubah, tanpa Playwright |
+| M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat: layanan approval bersama UI kontrol (bagian 7) |
 | M8 penemuan tool, memori prosedural | `[ ]` | – | Seluruhnya (ADR-003) |
-| M9 deployment terkendali | `[~]` (staging) | **Staging v0** (#244): `argus stage deploy\|rollback\|status`, hanya commit job `APPLIED` apa adanya, container tanpa jaringan/read-only/tanpa capability/non-root di Unix socket, isolasi dicek `docker inspect`, smoke dari host, rollback dites; **upgrade dependency v0** (#246): rilis = commit di satu runtime dengan image tercatat, `argus stage check` sebelum runtime baru, rollback antar image; **hardening** (#249); **data asli + monitor** (#251). Pilot: staging #1 (deploy/deploy/rollback/deploy, #245), upgrade #1 (check → up1 → rollback ke image v0 → up1, satu "go live", #248) | Production sungguhan (DNS/TLS, pengguna, kredensial, jaringan) belum ada dan butuh persetujuan terpisah Atha; satu aplikasi (argus-ledger); tidak ada alert keluar (kegagalan monitor hanya terlihat di `stage status`). **Tertutup 2026-10-30 (#251, pilot #253):** data staging asli (snapshot proyeksi allowlist) dan monitoring sesudah deploy (timer 15 menit) |
+| M9 deployment terkendali | `[~]` (staging) | `argus stage deploy\|rollback\|restart\|check\|status\|monitor\|report` (#244, #246, #249, #251, #258): hanya commit job `APPLIED` apa adanya, container tanpa jaringan/read-only/non-root di Unix socket, peer = pid container, data asli lewat snapshot allowlist, monitor 15 menit, **notifikasi ntfy** sesudah 3 gagal (#259, #260), namespace per direktori staging (#258). **Aplikasi statis** (#257, #261, #263): build tanpa jaringan di `pwa_node22`, cek artifact (A4), `sw.js` dipin, swap `current` atomik sesudah smoke kandidat, proxy `127.0.0.1:8710` GET/HEAD (Host, CSP, `no-store` untuk API, hanya `/sw.js` boleh jadi service worker), unit `systemd --user`. Dua aplikasi, pilot staging #1, upgrade #1, data asli #1, viewer #1–#2 | **Production** (DNS/TLS, pengguna, kredensial): ditunda (keputusan 2026-10-30, pemicu di bagian 7); smoke kandidat tidak menguji lingkungan unit systemd |
 | Capability pack (gambar, video/audio, game) | `[ ]` | – | Seluruhnya; gate non-kode ADR-006 |
 
-M4, M7, M8, M9, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (keputusan 2026-10-21, ditegaskan 2026-10-24: tidak
-ditutup lewat dokumen). Belum ada pilot yang tertahan karena tidak ada registry, policy engine, memori, atau multi-agent.
+M4, M7, M8, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (keputusan 2026-10-21, ditegaskan 2026-10-24).
 
 ## 2. ADR
 
-| ADR | Status | Yang ada di kode (code task kecuali disebut) | Gap |
+| ADR | Status | Yang ada di kode | Gap |
 |---|---|---|---|
-| 001 registry dan policy | `[ ]` | Allowlist tool per role di config + `tools` kontrak yang hanya boleh menambah, dibekukan per run; versi tool dan image (termasuk image environment) masuk kunci memo | Registry formal (id/versi, schema, biaya, izin, trust, provenance), policy engine. Target M7 |
-| 002 workflow bertipe | `[~]` (kuat) | State machine code task (`codetask/status.py`) dan **job router** (`router/job.py`, transisi legal); draf task bertipe dicek deterministik (W2a); **drafter model live**: setiap submit dicek harness (red karena assertion #179, cek setup yang sama di cek draf #180); draf model lolos dan dipakai di W2b-2, W2b-3, router #1–#3, SWE v0; di SWE v0 tes drafter **lulus 4/4 di atas patch resmi maintainer**; di batch 3 (tanpa bocoran) keempat draf yang di-approve hijau di atas patch maintainer (dibuka setelah grading); drafter melihat profil **efektif** coder (#204) | Planner dinamis; task dengan dependensi eksplisit; draf yang salah paham issue tanpa oracle baru tertangkap setelah grading (belum terjadi di batch 3) |
-| 003 memori berlapis | `[ ]` | Hanya state eksekusi (checkpoint, memo) | Knowledge dan project memory. Target M8 |
-| 004 durable, idempotensi, budget | `[~]` (kuat) | Reservasi sebelum kirim, ledger, `durability="sync"`, memo per langkah, crash-resume, `reservation_from_ledger`; D1/D5; **cap per job** yang dihitung dari ledger semua tahap, cap tahap dicatat saat mulai dan tidak dihitung ulang saat resume; kunci per job (`flock`); `retry` membuat tahap baru dengan cap dari sisa job; `max_input_tokens` per model (DeepSeek 60.000, Sonnet 40.000); `max_output_tokens` per model untuk agen (#200) dan drafter (#204) (DeepSeek 32.000), `max_tokens` tiap panggilan = min(batas, yang muat di sisa reservasi); perkiraan token heuristik **tidak** dipangkas (est/tagihan DeepSeek minimum 0,89) | **Idempotency key sisi provider** (tidak ada). Cap USD untuk model non-Anthropic bertumpu pada perkiraan token heuristik, jadi bukan batas mutlak (`FAILED_BUDGET` dapat sedikit melewati cap) |
-| 005 artifact dan workspace | `[~]` | Workspace per run (path jail, scope, digest); intake commit persis tanpa `.git` (dites: commit yang lebih baru tidak terlihat); paket review; **environment per job dengan id image yang dipin** di `job.json`, image berubah = tahap ditolak; build image deterministik per rootfs (`build_env_sandbox_image.sh`); **environment dari image Python resmi** dipin digest dengan requirements ber-hash dan cek environment wajib sebelum dipakai (`sympy_py39`, #202); `ledger_py312`, `ledger_staging` dan upgrade `*_up1` (#246); **environment Node `pwa_node22`** (#256): distroless, `/node_modules` read-only dari lock sha512, runner vitest; **rilis staging** = `git archive` commit applied (dicek terhadap tree), read-only, dengan runtime dan image tercatat | Artifact store terpisah (tidak ada); id image tidak bisa direproduksi (hanya rootfs), jadi job tidak bisa dilanjutkan setelah image dibangun ulang (disengaja, K1 SPEC_SWE_PILOT); data instance SWE di luar repo (`~/swe`) tidak di-versioning (sha-nya di `grade.json`) |
-| 006 quality gate | `[~]` (kuat untuk kode) | Kontrak beku, validasi di sandbox, verdict dengan bukti, klaim dicek, validasi ulang independen; cek draf; **penilai luar dengan tes tersembunyi** (`swe_grade.py`: patch harus sha paket review, berkas tes resmi dikembalikan lalu `test_patch` diterapkan, hasil per node, `missing` = tidak lulus, hasil yang tidak sah ditolak) | Gate non-kode. Penilai SWE milik Argus (Python 3.12), bukan harness resmi |
-| 007 keamanan dan approval | `[~]` | Sandbox Docker (tanpa jaringan, read-only, non-root, tanpa capability; dites bahwa host dan `.git` tidak terlihat); output sandbox berlabel data; **key dari file 0600 di luar repo** (`--key-file`, isinya tidak pernah ditampilkan atau ditulis); teks yang dicetak dibersihkan dari karakter kontrol | **Approval run pindah ke chat:** dengan `--yes` (hanya bersama `--key-file`), `[y/N]` tidak ditanyakan dan gerbang `go_live.sh` per pilot tidak dipakai lagi. Yang tersisa di kode: layar batas tetap dicetak dan dicatat (`confirmed_by_flag`), approve terikat ke sha draf, image dan kontrak terikat ke job. Persetujuan "go live"/"y" Atha hanya tercatat di riwayat chat, tidak di `job.json`. Layanan approval dan policy engine di kode tetap tidak ada. Kandidat slice M7 terkecil: mencatat siapa menyetujui apa (teks persetujuan) di log job. **Staging:** satu "go live" per `PLAN.md` yang ter-commit (U4, SPEC_DEP_UPGRADE_V0), berhenti di langkah pertama yang meleset; tetap hanya di chat |
+| 001 registry dan policy | `[ ]` | Allowlist tool per role + `tools` kontrak yang hanya menambah; versi tool dan image di kunci memo | Registry formal, policy engine. Target M7 |
+| 002 workflow bertipe | `[~]` (kuat) | State machine code task dan job router; drafter model dicek harness per submit (red karena assertion, untuk pytest dan **vitest**: hanya `AssertionError` lewat frame/`cause`); stage riset dengan gate (#242) | Planner dinamis; dependensi eksplisit |
+| 003 memori berlapis | `[ ]` | Hanya state eksekusi | Target M8 |
+| 004 durable, idempotensi, budget | `[~]` (kuat) | Reservasi sebelum kirim, ledger, `durability="sync"`, memo per langkah, crash-resume, `reservation_from_ledger`; cap per job; `max_input`/`max_output` per model; counter heuristik menghitung reasoning yang dikirim (#240); worst case selalu ×peak (#241) | Idempotency key provider; cap USD non-Anthropic bertumpu pada perkiraan heuristik |
+| 005 artifact dan workspace | `[~]` | Workspace per run (jail, scope, digest); environment per job dengan image dipin (Python dan **Node `pwa_node22`** distroless dari lock sha512); rilis staging = `git archive` commit applied, read-only, image/runtime/hash dist tercatat | Artifact store; id image tidak reproducible (hanya rootfs); **pin image per checkout disalin manual** |
+| 006 quality gate | `[~]` (kuat untuk kode) | Kontrak beku, validasi di sandbox, verdict dengan bukti, validasi ulang; penilai SWE dengan tes tersembunyi; staging: smoke dari host, cek artifact, pin service worker | Gate non-kode |
+| 007 keamanan dan approval | `[~]` | Sandbox Docker; key dari file 0600 (`--key-file`); output sandbox berlabel data; staging tanpa jaringan; proxy viewer hanya `127.0.0.1`, akses HP lewat kunci SSH yang dibatasi `permitopen` ke 8710 | Persetujuan "go live" hanya di chat (satu per `PLAN.md` untuk staging); layanan approval di kode tidak ada; dibuka bersama UI kontrol fase 2–3 atau `argus apply` |
 
-## 3. Kriteria MVP M6 (`FUTURE_ARCHITECTURE.md` bagian 6)
+## 3. Kriteria MVP M6
 
-| Kriteria | Status | Bukti |
-|---|---|---|
-| Issue dan repo target ber-scope | ✓ | kontrak, intake W4; repo luar (sympy, 11 instance) di commit persis |
-| Rencana bertipe dan kriteria eksplisit | ✓ | drafter model live (W2b, router, SWE v0), dicek harness dan di-approve manusia terikat sha |
-| Baca/tulis terbatas workspace | ✓ | path jail, scope tulis, protected |
-| Kode dan tes terisolasi | ✓ | sandbox Docker; environment per job (`argus`, `sympy`, `sympy_py39`) |
-| Batas biaya per task dan per run | ✓ | reservasi attempt, cap run, **cap per job** |
-| Simpan state dan resume | ✓ | checkpoint `sync`, memo, tes crash lintas proses; `argus resume` |
-| Tanpa panggilan berbayar ganda bila bisa direkonsiliasi | ✓ | memo per langkah, `reservation_from_ledger`; idempotency key provider tidak ada |
-| Artefak, diff, log, provenance | ✓ | run dir, ledger, paket review, `job.json` |
-| Tolak tool dan akses di luar scope | ✓ | allowlist, scope, sandbox tanpa jaringan |
-| Lulus/gagal per kriteria dengan bukti | ✓ | verdict, `status` (`why:`, attempt per tahap) |
-| Diff/PR yang bisa direview, tanpa merge otomatis | ✓ | paket review; PR dibuka manusia; merge hanya atas perintah Atha |
-| Tes deterministik untuk mode kegagalan | ✓ | W0, suite code task dan router (model palsu) |
+Semua kriteria `FUTURE_ARCHITECTURE.md` bagian 6 terpenuhi sejak 2026-10-27 (tabel di arsip 2026-10-27); bukti tambahan:
+repo JS (`argus-viewer`) dengan validasi vitest dan red check yang sama ketatnya dengan pytest.
 
-## 4a. Pilot M6 sampai 2026-10-22 (repo Argus, Sonnet 5.5)
+## 4a. Pilot M6 sampai 2026-10-22
 
-10 run live di 6 task (pilot 1, 2, 3a, 3b, 4, 5), 6 task `agent-completed`, **$1,29** total. Rinciannya di arsip
-[`reviews/RECONCILIATION_2026-10-22.md`](reviews/RECONCILIATION_2026-10-22.md) bagian 4.
+10 run live di 6 task, 6 `agent-completed`, $1,29 (arsip [`reviews/RECONCILIATION_2026-10-22.md`](reviews/RECONCILIATION_2026-10-22.md)).
 
-## 4b. Pilot sejak 2026-10-22 (drafter, router, repo luar)
+## 4b. SWE-bench (sympy), alat regresi sejak 2026-10-28
 
-| Pilot | Task | Model | Hasil | Biaya job | Catatan |
-|---|---|---|---|---|---|
-| W2b-2 | `pr_title2` | Sonnet 5.5 | `agent-completed` tanpa patch referensi | $0,5429 | drafter 3 run |
-| Router #1 | `argus list` | DeepSeek | `REVIEW_READY`, patch diterapkan | $0,0792 | 4 PR perbaikan harness di tengah job |
-| Router #2 | sama, thinking | DeepSeek thinking | `REVIEW_READY` | $0,0696 | 2 perintah live, 8 menit |
-| W2b-3 | `success_rate_all` (mengubah tes lama) | DeepSeek thinking | run 3 `REVIEW_READY`, patch diterapkan | $0,0355 + $0,0156 + $0,0216 | run 1–2 menemukan dua celah harness (#179, #180) |
-| Router #3 | `intake_repo --check` record task | DeepSeek thinking | `a1` gagal (`context_limit` tanpa menulis), **`retry` `a2` `DONE`**, patch diterapkan (#189) | $0,0349 | pemicu #188 (konteks agen, retry); 3 keputusan run |
-| **SWE v0** | `sympy__sympy-23534` (repo sympy) | DeepSeek thinking | **`resolved`** (`FAIL_TO_PASS` 1/1, `PASS_TO_PASS` 11/11) | **$0,0202** | patch agen identik dengan patch maintainer; 2 keputusan run; *oracle-informed* |
-| SWE batch 1 | 5 instance sympy (Python 3.12) | DeepSeek thinking | **5/5 `resolved`** (satu, `22914`, dengan usulan kode di issue) | $0,1378 | 6 keputusan; 2 patch berbeda dari maintainer; *oracle-informed* (hasil tes drafter di atas patch maintainer terlihat sebelum approve) |
-| SWE batch 2 | `24443` (Python 3.12) | DeepSeek thinking | `resolved` setelah redraft, #200, dan `retry` | $0,0606 | `a1` gagal `output_truncated` (thinking memakai seluruh 8.192); *oracle-assisted* (`d1` ditolak karena gagal di atas patch maintainer) |
-| **SWE batch 3** | 4 instance sympy, **`sympy_py39`** | DeepSeek thinking | **3/4 `resolved` tanpa bocoran** | $0,2127 | 7 keputusan; `21847`, `21612` lolos di attempt 2 berkat feedback #188; **`21379` gagal**: 4 attempt tanpa menulis (`max_steps` ×2, `context_limit` ×2); `21612` `d1` drafter `output_truncated`; pemicu #204 |
+| Kelompok | Hasil | Biaya | Catatan |
+|---|---|---|---|
+| `23534`, batch 1, batch 2 | 7/7 `resolved` | – | *oracle-informed/assisted*, tidak dicampur |
+| Batch 3 (`sympy_py39`) | **3/4** tanpa bocoran | $0,2127 | `RESULT.md` di `pilots/swe_v0/batch3/` |
+| Batch 4 | **3/5** (3/4 tanpa yang *harness-blocked*) | $0,4260 | #214 |
+| Batch 5 (sympy 1.6–1.8) | **2/5** (1/4 tanpa campur tangan) | $0,8746 | dua kegagalan agen di berkas besar → `EditFile` 2 MB |
+| Dev set 1–2 (bukan klaim) | 2/3 lalu 3/3 | $0,4968 + $0,0615 | sesudah perbaikan alat baca/tulis |
 
-SWE sympy sejauh ini: **11 instance, $0,4313**. Hasil **tidak dicampur**: tanpa bocoran 3/4 (batch 3); dengan bocoran 7/7
-(`23534`, batch 1, batch 2). Ringkasan per batch: `pilots/swe_v0/batch{1,2,3}/RESULT.md`.
+**Batas klaim:** harness menyelesaikan task SWE-bench ujung ke ujung, bukan kemampuan model pada bug baru (instance publik,
+kemungkinan terkontaminasi); penilai milik Argus, tidak dibandingkan dengan leaderboard.
 
-**Terbukti (sampel kecil, bukan tingkat sukses):** alur penuh berjalan tanpa PC (VM, `--key-file`/`--yes`), dengan 2–3 keputusan
-manusia per task (dulu ±17 di W2b-2); satu "go live" per batch; drafter model menulis tes yang dipakai, dan tanpa oracle keempat draf
-batch 3 yang di-approve hijau di atas patch maintainer; task di repositori luar dinilai `resolved` oleh tes resmi yang tidak terlihat,
-di dua environment (Python 3.12 dan 3.9); biaya per task yang selesai $0,02–0,09 di DeepSeek; **feedback #188 menyelamatkan dua
-instance** batch 3 (attempt 1 `context_limit` tanpa menulis → attempt 2 selesai).
+## 4c. Dogfooding: aplikasi latihan
 
-**Batas klaim SWE:** "harness Argus menyelesaikan task SWE-bench dari ujung ke ujung", **bukan** kemampuan model pada bug yang belum
-pernah dilihat. Instance SWE-bench Verified publik 2021–2023 dan kemungkinan ada di data latih (sebagian patch agen identik dengan
-patch maintainer). Penilaian ala SWE-bench (penilai milik Argus), **tidak** dibandingkan dengan leaderboard.
+| Aplikasi | Task di `main` | Biaya job | Catatan |
+|---|---|---|---|
+| **`argus-ledger`** (Python, FastAPI, SQLite) | 14 (tahap 0–12 + satu fix) | tahap 0–10 $0,5688; 013 $0,0179; 014 $0,0800 | CLI, API, HTML, login + hardening, report, keputusan manusia; 010 tidak di-merge (2 cacat ditemukan uji serangan); 0 tes lama dilonggarkan, 0 patch ditulis ulang; di staging dengan data asli |
+| **`argus-viewer`** (React 19 PWA, vitest) | 2 (issue 001 daftar job, 002 halaman job) + kerangka Claude | $0,0198 + $0,0243 | drafter dan agen berhasil di percobaan pertama; 23 tes baru, semua merah karena assertion; review Claude tidak mengubah hasil apa pun (sampel 2); live di staging, dipakai Atha di HP |
 
-**Supervisi:** tanpa hasil patch maintainer, waktu ringkasan → "y" naik dari median 45 detik (batch 1) ke ±5–7 menit (batch 3): Atha
-menilai isi tes sendiri. Itu biaya nyata dari approve tanpa oracle.
-
-**Belum terbukti:** tingkat sukses umum (tanpa bocoran baru 4 instance); ≥ 2 putaran perbaikan dalam satu attempt; menit kerja
-manusia; **efek tiga petunjuk berhenti** (`context_limit` #188, `output_truncated` #200, `max_steps` tanpa menulis #204) terpisah dari
-variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di run live; peringatan konteks 70% belum pernah muncul.
+**Terbukti (sampel kecil):** fitur nyata dari issue ke rilis staging dengan 1–2 keputusan Atha per job ("go live"), biaya
+$0,02–0,08 per fitur; repo JS dengan jaminan red check yang sama.
+**Belum terbukti:** task yang tidak dijelaskan rinci oleh Claude (semua issue ditulis Claude); tanpa review Claude (shadow
+mode diusulkan).
 
 ## 5. Mode kegagalan (`FUTURE_ARCHITECTURE.md` bagian 8)
 
@@ -112,77 +85,54 @@ variasi model; petunjuk #204 dan output drafter 32.000 belum pernah dipakai di r
 |---|---|---|
 | Crash sebelum/sesudah request | ✓ | ledger, `unknown_after_crash`, tes crash lintas proses; `argus resume` |
 | Timeout, rate limit, hasil berbayar ambigu | ✓ | retry transien, tagih kasus terburuk; tanpa idempotency key provider |
-| Konflik/overrun budget | ✓ | reservasi sebelum kirim, `FAILED_BUDGET` durable; cap per job; dua perintah pada satu job ditolak (`flock`) |
-| Workflow tidak valid atau siklik | ~ | transisi legal job dan code task; tidak ada workflow dengan dependensi |
-| Perubahan schema/versi tool | ~ | versi tool dan image di kunci memo; image environment dipin per job; tanpa registry |
-| Dokumen berbahaya, prompt injection | ~ | output sandbox berlabel data; teks yang dicetak dibersihkan dari karakter kontrol/ANSI; belum diukur untuk code task |
-| Lolos sandbox, jaringan tak sah | ✓ | hardening Docker diuji; host dan `.git` tidak terlihat dari dalam (dites) |
-| Artefak hilang/rusak | ~ | log rusak ditoleransi, cek intake dan digest; tanpa artifact store |
+| Konflik/overrun budget | ✓ | reservasi sebelum kirim, `FAILED_BUDGET` durable; cap per job; `flock` per job |
+| Workflow tidak valid atau siklik | ~ | transisi legal job dan code task; tanpa workflow dengan dependensi |
+| Perubahan schema/versi tool | ~ | versi tool dan image di kunci memo; image dipin per job; tanpa registry |
+| Dokumen berbahaya, prompt injection | ~ | output sandbox berlabel data; teks dibersihkan dari karakter kontrol; belum diukur untuk code task |
+| Lolos sandbox, jaringan tak sah | ✓ | hardening Docker diuji; build rilis viewer tanpa jaringan dites |
+| Artefak hilang/rusak | ~ | cek intake dan digest; rilis staging read-only dengan hash tercatat; tanpa artifact store |
 | Memori/prosedur basi | n/a | belum ada memori |
-| Evaluator berselisih / verdict rusak | ✓ | judge gagal tertutup; penilai SWE menolak hasil yang tidak sah alih-alih mencatatnya sebagai gagal |
-| Retry loop / planner berosilasi | ✓ | aturan stagnan, `max_iterations`, `max_steps`; `retry` hanya atas perintah manusia |
-| Agen membaca tanpa menulis sampai konteks habis | ~ | feedback antar attempt dan carry (#188); **penyebab utamanya alat baca** (`read_file` menolak berkas > 100 KB, `list_files` ±25k token): sesudah #215, `21379` dan `23824` selesai dalam 5–14 langkah (dev set 1). `24562` kini menulis tapi merusak berkasnya (mutu patch) |
-| Thinking menghabiskan output | ~ | balasan terpotong tidak dijalankan; output per model dan petunjuk untuk agen (#200) dan drafter (#204); `a2` batch 2 lolos, tapi bukan karena batas baru (balasan terbesar 5.519) |
-| Approval dicabut / parameter berubah | ~ | approve terikat sha draf, kontrak dan image terikat job; persetujuan run di chat tidak tercatat di job (ADR-007) |
+| Evaluator berselisih / verdict rusak | ✓ | judge gagal tertutup; penilai SWE menolak hasil tidak sah |
+| Retry loop / planner berosilasi | ✓ | `max_iterations`, `max_steps`; `retry` hanya atas perintah manusia |
+| Agen membaca tanpa menulis sampai konteks habis | ~ | feedback dan carry (#188); alat baca (#215, #227) dan `EditFile` 2 MB menutup penyebab utama di dev set 2 |
+| Thinking menghabiskan output | ~ | output per model dan petunjuk (#200, #204) |
+| Approval dicabut / parameter berubah | ~ | approve terikat sha draf; persetujuan run di chat tidak tercatat di job (ADR-007) |
 | Tulis bersamaan ke berkas proyek | ✗ | satu agen per workspace; satu perintah per job |
+| **Tes merusak staging live** | ✓ | ditemukan 2026-10-30 (reconcile menghapus container live); label `argus.staging.base` per direktori (#258) |
+| **Kegagalan staging tidak terlihat** | ✓ | notifikasi ntfy sesudah 3 gagal berturut-turut (#259, #260) |
 
 ## 6. Gap terbuka, diurutkan menurut nilai sekarang
 
-1. **Task fitur di aplikasi nyata** (arah 2026-10-28): `argus-ledger` tahap 0–9 selesai, **11 task di `main`, $0,5366** (agen 9/11 di attempt
-   pertama; 010 tidak di-merge karena uji serangan menemukan 2 cacat yang lolos dari tesnya; 010b lewat retry sesudah 4
-   `context_limit`, ditangani #227) (CLI, biaya dari ledger, API FastAPI di environment baru `ledger_py312` #221, halaman HTML, SQLite, login, hardening
-   login), semuanya dicek di data ledger asli; login dan hardening juga dengan uji serangan. Satu kegagalan drafter karena pesan
-   error harness (#223). Dogfooding juga menemukan celah gate: ekor output yang tidak memuat satu pun tes membuat cek "tes
-   menelan traceback" lolos tanpa menilai (#225). Mode fitur drafter tidak perlu. ReadDocs (akses web tahap 1, #229) di `main`; pilot
-   K7 (tahap 9): agen tidak memakainya pada fitur yang umum, manfaat belum terbukti. Berikutnya: JS + Playwright (3b) bila perlu;
-   mesin pencari hanya bila ReadDocs terbukti kurang. Issue 001–011 ditulis Claude atas delegasi; argus-ledger jalur cepat.
-2. **Tingkat sukses di repo luar tanpa bocoran** (M6, M5): batch 3 3/4, batch 4 3/5, batch 5 2/5 (1/4 tanpa campur tangan;
-   sympy 1.6–1.8). Sekarang alat regresi (±20% usaha), bukan tujuan. Batch 5: dua kegagalan agen (`max_steps`/`context_limit` di
-   berkas besar, #227 tidak mencegahnya) dan satu kontrak yang terlalu sempit.
-3. **Efek petunjuk #204** (`max_steps` tanpa menulis) dan output drafter 32.000: ada di kode, belum di run live.
-4. **Eval set yang tidak jenuh** (M5): instance SWE sebagai eval regresi harness; bukan ukuran model selama terkontaminasi.
-5. **Menit kerja manusia** (M5): jumlah keputusan, waktu mesin, dan waktu ringkasan → "y" terukur; menit Atha belum ditanyakan.
-6. **Persetujuan run di chat tidak tercatat di job** (ADR-007): ditunda sampai ada aksi berisiko di dalam run (bagian 7).
-7. **Pertanyaan B D5** (≥ 2 putaran perbaikan dalam satu attempt).
-8. **`argus apply`** (K6 router v0): belum ada bukti kebutuhan (apply 4 baris dari `status`).
-9. **Idempotency key provider** (ADR-004): dampak rendah selama tidak ada aksi eksternal selain panggilan model.
-10. **M4, M7, M8, M9, capability pack**: ditunda sampai ada bukti kebutuhan. Web search dan deep research bukan bagian capability
-   pack (gambar, video/audio, game); keduanya kandidat sesudah tahap awal `argus-ledger` (bagian 7).
+1. **Supervisi dan "melepas" Argus:** di dua aplikasi latihan Claude masih menulis issue, mereview draf dan patch, dan
+   men-deploy. Review Claude belum mengubah hasil di task viewer (sampel 2). Langkah: **shadow mode** per kelas task, dengan
+   **berkas yang dilindungi dipaksa harness** sebagai prasyarat. Ukuran: jumlah blok yang akan terjadi, menit Atha.
+2. **UI kontrol interaktif** (permintaan Atha 2026-10-30): menunggu keputusan scope (bagian 7). Menyentuh ADR-007 (approval
+   tercatat), key, dan CSRF; fase 1 read-only bisa jalan lebih dulu.
+3. **Operasional staging:** pin image per checkout disalin manual; smoke kandidat tidak menguji unit systemd; up2 mulai
+   2026-11-07.
+4. **Tingkat sukses di repo luar tanpa bocoran** (SWE, alat regresi ±20% usaha).
+5. **Eval set yang tidak jenuh** dan **menit kerja manusia** (M5).
+6. **Efek petunjuk berhenti** (#188, #200, #204) terpisah dari variasi model; **pertanyaan B D5**.
+7. **`argus apply`**, **idempotency key provider**: dampak rendah selama apply dilakukan Claude dan tidak ada aksi eksternal
+   selain panggilan model.
+8. **M4, M7, M8, capability pack, production**: ditunda sampai ada bukti kebutuhan.
 
-Kecil, dicatat di `PENDING.md`: layar batas tahap drafter tidak menyebut environment dan image (preflight chat menghitungnya dengan
-fungsi yang sama); baris bit executable dari patch agen #189; cek key manual router #3.
+## 7. Keputusan
 
-## 7. Keputusan yang diminta
+Keputusan sampai 2026-10-30 siang ada di arsip [`reviews/RECONCILIATION_2026-10-27.md`](reviews/RECONCILIATION_2026-10-27.md)
+bagian 7 (dua jalur, arah production, staging, upgrade, "go live" per rencana, data asli). Sesudahnya:
 
-1. **Batch 4** (usul di `PENDING.md`), sesudah spek `docs/reviews/SPEC_LOCATE_FROM_TRACEBACK.md` (#206, dari penelusuran `21379`): lima instance sympy yang layak di Python 3.12 tetapi tidak dipilih di batch 1 (`24562`,
-   `24066`, `23824`, `22456`, `23262`), tanpa bocoran seperti batch 3, di `main` dengan #204; `21379` diulang sebagai job baru dan
-   dilaporkan terpisah (instance yang sudah gagal, dipilih ulang).
-Diputuskan 2026-10-27 (Atha): gap 5 (mencatat persetujuan chat di job, ADR-007) **ditunda**; dibuka bersama aksi berisiko di dalam
-run (`argus apply`, git push/PR). Catatan teks persetujuan yang ditulis Claude bukan bukti persetujuan; saat itu yang dibutuhkan
-adalah sesuatu yang hanya bisa diberikan Atha.
+Diputuskan 2026-10-30 (Atha):
+- **Viewer PWA** (`docs/reviews/SPEC_PWA_VIEWER.md`): proxy selalu hidup, bind eksplisit `127.0.0.1`, port 8710, repo lokal, dua
+  PR jalur ketat; kerangka Claude dengan `sw.js` **network-first** (pin membuat `sw.js` tidak pernah diperbarui browser);
+  berkas yang dilindungi lewat skrip `check_protected.py` (bukan ingatan); tes deploy dengan pin default asli.
+- **Pin `SW_SHA256`** (#261): "merge bila verify lulus". **Unit proxy** (#263): "merge" + "go live".
+- **Akses HP:** Termius Local forward; kunci HP sendiri dengan `permitopen="127.0.0.1:8710"` tanpa shell.
+- **Production ditunda:** viewer tetap di staging; production dibuka bila ada pengguna kedua, kebutuhan akses tanpa Termius,
+  atau latihan deploy production, dengan spek dulu.
+- Issue 003 (tampilan HP) tidak diperlukan.
 
-Diputuskan 2026-10-28 (Atha):
-- **Batch 4 selesai** (#214, 3/5). Sesudahnya: dua jalur kerja (ketat: AGENTS.md, spek + mutants + `verify.sh` + "merge" Atha;
-  cepat: kemampuan agen, Claude merge sendiri, `verify.sh` penuh tidak per PR tapi wajib sebelum setiap batch).
-- **Arah:** Argus sebagai coding agent untuk membangun aplikasi production. SWE-bench ±20% usaha (dev set regresi, batch baru
-  sesekali untuk klaim); ±80% dogfooding. Aplikasi latihan pertama: **`argus-ledger`** (dashboard ledger Argus, repo terpisah,
-  bertahap CLI → filter → API → HTML → SQLite → login). Mode fitur di drafter hanya bila tahap 0 membuktikan perlu.
-- **M7/M8 di parkiran** (belum diputuskan), selain yang dibutuhkan task nyata. Web search lalu deep research sesudah tahap awal
-  `argus-ledger`. Tawaran marketplace skill (Agensi.io) **nanti**.
-- (sore) Urutan: blok "Why they fail now" per tes (#225, jalur ketat, di-merge Atha) → hardening login argus-ledger (008 selesai,
-  009–010 satu batch berurutan) → `verify.sh` + batch SWE 5 → web search ditunda sampai ada task yang butuh dokumentasi.
-  **argus-ledger jalur cepat:** Claude approve draf, review, dan commit; dari Atha hanya "go live" per job.
-
-Diputuskan 2026-10-29/30 (Atha):
-- **Staging v0** (#244, "merge") dan pilotnya (#245, satu "go live" per deploy, 4 total). Production sungguhan tetap butuh
-  persetujuan terpisah.
-- **Upgrade dependency v0** (#246): cek awal Claude menunjukkan stack terbaru tidak butuh perubahan kode di argus-ledger, jadi
-  task agen dua lengan **ditunda** sampai ada upgrade/issue yang butuh API rilis baru. Versi: `up1` sekarang (httpx2 + fastapi
-  0.143.2, aturan 2 minggu tetap), `up2` (starlette 1.10.0, fastapi 0.162.0) mulai 2026-11-07. `ledger_py312_up1` tidak masuk
-  `web.environments`.
-- **"Go live" per rencana:** satu "go live" untuk satu `PLAN.md` yang ter-commit (dipakai pertama di #248: 1 keputusan untuk 4
-  perintah staging).
-- **Staging hardening** sebagai PR terpisah (#249, "merge" langsung).
-- **Staging dengan data asli** (#251, opsi a: tanpa jaringan): allowlist schema, snapshot tervalidasi dan atomik, tanpa
-  refresh bersamaan, report escaped dengan akses terbatas, monitor tidak mengganggu; timer `systemd --user` 15 menit,
-  lingering dinyalakan. Issue 014 ditulis Claude. Tidak di-merge sebelum Atha mereview (direview, "merge").
+Menunggu keputusan Atha:
+1. **UI kontrol** (scope di `PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol, port 8711 +
+   `permitopen` kedua, waktunya terhadap up2.
+2. **Shadow mode** untuk issue viewer read-only, sesudah berkas yang dilindungi dipaksa harness.
