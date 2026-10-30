@@ -218,9 +218,11 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     0.143.2, httpx2), `argus stage check`, rilis = commit di satu runtime, rollback memakai image rekaman. Mutants 23/23,
     verify.sh PASS 44dceca. Pilot (`pilots/dep_upgrade_v0/p1/RESULT.md`): check → deploy up1 → rollback ke image v0 →
     deploy up1, semua sesuai PLAN.md, **satu "go live"** (U4)
-- [ ] **Staging hardening** (jalur ketat, PR terpisah): temuan /code-review staging v0: catatan log sesudah state,
-    state.json rusak → reconcile mematikan live, `docker rm` tanpa cek hasil, timeout `docker logs` melewatkan stop,
-    smoke sebelum uvicorn listen (retry)
+- [x] **Staging hardening** (jalur ketat, `docs/reviews/SPEC_STAGING_HARDENING.md`, #249): `state.json` ditulis terakhir
+    (gagal record → yang lama tetap live, event `live` ditutup `stopped`); `state.json` rusak/symlink putus → deploy dan
+    rollback ditolak sebelum `reconcile`, `stage status` exit 2; `docker rm` dicek lewat `docker inspect`; rilis lama yang
+    gagal dihentikan → peringatan + `stop_failed`, bukan deploy gagal; `docker logs` maks 15 s dan tidak pernah menentukan
+    hasil; smoke menunggu socket mendengar. Review: 10 temuan diperbaiki. Mutants 17/17, verify.sh PASS 296bfb9
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), PLAN.md + satu "go live"
 - [ ] **Task agen dua lengan (Alur A):** menunggu upgrade/issue yang benar-benar butuh API rilis baru
 - [ ] **Alur A berikutnya (kandidat):** bug yang jawabannya tidak ada di ingatan model (perilaku rilis terbaru atau
