@@ -166,6 +166,9 @@ def artifact_problems(dist, sw_sha256):
             if m and path != "sw.js":
                 problems.append(f"{path}: uses browser storage ({m.group().decode()}); API data is never kept in the "
                                 "browser")
+            if ext == ".js" and "/" not in path and path != "sw.js":
+                problems.append(f"{path}: a script at the top level could be registered as a service worker of the "
+                                "whole site; only the reviewed sw.js may be there")
             if path == "sw.js" and hashlib.sha256(data).hexdigest() != sw_sha256:
                 problems.append("sw.js is not the reviewed service worker" + ("" if sw_sha256 else
                                                                               " (none is pinned yet: SW_SHA256)"))
@@ -520,6 +523,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._error(421, "misdirected request")
         path = self.path
+        if "Service-Worker" in self.headers and path.split("?", 1)[0] != "/sw.js":
+            return self._error(404, "not found")       # A3: only the reviewed /sw.js may become a service worker
         if path == "/api" or path.startswith(("/api/", "/api?")):
             m = API.match(path)
             return self._api(f"/{m.group(1)}") if m else self._error(404, "not found")
