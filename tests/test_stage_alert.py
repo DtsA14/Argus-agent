@@ -271,3 +271,33 @@ def test_two_runs_at_once_take_turns_on_the_alert_state(area):
     t.join(5)
     sa.after_monitor(base, topic_file=topic, send=send)       # the other run, after it: nothing new
     assert len(sent) == 1
+
+
+@pytest.mark.parametrize("content, url", [
+    ("argus-test-topic-0123456789abcdef", "https://ntfy.sh/argus-test-topic-0123456789abcdef"),
+    ("https://ntfy.sh/argus-test-topic-0123456789abcdef", "https://ntfy.sh/argus-test-topic-0123456789abcdef"),
+    ("https://ntfy-me.com/argus-test-topic-0123456789abcdef\n", "https://ntfy-me.com/argus-test-topic-0123456789abcdef"),
+])
+def test_the_topic_file_names_a_topic_or_a_url_on_an_allowed_server(tmp_path, content, url):
+    f = tmp_path / "topic"
+    f.write_text(content)
+    f.chmod(0o600)
+    assert sa.topic_url(f) == (url, None)
+
+
+@pytest.mark.parametrize("content", [
+    "https://evil.example/argus-test-topic-0123456789abcdef",          # a server not allowed
+    "http://ntfy-me.com/argus-test-topic-0123456789abcdef",            # not https
+    "https://ntfy-me.com.evil.example/argus-test-topic-0123456789abcdef",
+    "https://user@ntfy-me.com/argus-test-topic-0123456789abcdef",
+    "https://ntfy-me.com:8443/argus-test-topic-0123456789abcdef",
+    "https://ntfy-me.com/argus-test-topic-0123456789abcdef/json",
+    "https://ntfy-me.com/argus-test-topic-0123456789abcdef?x=1",
+    "https://ntfy-me.com/short",
+])
+def test_no_other_server_or_url_is_sent_to(tmp_path, content):
+    f = tmp_path / "topic"
+    f.write_text(content)
+    f.chmod(0o600)
+    url, why = sa.topic_url(f)
+    assert url is None and why

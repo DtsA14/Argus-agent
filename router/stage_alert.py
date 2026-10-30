@@ -8,7 +8,8 @@ before this runs. Not covered: runs that never start (timer, venv or VM down).
 
 The message names the release(s), which checks failed and the harness's reasons; an answer of the app is reduced to its
 status ("answered 500"), so no API data leaves the VM. The ntfy topic is read from a 0600 regular file outside the
-repository (never an argument, never next to the API key); without one nothing is sent and the run says so.
+repository (never an argument, never next to the API key): a topic name (ntfy.sh) or https://<server>/<topic> for a
+server of SERVERS; without a valid one nothing is sent and the run says so.
 State: <staging>/alert.json (0600), under its own lock. A FAIL that could not be sent is tried again at the next run; a
 recovery that could not be sent is kept and sent at a later run, and never blocks the next FAIL.
 """
@@ -26,6 +27,9 @@ from .stage_data import _records
 FAILS_IN_A_ROW = 3                                      # 15-minute runs: about 30-45 minutes after it broke
 BUSY_IN_A_ROW = 4                                       # an hour without a smoke test
 NTFY = "https://ntfy.sh"
+# ntfy servers a topic file may name (https://<server>/<topic>; a bare topic is ntfy.sh's). ntfy-me.com: the iOS app
+# Atha's phone gets pushes from (2026-10-30: the official app showed messages only on refresh).
+SERVERS = ("ntfy.sh", "ntfy-me.com")
 TOPIC_FILE = Path.home() / ".ntfy" / "argus_topic"   # not next to the API key file
 TOPIC = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 SEND_TIMEOUT_S = 10
@@ -90,10 +94,16 @@ def topic_url(topic_file):
             return None, f"{p} is not a regular file"
         if st.st_mode & 0o077:
             return None, f"{p} can be read by others (chmod 600 it)"
-        topic = f.read(200).decode("utf-8", "replace").strip()
+        topic = f.read(300).decode("utf-8", "replace").strip()
+    server = "ntfy.sh"
+    m = re.fullmatch(r"https://([a-z0-9.-]+)/([^/?#\s]+)", topic)
+    if m:
+        server, topic = m.groups()
+        if server not in SERVERS:
+            return None, f"{p} names server {server!r}, not one of {', '.join(SERVERS)}"
     if not TOPIC.match(topic):
-        return None, f"{p} does not hold a topic name ([A-Za-z0-9_-], 16-64)"
-    return f"{NTFY}/{topic}", None
+        return None, f"{p} does not hold a topic name ([A-Za-z0-9_-], 16-64), bare or as https://<server>/<topic>"
+    return f"https://{server}/{topic}", None
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
