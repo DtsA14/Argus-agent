@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from router import stage as sg  # noqa: E402
 from router import stage_data as sd  # noqa: E402
+from test_stage import Staging  # noqa: E402  (the tests' own container namespace)
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="symlinks, flock and modes on the VM")
 
@@ -335,7 +336,7 @@ def test_two_refreshes_at_once_never_both_write(tmp_path, source):
 
 def test_a_smoke_test_waits_for_a_refresh_and_gives_up_when_it_never_ends(tmp_path, held_lock, monkeypatch):
     monkeypatch.setattr(sd, "LOCK_WAIT_S", 0.5)
-    st = sg.Staging(tmp_path)
+    st = Staging(tmp_path)
     with pytest.raises(sd.Refused, match="busy"):
         st.smoke("jx-0123456789ab")
 
@@ -357,7 +358,7 @@ def no_docker(*a, **k):
 
 @pytest.fixture
 def live(tmp_path, source, monkeypatch):
-    st = sg.Staging(tmp_path / "staging", run=no_docker)
+    st = Staging(tmp_path / "staging", run=no_docker)
     st.container_pid = lambda release: 4242
     st.base.mkdir(parents=True)
     st._save({"live": "jx-0123456789ab", "history": ["jx-0123456789ab"]})
@@ -458,7 +459,7 @@ def test_the_smoke_numbers_are_the_harness_numbers_of_the_snapshot(tmp_path, sou
 
 
 def test_no_container_starts_without_a_published_snapshot(tmp_path):
-    st = sg.Staging(tmp_path, run=lambda *a, **k: pytest.fail("docker must not run"))
+    st = Staging(tmp_path, run=lambda *a, **k: pytest.fail("docker must not run"))
     st.dir("jx-0123456789ab").mkdir(parents=True)
     st.verify = lambda release: None
     with pytest.raises(sg.Refused, match="no published data snapshot"):

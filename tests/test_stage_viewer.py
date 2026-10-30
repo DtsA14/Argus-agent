@@ -23,7 +23,7 @@ from router import stage as sg  # noqa: E402
 from router import stage_data as sd  # noqa: E402
 from router import stage_viewer as sv  # noqa: E402
 from runner import load_config  # noqa: E402
-from test_stage import Said, UnixHTTP, applied_job, git, with_fixture  # noqa: E402
+from test_stage import Said, Staging, UnixHTTP, applied_job, git, with_fixture  # noqa: E402
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Unix sockets and docker on the VM")
 
@@ -232,7 +232,7 @@ class Upstream:
 
 @pytest.fixture
 def ledger(tmp_path, monkeypatch):
-    st = with_fixture(sg.Staging(tmp_path / "staging", run=lambda *a, **k: (1, "", "no docker in this test")))
+    st = with_fixture(Staging(tmp_path / "staging", run=lambda *a, **k: (1, "", "no docker in this test")))
     st._save({"live": LEDGER_RELEASE, "history": [LEDGER_RELEASE]})
     monkeypatch.setattr(sg.Staging, "container_pid", lambda self, release: os.getpid() if release == LEDGER_RELEASE
                         else None)
