@@ -36,8 +36,8 @@ M = [
     # S2: only JSON, only the release's container
     ("not JSON passed", V, "            json.loads(body)\n", "\n", T),
     ("any status passed", V, "if status not in (200, 404) or not ctype", "if not ctype", T),
-    ("no peer check", V, 'conn.sock = sg._connect(ledger.dir(live) / "sock" / "app.sock", peer=peer)',
-     'conn.sock = sg._connect(ledger.dir(live) / "sock" / "app.sock")', T),
+    ("no peer check", V, '            try:\n                conn.sock = sg._connect(ledger.dir(live) / "sock" / "app.sock", peer=peer)',
+     '            try:\n                conn.sock = sg._connect(ledger.dir(live) / "sock" / "app.sock")', T),
     # S2: files
     ("dot segments", V, "not all(SEGMENT.match(s) and not s.startswith(\".\") for s in segments)",
      "not all(SEGMENT.match(s) for s in segments)", T),
@@ -65,7 +65,7 @@ M = [
      'if path == "sw.js" and sw_sha256 and hashlib.sha256(data).hexdigest() != sw_sha256:', T),
     ("sw.js may be missing", V, '("index.html", "sw.js") if p not in found]', '("index.html",) if p not in found]', T),
     # E1
-    ("other version", V, "            if version != want or", "            if want is None or", T),
+    ("other version", V, "            if version != want:", "            if want is None:", T),
     ("peer deps unchecked", V, "    for kind in DEP_KINDS:", "    for kind in DEP_KINDS[:2]:", T),
     ("E1 not run", V, "                problems = (dependency_problems(package, json.loads(",
      "                problems = ([] if 1 else dependency_problems(package, json.loads(", T),
@@ -79,31 +79,22 @@ M = [
      "        if False:\n            raise Refused(f\"release {release} failed", T),
     ("state failure keeps new current", V, "            if old is None:\n                os.unlink(self.base / \"current\")\n"
      "            else:\n                _swap(self.base, old)\n", "            pass\n", T),
-    ("smoke asset hash", V, 'return status == 200 and _sha(body) == files.get(ref.lstrip("/")), f"{status} {_sha(body)[:12]}"',
-     'return status == 200, f"{status} {_sha(body)[:12]}"', T),
-    ("monitor ignores viewer", D, '                if rec["viewer"] and not rec["viewer"]["ok"] and rec["ok"]:',
+    ("smoke asset hash", V, 'return status == 200 and sg._sha(body) == files.get(ref.lstrip("/")), f"{status}',
+     'return status == 200, f"{status}', T),
+    ("monitor ignores viewer", D, '                if rec["viewer"] and rec["viewer"]["ok"] is False and rec["ok"]:',
      "                if False:", T),
     # code review of PR 2
-    ("no reconcile", V, '        if self.published() == live and (live is not None or not os.path.lexists(self.base / "current")):
-            return',
-     "        return", T),
-    ("known release not checked again", V, "        problems = artifact_problems(self.dir(release), self.sw_sha256)
-        if problems:   ",
-     "        problems = []
-        if problems:   ", T),
+    ("no reconcile", V, '        if self.published() == live and (live is not None or not os.path.lexists(self.base / "current")):\n'
+     "            return", "        return", T),
+    ("known release not checked again", V, "        problems = artifact_problems(self.dir(release), self.sw_sha256)\n",
+     "        problems = []\n", T),
     ("known release on another image", V, 'if known is not None and known.get("image") != image:', "if False:", T),
     ("monitor without the viewer lock", D, "        with viewer.lock():                       # never",
      "        with _nothing():                       # never", T),
-    ("relative refs skipped", V, '        ref = posixpath.normpath("/" + ref.removeprefix("./").lstrip("/"))
-',
-     '        if not ref.startswith("/"):
-            continue
-', T),
-    ("stale pid never refreshed", V, "                if not from_cache:
-                    raise
-",
-     "                raise
-", T),
+    ("relative refs skipped", V, '        ref = posixpath.normpath("/" + ref.removeprefix("./").lstrip("/"))\n',
+     '        if not ref.startswith("/"):\n            continue\n', T),
+    ("stale pid never refreshed", V, "                if not from_cache:\n                    raise\n",
+     "                raise\n", T),
     ("pid never cached", V, "        from_cache = bool(cached) and cached[0] == live", "        from_cache = False", T),
 ]
 # Equivalent, not listed: rollback's own v.verify(previous) before the confirmation (switch() verifies again before
