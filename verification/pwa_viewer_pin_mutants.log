@@ -1,0 +1,8 @@
+KILLED  pin removed: 1 failed in 0.82s
+KILLED  another pin: 1 failed in 0.49s
+KILLED  default is not the pin: 1 failed in 0.51s
+KILLED  pin not checked: 1 failed, 1 passed in 0.94s
+KILLED  unpinned accepts anything: 1 failed, 1 passed in 0.81s
+KILLED  any script served as a service worker: 1 failed, 4 passed in 10.47s
+KILLED  top-level script allowed: 1 failed, 28 passed in 9.88s
+RESULT: 7/7 killed

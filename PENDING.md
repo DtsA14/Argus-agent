@@ -249,9 +249,11 @@ Urutan menurut nilai (Reconciliation bagian 6); keputusan urutan berikutnya di R
     validasi lulus, red = `AssertionError`, E1 dan artifact bersih dengan pin. Berkas yang tidak boleh diubah agen:
     `PROTECTED` (dibaca dari commit base) + `~/argus-viewer-issues/check_protected.py` (mode draft/patch/commit), dijalankan
     saat approve draft dan sebelum `argus applied`
-- [~] **Pin `SW_SHA256`** (jalur ketat): sha `public/sw.js` kerangka (`db58777a…`), fixture `viewer_demo` memakai salinan
+- [x] **Pin `SW_SHA256`** (jalur ketat, #261): sha `public/sw.js` kerangka (`db58777a…`), fixture `viewer_demo` memakai salinan
     persisnya; deploy nyata dengan pin default (bukan override konstruktor) diterima, `sw.js` beda satu byte ditolak dan
-    rilis live tetap. Lalu issue 001 (jalur cepat), lalu pilot PLAN.md: deploy + unit proxy + Termius
+    rilis live tetap. Security review (1 MEDIUM, diperbaiki): service worker kedua di root lolos dari pin → proxy menjawab
+    404 untuk fetch service worker selain `/sw.js`, A4 menolak `.js` lain di level atas. Code review medium 7 temuan (4
+    diperbaiki). Mutants 7/7, verify.sh PASS 9f8cb99. Lalu issue 001 (jalur cepat), lalu pilot PLAN.md: deploy + unit proxy + Termius
 - [x] **Staging: namespace per direktori + `argus stage restart`** (jalur ketat, temuan 2026-10-30, #258, restart 13:52 UTC): tes
     `Staging(tmp_path)` menghapus container live `~/argus-staging` lewat `reconcile()` (filter hanya label rilis);
     sejak 09:46 UTC staging argus-ledger mati, monitor gagal 12× tanpa ada yang tahu. Perbaikan: label
