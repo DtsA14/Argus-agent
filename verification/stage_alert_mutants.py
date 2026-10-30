@@ -37,6 +37,9 @@ M = [
      "    except OSError:\n        raise", T),
     ("crashed run not recorded", C, '''                        sd._append(st.base / "monitor.jsonl", {''',
      '''                        (lambda *a: None)(st.base / "monitor.jsonl", {''', T),
+    ("any server", A, "        if server not in SERVERS:", "        if False:", T),
+    ("http allowed", A, 're.fullmatch(r"https://([a-z0-9.-]+)/([^/?#\\s]+)", topic)', 're.fullmatch(r"https?://([a-z0-9.-]+)/([^/?#\\s]+)", topic)', T),
+    ("prefix match only", A, 're.fullmatch(r"https://([a-z0-9.-]+)/([^/?#\\s]+)", topic)', 're.match(r"https://([a-z0-9.-]+)/([^/?#\\s]+)", topic)', T),
 ]
 # Equivalent, not listed: the S_ISREG check of the topic file (O_NOFOLLOW refuses a link; a fifo or device opened with
 # O_NONBLOCK reads no topic name).
