@@ -178,6 +178,20 @@ def test_packages_outside_the_lock_are_refused_by_name(package, problem):
 
 # ---- S2, A1, A2, A5: the proxy -------------------------------------------------------------------------------------
 
+def test_the_proxy_unit_runs_in_the_users_own_namespace():
+    # pilot viewer_v0 p1: PrivateTmp=yes in a systemd --user unit implies a private user namespace, where the proxy's
+    # connect to the ledger socket failed with EACCES (every /api/* was 502). Only these options are allowed.
+    unit = (ROOT / "deploy" / "systemd" / "argus-stage-proxy.service").read_text()
+    section, keys = None, set()
+    for line in unit.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            section = line
+        elif section == "[Service]" and line and not line.startswith("#"):
+            keys.add(line.split("=", 1)[0])
+    assert keys == {"Type", "WorkingDirectory", "ExecStart", "Restart", "RestartSec", "NoNewPrivileges"}, keys
+
+
 def test_the_proxy_is_bound_to_127_0_0_1_on_8710_and_never_8000():
     assert (sv.BIND, sv.PORT) == ("127.0.0.1", 8710)
     assert sv.PORT != 8000

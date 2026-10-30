@@ -12,8 +12,9 @@ WorkingDirectory=%h/pilot3a_live
 ExecStart=%h/pilot3a_live/.venv-verify/bin/python scripts/argus.py stage proxy
 Restart=on-failure
 RestartSec=5
+# No PrivateTmp= (or any other option that runs a user service in its own user namespace, which systemd --user does
+# implicitly): there, connecting to the ledger's socket fails with EACCES (pilot viewer_v0 p1, 2026-10-30).
 NoNewPrivileges=yes
-PrivateTmp=yes
 
 [Install]
 WantedBy=default.target
