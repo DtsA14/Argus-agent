@@ -1,12 +1,22 @@
-KILLED  threshold 2: 1 failed in 0.08s
-KILLED  busy counted as failure: 1 failed, 1 passed in 0.08s
-KILLED  busy breaks the run: 1 failed, 1 passed in 0.08s
-KILLED  alert every run: 1 failed in 0.09s
-KILLED  no recovery message: 1 failed in 0.08s
-KILLED  app answer sent: 1 failed, 3 passed in 0.08s
-KILLED  refresh reason sent: 1 failed, 4 passed in 0.09s
-KILLED  viewer left out: 1 failed, 4 passed in 0.09s
-KILLED  topic readable by others: 1 failed, 6 passed in 0.09s
-KILLED  unsent counted as sent: 1 failed, 5 passed in 0.09s
-KILLED  state readable by others: 1 failed, 11 passed in 0.10s
-RESULT: 11/11 killed
+KILLED  threshold 2: 1 failed in 0.88s
+KILLED  busy counted as failure: 1 failed, 1 passed in 0.11s
+KILLED  stuck never reported: 1 failed, 12 passed in 0.13s
+KILLED  stuck after 3: 1 failed, 1 passed in 0.11s
+KILLED  alert every run: 1 failed in 0.11s
+KILLED  no recovery message: 1 failed in 0.11s
+KILLED  unsent recovery blocks the next FAIL: 1 failed, 13 passed in 0.14s
+KILLED  unsent recovery dropped: 1 failed, 13 passed in 0.13s
+KILLED  unsent FAIL counted as sent: 1 failed, 5 passed in 0.12s
+KILLED  app answer sent: 1 failed, 3 passed in 0.11s
+KILLED  refresh reason sent: 1 failed, 4 passed in 0.11s
+KILLED  viewer left out: 1 failed, 4 passed in 0.12s
+KILLED  viewer why left out: 1 failed, 14 passed in 0.14s
+KILLED  topic readable by others: 1 failed, 6 passed in 0.12s
+KILLED  topic through a link: 1 failed, 7 passed in 0.12s
+KILLED  redirects followed: 1 failed, 10 passed in 0.13s
+KILLED  no lock: 1 failed, 19 passed in 0.52s
+KILLED  state readable by others: 1 failed, 11 passed in 0.13s
+KILLED  CLI without the alert: 1 failed, 16 passed in 0.52s
+KILLED  CLI alert changes the exit code: 1 failed, 17 passed in 0.53s
+KILLED  crashed run not recorded: 1 failed, 18 passed in 0.56s
+RESULT: 21/21 killed

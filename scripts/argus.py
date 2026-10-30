@@ -23,6 +23,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,6 +34,16 @@ from acceptance import intake  # noqa: E402
 from models.registry import ConfigError  # noqa: E402
 from router import job as rj  # noqa: E402
 from runner import load_config  # noqa: E402
+
+
+def _alert(sa, st):
+    """The failure notification after a monitor run; it never changes the monitor's verdict or exit code."""
+    try:
+        sent = sa.after_monitor(st.base)
+    except Exception as e:                               # noqa: BLE001
+        sent = f"{type(e).__name__}: {e}"
+    if sent:
+        print(f"alert: {sent}")
 
 
 def stage_viewer(o, deps):
@@ -166,15 +177,17 @@ def main(argv=None, deps=None):
                     return 0
                 if o.stage_cmd == "monitor":
                     from router import stage_viewer as sv
-                    rec = sd.monitor(st, Path(o.jobs_dir), viewer=sv.Viewer(ledger=st))
-                    print(json.dumps(rec, sort_keys=True))
                     from router import stage_alert as sa
-                    try:                                 # a notification never changes the monitor's verdict
-                        sent = sa.after_monitor(st.base)
-                    except Exception as e:               # noqa: BLE001
-                        sent = f"alert: {type(e).__name__}: {e}"
-                    if sent:
-                        print(f"alert: {sent}")
+                    try:
+                        rec = sd.monitor(st, Path(o.jobs_dir), viewer=sv.Viewer(ledger=st))
+                    except Exception as e:               # a crashed run is a failed run, so it can be alerted
+                        sd._append(st.base / "monitor.jsonl", {
+                            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "ok": False,
+                            "why": f"the monitor crashed: {type(e).__name__}"})
+                        _alert(sa, st)
+                        raise
+                    print(json.dumps(rec, sort_keys=True))
+                    _alert(sa, st)
                     return {True: 0, None: 0}.get(rec.get("ok"), 1)
                 print(f"report: {sd.report(st, sg._get)}")
                 return 0
