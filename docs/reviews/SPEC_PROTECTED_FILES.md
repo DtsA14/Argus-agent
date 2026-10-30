@@ -1,0 +1,78 @@
+# Spek: berkas yang dilindungi per repo, dipaksa harness
+
+Status: **draf untuk Atha** (2026-10-30). Jalur ketat (scope, cek draf, paket review). Satu PR. Menggantikan
+`~/argus-viewer-issues/check_protected.py` (skrip di luar repo yang dijalankan Claude) dengan aturan di harness. Prasyarat
+shadow mode dan approve dari UI kontrol (`PENDING.md`).
+
+## 1. Masalah
+
+Scope sebuah task (writable/protected) ditulis **drafter** per draf. Repo tidak punya cara menyatakan "berkas ini tidak pernah
+diubah agen, apa pun drafnya". Yang ada sekarang:
+
+- **vitest:** `VITEST_LOADED` (`acceptance/contract.py`): config vite/vitest, `package.json`, `.npmrc` di root tidak boleh
+  writable. Daftar tetap di kode, hanya root, hanya untuk vitest.
+- **`argus-viewer`:** `PROTECTED` di repo + `check_protected.py` (mode `draft`, `patch`, `commit`) yang dijalankan Claude saat
+  approve dan sebelum `argus applied`. Bergantung pada ingatan Claude; tidak ada di job, tidak dites di Argus.
+- Contoh yang lolos tanpa skrip itu: draf dengan writable `src/**` membiarkan agen **membuat** `src/x/package.json` atau mengubah
+  `public/sw.js`; draf dengan writable `*` membiarkan agen membuat `postcss.config.js` (dieksekusi saat build) atau `.env`.
+  Pin `SW_SHA256` dan cek workspace vitest menangkap sebagian, tidak semuanya.
+
+## 2. Usul
+
+**P1. Sumber daftar.** Berkas `.argus/protected` di repo target: satu glob per baris (aturan glob kontrak: `**` melintasi
+direktori, `*` dan `?` di satu komponen), baris kosong dan `#` diabaikan. Dibaca **dari commit job** (`git show
+<commit>:.argus/protected`), tidak pernah dari working tree, saat `argus code` membuat job. `.argus/protected` sendiri selalu
+dilindungi.
+
+**P2. Dibekukan per job.** `job.json` mencatat `protected_repo: {"sha256": <hash berkas>, "globs": [...]}` (atau
+`null` bila berkas tidak ada) di samping `environment_image`. Tahap sesudahnya memakai catatan ini, tidak membaca ulang. Approve
+menyalinnya ke record task (`fixtures/intake/<task>.json`), yang dibaca setup run, tools, dan paket review. Berkas yang
+tidak bisa dibaca sebagai daftar (bukan UTF-8, glob tidak sah, > 200 baris) → job **tidak dibuat**, pesan menyebut barisnya.
+
+**P3. Cek draf.** Draf ditolak bila sebuah berkas di commit yang cocok dengan daftar juga cocok dengan writable kontrak (pesan
+menyebut berkas dan glob). Sama dengan `check_protected.py draft` sesudah dilonggarkan: berkas yang tidak writable aman walau
+tidak disebut di protected kontrak. Tes baru drafter (`new_tests`) boleh cocok dengan daftar (mis. `**/*.test.*`) karena
+berkas baru dan disetujui manusia; `changed_tests` pada berkas yang cocok dengan daftar: lihat keputusan K3.
+
+**P4. Tulis agen.** `_writable` di `codetask/tools.py` menolak path yang cocok dengan daftar repo, sebelum cek writable kontrak,
+dengan pesan sendiri ("protected by the repository (.argus/protected)"). Ini juga menutup **berkas baru** yang cocok (glob
+writable yang lebar tidak lagi cukup).
+
+**P5. Paket review.** `changes_in_scope` (`codetask/review.py`) menolak setiap perubahan agen pada path yang cocok dengan daftar
+repo → paket `REVIEW_INVALID`. Tes yang disetujui ada di pristine, jadi tidak terhitung sebagai perubahan agen.
+
+**P6. Tanpa daftar = seperti sekarang.** Repo tanpa `.argus/protected` (argus-ledger, sympy, repo Argus) tidak berubah
+perilakunya; `VITEST_LOADED` tetap berlaku untuk vitest apa pun daftarnya.
+
+**P7. Layar dan status.** Layar `code`, `approve`, `retry` dan `argus status` menyebut `protected by the repository: N globs
+(sha256 …)` atau `none`. Drafter mendapat daftarnya di prompt (supaya tidak menulis draf yang pasti ditolak).
+
+## 3. Yang dijamin (dites; mutants)
+
+1. Daftar dibaca dari commit job, bukan working tree: berkas working tree yang berbeda tidak berpengaruh.
+2. Daftar dibekukan saat job dibuat: commit baru di repo atau perubahan berkas sesudahnya tidak mengubah tahap yang berjalan.
+3. Draf dengan writable yang mencakup berkas di daftar ditolak; draf yang tidak menyentuhnya lolos walau protected kontrak tidak
+   menyebutnya.
+4. Agen tidak bisa menulis, mengedit, atau **membuat** path yang cocok dengan daftar, apa pun writable kontraknya.
+5. Paket review dengan perubahan agen pada path di daftar tidak `valid`.
+6. Daftar rusak → job tidak dibuat; tidak ada daftar → perilaku lama (tes perilaku lama tetap lulus tanpa diubah).
+7. `.argus/protected` selalu dilindungi, juga bila tidak disebut di dalamnya.
+
+Tes di sandbox nyata untuk P4 (agen palsu yang mencoba tiga jalan: tulis, edit, buat berkas baru). Docker tidak tersedia = tidak
+lulus.
+
+## 4. Sesudah merge (jalur cepat)
+
+- `argus-viewer`: `PROTECTED` → `.argus/protected` (commit Claude), isi sama.
+- `check_protected.py` tidak dipakai lagi di langkah approve/apply; disimpan sebagai riwayat. Satu job viewer berikutnya dicek
+  dengan daftar dari harness (layar menyebutnya).
+
+## 5. Keputusan untuk Atha
+
+- **K1. Nama berkas:** `.argus/protected` (usul: tempat milik harness, bisa menampung berkas Argus lain nanti) atau tetap
+  `PROTECTED` di root.
+- **K2. Repo tanpa daftar:** perilaku lama (usul) atau wajib ada daftar untuk environment tertentu (mis. semua environment Node).
+- **K3. `changed_tests` pada berkas di daftar:** boleh, karena disetujui manusia dan sudah lewat cek AST/`removed`/`modified`
+  (usul; layar approve menandainya "protected by the repository"), atau ditolak (tes lama tidak pernah bisa diubah lewat draf).
+- **K4. Ukuran:** satu PR jalur ketat (P1–P7), urutan biasa: tes → review medium + security → mutants → `verify.sh` → "merge".
+  Harus selesai sebelum up2 (2026-11-07) atau ditahan sesudahnya (satu PR jalur ketat pada satu waktu).
