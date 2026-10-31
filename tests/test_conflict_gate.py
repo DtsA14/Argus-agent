@@ -100,3 +100,8 @@ def test_g6_without_the_marker_approve_runs_as_before(tmp_path):
     e.code()
     job, r = e.approve()
     assert r["status"] == "DONE" and job.data["state"] == rj.REVIEW_READY and len(e.confirms) == 2
+
+
+def test_the_gate_reads_the_marker_the_vitest_drafter_is_told_to_write():
+    from codetask import drafter as cdr
+    assert f"`{rj.CONFLICT}: <file>::<test name>`" in cdr.SYSTEM_VITEST
