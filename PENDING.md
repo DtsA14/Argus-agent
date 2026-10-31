@@ -63,8 +63,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   - [x] **Shadow batch 2** (2026-10-31, harness 900711d): 10 job, $0.2791; 8 bersih di-apply (`argus-viewer` 9273316..201a723,
     issue 003-010); 1 blok Claude (`1808`, `<th scope=row>` agar tes lama tetap hijau, sebelum gerbang); 1 berhenti di gerbang
     `EXISTING TEST CONFLICT` (`3f45`, konflik nyata, tanpa biaya agen). Sesudah gerbang: 7 job, 0 blok yang butuh Claude.
-    Semua henti berasal dari tes lama yang rapuh (diperbaiki manual 8b905f9, 379550d). Belum: deploy rilis viewer ini
-    (PLAN staging + "go live")
+    Semua henti berasal dari tes lama yang rapuh (diperbaiki manual 8b905f9, 379550d). Dideploy 2026-10-31 (pilot viewer #3,
+    `pilots/viewer_v0/p3/RESULT.md`): live `j20261031_094229_2180-201a7231d246`, rollback rilis 002
   - [x] Gerbang penanda di harness (#275, SPEC_CONFLICT_GATE): `argus approve`, `dr.approve` dan `argus retry` menolak draf
     berpenanda `EXISTING TEST CONFLICT` (huruf dan pemisah apa pun) sebelum apa pun; `status` menampilkan baris `conflict:`.
     Mutants 12/12, review medium (8 diperbaiki), verify.sh PASS
