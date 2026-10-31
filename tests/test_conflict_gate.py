@@ -60,9 +60,16 @@ def test_g2_the_marker_in_any_entry_and_anywhere_in_it_refuses(tmp_path, unverif
 
 
 def test_g1_the_refusal_comes_before_the_web_check(tmp_path):
+    """With no environment allowed for ReadDocs, --web is refused; a flagged draft is refused for its conflict first."""
     e = flagged_env(tmp_path, [FLAG])
+    e.cfg["web"] = {**e.cfg["web"], "environments": []}
     e.code()
     refused(e, web=True)
+    plain = flagged_env(tmp_path / "plain", ["the colours are not checked"])
+    plain.cfg["web"] = {**plain.cfg["web"], "environments": []}
+    plain.code()
+    with pytest.raises(rj.Refused, match="ReadDocs is not allowed"):
+        plain.approve(web=True)
 
 
 def test_every_approve_path_refuses_it_dr_approve_too(tmp_path):

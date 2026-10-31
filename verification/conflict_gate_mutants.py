@@ -7,7 +7,7 @@ from pathlib import Path
 
 WT, PY = Path(sys.argv[1]), sys.argv[2]
 J, D = "router/job.py", "acceptance/draft.py"
-T = ["-rs", "tests/test_conflict_gate.py"]
+T = ["-rfEs", "tests/test_conflict_gate.py"]
 GATE = """        refusal = _conflict_refusal(job, draft, "approved")
         if refusal:
             raise refusal
