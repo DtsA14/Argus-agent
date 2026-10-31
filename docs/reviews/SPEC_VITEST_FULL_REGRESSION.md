@@ -1,6 +1,6 @@
 # Spek: draf vitest wajib menjalankan setiap berkas tes yang ada
 
-Status: **usul Claude 2026-10-31, menunggu keputusan Atha** (bagian 5). Jalur ketat (cek draf = aturan penilaian). Satu PR kecil.
+Status: **keputusan Atha 2026-10-31: K1-K3 ya**, dua penegasan ditambahkan (F1a, F1b, G6, G7). Jalur ketat (cek draf = aturan penilaian). Satu PR kecil.
 Tweak 3 dari shadow batch 1 (`PENDING.md`).
 
 ## 1. Masalah
@@ -21,8 +21,22 @@ tidak, draf ditolak di `static_problems` (`acceptance/draft.py`) dengan satu pes
 src/jobs-list.test.jsx is in no validation (a vitest draft runs every existing test file)`. Tidak ada daftar pengecualian
 (fail closed, K1).
 
-**F2. Akibatnya tanpa kode tambahan.** Karena setiap validasi harus hijau di baseline (tanpa node baru), di reference (bila
-ada) dan di run agen (`codetask`), F1 membuat seluruh suite lama wajib hijau di ketiga titik itu. Paket review memakai kontrak
+**F1a. Definisi "berkas tes lama".** Berkas `base_files` dari snapshot intake, yaitu tree **commit job** (`git show`/archive
+saat `argus code`, sama dengan sumber `.argus/protected`), tidak pernah working tree; tes baru draf (`new_tests`) bukan berkas
+lama. Polanya **`VITEST_FILE` yang sama** dengan aturan `new_tests` dan `validate_vitest` (`acceptance/validation.py`), tidak
+dibaca dari `include` di `vite.config.*`. Harness selalu menjalankan vitest dengan daftar berkas yang disebut (`include` dari
+argv, bukan dari config), jadi config repo tidak menentukan apa yang dijalankan.
+
+**F1b. Tidak ada tes yang diam-diam tidak terhitung.** Bila intake berisi berkas yang cocok dengan `include` bawaan vitest
+(`**/*.{test,spec}.?(c|m)[jt]s?(x)`) tetapi tidak cocok dengan `VITEST_FILE` (mis. `*.spec.jsx`, `*.test.mjs`), draf vitest
+ditolak: `test file src/a.spec.jsx cannot be run by the harness (only *.test.js|jsx|ts|tsx)`. Fail closed seperti K1; diperbaiki
+lewat commit manual (ganti nama). `argus-viewer` tidak punya berkas seperti itu.
+
+**F2. Akibatnya tanpa kode tambahan.** Di baseline, validasi tanpa node baru harus lulus, dan validasi **merah** hanya boleh
+gagal pada node baru yang wajib (`failures == len(new)`, tanpa error; `baseline_problems`): berkas lama yang hanya disebut di
+validasi merah tetap harus hijau di baseline. Di reference (bila ada) dan run agen (`codetask`) setiap validasi harus lulus
+(`judge_vitest`: exit 0 dan outcome OK, bukan hanya `must_pass`). Jadi F1 membuat seluruh suite lama wajib hijau di ketiga
+titik itu. Paket review memakai kontrak
 yang sama.
 
 **F3. Prompt.** Baris prompt drafter vitest "Keep a regression validation ... when the change can break them" diganti
@@ -45,9 +59,13 @@ lebih besar dari perlu); `changed_tests` untuk vitest; cakupan Python.
 - **G5** (sandbox, `pwa_node22`). Ulangan bentuk `0e27` kecil: intake dengan dua berkas tes lama, draf yang hanya menyebut satu
   ditolak sebelum menjalankan apa pun; draf yang menyebut keduanya dengan reference patch yang merusak tes lama ditolak di
   reference green. Tes yang di-skip (Docker tidak ada) tidak dihitung lulus.
+- **G6** (sandbox). Berkas tes lama yang **hanya** disebut di validasi merah (bersama tes baru) dan gagal di baseline membuat draf
+  ditolak (baseline: hanya node baru yang boleh gagal). Mengunci F2 untuk kasus ini.
+- **G7.** F1a/F1b: berkas lama diambil dari snapshot intake (berkas working tree yang tidak ada di commit tidak dihitung);
+  `src/a.spec.jsx` atau `src/a.test.mjs` di intake membuat draf vitest ditolak dengan pesan F1b.
 - Prompt: teks F3 ada di prompt vitest dan tidak di prompt Python.
 
-Mutants (`verification/vitest_full_regression_mutants.py`): cek F1 dihapus; hanya validasi pertama dihitung; tes baru dihitung
+Mutants (`verification/vitest_full_regression_mutants.py`): cek F1 dihapus; F1b dihapus; berkas lama dari working tree; hanya validasi pertama dihitung; tes baru dihitung
 sebagai lama; berlaku juga untuk Python; prompt lama dikembalikan. Lalu review (`/code-review medium`), verify.sh, "merge".
 
 ## 4. Biaya
@@ -59,5 +77,6 @@ Run tambahan per validasi: viewer seluruh suite ±3 detik. Drafter yang lupa sat
 
 - **K1.** Tanpa pengecualian: tes lama yang tidak bisa jalan di sandbox (mis. butuh network) membuat draf vitest selalu ditolak,
   diperbaiki lewat commit manual di repo. Usul: ya (viewer tidak punya tes seperti itu).
-- **K2.** Python tidak ikut (sympy terlalu besar; `argus-ledger` kecil tetapi bisa menyusul bila ada bukti). Usul: ya.
+- **K2.** Python tidak ikut (sympy terlalu besar). Usul: ya. **Lanjutan (tidak sekarang):** suite `argus-ledger` kecil, cakupan
+  Python untuk repo kecil dicatat di `PENDING.md`.
 - **K3.** Draf lama yang belum di-approve diperiksa dengan aturan baru. Usul: ya (saat ini tidak ada).
