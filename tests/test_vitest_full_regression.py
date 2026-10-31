@@ -118,11 +118,16 @@ def test_g4_a_python_draft_is_not_held_to_it():
     assert dr.full_regression_problems(d, c, files) == []
 
 
-def test_g7_the_files_come_from_the_commit_and_harness_unrunnable_tests_are_refused(tmp_path):
-    root, repo = make_root(tmp_path, {**BASE, "src/a.spec.jsx": OLD_ADDS, "src/b.test.mjs": OLD_ADDS,
-                                      "node_modules/x/y.test.js": OLD_ADDS})
-    (repo / "src" / "uncommitted.test.js").write_text(OLD_ADDS)        # the working tree is never read
+def test_g7_harness_unrunnable_tests_are_refused_and_vitest_excluded_directories_are_not_tests(tmp_path):
+    """F1a (files from the job's commit) holds by construction: check() gets the intake snapshot, never the repository.
+    Here: F1b, and the directories vitest's default `exclude` leaves out."""
+    root, _ = make_root(tmp_path, {**BASE, "src/a.spec.jsx": OLD_ADDS, "src/b.test.mjs": OLD_ADDS,
+                                   "node_modules/x/y.test.js": OLD_ADDS, "dist/app.test.js": OLD_ADDS,
+                                   "cypress/e2e/login.test.js": OLD_ADDS, "web/dist.test.js": OLD_ADDS})
     problems = statics(root, draft([TARGET, ALL_OLD]))
+    assert "existing test file web/dist.test.js is in no validation (a vitest draft runs every existing test file)" \
+        in problems                                         # a file named like an excluded directory is still a test
+    problems = [p for p in problems if "web/dist.test.js" not in p]
     assert f1(problems) == [
         "test file src/a.spec.jsx cannot be run by the harness (only *.test.js|jsx|ts|tsx with plain names): rename "
         "it in the repository",
@@ -134,7 +139,10 @@ def test_f3_the_vitest_prompt_asks_for_every_old_file_and_the_python_one_does_no
     rule = "Name every existing test file (*.test.*) in a validation"
     assert rule in cdr.SYSTEM_VITEST and rule not in cdr.SYSTEM
     assert "leave that file out of the validations" not in cdr.SYSTEM_VITEST
-    assert "EXISTING TEST CONFLICT" in cdr.SYSTEM_VITEST
+    assert ("changes behaviour that an existing test checks, still name that file, and start unverifiable with "
+            "`EXISTING TEST CONFLICT: <file>::<test name>`") in cdr.SYSTEM_VITEST
+    assert "A validation names at most 15 files; split them over several validations" in cdr.SYSTEM_VITEST
+    assert "An existing test that needs any of these fails there" in cdr.SYSTEM_VITEST
 
 
 # ---- G5, G6: the 0e27 shape in the sandbox -------------------------------------------------------------------------

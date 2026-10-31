@@ -579,6 +579,11 @@ def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=N
 # from the process that runs the code under test: a deliberate forgery from inside is contained by the sandbox, not
 # detected.
 VITEST_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)$")
+#: A file vitest's default `include` takes for a test (`**/*.{test,spec}.?(c|m)[jt]s?(x)`) and the directories its
+#: default `exclude` leaves out; a test-like file VITEST_FILE does not match cannot be named in a validation
+#: (SPEC_VITEST_FULL_REGRESSION F1b).
+VITEST_LIKE = re.compile(r"\.(?:test|spec)\.(?:c|m)?[jt]sx?$")
+VITEST_EXCLUDED_DIRS = frozenset({"node_modules", "dist", "cypress", ".idea", ".git", ".cache", ".output", ".temp"})
 VITEST_NODE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}\.test\.(?:js|jsx|ts|tsx)::[^\x00-\x1f\x7f]{1,300}$")
 VITEST_STATUS = {"passed": "ok", "failed": "FAIL", "skipped": "skipped", "pending": "skipped"}
 RED_OUTCOME = {"ok": "passed", "FAIL": "failed", "skipped": "skipped"}      # the pytest red check's words

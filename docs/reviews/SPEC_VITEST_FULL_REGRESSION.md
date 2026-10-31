@@ -28,7 +28,7 @@ dibaca dari `include` di `vite.config.*`. Harness selalu menjalankan vitest deng
 argv, bukan dari config), jadi config repo tidak menentukan apa yang dijalankan.
 
 **F1b. Tidak ada tes yang diam-diam tidak terhitung.** Bila intake berisi berkas yang cocok dengan `include` bawaan vitest
-(`**/*.{test,spec}.?(c|m)[jt]s?(x)`) tetapi tidak cocok dengan `VITEST_FILE` (mis. `*.spec.jsx`, `*.test.mjs`), draf vitest
+(`**/*.{test,spec}.?(c|m)[jt]s?(x)`, di luar direktori `exclude` bawaannya) tetapi tidak cocok dengan `VITEST_FILE` (mis. `*.spec.jsx`, `*.test.mjs`), draf vitest
 ditolak: `test file src/a.spec.jsx cannot be run by the harness (only *.test.js|jsx|ts|tsx)`. Fail closed seperti K1; diperbaiki
 lewat commit manual (ganti nama). `argus-viewer` tidak punya berkas seperti itu.
 
@@ -69,8 +69,18 @@ lebih besar dari perlu); `changed_tests` untuk vitest; cakupan Python.
   `src/a.spec.jsx` atau `src/a.test.mjs` di intake membuat draf vitest ditolak dengan pesan F1b.
 - Prompt: teks F3 ada di prompt vitest dan tidak di prompt Python.
 
-Mutants (`verification/vitest_full_regression_mutants.py`): cek F1 dihapus; F1b dihapus; berkas lama dari working tree; hanya validasi pertama dihitung; tes baru dihitung
+Mutants (`verification/vitest_full_regression_mutants.py`): cek F1 dihapus; F1b dihapus; direktori yang dikecualikan vitest dihitung; hanya validasi pertama dihitung; tes baru dihitung
 sebagai lama; berlaku juga untuk Python; prompt lama dikembalikan. Lalu review (`/code-review medium`), verify.sh, "merge".
+
+F1a tidak di-mutasi: `check()` hanya menerima snapshot intake (tidak ada argumen repo), jadi working tree tidak terjangkau
+dari cek ini; mutan "baca working tree" tidak bisa ditulis tanpa menambah argumen.
+
+**Code review (medium, 2026-10-31), dipertahankan dengan alasan:** (a) berkas lama dengan `test.skip`/`todo` tidak pernah
+lulus karena drafter memasang `max_skipped: 0`; (b) penanda `EXISTING TEST CONFLICT` hanya catatan, harness tidak
+memblok approve; (c) nama berkas dengan titik di depan atau spasi ditolak F1b. Ketiganya fail closed sesuai K1 dan tidak ada
+di `argus-viewer`; diperbaiki lewat commit manual bila muncul. Diperbaiki: batas 15 berkas per validasi di prompt, hint tes
+network dikembalikan, direktori `exclude` bawaan vitest (`node_modules`, `dist`, `cypress`, `.git`, ...) bukan tes repo,
+`VITEST_LIKE` di samping `VITEST_FILE`.
 
 ## 4. Biaya
 

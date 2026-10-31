@@ -36,7 +36,6 @@ import copy
 import hashlib
 import json
 import os
-import re
 import shutil
 import tempfile
 from datetime import datetime, timezone
@@ -45,7 +44,8 @@ from pathlib import Path
 from . import changed as ch
 from . import contract as ct
 from . import intake
-from .validation import MAX_NODES, VITEST_FILE, collect_nodes, kind, red_check, run_validation
+from .validation import (MAX_NODES, VITEST_EXCLUDED_DIRS, VITEST_FILE, VITEST_LIKE, collect_nodes, kind, red_check,
+                         run_validation)
 from .workspace import diff, digest, snapshot
 
 VERSION = 1
@@ -215,23 +215,20 @@ def repo_protected_problems(draft, contract, base_files, protected):
     return problems
 
 
-#: A file vitest's default `include` takes for a test (`**/*.{test,spec}.?(c|m)[jt]s?(x)`); one that VITEST_FILE does not
-#: match cannot be named in a validation (SPEC_VITEST_FULL_REGRESSION F1b).
-VITEST_LIKE = re.compile(r"\.(?:test|spec)\.(?:c|m)?[jt]sx?$")
-
-
 def full_regression_problems(draft, contract, base_files):
     """SPEC_VITEST_FULL_REGRESSION F1: a vitest draft names every existing test file of the intake (base_files: the job
     commit's snapshot; the draft's new tests are not existing ones) in a vitest validation, so the whole old suite must
     pass wherever the validations run. F1b: a file vitest would take for a test but VITEST_FILE does not match is
-    refused, so none goes uncounted. node_modules is never a test of the repository (vitest excludes it too)."""
+    refused, so none goes uncounted. A file below a directory vitest's default `exclude` leaves out (node_modules,
+    dist, ...) is not a test of the repository. base_files are the intake's only: check() is never given the
+    repository, so the working tree cannot be read here (F1a)."""
     if draft_runners(draft["contract"]) != {"vitest"}:
         return []
     new = {t["path"] for t in draft["new_tests"]}
     named = {f for v in contract["validation"] if kind(v) == "vitest" for f in v["args"][1:]}
     problems = []
     for f in sorted(base_files):
-        if f in new or "node_modules" in f.split("/"):
+        if f in new or VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]):
             continue
         if VITEST_FILE.match(f) and intake._plain(f):
             if f not in named:

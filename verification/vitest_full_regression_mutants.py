@@ -17,18 +17,27 @@ M = [
      'named = {f for v in contract["validation"] if kind(v) == "vitest" for f in v["args"][1:]}',
      'named = {f for v in contract["validation"][:1] if kind(v) == "vitest" for f in v["args"][1:]}', T),
     # G3
-    ("new tests counted as old", D, '        if f in new or "node_modules" in f.split("/"):',
-     '        if "node_modules" in f.split("/"):', T),
+    ("new tests counted as old", D, '        if f in new or VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]):',
+     '        if VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]):', T),
     # G4
     ("held to Python too", D, '    if draft_runners(draft["contract"]) != {"vitest"}:\n        return []',
      "    if False:\n        return []", T),
     # F1b / G7
     ("unrunnable test files not refused", D, '        elif VITEST_LIKE.search(f.rsplit("/", 1)[-1]):', "        elif False:", T),
-    ("node_modules counted", D, '        if f in new or "node_modules" in f.split("/"):', "        if f in new:", T),
+    ("excluded directories counted", D, '        if f in new or VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]):',
+     "        if f in new:", T),
+    ("the file name is matched as a directory", D, 'VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]):',
+     'any(d in f for d in VITEST_EXCLUDED_DIRS):', T),
+    ("dist not excluded", "acceptance/validation.py", '{"node_modules", "dist", "cypress",', '{"node_modules", "cypress",', T),
     # F3
     ("old prompt back", DR, '"- Name every existing test file (*.test.*) in a validation: the harness refuses a draft that leaves one out, "',
      '"- Keep a regression validation of existing tests when the change can break them. "', T),
-    ("conflict marker dropped", DR, "`EXISTING TEST CONFLICT: <file>::<test name>`", "a note", T),
+    ("conflict marker dropped", DR, '"changes behaviour that an existing test checks, still name that file, and start unverifiable with "',
+     '"changes behaviour that an existing test checks, still name that file, and add a note "', T),
+    ("no file limit in the prompt", DR, '"and the whole old suite must keep passing. A validation names at most 15 files; split them over several "',
+     '"and the whole old suite must keep passing. "', T),
+    ("no network hint", DR, '"network. An existing test that needs any of these fails there and no draft can pass: start unverifiable with "',
+     '"network. Start unverifiable with "', T),
     # G6 (F2): an old file named only in a red validation must still pass on the baseline
     ("red validation may fail more than its new tests", D, '        if e.get("errors") or e.get("failures") != len(new):',
      '        if e.get("errors"):', T),
