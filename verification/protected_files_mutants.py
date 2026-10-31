@@ -11,10 +11,11 @@ I, D, R, T_, V, J, C, DR = ("acceptance/intake.py", "acceptance/draft.py", "code
 T = ["-rs", "tests/test_protected_files.py"]
 M = [
     # 1. from the commit, never the working tree
-    ("list read from the working tree", I, 'return parse_protected(git(repo, "cat-file", "blob", sha))',
-     "return parse_protected((Path(repo) / PROTECTED_FILE).read_bytes())", T),
+    ("list read from the working tree", I, 'parsed = parse_protected(git(repo, "cat-file", "blob", sha))',
+     "parsed = parse_protected((Path(repo) / PROTECTED_FILE).read_bytes())", T),
     # 6. a list that is not one
-    ("bad glob accepted", I, "if not check_glob(line) or any(c.isspace() for c in line):", "if False:", T),
+    ("bad glob accepted", I, "if not check_glob(line) or not all(c.isprintable() and not c.isspace() for c in line):",
+     "if False:", T),
     ("no size limit", I, "    if len(globs) > MAX_PROTECTED:", "    if False:", T),
     ("a link is read as the list", I, 'if kind != "blob" or mode not in ("100644", "100755"):', 'if kind != "blob":', T),
     ("broken list leaves a job", J, '            raise Refused(f"{e}; no job was created") from e', "            protected = None",
@@ -23,7 +24,8 @@ M = [
     ("list does not protect itself", I, "    if PROTECTED_FILE not in globs:\n        globs.append(PROTECTED_FILE)",
      "    if False:\n        globs.append(PROTECTED_FILE)", T),
     # 2. frozen in the records
-    ("intake record without the list", I, '"protected": read_protected(repo, full),', '"protected": None,', T),
+    ("intake record without the list", I, '"protected": read_protected(repo, full) if protected is _UNREAD else protected,',
+     '"protected": None,', T),
     ("task record without the list", D, '"protected": base.get("protected"), "contract_sha256"',
      '"protected": None, "contract_sha256"', T),
     ("run setup does not freeze it", R, 'repo_protected = list(((record or {}).get("protected") or {}).get("globs") or [])',
@@ -37,8 +39,7 @@ M = [
     # 4, 8. the tools
     ("tools ignore the list", T_, "        if matches(norm, self.repo_protected):", "        if False:", T),
     # 5. the review package
-    ("review ignores the list", V, 'elif matches(p, ((record or {}).get("protected") or {}).get("globs") or []):',
-     "elif False:", T),
+    ("review ignores the list", V, "            elif matches(p, repo_globs):", "            elif False:", T),
     # 9. an environment that requires the list
     ("required list not required", J, 'if protected is None and env_cfg.get("protected_required"):', "if False:", T),
     ("pwa_node22 does not require it", C, "      protected_required: true   #", "      protected_required: false  #", T),
