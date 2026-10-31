@@ -1,4 +1,4 @@
-"""Mutants for SPEC_PROTECTED_FILES (the repository's .argus/protected, enforced by the harness): each applied alone in
+"""Mutants for SPEC_PROTECTED_FILES (and the fixes of its code review) (the repository's .argus/protected, enforced by the harness): each applied alone in
 a worktree, the named tests run with -x; killed = a test failed (an error or a skip is not a kill; a run with a skip is
 reported as SKIPPED). Usage: <this> <worktree> <python>"""
 import subprocess
@@ -42,6 +42,13 @@ M = [
     # 9. an environment that requires the list
     ("required list not required", J, 'if protected is None and env_cfg.get("protected_required"):', "if False:", T),
     ("pwa_node22 does not require it", C, "      protected_required: true   #", "      protected_required: false  #", T),
+    # code review of #270
+    ("task record may differ from the job", J, '    if rec.get("protected") != job.data["protected_repo"]:',
+     "    if False:", T),
+    ("old job runs where a list is required", J, "                if required else None)", "                if False else None)", T),
+    ("BOM kept in the first glob", I, 'text = data.decode("utf-8-sig")', 'text = data.decode("utf-8")', T),
+    ("directory accepted as a glob", I, '        if not any(c in g for c in "*?") and g in dirs:', "        if False:", T),
+    ("absent listed path may be writable", D, '| {g for g in globs if not any(c in g for c in "*?")})', ")", T),
     # P7: screens and status
     ("status does not name the list", J, '    if "protected_repo" in job.data:', "    if False:", T),
 ]

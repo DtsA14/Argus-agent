@@ -94,7 +94,7 @@ def test_2_4_the_agent_cannot_create_a_listed_file_and_a_later_commit_changes_no
                  agent=[write("src/x/package.json", "{}\n"), tr.WRITE, tr.FINISH])
     with_list(env)
     job = env.code()
-    assert job.data["protected_repo"]["globs"] == 3
+    assert len(job.data["protected_repo"]["globs"]) == 3
     commit(env.repo, {".argus/protected": "nothing/**\n"})                    # the list is frozen in the job's intake
     env.approve()
     job = env.job()
@@ -265,10 +265,72 @@ def test_9_an_environment_that_requires_the_list_creates_no_job_without_it(tmp_p
     assert not (env.jobs / "jtest").exists()
     with_list(env)
     job = env.code(environment="web_env")
-    assert job.data["protected_repo"]["globs"] == 3
+    assert len(job.data["protected_repo"]["globs"]) == 3
     assert "protected by the repository: 3 globs" in rj.status("jtest", jobs_dir=env.jobs)
 
 
 def test_9_pwa_node22_requires_the_list():
     from runner import load_config
     assert load_config()["sandbox"]["environments"]["pwa_node22"].get("protected_required") is True
+
+
+# ---- code review of #270 ---------------------------------------------------------------------------------------------
+
+def test_6_a_byte_order_mark_is_not_part_of_the_first_glob_and_invisible_characters_are_refused():
+    assert intake.parse_protected(b"\xef\xbb\xbfpublic/sw.js\n")["globs"] == ["public/sw.js", ".argus/protected"]
+    with pytest.raises(intake.IntakeError, match="invisible"):
+        intake.parse_protected("pub\u200blic/sw.js\n".encode())
+
+
+def test_6_a_directory_named_without_its_files_creates_no_job(tmp_path):
+    env = with_list(tr.Env(tmp_path), "src\n")
+    with pytest.raises(rj.Refused, match="'src' is a directory .* write 'src/\\*\\*'"):
+        env.code()
+    assert not (env.jobs / "jtest").exists()
+
+
+def test_3_a_listed_path_the_intake_lacks_is_not_writable_either():
+    files = {"src/shop.py": ""}                                     # no package.json, .argus/protected excluded
+    protected = {"globs": ["src/package.json", "src/**/x.json", ".argus/protected"]}
+    got = dr.repo_protected_problems({"new_tests": []}, contract_with(["src/*.json", "**"]), files, protected)
+    assert any(p.startswith("src/package.json is protected") and "'src/*.json'" in p for p in got)
+    assert any(p.startswith(".argus/protected is protected") and "'**'" in p for p in got)
+
+
+def test_2_the_job_keeps_the_list_and_an_agent_stage_refuses_a_task_record_that_differs(tmp_path):
+    env = tr.Env(tmp_path, draft=[wide_submit()])
+    with_list(env)
+    job = env.code()
+    assert job.data["protected_repo"]["globs"] == ["src/**/package.json", "src/shop_config.py", ".argus/protected"]
+    real = rj.approve
+
+    def approve_then_edit_record(job_id, **kw):                    # the record changes after it was published
+        record = env.job().root / "fixtures" / "intake" / "task.json"
+        orig = rj._agent
+
+        def agent(job, *a, **k):
+            data = json.loads(record.read_text())
+            data["protected"] = None
+            record.write_text(json.dumps(data))
+            return orig(job, *a, **k)
+        rj._agent = agent
+        try:
+            return real(job_id, **kw)
+        finally:
+            rj._agent = orig
+    with pytest.raises(rj.Refused, match="not the one the job was created with"):
+        approve_then_edit_record("jtest", cfg=env.cfg, deps=env.deps, sandbox_cfg={}, jobs_dir=env.jobs,
+                                 sha=env.sha())
+    assert env.job().data["state"] == rj.BLOCKED and env.coder.calls == []
+
+
+def test_9_a_job_from_before_the_lists_does_not_run_where_the_environment_requires_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(rj, "check_problem", lambda name, image, root=None: None)
+    env = tr.Env(tmp_path, config=required_config())
+    with_list(env)
+    job = env.code(environment="web_env")
+    del job.data["protected_repo"]                                   # as a job.json written before this change
+    job.save()
+    with pytest.raises(rj.Refused, match="from before the lists"):
+        env.approve()
+    assert env.job().data["state"] == rj.BLOCKED and env.coder.calls == []

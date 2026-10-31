@@ -52,7 +52,7 @@ def parse_protected(data):
     """{"sha256", "globs"} of the bytes of a .argus/protected: one scope glob per line, blank lines and # comments left
     out; the file itself is always in the list. Anything else is an IntakeError naming the line."""
     try:
-        text = data.decode("utf-8")
+        text = data.decode("utf-8-sig")             # a byte order mark (Windows editors) is not part of the first glob
     except UnicodeDecodeError as e:
         raise IntakeError(f"{PROTECTED_FILE} is not UTF-8 text") from e
     globs = []
@@ -60,9 +60,9 @@ def parse_protected(data):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        if not check_glob(line) or any(c.isspace() for c in line):
+        if not check_glob(line) or not all(c.isprintable() and not c.isspace() for c in line):
             raise IntakeError(f"{PROTECTED_FILE} line {n}: {line[:80]!r} is not a scope glob (relative, '/'-separated, "
-                              "no '..', no spaces)")
+                              "no '..', no spaces or invisible characters)")
         if line not in globs:
             globs.append(line)
     if len(globs) > MAX_PROTECTED:
@@ -82,7 +82,14 @@ def read_protected(repo, commit):
     mode, kind, sha = meta.decode().split()
     if kind != "blob" or mode not in ("100644", "100755"):
         raise IntakeError(f"{PROTECTED_FILE} in commit {commit[:12]} is not a regular file (mode {mode})")
-    return parse_protected(git(repo, "cat-file", "blob", sha))
+    parsed = parse_protected(git(repo, "cat-file", "blob", sha))
+    # a glob names files, never a directory: 'public' would protect nothing below public/ (say so, never widen it)
+    dirs = set(git(repo, "ls-tree", "-r", "-d", "-z", "--name-only", commit).decode("utf-8").split("\0")) - {""}
+    for g in parsed["globs"]:
+        if not any(c in g for c in "*?") and g in dirs:
+            raise IntakeError(f"{PROTECTED_FILE}: {g!r} is a directory in commit {commit[:12]}; globs match files: "
+                              f"write {g + '/**'!r}")
+    return parsed
 
 
 def _plain(path):
@@ -155,8 +162,12 @@ def remote_url(repo):
     return url.split("@", 1)[-1] if "@" in url.split(":", 1)[0] else url
 
 
-def intake(repo, commit, name, *, exclude=(), root="."):
-    """Create fixtures/repos/<name> from the commit and fixtures/intake/<name>.json. Refuses to overwrite."""
+_UNREAD = object()
+
+
+def intake(repo, commit, name, *, exclude=(), root=".", protected=_UNREAD):
+    """Create fixtures/repos/<name> from the commit and fixtures/intake/<name>.json. Refuses to overwrite. protected:
+    read_protected() of this commit when the caller already read it (router), so one reading decides both."""
     root, repo = Path(root), Path(repo)
     if not NAME.match(name or ""):
         raise IntakeError(f"name {name!r} must be a lower-case name")
@@ -179,7 +190,7 @@ def intake(repo, commit, name, *, exclude=(), root="."):
             raise IntakeError("the snapshot is empty")
         record = {"intake_version": VERSION, "name": name, "repo": remote_url(repo) or repo.resolve().name,
                   "commit": full, "tree": tree, "exclude": exclude, "files": len(snap),
-                  "snapshot_sha256": digest(snap), "executable": exec_paths, "protected": read_protected(repo, full),
+                  "snapshot_sha256": digest(snap), "executable": exec_paths, "protected": read_protected(repo, full) if protected is _UNREAD else protected,
                   "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         # The record is published before the workspace, each by an atomic rename. A stop in between leaves a record
         # without its workspace, which check() reports and setup blocks; never a workspace without its record, which

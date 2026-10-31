@@ -202,8 +202,12 @@ def repo_protected_problems(draft, contract, base_files, protected):
     if not globs:
         return []
     sc = contract["scope"]
+    # the intake's listed files, and every list entry that names one path (a file the commit lacks, or one the job's
+    # exclude left out, such as .argus/protected itself): none may be writable
+    listed = sorted({f for f in base_files if ct.matches(f, globs)}
+                    | {g for g in globs if not any(c in g for c in "*?")})
     problems = [f"{f} is protected by the repository ({intake.PROTECTED_FILE}), but writable glob {g!r} matches it"
-                for f in sorted(base_files) if ct.matches(f, globs) for g in sc["writable"] if ct.matches(f, [g])]
+                for f in listed for g in sc["writable"] if ct.matches(f, [g])]
     problems += [f"changed test {t['path']} is protected by the repository ({intake.PROTECTED_FILE}): it is changed "
                  "only by a commit of the human, never through a draft"
                  for t in draft.get("changed_tests") or [] if ct.matches(t["path"], globs)]

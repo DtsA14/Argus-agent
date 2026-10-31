@@ -473,13 +473,13 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
                     "stages": {}, "approval": None, "log": []}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
-            rec = intake.intake(repo, full or commit, BASE, exclude=exclude, root=job.root)
+            rec = (intake.intake(repo, full, BASE, exclude=exclude, root=job.root, protected=protected) if full
+                   else intake.intake(repo, commit, BASE, exclude=exclude, root=job.root))
         except intake.IntakeError as e:
             job.move(BLOCKED, deps, reason=f"intake: {e}")
             raise Refused(f"intake failed: {e}") from e
         job.data["intake"] = {k: rec[k] for k in ("commit", "tree", "files", "snapshot_sha256")}
-        job.data["protected_repo"] = (None if rec.get("protected") is None else
-                                      {"sha256": rec["protected"]["sha256"], "globs": len(rec["protected"]["globs"])})
+        job.data["protected_repo"] = rec.get("protected")           # SPEC_PROTECTED_FILES P2: the list, frozen
         job.note(deps, "intaken", files=rec["files"])
         if research:
             _research(job, cfg, deps)
@@ -634,6 +634,28 @@ def _env(v):
     return f" (env {v['environment']})" if v.get("environment") else ""
 
 
+def protected_changed(job, cfg):
+    """Why the task record's repository list is not the one the job froze when it was created, or None
+    (SPEC_PROTECTED_FILES P2; code review of #270): the run's tools and the review package read the record, so a
+    record from before the lists, or one edited since, must never run with less protection than the job showed. A job
+    from before the lists runs as before, unless its environment requires one."""
+    try:
+        rec = json.loads((job.root / "fixtures" / "intake" / f"{TASK}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return f"the task record cannot be read: {e}"
+    env = job.data["inputs"].get("environment")
+    required = ((((cfg.get("sandbox") or {}).get("environments") or {}).get(env) or {}).get("protected_required")
+                if env else False)
+    if "protected_repo" not in job.data:
+        return (f"sandbox environment {env!r} requires {intake.PROTECTED_FILE}, and this job is from before the lists"
+                if required else None)
+    if rec.get("protected") != job.data["protected_repo"]:
+        return "the task record's protected list is not the one the job was created with"
+    if required and job.data["protected_repo"] is None:
+        return f"sandbox environment {env!r} requires {intake.PROTECTED_FILE}, and the job has none"
+    return None
+
+
 def environment_lines(job):
     """The job's pinned environment and image, and the repository's protected list (SPEC_PROTECTED_FILES P7), for
     every limits screen and the status; a job from before either names neither."""
@@ -642,7 +664,8 @@ def environment_lines(job):
     if "protected_repo" in job.data:
         p = job.data["protected_repo"]
         lines.append("protected by the repository: " + ("none" if p is None else
-                                                         f"{p['globs']} globs (.argus/protected sha256 {p['sha256'][:12]})"))
+                                                         f"{len(p['globs'])} globs (.argus/protected sha256 "
+                                                         f"{p['sha256'][:12]})"))
     return lines
 
 
@@ -765,6 +788,10 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
     if sha != ap["contract_sha256"]:
         job.move(BLOCKED, deps, reason="contract_changed: the contract differs from the approved one")
         raise Refused(f"job {job.id}: the contract is not the one approved (BLOCKED)")
+    why = protected_changed(job, cfg)
+    if why:
+        job.move(BLOCKED, deps, reason=f"protected_changed: {why}")
+        raise Refused(f"job {job.id}: {why} (BLOCKED)")
     if sid not in job.data["stages"]:
         job.data["stages"][sid] = {"kind": "agent", "run_id": f"{job.id}-{sid}",
                                    "cap_usd": ap["max_usd"] if cap is None else cap, "started_at": deps.clock()}

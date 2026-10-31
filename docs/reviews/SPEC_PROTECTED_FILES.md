@@ -90,6 +90,21 @@ Sampai merge, `check_protected.py` manual tetap pengaman sementara di setiap job
 - `check_protected.py` tidak dipakai lagi di langkah approve/apply; disimpan sebagai riwayat. Satu job viewer berikutnya dicek
   dengan daftar dari harness (layar menyebutnya).
 
+## 4b. Review #270 (code review medium + security review)
+
+Security review: tanpa temuan >= 8/10. Code review medium, 9 temuan; diperbaiki:
+- **Daftar bisa hilang diam-diam di antara job dan record task:** `job.json` kini menyimpan daftar lengkap (`sha256`, `globs`);
+  setiap tahap agen (approve, retry, resume) menolak (`BLOCKED`) bila record task berbeda dari daftar job, atau bila
+  environment mewajibkan daftar dan job berasal dari sebelum daftar ada.
+- **BOM** di awal berkas (editor Windows) tidak lagi menjadi bagian glob pertama; karakter tak terlihat ditolak.
+- **Nama direktori tanpa `/**`** (mis. `public`) ditolak dengan petunjuk, bukan diam-diam tidak melindungi apa pun.
+- **Entri daftar tanpa wildcard yang tidak ada di intake** (berkas yang belum ada, atau `.argus/protected` yang di-exclude)
+  juga tidak boleh writable di cek draf.
+- Satu pembacaan daftar per job (router meneruskannya ke intake); glob dikompilasi sekali (`lru_cache`); review tanpa guard mati.
+
+Tidak diubah: tes baru yang cocok dengan daftar (P3) hanya bisa berupa berkas tes (`test_*.py`, `*.test.js|jsx|ts|tsx`),
+jadi tidak bisa menanam `postcss.config.js` atau sejenisnya.
+
 ## 5. Keputusan Atha (2026-10-31)
 
 - **K1:** `.argus/protected`.
