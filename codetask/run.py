@@ -82,6 +82,7 @@ class State(TypedDict, total=False):
     budget_profile: dict         # the profile the run was configured with: name, attempt_tokens, max_output_tokens
     loop_policy: dict            # D3, frozen at setup: auto_validate, auto_validate_max (absent: a run from before D3)
     web: dict                    # SPEC_WEB_TOOLS, frozen at setup when ReadDocs is granted: {hosts, limits}
+    repo_protected: list         # SPEC_PROTECTED_FILES, frozen at setup from the intake record: the repository's globs
     tokens_used: Annotated[int, operator.add]
     usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
@@ -253,6 +254,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                 return move(state, st.BLOCKED, reason="the contract is not the one approved for this task "
                             f"(sha256 {sha[:12]}, approved {str(record.get('contract_sha256'))[:12]})",
                             blocked="invalid_contract")
+        # SPEC_PROTECTED_FILES P4: the repository's own list, from the commit the intake took; frozen for every attempt
+        repo_protected = list(((record or {}).get("protected") or {}).get("globs") or [])
         if ws.exists():
             shutil.rmtree(ws)     # a copy from a setup that crashed before committing; the agent never ran on it
         try:
@@ -303,7 +306,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         return move(state, st.RUNNING, contract_sha=sha, before=before, iteration=0, failures=[],
                     feedback=initial_feedback or [],
                     tools=effective_tools(contract), provenance=provenance, budget_profile=budget, loop_policy=policy,
-                    **({"web": frozen_web} if frozen_web else {}))
+                    **({"web": frozen_web} if frozen_web else {}),
+                    **({"repo_protected": repo_protected} if repo_protected else {}))
 
     def agent(state):
         try:
@@ -332,7 +336,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                             blocked="invalid_contract")
             docs = web.DocsReader(state["web"], run_dir, state["iteration"], log, spawn=web_spawn or web.spawn)
         box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate, journal=run_dir / "tool_journal.jsonl",
-                      crasher=crasher, docs=docs)
+                      crasher=crasher, docs=docs, repo_protected=state.get("repo_protected") or ())
         # The policy frozen at setup, not this process's config: a resume must decide every step as the run did.
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None,
                        policy=state.get("loop_policy"))

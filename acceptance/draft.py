@@ -194,6 +194,26 @@ def red_paths(draft):
     return {t["path"] for t in draft["new_tests"]} | {t["path"] for t in draft.get("changed_tests") or []}
 
 
+def repo_protected_problems(draft, contract, base_files, protected):
+    """SPEC_PROTECTED_FILES P3/K3: no file of the intake that the repository protects (its .argus/protected, in the
+    intake record) may be writable, and no changed test may be one of them. A file that is not writable is safe even
+    when the contract's protected globs do not name it; new test files may match the list (they are new)."""
+    globs = (protected or {}).get("globs") or []
+    if not globs:
+        return []
+    sc = contract["scope"]
+    # the intake's listed files, and every list entry that names one path (a file the commit lacks, or one the job's
+    # exclude left out, such as .argus/protected itself): none may be writable
+    listed = sorted({f for f in base_files if ct.matches(f, globs)}
+                    | {g for g in globs if not any(c in g for c in "*?")})
+    problems = [f"{f} is protected by the repository ({intake.PROTECTED_FILE}), but writable glob {g!r} matches it"
+                for f in listed for g in sc["writable"] if ct.matches(f, [g])]
+    problems += [f"changed test {t['path']} is protected by the repository ({intake.PROTECTED_FILE}): it is changed "
+                 "only by a commit of the human, never through a draft"
+                 for t in draft.get("changed_tests") or [] if ct.matches(t["path"], globs)]
+    return problems
+
+
 def static_problems(draft, contract, base_files, old=None):
     """Problems found without running anything. old: old_tests() of the draft (needed for changed_tests)."""
     problems = [f"contract: {e}" for e in ct.validate(contract)]
@@ -398,6 +418,8 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
     report["contract"] = contract
     base_files = snapshot(base_dir, skip_cache=True)
     problems = static_problems(draft, contract, base_files, old)
+    if not problems:
+        problems = repo_protected_problems(draft, contract, base_files, base.get("protected"))
     if not problems:              # what setup checks before the agent, on the task baseline's files (W2b-3 run 2)
         task_files = set(base_files) | {t["path"] for t in draft["new_tests"]}
         problems = [f"contract: {p}" for p in ct.setup_problems(
@@ -484,7 +506,7 @@ def approve(report, draft, *, root="."):
                   "commit": base["commit"], "tree": base["tree"], "exclude": base["exclude"],
                   "base": {k: base[k] for k in ("name", "commit", "tree", "snapshot_sha256")}, "added": added,
                   "files": len(snap), "snapshot_sha256": digest(snap), "executable": base["executable"],
-                  "contract_sha256": contract_sha, "draft_sha256": report["draft_sha256"],
+                  "protected": base.get("protected"), "contract_sha256": contract_sha, "draft_sha256": report["draft_sha256"],
                   "plan": draft["plan"], "unverifiable": draft["unverifiable"],
                   # W2b: "proven" only when a reference patch passed every validation in this report
                   "feasibility": "proven" if report.get("reference") else "unproven",

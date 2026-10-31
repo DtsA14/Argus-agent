@@ -15,6 +15,7 @@ Shape (docs/reviews/ACCEPTANCE_GENERAL.md section 5):
   budget_profile?: str          the name of a budget profile in the config (attempt reservation and output cap only;
                                 never the cost cap)
 """
+import functools
 import hashlib
 import json
 import math
@@ -61,6 +62,7 @@ def check_glob(g):
     return all(p not in ("", ".", "..") for p in g.split("/"))
 
 
+@functools.lru_cache(maxsize=4096)
 def glob_regex(g):
     """'**' matches across directories, '*' and '?' within one path component. Nothing else is special."""
     out, i = [], 0

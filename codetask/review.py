@@ -311,10 +311,13 @@ def verify(run_dir, result, *, repo, sandbox_cfg, root, validate, work):
         agent = state_diff(pristine, final)
         changed = [p for p in _changed(agent) if p != SUMMARY]
         sc = contract["scope"]
+        repo_globs = (record.get("protected") or {}).get("globs") or []          # SPEC_PROTECTED_FILES P5
         problems = []
         for p in changed:
             if ".git" in p.split("/"):
                 problems.append(f"{p} is inside a .git directory")
+            elif matches(p, repo_globs):
+                problems.append(f"{p} is protected by the repository (.argus/protected)")
             elif matches(p, sc["protected"]):
                 problems.append(f"{p} is protected")
             elif not matches(p, sc["writable"]):

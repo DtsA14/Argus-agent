@@ -1,0 +1,23 @@
+KILLED  list read from the working tree: 1 failed in 1.13s
+KILLED  bad glob accepted: 1 failed, 11 passed in 1.81s
+KILLED  no size limit: 1 failed, 14 passed in 3.77s
+KILLED  a link is read as the list: 1 failed, 15 passed in 2.03s
+KILLED  broken list leaves a job: 1 failed, 11 passed in 1.87s
+KILLED  list does not protect itself: 1 failed in 0.61s
+KILLED  intake record without the list: 1 failed in 0.60s
+KILLED  task record without the list: 1 failed, 2 passed in 0.94s
+KILLED  run setup does not freeze it: 1 failed, 2 passed in 1.02s
+KILLED  draft check ignores the list: 1 failed, 7 passed in 1.08s
+KILLED  changed tests may change listed files: 1 failed, 8 passed in 1.11s
+KILLED  drafter not told: 1 failed, 9 passed in 1.28s
+KILLED  tools ignore the list: 1 failed, 2 passed in 1.07s
+KILLED  review ignores the list: 1 failed, 10 passed in 1.69s
+KILLED  required list not required: 1 failed, 20 passed in 2.25s
+KILLED  pwa_node22 does not require it: 1 failed, 21 passed in 2.31s
+KILLED  task record may differ from the job: 1 failed, 25 passed in 2.74s
+KILLED  old job runs where a list is required: 1 failed, 26 passed in 3.00s
+KILLED  BOM kept in the first glob: 1 failed, 22 passed in 2.43s
+KILLED  directory accepted as a glob: 1 failed, 23 passed in 2.50s
+KILLED  absent listed path may be writable: 1 failed, 24 passed in 2.42s
+KILLED  status does not name the list: 1 failed, 16 passed in 2.12s
+RESULT: 22/22 killed

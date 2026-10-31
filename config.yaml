@@ -414,5 +414,6 @@ sandbox:
     pwa_node22:
       image: null
       runner: vitest
+      protected_required: true   # SPEC_PROTECTED_FILES K2: no job without .argus/protected in the commit
     argus:                 # Argus's own pinned dependencies (requirements.txt), built offline from a verified venv by
       image: null          # scripts/build_argus_sandbox_image.sh -> .sandbox_image_argus. No git, no bash, no Docker
