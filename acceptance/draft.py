@@ -44,7 +44,8 @@ from pathlib import Path
 from . import changed as ch
 from . import contract as ct
 from . import intake
-from .validation import MAX_NODES, VITEST_FILE, collect_nodes, kind, red_check, run_validation
+from .validation import (MAX_NODES, VITEST_EXCLUDED_DIRS, VITEST_FILE, VITEST_LIKE, collect_nodes, kind, red_check,
+                         run_validation)
 from .workspace import diff, digest, snapshot
 
 VERSION = 1
@@ -214,6 +215,31 @@ def repo_protected_problems(draft, contract, base_files, protected):
     return problems
 
 
+def full_regression_problems(draft, contract, base_files):
+    """SPEC_VITEST_FULL_REGRESSION F1: a vitest draft names every existing test file of the intake (base_files: the job
+    commit's snapshot; the draft's new tests are not existing ones) in a vitest validation, so the whole old suite must
+    pass wherever the validations run. F1b: a file vitest would take for a test but VITEST_FILE does not match is
+    refused, so none goes uncounted. A file below a directory vitest's default `exclude` leaves out (node_modules,
+    dist, ...) is not a test of the repository. base_files are the intake's only: check() is never given the
+    repository, so the working tree cannot be read here (F1a)."""
+    if draft_runners(draft["contract"]) != {"vitest"}:
+        return []
+    new = {t["path"] for t in draft["new_tests"]}
+    named = {f for v in contract["validation"] if kind(v) == "vitest" for f in v["args"][1:]}
+    problems = []
+    for f in sorted(base_files):
+        if f in new or VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]):
+            continue
+        if VITEST_FILE.match(f) and intake._plain(f):
+            if f not in named:
+                problems.append(f"existing test file {f} is in no validation (a vitest draft runs every existing "
+                                "test file)")
+        elif VITEST_LIKE.search(f.rsplit("/", 1)[-1]):
+            problems.append(f"test file {f} cannot be run by the harness (only *.test.js|jsx|ts|tsx with plain "
+                            "names): rename it in the repository")
+    return problems
+
+
 def static_problems(draft, contract, base_files, old=None):
     """Problems found without running anything. old: old_tests() of the draft (needed for changed_tests)."""
     problems = [f"contract: {e}" for e in ct.validate(contract)]
@@ -232,7 +258,7 @@ def static_problems(draft, contract, base_files, old=None):
         if _new_nodes(v, red_paths(draft)) and kind(v) not in ("pytest", "vitest"):
             problems.append(f"validation {v['id']}: required nodes of new or changed tests need a pytest or vitest "
                             "validation")
-    return problems
+    return problems + full_regression_problems(draft, contract, base_files)
 
 
 def changed_record(base_files, draft):

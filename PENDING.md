@@ -49,10 +49,13 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   menyembunyikan teks `<option>` di `<span>` (HTML tidak valid, vitest hijau, React hanya `console.error`); (2) `0e27` drafter
   membuang `jobs-list.test.jsx` dari regresi, patch merusak tes lama itu dan tetap REVIEW_READY. Biaya $0.0654. Log:
   `~/argus-viewer-issues/SHADOW.md`. Kesimpulan: review Claude masih perlu untuk kelas ini. Urutan sesudahnya (Atha "Ok"):
-  - [ ] Tweak 1 (repo `argus-viewer`, manual): tes 001/002 mencari dengan `within(...)`, bukan query satu halaman
-  - [ ] Tweak 2 (repo `argus-viewer`, manual): setup vitest menggagalkan tes pada `console.error` (React nesting dll.)
-  - [ ] Tweak 3 (**jalur ketat**, spek dulu): runner `vitest` → harness menambah sendiri validasi semua tes yang ada, wajib
-    hijau di draf dan patch; drafter tidak bisa membuangnya
+  - [x] Tweak 1 (repo `argus-viewer` 56b7e00, manual): tes 001/002 mencari di sel tabel/link, bukan query satu halaman
+  - [x] Tweak 2 (repo `argus-viewer` 56b7e00): `vitest.setup.js` (dilindungi) menggagalkan tes pada `console.error`; terbukti
+    lewat `run_validation` harness: patch hack `097d` merah
+  - [x] Tweak 3 (jalur ketat, #273, SPEC_VITEST_FULL_REGRESSION): draf vitest wajib menyebut setiap berkas tes lama di commit
+    job; berkas mirip tes yang tidak bisa dijalankan harness ditolak; prompt `EXISTING TEST CONFLICT`. Mutants 14/14,
+    review medium (6 diperbaiki, 3 dipertahankan), verify.sh PASS 95cbee4
+  - [ ] Lanjutan K2 (tidak sekarang): cakupan Python untuk repo kecil (`argus-ledger`)
   - [ ] Reviewer Argus (fitur baru, rencana ke Atha sebelum kode): model murah menilai draf + patch + hasil semua tes; di shadow
     batch 2 berdampingan dengan Claude (Claude menilai tanpa melihat vonisnya); ukuran: blok asli yang lolos dari reviewer
   - [ ] Catatan pelajaran per repo (`.argus/lessons.md`): hanya bila batch 2 menunjukkan pola berulang yang tidak bisa jadi
