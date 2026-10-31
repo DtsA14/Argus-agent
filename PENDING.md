@@ -31,8 +31,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   `verify.sh`, "merge" Atha; urutan: tes → review → mutants → verify) dan cepat (kemampuan agen dan aplikasi latihan: Claude
   merge sendiri). Satu PR jalur ketat pada satu waktu.
 - **Aplikasi latihan** (`argus-ledger`, `argus-viewer`): issue ditulis Claude, "go live" per job dari Atha, Claude review draf
-  dan patch lalu `argus applied`. `argus-viewer`: `PROTECTED` + `~/argus-viewer-issues/check_protected.py` saat approve
-  (`draft`) dan sebelum apply (`patch`).
+  dan patch lalu `argus applied`. `argus-viewer`: berkas yang dilindungi di `.argus/protected`, dipaksa harness (#270).
 - **Staging:** satu "go live" per `PLAN.md` yang ter-commit; **satu langkah = satu perintah**; berhenti di langkah pertama yang
   meleset; lanjut butuh "go live" baru. Data viewer = snapshot terakhir (monitor tiap 15 menit).
 
@@ -60,8 +59,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   2026-10-31: `.argus/protected`, wajib untuk `pwa_node22`, `changed_tests` pada berkas di daftar ditolak, tanpa mengejar
   up2): daftar dibaca dari commit dan dibekukan di record intake, dipaksa di cek draf, tools agen, dan paket review; hapus/
   rename/symlink (P8). Security review tanpa temuan; code review medium 9 temuan (7 diperbaiki, mis. daftar job vs record task, BOM,
-  direktori tanpa `/**`); 27 tes, mutants 22/22, verify.sh PASS ab85a73. Sesudah merge: `argus-viewer` pindah ke
-  `.argus/protected`, `check_protected.py` pensiun. Prasyarat shadow mode dan UI approve
+  direktori tanpa `/**`); 27 tes, mutants 22/22, verify.sh PASS ab85a73. Merged #270 (1288ea0, squash). `argus-viewer` pindah
+  ke `.argus/protected` (1481c44, 21 glob, dibaca harness dari commit); `check_protected.py` pensiun (disimpan sebagai riwayat). Prasyarat shadow mode dan UI approve
 - [~] **Pin image per checkout disalin manual.** `~/pilot3a_live` butuh `.sandbox_image_pwa_node22*` dari `~/Argus-agent`
   (job 001 ditolak sekali); `verify.sh` menulis pin baru hanya di checkout tempat ia jalan (`.sandbox_image_argus` sudah
   berbeda antar checkout). **Preflight ada** (jalur cepat 2026-10-30): `scripts/pin_status.py [--against DIR] [ENV ...]`
