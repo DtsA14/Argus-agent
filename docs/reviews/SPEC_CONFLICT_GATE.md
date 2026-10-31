@@ -57,6 +57,13 @@ cek draf.
 Mutants (`verification/conflict_gate_mutants.py`): gerbang dihapus; hanya entri pertama dibaca; gerbang sesudah cek cap; tidak
 dicek untuk DRAFT_FAILED; baris `conflict:` tidak ditampilkan. Lalu review medium, verify.sh, "merge".
 
+**Code review (medium, 2026-10-31), semua diperbaiki:** penanda dibaca tanpa peka huruf besar dan dengan pemisah apa pun
+(`acceptance/draft.py` `CONFLICT_RE`, fail closed); `dr.approve` juga menolak (jalur kedua `scripts/approve_draft.py
+--approve`); `argus retry` menolak job yang draf disetujuinya berpenanda (disetujui sebelum gerbang); pesan menyebut juga
+environment (tes lama yang butuh network); entri diambil langsung, bukan dari potongan baris status; tes urutan terhadap cek
+web, ledger/run dan log keputusan tidak berubah; mutan dihitung killed hanya bila tes gerbang FAILED tanpa error.
+`argus resume` tidak dicek: ia melanjutkan stage yang sudah berjalan dari keputusan yang sudah dibuat.
+
 ## 4. Sesudah merge
 
 Skrip shadow Claude memakai `argus approve` apa adanya (gerbangnya sendiri dihapus, agar yang diukur adalah harness).

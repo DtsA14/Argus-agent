@@ -1,6 +1,7 @@
 """SPEC_CONFLICT_GATE: `argus approve` refuses a draft whose unverifiable flags EXISTING TEST CONFLICT, before anything
 else (no stage, no model call, no BLOCKED move, no confirmation); status shows the flagged entries. One test (or group)
 per guarantee of section 3, numbered as there."""
+import json
 import sys
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_drafter as td  # noqa: E402
 import test_router as tr  # noqa: E402
+from acceptance import draft as dr  # noqa: E402
 from models.fake import reply  # noqa: E402
 from router import job as rj  # noqa: E402
 
@@ -22,21 +24,17 @@ def flagged_env(tmp_path, unverifiable, draft_more=()):
 
 def refused(e, **kw):
     """approve() refuses as SPEC_CONFLICT_GATE C1 says, and nothing starts: no confirmation is asked, no coder call, no
-    agent stage, no approval."""
-    asked = len(e.confirms)
+    agent stage or run directory, no ledger event outside the drafter's, no approval, no new decision log entry."""
+    asked, log, runs = len(e.confirms), list(e.job().data["log"]), sorted(p.name for p in e.job().runs.iterdir())
     with pytest.raises(rj.Refused) as exc:
         e.approve(**kw)
     assert "the draft flags a conflict with an existing test" in str(exc.value), exc.value
-    assert len(e.confirms) == asked
-    return nothing_started(e), str(exc.value)
-
-
-def nothing_started(e):
     job = e.job()
-    assert e.coder.calls == []
+    assert len(e.confirms) == asked and e.coder.calls == []
     assert not any(s["kind"] == "agent" for s in job.data["stages"].values())
-    assert job.data["approval"] is None
-    return job
+    assert sorted(p.name for p in job.runs.iterdir()) == runs and all(r.endswith(("-d1", "-d2")) for r in runs)
+    assert job.data["approval"] is None and job.data["log"] == log
+    return job, str(exc.value)
 
 
 def test_g1_g7_a_flagged_draft_is_refused_with_the_right_sha_and_nothing_starts(tmp_path):
@@ -45,17 +43,46 @@ def test_g1_g7_a_flagged_draft_is_refused_with_the_right_sha_and_nothing_starts(
     e.code()
     job, why = refused(e)
     assert job.data["state"] == rj.AWAITING_APPROVAL
-    assert "tests/test_old.py::test_total" in why and why.endswith("nothing was approved")
+    assert f"({FLAG})" in why and why.endswith("nothing was approved")
 
 
 @pytest.mark.parametrize("unverifiable", [
     ["the colours are not checked", FLAG],                                       # not the first entry
     ["note first; then EXISTING TEST CONFLICT: tests/test_old.py::test_total"],  # not at the start of the entry
+    ["Existing test conflict: tests/test_old.py::test_total"],                  # near-miss spellings fail closed
+    ["EXISTING-TEST-CONFLICTS: tests/test_old.py::test_total"],
+    ["existing_tests_conflict tests/test_old.py::test_total"],
 ])
 def test_g2_the_marker_in_any_entry_and_anywhere_in_it_refuses(tmp_path, unverifiable):
     e = flagged_env(tmp_path, unverifiable)
     e.code()
     refused(e)
+
+
+def test_g1_the_refusal_comes_before_the_web_check(tmp_path):
+    e = flagged_env(tmp_path, [FLAG])
+    e.code()
+    refused(e, web=True)
+
+
+def test_every_approve_path_refuses_it_dr_approve_too(tmp_path):
+    """scripts/approve_draft.py --approve publishes with dr.approve directly; it refuses before writing anything."""
+    draft = {"unverifiable": [FLAG]}
+    with pytest.raises(dr.DraftError, match="flags a conflict"):
+        dr.approve({"ok": True, "task": "t"}, draft, root=tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_job_approved_before_the_gate_from_a_flagged_draft_is_not_retried(tmp_path, monkeypatch):
+    e = tr.Env(tmp_path)
+    tr.failed_a1(e, monkeypatch)
+    path = rj._last_draft(e.job())[1]                 # as if it had been flagged and approved before this gate
+    d = json.loads(path.read_text())
+    path.write_text(json.dumps({**d, "unverifiable": [FLAG]}))
+    with pytest.raises(rj.Refused, match="flags a conflict.*nothing was retried"):
+        tr.retry(e)
+    job = e.job()
+    assert job.data["state"] == rj.AGENT_FAILED and "a2" not in job.data["stages"] and e.coder.calls == []
 
 
 def test_g3_the_refusal_comes_before_the_cap_check_and_the_confirmation(tmp_path):
@@ -104,4 +131,5 @@ def test_g6_without_the_marker_approve_runs_as_before(tmp_path):
 
 def test_the_gate_reads_the_marker_the_vitest_drafter_is_told_to_write():
     from codetask import drafter as cdr
-    assert f"`{rj.CONFLICT}: <file>::<test name>`" in cdr.SYSTEM_VITEST
+    assert f"`{dr.CONFLICT}: <file>::<test name>`" in cdr.SYSTEM_VITEST
+    assert dr.CONFLICT_RE.search(dr.CONFLICT)

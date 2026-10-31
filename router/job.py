@@ -622,13 +622,19 @@ def _draft(job, cfg, deps, n, note=None):
     return r
 
 
-#: What a drafter writes in unverifiable when the issue changes behaviour an existing test checks (SPEC_CONFLICT_GATE).
-CONFLICT = "EXISTING TEST CONFLICT"
-
-
 def conflict_lines(draft):
-    """SPEC_CONFLICT_GATE C2: one `conflict:` line per unverifiable entry of the draft that carries the marker."""
-    return [f"conflict: {u}" for u in draft.get("unverifiable") or [] if isinstance(u, str) and CONFLICT in u]
+    """SPEC_CONFLICT_GATE C2: one `conflict:` line per unverifiable entry of the draft that flags a conflict."""
+    return [f"conflict: {u}" for u in dr.conflict_entries(draft)]
+
+
+def _conflict_refusal(job, draft, what):
+    """SPEC_CONFLICT_GATE C1: the refusal of a flagged draft, or None."""
+    flagged = dr.conflict_entries(draft)
+    if not flagged:
+        return None
+    return Refused(f"job {job.id}: the draft flags a conflict with an existing test ({flagged[0][:300]}); change that "
+                   "test (or, when the sandbox cannot run it, the environment) by a commit of yours, then abandon this "
+                   f"job and start a new one; nothing was {what}")
 
 
 def _last_draft(job):
@@ -724,11 +730,9 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
         draft = json.loads(path.read_text(encoding="utf-8"))
         # SPEC_CONFLICT_GATE C1: before anything else (web, cap, BLOCKED, the confirmation, the agent). Not refused at
         # the draft check: that would be the drafter's feedback, and it would learn to drop the marker.
-        flagged = conflict_lines(draft)
-        if flagged:
-            raise Refused(f"job {job.id}: the draft flags a conflict with an existing test ({flagged[0][10:310]}); "
-                          "change that test by a commit of yours, then abandon this job and start a new one; nothing "
-                          "was approved")
+        refusal = _conflict_refusal(job, draft, "approved")
+        if refusal:
+            raise refusal
         c = draft["contract"]
         why = web_problem(cfg.get("web"), c) if web else None
         if why:
@@ -904,6 +908,10 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS):
         _check_environment(job, cfg)
         if job.data["state"] != AGENT_FAILED:
             raise Refused(f"job {job.id} is {job.data['state']}: only a job whose agent failed is retried")
+        # SPEC_CONFLICT_GATE: a job approved (before the gate) from a flagged draft is not run again
+        refusal = _conflict_refusal(job, json.loads(_last_draft(job)[1].read_text(encoding="utf-8")), "retried")
+        if refusal:
+            raise refusal
         prev, _ = last_agent(job)
         sid = f"a{int(prev[1:]) + 1}"
         carry = carry_from(job, prev)
