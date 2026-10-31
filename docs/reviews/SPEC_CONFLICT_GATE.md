@@ -1,6 +1,6 @@
 # Spek: `argus approve` menolak draf dengan penanda konflik tes lama
 
-Status: **usul Claude 2026-10-31, menunggu keputusan Atha** (bagian 5). Jalur ketat (approve = keputusan manusia + uang
+Status: **keputusan Atha 2026-10-31: K1-K3 ya**; merge didelegasikan ke Claude. Jalur ketat (approve = keputusan manusia + uang
 agen). Satu PR kecil. Lanjutan SPEC_VITEST_FULL_REGRESSION (#273) dan shadow batch 2 (`PENDING.md`).
 
 ## 1. Masalah
@@ -27,8 +27,9 @@ tidak ada entri log keputusan.
 Cek draf (`acceptance/draft.py`) **tidak** menolaknya: penolakan di sana menjadi umpan balik drafter, dan drafter akan belajar
 menghapus penanda agar lolos.
 
-**C2. Layar.** `argus status` dan layar konfirmasi approve menampilkan setiap entri berpenanda sebagai baris sendiri
-`conflict: <entri>` (sebelum baris lain), agar manusia melihatnya tanpa membuka `DRAFT_REVIEW.md`.
+**C2. Layar.** `argus status` menampilkan setiap entri berpenanda sebagai baris sendiri `conflict: <entri>` (sebelum baris
+draf), agar manusia melihatnya tanpa membuka `DRAFT_REVIEW.md`. Layar konfirmasi approve tidak pernah muncul untuk draf
+seperti itu (C1 menolak lebih dulu); pesan penolakan menyebut entri pertama.
 
 **C3. Semua environment.** Prompt yang menulis penanda hanya prompt vitest, tetapi gerbang membaca draf apa pun (Python juga):
 teks itu tidak muncul tanpa sengaja, dan fail closed lebih murah daripada pengecualian.
@@ -48,8 +49,8 @@ cek draf.
 - **G3.** Penolakan datang sebelum cek cap: job dengan sisa cap terlalu kecil tetap AWAITING_APPROVAL (tidak dipindah ke
   BLOCKED) bila drafnya berpenanda; dan sebelum konfirmasi (tidak ada prompt `[y/N]`).
 - **G4.** Draf DRAFT_FAILED yang draf terakhirnya diterima dan berpenanda juga ditolak.
-- **G5.** `status` dan teks konfirmasi menampilkan `conflict: ...` untuk tiap entri berpenanda; tidak ada baris itu tanpa
-  penanda.
+- **G5.** `status` menampilkan `conflict: ...` untuk tiap entri berpenanda (dan pesan penolakan menyebut entri pertama);
+  tidak ada baris itu tanpa penanda.
 - **G6.** Tanpa penanda approve berjalan seperti sebelumnya (tes approve yang ada tetap hijau).
 - **G7.** Draf Python berpenanda juga ditolak (C3).
 

@@ -622,6 +622,15 @@ def _draft(job, cfg, deps, n, note=None):
     return r
 
 
+#: What a drafter writes in unverifiable when the issue changes behaviour an existing test checks (SPEC_CONFLICT_GATE).
+CONFLICT = "EXISTING TEST CONFLICT"
+
+
+def conflict_lines(draft):
+    """SPEC_CONFLICT_GATE C2: one `conflict:` line per unverifiable entry of the draft that carries the marker."""
+    return [f"conflict: {u}" for u in draft.get("unverifiable") or [] if isinstance(u, str) and CONFLICT in u]
+
+
 def _last_draft(job):
     drafts = [s for s in job.data["stages"].values() if s["kind"] == "draft" and s.get("status") == "DRAFTED"]
     if not drafts:
@@ -713,6 +722,13 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             raise Refused(f"the draft is {seen[:12]}, not the {sha!r} given: approve the draft status shows "
                           "(at least its first 12 characters)")
         draft = json.loads(path.read_text(encoding="utf-8"))
+        # SPEC_CONFLICT_GATE C1: before anything else (web, cap, BLOCKED, the confirmation, the agent). Not refused at
+        # the draft check: that would be the drafter's feedback, and it would learn to drop the marker.
+        flagged = conflict_lines(draft)
+        if flagged:
+            raise Refused(f"job {job.id}: the draft flags a conflict with an existing test ({flagged[0][10:310]}); "
+                          "change that test by a commit of yours, then abandon this job and start a new one; nothing "
+                          "was approved")
         c = draft["contract"]
         why = web_problem(cfg.get("web"), c) if web else None
         if why:
@@ -1144,7 +1160,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
         c = draft["contract"]
         if d["state"] == DRAFT_FAILED:
             out.append(f"the latest redraft failed; the last accepted draft is from {st['run_id']}")
-        out += [f"draft {sha[:12]} ({job.runs / st['run_id'] / 'DRAFT_REVIEW.md'})",
+        out += [*conflict_lines(draft), f"draft {sha[:12]} ({job.runs / st['run_id'] / 'DRAFT_REVIEW.md'})",
                 "writable: " + ", ".join(c["scope"]["writable"]),
                 *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
                 *changed_lines(job, draft),
