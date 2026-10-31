@@ -60,7 +60,13 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     batch 2 berdampingan dengan Claude (Claude menilai tanpa melihat vonisnya); ukuran: blok asli yang lolos dari reviewer
   - [ ] Catatan pelajaran per repo (`.argus/lessons.md`): hanya bila batch 2 menunjukkan pola berulang yang tidak bisa jadi
     cek; pelajaran masuk hanya bila replay job lama membuktikannya atau disetujui. Tidak: aturan yang ditulis dan dipakai sendiri
-  - [ ] Shadow batch 2 dari 003 dengan "go live" baru; hitungan mulai dari nol
+  - [x] **Shadow batch 2** (2026-10-31, harness 900711d): 10 job, $0.2791; 8 bersih di-apply (`argus-viewer` 9273316..201a723,
+    issue 003-010); 1 blok Claude (`1808`, `<th scope=row>` agar tes lama tetap hijau, sebelum gerbang); 1 berhenti di gerbang
+    `EXISTING TEST CONFLICT` (`3f45`, konflik nyata, tanpa biaya agen). Sesudah gerbang: 7 job, 0 blok yang butuh Claude.
+    Semua henti berasal dari tes lama yang rapuh (diperbaiki manual 8b905f9, 379550d). Belum: deploy rilis viewer ini
+    (PLAN staging + "go live")
+  - [ ] Gerbang penanda di harness (jalur ketat, kecil): `argus approve` menolak draf yang `unverifiable`-nya berisi
+    `EXISTING TEST CONFLICT` (sekarang hanya di skrip shadow Claude)
   Batas: `--max-usd 1.00` per job (drafter memesan $0.70/percobaan, agen $0.50; $0.25 BLOCKED di $0), berhenti bila biaya
   nyata job > $0.25 atau batch > $1.50. PR `stage_data` (isi draf ke snapshot, UI fase 1) ditunda sampai sesudah up2
 
