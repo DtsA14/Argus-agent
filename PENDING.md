@@ -44,9 +44,22 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   halaman review draf read-only (jalur cepat), fase 2 aksi tanpa biaya (`reject`/`abandon`), fase 3 aksi berbayar, fase 4
   tombol staging. Pertanyaan terbuka: siapa yang approve, batas $ via UI, "go live" lewat tombol, port 8711 + `permitopen`
   kedua di kunci HP, waktunya terhadap up2
-- [ ] **Shadow mode** (usul Claude 2026-10-30): satu kelas task (issue viewer read-only) jalan otomatis draf → patch dengan
-  cek otomatis; Claude menilai sesudahnya "akan diblok?"; 0 blok dalam ±10 job → kelas itu jalan tanpa Claude di dalam batas
-  biaya harness. Prasyarat: `check_protected` pindah ke harness (lihat bawah)
+- [~] **Shadow mode** (usul Claude 2026-10-30). **Batch 1 dihentikan 2026-10-31** (Atha) setelah 2 job, 2 blok nyata, keduanya
+  lolos gerbang harness: (1) `097d` issue 003 bertentangan dengan tes lama `jobs-list` yang dilindungi (query satu halaman), agen
+  menyembunyikan teks `<option>` di `<span>` (HTML tidak valid, vitest hijau, React hanya `console.error`); (2) `0e27` drafter
+  membuang `jobs-list.test.jsx` dari regresi, patch merusak tes lama itu dan tetap REVIEW_READY. Biaya $0.0654. Log:
+  `~/argus-viewer-issues/SHADOW.md`. Kesimpulan: review Claude masih perlu untuk kelas ini. Urutan sesudahnya (Atha "Ok"):
+  - [ ] Tweak 1 (repo `argus-viewer`, manual): tes 001/002 mencari dengan `within(...)`, bukan query satu halaman
+  - [ ] Tweak 2 (repo `argus-viewer`, manual): setup vitest menggagalkan tes pada `console.error` (React nesting dll.)
+  - [ ] Tweak 3 (**jalur ketat**, spek dulu): runner `vitest` → harness menambah sendiri validasi semua tes yang ada, wajib
+    hijau di draf dan patch; drafter tidak bisa membuangnya
+  - [ ] Reviewer Argus (fitur baru, rencana ke Atha sebelum kode): model murah menilai draf + patch + hasil semua tes; di shadow
+    batch 2 berdampingan dengan Claude (Claude menilai tanpa melihat vonisnya); ukuran: blok asli yang lolos dari reviewer
+  - [ ] Catatan pelajaran per repo (`.argus/lessons.md`): hanya bila batch 2 menunjukkan pola berulang yang tidak bisa jadi
+    cek; pelajaran masuk hanya bila replay job lama membuktikannya atau disetujui. Tidak: aturan yang ditulis dan dipakai sendiri
+  - [ ] Shadow batch 2 dari 003 dengan "go live" baru; hitungan mulai dari nol
+  Batas: `--max-usd 1.00` per job (drafter memesan $0.70/percobaan, agen $0.50; $0.25 BLOCKED di $0), berhenti bila biaya
+  nyata job > $0.25 atau batch > $1.50. PR `stage_data` (isi draf ke snapshot, UI fase 1) ditunda sampai sesudah up2
 
 ### Terjadwal
 
