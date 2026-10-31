@@ -271,12 +271,13 @@ SYSTEM_VITEST = "\n".join([
     "- Writable: only what a fix needs. Protected: every test file (new and old) and everything else the agent must "
     "not change. A new test must be protected and not writable. Globs match files, never directories: write "
     "`src/**/*.test.jsx` or `src/list.jsx`, not `src`; every protected glob must match a file.",
-    "- Keep a regression validation of existing tests when the change can break them.",
+    "- Name every existing test file (*.test.*) in a validation: the harness refuses a draft that leaves one out, "
+    "and the whole old suite must keep passing.",
     "- The sandbox has only the repository, Node and the environment's fixed packages: no npm install, no git, no "
-    "network. A test that needs any of these fails there; do not use it in a validation.",
+    "network.",
     "- Existing test files cannot be changed in this repository: only new test files can be added. When the issue "
-    "changes behaviour that an existing test checks, leave that file out of the validations and say so in "
-    "unverifiable.",
+    "changes behaviour that an existing test checks, still name that file, and start unverifiable with "
+    "`EXISTING TEST CONFLICT: <file>::<test name>`: a human must change that test before the task can be done.",
     "- Put in unverifiable what the issue asks that no test checks; it is a note for the reviewer, never a pass.",
     "- You do not decide whether the draft is good: the harness checks it, and a human approves it or not.",
     "- Tools: ListFiles, SearchFiles and ReadFile read the repository; SubmitDraft submits the draft and is checked "

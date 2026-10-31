@@ -41,7 +41,11 @@ yang sama.
 
 **F3. Prompt.** Baris prompt drafter vitest "Keep a regression validation ... when the change can break them" diganti
 "Name every existing test file (`*.test.*`) in a validation: the harness refuses a draft that leaves one out". Prompt
-Python tidak berubah.
+Python tidak berubah. Dua baris prompt vitest lama yang bertentangan dengan F1 diganti: "a test that needs [network] ... do
+not use it in a validation" (K1: tidak ada lagi pengecualian) dan "when the issue changes behaviour that an existing test
+checks, leave that file out of the validations". Penggantinya: tetap sebut berkas itu, dan mulai `unverifiable` dengan
+`EXISTING TEST CONFLICT: <file>::<test>`; manusia mengubah tes itu lewat commit sebelum task bisa dikerjakan (drafter
+tidak punya tool menyerah; tanpa penanda ini agen akan gagal di tes lama dan memakai biayanya).
 
 **F4. Lingkup.** Hanya vitest. Python tidak berubah: suite sympy ribuan tes, tidak muat di batas waktu validasi
 (K2). Job yang sudah ada tidak berubah: cek berjalan saat draf diperiksa; draf lama yang di-approve sesudah merge diperiksa
