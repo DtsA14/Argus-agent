@@ -1,6 +1,6 @@
 # Spek: berkas yang dilindungi per repo, dipaksa harness
 
-Status: **draf untuk Atha** (2026-10-30). Jalur ketat (scope, cek draf, paket review). Satu PR. Menggantikan
+Status: **keputusan Atha 2026-10-31** (bagian 5; celah hapus/rename dan symlink ditambahkan sebagai P8 dan jaminan 8). Jalur ketat (scope, cek draf, paket review). Satu PR. Menggantikan
 `~/argus-viewer-issues/check_protected.py` (skrip di luar repo yang dijalankan Claude) dengan aturan di harness. Prasyarat
 shadow mode dan approve dari UI kontrol (`PENDING.md`).
 
@@ -32,7 +32,8 @@ tidak bisa dibaca sebagai daftar (bukan UTF-8, glob tidak sah, > 200 baris) → 
 **P3. Cek draf.** Draf ditolak bila sebuah berkas di commit yang cocok dengan daftar juga cocok dengan writable kontrak (pesan
 menyebut berkas dan glob). Sama dengan `check_protected.py draft` sesudah dilonggarkan: berkas yang tidak writable aman walau
 tidak disebut di protected kontrak. Tes baru drafter (`new_tests`) boleh cocok dengan daftar (mis. `**/*.test.*`) karena
-berkas baru dan disetujui manusia; `changed_tests` pada berkas yang cocok dengan daftar: lihat keputusan K3.
+berkas baru dan disetujui manusia. **`changed_tests` pada berkas yang cocok dengan daftar ditolak** (K3): "dilindungi" berarti
+tidak diubah lewat draf apa pun; bila perlu diubah, Atha mengubahnya lewat commit sendiri.
 
 **P4. Tulis agen.** `_writable` di `codetask/tools.py` menolak path yang cocok dengan daftar repo, sebelum cek writable kontrak,
 dengan pesan sendiri ("protected by the repository (.argus/protected)"). Ini juga menutup **berkas baru** yang cocok (glob
@@ -41,8 +42,22 @@ writable yang lebar tidak lagi cukup).
 **P5. Paket review.** `changes_in_scope` (`codetask/review.py`) menolak setiap perubahan agen pada path yang cocok dengan daftar
 repo → paket `REVIEW_INVALID`. Tes yang disetujui ada di pristine, jadi tidak terhitung sebagai perubahan agen.
 
-**P6. Tanpa daftar = seperti sekarang.** Repo tanpa `.argus/protected` (argus-ledger, sympy, repo Argus) tidak berubah
-perilakunya; `VITEST_LOADED` tetap berlaku untuk vitest apa pun daftarnya.
+**P6. Tanpa daftar.** Repo tanpa `.argus/protected` (argus-ledger, sympy, repo Argus) tidak berubah perilakunya, **kecuali**
+environment yang di `config.yaml` bertanda `protected_required: true` (sekarang hanya `pwa_node22`): di sana job **tidak dibuat**
+tanpa daftar (commit yang tidak sengaja menghapus `.argus/protected` tidak boleh mematikan proteksi diam-diam; viewer
+dipublikasikan ke staging). `VITEST_LOADED` tetap berlaku untuk vitest apa pun daftarnya.
+
+**P8. Hapus, rename, symlink.** Tidak ada perubahan pada berkas di daftar lewat jalan lain selain tulis/edit:
+- Agen tidak punya tool hapus, rename, atau symlink; validasi berjalan dengan workspace read-only. Dijadikan jaminan: setiap tool
+  yang mengubah workspace (sekarang `WriteFile`, `EditFile`) melewati satu pemeriksaan (`_writable`), dan daftar tool yang
+  mengubah workspace dites, sehingga tool hapus/rename di masa depan wajib melewati pemeriksaan yang sama (tes gagal bila
+  ada tool baru yang menulis tanpa `_writable`).
+- Symlink: path jail (`tools/fs.py`) tidak pernah mengikuti symlink di level mana pun, dan pencocokan memakai path yang dinamai
+  agen tanpa resolve. Symlink yang ada di commit (mis. `src/link → ../public/sw.js` di folder writable): menulis ke `src/link`
+  mengganti link itu sendiri (renameat), target tidak tersentuh; menulis ke target lewat link tidak mungkin. Dites di
+  sandbox seperti P4.
+- Penghapusan atau rename yang muncul di workspace (dari jalan apa pun) tetap ditolak di paket review (P5 memakai diff
+  state, yang mencatat berkas hilang sebagai perubahan).
 
 **P7. Layar dan status.** Layar `code`, `approve`, `retry` dan `argus status` menyebut `protected by the repository: N globs
 (sha256 …)` atau `none`. Drafter mendapat daftarnya di prompt (supaya tidak menulis draf yang pasti ditolak).
@@ -57,22 +72,29 @@ perilakunya; `VITEST_LOADED` tetap berlaku untuk vitest apa pun daftarnya.
 5. Paket review dengan perubahan agen pada path di daftar tidak `valid`.
 6. Daftar rusak → job tidak dibuat; tidak ada daftar → perilaku lama (tes perilaku lama tetap lulus tanpa diubah).
 7. `.argus/protected` selalu dilindungi, juga bila tidak disebut di dalamnya.
+8. Berkas di daftar tidak bisa dihapus, di-rename, atau ditulis lewat symlink: setiap tool yang mengubah workspace melewati
+   `_writable` (tes daftar tool), symlink tidak pernah diikuti (tes sandbox dengan symlink di commit), dan berkas yang hilang
+   dari workspace membuat paket review tidak valid.
+9. Environment dengan `protected_required` tanpa `.argus/protected` di commit → job tidak dibuat.
+10. `changed_tests` pada berkas di daftar → draf ditolak.
 
 Tes di sandbox nyata untuk P4 (agen palsu yang mencoba tiga jalan: tulis, edit, buat berkas baru). Docker tidak tersedia = tidak
 lulus.
 
 ## 4. Sesudah merge (jalur cepat)
 
+Sampai merge, `check_protected.py` manual tetap pengaman sementara di setiap job `argus-viewer`.
+
+
 - `argus-viewer`: `PROTECTED` → `.argus/protected` (commit Claude), isi sama.
 - `check_protected.py` tidak dipakai lagi di langkah approve/apply; disimpan sebagai riwayat. Satu job viewer berikutnya dicek
   dengan daftar dari harness (layar menyebutnya).
 
-## 5. Keputusan untuk Atha
+## 5. Keputusan Atha (2026-10-31)
 
-- **K1. Nama berkas:** `.argus/protected` (usul: tempat milik harness, bisa menampung berkas Argus lain nanti) atau tetap
-  `PROTECTED` di root.
-- **K2. Repo tanpa daftar:** perilaku lama (usul) atau wajib ada daftar untuk environment tertentu (mis. semua environment Node).
-- **K3. `changed_tests` pada berkas di daftar:** boleh, karena disetujui manusia dan sudah lewat cek AST/`removed`/`modified`
-  (usul; layar approve menandainya "protected by the repository"), atau ditolak (tes lama tidak pernah bisa diubah lewat draf).
-- **K4. Ukuran:** satu PR jalur ketat (P1–P7), urutan biasa: tes → review medium + security → mutants → `verify.sh` → "merge".
-  Harus selesai sebelum up2 (2026-11-07) atau ditahan sesudahnya (satu PR jalur ketat pada satu waktu).
+- **K1:** `.argus/protected`.
+- **K2:** perilaku lama untuk repo tanpa daftar, **kecuali `pwa_node22`**: daftar wajib (P6).
+- **K3:** `changed_tests` pada berkas di daftar **ditolak** (bisa dilonggarkan nanti bila terbukti perlu).
+- **K4:** **tanpa mengejar tenggat up2**; perubahan keamanan jalur ketat tidak dipercepat. Satu PR jalur ketat pada satu
+  waktu: bila belum selesai saat up2 dimulai, Atha memilih yang didahulukan.
+- Tambahan Atha: hapus/rename dan symlink (P8, jaminan 8).
