@@ -213,11 +213,14 @@ class Toolbox:
     """allowed: the coder role's tool allowlist from config (tools.coder), enforced here, not by the prompt."""
 
     def __init__(self, workspace, contract, sandbox_cfg, allowed, log, validate=run_validation, journal=None,
-                 crasher=None, role="coder", docs=None):
+                 crasher=None, role="coder", docs=None, repo_protected=()):
         """journal: a file outside the workspace where EditFile records each edit before making it (crash-resume).
         role: the role named in tool_call / tool_denied events (the W2b drafter uses the read tools).
-        docs: the run's tools.web.DocsReader for this attempt, when ReadDocs was granted (SPEC_WEB_TOOLS)."""
+        docs: the run's tools.web.DocsReader for this attempt, when ReadDocs was granted (SPEC_WEB_TOOLS).
+        repo_protected: the repository's .argus/protected globs frozen at setup (SPEC_PROTECTED_FILES P4): never
+        written, whatever the contract's scope says."""
         self.docs = docs
+        self.repo_protected = list(repo_protected)
         self.jail = PathJail(workspace)
         self.workspace, self.contract, self.sandbox_cfg = workspace, contract, sandbox_cfg
         self.allowed, self.log, self.validate = set(allowed), log, validate
@@ -384,6 +387,8 @@ class Toolbox:
         sc = self.contract["scope"]
         if norm == SUMMARY:
             return None, f"Rejected: {SUMMARY} is written by Finish, not {tool}."
+        if matches(norm, self.repo_protected):
+            return None, f"Rejected: {norm} is protected by the repository (.argus/protected) and may not be changed."
         if matches(norm, sc["protected"]):
             return None, f"Rejected: {norm} is protected by the contract and may not be changed."
         if not matches(norm, sc["writable"]):

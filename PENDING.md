@@ -56,9 +56,11 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Gap dari pekerjaan 2026-10-30
 
-- [ ] **Berkas yang dilindungi belum dipaksa harness.** `argus-viewer` bergantung pada skrip di luar repo yang dijalankan Claude;
-  aturan drafter vitest hanya melarang config/`package.json`/`.npmrc` writable. Kandidat jalur ketat: daftar `PROTECTED` per
-  repo dibaca harness dari commit base, dicek di cek draf dan di paket review. Prasyarat shadow mode dan UI approve
+- [~] **Berkas yang dilindungi dipaksa harness** (jalur ketat, `docs/reviews/SPEC_PROTECTED_FILES.md`, #270; keputusan Atha
+  2026-10-31: `.argus/protected`, wajib untuk `pwa_node22`, `changed_tests` pada berkas di daftar ditolak, tanpa mengejar
+  up2): daftar dibaca dari commit dan dibekukan di record intake, dipaksa di cek draf, tools agen, dan paket review; hapus/
+  rename/symlink (P8). Kode + 22 tes; menunggu review, mutants, `verify.sh`, "merge". Sampai merge, `check_protected.py`
+  manual tetap dipakai. Prasyarat shadow mode dan UI approve
 - [~] **Pin image per checkout disalin manual.** `~/pilot3a_live` butuh `.sandbox_image_pwa_node22*` dari `~/Argus-agent`
   (job 001 ditolak sekali); `verify.sh` menulis pin baru hanya di checkout tempat ia jalan (`.sandbox_image_argus` sudah
   berbeda antar checkout). **Preflight ada** (jalur cepat 2026-10-30): `scripts/pin_status.py [--against DIR] [ENV ...]`

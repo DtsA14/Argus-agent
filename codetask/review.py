@@ -315,6 +315,8 @@ def verify(run_dir, result, *, repo, sandbox_cfg, root, validate, work):
         for p in changed:
             if ".git" in p.split("/"):
                 problems.append(f"{p} is inside a .git directory")
+            elif matches(p, ((record or {}).get("protected") or {}).get("globs") or []):
+                problems.append(f"{p} is protected by the repository (.argus/protected)")      # SPEC_PROTECTED_FILES P5
             elif matches(p, sc["protected"]):
                 problems.append(f"{p} is protected")
             elif not matches(p, sc["writable"]):

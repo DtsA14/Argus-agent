@@ -10,6 +10,7 @@ excluded: the workspace holds regular files only. Git runs without user or syste
 A code task whose workspace has a record checks the snapshot against it in setup, before any model call: a file
 changed, added, removed, or with a different executable bit since intake blocks the run (codetask/run.py).
 """
+import hashlib
 import json
 import os
 import re
@@ -20,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+from .contract import check_glob
 from .workspace import digest, snapshot
 
 NAME = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
@@ -38,6 +40,49 @@ def git(repo, *args, data=None):
     if r.returncode != 0:
         raise IntakeError(f"git {' '.join(args[:2])} failed: {r.stderr.decode(errors='replace').strip()[:300]}")
     return r.stdout
+
+
+# SPEC_PROTECTED_FILES P1: the repository's own list of files the agent never changes, read from the commit (never a
+# working tree) and kept in the intake record, so every stage of a job uses the list of the commit it was taken from.
+PROTECTED_FILE = ".argus/protected"
+MAX_PROTECTED = 200
+
+
+def parse_protected(data):
+    """{"sha256", "globs"} of the bytes of a .argus/protected: one scope glob per line, blank lines and # comments left
+    out; the file itself is always in the list. Anything else is an IntakeError naming the line."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise IntakeError(f"{PROTECTED_FILE} is not UTF-8 text") from e
+    globs = []
+    for n, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not check_glob(line) or any(c.isspace() for c in line):
+            raise IntakeError(f"{PROTECTED_FILE} line {n}: {line[:80]!r} is not a scope glob (relative, '/'-separated, "
+                              "no '..', no spaces)")
+        if line not in globs:
+            globs.append(line)
+    if len(globs) > MAX_PROTECTED:
+        raise IntakeError(f"{PROTECTED_FILE} has {len(globs)} globs, more than {MAX_PROTECTED}")
+    if PROTECTED_FILE not in globs:
+        globs.append(PROTECTED_FILE)
+    return {"sha256": hashlib.sha256(data).hexdigest(), "globs": globs}
+
+
+def read_protected(repo, commit):
+    """The parsed .argus/protected of the commit, or None when the commit has none. Only a regular file counts: a link
+    or a directory there is an IntakeError, never a list read from somewhere else."""
+    out = git(repo, "ls-tree", "-z", commit, "--", PROTECTED_FILE)
+    if not out:
+        return None
+    meta, _, _ = out.rstrip(b"\0").partition(b"\t")
+    mode, kind, sha = meta.decode().split()
+    if kind != "blob" or mode not in ("100644", "100755"):
+        raise IntakeError(f"{PROTECTED_FILE} in commit {commit[:12]} is not a regular file (mode {mode})")
+    return parse_protected(git(repo, "cat-file", "blob", sha))
 
 
 def _plain(path):
@@ -134,7 +179,7 @@ def intake(repo, commit, name, *, exclude=(), root="."):
             raise IntakeError("the snapshot is empty")
         record = {"intake_version": VERSION, "name": name, "repo": remote_url(repo) or repo.resolve().name,
                   "commit": full, "tree": tree, "exclude": exclude, "files": len(snap),
-                  "snapshot_sha256": digest(snap), "executable": exec_paths,
+                  "snapshot_sha256": digest(snap), "executable": exec_paths, "protected": read_protected(repo, full),
                   "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         # The record is published before the workspace, each by an atomic rename. A stop in between leaves a record
         # without its workspace, which check() reports and setup blocks; never a workspace without its record, which

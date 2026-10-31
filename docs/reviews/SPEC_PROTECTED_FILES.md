@@ -1,6 +1,6 @@
 # Spek: berkas yang dilindungi per repo, dipaksa harness
 
-Status: **keputusan Atha 2026-10-31** (bagian 5; celah hapus/rename dan symlink ditambahkan sebagai P8 dan jaminan 8). Jalur ketat (scope, cek draf, paket review). Satu PR. Menggantikan
+Status: **keputusan Atha 2026-10-31, diimplementasikan di #270** (bagian 5; celah hapus/rename dan symlink ditambahkan sebagai P8 dan jaminan 8). Jalur ketat (scope, cek draf, paket review). Satu PR. Menggantikan
 `~/argus-viewer-issues/check_protected.py` (skrip di luar repo yang dijalankan Claude) dengan aturan di harness. Prasyarat
 shadow mode dan approve dari UI kontrol (`PENDING.md`).
 
@@ -53,9 +53,8 @@ dipublikasikan ke staging). `VITEST_LOADED` tetap berlaku untuk vitest apa pun d
   mengubah workspace dites, sehingga tool hapus/rename di masa depan wajib melewati pemeriksaan yang sama (tes gagal bila
   ada tool baru yang menulis tanpa `_writable`).
 - Symlink: path jail (`tools/fs.py`) tidak pernah mengikuti symlink di level mana pun, dan pencocokan memakai path yang dinamai
-  agen tanpa resolve. Symlink yang ada di commit (mis. `src/link → ../public/sw.js` di folder writable): menulis ke `src/link`
-  mengganti link itu sendiri (renameat), target tidak tersentuh; menulis ke target lewat link tidak mungkin. Dites di
-  sandbox seperti P4.
+  agen tanpa resolve. Symlink yang ada di commit (mis. `src/link.js → ../public/sw.js` di folder writable): `WriteFile` dan
+  `EditFile` ke `src/link.js` **ditolak** (jail tidak pernah mengganti atau membuka link), target dan link tidak tersentuh.
 - Penghapusan atau rename yang muncul di workspace (dari jalan apa pun) tetap ditolak di paket review (P5 memakai diff
   state, yang mencatat berkas hilang sebagai perubahan).
 
@@ -78,8 +77,9 @@ dipublikasikan ke staging). `VITEST_LOADED` tetap berlaku untuk vitest apa pun d
 9. Environment dengan `protected_required` tanpa `.argus/protected` di commit → job tidak dibuat.
 10. `changed_tests` pada berkas di daftar → draf ditolak.
 
-Tes di sandbox nyata untuk P4 (agen palsu yang mencoba tiga jalan: tulis, edit, buat berkas baru). Docker tidak tersedia = tidak
-lulus.
+Tes P4 dan P8 memakai `Toolbox` dan path jail yang sebenarnya pada direktori nyata (tools berjalan di proses harness, bukan
+di container, jadi tidak butuh Docker), plus job router ujung ke ujung dengan model palsu: agen mencoba membuat berkas di
+daftar, dan tool yang "lupa" daftar tertangkap di paket review. `tests/test_protected_files.py`, satu tes per jaminan.
 
 ## 4. Sesudah merge (jalur cepat)
 

@@ -299,6 +299,9 @@ def task_prompt(inputs, files, policy):
     return "\n".join([
         "Issue (from a human; the task to draft):", inputs["issue"], "", *note,
         f"Repository: intake {inputs['intake']!r}, {files} files, read-only.",
+        *([f"Protected by the repository ({intake.PROTECTED_FILE}): {', '.join(policy['repo_protected'])}. A file "
+           "they match is never writable and never a changed test; new test files may match them."]
+          if policy.get("repo_protected") else []),
         (f"Each validation runs `vitest run <test files>` in the sandbox environment {policy['environment']!r} "
          f"(timeout {policy['validation_timeout_s']} s). You give the test files (paths only) and the required node "
          "ids." if policy.get("runner") == "vitest" else
@@ -940,6 +943,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         if lim["attempt_usd"] <= 0:
             return stop(FAILED_BUDGET, "the run cap leaves nothing for the drafter")
         policy = {"max_steps": lim["max_steps"], "max_submits": int(cfg["drafter"]["max_submits"]), "environment": env,
+                  **({"repo_protected": record["protected"]["globs"]} if record.get("protected") else {}),
                   "runner": ct.runner(scfg["environments"][env]),
                   "validation_timeout_s": cfg["drafter"]["validation_timeout_s"],
                   "profiles": agent_profiles(cfg),

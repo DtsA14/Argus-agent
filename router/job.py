@@ -437,6 +437,22 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
         image, problem = environment_pin(cfg, environment)
         if problem:
             raise Refused(f"{problem}; no job was created")
+    # SPEC_PROTECTED_FILES: the repository's .argus/protected at the commit, read before any job exists so a broken
+    # list (or a missing one where the environment requires it) creates none; the intake then takes this same commit.
+    # A commit that does not resolve is left to the intake, which blocks the job as before.
+    try:
+        full = intake.git(repo, "rev-parse", "--verify", f"{commit}^{{commit}}").decode().strip()
+    except intake.IntakeError:
+        full = None
+    if full is not None:
+        try:
+            protected = intake.read_protected(repo, full)
+        except intake.IntakeError as e:
+            raise Refused(f"{e}; no job was created") from e
+        env_cfg = ((cfg.get("sandbox") or {}).get("environments") or {}).get(environment) or {}
+        if protected is None and env_cfg.get("protected_required"):
+            raise Refused(f"sandbox environment {environment!r} requires {intake.PROTECTED_FILE} in the commit "
+                          f"(SPEC_PROTECTED_FILES K2), and {full[:12]} has none; no job was created")
     job_id = job_id or new_job_id()
     if not JOB_ID.match(job_id):
         raise Refused(f"{job_id!r} is not a job id")
@@ -457,11 +473,13 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
                     "stages": {}, "approval": None, "log": []}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
-            rec = intake.intake(repo, commit, BASE, exclude=exclude, root=job.root)
+            rec = intake.intake(repo, full or commit, BASE, exclude=exclude, root=job.root)
         except intake.IntakeError as e:
             job.move(BLOCKED, deps, reason=f"intake: {e}")
             raise Refused(f"intake failed: {e}") from e
         job.data["intake"] = {k: rec[k] for k in ("commit", "tree", "files", "snapshot_sha256")}
+        job.data["protected_repo"] = (None if rec.get("protected") is None else
+                                      {"sha256": rec["protected"]["sha256"], "globs": len(rec["protected"]["globs"])})
         job.note(deps, "intaken", files=rec["files"])
         if research:
             _research(job, cfg, deps)
@@ -617,10 +635,15 @@ def _env(v):
 
 
 def environment_lines(job):
+    """The job's pinned environment and image, and the repository's protected list (SPEC_PROTECTED_FILES P7), for
+    every limits screen and the status; a job from before either names neither."""
     name, image = job.data["inputs"].get("environment"), job.data.get("environment_image")
-    if name is None:
-        return []
-    return [f"environment {name}, image {str(image).split(':')[-1][:12]}"]
+    lines = [] if name is None else [f"environment {name}, image {str(image).split(':')[-1][:12]}"]
+    if "protected_repo" in job.data:
+        p = job.data["protected_repo"]
+        lines.append("protected by the repository: " + ("none" if p is None else
+                                                         f"{p['globs']} globs (.argus/protected sha256 {p['sha256'][:12]})"))
+    return lines
 
 
 def changed_lines(job, draft):
