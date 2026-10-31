@@ -65,8 +65,9 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     `EXISTING TEST CONFLICT` (`3f45`, konflik nyata, tanpa biaya agen). Sesudah gerbang: 7 job, 0 blok yang butuh Claude.
     Semua henti berasal dari tes lama yang rapuh (diperbaiki manual 8b905f9, 379550d). Belum: deploy rilis viewer ini
     (PLAN staging + "go live")
-  - [ ] Gerbang penanda di harness (jalur ketat, kecil): `argus approve` menolak draf yang `unverifiable`-nya berisi
-    `EXISTING TEST CONFLICT` (sekarang hanya di skrip shadow Claude)
+  - [x] Gerbang penanda di harness (#275, SPEC_CONFLICT_GATE): `argus approve`, `dr.approve` dan `argus retry` menolak draf
+    berpenanda `EXISTING TEST CONFLICT` (huruf dan pemisah apa pun) sebelum apa pun; `status` menampilkan baris `conflict:`.
+    Mutants 12/12, review medium (8 diperbaiki), verify.sh PASS
   Batas: `--max-usd 1.00` per job (drafter memesan $0.70/percobaan, agen $0.50; $0.25 BLOCKED di $0), berhenti bila biaya
   nyata job > $0.25 atau batch > $1.50. PR `stage_data` (isi draf ke snapshot, UI fase 1) ditunda sampai sesudah up2
 

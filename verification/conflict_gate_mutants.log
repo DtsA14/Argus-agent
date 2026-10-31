@@ -1,0 +1,13 @@
+KILLED  gate removed: ['FAILED tests/test_conflict_gate.py::test_g1_g7_a_flagged_draft_is_refused_with_the_right_sha_and_nothing_starts']
+KILLED  gate after the cap check: ['FAILED tests/test_conflict_gate.py::test_g1_the_refusal_comes_before_the_web_check']
+KILLED  gate after the web check: ['FAILED tests/test_conflict_gate.py::test_g1_the_refusal_comes_before_the_web_check']
+KILLED  only the first entry read: ['FAILED tests/test_conflict_gate.py::test_g2_the_marker_in_any_entry_and_anywhere_in_it_refuses[unverifiable0]']
+KILLED  only at the start of an entry: ['FAILED tests/test_conflict_gate.py::test_g2_the_marker_in_any_entry_and_anywhere_in_it_refuses[unverifiable1]']
+KILLED  case-sensitive: ['FAILED tests/test_conflict_gate.py::test_g1_g7_a_flagged_draft_is_refused_with_the_right_sha_and_nothing_starts']
+KILLED  exact spelling only: ['FAILED tests/test_conflict_gate.py::test_g2_the_marker_in_any_entry_and_anywhere_in_it_refuses[unverifiable2]']
+KILLED  not checked for a failed redraft: ['FAILED tests/test_conflict_gate.py::test_g4_the_last_accepted_draft_of_a_failed_redraft_is_refused_too']
+KILLED  status without conflict lines: ['FAILED tests/test_conflict_gate.py::test_g5_status_shows_each_flagged_entry_and_nothing_without_the_marker']
+KILLED  dr.approve does not check: ['FAILED tests/test_conflict_gate.py::test_every_approve_path_refuses_it_dr_approve_too']
+KILLED  retry does not check: ['FAILED tests/test_conflict_gate.py::test_a_job_approved_before_the_gate_from_a_flagged_draft_is_not_retried']
+KILLED  marker text changed: ['FAILED tests/test_conflict_gate.py::test_the_gate_reads_the_marker_the_vitest_drafter_is_told_to_write']
+RESULT: 12/12 killed

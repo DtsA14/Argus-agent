@@ -36,6 +36,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 from datetime import datetime, timezone
@@ -58,6 +59,17 @@ MAX_TEST_BYTES = 50_000
 
 class DraftError(Exception):
     pass
+
+
+#: What a drafter writes in unverifiable when an existing test stands in the way (SPEC_CONFLICT_GATE); read in any case
+#: and with any separator, so a near-miss spelling still refuses (fail closed).
+CONFLICT = "EXISTING TEST CONFLICT"
+CONFLICT_RE = re.compile(r"existing[\s_-]*tests?[\s_-]*conflicts?", re.IGNORECASE)
+
+
+def conflict_entries(draft):
+    """SPEC_CONFLICT_GATE: the unverifiable entries of a draft that flag a conflict with an existing test."""
+    return [u for u in draft.get("unverifiable") or [] if isinstance(u, str) and CONFLICT_RE.search(u)]
 
 
 def _strings(v, limit=50, length=500):
@@ -488,6 +500,9 @@ def approve(report, draft, *, root="."):
     overwrites. A stop part-way leaves a record without its task repository or contract, which setup refuses."""
     if not report.get("ok"):
         raise DraftError("only a report whose checks all passed can be approved")
+    if conflict_entries(draft):            # SPEC_CONFLICT_GATE: every approve path (router, scripts/approve_draft.py)
+        raise DraftError(f"the draft flags a conflict with an existing test ({conflict_entries(draft)[0][:300]}); "
+                         "nothing was approved")
     root, task = Path(root), report["task"]
     if not intake.NAME.match(task or ""):
         raise DraftError(f"task {task!r} must be a lower-case name")
