@@ -15,6 +15,10 @@ import measure_context as mc  # noqa: E402
 os.environ["ARGUS_SANDBOX_IMAGE_ARGUS"] = Path(".sandbox_image_argus").read_text().strip()
 os.environ["ARGUS_SANDBOX_IMAGE"] = Path(".sandbox_image").read_text().strip()
 runs_dir, plan_name = Path(sys.argv[1]), sys.argv[2]
+# A simulation, not a run: its ledgers name real models with computed costs that were never billed. Mark the folder so
+# no sum of ledgers counts it (2026-11-03: ~/p3a_sim, ~/p4sim, ~/p5sim held $0.68 of such "cost"; deleted).
+runs_dir.mkdir(parents=True, exist_ok=True)
+(runs_dir / "SIMULATED").write_text("no model was called; the costs in these ledgers were never billed\n")
 sizes = [int(x) for x in sys.argv[3:]] or [30000]
 
 SIM = ROOT / "fixtures" / "repos" / "p4sim"

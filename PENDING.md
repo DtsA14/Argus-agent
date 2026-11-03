@@ -123,6 +123,14 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Kecil / rendah
 
+- [x] **Rekonsiliasi biaya Oktober vs konsol** (2026-11-03, Atha): DeepSeek konsol $4,24 = ledger dihitung ulang dengan harga
+  sekarang $4,2372 (token 66,96 jt vs 66,94 jt); ledger mencatat $4,4883 karena 15 Okt (kalibrasi judge) memakai tabel harga
+  lama (~2×) sebelum dicek 23 Okt: lebih tinggi, arah aman. Anthropic konsol $8,31 di dalam ledger $8,21-8,49 (satu call router
+  pilot #1, 22 Okt 19:34 UTC, terkirim tanpa `llm_call`). Viewer ($4,65) hanya job router. **Simulasi token** (`~/p3_tokens.py`,
+  `~/p3a_tokens.py`, `pilots/m6_pilot4|5/sim_tokens.py`) menulis ledger dengan nama model asli dan biaya hitungan ($0,68 di
+  `~/p3a_sim`, `~/p4sim`, `~/p5sim`, dihapus); sekarang menaruh berkas `SIMULATED` di folder hasilnya. Penjumlah ledger
+  lintas folder harus melewati folder ber-`SIMULATED`
+
 - [ ] Router: cek bentuk kunci DeepSeek (hanya Anthropic yang dicek prefiksnya)
 - [ ] Router: `argus apply` (K6 v0); sekarang perintah apply dicetak `status` dan dijalankan Claude
 
