@@ -39,6 +39,14 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Keputusan Atha yang ditunggu
 
+- [ ] **Deep research, `argus research`** (Atha 2026-11-03: arah general-purpose agent; keputusan dan urutan gap di
+  Reconciliation bagian 7). Dipindah dari "Ditunda": mesin pencari (tahap 2 akses web) dan deep research (gate kutipan klaim
+  ↔ sumber). Langkah: pilih provider web search, lalu spek `SPEC_RESEARCH_JOB` (job tanpa repo, tool search dengan biaya di cap
+  job, baca web umum, isi web sebagai data, gate klaim ↔ sumber) dan eval set riset kecil; implementasi jalur ketat.
+  Kandidat provider (2026-11-03): DeepSeek Search/Fetch API (REST terpisah, $0,75 per 1.000 request sukses masing-masing,
+  harga dari halaman resmi), Anthropic `web_search` (server-side di dalam panggilan model, $10 per 1.000), Brave/Exa/Tavily
+  (sekitar $5 sampai $8 per 1.000, dari blog perbandingan, belum dicek ke halaman resmi)
+
 - [ ] **UI kontrol interaktif** (Atha 2026-10-30, scope dibahas di chat): fase 0 spek `SPEC_CONTROL_UI` (service kontrol
   terpisah `127.0.0.1:8711`, proxy viewer tetap GET-only, CSRF/Origin, audit di `job.json`, batas biaya server-side), fase 1
   halaman review draf read-only (jalur cepat), fase 2 aksi tanpa biaya (`reject`/`abandon`), fase 3 aksi berbayar, fase 4
@@ -136,8 +144,6 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Ditunda sampai ada bukti kebutuhan
 
-- [ ] Mesin pencari (tahap 2 akses web): hanya bila ReadDocs terbukti kurang; ReadDocs belum pernah dipakai agen (K7, riset 013)
-- [ ] Deep research (gate kutipan klaim ↔ sumber); `argus research` bersama Alur A
 - [ ] Alur A: bug yang jawabannya tidak ada di ingatan model; task agen dua lengan untuk upgrade yang butuh API baru
 - [ ] Ringkasan validasi untuk agen (subagen penguji ringan), bila `context_limit` karena output validasi
 - [ ] D4: batas ListFiles + daftar berkas di issue
