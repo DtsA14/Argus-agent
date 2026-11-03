@@ -24,7 +24,7 @@ contract = json.loads((run_dir / "contract.json").read_text())
 result = read_result(run_dir)
 memo = read_memo(run_dir)
 events, skipped = read_events(run_dir)
-calls = [e for e in events if e["event"] == "llm_call"]
+calls = [e for e in events if e["event"] == "llm_call" and not e.get("paid_request")]   # model calls only
 # ListFiles/ReadFile version: 2 (line ranges) unless the run's first call was built with version 1's schemas and prompt
 version = 2
 if result["tools"] is not None and calls:

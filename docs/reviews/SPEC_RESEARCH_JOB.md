@@ -123,9 +123,13 @@ Ini perubahan di jalur uang (`harness/llm.py` atau modul baru di `harness/` yang
   (aturan model tanpa harga).
 - Sebelum setiap request: reservasi stage harus masih muat harga satu request (dicek bersama sisa reservasi model; request
   yang tidak muat ditolak **sebelum dikirim**, pesan ke model "budget habis untuk search").
-- Ledger: event `paid_call_started` (call_id, kind, worst_usd_nano) ditulis **sebelum** request, lalu `paid_call` (status,
-  usd_nano) sesudahnya. `reconcile_ledger` menjumlahkan keduanya bersama `llm_call`; `started` tanpa akhir (crash) =
-  worst case. Jadi `spent_nano`, `status`, cap job, dan `reservation_from_ledger` otomatis ikut menghitung.
+- Ledger: **event yang sama dengan panggilan model** (diubah saat implementasi PR A, 2026-11-03): `llm_call_started`
+  (call_id, `worst_usd_nano` = harga satu request) ditulis **sebelum** request, lalu `llm_call` (status, usd_nano), dengan
+  `role: "web"`, `model: "deepseek:web_search"` / `"deepseek:web_fetch"`, `tokens` 0, dan `paid_request: search|fetch`.
+  Alasan: event baru (`paid_call_*`) harus ditambahkan ke setiap pembaca ledger (`reconcile_ledger`,
+  `reservation_from_ledger`, allowlist snapshot staging, skrip audit, argus-ledger); satu yang terlewat berarti biaya
+  search tidak terhitung. Dengan event yang sama, semuanya menghitungnya tanpa perubahan; `started` tanpa akhir (crash) =
+  harga penuh. Konsekuensi: jumlah `calls` di ringkasan run ikut menghitung request web.
 - Charge: HTTP 200 dengan hasil/isi → harga penuh; status error yang pasti dari DeepSeek (4xx/5xx dengan body error) atau 200
   tanpa hasil → 0 (aturan billing resmi: hanya request sukses yang ditagih); timeout, koneksi putus, atau jawaban rusak →
   **harga penuh** (tidak bisa dibuktikan tidak ditagih). Reservasi tetap di-charge walau penulisan ledger gagal.

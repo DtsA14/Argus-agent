@@ -19,6 +19,8 @@ Ledger lifecycle, per call_id:
   llm_call_started + llm_call (final)    -> ok / transient_error / error, charged as recorded
   llm_call_started without a final event -> unknown_after_crash: the process died mid-request;
                                             reconcile_ledger() charges it at worst case
+  Paid web requests (harness/paid.py, DeepSeek Search/Fetch) are written with the same events (role "web", tokens 0),
+  so every reader of this ledger counts them too.
 
 What is and is not guaranteed:
   - Exact input counts (Anthropic): charges never exceed the reservation. Hard cap.
