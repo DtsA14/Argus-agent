@@ -136,7 +136,11 @@ class Job:
 
     def move(self, new, deps, **why):
         old = self.data["state"]
-        if (old, new) not in LEGAL:
+        if self.data.get("kind") == "research":         # SPEC_RESEARCH_JOB: its own states (router/research.py)
+            from router.research import LEGAL as legal
+        else:
+            legal = LEGAL
+        if (old, new) not in legal:
             raise Refused(f"job {self.id}: {old} -> {new} is not a legal transition")
         self.data["state"] = new
         self.note(deps, "state", old=old, new=new, **why)
@@ -372,7 +376,8 @@ def live(deps, cfg, roles, text, job=None):
             job.note(deps, "confirmed" if ok else "not_confirmed")
         if not ok:
             raise Refused("not confirmed; nothing was started")
-    forbidden = list(deps.key_forbidden) + ([job.dir.parent, job.data["inputs"]["repo"]] if job is not None else [])
+    forbidden = list(deps.key_forbidden) + ([job.dir.parent, *([job.data["inputs"]["repo"]] if job.data["inputs"].get("repo")
+                                                               else [])] if job is not None else [])
     set_vars = []
     try:
         for var, kind in keys:
@@ -853,6 +858,9 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
     """Continue the stage a crash interrupted, with the cap it started with."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
+        if job.data.get("kind") == "research":
+            from router import research
+            return job, research.resume(job, cfg, deps)
         _check_environment(job, cfg)
         state = job.data["state"]
         if state == RESEARCHING:
@@ -1149,6 +1157,9 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     whether the job's pinned environment image is still the one the config resolves."""
     job = open_job(job_id, jobs_dir)
     d = job.data
+    if d.get("kind") == "research":
+        from router import research
+        return "\n".join(map(clean, research.status_lines(job)))
     out = [f"job {job.id}: {d['state']}", f"repo {d['inputs']['repo']} at {d['inputs']['commit']}",
            *environment_lines(job), f"money: cap ${d['max_usd']:.2f}, spent ${spent_nano(job) / 1e9:.4f}"]
     changed = environment_changed(job, cfg) if cfg is not None else None

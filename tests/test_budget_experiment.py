@@ -43,6 +43,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["router"]                                                      # router v0 (never used by these arms)
     del base["web"]                       # SPEC_WEB_TOOLS (ReadDocs; granted only at approve, never to these arms)
     del base["research"], base["roles"]["researcher"], base["tools"]["researcher"]   # SPEC_RESEARCH_STAGE (never used)
+    del base["research_job"]              # SPEC_RESEARCH_JOB (argus research, never used by these arms)
     del base["web_research"]              # SPEC_RESEARCH_JOB (paid DeepSeek Search/Fetch, never used by these arms)
     base["roles"]["coder"] = config("30k")["roles"]["coder"]   # the coder moved to DeepSeek on 2026-10-23; the arms ran Sonnet
     # D5: llm.prompt_cache added after the arms ran (absent means off); cache prices corrected and write rates added
