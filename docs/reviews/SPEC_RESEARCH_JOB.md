@@ -1,6 +1,6 @@
 # Spek: job deep research `argus research` (langkah pertama general-purpose agent)
 
-Status: **draf 2026-11-03, menunggu keputusan Atha (§13).** Dasar: keputusan Atha 2026-11-03 di `docs/Reconciliation.md`
+Status: **disetujui Atha 2026-11-03** (§13: cap $1, flash semua, key yang sama, e1 hanya menandai, eval set satu batch). Dasar: keputusan Atha 2026-11-03 di `docs/Reconciliation.md`
 bagian 7 (arah general-purpose agent, deep research dulu; planner adalah stage run; satu "go live" per job; plan riset tanpa
 `approve`; mulai dari job kind `argus research`) dan provider web search pertama **DeepSeek Search/Fetch API**.
 
@@ -206,3 +206,7 @@ Pilot sesudah PR C: eval set §10, satu "go live" per job (atau satu untuk selur
    saldo dan pencabutannya terpisah? Usul: yang sama dulu.
 4. **e1 hanya menandai** di v0 (tidak memblokir laporan) — setuju?
 5. **Eval set:** satu "go live" untuk seluruh 8 pertanyaan (perkiraan ≤ $2,40 total), atau per job?
+
+**Jawaban Atha 2026-11-03:** 1 ok ($1,00 per job); 2 `deepseek-flash` untuk semua stage dulu; 3 `DEEPSEEK_API_KEY` yang sama;
+4 e1 hanya menandai; 5 eval set dijalankan sebagai **satu batch dengan satu "go live"** (8 job, ≤ $8 cap total, perkiraan
+≤ $2,40).
