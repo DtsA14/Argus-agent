@@ -132,7 +132,26 @@ Diputuskan 2026-10-30 (Atha):
   atau latihan deploy production, dengan spek dulu.
 - Issue 003 (tampilan HP) tidak diperlukan.
 
+Diputuskan 2026-11-03 (Atha, sesudah membahas "SPEC-001 Router v1, Guarded Autonomy" dengan GPT):
+- **Arah berubah ke general-purpose agent**, dimulai dari **deep research**. Menggantikan arah "coding agent untuk production"
+  (2026-10-28) sebagai tujuan; aplikasi latihan dan jalur kode tetap berjalan. Usulan Router v1 (planner, policy engine,
+  registry worker, replanning) **bukan** spek untuk dikoding: ia menyatakan ulang ADR-001/002/007, M4 dan M7.
+- **Planner adalah stage run** (seperti `run_drafter`: `LLMCaller`, reservasi, ledger, memo); router tetap tidak memanggil model.
+- **"Go live" tetap ada, satu per job**, mencakup semua stage di dalam cap job (planner, worker, retry, replan). Jatah harian
+  tanpa "go live" baru diputuskan sesudah ada data.
+- **Plan deep research tanpa `approve`**: dicatat di `job.json`, bisa di-`abandon`. Code task tetap `approve <sha>`. Tindakan
+  dengan efek ke luar (kirim pesan, deploy production, transaksi, hapus data) selalu butuh persetujuan manusia.
+- **Mulai dari job kind `argus research`** (rencana, worker riset paralel, sintesis dengan sumber, evaluator); Router v1
+  lengkap belakangan. Gap menurut urutan:
+  - *Sekarang (deep research):* job tanpa repo; tool web search (provider, key, biaya per query masuk cap job, jalur ketat);
+    baca web umum (bukan hanya allowlist ReadDocs); isi web sebagai data, worker riset tanpa tool berefek ke luar; gate
+    non-kode (klaim menunjuk ke sumber yang benar-benar dibaca, judge); eval set riset kecil yang bisa dicek.
+  - *Berikutnya:* planner dengan dependensi (ADR-002, M4); tempat artifact (ADR-005); job gabungan riset + kode.
+  - *Ditunda sampai ada bukti kebutuhan:* registry dan policy engine formal (M7), layanan approval di kode (ADR-007,
+    bersama UI kontrol), memori (M8), capability pack.
+
 Menunggu keputusan Atha:
 1. **UI kontrol** (scope di `PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol, port 8711 +
    `permitopen` kedua, waktunya terhadap up2.
 2. **Shadow mode** untuk issue viewer read-only, sesudah berkas yang dilindungi dipaksa harness.
+3. **Provider web search** untuk `argus research` (perbandingan di `PENDING.md`).
