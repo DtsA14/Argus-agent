@@ -314,7 +314,11 @@ class LLMCaller:
         check_priced(cfg, self.ref, f"role {role!r}")
         gateway.check_use(cfg, role, self.ref)      # SPEC_GATEWAY_PROVIDER: listed, pinned, free only where allowed
         self.gateway = gateway.entry(cfg, self.ref) if gateway.is_gateway(cfg, self.ref) else None
-        self.drift = float((cfg.get("gateway") or {}).get("cost_drift_warn", 0.10))
+        if self.gateway is not None:
+            drift = (cfg.get("gateway") or {}).get("cost_drift_warn", 0.10)
+            if isinstance(drift, bool) or not isinstance(drift, (int, float)) or not 0 <= drift < 1:
+                raise ConfigError(f"gateway.cost_drift_warn must be a number from 0 to 1, not {drift!r}")
+            self.drift = float(drift)
         self.price = price_for(cfg, self.ref)
         llm = cfg.get("llm", {})
         self.max_output = int(rcfg.get("max_output_tokens", 2048))
@@ -391,6 +395,8 @@ class LLMCaller:
         bad = sorted(set(meta) - META_KEYS)
         if bad:
             raise ValueError(f"meta keys not allowed: {bad}; allowed: {sorted(META_KEYS)}")
+        if self.gateway is not None:                 # SPEC_GATEWAY_PROVIDER §5.1: tools added at run time count too
+            gateway.check_tools(self.ref, self.gateway["free"], tools)
         phash = prompt_hash(messages, tools)
         if tools:
             model = self.model.bind_tools(tools, tool_choice=tool_choice) if tool_choice else self.model.bind_tools(tools)
@@ -488,7 +494,7 @@ class LLMCaller:
                 computed, rep_nano = nano, to_nano(rep)
                 if rep_nano is not None and (computed is None or rep_nano > computed):
                     nano, charged = rep_nano, "gateway_reported"
-                served_ok = gateway.served_ok(self.cfg, self.ref, served)
+                served_ok = gateway.served_ok(self.gateway["upstream"], served)
                 gw = {"usd_computed_nano": computed, "usd_reported_nano": rep_nano, "upstream_served": served,
                       "free": self.gateway["free"]}
             truncated = is_truncated(msg)
@@ -499,14 +505,16 @@ class LLMCaller:
                      peak=mult > 1, **reply_details(msg), **gw)
             finally:
                 reservation.charge(tok, nano)
-            if not served_ok:                      # §3: served outside the pin; paid for, then the call fails
-                emit("pin_violated", call_id=call_id, upstream=self.gateway["upstream"], served=gw["upstream_served"])
-                raise LLMCallFailed(f"{self.role}: {self.ref} was served by {gw['upstream_served']!r}, outside its pin "
-                                    f"{self.gateway['upstream']}")
             if gw.get("usd_reported_nano") is not None and gw["usd_computed_nano"] is not None:
                 a, b = gw["usd_computed_nano"], gw["usd_reported_nano"]
                 if max(a, b) > 0 and abs(a - b) / max(a, b) > self.drift:
                     emit("price_drift", call_id=call_id, usd_computed_nano=a, usd_reported_nano=b)
+            if self.gateway is not None and gw["upstream_served"] is None:
+                emit("pin_unverified", call_id=call_id)      # the reply did not name its provider
+            if not served_ok:                      # §3: served outside the pin; paid for, then the call fails
+                emit("pin_violated", call_id=call_id, upstream=self.gateway["upstream"], served=gw["upstream_served"])
+                raise LLMCallFailed(f"{self.role}: {self.ref} was served by {gw['upstream_served']!r}, outside its pin "
+                                    f"{self.gateway['upstream']}")
             if cu["write_1h"]:                   # D5 asks only for 5 minutes: priced at the 1-hour rate, and reported
                 emit("cache_ttl_unexpected", call_id=call_id, ephemeral_1h_input_tokens=cu["write_1h"])
             if truncated:

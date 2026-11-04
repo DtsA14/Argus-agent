@@ -15,7 +15,10 @@ import math
 from .registry import ConfigError
 
 VENDORS = ("openrouter",)
-REPO_TOOLS = {"list_files", "search_files", "read_file", "write_file", "run_validation", "read_docs"}
+REPO_TOOLS = {"list_files", "search_files", "read_file", "write_file", "edit_file", "run_validation", "read_docs"}
+# the only tools a free model may be bound to, checked on every call (a contract or a stage can add tools to a role at
+# run time, so the configured list alone is not enough): the research job's web and submit tools, none reads a repo
+FREE_TOOLS = {"SubmitPlan", "WebSearch", "WebFetch", "SubmitFindings", "SubmitReport", "SubmitCheck"}
 
 
 def is_gateway(cfg, ref):
@@ -37,6 +40,11 @@ def entry(cfg, ref):
         raise ConfigError(f"gateway_models[{str(ref)!r}].upstream must be a non-empty list of provider slugs")
     if not isinstance(e.get("free", False), bool):
         raise ConfigError(f"gateway_models[{str(ref)!r}].free must be true or false")
+    price = (cfg.get("prices") or {}).get(str(ref)) or {}
+    looks_free = ref.model.endswith(":free") or (price.get("input") == 0 and price.get("output") == 0)
+    if looks_free and not e.get("free", False):
+        raise ConfigError(f"{ref} looks free (a :free id or a zero price) but gateway_models does not say free: true; "
+                          "a free model must be marked so its limits apply")
     return {"upstream": [u.strip() for u in up], "free": e.get("free", False)}
 
 
@@ -52,6 +60,8 @@ def check_use(cfg, role, ref):
         raise ConfigError(f"role {role!r} may not use the free model {ref}: prompts to free models may be kept or used "
                           "for training by their provider; list the role in gateway.free_roles to allow it")
     reads = sorted(REPO_TOOLS & set((cfg.get("tools") or {}).get(role) or []))
+    if role == (cfg.get("code_task") or {}).get("role"):
+        reads = reads or ["code task tools"]
     if reads:
         raise ConfigError(f"role {role!r} reads repositories ({', '.join(reads)}) and may not use the free model {ref}: "
                           "what it reads would go to a provider that may keep it")
@@ -69,15 +79,29 @@ def request_params(cfg, ref, params):
     return {**params, "extra_body": extra}
 
 
+def check_tools(ref, free, tools):
+    """Refuse binding a free model to any tool outside FREE_TOOLS (§5.1), before the call is sent."""
+    if not free:
+        return
+    names = sorted(getattr(t, "name", None) or getattr(t, "__name__", str(t)) for t in (tools or []))
+    bad = [n for n in names if n not in FREE_TOOLS]
+    if bad:
+        raise ConfigError(f"the free model {ref} may not be given {bad}: only {sorted(FREE_TOOLS)}, none of which reads "
+                          "a repository")
+
+
 def _slug(s):
     return "".join(ch for ch in str(s).lower() if ch.isalnum())
 
 
-def served_ok(cfg, ref, served):
-    """False only when the reply names a provider outside the pin (None: the reply did not say)."""
+def served_ok(upstream, served):
+    """False only when the reply names a provider outside the pin (None: the reply did not say). A reply names the
+    provider ("DeepInfra", "Google"), the pin a slug that may carry a variant ("deepinfra/fp8", "google-vertex"): the
+    name matches when it is the slug's base, or its start."""
     if served is None:
         return True
-    return _slug(served) in {_slug(u) for u in entry(cfg, ref)["upstream"]}
+    name = _slug(served)
+    return bool(name) and any(_slug(u.split("/")[0]).startswith(name) for u in upstream)
 
 
 def reported(msg):

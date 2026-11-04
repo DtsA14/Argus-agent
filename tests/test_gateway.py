@@ -146,6 +146,30 @@ def test_a_reply_served_outside_the_pin_is_paid_then_fails(fake, tmp_path):
     [e] = events(log)
     assert e["upstream_served"] == "Chutes" and r.used_nano == e["usd_nano"] == 420_000
     assert events(log, "pin_violated")[0]["served"] == "Chutes" and len(fake.requests) == 1   # never retried
+    assert not events(log, "price_drift")                     # 0.0004 vs our 0.00042: within 10%
+
+
+def test_a_reply_served_outside_the_pin_still_reports_its_price_drift(fake, tmp_path):
+    fake.queue = [ok(provider="Chutes", cost=0.002)]
+    c, log = caller(config(fake), tmp_path)
+    with pytest.raises(LLMCallFailed):
+        c.call([HumanMessage("hello")], res())
+    assert events(log, "price_drift") and events(log, "pin_violated")
+
+
+def test_a_reply_that_does_not_name_its_provider_is_marked_unverified(fake, tmp_path):
+    fake.queue = [ok(provider=None)]
+    c, log = caller(config(fake), tmp_path)
+    c.call([HumanMessage("hello")], res())
+    assert events(log)[0]["upstream_served"] is None and events(log, "pin_unverified")
+
+
+@pytest.mark.parametrize("upstream, served, good", [
+    (["deepseek"], "DeepSeek", True), (["deepinfra/fp8"], "DeepInfra", True), (["google-vertex"], "Google", True),
+    (["deepseek"], "Chutes", False), (["deepinfra/fp8"], "Together", False), (["deepseek"], "!!", False),
+    (["deepseek"], None, True)])
+def test_the_serving_provider_is_matched_against_the_pin(upstream, served, good):
+    assert gateway.served_ok(upstream, served) is good
 
 
 # ---- money -------------------------------------------------------------------------------------------------------
@@ -226,8 +250,8 @@ def test_a_free_model_is_used_only_by_a_listed_role(fake, tmp_path):
     assert fake.requests == []
 
 
-@pytest.mark.parametrize("tool", ["list_files", "search_files", "read_file", "write_file", "run_validation",
-                                  "read_docs"])
+@pytest.mark.parametrize("tool", ["list_files", "search_files", "read_file", "write_file", "edit_file",
+                                  "run_validation", "read_docs"])
 def test_a_free_model_never_reads_a_repository(fake, tmp_path, tool):
     with pytest.raises(ConfigError, match="reads repositories"):
         caller(config(fake, model=FREE, tools=[tool]), tmp_path)
@@ -262,3 +286,51 @@ def test_the_caller_checks_the_role_even_with_an_injected_model(fake, tmp_path):
     cfg = config(fake, model=FREE, free_roles=())
     with pytest.raises(ConfigError, match="gateway.free_roles"):
         LLMCaller(cfg, "gw", EventLog(tmp_path / "e.jsonl"), model=StrictScriptedChatModel(script=[]))
+
+
+def test_a_free_model_is_refused_for_the_code_task_role(fake, tmp_path):
+    cfg = config(fake, model=FREE, tools=[])
+    cfg["code_task"]["role"] = "gw"
+    with pytest.raises(ConfigError, match="reads repositories"):
+        caller(cfg, tmp_path)
+
+
+def test_a_free_model_is_never_bound_to_a_tool_outside_the_free_list(fake, tmp_path):
+    from codetask.tools import EditFile, ReadFile
+    from research.stages import SubmitFindings, WebSearch
+    c, log = caller(config(fake, model=FREE, tools=[]), tmp_path)
+    for tool in (ReadFile, EditFile):
+        with pytest.raises(ConfigError, match="may not be given"):
+            c.call([HumanMessage("hello")], res(), tools=[WebSearch, tool])
+    assert fake.requests == [] and events(log) == []
+    fake.queue = [ok(provider="Chutes", cost=0)]
+    c.call([HumanMessage("hello")], res(), tools=[WebSearch, SubmitFindings])
+    assert len(fake.requests) == 1
+
+
+def test_a_paid_model_may_be_bound_to_any_tool(fake, tmp_path):
+    from codetask.tools import ReadFile
+    c, _ = caller(config(fake, tools=["read_file"], free_roles=()), tmp_path)
+    c.call([HumanMessage("hello")], res(), tools=[ReadFile])
+    assert len(fake.requests) == 1
+
+
+@pytest.mark.parametrize("model, price", [("openrouter:x/y:free", {"input": 1, "output": 1}),
+                                          ("openrouter:x/y", {"input": 0, "output": 0})])
+def test_a_model_that_looks_free_must_be_marked_free(fake, tmp_path, model, price):
+    cfg = config(fake, model=model)
+    cfg["gateway_models"][model] = {"upstream": ["chutes"]}
+    cfg["prices"][model] = price
+    with pytest.raises(ConfigError, match="looks free"):
+        caller(cfg, tmp_path)
+
+
+@pytest.mark.parametrize("drift", [None, "0.1", True, 1.5, -0.1])
+def test_a_bad_drift_threshold_is_a_config_error_for_gateway_roles_only(fake, tmp_path, drift):
+    cfg = config(fake)
+    cfg["gateway"]["cost_drift_warn"] = drift
+    with pytest.raises(ConfigError, match="cost_drift_warn"):
+        caller(cfg, tmp_path)
+    cfg["roles"]["other"] = {"model": "fake:scripted"}
+    from models.fake import StrictScriptedChatModel
+    LLMCaller(cfg, "other", EventLog(tmp_path / "o.jsonl"), model=StrictScriptedChatModel(script=[]))
