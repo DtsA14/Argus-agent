@@ -165,7 +165,7 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
    - `research_job.profiles` (role per stage: planner, worker, synthesis, checker), dipilih per job dengan
      `argus research --profile NAME` dan dicatat di `job.json` (resume memakai role yang sama). Profil: `deepseek`
      (default, seperti sebelumnya), `free` (p1/s1 `nvidia/nemotron-3-ultra-550b-a55b:free`, worker
-     `thinkingmachines/inkling:free`, e1 `google/gemma-4-31b-it:free`), `deepinfra` (DeepSeek V4.1 Flash lewat
+     `nvidia/nemotron-3.5-super-vl:free` (Inkling diganti 2026-11-04: versi gratisnya hanya untuk aplikasi yang terdaftar di OpenRouter, HTTP 403 di smoke), e1 `google/gemma-4-31b-it:free`), `deepinfra` (DeepSeek V4.1 Flash lewat
      OpenRouter).
    - `gateway.free_roles` = `free_planner`, `free_worker`, `free_checker` (pengganti satu role `research_free`, karena
      tiap stage memakai model lain), tanpa tool sendiri.
