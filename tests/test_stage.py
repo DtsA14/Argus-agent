@@ -507,14 +507,16 @@ def test_a_failure_to_record_the_new_release_stops_it_and_keeps_the_old_live(tmp
 
 # ---- SPEC_DEP_UPGRADE_V0: a release is a commit on one runtime; rollback restores the image; check before a new runtime --
 
-IMAGES = {"ledger_staging": "sha256:" + "1" * 64, "ledger_staging_up1": "sha256:" + "2" * 64}
+IMAGES = {"ledger_staging": "sha256:" + "1" * 64, "ledger_staging_up1": "sha256:" + "2" * 64,
+          "ledger_staging_up2": "sha256:" + "6" * 64}
 SANDBOX_UP1 = "sha256:" + "5" * 64
+SANDBOX_UP2 = "sha256:" + "7" * 64
 
 
 @pytest.fixture
 def two_runtimes(tmp_path, monkeypatch):
     """Staging whose switch only records (release, image) and commits the state: no docker, no socket."""
-    images = {**IMAGES, "ledger_py312_up1": SANDBOX_UP1}             # every name resolves; RUNTIMES decides
+    images = {**IMAGES, "ledger_py312_up1": SANDBOX_UP1, "ledger_py312_up2": SANDBOX_UP2}   # all resolve; RUNTIMES decides
     monkeypatch.setattr(rj, "environment_pin", lambda cfg, name, root=None: (images.get(name), None)
                         if name in images else (None, f"no {name}"))
     st = Staging(tmp_path / "staging", run=only_ps)
@@ -586,7 +588,40 @@ def test_a_new_runtime_needs_a_passed_check_of_that_commit(tmp_path, repo, two_r
     assert len(started) == 1
 
 
-@pytest.mark.parametrize("runtime", ["ledger_py312_up1", "argus", "ledger_staging_up2"])
+def test_upgrade_2_needs_a_check_in_its_own_environment_not_upgrade_1s(tmp_path, repo, two_runtimes):
+    r, c = repo
+    st, images, started = two_runtimes
+    jobs = tmp_path / "jobs"
+    jid = applied_job(jobs, "jb", r, c["good2"])
+    passed_check(st, c["good2"])                                     # a pass in ledger_py312_up1 (and its runtime image)
+    with pytest.raises(sg.Refused, match="no passed `argus stage check`.*ledger_py312_up2"):
+        sg.deploy(jid, cfg={}, deps=deps(), jobs_dir=jobs, staging=st, runtime="ledger_staging_up2")
+    assert started == [] and st.releases() == {}
+    passed_check(st, c["good2"], environment="ledger_py312_up2", image=SANDBOX_UP2,
+                 runtime_image=IMAGES["ledger_staging_up2"])
+    release = sg.deploy(jid, cfg={}, deps=deps(), jobs_dir=jobs, staging=st, runtime="ledger_staging_up2")
+    assert release.endswith(".up2") and sg.RELEASE.match(release)
+    assert st.releases()[release]["image"] == IMAGES["ledger_staging_up2"]
+    assert "runtime ledger_staging_up2" in sg.status(staging=st)
+
+
+def test_rollback_from_upgrade_2_restores_upgrade_1_on_its_recorded_image(tmp_path, repo, two_runtimes):
+    r, c = repo
+    st, images, started = two_runtimes
+    jobs = tmp_path / "jobs"
+    passed_check(st, c["good"])
+    first = sg.deploy(applied_job(jobs, "ja", r, c["good"]), cfg={}, deps=deps(), jobs_dir=jobs, staging=st,
+                      runtime="ledger_staging_up1")
+    passed_check(st, c["good2"], environment="ledger_py312_up2", image=SANDBOX_UP2,
+                 runtime_image=IMAGES["ledger_staging_up2"])
+    second = sg.deploy(applied_job(jobs, "jb", r, c["good2"]), cfg={}, deps=deps(), jobs_dir=jobs, staging=st,
+                       runtime="ledger_staging_up2")
+    assert sg.rollback(cfg={}, deps=deps(), staging=st) == first
+    assert started == [(first, IMAGES["ledger_staging_up1"]), (second, IMAGES["ledger_staging_up2"]),
+                       (first, IMAGES["ledger_staging_up1"])]
+
+
+@pytest.mark.parametrize("runtime", ["ledger_py312_up1", "ledger_py312_up2", "argus", "ledger_staging_up9"])
 def test_only_a_staging_runtime_is_deployed_on(tmp_path, repo, two_runtimes, runtime):
     r, c = repo
     st, images, started = two_runtimes
@@ -597,7 +632,7 @@ def test_only_a_staging_runtime_is_deployed_on(tmp_path, repo, two_runtimes, run
     assert started == []
 
 
-@pytest.mark.parametrize("runtime", ["ledger_py312_up1", "argus"])
+@pytest.mark.parametrize("runtime", ["ledger_py312_up1", "ledger_py312_up2", "argus"])
 def test_the_runtime_image_is_only_a_staging_runtimes(runtime):
     with pytest.raises(sg.Refused, match="not a staging runtime"):
         sg.runtime_image({}, runtime)
