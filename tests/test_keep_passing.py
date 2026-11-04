@@ -52,6 +52,7 @@ def test_the_last_submit_drops_a_failing_source_and_keeps_its_finding(tools):
     claim = "Python 3.14 was released in October 2025 with free threading."
     problems, f = gate(run, args((claim, [(t.URL, BAD), (t.URL, SECOND), (t.OTHER, t.QUOTE)])), keep=True)
     assert problems == [] and [s["quote"] for s in f["findings"][0]["sources"]] == [SECOND]
+    assert f["findings"][0]["dropped_sources"] == 2
     assert [d[:2] for d in f["dropped"]] == ["G2", "G1"]          # OTHER was never fetched in this run
 
 
@@ -66,7 +67,8 @@ def test_answered_with_no_finding_left_is_still_rejected(tools):
     w, res, _, run = tools
     w.fetch(t.URL, 1, "k1", res)
     problems, f = gate(run, args(BAD_F), keep=True)
-    assert f is None and problems[-1].endswith("none had a source that passed")
+    assert f is None and any(p.endswith("whose sources pass G1 and G2") for p in problems)
+    assert any(p.startswith("G2 finding 1") for p in problems)
 
 
 def test_insufficient_evidence_with_every_finding_dropped_passes(tools):
@@ -83,6 +85,7 @@ def test_any_other_problem_still_rejects_the_last_submit(tools):
     w.fetch(t.URL, 1, "k1", res)
     problems, f = gate(run, args(GOOD_F, ("short", [(t.URL, BAD)])), keep=True)
     assert f is None and any("claim" in p for p in problems) and any(p.startswith("G2") for p in problems)
+    assert not any("dropped" in p for p in problems)                  # a rejected submit drops nothing
 
 
 def test_nothing_dropped_leaves_the_result_as_before(tools):
@@ -109,8 +112,7 @@ def test_a_worker_whose_last_submit_has_one_bad_quote_keeps_the_good_finding(tmp
     assert any(d.startswith("G2 finding 2") for d in w["dropped"])
     ev = EventLog(job.runs / job.data["stages"]["w1"]["run_id"] / "events.jsonl").read()
     assert [e["ok"] for e in ev if e["event"] == "findings_checked"] == [False, False, True]
-    [d] = [e for e in ev if e["event"] == "findings_dropped"]
-    assert d["submit"] == 3
+    assert [bool(e.get("dropped")) for e in ev if e["event"] == "findings_checked"] == [False, False, True]
 
 
 def test_a_worker_with_no_bad_quote_has_no_dropped_list(tmp_path):
@@ -118,3 +120,29 @@ def test_a_worker_with_no_bad_quote_has_no_dropped_list(tmp_path):
     job = env.start()
     [w] = json.loads((job.dir / "findings.json").read_text())["workers"]
     assert "dropped" not in w
+
+
+def test_a_submit_on_the_loops_last_step_keeps_what_passed(tmp_path):
+    # the first and only submit comes on the last step: there is no later chance, so it keeps the good finding
+    lim = t.cfg()["research_job"]["worker"]
+    reads = [t.SEARCH, t.FETCH] + [t.call("WebFetch", {"url": t.URL, "part": 1}, f"r{i}")
+                                   for i in range(lim["max_steps"] - 3)]
+    env = t.Env(tmp_path, [t.PLAN, *reads, submit("last", GOOD_F, BAD_F), t.REPORT, t.CHECK])
+    job = env.start()
+    assert job.data["stages"]["w1"]["status"] == st.ANSWERED
+    [w] = json.loads((job.dir / "findings.json").read_text())["workers"]
+    assert [x["id"] for x in w["findings"]] == ["W1.F1"] and w["dropped"]
+
+
+def test_a_finding_that_lost_a_source_says_so_in_report_md(tmp_path):
+    two = ("Python 3.14 was released on 7 October 2025.", [(t.URL, t.QUOTE), (t.URL, BAD)])
+    env = t.Env(tmp_path, [t.PLAN, t.SEARCH, t.FETCH, submit("a", two), submit("b", two), submit("c", two),
+                           t.REPORT, t.CHECK])
+    job = env.start()
+    text = (job.dir / "REPORT.md").read_text()
+    assert "(1 more source(s) failed the harness quote check and were removed)" in text
+
+
+def test_the_submit_tool_version_changed_with_the_rule():
+    # a rejection committed under the old rule must not be replayed for a resumed run under the new one
+    assert st.WORKER_VERSIONS["SubmitFindings"] == "2"

@@ -34,7 +34,7 @@ INPUTS = "inputs.json"
 def tool_loop(caller, memo, log, *, node, task_id, lim, system, prompt, tools, submit, versions, run_tool, gate_submit,
               crasher, nudge, steps_note, final_note):
     """Run until the submit tool's result is accepted, the submits or steps run out, or a call cannot be made.
-    run_tool(name, args, step_key, reservation) -> {"content"}; gate_submit(args, n) -> {"content", "finished",
+    run_tool(name, args, step_key, reservation) -> {"content"}; gate_submit(args, n, last_step) -> {"content", "finished",
     "exhausted", "result"}. Returns {"end", "steps", "submits", "tokens_used", "usd_used", ["result"]}."""
     meta = {"node": node, "task": task_id, "iteration": 0}
     res = reservation_from_ledger(log, tokens=lim["attempt_tokens"], usd=lim["attempt_usd"],
@@ -108,7 +108,7 @@ def tool_loop(caller, memo, log, *, node, task_id, lim, system, prompt, tools, s
                         f"in the last {FINAL_STEPS} steps; only {name_of_submit} is." if final else "here.")
                         + " Nothing was run.", "finished": False}
                 elif name == name_of_submit:
-                    record = gate_submit(c.get("args") or {}, submits + 1)
+                    record = gate_submit(c.get("args") or {}, submits + 1, step == max_steps - 1)
                 else:
                     record = {"content": run_tool(name, c.get("args") or {}, tkey, res), "finished": False}
                 crasher.point(f"{node}@after_tool", step=step, **meta)

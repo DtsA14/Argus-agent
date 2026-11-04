@@ -183,7 +183,7 @@ def run_synthesis(*, run_id, runs_dir, cfg, findings=None, max_usd=None, resume=
             return {"status": "FAILED_BUDGET", "stop_reason": "the stage cap leaves nothing for the synthesis"}
         known = set(citable(inputs["findings"]))
 
-        def gate_submit(args, n):
+        def gate_submit(args, n, last_step=False):
             problems, report = report_gate(args, known)
             return _verdict(problems, lim["max_submits"], n, "Accepted: the report passed the harness gate.", report,
                             log, "report_checked")
@@ -295,7 +295,7 @@ def run_check(*, run_id, runs_dir, cfg, report=None, findings=None, max_usd=None
             return {"status": "FAILED_BUDGET", "stop_reason": "the stage cap leaves nothing for the checker"}
         ids = [it["id"] for it in check_items(inputs["report"])]
 
-        def gate_submit(args, n):
+        def gate_submit(args, n, last_step=False):
             problems, verdicts = check_gate(args, ids)
             return _verdict(problems, lim["max_submits"], n, "Accepted: every item has a verdict.", verdicts, log,
                             "check_checked")
@@ -374,6 +374,8 @@ def render(findings, report, check=None, job_id=None):
     for c in order:
         f = known[c]
         out += ["", f"[{num[c]}] {c}: {ws(f['claim'])}"]
+        if f.get("dropped_sources"):
+            out += [f"- ({f['dropped_sources']} more source(s) failed the harness quote check and were removed)"]
         for s in f["sources"]:
             out += [f"- <{s['url']}>" + (f" {ws(s['title'])}" if s.get("title") else "")
                     + f", fetched {_when(s.get('fetched_at'))}, sha256 {s.get('sha256')}", f"  > {s['quote']}"]
