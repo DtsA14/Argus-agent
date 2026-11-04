@@ -1,6 +1,6 @@
 # Spek: provider gateway (OpenRouter dulu, Vercel AI Gateway sesudahnya)
 
-Status: **draf, menunggu Atha** (§10). Dasar: permintaan Atha 2026-11-04 ("butuh multi provider kalo multi agent gw
+Status: **disetujui Atha 2026-11-04** ("Ikut saran lu bro": semua usul §10). Dasar: permintaan Atha 2026-11-04 ("butuh multi provider kalo multi agent gw
 jalan, biar ga ribet masukin banyak API, dan lumayan suka ada gratisannya"), perbandingan Claude di chat hari yang sama
 (OmniRoute ditolak; OpenRouter dan Vercel AI Gateway dipilih sebagai satu adapter).
 
@@ -176,3 +176,9 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
    harganya dicek dari halaman model saat PR 1.
 5. **Top-up $10 di OpenRouter** supaya batas model gratis 1000/hari (bukan 50) dan pasang credit limit di key-nya —
    ini tindakan Atha di dashboard OpenRouter.
+
+**Jawaban Atha 2026-11-04 ("Ikut saran lu bro"):** 1 OpenRouter dulu, Vercel sesudahnya; 2 charge = max(hitungan kita,
+cost gateway); 3 `free_roles: [research_free]` (role baru untuk eksperimen riset, tanpa tool file), `free_repos` kosong
+sampai scan Argus-agent lolos (kandidat: Argus-agent saja); 4 smoke: DeepSeek lewat OpenRouter dipin ke DeepSeek, satu
+model murah provider lain (Gemini Flash), satu model `:free`; 5 top-up $10 + credit limit di key OpenRouter (tindakan
+Atha di dashboard, sebelum smoke).
