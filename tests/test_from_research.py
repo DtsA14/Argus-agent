@@ -244,3 +244,27 @@ def test_the_cli_passes_from_research_and_the_items(env, monkeypatch):
 def test_items_without_from_research_are_refused(env):
     with pytest.raises(rj.Refused, match="--from-research"):
         env.code(research_items=["P1"])
+
+
+@pytest.mark.parametrize("bad", ["../jres", "jres/..", "/tmp/jres", "JRES"])
+def test_a_research_job_id_that_is_not_a_job_id_is_refused(env, bad):
+    with pytest.raises(rj.Refused, match="not a job id"):
+        env.code(from_research=bad)
+    assert not (env.jobs / "jtest").exists()
+
+
+@pytest.mark.parametrize("research", ["", "   ", "x" * 50])
+def test_the_drafter_blocks_a_research_context_that_is_empty_or_too_long(td_root, tmp_path, monkeypatch, research):
+    from codetask import drafter as dt
+    monkeypatch.setattr(ct, "MAX_RESEARCH", 40)
+    model = td.StrictScriptedChatModel(script=[td.SUBMIT])
+    r = dt.run_drafter(run_id="d", runs_dir=tmp_path / "runs", cfg=td.cfg(), intake_name="shop", issue=td.ISSUE,
+                       max_usd=0.4, models={"drafter": model}, validate=td.fake_validate, preflight=lambda: (True, "ok"),
+                       env_preflight=lambda name: (True, "ok"), root=td_root, collect=td.fake_collect, red=td.fake_red,
+                       research=research)
+    assert r["status"] == dt.BLOCKED and "research context" in r["stop_reason"] and model.calls == []
+
+
+@pytest.fixture
+def td_root(tmp_path):
+    return td.make_root(tmp_path)
