@@ -46,6 +46,7 @@ prices:                                # wajib, seperti provider lain; model gra
 
 gateway:
   free_roles: []                       # role yang boleh memakai model free: true (default: tidak ada)
+  free_repos: []                       # repo yang boleh dibaca model gratis (§5.1); default: tidak ada
   cost_drift_warn: 0.10                # selisih cost gateway vs hitungan kita yang dicatat sebagai price_drift
 ```
 
@@ -97,11 +98,29 @@ membuat harga itu salah. Karena itu setiap request membawa pin, dan request tanp
   - Model berbayar dikirim dengan `data_collection: "deny"`; model gratis dengan `"allow"` (kalau tidak, umumnya tidak
     ada provider yang mau melayani) dan layar konfirmasi "go live" menyebut "prompt ke model gratis bisa disimpan atau
     dipakai training oleh provider-nya".
-  - Usul: model gratis hanya untuk riset publik dan eksperimen eval, tidak untuk role yang membaca repo (coder, drafter,
-    researcher r1).
+  - Model gratis untuk riset publik dan eksperimen eval; role yang membaca repo diatur §5.1.
 - Rate limit model gratis OpenRouter: 20 request/menit; 50/hari (kredit dibeli < $10) atau 1000/hari (≥ $10). HTTP 429
   di-retry sesuai `retry` + `Retry-After` yang ada; kalau tetap 429 → `LLMCallFailed` → stage BLOCKED. **Tidak pernah**
   pindah otomatis ke model berbayar.
+
+### 5.1 Model gratis dan repo (Atha 2026-11-04)
+
+Model gratis yang membaca repo mengirim isi repo ke provider yang boleh menyimpan atau melatih: rahasia yang terselip
+(`.env`, key di fixture atau di git history, path dan user VM), kode yang belum publik, dan data di repo (mis. ledger di
+`argus-ledger`). Yang sudah terkirim tidak bisa ditarik. Karena itu:
+
+- **Default:** role yang membaca repo (coder, drafter, researcher r1, dan role baru yang diberi tool file) **tidak**
+  memakai model gratis.
+- **Dibuka per repo:** repo boleh dibaca model gratis hanya bila (a) ada di `gateway.free_repos` (Atha yang mengisi),
+  dan (b) ada catatan scan rahasia yang **lolos untuk commit persis** yang akan dibaca (working tree dan seluruh git
+  history), pola `scripts/check_env_image.py` (catatan per image). Commit lain, atau working tree yang kotor → ditolak
+  sebelum stage mulai, dengan pesan yang menyebut cara menjalankan scan.
+- Scan: `scripts/check_secrets.py` (PR 1) menjalankan pemindai rahasia (alat dipilih di PR 1, mis. `gitleaks` dengan
+  versi dipin; kalau tidak ada, pola regex sendiri untuk key yang dikenal + file `.env*`) dan menulis catatan
+  `{repo, commit, tool, version, findings: 0}`. Temuan > 0 → tidak ada catatan lolos; temuan diperbaiki di repo, bukan
+  di-allowlist diam-diam (allowlist eksplisit per temuan boleh, ikut di-commit dan di-review).
+- Usul awal: hanya `Argus-agent` (repo publik) yang dikandidatkan, setelah scan pertama lolos. `argus-ledger` (lokal,
+  berisi data ledger) dan repo kerjaan atau klien tidak.
 
 ## 6. Key
 
@@ -126,7 +145,9 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
 2. Uang: cost gateway > hitungan → yang di-charge cost gateway; < hitungan → hitungan; tidak ada → hitungan dan
    `usd_reported_nano: null`; selisih > ambang → `price_drift`; model tanpa harga + cap finite → ditolak; 402 → tidak
    di-retry, BLOCKED; crash di antara started dan akhir → worst case (aturan yang sudah ada, untuk provider ini).
-3. Gratis: role di luar `free_roles` ditolak sebelum kirim; 429 berulang → BLOCKED, tidak ada request ke model lain;
+3. Gratis: role di luar `free_roles` ditolak sebelum kirim; role yang membaca repo dengan model gratis ditolak bila
+   repo tidak di `free_repos`, tidak ada catatan scan untuk commit itu, catatannya untuk commit lain, atau working tree
+   kotor; scan dengan temuan tidak menghasilkan catatan lolos; 429 berulang → BLOCKED, tidak ada request ke model lain;
    model gratis tercatat `free: true`, `usd_nano: 0`; cost > 0 dari gateway untuk model gratis → di-charge.
 4. Pin dilanggar: respons menyebut provider di luar `upstream` → `pin_violated`, stage berhenti, uang tercatat.
 5. Key: tidak muncul di ledger, log, memo, `job.json`; tanpa key → refused sebelum konfirmasi selesai, tidak ada request.
@@ -147,9 +168,9 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
 1. **Vendor pertama OpenRouter** (gratisan, katalog terluas, cost ada di respons), Vercel sesudahnya — setuju?
 2. **Charge = max(hitungan kita, cost gateway)** — setuju? (Alternatif: percaya cost gateway saja; lebih tepat, tapi
    kalau gateway salah lapor ke bawah, reservasi kita ikut longgar.)
-3. **Model gratis** hanya di role yang Atha daftarkan di `gateway.free_roles`, default kosong, dan usul tidak pernah di
-   role yang membaca repo — setuju? Role mana yang mau langsung didaftarkan (mis. role baru `research_free` untuk
-   eksperimen)?
+3. **Model gratis** hanya di role yang Atha daftarkan di `gateway.free_roles`, default kosong; role yang membaca repo
+   hanya untuk repo di `free_repos` dengan scan rahasia lolos (§5.1, disetujui Atha 2026-11-04). Role mana yang mau
+   langsung didaftarkan (mis. role baru `research_free` untuk eksperimen)?
 4. **Model awal** untuk smoke: usul (a) DeepSeek lewat OpenRouter dipin ke DeepSeek (pembanding harga), (b) satu model
    murah dari provider lain (mis. Gemini Flash) untuk judge/eksperimen, (c) satu model `:free`. Id persisnya dipilih dan
    harganya dicek dari halaman model saat PR 1.
