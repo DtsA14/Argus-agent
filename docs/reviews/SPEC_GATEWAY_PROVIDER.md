@@ -161,6 +161,20 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
    `free_repos` + `scripts/check_secrets.py` menyusul di PR 1b, hanya bila dibutuhkan (role eksperimen `research_free`
    tidak membaca repo). Tool yang dihitung "membaca repo": list_files, search_files, read_file, write_file,
    run_validation, read_docs.
+1c. **PR 2 (jalur ketat, 2026-11-04), syarat smoke:**
+   - `research_job.profiles` (role per stage: planner, worker, synthesis, checker), dipilih per job dengan
+     `argus research --profile NAME` dan dicatat di `job.json` (resume memakai role yang sama). Profil: `deepseek`
+     (default, seperti sebelumnya), `free` (p1/s1 `nvidia/nemotron-3-ultra-550b-a55b:free`, worker
+     `thinkingmachines/inkling:free`, e1 `google/gemma-4-31b-it:free`), `deepinfra` (DeepSeek V4.1 Flash lewat
+     OpenRouter).
+   - `gateway.free_roles` = `free_planner`, `free_worker`, `free_checker` (pengganti satu role `research_free`, karena
+     tiap stage memakai model lain), tanpa tool sendiri.
+   - DeepSeek **tidak** melayani DeepSeek V4.1 Flash di OpenRouter (cek endpoints 2026-11-04); pembandingnya dipin ke
+     DeepInfra fp8 ($0,14/$0,42 per 1M, tanpa peak).
+   - Key: worker tetap butuh key DeepSeek untuk web, jadi satu stage bisa butuh dua key. `--key-file` bisa diulang
+     sebagai `--key-file PROVIDER=PATH` (bentuk satu PATH tetap untuk satu key); file harus pas dengan provider yang
+     butuh key (kurang atau lebih → ditolak); key OpenRouter dicek berawalan `sk-or-v1-` (`providers.*.key_prefix`).
+   - Preflight sebelum konfirmasi: tiap model stage berharga dan boleh untuk role-nya (aturan model gratis).
 2. **Smoke live (butuh "go live", ≤ $0,10):** satu panggilan + satu loop tool kecil ke 2–3 model terpilih (§10 no. 4),
    membandingkan cost gateway dengan hitungan kita dan memeriksa pin. Hasilnya menentukan harga di config.
 3. **Eksperimen:** satu stage riset (worker atau s1) memakai model gateway, dibandingkan dengan DeepSeek langsung di

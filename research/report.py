@@ -19,7 +19,7 @@ from harness.llm import LLMCaller
 
 from .loop import run_stage, tool_loop
 from .stages import (ANSWERED, BLOCKED, DATA, HEADING_MAX, UNCERTAINTIES_MAX, UNCERTAINTY_MAX, _text, _verdict, settings,
-                     with_output_cap)
+                     stage_role, with_output_cap)
 
 REPORTED, SYNTHESIS_FAILED, CHECKED, NOT_CHECKED = "REPORTED", "SYNTHESIS_FAILED", "CHECKED", "NOT_CHECKED"
 SUPPORTED, PARTIAL, UNSUPPORTED = "SUPPORTED", "PARTIAL", "UNSUPPORTED"
@@ -173,9 +173,9 @@ def report_prompt(findings, lim):
 
 
 def run_synthesis(*, run_id, runs_dir, cfg, findings=None, max_usd=None, resume=False, models=None, crash_at=None):
-    cfg = with_output_cap(cfg)
+    cfg = with_output_cap(cfg, "synthesis")
     lim = settings(cfg, "synthesis")
-    role = cfg["research_job"]["role"]
+    role = stage_role(cfg, "synthesis")
 
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:
@@ -284,9 +284,9 @@ def check_prompt(report, findings, lim):
 
 def run_check(*, run_id, runs_dir, cfg, report=None, findings=None, max_usd=None, resume=False, models=None,
               crash_at=None):
-    cfg = with_output_cap(cfg)
+    cfg = with_output_cap(cfg, "checker")
     lim = settings(cfg, "checker")
-    role = cfg["research_job"]["role"]
+    role = stage_role(cfg, "checker")
 
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:

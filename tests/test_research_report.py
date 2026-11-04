@@ -49,7 +49,7 @@ def test_a_job_ends_with_a_report_the_harness_renders_and_e1_flags(tmp_path):
     env = Env(tmp_path, WORKED + [REPORT, CHECK])
     job = env.start()
     assert job.data["state"] == rr.REPORT_READY and len(env.confirms) == 1
-    assert "synthesis cap $0.15" in env.confirms[0] and "claim checker cap $0.10" in env.confirms[0]
+    assert "synthesis $0.15" in env.confirms[0] and "claim checker $0.10" in env.confirms[0]
     md = (job.dir / "REPORT.md").read_text()
     assert "Python 3.14 was released on 7 October 2025. [1]" in md
     assert f"<{t.URL}>" in md and f"> {t.QUOTE}" in md and "*e1: SUPPORTED (The quote gives the date.)*" in md

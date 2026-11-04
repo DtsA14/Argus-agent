@@ -39,45 +39,95 @@ LEGAL = {(NEW, PLANNING), (NEW, BLOCKED), (PLANNING, RESEARCHING), (PLANNING, PL
         {(s, ABANDONED) for s in (NEW, *RUNNING, BLOCKED, PLAN_FAILED, INCONCLUSIVE, SYNTHESIS_FAILED, REPORT_READY)}
 
 
+STAGE_KINDS = ("planner", "worker", "synthesis", "checker")
+
+
 def _settings(cfg):
     rcfg = cfg["research_job"]
-    role = rcfg["role"]
     wr = cfg.get("web_research") or {}
-    return rcfg, role, wr
+    return rcfg, wr
+
+
+def stage_roles(cfg, profile=None):
+    """{stage kind: role} of a profile (research_job.profiles; research_job.profile by default). Without profiles every
+    stage runs on research_job.role."""
+    rcfg = cfg["research_job"]
+    profiles = rcfg.get("profiles") or {}
+    name = profile or rcfg.get("profile")
+    if not profiles and profile is None:
+        return {k: rcfg["role"] for k in STAGE_KINDS}
+    if name not in profiles:
+        raise rj.Refused(f"unknown research profile {name!r}; profiles: {sorted(profiles)}; no job was created")
+    roles = profiles[name]
+    missing = [k for k in STAGE_KINDS if not (roles or {}).get(k)]
+    if missing or any(roles[k] not in cfg.get("roles", {}) for k in STAGE_KINDS):
+        raise rj.Refused(f"research profile {name!r} must name an existing role for each of {list(STAGE_KINDS)}; "
+                         "no job was created")
+    return {k: roles[k] for k in STAGE_KINDS}
+
+
+def _cfg(job, cfg, cap):
+    """A stage's config: the router's overrides, the stage cap, and the job's stage roles (fixed when it was created)."""
+    out = rj.stage_config(cfg, cap)
+    out["research_job"]["stage_roles"] = dict(job.data["stage_roles"])
+    return out
+
+
+def _web_provider(cfg):
+    return (cfg.get("web_research") or {}).get("provider", "deepseek")
 
 
 def _screen(job, cfg, title):
-    rcfg, role, wr = _settings(cfg)
+    rcfg, wr = _settings(cfg)
     prices = wr.get("price_usd_per_request") or {}
     plan = job.data.get("plan")
     workers = len(plan["sub_questions"]) if plan else rcfg["planner"]["max_sub_questions"]
+    roles = job.data["stage_roles"]
+    models = {k: cfg["roles"][r]["model"] for k, r in roles.items()}
+    free = sorted({m for k, m in models.items() if _is_free(cfg, m)})
     return rj._limits_text(job, title, [
         "question: " + job.data["inputs"]["question"][:300] + ("..." if len(job.data["inputs"]["question"]) > 300 else ""),
-        f"model {cfg['roles'][role]['model']} for every stage; planner cap ${rcfg['planner']['cap_usd']:.2f}, "
-        f"{'' if plan else 'up to '}{workers} worker(s) at ${rcfg['worker']['cap_usd']:.2f} each, synthesis cap "
-        f"${rcfg['synthesis']['cap_usd']:.2f}, claim checker cap ${rcfg['checker']['cap_usd']:.2f} (it only flags)",
+        f"profile {job.data['profile']}: " + ", ".join(f"{k} {models[k]}" for k in STAGE_KINDS),
+        f"caps: planner ${rcfg['planner']['cap_usd']:.2f}, {'' if plan else 'up to '}{workers} worker(s) at "
+        f"${rcfg['worker']['cap_usd']:.2f} each, synthesis ${rcfg['synthesis']['cap_usd']:.2f}, claim checker "
+        f"${rcfg['checker']['cap_usd']:.2f} (it only flags)",
         f"web: {wr.get('provider', 'deepseek')} Search ${prices.get('search')} and Fetch ${prices.get('fetch')} per "
         f"request, paid from each worker's cap; at most {rcfg['worker']['max_searches']} searches and "
         f"{rcfg['worker']['max_fetches']} fetches per worker",
-        "data sent out: the question, the search queries and the URLs go to DeepSeek; do not put secrets in the question",
+        "data sent out: the question, the search queries and the URLs go to DeepSeek, and the prompts to each stage's "
+        "model provider; do not put secrets in the question",
+        *([f"free models ({', '.join(free)}): their providers may keep the prompts or train on them"] if free else []),
         "tools: WebSearch, WebFetch, Submit; nothing is written outside the job, nothing is sent anywhere else",
         "one confirmation covers every stage of this job (planner, workers, synthesis, claim checker)"])
 
 
-def _preflight(cfg):
-    """What a worker needs, checked before the confirmation so no stage is paid for first: the web provider is the one
-    whose key the confirmation takes (the researcher role's), and both request kinds have a price."""
-    from models.registry import ModelRef
-    rcfg, role, wr = _settings(cfg)
-    provider = ModelRef.parse(cfg["roles"][role]["model"]).provider
-    web_provider = wr.get("provider", "deepseek")
-    if provider not in (web_provider, "fake"):
-        raise rj.Refused(f"web_research.provider {web_provider!r} is not the researcher role's provider {provider!r}: "
-                         "its key would not be taken; no job was created")
+def _is_free(cfg, model):
+    e = (cfg.get("gateway_models") or {}).get(model)
+    return bool(e and e.get("free"))
+
+
+def _preflight(cfg, roles, cap):
+    """What every stage needs, checked before the confirmation so no stage is paid for first: both web request kinds
+    have a price, the web provider is configured (its key is taken with the models' keys), and each stage's model is
+    priced and allowed for its role (a free model only for a listed role without repository tools)."""
+    from harness.llm import check_priced
+    from models import gateway
+    from models.registry import ConfigError, ModelRef
+    _, wr = _settings(cfg)
+    if _web_provider(cfg) not in (cfg.get("providers") or {}):
+        raise rj.Refused(f"web_research.provider {_web_provider(cfg)!r} is not a configured provider; no job was created")
     prices = wr.get("price_usd_per_request") or {}
     missing = [k for k in ("search", "fetch") if prices.get(k) is None]
     if missing:
         raise rj.Refused(f"web_research.price_usd_per_request has no {', '.join(missing)}; no job was created")
+    scfg = rj.stage_config(cfg, cap)
+    for kind, role in roles.items():
+        ref = ModelRef.parse(cfg["roles"][role]["model"])
+        try:
+            check_priced(scfg, ref, f"research {kind} (role {role!r})")
+            gateway.check_use(scfg, role, ref)
+        except ConfigError as e:
+            raise rj.Refused(f"{e}; no job was created") from e
 
 
 def _need(rcfg):
@@ -85,19 +135,20 @@ def _need(rcfg):
             + float(rcfg["synthesis"]["cap_usd"]) + float(rcfg["checker"]["cap_usd"]))
 
 
-def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None):
+def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None, profile=None):
     """A new research job, confirmed once, then every stage. Returns the job."""
     from research.stages import QUESTION_MAX, QUESTION_MIN
     if not isinstance(question, str) or not QUESTION_MIN <= len(question.strip()) <= QUESTION_MAX:
         raise rj.Refused(f"the question must have {QUESTION_MIN} to {QUESTION_MAX} characters; no job was created")
-    rcfg, role, wr = _settings(cfg)
+    rcfg, wr = _settings(cfg)
+    roles = stage_roles(cfg, profile)
     cap = float(max_usd if max_usd is not None else rcfg.get("max_usd", 1.0))
     need = _need(rcfg)
     if not (math.isfinite(cap) and cap + 1e-9 >= need):
         raise rj.Refused(f"the job cap must be a number of at least ${need:.2f} (the planner, "
                          f"{rcfg['planner']['max_sub_questions']} workers, the synthesis and the checker at their caps); "
                          "no job was created")
-    _preflight(cfg)
+    _preflight(cfg, roles, cap)
     job_id = job_id or rj.new_job_id()
     if not rj.JOB_ID.match(job_id):
         raise rj.Refused(f"{job_id!r} is not a job id")
@@ -106,10 +157,12 @@ def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None):
         raise rj.Refused(f"job {job_id} already exists")
     with job.lock():
         job.data = {"job": job_id, "kind": "research", "state": NEW, "created_at": deps.clock(), "max_usd": cap,
-                    "inputs": {"question": rj.clean(question.strip())}, "stages": {}, "plan": None, "log": []}
+                    "inputs": {"question": rj.clean(question.strip())}, "stages": {}, "plan": None, "log": [],
+                    "profile": profile or rcfg.get("profile") or "default", "stage_roles": roles}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
-            with rj.live(deps, rj.stage_config(cfg, cap), [role], _screen(job, cfg, "research job"), job=job):
+            with rj.live(deps, rj.stage_config(cfg, cap), sorted(set(roles.values())), _screen(job, cfg, "research job"),
+                         job=job, providers=[_web_provider(cfg)]):
                 _run(job, cfg, deps)
         except rj.Refused:
             if job.data["state"] == NEW and not job.data["stages"]:
@@ -122,9 +175,10 @@ def resume(job, cfg, deps):
     """Continue a research job whose stage was interrupted (the caller holds the job's lock)."""
     if job.data["state"] not in RUNNING:
         raise rj.Refused(f"job {job.id} is {job.data['state']}: nothing to resume")
-    _, role, _ = _settings(cfg)
-    with rj.live(deps, rj.stage_config(cfg, job.data["max_usd"]), [role],
-                 _screen(job, cfg, "research job (resume)"), job=job):
+    job.data.setdefault("stage_roles", {k: cfg["research_job"]["role"] for k in STAGE_KINDS})   # a job from before
+    job.data.setdefault("profile", "default")
+    with rj.live(deps, rj.stage_config(cfg, job.data["max_usd"]), sorted(set(job.data["stage_roles"].values())),
+                 _screen(job, cfg, "research job (resume)"), job=job, providers=[_web_provider(cfg)]):
         _run(job, cfg, deps)
     return job
 
@@ -169,7 +223,7 @@ def _run(job, cfg, deps):
             raise rj.Refused(f"job {job.id}: not enough of the job cap left for the planner (BLOCKED)")
         run_id, again = _start_stage(job, deps, "p1", "plan", cap)
         deps.echo(rj.running(job, "planner", run_id))
-        r = run_planner(run_id=run_id, runs_dir=job.runs, cfg=rj.stage_config(cfg, cap), question=question, max_usd=cap,
+        r = run_planner(run_id=run_id, runs_dir=job.runs, cfg=_cfg(job, cfg, cap), question=question, max_usd=cap,
                         resume=again, models=deps.models)
         _end_stage(job, deps, "p1", r)
         if r.get("status") != PLANNED:
@@ -187,7 +241,7 @@ def _run(job, cfg, deps):
             raise rj.Refused(f"job {job.id}: not enough of the job cap left for the synthesis (BLOCKED)")
         run_id, again = _start_stage(job, deps, "s1", "report", cap)
         deps.echo(rj.running(job, "synthesis s1", run_id))
-        r = rp.run_synthesis(run_id=run_id, runs_dir=job.runs, cfg=rj.stage_config(cfg, cap), findings=_collect(job),
+        r = rp.run_synthesis(run_id=run_id, runs_dir=job.runs, cfg=_cfg(job, cfg, cap), findings=_collect(job),
                              max_usd=cap, resume=again, models=deps.models)
         _end_stage(job, deps, "s1", r)
         if r.get("status") != rp.REPORTED:
@@ -205,7 +259,7 @@ def _run(job, cfg, deps):
         run_id, again = _start_stage(job, deps, "e1", "check", cap)
         deps.echo(rj.running(job, "claim checker e1", run_id))
         report = json.loads((job.dir / "report.json").read_text(encoding="utf-8"))
-        r = rp.run_check(run_id=run_id, runs_dir=job.runs, cfg=rj.stage_config(cfg, cap), report=report,
+        r = rp.run_check(run_id=run_id, runs_dir=job.runs, cfg=_cfg(job, cfg, cap), report=report,
                          findings=_collect(job), max_usd=cap, resume=again, models=deps.models)
         _end_stage(job, deps, "e1", r)
         check = {k: r.get(k) for k in ("status", "stop_reason", "verdicts")}
@@ -234,7 +288,7 @@ def _research(job, cfg, deps, question):
             raise rj.Refused(f"job {job.id}: not enough of the job cap left for {sid} (BLOCKED)")
         run_id, again = _start_stage(job, deps, sid, "research_worker", cap)
         deps.echo(rj.running(job, f"worker {sid} ({sub['id']})", run_id))
-        r = run_worker(run_id=run_id, runs_dir=job.runs, cfg=rj.stage_config(cfg, cap), question=question, sub=sub,
+        r = run_worker(run_id=run_id, runs_dir=job.runs, cfg=_cfg(job, cfg, cap), question=question, sub=sub,
                        max_usd=cap, resume=again, models=deps.models, **({"paid": paid} if paid else {}))
         _end_stage(job, deps, sid, r)
         if r.get("findings"):
@@ -288,6 +342,8 @@ def status_lines(job):
     d = job.data
     out = [f"job {job.id}: {d['state']} (research)", "question: " + d["inputs"]["question"][:200],
            f"money: cap ${d['max_usd']:.2f}, spent ${rj.spent_nano(job) / 1e9:.4f}"]
+    if d.get("stage_roles"):
+        out.append(f"profile {d.get('profile')}: " + ", ".join(f"{k} {r}" for k, r in d["stage_roles"].items()))
     for sid, s in d["stages"].items():
         out.append(f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
                    + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else "")

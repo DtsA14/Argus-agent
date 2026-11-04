@@ -74,6 +74,7 @@ LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
                                   RESEARCHING, AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE, RESEARCH_FAILED)}
 JOB_ID = re.compile(r"^j[0-9a-z_]{1,40}$")
 KEY_SHAPE = {"anthropic": "sk-ant-"}
+KEY_NAMED = re.compile(r"^([a-z][a-z0-9_]*)=(.+)$")       # --key-file PROVIDER=PATH
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-_]?")
 
 
@@ -292,15 +293,37 @@ def draft_sha(path):
 
 # ---- live stages: the human confirms, then types the key -----------------------------------------------------------
 
-def _needs_key(cfg, roles):
+def _needs_key(cfg, roles, providers=()):
+    """[(provider, key env var, kind, key prefix)] the roles' models and the extra providers (a web provider) need, one
+    per env var. The prefix is the provider's key_prefix, else the kind's (KEY_SHAPE)."""
     from models.registry import ModelRef
-    out = []
-    for role in roles:
-        ref = ModelRef.parse(cfg["roles"][role]["model"])
-        prov = (cfg.get("providers") or {}).get(ref.provider) or {}
+    names = [ModelRef.parse(cfg["roles"][role]["model"]).provider for role in roles] + list(providers)
+    out = {}
+    for name in names:
+        prov = (cfg.get("providers") or {}).get(name) or {}
         if prov.get("kind") != "fake":
-            out.append((prov.get("api_key_env"), prov.get("kind")))
-    return sorted(set(out))
+            env = prov.get("api_key_env")
+            out.setdefault(env, (name, env, prov.get("kind"), prov.get("key_prefix") or KEY_SHAPE.get(prov.get("kind"))))
+    return sorted(out.values(), key=lambda k: (k[0], str(k[1])))
+
+
+def key_files(value):
+    """--key-file as given: one PATH (the old form, one key), or NAME=PATH per provider -> {provider: PATH}. Mixing
+    both forms, or naming a provider twice, is refused."""
+    if value is None or isinstance(value, (str, os.PathLike, dict)):
+        return value
+    items = list(value)
+    if len(items) == 1 and not KEY_NAMED.match(items[0]):
+        return items[0]
+    out = {}
+    for item in items:
+        m = KEY_NAMED.match(item)
+        if not m:
+            raise Refused(f"--key-file {item!r}: with more than one key file give each as PROVIDER=PATH")
+        if m.group(1) in out:
+            raise Refused(f"--key-file names provider {m.group(1)!r} twice")
+        out[m.group(1)] = m.group(2)
+    return out
 
 
 def _peak_lines(deps, cfg, roles):
@@ -351,17 +374,27 @@ def read_key_file(path, forbidden):
 
 
 @contextmanager
-def live(deps, cfg, roles, text, job=None):
-    """Confirm, then take each key the stage's real models need (never an argument, never written, unset after).
-    The key is typed in a terminal, or read from deps.key_file; only with a key file may deps.assume_yes replace the
-    [y/N] (the human approved this run in chat), and the limits are then still printed and noted in the job."""
-    keys = _needs_key(cfg, roles)
-    if deps.assume_yes and not deps.key_file:
+def live(deps, cfg, roles, text, job=None, providers=()):
+    """Confirm, then take each key the stage's real models (and `providers`, e.g. a web provider) need (never an
+    argument, never written, unset after). A key is typed in a terminal, or read from deps.key_file: one PATH for a
+    stage that needs one key, or {provider: PATH} naming exactly the providers that need one. Only with key files may
+    deps.assume_yes replace the [y/N] (the human approved this run in chat), and the limits are then still printed and
+    noted in the job."""
+    keys = _needs_key(cfg, roles, providers)
+    files = key_files(deps.key_file)
+    if deps.assume_yes and not files:
         raise Refused("--yes needs --key-file: without a key file the run is confirmed in the terminal")
-    if keys and not deps.key_file and not deps.isatty():
+    if keys and not files and not deps.isatty():
         raise Refused("a live stage needs a terminal: the key is typed, never passed (or use --key-file)")
-    if deps.key_file and len(keys) > 1:
-        raise Refused(f"--key-file holds one key; this stage needs {len(keys)}")
+    if isinstance(files, str) and len(keys) > 1:
+        raise Refused(f"--key-file holds one key; this stage needs {len(keys)} ({', '.join(k[0] for k in keys)}): give "
+                      "each as --key-file PROVIDER=PATH")
+    if isinstance(files, dict):
+        need = {k[0] for k in keys}
+        if set(files) != need:
+            raise Refused(f"--key-file names {sorted(files)}; this stage needs a key for {sorted(need)}")
+    if len(keys) > 1:
+        text = "\n".join([text, "keys taken: " + ", ".join(f"{k[0]} ({k[1]})" for k in keys)])
     text = "\n".join([text, *_peak_lines(deps, cfg, roles)])
     # SPEC_ROUTER_STATUS.md 2.1: the human's decisions and their times, for the supervision measure
     if job is not None:
@@ -380,20 +413,22 @@ def live(deps, cfg, roles, text, job=None):
                                                                else [])] if job is not None else [])
     set_vars = []
     try:
-        for var, kind in keys:
-            if deps.key_file:
-                key = read_key_file(deps.key_file, forbidden)
+        for name, var, kind, shape in keys:
+            if files:
+                path = files[name] if isinstance(files, dict) else files
+                key = read_key_file(path, forbidden)
                 if job is not None:
-                    job.note(deps, "key_from_file", path=str(Path(deps.key_file).expanduser()))
+                    job.note(deps, "key_from_file", provider=name, path=str(Path(path).expanduser()))
             else:
+                if len(keys) > 1:
+                    deps.echo(f"key for {name} ({var}):")
                 key = deps.get_key() or ""
-            shape = KEY_SHAPE.get(kind)
             if not key:
                 raise Refused("the key is empty; nothing was started")
             if re.search(r"\s", key):
                 raise Refused("the key contains whitespace (pasted twice?); nothing was started")
             if shape and (not key.startswith(shape) or key[len(shape):].find(shape) != -1):
-                raise Refused(f"the key does not look like one {kind} key; nothing was started")
+                raise Refused(f"the key does not look like one {name} key; nothing was started")
             if not deps.key_file and job is not None:
                 job.note(deps, "key_typed")             # only when: never the key, its length or its prefix
             os.environ[var] = key

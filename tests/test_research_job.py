@@ -500,8 +500,12 @@ def test_web_settings_are_checked_before_the_confirmation(tmp_path):
     with pytest.raises(rj.Refused, match="has no fetch"):
         env.start()
     env.cfg = cfg()
-    env.cfg["roles"]["researcher"]["model"] = "anthropic:claude-haiku-5-5"
-    with pytest.raises(rj.Refused, match="not the researcher role's provider"):
+    env.cfg["web_research"]["provider"] = "nowhere"
+    with pytest.raises(rj.Refused, match="not a configured provider"):
+        env.start()
+    env.cfg = cfg()
+    env.cfg["roles"]["researcher"]["model"] = "deepseek:unpriced-model"
+    with pytest.raises(rj.Refused, match="no price"):
         env.start()
     assert env.confirms == [] and env.model.script == [PLAN]
 
