@@ -58,6 +58,11 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     `pilots/from_research_v0` (issue 015, argus-ledger 4e947a0): kedua lengan benar menurut grader tersembunyi; tanpa
     riset $0,0384, dengan riset $0,0743 (agen 1 percobaan vs 2). Riset tidak dibutuhkan untuk issue ini (n = 1)
   - [ ] Bukti berikutnya: issue yang salah dikerjakan lengan tanpa riset. Planner berhirarki belum dibenarkan
+    - [x] Kandidat dikumpulkan 2026-11-04 (`pilots/research_need_v0/CANDIDATES.md`, #300): 4 kandidat dari release notes
+      fastapi 0.143.2→0.162.0 dan starlette 1.8.0→1.10.0, perilaku dibuktikan di dua venv scratch. Penilaian: kebanyakan
+      perubahan up2 menambah kemampuan, bukan membuat jalan lama salah; peluang ketemu issue yang gagal tanpa riset rendah
+    - [ ] Penyaringan: satu panggilan DeepSeek per kandidat tanpa tool (< $0,01), butuh "go live" kecil; pilot dua lengan
+      hanya bila jawabannya salah menurut probe. Kalau semua benar: catat dan hentikan jalur ini
   - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
