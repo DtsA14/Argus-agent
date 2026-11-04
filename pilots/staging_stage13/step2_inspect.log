@@ -1,0 +1,2 @@
+net=none ro=true cap=[ALL] user=1001:1001 sec=[no-new-privileges] mounts=/home/ubuntu/argus-staging/releases/j20261104_152512_b93a-4e947a0ffe8b.up1/sock:/run/argus:rw=true /home/ubuntu/argus-staging/releases/j20261104_152512_b93a-4e947a0ffe8b.up1/src:/app:rw=false /home/ubuntu/argus-staging/releases/j20261104_152512_b93a-4e947a0ffe8b.up1/entry:/entry:rw=false /home/ubuntu/argus-staging/data/pub:/data:rw=false 
+staging containers: 1

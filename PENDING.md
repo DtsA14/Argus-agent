@@ -97,8 +97,14 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Terjadwal
 
+- [x] **Deploy Stage 13 / issue 015** (argus-ledger 4e947a0) ke staging 2026-11-04, `pilots/staging_stage13/RESULT.md`:
+  live `j20261104_152512_b93a-4e947a0ffe8b.up1`, CSV tanpa gzip, JSON gzip; rollback → 014 `.up1`. Dua "go live" (yang
+  pertama berhenti: job ada di `~/pilot3a_live`)
+
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), environment `*_up2`, PLAN.md + satu
-  "go live" (`docs/reviews/SPEC_DEP_UPGRADE_V0.md`)
+  "go live" (`docs/reviews/SPEC_DEP_UPGRADE_V0.md`). Ulangi cek gzip Stage 13 (langkah 3
+  `pilots/staging_stage13`) di up2. Sesudah up2: kandidat issue dengan API baru starlette/fastapi, disaring dulu dengan
+  pertanyaan langsung ke DeepSeek tanpa tool sebelum pilot dua lengan (bukti untuk planner berhirarki)
 
 ### Gap dari pekerjaan 2026-10-30
 
