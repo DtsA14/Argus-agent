@@ -144,12 +144,17 @@ def main(argv=None, deps=None):
                        ("monitor", "refresh, then the smoke test of the live release; recorded; changes no container"),
                        ("report", "the live release's summary and jobs as an escaped HTML page in ~/argus-staging/reports")):
         gs.add_parser(name, help=text)
+    rs = sub.add_parser("research", help="a deep research job: planner, web workers (docs/reviews/SPEC_RESEARCH_JOB.md)")
+    gq = rs.add_mutually_exclusive_group(required=True)
+    gq.add_argument("--question")
+    gq.add_argument("--question-file")
+    rs.add_argument("--max-usd", type=float)
     for name in ("reject", "abandon"):
         r = sub.add_parser(name)
         r.add_argument("job")
         r.add_argument("reason")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research"):   # the live commands
             p.add_argument("--key-file", help="read the API key from this 0600 file instead of typing it")
             p.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     o = ap.parse_args(argv)
@@ -239,6 +244,12 @@ def main(argv=None, deps=None):
             issue = o.issue if o.issue is not None else Path(o.issue_file).read_text(encoding="utf-8")
             job = rj.start_code(repo=o.repo, commit=o.commit, issue=issue, cfg=cfg, deps=deps, exclude=o.exclude,
                                 max_usd=o.max_usd, jobs_dir=o.jobs_dir, environment=o.environment, research=o.research)
+        elif o.cmd == "research":
+            from router import research as rr
+            question = o.question if o.question is not None else Path(o.question_file).read_text(encoding="utf-8")
+            job = rr.start(question=question, cfg=cfg, deps=deps, max_usd=o.max_usd, jobs_dir=o.jobs_dir)
+            print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
+            return 0 if job.data["state"] == rr.FINDINGS_READY else 1
         elif o.cmd == "research-ok":
             job, _ = rj.research_ok(o.job, sha=o.sha, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
         elif o.cmd == "approve":
@@ -261,7 +272,9 @@ def main(argv=None, deps=None):
               + "`argus status <job>` shows where it stopped. Do not start a new job for the same task.", file=sys.stderr)
         return 130
     print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
-    return 0 if job.data["state"] in (rj.AWAITING_APPROVAL, rj.REVIEW_READY, rj.AWAITING_RESEARCH_REVIEW) else 1
+    from router.research import FINDINGS_READY            # a resumed research job
+    return 0 if job.data["state"] in (rj.AWAITING_APPROVAL, rj.REVIEW_READY, rj.AWAITING_RESEARCH_REVIEW,
+                                      FINDINGS_READY) else 1
 
 
 if __name__ == "__main__":

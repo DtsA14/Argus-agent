@@ -173,6 +173,17 @@ web_research:
   timeout_s: 30
   max_response_bytes: 4000000
 
+# SPEC_RESEARCH_JOB: argus research. Every stage on the researcher role (deepseek-flash, Atha 2026-11-03); the job cap
+# and each stage's cap (a stage the job's remainder cannot fund is not started). Workers' web requests are paid from their stage's reservation.
+research_job:
+  role: researcher
+  max_usd: 1.00
+  max_output_tokens_by_model: {"deepseek:deepseek-flash": 16000, "deepseek:deepseek-v4-pro": 16000}
+  planner: {cap_usd: 0.05, attempt_tokens: 100000, max_input_tokens: 30000, max_steps: 4, max_submits: 3,
+            max_sub_questions: 4}
+  worker: {cap_usd: 0.15, attempt_tokens: 600000, max_input_tokens: 60000, max_steps: 16, max_submits: 3,
+           max_searches: 6, max_fetches: 8, search_count: 8, attempt_text: 48000, part_chars: 12000}
+
 router:
   job_max_usd: 1.00
   draft_max_usd: 0.75

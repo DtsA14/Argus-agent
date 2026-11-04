@@ -25,8 +25,9 @@ riset yang benar dan bersumber dengan biaya kecil, tanpa Claude menulis atau men
 ## 2. Alur job
 
 ```
-argus research "<pertanyaan>" [--max-usd X] [--key-file F]
+argus research --question "<pertanyaan>" | --question-file F [--max-usd X] [--key-file F --yes]
   NEW → PLANNING (p1) → RESEARCHING (w1..wN, berurutan) → SYNTHESIZING (s1) → CHECKING (e1) → REPORT_READY
+  (PR B, 2026-11-03: sampai PR C, RESEARCHING berakhir di FINDINGS_READY, yaitu findings.json tanpa laporan)
                       ↘ PLAN_FAILED          ↘ (semua worker INSUFFICIENT_EVIDENCE) → RESEARCH_INCONCLUSIVE
   setiap stage → BLOCKED (cap tidak cukup untuk satu attempt) · setiap state non-terminal → ABANDONED
 argus status / resume / abandon <job>      (sama dengan job kode)
@@ -48,7 +49,7 @@ Stage run sendiri (pola `make_drafting`/r1, `LLMCaller`, memo), **tanpa tool web
 
 ```
 SubmitPlan:
-  sub_questions: [{id: "Q1".."Q4", question: str (20..500), why: str (≤ 300)}]   1..max_sub_questions (default 4)
+  sub_questions: [{question: str (20..500), why: str (≤ 300)}]   1..max_sub_questions (default 4); id Q1.. diberi harness
   outline: [str (≤ 120)]   1..8 judul bagian laporan
 ```
 
@@ -70,14 +71,16 @@ SubmitFindings(...)
 - `WebFetch` memakai DeepSeek Fetch (markdown). Teks halaman disimpan di `<run>/web/pages/` **sebelum** hasil dikembalikan
   (format dan `stored_page` yang sama dengan ReadDocs), dibagi per 12.000 karakter; `part=n` membaca dari salinan tersimpan,
   bukan request baru.
-- Batas per worker: `max_steps` 20, `max_searches` 6, `max_fetches` 8, teks web ke konteks 60.000 karakter per attempt;
+- Batas per worker (PR B): `max_steps` 16, `max_searches` 6, `max_fetches` 8 (request yang dikirim, tercatat sebelum
+  dikirim; hasil yang sudah disimpan gratis), teks web ke konteks 48.000 karakter per run;
   lewat batas → tool ditolak dengan pesan, loop lanjut. Tiga langkah terakhir hanya menawarkan `SubmitFindings` (seperti r1).
 - Worker menerima pertanyaan job dan **hanya** sub-pertanyaannya, ditandai data dari planner.
 
 ```
 SubmitFindings:
   verdict: ANSWERED | INSUFFICIENT_EVIDENCE
-  findings: [{id: "F1".., claim: str (20..600), sources: [{url, quote (20..600)}] 1..3}]   0..8 (≥ 1 untuk ANSWERED)
+  findings: [{claim: str (20..600), sources: [{url, quote (20..600)}] 1..3}]   0..8 (≥ 1 untuk ANSWERED); id F1.. dan
+            W<n>.F<m> di findings.json diberi harness
   uncertainties: [str (≤ 300)]   ≥ 1 untuk INSUFFICIENT_EVIDENCE
 ```
 
