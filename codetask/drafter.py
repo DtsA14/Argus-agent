@@ -48,7 +48,7 @@ from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_
                            reservation_from_ledger, tool_step_key)
 from models.registry import ModelRef
 
-from .agent import NUDGE, error_excerpt
+from .agent import NUDGE, RESEARCH_LABEL, error_excerpt
 from .review import cell, fence
 from .run import ROOT, RunExists, cache_totals
 from .tools import GATED, ListFiles, ReadFile, SearchFiles, Toolbox
@@ -301,6 +301,7 @@ def task_prompt(inputs, files, policy):
     note = [NOTE_LABEL, inputs["note"], ""] if inputs.get("note") else []    # SPEC_DRAFT_CALL_PATH 2.4
     return "\n".join([
         "Issue (from a human; the task to draft):", inputs["issue"], "", *note,
+        *([RESEARCH_LABEL, inputs["research"], ""] if inputs.get("research") else []),   # SPEC_FROM_RESEARCH 5
         f"Repository: intake {inputs['intake']!r}, {files} files, read-only.",
         *([f"Protected by the repository ({intake.PROTECTED_FILE}): {', '.join(policy['repo_protected'])}. A file "
            "they match is never writable and never a changed test; new test files may match them."]
@@ -553,7 +554,8 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
         report = None
         if not problems:
             try:
-                report = dr.check(draft, task=CHECK_TASK, issue=inputs["issue"], max_usd=CHECK_USD,
+                report = dr.check(draft, task=CHECK_TASK, issue=inputs["issue"], research=inputs.get("research"),
+                                  max_usd=CHECK_USD,
                                   max_iterations=CHECK_ITERATIONS, reference_patch=None, sandbox_cfg=scfg, root=root,
                                   validate=validate, collect=collect, red=red, profiles=policy["profiles"])
             except (dr.DraftError, intake.IntakeError, OSError) as e:
@@ -794,6 +796,8 @@ def review_text(run_id, inputs, state, cost, source=None):
            "", "## Issue", "", fence(inputs["issue"], "text")]
     if inputs.get("note"):                      # SPEC_DRAFT_CALL_PATH 2.4: this draft was steered by a human's note
         out += ["", "## Note from the reviewer (human-steered)", "", fence(inputs["note"], "text")]
+    if inputs.get("research"):                  # SPEC_FROM_RESEARCH 5: the drafter also read a research job's context
+        out += ["", "## Research context", "", fence(inputs["research"], "text")]
     draft, report = state.get("draft"), state.get("report") or {}
     if draft:
         p, c = draft["plan"], draft["contract"]
@@ -919,6 +923,11 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         issue = inputs["issue"]
         if not isinstance(issue, str) or not issue.strip() or len(issue) > MAX_ISSUE:
             return stop(BLOCKED, f"the issue must be non-empty text of at most {MAX_ISSUE} characters", "invalid_input")
+        research = inputs.get("research")
+        if research is not None and (not isinstance(research, str) or not research.strip()
+                                     or len(research) > ct.MAX_RESEARCH):
+            return stop(BLOCKED, f"the research context must be non-empty text of at most {ct.MAX_RESEARCH} characters",
+                        "invalid_input")
         name = inputs["intake"]
         if not isinstance(name, str) or not intake.NAME.match(name):
             return stop(BLOCKED, f"{name!r} is not an intake name", "invalid_input")
@@ -1007,9 +1016,9 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
 
 def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=None, resume=False, crash_at=None,
                 models=None, validate=None, preflight=None, env_preflight=None, root=ROOT, echo=False, collect=None,
-                red=None, note=None):
-    """A new run takes the intake, the issue and the run's cap (and a reviewer's note, SPEC_DRAFT_CALL_PATH 2.4); a
-    resume takes them from <run>/inputs.json."""
+                red=None, note=None, research=None):
+    """A new run takes the intake, the issue and the run's cap (and a reviewer's note, SPEC_DRAFT_CALL_PATH 2.4, and a
+    research job's frozen context, SPEC_FROM_RESEARCH); a resume takes them from <run>/inputs.json."""
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
@@ -1021,7 +1030,8 @@ def run_drafter(*, run_id, runs_dir, cfg, intake_name=None, issue=None, max_usd=
     else:
         if max_usd is None or not float(max_usd) > 0:
             raise ValueError("a drafter run needs a cap (max_usd > 0)")
-        inputs = {"intake": intake_name, "issue": issue, "max_usd": float(max_usd), **({"note": note} if note else {})}
+        inputs = {"intake": intake_name, "issue": issue, "max_usd": float(max_usd), **({"note": note} if note else {}),
+                  **({"research": research} if research is not None else {})}
         _write(run_dir / INPUTS, json.dumps(inputs, indent=2, ensure_ascii=False) + "\n")
         _write(run_dir / "issue.txt", (issue or "") + "\n")
     cap = cfg["budget"].get("max_usd")

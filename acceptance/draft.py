@@ -179,11 +179,13 @@ def old_tests(base_dir, draft):
     return out
 
 
-def build_contract(draft, *, task, workspace, issue, max_usd, max_iterations, old=None, web=False):
+def build_contract(draft, *, task, workspace, issue, max_usd, max_iterations, old=None, web=False, research=None):
     """The task's contract: the draft's scope, validations, tools and profile; everything else from the human.
     old: {path: intake text} of the changed test files (old_tests), from which their no_skip rules are made.
-    web: the human granted ReadDocs (SPEC_WEB_TOOLS 3): read_docs is added to the draft's tools."""
-    c = {"contract": task, "version": 1, "inputs": {"workspace": workspace, "issue": issue},
+    web: the human granted ReadDocs (SPEC_WEB_TOOLS 3): read_docs is added to the draft's tools.
+    research: a research job's frozen context (SPEC_FROM_RESEARCH), kept apart from the issue; None adds nothing."""
+    c = {"contract": task, "version": 1, "inputs": {"workspace": workspace, "issue": issue,
+                                                    **({"research": research} if research is not None else {})},
          "scope": copy.deepcopy(draft["contract"]["scope"]),
          "artifacts": [{"path": ct.SUMMARY, "type": "json", "schema": "claims_v2"}],
          "validation": copy.deepcopy(draft["contract"]["validation"]), "judge": [],
@@ -430,7 +432,7 @@ def reference_problems(contract, new_paths, ws, patch, sandbox_cfg, validate=run
 
 
 def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandbox_cfg, root=".",
-          profiles, validate=run_validation, collect=collect_nodes, red=red_check, web=False):
+          profiles, validate=run_validation, collect=collect_nodes, red=red_check, web=False, research=None):
     """The full report on a draft. ok only when every check passed. reference_patch=None: no reference check (W2b),
     and the report says the criteria are not proven satisfiable. profiles (required, no default, so a new caller
     cannot skip the check by forgetting it): the configured budget profile names, for the checks setup runs
@@ -452,7 +454,7 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
         return {**report, "problems": [f"intake {draft['base']}: {p}" for p in problems]}
     old = old_tests(base_dir, draft)
     contract = build_contract(draft, task=task, workspace=f"fixtures/repos/{task}", issue=issue, max_usd=max_usd,
-                              max_iterations=max_iterations, old=old, web=web)
+                              max_iterations=max_iterations, old=old, web=web, research=research)
     report["contract"] = contract
     base_files = snapshot(base_dir, skip_cache=True)
     problems = static_problems(draft, contract, base_files, old)
@@ -530,7 +532,8 @@ def approve(report, draft, *, root="."):
         raise DraftError(f"intake {draft['base']} changed since the check: {'; '.join(stale)}")
     rebuilt = build_contract(draft, task=task, workspace=f"fixtures/repos/{task}", issue=contract["inputs"]["issue"],
                              max_usd=contract["limits"]["max_usd"], max_iterations=contract["limits"]["max_iterations"],
-                             old=old_tests(base_dir, draft), web="read_docs" in (contract.get("tools") or []))
+                             old=old_tests(base_dir, draft), web="read_docs" in (contract.get("tools") or []),
+                             research=contract["inputs"].get("research"))
     if ct.canonical(rebuilt) != ct.canonical(contract):
         raise DraftError("the contract is not the draft plus the human's fields")
     changed = changed_record(snapshot(base_dir, skip_cache=True), draft)

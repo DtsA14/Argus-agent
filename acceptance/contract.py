@@ -4,7 +4,8 @@ canonical JSON and its sha256 are stored in the run directory, and the agent has
 Shape (docs/reviews/ACCEPTANCE_GENERAL.md section 5):
   contract: str                 name
   version: int >= 1
-  inputs: {workspace, issue}    workspace: repository directory, relative to the project root, under fixtures/repos/
+  inputs: {workspace, issue[, research]}    workspace: repository directory, relative to the project root, under fixtures/repos/;
+                                           research: a research job's frozen context (SPEC_FROM_RESEARCH)
   scope: {writable, protected}  globs relative to the workspace; protected wins, and no input file may match both
   artifacts: [{path, type, schema}]   slice 1: exactly SUMMARY.json, json, claims_v1 or claims_v2
   validation: [{id, executable, args, timeout_s, min_tests, max_skipped, must_pass?, environment?}]
@@ -26,6 +27,7 @@ from .validation import PYTEST_NODE, VITEST_NODE, kind, validate_command
 ARTIFACT_TYPES = {"json": {"claims_v1", "claims_v2"}}
 SUMMARY = "SUMMARY.json"
 MAX_ISSUE = 8000   # characters of inputs.issue (and of a drafter's issue); 2000 refused sympy-23824 (2103)
+MAX_RESEARCH = 24000   # characters of inputs.research, a research job's frozen context (SPEC_FROM_RESEARCH 4)
 KEYS = {"contract", "version", "inputs", "scope", "artifacts", "validation", "judge", "limits"}
 OPTIONAL_KEYS = {"tools", "budget_profile"}
 # Tools a contract may add to the configured allowlist for its own run (docs/reviews/TASK_LARGE_REPO.md, decision A).
@@ -115,9 +117,12 @@ def validate(c):
         errors.append("version must be an integer >= 1")
 
     inp = c["inputs"]
-    if not isinstance(inp, dict) or set(inp) != {"workspace", "issue"}:
-        errors.append("inputs must have exactly 'workspace' and 'issue'")
+    if not isinstance(inp, dict) or set(inp) - {"research"} != {"workspace", "issue"}:
+        errors.append("inputs must have exactly 'workspace' and 'issue' (and optionally 'research')")
     else:
+        r = inp.get("research")
+        if "research" in inp and (not isinstance(r, str) or not r.strip() or len(r) > MAX_RESEARCH):
+            errors.append(f"inputs.research must be a non-empty string of at most {MAX_RESEARCH} characters")
         ws = inp["workspace"]
         if not check_glob(ws) or any(ch in ws for ch in "*?") or not ws.startswith("fixtures/repos/"):
             errors.append("inputs.workspace must be a plain relative path under fixtures/repos/")

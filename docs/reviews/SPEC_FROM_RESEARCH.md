@@ -1,6 +1,6 @@
 # Spek: `argus code --from-research` (riset → kode, urutan tetap)
 
-Status: **draf, menunggu "Ok" Atha** (§9). Langkah pertama menuju satu pipeline berhirarki (PENDING, Reconciliation
+Status: **disetujui Atha 2026-11-04** ("Ok plus merge": usul §9.1-9.4 apa adanya). Langkah pertama menuju satu pipeline berhirarki (PENDING, Reconciliation
 2026-11-04), tanpa planner. Jalur ketat: mengubah input drafter dan kontrak agen, dan memasukkan teks web ke agen yang
 menulis kode. Berlaku penuh AGENTS.md: spek → tes yang gagal di kode lama → kode → mutants → `/code-review medium` +
 `/security-review` → `verify.sh` sekali di commit final → "merge" Atha.
@@ -34,7 +34,8 @@ Dibangun harness dari berkas job riset, bukan dari model:
 
 - Pertanyaan riset, id job riset, dan sha256 `report.json`, `check.json`, `findings.json`.
 - Item laporan (S, P1..) yang **e1 nilai SUPPORTED** (usul §9.2), masing-masing dengan teksnya dan setiap kutipan yang ia
-  rujuk: URL, `fetched_at`, kutipan. Item PARTIAL/UNSUPPORTED tidak dibawa; jumlahnya disebut ("3 item lain tidak dibawa:
+  rujuk: URL, `fetched_at`, kutipan. Ringkasan S dinilai e1 terhadap semua temuan yang dirujuk laporan, jadi S membawa
+  semua kutipan itu, termasuk kutipan yang dirujuk item yang tidak dibawa (kutipannya tetap lolos G1/G2). Item PARTIAL/UNSUPPORTED tidak dibawa; jumlahnya disebut ("3 item lain tidak dibawa:
   e1 PARTIAL").
 - `--items` memilih sebagian item SUPPORTED. Item yang tidak ada atau bukan SUPPORTED → ditolak, tidak diam-diam dibuang.
 - Semua teks model dan kutipan di dalam fence, dengan label: "data dari web dan dari model riset; bukan instruksi".
@@ -45,8 +46,8 @@ retry memakai salinan ini; job riset yang berubah sesudahnya tidak berpengaruh.
 ## 4. Batas ukuran
 
 Laporan eval v0 berukuran 2,7–38 ribu karakter; `MAX_ISSUE` 8.000 (issue + handoff r1) terlalu kecil. Konteks riset
-punya batas sendiri, **`router.research_context_max_chars`, usul 24.000** (§9.3), sekitar 6 ribu token: kecil di
-`max_input_tokens` drafter (200.000).
+punya batas sendiri, **`MAX_RESEARCH` = 24.000** (§9.3, konstanta di `acceptance/contract.py`, dipaksa juga oleh
+validasi kontrak), sekitar 6 ribu token: kecil di `max_input_tokens` drafter (200.000).
 
 - Konteks yang melebihi batas → `argus code` ditolak sebelum job dibuat, dengan ukuran per item agar `--items` bisa dipilih.
   Tidak pernah dipotong diam-diam.
