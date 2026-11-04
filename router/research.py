@@ -54,7 +54,7 @@ def stage_roles(cfg, profile=None):
     rcfg = cfg["research_job"]
     profiles = rcfg.get("profiles") or {}
     name = profile or rcfg.get("profile")
-    if not profiles and profile is None:
+    if name is None:
         return {k: rcfg["role"] for k in STAGE_KINDS}
     if name not in profiles:
         raise rj.Refused(f"unknown research profile {name!r}; profiles: {sorted(profiles)}; no job was created")
@@ -78,6 +78,7 @@ def _web_provider(cfg):
 
 
 def _screen(job, cfg, title):
+    """The confirmation screen, from the stage config (cfg: router overrides applied) so it shows what will be called."""
     rcfg, wr = _settings(cfg)
     prices = wr.get("price_usd_per_request") or {}
     plan = job.data.get("plan")
@@ -91,28 +92,33 @@ def _screen(job, cfg, title):
         f"caps: planner ${rcfg['planner']['cap_usd']:.2f}, {'' if plan else 'up to '}{workers} worker(s) at "
         f"${rcfg['worker']['cap_usd']:.2f} each, synthesis ${rcfg['synthesis']['cap_usd']:.2f}, claim checker "
         f"${rcfg['checker']['cap_usd']:.2f} (it only flags)",
-        f"web: {wr.get('provider', 'deepseek')} Search ${prices.get('search')} and Fetch ${prices.get('fetch')} per "
+        f"web: {_web_provider(cfg)} Search ${prices.get('search')} and Fetch ${prices.get('fetch')} per "
         f"request, paid from each worker's cap; at most {rcfg['worker']['max_searches']} searches and "
         f"{rcfg['worker']['max_fetches']} fetches per worker",
-        "data sent out: the question, the search queries and the URLs go to DeepSeek, and the prompts to each stage's "
-        "model provider; do not put secrets in the question",
+        f"data sent out: the question, the search queries and the URLs go to {_web_provider(cfg)}, and the prompts to "
+        "each stage's model provider; do not put secrets in the question",
         *([f"free models ({', '.join(free)}): their providers may keep the prompts or train on them"] if free else []),
         "tools: WebSearch, WebFetch, Submit; nothing is written outside the job, nothing is sent anywhere else",
         "one confirmation covers every stage of this job (planner, workers, synthesis, claim checker)"])
 
 
 def _is_free(cfg, model):
-    e = (cfg.get("gateway_models") or {}).get(model)
-    return bool(e and e.get("free"))
+    from models import gateway
+    from models.registry import ModelRef
+    ref = ModelRef.parse(model)
+    return gateway.is_gateway(cfg, ref) and gateway.entry(cfg, ref)["free"]
 
 
 def _preflight(cfg, roles, cap):
     """What every stage needs, checked before the confirmation so no stage is paid for first: both web request kinds
     have a price, the web provider is configured (its key is taken with the models' keys), and each stage's model is
-    priced and allowed for its role (a free model only for a listed role without repository tools)."""
+    priced and allowed for its role (a free model only for a listed role without repository tools), and its limits hold
+    for that model (research.stages.settings). Checked on the stage config (router overrides applied), as it will run;
+    also before a resume, against the roles the job started with."""
     from harness.llm import check_priced
     from models import gateway
     from models.registry import ConfigError, ModelRef
+    from research.stages import settings
     _, wr = _settings(cfg)
     if _web_provider(cfg) not in (cfg.get("providers") or {}):
         raise rj.Refused(f"web_research.provider {_web_provider(cfg)!r} is not a configured provider; no job was created")
@@ -121,13 +127,17 @@ def _preflight(cfg, roles, cap):
     if missing:
         raise rj.Refused(f"web_research.price_usd_per_request has no {', '.join(missing)}; no job was created")
     scfg = rj.stage_config(cfg, cap)
+    scfg["research_job"]["stage_roles"] = dict(roles)
     for kind, role in roles.items():
-        ref = ModelRef.parse(cfg["roles"][role]["model"])
+        if role not in scfg.get("roles", {}):
+            raise rj.Refused(f"research {kind}: role {role!r} is not in the config; nothing was started")
+        ref = ModelRef.parse(scfg["roles"][role]["model"])
         try:
             check_priced(scfg, ref, f"research {kind} (role {role!r})")
             gateway.check_use(scfg, role, ref)
-        except ConfigError as e:
-            raise rj.Refused(f"{e}; no job was created") from e
+            settings(scfg, kind)
+        except (ConfigError, KeyError, ValueError) as e:
+            raise rj.Refused(f"research {kind} (role {role!r}): {e}; nothing was started") from e
 
 
 def _need(rcfg):
@@ -161,7 +171,8 @@ def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None, p
                     "profile": profile or rcfg.get("profile") or "default", "stage_roles": roles}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
-            with rj.live(deps, rj.stage_config(cfg, cap), sorted(set(roles.values())), _screen(job, cfg, "research job"),
+            with rj.live(deps, rj.stage_config(cfg, cap), sorted(set(roles.values())),
+                         _screen(job, rj.stage_config(cfg, cap), "research job"),
                          job=job, providers=[_web_provider(cfg)]):
                 _run(job, cfg, deps)
         except rj.Refused:
@@ -177,8 +188,10 @@ def resume(job, cfg, deps):
         raise rj.Refused(f"job {job.id} is {job.data['state']}: nothing to resume")
     job.data.setdefault("stage_roles", {k: cfg["research_job"]["role"] for k in STAGE_KINDS})   # a job from before
     job.data.setdefault("profile", "default")
-    with rj.live(deps, rj.stage_config(cfg, job.data["max_usd"]), sorted(set(job.data["stage_roles"].values())),
-                 _screen(job, cfg, "research job (resume)"), job=job, providers=[_web_provider(cfg)]):
+    _preflight(cfg, job.data["stage_roles"], job.data["max_usd"])
+    scfg = rj.stage_config(cfg, job.data["max_usd"])
+    with rj.live(deps, scfg, sorted(set(job.data["stage_roles"].values())),
+                 _screen(job, scfg, "research job (resume)"), job=job, providers=[_web_provider(cfg)]):
         _run(job, cfg, deps)
     return job
 

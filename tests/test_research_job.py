@@ -117,7 +117,7 @@ def test_a_job_plans_researches_and_keeps_only_gated_findings(tmp_path):
     env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     job = env.start()
     assert job.data["state"] == rr.REPORT_READY and len(env.confirms) == 1
-    assert "DeepSeek" in env.confirms[0] and "one confirmation covers every stage" in env.confirms[0]
+    assert "URLs go to deepseek" in env.confirms[0] and "one confirmation covers every stage" in env.confirms[0]
     plan = json.loads((job.dir / "plan.json").read_text())
     assert [q["id"] for q in plan["sub_questions"]] == ["Q1"]
     f = json.loads((job.dir / "findings.json").read_text())

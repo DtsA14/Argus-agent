@@ -220,3 +220,56 @@ def test_the_cli_passes_key_files_per_provider_and_the_profile(tmp_path, monkeyp
     rc = argus.main(["--jobs-dir", str(tmp_path / "jobs"), "research", "--question", t.QUESTION,
                      "--key-file", "/k/a", "--key-file", "/k/b"])
     assert rc == 2 and "give each as PROVIDER=PATH" in capsys.readouterr().err
+
+
+# ---- added from the code and security reviews --------------------------------------------------------------------
+
+@pytest.mark.parametrize("files", ["swapped", "same_file", "one_path_object"])
+def test_a_gateway_key_never_goes_to_deepseek(tmp_path, files):
+    ds, orf = key_file(tmp_path, "ds", DS_KEY), key_file(tmp_path, "or", OR_KEY)
+    given = {"swapped": {"deepseek": str(orf), "openrouter": str(ds)},
+             "same_file": {"deepseek": str(orf), "openrouter": str(orf)},
+             "one_path_object": orf}[files]
+    with pytest.raises(rj.Refused, match="looks like a openrouter key|holds one key|does not look like"):
+        run_live(deps_with(given))
+    assert "DEEPSEEK_API_KEY" not in os.environ
+
+
+def test_keys_typed_in_the_wrong_order_are_refused(tmp_path):
+    with pytest.raises(rj.Refused, match="the key for deepseek looks like a openrouter key"):
+        run_live(deps_with(None, yes=False, typed=[OR_KEY, DS_KEY]))
+
+
+def test_a_resume_checks_the_stage_roles_again_before_the_confirmation(tmp_path, monkeypatch):
+    from research import stages as st
+    env = free_env(tmp_path, [t.PLAN], [], [])
+    monkeypatch.setattr(st, "run_worker", lambda **kw: (_ for _ in ()).throw(KeyboardInterrupt))
+    with pytest.raises(KeyboardInterrupt):
+        env.start(profile="free")
+    del env.cfg["roles"]["free_checker"]
+    confirms = len(env.confirms)
+    with pytest.raises(rj.Refused, match="role 'free_checker' is not in the config"):
+        rj.resume("jr", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    assert len(env.confirms) == confirms
+
+
+def test_preflight_and_screen_use_the_router_overrides(tmp_path):
+    env = free_env(tmp_path, [], [], [])
+    env.cfg["router"]["overrides"] = {"roles.free_worker.model": "openrouter:x/unlisted"}
+    with pytest.raises(rj.Refused, match="x/unlisted"):
+        env.start(profile="free")
+    assert env.confirms == []
+
+
+def test_a_stage_whose_limits_do_not_hold_for_its_model_creates_no_job(tmp_path):
+    env = free_env(tmp_path, [], [], [])
+    env.cfg["prices"]["openrouter:google/gemma-4-31b-it:free"]["long_context_above"] = 1000
+    with pytest.raises(rj.Refused, match="research checker"):
+        env.start(profile="free")
+    assert env.confirms == []
+
+
+def test_without_a_profile_every_stage_uses_the_research_role():
+    c = t.cfg()
+    del c["research_job"]["profile"]
+    assert set(rr.stage_roles(c).values()) == {"researcher"}

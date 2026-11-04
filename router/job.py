@@ -386,7 +386,7 @@ def live(deps, cfg, roles, text, job=None, providers=()):
         raise Refused("--yes needs --key-file: without a key file the run is confirmed in the terminal")
     if keys and not files and not deps.isatty():
         raise Refused("a live stage needs a terminal: the key is typed, never passed (or use --key-file)")
-    if isinstance(files, str) and len(keys) > 1:
+    if files and not isinstance(files, dict) and len(keys) > 1:
         raise Refused(f"--key-file holds one key; this stage needs {len(keys)} ({', '.join(k[0] for k in keys)}): give "
                       "each as --key-file PROVIDER=PATH")
     if isinstance(files, dict):
@@ -429,6 +429,12 @@ def live(deps, cfg, roles, text, job=None, providers=()):
                 raise Refused("the key contains whitespace (pasted twice?); nothing was started")
             if shape and (not key.startswith(shape) or key[len(shape):].find(shape) != -1):
                 raise Refused(f"the key does not look like one {name} key; nothing was started")
+            # a key that looks like another provider's (files swapped, keys typed in the wrong order) never goes out
+            other = [n for n, pc in (cfg.get("providers") or {}).items() if n != name and pc.get("key_prefix")
+                     and pc["key_prefix"] != shape and not (shape or "").startswith(pc["key_prefix"])
+                     and key.startswith(pc["key_prefix"])]
+            if other:
+                raise Refused(f"the key for {name} looks like a {other[0]} key (swapped?); nothing was started")
             if not deps.key_file and job is not None:
                 job.note(deps, "key_typed")             # only when: never the key, its length or its prefix
             os.environ[var] = key
