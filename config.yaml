@@ -183,6 +183,9 @@ research_job:
             max_sub_questions: 4}
   worker: {cap_usd: 0.15, attempt_tokens: 600000, max_input_tokens: 60000, max_steps: 16, max_submits: 3,
            max_searches: 6, max_fetches: 8, search_count: 8, attempt_text: 48000, part_chars: 12000}
+  # PR C: s1 writes the report from the findings, e1 flags each item (v0: flags only). No web, one Submit tool each.
+  synthesis: {cap_usd: 0.15, attempt_tokens: 250000, max_input_tokens: 40000, max_steps: 4, max_submits: 3}
+  checker: {cap_usd: 0.10, attempt_tokens: 200000, max_input_tokens: 40000, max_steps: 4, max_submits: 3}
 
 router:
   job_max_usd: 1.00
