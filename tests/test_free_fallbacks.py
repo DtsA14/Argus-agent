@@ -21,16 +21,16 @@ from research import report as rp  # noqa: E402
 from router import job as rj  # noqa: E402
 from router import research as rr  # noqa: E402
 
-GEMMA31, GEMMA26 = "openrouter:google/gemma-4-31b-it:free", "openrouter:google/gemma-4-26b-a4b-it:free"
-VL = "openrouter:nvidia/nemotron-3.5-super-vl:free"
+FIRST = "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"          # free_checker's chain in config.yaml
+SECOND, THIRD = "openrouter:nvidia/nemotron-3.5-super-vl:free", "openrouter:nvidia/nemotron-3.5-lightning:free"
 PAID = "openrouter:deepseek/deepseek-v4.1-flash"
 LIMITED = [FakeHTTPError(429, "rate-limited upstream")] * 3          # LLMCaller tries 3 times
 
 
 def checker_env(tmp_path, first, second=(), third=()):
     env = tp.free_env(tmp_path, [t.PLAN, t.REPORT], tp.WORKED, list(first))
-    env.models[f"free_checker@{GEMMA26}"] = StrictScriptedChatModel(script=list(second))
-    env.models[f"free_checker@{VL}"] = StrictScriptedChatModel(script=list(third))
+    env.models[f"free_checker@{SECOND}"] = StrictScriptedChatModel(script=list(second))
+    env.models[f"free_checker@{THIRD}"] = StrictScriptedChatModel(script=list(third))
     env.cfg["llm"]["base_delay"] = 0
     return env
 
@@ -44,16 +44,16 @@ def events(job, sid, name):
 
 def test_a_free_role_lists_its_free_fallbacks():
     c = t.cfg()
-    assert gateway.fallback_chain(c, "free_checker") == [GEMMA31, GEMMA26, VL]
+    assert gateway.fallback_chain(c, "free_checker") == [FIRST, SECOND, THIRD]
     assert gateway.fallback_chain(c, "researcher") == ["fake:scripted"]          # no fallbacks: just the model
 
 
 @pytest.mark.parametrize("role, fallbacks, problem", [
     ("free_checker", [PAID], "only free gateway models fall back"),
-    ("or_deepseek", [VL], "only free gateway models fall back"),            # a paid model never falls back
-    ("free_checker", [GEMMA26, GEMMA26], "repeats a model"),
-    ("free_checker", [GEMMA31], "repeats a model"),
-    ("free_checker", GEMMA26, "must be a list"),
+    ("or_deepseek", [THIRD], "only free gateway models fall back"),            # a paid model never falls back
+    ("free_checker", [SECOND, SECOND], "repeats a model"),
+    ("free_checker", [FIRST], "repeats a model"),
+    ("free_checker", SECOND, "must be a list"),
     ("free_checker", ["openrouter:x/unlisted:free"], "not in gateway_models"),
     ("free_checker", ["other:some/model:free"], "not on openrouter"),
 ])
@@ -83,9 +83,9 @@ def test_a_rate_limited_checker_moves_to_its_next_free_model(tmp_path):
     assert job.data["state"] == rr.REPORT_READY
     assert json.loads((job.dir / "check.json").read_text())["status"] == rp.CHECKED
     [fb] = events(job, "e1", "model_fallback")
-    assert fb["model"] == GEMMA31 and fb["next"] == GEMMA26
+    assert fb["model"] == FIRST and fb["next"] == SECOND
     calls = [e for e in events(job, "e1", "llm_call")]
-    assert [e["model"] for e in calls] == [GEMMA31] * 3 + [GEMMA26] and calls[-1]["status"] == "ok"
+    assert [e["model"] for e in calls] == [FIRST] * 3 + [SECOND] and calls[-1]["status"] == "ok"
 
 
 def test_the_whole_chain_rate_limited_blocks_the_job(tmp_path):
@@ -98,7 +98,7 @@ def test_another_error_does_not_fall_back(tmp_path):
     env = checker_env(tmp_path, [FakeHTTPError(400, "bad request")], [t.CHECK])
     job = env.start(profile="free")
     assert job.data["state"] == rr.BLOCKED and events(job, "e1", "model_fallback") == []
-    assert env.models[f"free_checker@{GEMMA26}"].calls == []
+    assert env.models[f"free_checker@{SECOND}"].calls == []
 
 
 def test_a_limit_after_the_first_reply_does_not_fall_back(tmp_path):
@@ -106,21 +106,21 @@ def test_a_limit_after_the_first_reply_does_not_fall_back(tmp_path):
     env = checker_env(tmp_path, [bad, *LIMITED], [t.CHECK])
     job = env.start(profile="free")
     assert job.data["state"] == rr.BLOCKED and events(job, "e1", "model_fallback") == []
-    assert env.models[f"free_checker@{GEMMA26}"].calls == []
+    assert env.models[f"free_checker@{SECOND}"].calls == []
 
 
 def test_a_resumed_stage_continues_on_the_model_it_fell_back_to(tmp_path):
     cfg = t.cfg()
     memo, log = Memo(tmp_path / "memo.sqlite"), EventLog(tmp_path / "events.jsonl")
-    memo.put("model_choice:check:e1", GEMMA26)                 # committed before the crash: GEMMA26 is in use
+    memo.put("model_choice:check:e1", SECOND)                 # committed before the crash: SECOND is in use
     seen = []
 
     def loop(caller):
         seen.append(str(caller.ref))
         return {"end": "submitted", "steps": 0, "submits": 1, "tokens_used": 0, "usd_used": 0.0, "result": {}}
     rl.with_fallbacks(cfg, "free_checker", log, memo, node="check", task_id="e1",
-                      models={f"free_checker@{GEMMA26}": StrictScriptedChatModel(script=[])}, loop=loop)
-    assert seen == [GEMMA26]
+                      models={f"free_checker@{SECOND}": StrictScriptedChatModel(script=[])}, loop=loop)
+    assert seen == [SECOND]
 
 
 def test_the_model_in_use_is_committed_before_its_first_call(tmp_path):
@@ -135,8 +135,8 @@ def test_the_model_in_use_is_committed_before_its_first_call(tmp_path):
         return {"end": "submitted", "steps": 0, "submits": 1, "tokens_used": 0, "usd_used": 0.0, "result": {}}
     rl.with_fallbacks(cfg, "free_checker", log, memo, node="check", task_id="e1",
                       models={"free_checker": StrictScriptedChatModel(script=[]),
-                              f"free_checker@{GEMMA26}": StrictScriptedChatModel(script=[])}, loop=loop)
-    assert choices == [None, GEMMA26]
+                              f"free_checker@{SECOND}": StrictScriptedChatModel(script=[])}, loop=loop)
+    assert choices == [None, SECOND]
 
 
 # ---- REPORT.md -----------------------------------------------------------------------------------------------------
@@ -149,8 +149,8 @@ def test_a_fetch_time_is_shown_as_utc(stored, shown):
 
 def test_an_unpriced_fallback_creates_no_job(tmp_path):
     env = tp.free_env(tmp_path, [], [], [])
-    del env.cfg["prices"][GEMMA26]
-    with pytest.raises(rj.Refused, match="gemma-4-26b"):
+    del env.cfg["prices"][THIRD]
+    with pytest.raises(rj.Refused, match="nemotron-3.5-lightning"):
         env.start(profile="free")
     assert env.confirms == []
 
@@ -177,12 +177,12 @@ def test_a_stage_resumed_on_a_model_no_longer_in_its_chain_stops(tmp_path):
 
 def test_a_fallback_gets_its_own_output_cap(tmp_path):
     cfg = t.cfg()
-    cfg["research_job"]["max_output_tokens_by_model"][GEMMA26] = 7000
+    cfg["research_job"]["max_output_tokens_by_model"][SECOND] = 7000
     memo, log = Memo(tmp_path / "memo.sqlite"), EventLog(tmp_path / "events.jsonl")
-    memo.put("model_choice:check:e1", GEMMA26)
+    memo.put("model_choice:check:e1", SECOND)
     caps = []
     rl.with_fallbacks(cfg, "free_checker", log, memo, node="check", task_id="e1",
-                      models={f"free_checker@{GEMMA26}": StrictScriptedChatModel(script=[])},
+                      models={f"free_checker@{SECOND}": StrictScriptedChatModel(script=[])},
                       loop=lambda c: caps.append(c.max_output) or {"end": "submitted", "steps": 0, "result": {}})
     assert caps == [7000]
 
@@ -191,12 +191,12 @@ def test_the_confirmation_shows_the_fallbacks(tmp_path):
     env = checker_env(tmp_path, [t.CHECK])
     env.start(profile="free")
     screen = env.confirms[0]
-    assert f"checker {GEMMA31} -> {GEMMA26} -> {VL}" in screen and GEMMA26 in screen.split("free models (")[1]
+    assert f"checker {FIRST} -> {SECOND} -> {THIRD}" in screen and SECOND in screen.split("free models (")[1]
 
 
 def test_a_fallback_whose_limits_do_not_hold_creates_no_job(tmp_path):
     env = tp.free_env(tmp_path, [], [], [])
-    env.cfg["prices"][GEMMA26]["long_context_above"] = 1000
+    env.cfg["prices"][THIRD]["long_context_above"] = 1000
     with pytest.raises(rj.Refused, match="research checker"):
         env.start(profile="free")
     assert env.confirms == []

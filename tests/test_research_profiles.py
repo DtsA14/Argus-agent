@@ -9,9 +9,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_research_job as t  # noqa: E402
 
+from models import gateway  # noqa: E402
 from models.fake import StrictScriptedChatModel  # noqa: E402
+from models.registry import ModelRef  # noqa: E402
 from router import job as rj  # noqa: E402
 from router import research as rr  # noqa: E402
+from runner import load_config  # noqa: E402
 
 ROOT = t.ROOT
 DS_KEY, OR_KEY = "sk-deepseek-test-0000", "sk-or-v1-test-0000"
@@ -263,7 +266,7 @@ def test_preflight_and_screen_use_the_router_overrides(tmp_path):
 
 def test_a_stage_whose_limits_do_not_hold_for_its_model_creates_no_job(tmp_path):
     env = free_env(tmp_path, [], [], [])
-    env.cfg["prices"]["openrouter:google/gemma-4-31b-it:free"]["long_context_above"] = 1000
+    env.cfg["prices"]["openrouter:nvidia/nemotron-3.5-lightning:free"]["long_context_above"] = 1000
     with pytest.raises(rj.Refused, match="research checker"):
         env.start(profile="free")
     assert env.confirms == []
@@ -273,3 +276,14 @@ def test_without_a_profile_every_stage_uses_the_research_role():
     c = t.cfg()
     del c["research_job"]["profile"]
     assert set(rr.stage_roles(c).values()) == {"researcher"}
+
+
+def test_the_paid_checker_caps_its_reasoning_below_its_output_cap():
+    # Eval v0 (2026-11-04): e1 spent its whole output cap on reasoning in 6 of 8 jobs; the cap goes out with the request
+    c = load_config()
+    rcfg = c["roles"][c["research_job"]["profiles"]["deepinfra"]["checker"]]
+    cap = rcfg["params"]["extra_body"]["reasoning"]["max_tokens"]
+    assert 0 < cap <= rcfg["max_output_tokens"] // 2
+    ref = ModelRef.parse(rcfg["model"])
+    sent = gateway.request_params(c, ref, dict(rcfg["params"]))["extra_body"]
+    assert sent["reasoning"] == {"max_tokens": cap} and sent["provider"]["only"] == ["deepinfra/fp8"]
