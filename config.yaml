@@ -183,13 +183,12 @@ research_job:
   profiles:
     deepseek: {planner: researcher, worker: researcher, synthesis: researcher, checker: researcher}
     free: {planner: free_planner, worker: free_worker, synthesis: free_planner, checker: free_checker}
-    deepinfra: {planner: or_deepseek, worker: or_deepseek, synthesis: or_deepseek, checker: or_deepseek}
+    deepinfra: {planner: or_deepseek, worker: or_deepseek, synthesis: or_deepseek, checker: or_deepseek_checker}
   max_usd: 1.00
   max_output_tokens_by_model: {"deepseek:deepseek-flash": 16000, "deepseek:deepseek-v4-pro": 16000,
                                "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": 16000,
                                "openrouter:nvidia/nemotron-3.5-super-vl:free": 16000,
-                               "openrouter:google/gemma-4-31b-it:free": 16000,
-                               "openrouter:google/gemma-4-26b-a4b-it:free": 16000,
+                               "openrouter:nvidia/nemotron-3.5-lightning:free": 16000,
                                "openrouter:deepseek/deepseek-v4.1-flash": 16000}
   planner: {cap_usd: 0.05, attempt_tokens: 100000, max_input_tokens: 30000, max_steps: 4, max_submits: 3,
             max_sub_questions: 4}
@@ -342,14 +341,22 @@ roles:
     max_output_tokens: 16000
     timeout_s: 180
   free_checker:
-    model: "openrouter:google/gemma-4-31b-it:free"
-    fallback_models: ["openrouter:google/gemma-4-26b-a4b-it:free", "openrouter:nvidia/nemotron-3.5-super-vl:free"]
+    # Eval v0 (2026-11-04): both Gemma 4 free models answered HTTP 429 in all 6 jobs; Atha: another model instead.
+    model: "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"
+    fallback_models: ["openrouter:nvidia/nemotron-3.5-super-vl:free", "openrouter:nvidia/nemotron-3.5-lightning:free"]
     max_output_tokens: 16000
     timeout_s: 180
   or_deepseek:
     model: "openrouter:deepseek/deepseek-v4.1-flash"
     max_output_tokens: 16000
     timeout_s: 180
+  or_deepseek_checker:
+    # Eval v0 (2026-11-04): e1 spent its whole 16,000-token output on reasoning in 6 of 8 jobs (stop: length, no
+    # SubmitCheck). Reasoning is capped so the verdicts have room; the stage's USD cap is unchanged.
+    model: "openrouter:deepseek/deepseek-v4.1-flash"
+    max_output_tokens: 16000
+    timeout_s: 180
+    params: {extra_body: {reasoning: {max_tokens: 6000}}}
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
@@ -400,8 +407,7 @@ prices:
   # gateway_models entry says free). DeepSeek V4.1 Flash on DeepInfra fp8; no peak window there.
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {input: 0, output: 0}
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {input: 0, output: 0}
-  "openrouter:google/gemma-4-31b-it:free":             {input: 0, output: 0}
-  "openrouter:google/gemma-4-26b-a4b-it:free":         {input: 0, output: 0}
+  "openrouter:nvidia/nemotron-3.5-lightning:free":     {input: 0, output: 0}
   "openrouter:deepseek/deepseek-v4.1-flash":           {input: 0.14, output: 0.42, cache_read: 0.0042}
 
 # SPEC_GATEWAY_PROVIDER: the models a gateway may serve, each pinned to upstream provider slugs (no fallback), and
@@ -411,8 +417,7 @@ prices:
 gateway_models:
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {upstream: [nvidia], free: true}
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {upstream: [nvidia], free: true}
-  "openrouter:google/gemma-4-31b-it:free":             {upstream: [google-ai-studio], free: true}
-  "openrouter:google/gemma-4-26b-a4b-it:free":         {upstream: [google-ai-studio], free: true}
+  "openrouter:nvidia/nemotron-3.5-lightning:free":     {upstream: [nvidia], free: true}
   "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
 gateway:
   free_roles: [free_planner, free_worker, free_checker]   # Atha 2026-11-04 (research_free, split per stage)

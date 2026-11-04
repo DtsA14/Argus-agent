@@ -42,7 +42,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["drafter"], base["roles"]["drafter"], base["tools"]["drafter"]   # W2b (a role and section they never used)
     del base["router"]                                                      # router v0 (never used by these arms)
     del base["gateway_models"], base["gateway"], base["providers"]["openrouter"]   # SPEC_GATEWAY_PROVIDER (never used)
-    for role in ("free_planner", "free_worker", "free_checker", "or_deepseek"):        # its research roles (PR 2)
+    for role in ("free_planner", "free_worker", "free_checker", "or_deepseek", "or_deepseek_checker"):        # its research roles (PR 2)
         del base["roles"][role]
     for model in [m for m in base["prices"] if m.startswith("openrouter:")]:
         del base["prices"][model]
