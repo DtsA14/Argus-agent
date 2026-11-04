@@ -10,14 +10,15 @@
 REPORT.md is rendered by the harness from the report, the findings and the check, never written by a model.
 """
 import re
+import time
 from typing import List
 
 from pydantic import BaseModel, Field
 
 from codetask.research import ws
-from harness.llm import LLMCaller
 
-from .loop import run_stage, tool_loop
+
+from .loop import run_stage, tool_loop, with_fallbacks
 from .stages import (ANSWERED, BLOCKED, DATA, HEADING_MAX, UNCERTAINTIES_MAX, UNCERTAINTY_MAX, _text, _verdict, settings,
                      stage_role, with_output_cap)
 
@@ -180,7 +181,6 @@ def run_synthesis(*, run_id, runs_dir, cfg, findings=None, max_usd=None, resume=
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:
             return {"status": "FAILED_BUDGET", "stop_reason": "the stage cap leaves nothing for the synthesis"}
-        caller = LLMCaller(cfg, role, log, model=(models or {}).get(role))
         known = set(citable(inputs["findings"]))
 
         def gate_submit(args, n):
@@ -188,12 +188,14 @@ def run_synthesis(*, run_id, runs_dir, cfg, findings=None, max_usd=None, resume=
             return _verdict(problems, lim["max_submits"], n, "Accepted: the report passed the harness gate.", report,
                             log, "report_checked")
 
-        a = tool_loop(caller, memo, log, node="report", task_id="s1", lim=lim, system=REPORT_SYSTEM,
-                      prompt=report_prompt(inputs["findings"], lim), tools=[SubmitReport], submit=SubmitReport,
-                      versions=REPORT_VERSIONS, run_tool=lambda *a: "Unknown tool.", gate_submit=gate_submit,
-                      crasher=crasher, nudge="Call SubmitReport with the report.",
-                      steps_note="Harness: {n} steps left of {max}. Submit the report now.",
-                      final_note="Harness: the last {n} steps. Submit the report.")
+        def loop(caller):
+            return tool_loop(caller, memo, log, node="report", task_id="s1", lim=lim, system=REPORT_SYSTEM,
+                             prompt=report_prompt(inputs["findings"], lim), tools=[SubmitReport], submit=SubmitReport,
+                             versions=REPORT_VERSIONS, run_tool=lambda *a: "Unknown tool.", gate_submit=gate_submit,
+                             crasher=crasher, nudge="Call SubmitReport with the report.",
+                             steps_note="Harness: {n} steps left of {max}. Submit the report now.",
+                             final_note="Harness: the last {n} steps. Submit the report.")
+        a = with_fallbacks(cfg, role, log, memo, node="report", task_id="s1", models=models, loop=loop)
         return _outcome(a, REPORTED, "a report passed the gate", "report", SYNTHESIS_FAILED)
 
     return run_stage(run_id=run_id, runs_dir=runs_dir, resume=resume, kind="research_report", work=work,
@@ -291,7 +293,6 @@ def run_check(*, run_id, runs_dir, cfg, report=None, findings=None, max_usd=None
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:
             return {"status": "FAILED_BUDGET", "stop_reason": "the stage cap leaves nothing for the checker"}
-        caller = LLMCaller(cfg, role, log, model=(models or {}).get(role))
         ids = [it["id"] for it in check_items(inputs["report"])]
 
         def gate_submit(args, n):
@@ -299,12 +300,14 @@ def run_check(*, run_id, runs_dir, cfg, report=None, findings=None, max_usd=None
             return _verdict(problems, lim["max_submits"], n, "Accepted: every item has a verdict.", verdicts, log,
                             "check_checked")
 
-        a = tool_loop(caller, memo, log, node="check", task_id="e1", lim=lim, system=CHECK_SYSTEM,
-                      prompt=check_prompt(inputs["report"], inputs["findings"], lim), tools=[SubmitCheck],
-                      submit=SubmitCheck, versions=CHECK_VERSIONS, run_tool=lambda *a: "Unknown tool.",
-                      gate_submit=gate_submit, crasher=crasher, nudge="Call SubmitCheck with your verdicts.",
-                      steps_note="Harness: {n} steps left of {max}. Submit the verdicts now.",
-                      final_note="Harness: the last {n} steps. Submit the verdicts.")
+        def loop(caller):
+            return tool_loop(caller, memo, log, node="check", task_id="e1", lim=lim, system=CHECK_SYSTEM,
+                             prompt=check_prompt(inputs["report"], inputs["findings"], lim), tools=[SubmitCheck],
+                             submit=SubmitCheck, versions=CHECK_VERSIONS, run_tool=lambda *a: "Unknown tool.",
+                             gate_submit=gate_submit, crasher=crasher, nudge="Call SubmitCheck with your verdicts.",
+                             steps_note="Harness: {n} steps left of {max}. Submit the verdicts now.",
+                             final_note="Harness: the last {n} steps. Submit the verdicts.")
+        a = with_fallbacks(cfg, role, log, memo, node="check", task_id="e1", models=models, loop=loop)
         return _outcome(a, CHECKED, "every item has a verdict", "verdicts", NOT_CHECKED)
 
     return run_stage(run_id=run_id, runs_dir=runs_dir, resume=resume, kind="research_check", work=work,
@@ -322,6 +325,16 @@ def counts(check):
 def _flag(check, item_id):
     v = ((check or {}).get("verdicts") or {}).get(item_id)
     return f"*e1: {v['verdict']} ({v['reason']})*" if v else None
+
+
+def _when(t):
+    """A page's fetch time for the reader: UTC ISO 8601 from the stored epoch seconds (text is shown as stored)."""
+    if isinstance(t, (int, float)) and not isinstance(t, bool):
+        try:
+            return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))     # as research/web_tools.py shows it
+        except (ValueError, OverflowError, OSError):
+            return t
+    return t
 
 
 def render(findings, report, check=None, job_id=None):
@@ -363,5 +376,5 @@ def render(findings, report, check=None, job_id=None):
         out += ["", f"[{num[c]}] {c}: {ws(f['claim'])}"]
         for s in f["sources"]:
             out += [f"- <{s['url']}>" + (f" {ws(s['title'])}" if s.get("title") else "")
-                    + f", fetched {s.get('fetched_at')}, sha256 {s.get('sha256')}", f"  > {s['quote']}"]
+                    + f", fetched {_when(s.get('fetched_at'))}, sha256 {s.get('sha256')}", f"  > {s['quote']}"]
     return "\n".join(out) + "\n"

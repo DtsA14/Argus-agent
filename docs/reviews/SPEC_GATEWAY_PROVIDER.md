@@ -175,6 +175,12 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
      sebagai `--key-file PROVIDER=PATH` (bentuk satu PATH tetap untuk satu key); file harus pas dengan provider yang
      butuh key (kurang atau lebih → ditolak); key OpenRouter dicek berawalan `sk-or-v1-` (`providers.*.key_prefix`).
    - Preflight sebelum konfirmasi: tiap model stage berharga dan boleh untuk role-nya (aturan model gratis).
+1d. **Fallback model gratis (Atha 2026-11-04, sesudah smoke: Gemma 4 31B gratis kena HTTP 429 dari Google):**
+   `roles.<role>.fallback_models`, hanya untuk role bermodel gratis dan hanya berisi model gratis di `gateway_models`
+   (masing-masing dengan pin sendiri); tidak pernah model berbayar, dan model berbayar tidak punya fallback. Pindah hanya
+   bila model sebelumnya kena 429 (sesudah retry LLMCaller) sebelum balasan pertama loop stage itu (step 0); model yang
+   dipakai di-commit ke memo sebelum panggilan pertamanya, jadi resume melanjutkan di model itu. Event `model_fallback`
+   di ledger. Ini bukan routing otomatis OpenRouter: rantainya ditulis di config dan diperiksa preflight.
 2. **Smoke live (butuh "go live", ≤ $0,10):** satu panggilan + satu loop tool kecil ke 2–3 model terpilih (§10 no. 4),
    membandingkan cost gateway dengan hitungan kita dan memeriksa pin. Hasilnya menentukan harga di config.
 3. **Eksperimen:** satu stage riset (worker atau s1) memakai model gateway, dibandingkan dengan DeepSeek langsung di

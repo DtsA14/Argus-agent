@@ -457,6 +457,9 @@ class LLMCaller:
                 transient = is_transient(exc)
                 status_code = http_status(exc)
                 tok, nano = (worst_tokens, worst_nano) if self.failed_charge == "worst_case" else (0, 0)
+                if self.gateway is not None and self.gateway["free"] and status_code == 429:
+                    tok, nano = 0, 0     # a free model's rate limit: refused unprocessed, and nothing to bill
+
                 try:
                     emit("llm_call", call_id=call_id, status="transient_error" if transient else "error",
                          attempt=attempt, est_input=est_in, max_tokens=cap, tokens=tok,
