@@ -187,7 +187,7 @@ research_job:
   max_usd: 1.00
   max_output_tokens_by_model: {"deepseek:deepseek-flash": 16000, "deepseek:deepseek-v4-pro": 16000,
                                "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": 16000,
-                               "openrouter:thinkingmachines/inkling:free": 16000,
+                               "openrouter:nvidia/nemotron-3.5-super-vl:free": 16000,
                                "openrouter:google/gemma-4-31b-it:free": 16000,
                                "openrouter:deepseek/deepseek-v4.1-flash": 16000}
   planner: {cap_usd: 0.05, attempt_tokens: 100000, max_input_tokens: 30000, max_steps: 4, max_submits: 3,
@@ -333,7 +333,7 @@ roles:
     max_output_tokens: 16000
     timeout_s: 180
   free_worker:
-    model: "openrouter:thinkingmachines/inkling:free"
+    model: "openrouter:nvidia/nemotron-3.5-super-vl:free"
     max_output_tokens: 16000
     timeout_s: 180
   free_checker:
@@ -393,7 +393,7 @@ prices:
   # SPEC_GATEWAY_PROVIDER PR 2, checked 2026-11-04 on openrouter.ai/api/v1/models/<id>/endpoints. Free models: 0 (their
   # gateway_models entry says free). DeepSeek V4.1 Flash on DeepInfra fp8; no peak window there.
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {input: 0, output: 0}
-  "openrouter:thinkingmachines/inkling:free":          {input: 0, output: 0}
+  "openrouter:nvidia/nemotron-3.5-super-vl:free":          {input: 0, output: 0}
   "openrouter:google/gemma-4-31b-it:free":             {input: 0, output: 0}
   "openrouter:deepseek/deepseek-v4.1-flash":           {input: 0.14, output: 0.42, cache_read: 0.0042}
 
@@ -403,7 +403,7 @@ prices:
 # Checked 2026-11-04 on openrouter.ai/api/v1/models/<id>/endpoints: each free model has one endpoint, its own maker.
 gateway_models:
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {upstream: [nvidia], free: true}
-  "openrouter:thinkingmachines/inkling:free":          {upstream: [thinkingmachines/nvfp4], free: true}
+  "openrouter:nvidia/nemotron-3.5-super-vl:free":          {upstream: [nvidia], free: true}
   "openrouter:google/gemma-4-31b-it:free":             {upstream: [google-ai-studio], free: true}
   "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
 gateway:
