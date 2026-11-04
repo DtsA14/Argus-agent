@@ -54,9 +54,11 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
   satu task (stop/retry/replan). Versi lengkap sekitar satu spek + 4-6 PR jalur ketat. Usul Claude, langkah kecil dulu:
-  - [ ] `argus code ... --from-research <job>`: laporan riset `REPORT_READY` (dengan kutipan) masuk sebagai konteks
-    drafter; urutan tetap, tanpa planner; 1-2 PR, cap dan approve yang sudah ada. Ukuran: apakah riset dulu membuat
-    draf/patch lebih baik. Planner berhirarki hanya bila ini terbukti dan rangkaian task sering dipakai
+  - [~] `argus code ... --from-research <job> [--items ...]` (`docs/reviews/SPEC_FROM_RESEARCH.md`, disetujui Atha
+    2026-11-04): item e1 SUPPORTED + kutipannya dibekukan ke job kode (sha di `job.json`), ke drafter dan
+    `inputs.research` kontrak agen, terpisah dari issue; batas 24.000 karakter. 36 tes, mutants 30/30, review medium
+    (6 diperbaiki, 2 diterima), security review tanpa temuan, verify.sh PASS. Menunggu "merge"; lalu pilot up2 dua
+    lengan (riset → kode vs kode saja, butuh "go live"). Planner berhirarki hanya bila ini terbukti
   - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan

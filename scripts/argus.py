@@ -94,6 +94,10 @@ def main(argv=None, deps=None):
                    "the whole job); without it, the drafter's configured one, nothing pinned")
     c.add_argument("--research", action="store_true", help="start with the research stage r1: read-only tools and ReadDocs "
                    "(granted by this confirmation; needs --environment in web.environments); docs/reviews/SPEC_RESEARCH_STAGE.md")
+    c.add_argument("--from-research", metavar="JOB", help="a finished research job (REPORT_READY, checked by e1): its "
+                   "SUPPORTED items and their quotes go to the drafter and the agent; docs/reviews/SPEC_FROM_RESEARCH.md")
+    c.add_argument("--items", help="with --from-research: the items to take, comma-separated (e.g. S,P2,P5), "
+                   "among the SUPPORTED ones")
     sub.add_parser("list")
     sub.add_parser("status").add_argument("job")
     sub.add_parser("resume").add_argument("job")
@@ -250,7 +254,10 @@ def main(argv=None, deps=None):
         if o.cmd == "code":
             issue = o.issue if o.issue is not None else Path(o.issue_file).read_text(encoding="utf-8")
             job = rj.start_code(repo=o.repo, commit=o.commit, issue=issue, cfg=cfg, deps=deps, exclude=o.exclude,
-                                max_usd=o.max_usd, jobs_dir=o.jobs_dir, environment=o.environment, research=o.research)
+                                max_usd=o.max_usd, jobs_dir=o.jobs_dir, environment=o.environment, research=o.research,
+                                from_research=o.from_research,
+                                research_items=None if o.items is None else [i.strip() for i in o.items.split(",")
+                                                                             if i.strip()])
         elif o.cmd == "research":
             from router import research as rr
             question = o.question if o.question is not None else Path(o.question_file).read_text(encoding="utf-8")

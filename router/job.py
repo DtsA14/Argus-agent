@@ -466,13 +466,28 @@ def new_job_id():
 
 
 def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs_dir=JOBS, job_id=None,
-               environment=None, research=False):
+               environment=None, research=False, from_research=None, research_items=None):
     """A new job: intake, then the first drafter stage. Returns the job. environment: the sandbox environment its
     validations run in, with the image it resolves to now pinned for the whole job; None is the job as before
     (the drafter's configured environment, nothing pinned). research: the human grants the research stage r1 and its
-    ReadDocs (SPEC_RESEARCH_STAGE); r1 runs instead of the drafter, which starts at research-ok."""
+    ReadDocs (SPEC_RESEARCH_STAGE); r1 runs instead of the drafter, which starts at research-ok. from_research: a
+    finished research job in jobs_dir whose SUPPORTED items (research_items: some of them) are frozen into the job as
+    its research context (SPEC_FROM_RESEARCH), for the drafter and the agent's contract."""
     if not isinstance(issue, str) or not issue.strip():
         raise Refused("the issue is empty")
+    context = None
+    if from_research is not None:
+        from research.context import ContextError, build
+        if research:
+            raise Refused("--from-research and --research cannot be used together; no job was created")
+        if not JOB_ID.match(str(from_research)):
+            raise Refused(f"{from_research!r} is not a job id; no job was created")
+        try:
+            context = build(Path(jobs_dir) / from_research, research_items)
+        except ContextError as e:
+            raise Refused(f"{e}; no job was created") from e
+    elif research_items is not None:
+        raise Refused("--items needs --from-research; no job was created")
     if research:
         w = cfg.get("web") or {}
         if environment not in (w.get("environments") or []) or not w.get("hosts") or not w.get("limits"):
@@ -514,9 +529,14 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
     with job.lock():
         job.data = {"job": job_id, "kind": "code", "state": NEW, "created_at": deps.clock(), "max_usd": cap,
                     "inputs": {"repo": str(Path(repo).resolve()), "commit": commit, "issue": issue.strip(),
-                               "exclude": list(exclude), **({"environment": environment} if environment else {})},
+                               "exclude": list(exclude), **({"environment": environment} if environment else {}),
+                               **({"research": context[1]} if context else {})},
                     **({"environment_image": image} if environment else {}),
                     "stages": {}, "approval": None, "log": []}
+        if context:                                 # SPEC_FROM_RESEARCH 3: frozen with the job, before any stage
+            tmp = job.dir / (RESEARCH_CONTEXT + ".tmp")     # the exact bytes whose sha was recorded, atomically
+            tmp.write_bytes(context[0].encode("utf-8"))
+            os.replace(tmp, job.dir / RESEARCH_CONTEXT)
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
             rec = (intake.intake(repo, full, BASE, exclude=exclude, root=job.root, protected=protected) if full
@@ -532,6 +552,24 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
         else:
             _draft(job, cfg, deps, 1)
     return job
+
+
+RESEARCH_CONTEXT = "research_context.txt"
+
+
+def job_research(job):
+    """The job's frozen research context (SPEC_FROM_RESEARCH), checked against the sha recorded when the job was made;
+    None for a job without one."""
+    rec = job.data["inputs"].get("research")
+    if rec is None:
+        return None
+    try:
+        raw = (job.dir / RESEARCH_CONTEXT).read_bytes()
+    except OSError as e:
+        raise Refused(f"job {job.id}: the research context cannot be read ({e.strerror})") from e
+    if hashlib.sha256(raw).hexdigest() != rec["sha256"]:
+        raise Refused(f"job {job.id}: the research context changed after the job was made (not {rec['sha256'][:12]})")
+    return raw.decode("utf-8")
 
 
 def handoff_path(job):
@@ -637,6 +675,7 @@ def _draft(job, cfg, deps, n, note=None):
             raise Refused(f"job {job.id}: not enough of the job cap left for a drafter (BLOCKED)")
     else:
         cap = stage["cap_usd"]                            # the cap it started with, never recomputed
+    research = job_research(job)
     scfg = stage_config(job_config(job, cfg), cap)
     lim = drafter_settings(scfg)
     text = _limits_text(job, f"drafter stage {sid}" + (" (resume)" if resume else ""),
@@ -656,7 +695,7 @@ def _draft(job, cfg, deps, n, note=None):
         r = run_drafter(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job_issue(job),
                         max_usd=cap, resume=again, models=deps.models, validate=deps.validate,
                         preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root, red=deps.red,
-                        note=job.data["stages"][sid].get("note"))
+                        note=job.data["stages"][sid].get("note"), research=research)
     st = job.data["stages"][sid]
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
     deps.echo(f"drafter finished: {r['status']} (${r['usd_billed']:.4f})")
@@ -718,8 +757,8 @@ def protected_changed(job, cfg):
 
 
 def environment_lines(job):
-    """The job's pinned environment and image, and the repository's protected list (SPEC_PROTECTED_FILES P7), for
-    every limits screen and the status; a job from before either names neither."""
+    """The job's pinned environment and image, the repository's protected list (SPEC_PROTECTED_FILES P7) and its
+    research context (SPEC_FROM_RESEARCH), for every limits screen and the status; a job from before names none."""
     name, image = job.data["inputs"].get("environment"), job.data.get("environment_image")
     lines = [] if name is None else [f"environment {name}, image {str(image).split(':')[-1][:12]}"]
     if "protected_repo" in job.data:
@@ -727,6 +766,10 @@ def environment_lines(job):
         lines.append("protected by the repository: " + ("none" if p is None else
                                                          f"{len(p['globs'])} globs (.argus/protected sha256 "
                                                          f"{p['sha256'][:12]})"))
+    r = job.data["inputs"].get("research")
+    if r:                                       # SPEC_FROM_RESEARCH 2: what the drafter and the agent will read
+        lines.append(f"research context from job {r['job']}: items {', '.join(r['items'])}; left out "
+                     f"{', '.join(r['left_out']) or 'none'}; {r['chars']} characters, sha256 {r['sha256'][:12]}")
     return lines
 
 
@@ -809,7 +852,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
         with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
             if draft_sha(path) != seen:                 # changed while the human was reading
                 raise Refused("the draft changed after it was shown; nothing was approved")
-            report = dr.check(draft, task=TASK, issue=job_issue(job), max_usd=cap,
+            report = dr.check(draft, task=TASK, issue=job_issue(job), research=job_research(job), max_usd=cap,
                               max_iterations=max_iterations, reference_patch=reference_patch,
                               sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root,
                               profiles=sorted((cfg.get("code_task") or {}).get("profiles") or {}),
