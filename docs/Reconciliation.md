@@ -164,7 +164,7 @@ Diputuskan 2026-11-04 (Atha):
 - **Pipeline saat ini:** alur A (`main.py`/`graph.py`: orchestrator, worker, synthesize, evaluator) hanya regresi; alur B
   `argus code` (r1 opsional, drafter, `approve`, agen, review, `applied`, staging); alur C `argus research` (p1, worker
   web, s1, e1). **Satu pipeline berhirarki** (job → planner → task riset/kode/deploy) dicatat sebagai arah; langkah
-  pertama yang diusulkan `--from-research` (urutan tetap, tanpa planner), menunggu "Ok" Atha untuk spek.
+  pertama `--from-research` (urutan tetap, tanpa planner): spek disetujui Atha, diimplementasi (`SPEC_FROM_RESEARCH`).
 
 Menunggu keputusan Atha:
 1. **UI kontrol** (scope di `PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol, port 8711 +
