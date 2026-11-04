@@ -157,9 +157,11 @@ Diputuskan 2026-11-04 (Atha):
   kutipan kalimat utuh, submit terakhir menyimpan temuan yang lolos (#291, #292). Rerun R2/R5/R8 (#293).
 - **Output e1 berbayar 32.000** (Atha "Ok 32k"), bukan reasoning `low` atau mati, agar mutu cek tidak turun; batas
   output per stage di `research_job.<stage>.max_output_tokens_by_model` (#294).
+- **Ambang v1 `argus research`** (Atha "ambang v1 udah ok"), dinilai pada eval set R1-R8 di profil berbayar: minimal 7/8
+  jawaban benar dan tidak ada yang salah; tidak ada item UNSUPPORTED; minimal 60% item SUPPORTED (nilai Claude); e1
+  selesai mengecek minimal 7/8 laporan.
 
 Menunggu keputusan Atha:
 1. **UI kontrol** (scope di `PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol, port 8711 +
    `permitopen` kedua, waktunya terhadap up2.
 2. **Shadow mode** untuk issue viewer read-only, sesudah berkas yang dilindungi dipaksa harness.
-3. **Ambang v1 `argus research`** (usul di `docs/reviews/RESEARCH_EVAL_V0.md`).
