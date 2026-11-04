@@ -47,7 +47,16 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   Output e1 berbayar dinaikkan ke 32.000 (#294; `reasoning.max_tokens` ternyata tidak dipatuhi). Terbuka:
   - [x] Ambang v1 diputuskan Atha 2026-11-04 (profil berbayar: ≥7/8 benar, tidak ada yang salah, tidak ada
     UNSUPPORTED, ≥60% SUPPORTED, e1 selesai ≥7/8)
-  - [ ] Batch v1: R1-R8 di profil `deepinfra` (sekitar $0,45, butuh "go live"), sekaligus bukti output e1 32k
+  - [~] Batch v1 R1-R8 dilewati (Atha 2026-11-04: lama, kurang sebanding hasilnya). Ambang v1 dan output e1 32k dicek
+    di job riset berbayar berikutnya: e1 selesai tanpa terpotong, tidak ada UNSUPPORTED, persen SUPPORTED; "7/8 benar"
+    baru terbukti setelah beberapa job
+- [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
+  (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
+  task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
+  satu task (stop/retry/replan). Versi lengkap sekitar satu spek + 4-6 PR jalur ketat. Usul Claude, langkah kecil dulu:
+  - [ ] `argus code ... --from-research <job>`: laporan riset `REPORT_READY` (dengan kutipan) masuk sebagai konteks
+    drafter; urutan tetap, tanpa planner; 1-2 PR, cap dan approve yang sudah ada. Ukuran: apakah riset dulu membuat
+    draf/patch lebih baik. Planner berhirarki hanya bila ini terbukti dan rangkaian task sering dipakai
   - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
