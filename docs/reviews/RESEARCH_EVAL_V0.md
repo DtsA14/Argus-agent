@@ -103,3 +103,43 @@ The whole batch cost $0.44.
   - e1 completes on at least 7/8 reports.
 
   This batch meets every point except the last one.
+
+## Rerun after the fixes (R2, R5, R8)
+
+After Atha's "go live", R2, R5 and R8 ran again on both profiles. They ran from `main` at dd6d922 (#291 and #292), from
+08:58 to 09:55 UTC. Grading is the same as above.
+
+| Q | profile | job | answer | items S/total | e1 | e1 agree | dropped at last submit | cost | wall |
+|---|---|---|---|---|---|---|---|---|---|
+| R2 | deepinfra | j20261104_085808_9c14 | correct | 7/13 | checked | 8/13 | w4: 2 | $0.0477 | 12.1 min |
+| R2 | free | j20261104_091017_b02c | partial (no `@field_validator`) | 4/4 | checked (Ultra) | 4/4 | – | $0.0053 | 2.9 min |
+| R5 | deepinfra | j20261104_091312_72d5 | correct | 11/14 | checked | 12/14 | – | $0.0532 | 14.2 min |
+| R5 | free | j20261104_092725_95b4 | partial (no concurrency guarantee) | 6/9 | checked (Ultra) | 6/9 | w3: 2 | $0.0097 | 6.4 min |
+| R8 | deepinfra | j20261104_093351_1185 | correct | 15/17 | checked | 17/17 | w3: 1 | $0.0600 | 15.1 min |
+| R8 | free | j20261104_094857_7249 | correct | 2/6 | checked (Ultra) | 3/6 | w2: 2, w3: 1 | $0.0060 | 5.8 min |
+
+Compared with the same three questions in the first batch:
+
+| | before | after |
+|---|---|---|
+| deepinfra: answers correct | 3/3 | 3/3 |
+| deepinfra: items supported (Claude) | 34/48 = 71% | 33/44 = 75% |
+| deepinfra: e1 checked | 0/3 | 3/3 |
+| free: answers correct / partial / none | 0 / 1 / 2 | 1 / 2 / 0 |
+| free: e1 checked | 0/1 | 3/3, on Nemotron Ultra with no fallback |
+| e1 agreement with Claude | – | 50/63 = 79%; e1 was the more lenient side in every disagreement |
+| cost per job (deepinfra / free) | $0.046 / $0.009 | $0.054 / $0.007 |
+| wall time per job (deepinfra) | 10.9 min | 13.8 min |
+
+- **Keep-passing worked.** Five workers kept their good findings on the last submit (8 dropped entries in total).
+  Without it, R8 free would again have had no report, and R5 free would have kept only w1's two findings.
+  - Some free workers still end NO_FINDINGS: 4 of 9.
+- **Every e1 run finished, but the paid reasoning cap is not enforced.** With `reasoning.max_tokens: 6000`, the first e1
+  call still used 15,519 reasoning tokens in R2 and 10,074 in R5. R2's call reached the whole 16,000-token output cap,
+  and its tool call fit in the last 481 tokens. Fix 1 therefore holds only by margin.
+  - Next step: switch to a cap that is enforced, for example `reasoning.effort` or turning reasoning off for e1, or
+    raise the output cap. Then check that the e1 events show reasoning tokens below the cap.
+- **Quotes are now whole sentences in most findings.** The R2 deepinfra worker w4 still cut quotes short, for example
+  "...to apply" and "...you can pass". Every PARTIAL item in that report comes from w4's findings or adds a detail no
+  quote holds.
+- **No answer is wrong, and no item is UNSUPPORTED.**
