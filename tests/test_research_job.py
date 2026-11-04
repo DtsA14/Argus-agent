@@ -74,6 +74,22 @@ FETCH = call("WebFetch", {"url": URL}, "f")
 SUBMIT = call("SubmitFindings", findings_args(), "sub")
 
 
+def report_args(cites=("W1.F1",), text="Python 3.14 was released on 7 October 2025."):
+    return {"summary": "Python 3.14 came out in October 2025.",
+            "sections": [{"heading": "Release", "paragraphs": [{"text": text, "cites": list(cites)}]}],
+            "uncertainties": []}
+
+
+def check_args(ids=("S", "P1"), verdict="SUPPORTED"):
+    return {"verdicts": [{"id": i, "verdict": verdict, "reason": "The quote gives the date."} for i in ids]}
+
+
+REPORT = call("SubmitReport", report_args(), "rep")
+CHECK = call("SubmitCheck", check_args(), "chk")
+INSUFFICIENT = call("SubmitFindings", {"verdict": st.INSUFFICIENT, "findings": [],
+                                       "uncertainties": ["No page gives the date."]}, "sub")
+
+
 class Env:
     def __init__(self, tmp_path, script, *, spawn=None, confirm=True):
         self.jobs, self.spawn, self.said, self.confirms = tmp_path / "jobs", spawn or Spawn(), [], []
@@ -98,9 +114,9 @@ class Env:
 # ---- the whole job ----------------------------------------------------------------------------------------------
 
 def test_a_job_plans_researches_and_keeps_only_gated_findings(tmp_path):
-    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT])
+    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     job = env.start()
-    assert job.data["state"] == rr.FINDINGS_READY and len(env.confirms) == 1
+    assert job.data["state"] == rr.REPORT_READY and len(env.confirms) == 1
     assert "DeepSeek" in env.confirms[0] and "one confirmation covers every stage" in env.confirms[0]
     plan = json.loads((job.dir / "plan.json").read_text())
     assert [q["id"] for q in plan["sub_questions"]] == ["Q1"]
@@ -115,7 +131,7 @@ def test_a_job_plans_researches_and_keeps_only_gated_findings(tmp_path):
     assert rj.spent_nano(job) == sum(reconcile_ledger(EventLog(job.runs / s["run_id"] / "events.jsonl").read())[1]
                                      ["usd_nano"] for s in job.data["stages"].values())
     text = rj.status("jr", jobs_dir=env.jobs)
-    assert "FINDINGS_READY (research)" in text and f"Q1 {SUB}" in text and "findings: " in text
+    assert "REPORT_READY (research)" in text and f"Q1 {SUB}" in text and "findings: " in text
 
 
 def test_not_confirmed_starts_nothing_and_spends_nothing(tmp_path):
@@ -153,15 +169,15 @@ def test_insufficient_evidence_everywhere_is_inconclusive(tmp_path):
 
 def test_workers_run_in_plan_order_each_with_its_own_cap(tmp_path):
     two = call("SubmitPlan", plan_args(subs=(SUB, "Which headline features did Python 3.14 add?")), "p")
-    env = Env(tmp_path, [two, SEARCH, FETCH, SUBMIT, SEARCH, FETCH, SUBMIT])
+    env = Env(tmp_path, [two, SEARCH, FETCH, SUBMIT, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     job = env.start()
-    assert list(job.data["stages"]) == ["p1", "w1", "w2"] and job.data["state"] == rr.FINDINGS_READY
+    assert list(job.data["stages"]) == ["p1", "w1", "w2", "s1", "e1"] and job.data["state"] == rr.REPORT_READY
     caps = {k: s["cap_usd"] for k, s in job.data["stages"].items()}
-    assert caps == {"p1": 0.05, "w1": 0.15, "w2": 0.15}
+    assert caps == {"p1": 0.05, "w1": 0.15, "w2": 0.15, "s1": 0.15, "e1": 0.10}
 
 
 def test_an_interrupted_worker_is_resumed_and_the_job_finishes(tmp_path, monkeypatch):
-    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT])
+    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     real = st.run_worker
     calls = []
 
@@ -175,11 +191,11 @@ def test_an_interrupted_worker_is_resumed_and_the_job_finishes(tmp_path, monkeyp
         env.start()
     assert env.job().data["state"] == rr.RESEARCHING and "ended_at" not in env.job().data["stages"]["w1"]
     job, _ = rj.resume("jr", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
-    assert job.data["state"] == rr.FINDINGS_READY and calls == [False, False]   # never started: a fresh run
+    assert job.data["state"] == rr.REPORT_READY and calls == [False, False]   # never started: a fresh run
 
 
 def test_research_states_have_their_own_transitions_and_abandon(tmp_path):
-    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT])
+    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     env.start()
     job = env.job()
     with job.lock():
@@ -193,10 +209,10 @@ def test_research_states_have_their_own_transitions_and_abandon(tmp_path):
 def test_the_cli_starts_a_research_job(tmp_path, capsys):
     sys.path.insert(0, str(ROOT / "scripts"))
     import argus
-    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT])
+    env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     rc = argus.main(["--jobs-dir", str(env.jobs), "research", "--question", QUESTION], deps=env.deps)
     out = capsys.readouterr().out
-    assert rc == 0 and "FINDINGS_READY (research)" in out
+    assert rc == 0 and "REPORT_READY (research)" in out
 
 
 # ---- the planner gate -------------------------------------------------------------------------------------------
@@ -318,9 +334,9 @@ def test_web_text_per_run_is_limited(tmp_path):
 
 def test_the_worker_toolbox_offers_only_search_fetch_and_submit(tmp_path):
     env = Env(tmp_path, [PLAN, call("ReadFile", {"path": "x"}, "r"), call("RunValidation", {"id": "v"}, "v"), SEARCH,
-                         FETCH, SUBMIT])
+                         FETCH, INSUFFICIENT])          # the job ends after the worker: its tools are the last bound
     job = env.start()
-    assert job.data["state"] == rr.FINDINGS_READY
+    assert job.data["state"] == rr.INCONCLUSIVE
     answers = [str(m.content) for m in env.model.calls[4]["messages"] if type(m).__name__ == "ToolMessage"]
     assert answers[0].startswith("Refused: ReadFile is not offered")
     assert answers[1].startswith("Refused: RunValidation is not offered")
@@ -403,7 +419,7 @@ def test_answered_needs_a_finding_and_insufficient_needs_an_uncertainty(tools):
 
 def test_a_resume_does_not_run_a_finished_worker_again(tmp_path, monkeypatch):
     two = call("SubmitPlan", plan_args(subs=(SUB, "Which headline features did Python 3.14 add?")), "p")
-    env = Env(tmp_path, [two, SEARCH, FETCH, SUBMIT, SEARCH, FETCH, SUBMIT])
+    env = Env(tmp_path, [two, SEARCH, FETCH, SUBMIT, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     real = st.run_worker
     seen = []
 
@@ -416,7 +432,7 @@ def test_a_resume_does_not_run_a_finished_worker_again(tmp_path, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         env.start()
     rj.resume("jr", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
-    assert seen == ["Q1", "Q2", "Q2"] and env.job().data["state"] == rr.FINDINGS_READY
+    assert seen == ["Q1", "Q2", "Q2"] and env.job().data["state"] == rr.REPORT_READY
 
 
 def test_every_research_graph_runs_with_sync_checkpoints():

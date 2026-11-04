@@ -27,8 +27,9 @@ riset yang benar dan bersumber dengan biaya kecil, tanpa Claude menulis atau men
 ```
 argus research --question "<pertanyaan>" | --question-file F [--max-usd X] [--key-file F --yes]
   NEW → PLANNING (p1) → RESEARCHING (w1..wN, berurutan) → SYNTHESIZING (s1) → CHECKING (e1) → REPORT_READY
-  (PR B, 2026-11-03: sampai PR C, RESEARCHING berakhir di FINDINGS_READY, yaitu findings.json tanpa laporan)
                       ↘ PLAN_FAILED          ↘ (semua worker INSUFFICIENT_EVIDENCE) → RESEARCH_INCONCLUSIVE
+                                                             SYNTHESIZING ↘ SYNTHESIS_FAILED (lewat batas submit)
+  (PR C, 2026-11-04: FINDINGS_READY dari PR B dihapus; findings.json tetap ditulis sesudah worker terakhir)
   setiap stage → BLOCKED (cap tidak cukup untuk satu attempt) · setiap state non-terminal → ABANDONED
 argus status / resume / abandon <job>      (sama dengan job kode)
 ```
@@ -106,13 +107,19 @@ SubmitReport:
 ```
 
 Gate: setiap `cites` menunjuk finding yang ada dan lolos gate; tidak ada URL di `text`/`summary` (sumber hanya lewat
-`cites`, supaya model tidak bisa menambah sumber yang tidak dibaca). `REPORT.md` **dirender harness**: paragraf dengan nomor
+`cites`, supaya model tidak bisa menambah sumber yang tidak dibaca). Implementasi PR C: URL = skema `x://`, `www.`, atau
+domain diikuti path, juga di heading dan uncertainties; paragraf dinomori `P1..` oleh harness; paling banyak 16 paragraf
+dan 8 cite per paragraf; lewat `max_submits` = 3 → `SYNTHESIS_FAILED`. `REPORT.md` **dirender harness**: paragraf dengan nomor
 sitasi, daftar sumber (URL, kutipan, waktu ambil, sha256 halaman), sub-pertanyaan yang gagal atau tidak cukup bukti.
 
 ## 6. Stage e1: pengecek klaim
 
 LLM membaca setiap paragraf bersama klaim dan kutipan yang disitasinya, lalu memberi `SUPPORTED | PARTIAL | UNSUPPORTED` +
 alasan ≤ 300 karakter. Validasi bentuk seperti `nodes/judge.py` (satu verdict per paragraf, tidak lebih, tidak kurang).
+Implementasi PR C: ringkasan ikut dicek sebagai item `S` terhadap semua finding yang disitasi laporan (ringkasan tidak
+punya `cites` sendiri, jadi tanpa ini ia satu-satunya teks yang tidak dicek). e1 yang gagal memberi verdict valid →
+`check.json` `NOT_CHECKED`, laporan tetap `REPORT_READY` dengan catatan "tidak dicek"; provider gagal → `BLOCKED`,
+`REPORT.md` tanpa tanda tetap ada.
 **v0: hanya menandai**, tidak menggagalkan job: `REPORT.md` menampilkan tanda per paragraf dan jumlahnya di `status`.
 Alasan: pengecek ini belum dikalibrasi; eval §10 mengukur seberapa sering ia sesuai dengan cek Claude sebelum diberi
 kewenangan memblokir.
@@ -137,7 +144,9 @@ Ini perubahan di jalur uang (`harness/llm.py` atau modul baru di `harness/` yang
   tanpa hasil → 0 (aturan billing resmi: hanya request sukses yang ditagih); timeout, koneksi putus, atau jawaban rusak →
   **harga penuh** (tidak bisa dibuktikan tidak ditagih). Reservasi tetap di-charge walau penulisan ledger gagal.
 - Cap default job riset: `research_job.max_usd` **$1,00**; cap stage: p1 $0,05, setiap worker $0,15 (≤ 4), s1 $0,15, e1 $0,10
-  (jumlah ≤ $1,00). Cap stage = min(cap stage, sisa cap job) seperti router v0. Perkiraan nyata (DeepSeek flash, off-peak):
+  (jumlah ≤ $1,00). Cap stage = min(cap stage, sisa cap job) seperti router v0. PR C: job hanya dibuat bila cap-nya
+menutup semua stage pada cap masing-masing (p1 + `max_sub_questions` worker + s1 + e1 = $0,90 dengan default), supaya
+job yang berjalan dalam cap-nya tidak pernah berhenti sebelum laporan karena uang. Perkiraan nyata (DeepSeek flash, off-peak):
   $0,10–0,30 per job; search + fetch ≤ 4 × 14 × $0,00075 ≈ $0,04.
 
 ## 8. Jaringan, key, dan isolasi

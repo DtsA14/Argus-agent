@@ -1,8 +1,9 @@
 """A research job (docs/reviews/SPEC_RESEARCH_JOB.md §2): `argus research "<question>"`, kind "research".
 
-  NEW -> PLANNING (p1) -> RESEARCHING (w1..wN, in order) -> FINDINGS_READY        at least one sub-question answered
-                       \\-> PLAN_FAILED                 \\-> RESEARCH_INCONCLUSIVE  none answered
-  BLOCKED when a stage cannot be funded or the provider fails; every state but a closed one -> ABANDONED.
+  NEW -> PLANNING (p1) -> RESEARCHING (w1..wN, in order) -> SYNTHESIZING (s1) -> CHECKING (e1) -> REPORT_READY
+                       \\-> PLAN_FAILED                 \\-> RESEARCH_INCONCLUSIVE \\-> SYNTHESIS_FAILED
+                                                          (no sub-question answered)
+  BLOCKED when a stage cannot be funded or the provider fails; every state -> ABANDONED.
 
 One "go live" per job (Atha 2026-11-03): the [y/N] before the job is created shows the question, the caps, the model,
 the web provider and its prices, and that queries and URLs go to DeepSeek; then every stage runs without another
@@ -10,6 +11,10 @@ decision. A resume continues the stage a crash interrupted, with the cap that st
 it. Each stage runs on its configured cap, recorded when it starts; a stage whose cap is more than what the job's ledgers
 leave is not started (BLOCKED), and the findings paid for until then are still written. A worker whose provider fails
 also blocks the job (BLOCKED), after writing the findings so far. The plan is written once, when p1 passes, and never changes.
+A job is started only when its cap funds every stage at its configured cap (the planner, the most workers a plan may
+have, the synthesis and the checker), so a job that runs within its caps is never left without a report for money.
+REPORT.md is rendered by the harness when s1 passes (unchecked) and again when e1 ends; e1 only flags (v0): whatever it
+says, the job ends REPORT_READY, unless its provider fails or it cannot be funded (BLOCKED, the unchecked REPORT.md kept).
 """
 import json
 import math
@@ -18,14 +23,20 @@ from pathlib import Path
 
 from codetask.drafter import _write
 
+from research import report as rp
+
 from . import job as rj
 
 PLANNING, PLAN_FAILED, RESEARCHING = "PLANNING", "PLAN_FAILED", "RESEARCHING"
-FINDINGS_READY, INCONCLUSIVE = "FINDINGS_READY", "RESEARCH_INCONCLUSIVE"
+INCONCLUSIVE, SYNTHESIZING, SYNTHESIS_FAILED = "RESEARCH_INCONCLUSIVE", "SYNTHESIZING", "SYNTHESIS_FAILED"
+CHECKING, REPORT_READY = "CHECKING", "REPORT_READY"
 NEW, BLOCKED, ABANDONED = rj.NEW, rj.BLOCKED, rj.ABANDONED
+RUNNING = (PLANNING, RESEARCHING, SYNTHESIZING, CHECKING)
 LEGAL = {(NEW, PLANNING), (NEW, BLOCKED), (PLANNING, RESEARCHING), (PLANNING, PLAN_FAILED), (PLANNING, BLOCKED),
-         (RESEARCHING, FINDINGS_READY), (RESEARCHING, INCONCLUSIVE), (RESEARCHING, BLOCKED)} | \
-        {(s, ABANDONED) for s in (NEW, PLANNING, RESEARCHING, BLOCKED, PLAN_FAILED, FINDINGS_READY, INCONCLUSIVE)}
+         (RESEARCHING, SYNTHESIZING), (RESEARCHING, INCONCLUSIVE), (RESEARCHING, BLOCKED),
+         (SYNTHESIZING, CHECKING), (SYNTHESIZING, SYNTHESIS_FAILED), (SYNTHESIZING, BLOCKED),
+         (CHECKING, REPORT_READY), (CHECKING, BLOCKED)} | \
+        {(s, ABANDONED) for s in (NEW, *RUNNING, BLOCKED, PLAN_FAILED, INCONCLUSIVE, SYNTHESIS_FAILED, REPORT_READY)}
 
 
 def _settings(cfg):
@@ -43,13 +54,14 @@ def _screen(job, cfg, title):
     return rj._limits_text(job, title, [
         "question: " + job.data["inputs"]["question"][:300] + ("..." if len(job.data["inputs"]["question"]) > 300 else ""),
         f"model {cfg['roles'][role]['model']} for every stage; planner cap ${rcfg['planner']['cap_usd']:.2f}, "
-        f"{'' if plan else 'up to '}{workers} worker(s) at ${rcfg['worker']['cap_usd']:.2f} each",
+        f"{'' if plan else 'up to '}{workers} worker(s) at ${rcfg['worker']['cap_usd']:.2f} each, synthesis cap "
+        f"${rcfg['synthesis']['cap_usd']:.2f}, claim checker cap ${rcfg['checker']['cap_usd']:.2f} (it only flags)",
         f"web: {wr.get('provider', 'deepseek')} Search ${prices.get('search')} and Fetch ${prices.get('fetch')} per "
         f"request, paid from each worker's cap; at most {rcfg['worker']['max_searches']} searches and "
         f"{rcfg['worker']['max_fetches']} fetches per worker",
         "data sent out: the question, the search queries and the URLs go to DeepSeek; do not put secrets in the question",
         "tools: WebSearch, WebFetch, Submit; nothing is written outside the job, nothing is sent anywhere else",
-        "one confirmation covers every stage of this job (planner and workers)"])
+        "one confirmation covers every stage of this job (planner, workers, synthesis, claim checker)"])
 
 
 def _preflight(cfg):
@@ -68,6 +80,11 @@ def _preflight(cfg):
         raise rj.Refused(f"web_research.price_usd_per_request has no {', '.join(missing)}; no job was created")
 
 
+def _need(rcfg):
+    return (float(rcfg["planner"]["cap_usd"]) + int(rcfg["planner"]["max_sub_questions"]) * float(rcfg["worker"]["cap_usd"])
+            + float(rcfg["synthesis"]["cap_usd"]) + float(rcfg["checker"]["cap_usd"]))
+
+
 def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None):
     """A new research job, confirmed once, then every stage. Returns the job."""
     from research.stages import QUESTION_MAX, QUESTION_MIN
@@ -75,9 +92,10 @@ def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None):
         raise rj.Refused(f"the question must have {QUESTION_MIN} to {QUESTION_MAX} characters; no job was created")
     rcfg, role, wr = _settings(cfg)
     cap = float(max_usd if max_usd is not None else rcfg.get("max_usd", 1.0))
-    need = float(rcfg["planner"]["cap_usd"]) + float(rcfg["worker"]["cap_usd"])
-    if not (math.isfinite(cap) and cap >= need):
-        raise rj.Refused(f"the job cap must be a number of at least ${need:.2f} (the planner and one worker); "
+    need = _need(rcfg)
+    if not (math.isfinite(cap) and cap + 1e-9 >= need):
+        raise rj.Refused(f"the job cap must be a number of at least ${need:.2f} (the planner, "
+                         f"{rcfg['planner']['max_sub_questions']} workers, the synthesis and the checker at their caps); "
                          "no job was created")
     _preflight(cfg)
     job_id = job_id or rj.new_job_id()
@@ -102,7 +120,7 @@ def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None):
 
 def resume(job, cfg, deps):
     """Continue a research job whose stage was interrupted (the caller holds the job's lock)."""
-    if job.data["state"] not in (PLANNING, RESEARCHING):
+    if job.data["state"] not in RUNNING:
         raise rj.Refused(f"job {job.id} is {job.data['state']}: nothing to resume")
     _, role, _ = _settings(cfg)
     with rj.live(deps, rj.stage_config(cfg, job.data["max_usd"]), [role],
@@ -140,7 +158,7 @@ def _end_stage(job, deps, sid, r):
 
 
 def _run(job, cfg, deps):
-    from research.stages import ANSWERED, PLANNED, run_planner, run_worker
+    from research.stages import PLANNED, run_planner
     rcfg = cfg["research_job"]
     question = job.data["inputs"]["question"]
     if job.data["state"] == NEW:
@@ -161,6 +179,50 @@ def _run(job, cfg, deps):
         job.data["plan"] = r["plan"]
         _write(job.dir / "plan.json", json.dumps(r["plan"], indent=2, ensure_ascii=False) + "\n")
         job.move(RESEARCHING, deps, stage="p1", sub_questions=len(r["plan"]["sub_questions"]))
+    if job.data["state"] == RESEARCHING:
+        if not _research(job, cfg, deps, question):
+            return
+    if job.data["state"] == SYNTHESIZING:
+        cap = _cap(job, cfg, deps, "synthesis", "s1")
+        if cap is None:
+            raise rj.Refused(f"job {job.id}: not enough of the job cap left for the synthesis (BLOCKED)")
+        run_id, again = _start_stage(job, deps, "s1", "report", cap)
+        deps.echo(rj.running(job, "synthesis s1", run_id))
+        r = rp.run_synthesis(run_id=run_id, runs_dir=job.runs, cfg=rj.stage_config(cfg, cap), findings=_collect(job),
+                             max_usd=cap, resume=again, models=deps.models)
+        _end_stage(job, deps, "s1", r)
+        if r.get("status") != rp.REPORTED:
+            job.move(BLOCKED if r.get("status") == BLOCKED else SYNTHESIS_FAILED, deps, stage="s1",
+                     reason=r.get("stop_reason"))
+            return
+        _write(job.dir / "report.json", json.dumps(r["report"], indent=2, ensure_ascii=False) + "\n")
+        _write_report(job)
+        job.move(CHECKING, deps, stage="s1")
+    if job.data["state"] == CHECKING:
+        cap = _cap(job, cfg, deps, "checker", "e1")
+        if cap is None:
+            raise rj.Refused(f"job {job.id}: not enough of the job cap left for the claim checker (BLOCKED); "
+                             f"the unchecked report is {job.dir / 'REPORT.md'}")
+        run_id, again = _start_stage(job, deps, "e1", "check", cap)
+        deps.echo(rj.running(job, "claim checker e1", run_id))
+        report = json.loads((job.dir / "report.json").read_text(encoding="utf-8"))
+        r = rp.run_check(run_id=run_id, runs_dir=job.runs, cfg=rj.stage_config(cfg, cap), report=report,
+                         findings=_collect(job), max_usd=cap, resume=again, models=deps.models)
+        _end_stage(job, deps, "e1", r)
+        check = {k: r.get(k) for k in ("status", "stop_reason", "verdicts")}
+        _write(job.dir / "check.json", json.dumps(check, indent=2, ensure_ascii=False) + "\n")
+        job.data["stages"]["e1"]["counts"] = rp.counts(check)
+        job.save()
+        _write_report(job)
+        if r.get("status") == BLOCKED:                     # the provider failed: the report stays unchecked
+            job.move(BLOCKED, deps, stage="e1", reason=r.get("stop_reason"))
+            return
+        job.move(REPORT_READY, deps, stage="e1", check=r.get("status"), **rp.counts(check))
+
+
+def _research(job, cfg, deps, question):
+    """The workers, in plan order, then findings.json; False when the job stopped (BLOCKED or inconclusive)."""
+    from research.stages import ANSWERED, run_worker
     paid = getattr(deps, "paid", None)
     for n, sub in enumerate(job.data["plan"]["sub_questions"], 1):
         sid = f"w{n}"
@@ -183,11 +245,20 @@ def _run(job, cfg, deps):
         if r.get("status") == "BLOCKED":                   # the provider failed: not a missing answer
             _write_findings(job)
             job.move(BLOCKED, deps, stage=sid, reason=r.get("stop_reason"))
-            return
+            return False
     findings = _write_findings(job)
     answered = any(f["verdict"] == ANSWERED for f in findings["workers"])
-    job.move(FINDINGS_READY if answered else INCONCLUSIVE, deps,
-             findings=sum(len(f["findings"]) for f in findings["workers"]))
+    n = sum(len(f["findings"]) for f in findings["workers"])
+    job.move(SYNTHESIZING if answered else INCONCLUSIVE, deps, findings=n)
+    return answered
+
+
+def _write_report(job):
+    """REPORT.md from report.json, the findings and check.json (when e1 has ended), rendered by the harness."""
+    report = json.loads((job.dir / "report.json").read_text(encoding="utf-8"))
+    check_file = job.dir / "check.json"
+    check = json.loads(check_file.read_text(encoding="utf-8")) if check_file.exists() else None
+    _write(job.dir / "REPORT.md", rp.render(_collect(job), report, check, job_id=job.id))
 
 
 def _write_findings(job):
@@ -227,9 +298,14 @@ def status_lines(job):
         out += [f"plan ({job.dir / 'plan.json'}):"] + [f"  {q['id']} {q['question'][:150]}" for q in d["plan"]["sub_questions"]]
     if (job.dir / "findings.json").exists():
         out.append(f"findings: {job.dir / 'findings.json'}")
-    if d["state"] in (PLANNING, RESEARCHING):
+    if (job.dir / "REPORT.md").exists():
+        c = (d["stages"].get("e1") or {}).get("counts")
+        out.append(f"report: {job.dir / 'REPORT.md'}" + (
+            f" (e1 flags: {c[rp.SUPPORTED]} supported, {c[rp.PARTIAL]} partial, {c[rp.UNSUPPORTED]} unsupported)"
+            if c and d["stages"]["e1"].get("status") == rp.CHECKED else " (not checked by e1)"))
+    if d["state"] in RUNNING:
         out.append(f"next (if no stage is running): argus resume {job.id}")
-    if d["state"] in (BLOCKED, PLAN_FAILED, ABANDONED, INCONCLUSIVE):
+    if d["state"] in (BLOCKED, PLAN_FAILED, ABANDONED, INCONCLUSIVE, SYNTHESIS_FAILED):
         why = rj._why(job)
         out.append(f"why: {why.get('reason') or 'not recorded'}")
     return out

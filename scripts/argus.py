@@ -144,7 +144,7 @@ def main(argv=None, deps=None):
                        ("monitor", "refresh, then the smoke test of the live release; recorded; changes no container"),
                        ("report", "the live release's summary and jobs as an escaped HTML page in ~/argus-staging/reports")):
         gs.add_parser(name, help=text)
-    rs = sub.add_parser("research", help="a deep research job: planner, web workers (docs/reviews/SPEC_RESEARCH_JOB.md)")
+    rs = sub.add_parser("research", help="a deep research job: planner, web workers, synthesis, claim checker (docs/reviews/SPEC_RESEARCH_JOB.md)")
     gq = rs.add_mutually_exclusive_group(required=True)
     gq.add_argument("--question")
     gq.add_argument("--question-file")
@@ -249,7 +249,7 @@ def main(argv=None, deps=None):
             question = o.question if o.question is not None else Path(o.question_file).read_text(encoding="utf-8")
             job = rr.start(question=question, cfg=cfg, deps=deps, max_usd=o.max_usd, jobs_dir=o.jobs_dir)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
-            return 0 if job.data["state"] == rr.FINDINGS_READY else 1
+            return 0 if job.data["state"] == rr.REPORT_READY else 1
         elif o.cmd == "research-ok":
             job, _ = rj.research_ok(o.job, sha=o.sha, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
         elif o.cmd == "approve":
@@ -272,9 +272,9 @@ def main(argv=None, deps=None):
               + "`argus status <job>` shows where it stopped. Do not start a new job for the same task.", file=sys.stderr)
         return 130
     print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
-    from router.research import FINDINGS_READY            # a resumed research job
+    from router.research import REPORT_READY              # a resumed research job
     return 0 if job.data["state"] in (rj.AWAITING_APPROVAL, rj.REVIEW_READY, rj.AWAITING_RESEARCH_REVIEW,
-                                      FINDINGS_READY) else 1
+                                      REPORT_READY) else 1
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1 @@
+In Pydantic v2, what replaced the v1 model methods .dict() and .parse_obj(), and the @validator decorator?

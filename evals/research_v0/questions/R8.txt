@@ -1,0 +1,1 @@
+What does PEP 723 specify for Python scripts, and what is the format of the metadata block it defines?

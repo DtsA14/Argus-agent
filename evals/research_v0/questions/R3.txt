@@ -1,0 +1,1 @@
+When was NumPy 2.0.0 released, and which of its changes can break existing user code or compiled extensions?
