@@ -222,9 +222,12 @@ class SubmitFindings(BaseModel):
                                      description="What the sources do not settle; at least one for INSUFFICIENT_EVIDENCE.")
 
 
-def findings_gate(args, *, run_dir, part_chars):
-    """(problems, findings) of a SubmitFindings (G1, G2, G4)."""
-    problems = []
+def findings_gate(args, *, run_dir, part_chars, keep_passing=False):
+    """(problems, findings) of a SubmitFindings (G1, G2, G4). With keep_passing (the worker's last submit, eval v0): a
+    source that fails G1, G2 or its quote length is dropped instead of rejecting the submission, then a finding left
+    without sources; the result lists what was dropped. Every kept quote still passed G1 and G2; any other problem, or
+    ANSWERED with no finding left, still rejects."""
+    problems, dropped = [], []
     if not isinstance(args, dict):
         return ["the arguments must be an object"], None
     verdict = args.get("verdict")
@@ -256,21 +259,24 @@ def findings_gate(args, *, run_dir, part_chars):
                 continue
             url, quote = s["url"], ws(s["quote"])
             if not QUOTE_MIN <= len(quote) <= QUOTE_MAX:
-                problems.append(f"{where}: the quote has {len(quote)} characters (without extra whitespace); it must "
-                                f"have {QUOTE_MIN} to {QUOTE_MAX}")
+                dropped.append(f"{where}: the quote has {len(quote)} characters (without extra whitespace); it must "
+                               f"have {QUOTE_MIN} to {QUOTE_MAX}")
                 continue
             page = web.stored_page(run_dir, url)
             if page is None:
-                problems.append(f"G1 {where}: {url!r} is not a page WebFetch read in this run; a search result is not a "
-                                "source. Fetch it first, and give the url exactly as you asked for it")
+                dropped.append(f"G1 {where}: {url!r} is not a page WebFetch read in this run; a search result is not a "
+                               "source. Fetch it first, and give the url exactly as you asked for it")
                 continue
             if not any(quoted_in(ws(t), quote) for t in web.served_texts(run_dir, url, part_chars)):
-                problems.append(f"G2 {where}: the quote is not, as whole words, in the parts of {url!r} you read; copy "
-                                "it exactly from a part you read")
+                dropped.append(f"G2 {where}: the quote is not, as whole words, in the parts of {url!r} you read; copy "
+                               "it exactly from a part you read")
                 continue
             srcs.append({"url": url, "quote": quote, "title": page.get("title") or "",
                          "fetched_at": page.get("fetched_at"), "sha256": page.get("sha256")})
-        kept.append({"id": f"F{i}", "claim": claim, "sources": srcs})
+        if srcs or not keep_passing:
+            kept.append({"id": f"F{i}", "claim": claim, "sources": srcs})
+        else:
+            dropped.append(f"finding {i}: no source passed, so the finding was dropped")
     unc = args.get("uncertainties", [])
     if not (isinstance(unc, list) and all(isinstance(u, str) and u.strip() for u in unc)):
         problems.append("uncertainties must be a list of non-empty texts")
@@ -279,9 +285,14 @@ def findings_gate(args, *, run_dir, part_chars):
         problems.append(f"uncertainties: at most {UNCERTAINTIES_MAX} items of at most {UNCERTAINTY_MAX} characters")
     if verdict == INSUFFICIENT and not unc:
         problems.append(f"{INSUFFICIENT} needs at least one uncertainty: what the pages you read do not settle")
+    if not keep_passing or problems:
+        problems += dropped
+    elif verdict == ANSWERED and not kept:
+        problems += [*dropped, f"{ANSWERED} needs at least one finding; none had a source that passed"]
     if problems:
         return problems, None
-    return [], {"verdict": verdict, "findings": kept, "uncertainties": [u.strip() for u in unc]}
+    out = {"verdict": verdict, "findings": kept, "uncertainties": [u.strip() for u in unc]}
+    return [], ({**out, "dropped": dropped} if dropped else out)
 
 
 WORKER_SYSTEM = "\n".join([
@@ -331,8 +342,13 @@ def run_worker(*, run_id, runs_dir, cfg, question=None, sub=None, max_usd=None, 
             return f"Unknown tool {name!r}."
 
         def gate_submit(args, n):
-            problems, findings = findings_gate(args, run_dir=run_dir, part_chars=lim["part_chars"])
-            return _verdict(problems, lim["max_submits"], n, "Accepted: the findings passed the harness gate.",
+            last = n >= lim["max_submits"]          # the last submit keeps what passed (eval v0, Atha 2026-11-04)
+            problems, findings = findings_gate(args, run_dir=run_dir, part_chars=lim["part_chars"], keep_passing=last)
+            dropped = (findings or {}).get("dropped", [])
+            if dropped:
+                log.emit("findings_dropped", submit=n, dropped=dropped[:20])
+            return _verdict(problems, lim["max_submits"], n, "Accepted: the findings passed the harness gate"
+                            + (f", {len(dropped)} failing source(s) or finding(s) dropped." if dropped else "."),
                             findings, log, "findings_checked")
 
         def loop(caller):

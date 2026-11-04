@@ -93,6 +93,13 @@ SubmitFindings:
 - **G4:** bentuk dan panjang. Gagal → masalahnya dikembalikan ke model, maksimal 3 submit; lewat → stage gagal, job lanjut
   ke worker berikutnya dengan sub-pertanyaan itu dicatat `FAILED` (laporan menyebutnya).
 
+- **Submit terakhir menyimpan yang lolos** (amandemen eval v0, Atha 2026-11-04): pada submit ke-`max_submits`, sumber yang
+  gagal G1, G2 atau panjang kutipan **dibuang**, bukan menolak seluruh submit; temuan yang tidak punya sumber tersisa ikut
+  dibuang. Yang dibuang dicatat (`findings_dropped` di events, `dropped` di findings.json). Masalah lain (bentuk, klaim,
+  verdict, uncertainties) tetap menolak, begitu pula ANSWERED tanpa temuan tersisa. Submit sebelumnya ditolak seperti
+  biasa, jadi model tetap diberi kesempatan memperbaiki. Setiap kutipan yang disimpan tetap lolos G1 dan G2.
+  Alasan: di eval v0 worker gratis kehilangan semua temuan yang benar karena satu kutipan salah (R5, R8 free).
+
 Gate tidak menilai apakah klaim benar menurut kutipan; itu tugas e1 (§6) dan peninjau.
 
 ## 5. Stage s1: sintesis
