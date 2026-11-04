@@ -131,8 +131,8 @@ Compared with the same three questions in the first batch:
 | cost per job (deepinfra / free) | $0.046 / $0.009 | $0.054 / $0.007 |
 | wall time per job (deepinfra) | 10.9 min | 13.8 min |
 
-- **Keep-passing worked.** Five workers kept their good findings on the last submit (8 sources dropped in total).
-  Without it, R5 free and R8 free would again have had no report.
+- **Keep-passing worked.** Five workers kept their good findings on the last submit (8 dropped entries in total).
+  Without it, R8 free would again have had no report, and R5 free would have kept only w1's two findings.
   - Some free workers still end NO_FINDINGS: 4 of 9.
 - **Every e1 run finished, but the paid reasoning cap is not enforced.** With `reasoning.max_tokens: 6000`, the first e1
   call still used 15,519 reasoning tokens in R2 and 10,074 in R5. R2's call reached the whole 16,000-token output cap,
