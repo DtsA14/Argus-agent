@@ -55,9 +55,13 @@ def test_a_free_role_lists_its_free_fallbacks():
     ("free_checker", [GEMMA31], "repeats a model"),
     ("free_checker", GEMMA26, "must be a list"),
     ("free_checker", ["openrouter:x/unlisted:free"], "not in gateway_models"),
+    ("free_checker", ["other:some/model:free"], "not on openrouter"),
 ])
 def test_a_bad_fallback_chain_is_refused(role, fallbacks, problem):
     c = t.cfg()
+    c["providers"]["other"] = {**c["providers"]["openrouter"], "api_key_env": "OTHER_KEY"}
+    c["gateway_models"]["other:some/model:free"] = {"upstream": ["x"], "free": True}
+    c["prices"]["other:some/model:free"] = {"input": 0, "output": 0}
     c["roles"][role]["fallback_models"] = fallbacks
     with pytest.raises(ConfigError, match=problem):
         gateway.fallback_chain(c, role)
@@ -108,7 +112,7 @@ def test_a_limit_after_the_first_reply_does_not_fall_back(tmp_path):
 def test_a_resumed_stage_continues_on_the_model_it_fell_back_to(tmp_path):
     cfg = t.cfg()
     memo, log = Memo(tmp_path / "memo.sqlite"), EventLog(tmp_path / "events.jsonl")
-    memo.put("model_choice:check:e1", 1)                       # committed before the crash: GEMMA26 is in use
+    memo.put("model_choice:check:e1", GEMMA26)                 # committed before the crash: GEMMA26 is in use
     seen = []
 
     def loop(caller):
@@ -132,7 +136,7 @@ def test_the_model_in_use_is_committed_before_its_first_call(tmp_path):
     rl.with_fallbacks(cfg, "free_checker", log, memo, node="check", task_id="e1",
                       models={"free_checker": StrictScriptedChatModel(script=[]),
                               f"free_checker@{GEMMA26}": StrictScriptedChatModel(script=[])}, loop=loop)
-    assert choices == [None, 1]
+    assert choices == [None, GEMMA26]
 
 
 # ---- REPORT.md -----------------------------------------------------------------------------------------------------
@@ -149,3 +153,55 @@ def test_an_unpriced_fallback_creates_no_job(tmp_path):
     with pytest.raises(rj.Refused, match="gemma-4-26b"):
         env.start(profile="free")
     assert env.confirms == []
+
+
+# ---- added from the code review ----------------------------------------------------------------------------------
+
+def test_a_free_rate_limit_uses_none_of_the_reservation(tmp_path):
+    env = checker_env(tmp_path, LIMITED, LIMITED, [t.CHECK])          # 6 refusals, then the third model answers
+    env.cfg["research_job"]["checker"]["attempt_tokens"] = 30000       # less than one worst case per refusal
+    job = env.start(profile="free")
+    assert job.data["state"] == rr.REPORT_READY
+    refused = [e for e in events(job, "e1", "llm_call") if e.get("http_status") == 429]
+    assert len(refused) == 6 and all(e["tokens"] == 0 and e["usd_nano"] == 0 for e in refused)
+
+
+def test_a_stage_resumed_on_a_model_no_longer_in_its_chain_stops(tmp_path):
+    cfg = t.cfg()
+    memo, log = Memo(tmp_path / "memo.sqlite"), EventLog(tmp_path / "events.jsonl")
+    memo.put("model_choice:check:e1", "openrouter:gone/model:free")
+    with pytest.raises(ConfigError, match="no longer in roles.free_checker"):
+        rl.with_fallbacks(cfg, "free_checker", log, memo, node="check", task_id="e1", models={},
+                          loop=lambda caller: pytest.fail("no call"))
+
+
+def test_a_fallback_gets_its_own_output_cap(tmp_path):
+    cfg = t.cfg()
+    cfg["research_job"]["max_output_tokens_by_model"][GEMMA26] = 7000
+    memo, log = Memo(tmp_path / "memo.sqlite"), EventLog(tmp_path / "events.jsonl")
+    memo.put("model_choice:check:e1", GEMMA26)
+    caps = []
+    rl.with_fallbacks(cfg, "free_checker", log, memo, node="check", task_id="e1",
+                      models={f"free_checker@{GEMMA26}": StrictScriptedChatModel(script=[])},
+                      loop=lambda c: caps.append(c.max_output) or {"end": "submitted", "steps": 0, "result": {}})
+    assert caps == [7000]
+
+
+def test_the_confirmation_shows_the_fallbacks(tmp_path):
+    env = checker_env(tmp_path, [t.CHECK])
+    env.start(profile="free")
+    screen = env.confirms[0]
+    assert f"checker {GEMMA31} -> {GEMMA26} -> {VL}" in screen and GEMMA26 in screen.split("free models (")[1]
+
+
+def test_a_fallback_whose_limits_do_not_hold_creates_no_job(tmp_path):
+    env = tp.free_env(tmp_path, [], [], [])
+    env.cfg["prices"][GEMMA26]["long_context_above"] = 1000
+    with pytest.raises(rj.Refused, match="research checker"):
+        env.start(profile="free")
+    assert env.confirms == []
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 1e20])
+def test_a_bad_fetch_time_is_shown_as_stored(bad):
+    assert rp._when(bad) is bad

@@ -85,10 +85,13 @@ def _screen(job, cfg, title):
     workers = len(plan["sub_questions"]) if plan else rcfg["planner"]["max_sub_questions"]
     roles = job.data["stage_roles"]
     models = {k: cfg["roles"][r]["model"] for k, r in roles.items()}
-    free = sorted({m for k, m in models.items() if _is_free(cfg, m)})
+    fallbacks = {k: cfg["roles"][r].get("fallback_models") or [] for k, r in roles.items()}
+    free = sorted({m for k in models for m in [models[k], *fallbacks[k]] if _is_free(cfg, m)})
     return rj._limits_text(job, title, [
         "question: " + job.data["inputs"]["question"][:300] + ("..." if len(job.data["inputs"]["question"]) > 300 else ""),
         f"profile {job.data['profile']}: " + ", ".join(f"{k} {models[k]}" for k in STAGE_KINDS),
+        *([("free fallbacks when rate limited: " + "; ".join(f"{k} " + " -> ".join([models[k], *fallbacks[k]]) for k in STAGE_KINDS
+                                                              if fallbacks[k]))] if any(fallbacks.values()) else []),
         f"caps: planner ${rcfg['planner']['cap_usd']:.2f}, {'' if plan else 'up to '}{workers} worker(s) at "
         f"${rcfg['worker']['cap_usd']:.2f} each, synthesis ${rcfg['synthesis']['cap_usd']:.2f}, claim checker "
         f"${rcfg['checker']['cap_usd']:.2f} (it only flags)",
@@ -136,7 +139,8 @@ def _preflight(cfg, roles, cap):
                 ref = ModelRef.parse(model)
                 check_priced(scfg, ref, f"research {kind} (role {role!r})")
                 gateway.check_use(scfg, role, ref)
-            settings(scfg, kind)
+                mcfg = {**scfg, "roles": {**scfg["roles"], role: {**scfg["roles"][role], "model": model}}}
+                settings(mcfg, kind)
         except (ConfigError, KeyError, ValueError) as e:
             raise rj.Refused(f"research {kind} (role {role!r}): {e}; nothing was started") from e
 

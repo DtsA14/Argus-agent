@@ -26,6 +26,7 @@ from harness.llm import LLMCaller, http_status, is_truncated, reconcile_ledger
 from harness.memo import Memo
 from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_from_json, message_to_json,
                            reservation_from_ledger, tool_step_key)
+from models.registry import ConfigError
 
 INPUTS = "inputs.json"
 
@@ -132,16 +133,24 @@ def with_fallbacks(cfg, role, log, memo, *, node, task_id, models, loop):
     from models.gateway import fallback_chain
     chain = fallback_chain(cfg, role)
     key = f"model_choice:{node}:{task_id}"
-    i = memo.get(key) or 0
+    chosen = memo.get(key)
+    if chosen is not None and chosen not in chain:
+        raise ConfigError(f"{node} {task_id} runs on {chosen}, which is no longer in roles.{role}'s fallback chain "
+                          f"{chain}; put it back to resume this stage")
+    i = chain.index(chosen) if chosen is not None else 0
+    caps = (cfg.get("research_job") or {}).get("max_output_tokens_by_model") or {}
     while True:
         model = chain[i]
-        rcfg = {**cfg, "roles": {**cfg["roles"], role: {**cfg["roles"][role], "model": model}}}
+        role_cfg = {**cfg["roles"][role], "model": model}
+        if i > 0 and model in caps:                      # a fallback's own output cap (the primary's was set before)
+            role_cfg["max_output_tokens"] = int(caps[model])
+        rcfg = {**cfg, "roles": {**cfg["roles"], role: role_cfg}}
         injected = (models or {}).get(f"{role}@{model}") or ((models or {}).get(role) if i == 0 else None)
         a = loop(LLMCaller(rcfg, role, log, model=injected))
         if a["end"] == "llm_failed" and a["steps"] == 0 and a.get("http_status") == 429 and i + 1 < len(chain):
+            memo.put(key, chain[i + 1])                  # committed first: a crash here resumes on the next model
             log.emit("model_fallback", role=role, node=node, task=task_id, model=model, next=chain[i + 1])
             i += 1
-            memo.put(key, i)
             continue
         return a
 

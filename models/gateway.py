@@ -158,9 +158,12 @@ def fallback_chain(cfg, role):
     chain = [primary, *fb]
     if len(set(chain)) != len(chain):
         raise ConfigError(f"roles.{role}.fallback_models repeats a model")
+    provider = ModelRef.parse(primary).provider
     for m in chain:
         ref = ModelRef.parse(m)
         if not (is_gateway(cfg, ref) and entry(cfg, ref)["free"]):
             raise ConfigError(f"roles.{role}: {m} may not be in a fallback chain: only free gateway models fall back, "
                               "to free gateway models")
+        if ref.provider != provider:     # one gateway, one key: the confirmation takes the keys of the primary models
+            raise ConfigError(f"roles.{role}: fallback {m} is not on {provider}, the provider of {primary}")
     return chain

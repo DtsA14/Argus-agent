@@ -10,7 +10,7 @@
 REPORT.md is rendered by the harness from the report, the findings and the check, never written by a model.
 """
 import re
-from datetime import datetime, timezone
+import time
 from typing import List
 
 from pydantic import BaseModel, Field
@@ -330,7 +330,10 @@ def _flag(check, item_id):
 def _when(t):
     """A page's fetch time for the reader: UTC ISO 8601 from the stored epoch seconds (text is shown as stored)."""
     if isinstance(t, (int, float)) and not isinstance(t, bool):
-        return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))     # as research/web_tools.py shows it
+        except (ValueError, OverflowError, OSError):
+            return t
     return t
 
 
