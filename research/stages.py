@@ -14,12 +14,12 @@ from typing import List
 from pydantic import BaseModel, Field
 
 from codetask.research import quoted_in, ws
-from harness.llm import LLMCaller, check_long_context
+from harness.llm import check_long_context
 from harness.paid import PaidRequests
 from models.registry import ModelRef
 from tools import web
 
-from .loop import run_stage, tool_loop
+from .loop import run_stage, tool_loop, with_fallbacks
 from .web_tools import WebTools
 
 PLANNED, PLAN_FAILED = "PLANNED", "PLAN_FAILED"
@@ -157,7 +157,6 @@ def run_planner(*, run_id, runs_dir, cfg, question=None, max_usd=None, resume=Fa
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:
             return {"status": FAILED_BUDGET, "stop_reason": "the stage cap leaves nothing for the planner"}
-        caller = LLMCaller(cfg, role, log, model=(models or {}).get(role))
         max_sub = int(lim["max_sub_questions"])
 
         def gate_submit(args, n):
@@ -165,13 +164,15 @@ def run_planner(*, run_id, runs_dir, cfg, question=None, max_usd=None, resume=Fa
             return _verdict(problems, lim["max_submits"], n, "Accepted: the plan passed the harness gate.", plan, log,
                             "plan_checked")
 
-        a = tool_loop(caller, memo, log, node="plan", task_id="p1", lim=lim, system=PLAN_SYSTEM,
-                      prompt=plan_prompt(inputs["question"], lim), tools=[SubmitPlan], submit=SubmitPlan,
-                      versions=PLAN_VERSIONS, run_tool=lambda *a: "Unknown tool.",
-                      gate_submit=gate_submit,
-                      crasher=crasher, nudge="Call SubmitPlan with the plan.",
-                      steps_note="Harness: {n} steps left of {max}. Submit the plan now.",
-                      final_note="Harness: the last {n} steps. Submit the plan.")
+        def loop(caller):
+            return tool_loop(caller, memo, log, node="plan", task_id="p1", lim=lim, system=PLAN_SYSTEM,
+                             prompt=plan_prompt(inputs["question"], lim), tools=[SubmitPlan], submit=SubmitPlan,
+                             versions=PLAN_VERSIONS, run_tool=lambda *a: "Unknown tool.",
+                             gate_submit=gate_submit,
+                             crasher=crasher, nudge="Call SubmitPlan with the plan.",
+                             steps_note="Harness: {n} steps left of {max}. Submit the plan now.",
+                             final_note="Harness: the last {n} steps. Submit the plan.")
+        a = with_fallbacks(cfg, role, log, memo, node="plan", task_id="p1", models=models, loop=loop)
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
                "usd_used": a["usd_used"]}
         if a["end"] == "submitted":
@@ -317,7 +318,6 @@ def run_worker(*, run_id, runs_dir, cfg, question=None, sub=None, max_usd=None, 
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:
             return {"status": FAILED_BUDGET, "stop_reason": "the stage cap leaves nothing for the worker"}
-        caller = LLMCaller(cfg, role, log, model=(models or {}).get(role))
         requests = (paid or PaidRequests)(cfg, log)
         tools_ = WebTools(run_dir, requests, log, lim)
         task = inputs["sub"]["id"]
@@ -335,14 +335,19 @@ def run_worker(*, run_id, runs_dir, cfg, question=None, sub=None, max_usd=None, 
             return _verdict(problems, lim["max_submits"], n, "Accepted: the findings passed the harness gate.",
                             findings, log, "findings_checked")
 
-        a = tool_loop(caller, memo, log, node="worker", task_id=task, lim=lim, system=WORKER_SYSTEM,
-                      prompt=worker_prompt(inputs["question"], inputs["sub"], lim),
-                      tools=[WebSearch, WebFetch, SubmitFindings], submit=SubmitFindings, versions=WORKER_VERSIONS,
-                      run_tool=run_tool, gate_submit=gate_submit, crasher=crasher,
-                      nudge="Use WebSearch and WebFetch, then call SubmitFindings.",
-                      steps_note=("Harness: {n} steps left of {max}. Submit your findings soon with SubmitFindings: a "
-                                  "run that ends without accepted findings has none, whatever was read."),
-                      final_note="Harness: the last {n} steps. Only SubmitFindings is offered now; submit what you have.")
+        def loop(caller):
+            return tool_loop(caller, memo, log, node="worker", task_id=task, lim=lim, system=WORKER_SYSTEM,
+                             prompt=worker_prompt(inputs["question"], inputs["sub"], lim),
+                             tools=[WebSearch, WebFetch, SubmitFindings], submit=SubmitFindings,
+                             versions=WORKER_VERSIONS,
+                             run_tool=run_tool, gate_submit=gate_submit, crasher=crasher,
+                             nudge="Use WebSearch and WebFetch, then call SubmitFindings.",
+                             steps_note=("Harness: {n} steps left of {max}. Submit your findings soon with "
+                                         "SubmitFindings: a run that ends without accepted findings has none, whatever "
+                                         "was read."),
+                             final_note=("Harness: the last {n} steps. Only SubmitFindings is offered now; submit what "
+                                         "you have."))
+        a = with_fallbacks(cfg, role, log, memo, node="worker", task_id=task, models=models, loop=loop)
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
                "usd_used": a["usd_used"]}
         if a["end"] == "submitted":

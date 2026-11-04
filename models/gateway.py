@@ -141,3 +141,26 @@ def build(cfg, role, ref, pcfg, params, api_key):
     check_use(cfg, role, ref)
     return chat_class()(model=ref.model, api_key=api_key, base_url=pcfg["base_url"], **request_params(cfg, ref, params))
 
+
+
+def fallback_chain(cfg, role):
+    """[primary, *fallbacks] model refs (text) of a role (roles.<role>.fallback_models, SPEC_GATEWAY_PROVIDER, Atha
+    2026-11-04). Only for a free gateway model, and every fallback is a listed free gateway model too, each with its own
+    pin: a fallback never costs money and never changes the data rules. ConfigError otherwise."""
+    from .registry import ModelRef
+    rcfg = cfg["roles"][role]
+    primary = rcfg["model"]
+    fb = rcfg.get("fallback_models") or []
+    if not fb:
+        return [primary]
+    if not isinstance(fb, list) or not all(isinstance(m, str) for m in fb):
+        raise ConfigError(f"roles.{role}.fallback_models must be a list of models")
+    chain = [primary, *fb]
+    if len(set(chain)) != len(chain):
+        raise ConfigError(f"roles.{role}.fallback_models repeats a model")
+    for m in chain:
+        ref = ModelRef.parse(m)
+        if not (is_gateway(cfg, ref) and entry(cfg, ref)["free"]):
+            raise ConfigError(f"roles.{role}: {m} may not be in a fallback chain: only free gateway models fall back, "
+                              "to free gateway models")
+    return chain

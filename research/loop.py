@@ -22,7 +22,7 @@ from harness.crash import Crasher
 from harness.errors import EstimateExceeded, InputLimitExceeded, LLMCallFailed, ReservationExhausted
 from harness.events import EventLog
 from harness.guard import guard
-from harness.llm import is_truncated, reconcile_ledger
+from harness.llm import LLMCaller, http_status, is_truncated, reconcile_ledger
 from harness.memo import Memo
 from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_from_json, message_to_json,
                            reservation_from_ledger, tool_step_key)
@@ -67,8 +67,8 @@ def tool_loop(caller, memo, log, *, node, task_id, lim, system, prompt, tools, s
                 return end("context_limit", step)
             except ReservationExhausted:
                 return end("reservation_exhausted", step)
-            except LLMCallFailed:
-                return end("llm_failed", step)
+            except LLMCallFailed as e:
+                return end("llm_failed", step, http_status=http_status(e.__cause__) if e.__cause__ else None)
             crasher.point(f"{node}@after_llm", step=step, **meta)
             memo.put(key, message_to_json(msg))
             log.emit("step_committed", kind="llm", step=step, **meta)
@@ -122,6 +122,28 @@ def tool_loop(caller, memo, log, *, node, task_id, lim, system, prompt, tools, s
             if record.get("exhausted"):
                 return end("submits_exhausted", step)
     return end("max_steps", max_steps)
+
+
+def with_fallbacks(cfg, role, log, memo, *, node, task_id, models, loop):
+    """loop(caller) -> tool_loop's result, on the role's model, or on its next free fallback when the model was rate
+    limited (HTTP 429, after LLMCaller's retries) before any reply of this loop (step 0). The model in use is committed
+    to the memo before its first call, so a resumed stage continues on it and never asks an earlier model again (its
+    committed steps are keyed by its model). models: injected chat models by role, or by "role@model" (tests)."""
+    from models.gateway import fallback_chain
+    chain = fallback_chain(cfg, role)
+    key = f"model_choice:{node}:{task_id}"
+    i = memo.get(key) or 0
+    while True:
+        model = chain[i]
+        rcfg = {**cfg, "roles": {**cfg["roles"], role: {**cfg["roles"][role], "model": model}}}
+        injected = (models or {}).get(f"{role}@{model}") or ((models or {}).get(role) if i == 0 else None)
+        a = loop(LLMCaller(rcfg, role, log, model=injected))
+        if a["end"] == "llm_failed" and a["steps"] == 0 and a.get("http_status") == 429 and i + 1 < len(chain):
+            log.emit("model_fallback", role=role, node=node, task=task_id, model=model, next=chain[i + 1])
+            i += 1
+            memo.put(key, i)
+            continue
+        return a
 
 
 class State(TypedDict, total=False):

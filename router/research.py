@@ -131,10 +131,11 @@ def _preflight(cfg, roles, cap):
     for kind, role in roles.items():
         if role not in scfg.get("roles", {}):
             raise rj.Refused(f"research {kind}: role {role!r} is not in the config; nothing was started")
-        ref = ModelRef.parse(scfg["roles"][role]["model"])
         try:
-            check_priced(scfg, ref, f"research {kind} (role {role!r})")
-            gateway.check_use(scfg, role, ref)
+            for model in gateway.fallback_chain(scfg, role):       # the role's model, then its free fallbacks
+                ref = ModelRef.parse(model)
+                check_priced(scfg, ref, f"research {kind} (role {role!r})")
+                gateway.check_use(scfg, role, ref)
             settings(scfg, kind)
         except (ConfigError, KeyError, ValueError) as e:
             raise rj.Refused(f"research {kind} (role {role!r}): {e}; nothing was started") from e

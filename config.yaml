@@ -189,6 +189,7 @@ research_job:
                                "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": 16000,
                                "openrouter:nvidia/nemotron-3.5-super-vl:free": 16000,
                                "openrouter:google/gemma-4-31b-it:free": 16000,
+                               "openrouter:google/gemma-4-26b-a4b-it:free": 16000,
                                "openrouter:deepseek/deepseek-v4.1-flash": 16000}
   planner: {cap_usd: 0.05, attempt_tokens: 100000, max_input_tokens: 30000, max_steps: 4, max_submits: 3,
             max_sub_questions: 4}
@@ -328,16 +329,21 @@ roles:
     params: {extra_body: {thinking: {type: enabled}}}
   # SPEC_GATEWAY_PROVIDER PR 2: the research job's free profile (no tools of their own; never a repository) and the
   # same DeepSeek V4.1 Flash through OpenRouter, pinned to DeepInfra (DeepSeek itself does not serve it there).
+  # fallback_models: free models only, tried in order when the one before was rate limited (HTTP 429) before the
+  # stage's first reply; the model in use is kept for a resume (Atha 2026-11-04).
   free_planner:
     model: "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"
+    fallback_models: ["openrouter:nvidia/nemotron-3.5-super-vl:free"]
     max_output_tokens: 16000
     timeout_s: 180
   free_worker:
     model: "openrouter:nvidia/nemotron-3.5-super-vl:free"
+    fallback_models: ["openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"]
     max_output_tokens: 16000
     timeout_s: 180
   free_checker:
     model: "openrouter:google/gemma-4-31b-it:free"
+    fallback_models: ["openrouter:google/gemma-4-26b-a4b-it:free", "openrouter:nvidia/nemotron-3.5-super-vl:free"]
     max_output_tokens: 16000
     timeout_s: 180
   or_deepseek:
@@ -395,6 +401,7 @@ prices:
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {input: 0, output: 0}
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {input: 0, output: 0}
   "openrouter:google/gemma-4-31b-it:free":             {input: 0, output: 0}
+  "openrouter:google/gemma-4-26b-a4b-it:free":         {input: 0, output: 0}
   "openrouter:deepseek/deepseek-v4.1-flash":           {input: 0.14, output: 0.42, cache_read: 0.0042}
 
 # SPEC_GATEWAY_PROVIDER: the models a gateway may serve, each pinned to upstream provider slugs (no fallback), and
@@ -405,6 +412,7 @@ gateway_models:
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {upstream: [nvidia], free: true}
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {upstream: [nvidia], free: true}
   "openrouter:google/gemma-4-31b-it:free":             {upstream: [google-ai-studio], free: true}
+  "openrouter:google/gemma-4-26b-a4b-it:free":         {upstream: [google-ai-studio], free: true}
   "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
 gateway:
   free_roles: [free_planner, free_worker, free_checker]   # Atha 2026-11-04 (research_free, split per stage)
