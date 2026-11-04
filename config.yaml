@@ -196,7 +196,8 @@ research_job:
            max_searches: 6, max_fetches: 8, search_count: 8, attempt_text: 48000, part_chars: 12000}
   # PR C: s1 writes the report from the findings, e1 flags each item (v0: flags only). No web, one Submit tool each.
   synthesis: {cap_usd: 0.15, attempt_tokens: 250000, max_input_tokens: 40000, max_steps: 4, max_submits: 3}
-  checker: {cap_usd: 0.10, attempt_tokens: 200000, max_input_tokens: 40000, max_steps: 4, max_submits: 3}
+  checker: {cap_usd: 0.10, attempt_tokens: 200000, max_input_tokens: 40000, max_steps: 4, max_submits: 3,
+            max_output_tokens_by_model: {"openrouter:deepseek/deepseek-v4.1-flash": 32000}}
 
 router:
   job_max_usd: 1.00
@@ -352,11 +353,11 @@ roles:
     timeout_s: 180
   or_deepseek_checker:
     # Eval v0 (2026-11-04): e1 spent its whole 16,000-token output on reasoning in 6 of 8 jobs (stop: length, no
-    # SubmitCheck). Reasoning is capped so the verdicts have room; the stage's USD cap is unchanged.
+    # SubmitCheck). reasoning.max_tokens 6000 was not enforced (rerun: 15,519 reasoning tokens), so e1 gets 32,000
+    # output instead (research_job.checker, Atha 2026-11-04); at ~75 tokens/s that is ~7 minutes, hence the timeout.
     model: "openrouter:deepseek/deepseek-v4.1-flash"
-    max_output_tokens: 16000
-    timeout_s: 180
-    params: {extra_body: {reasoning: {max_tokens: 6000}}}
+    max_output_tokens: 32000
+    timeout_s: 480
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
