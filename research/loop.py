@@ -163,10 +163,10 @@ def run_stage(*, run_id, runs_dir, inputs, resume, kind, work, estimate, usd_est
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = g.compile(checkpointer=cp)
         try:
-            if resume:
+            if resume and graph.get_state(config).values:
                 log.emit("resume", run_id=run_id)
                 graph.invoke(None, config, durability="sync")
-            else:
+            else:                                          # new, or a crash before the first checkpoint was written
                 log.emit("run_start", run_id=run_id, kind=kind, max_usd=inputs.get("max_usd"))
                 graph.invoke({"run_id": run_id}, config, durability="sync")
             out = dict(graph.get_state(config).values).get("out") or {}

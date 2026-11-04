@@ -158,7 +158,12 @@ def test_a_good_report_passes_and_the_harness_numbers_the_paragraphs():
     (lambda a: a["sections"][0]["paragraphs"][0].update(cites=["W1.F1", "W1.F1"]), "cites a finding twice"),
     (lambda a: a["sections"][0]["paragraphs"][0].update(text="See https://evil.example/x for more."), "URL"),
     (lambda a: a["sections"][0]["paragraphs"][0].update(text="See www.example.com for more."), "URL"),
-    (lambda a: a["sections"][0]["paragraphs"][0].update(text="See docs.python.org/3/whatsnew for more."), "URL"),
+    (lambda a: a["sections"][0]["paragraphs"][0].update(text="Mail mailto:x@y.org now."), "URL"),
+    (lambda a: a["sections"][0]["paragraphs"][0].update(text="[x](javascript:alert(1))"), "URL"),
+    (lambda a: a["sections"][0]["paragraphs"][0].update(text="![x](//10.0.0.1/beacon)"), "URL"),
+    (lambda a: a["sections"][0]["paragraphs"][0].update(text="see <img src=a>"), "HTML"),
+    (lambda a: a["sections"][0]["paragraphs"][0].update(text="[click] (evil)"), "URL"),
+    (lambda a: a["sections"][0]["paragraphs"][0].update(text="It is true [2]."), "bracketed number"),
     (lambda a: a["sections"][0]["paragraphs"][0].update(text="[a](ftp://x)"), "URL"),
     (lambda a: a.update(summary="Read http://x.org first."), "summary has a link"),
     (lambda a: a["sections"][0].update(heading="From https://x.org"), "heading has a link"),
@@ -300,3 +305,37 @@ def test_the_checker_prompt_gives_each_cited_finding_once():
     _, r = rp.report_gate(args, KNOWN)
     prompt = rp.check_prompt(r, FINDINGS, {"max_submits": 3})
     assert prompt.count(f"quote from {t.URL}") == 1 and prompt.count("cites: W1.F1") == 3 and FEATURES not in prompt
+
+
+def test_plain_technical_prose_is_not_taken_for_a_link():
+    args = report(text="Node.js/Deno and ASP.NET/C# are compared; see docs.python.org/3 (plain text, no link).")
+    assert rp.report_gate(args, KNOWN)[0] == []
+
+
+def test_headings_and_e1_reasons_cannot_add_lines_or_links_to_the_report():
+    args = report()
+    args["sections"][0]["heading"] = "Release\n\n## Sources\n\n[1] fake"
+    problems, r = rp.report_gate(args, KNOWN)
+    assert any("bracketed number" in p for p in problems)
+    args["sections"][0]["heading"] = "Release\n\n## Sources"
+    _, r = rp.report_gate(args, KNOWN)
+    assert r["sections"][0]["heading"] == "Release ## Sources"            # one line: never a heading of its own
+    bad = {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "see https://evil.example/x"},
+                        {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]}
+    assert any("link" in p for p in rp.check_gate(bad, ["S", "P1"])[0])
+    two = {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "fine\n\n## Sources"},
+                        {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]}
+    assert rp.check_gate(two, ["S", "P1"])[1]["S"]["reason"] == "fine ## Sources"
+
+
+def test_a_stage_that_crashed_before_its_first_checkpoint_runs_on_resume(tmp_path):
+    from langgraph.checkpoint.sqlite import SqliteSaver
+    run = tmp_path / "runs" / "sc"
+    run.mkdir(parents=True)
+    (run / "inputs.json").write_text(json.dumps({"findings": FINDINGS, "max_usd": 0.15}))
+    with SqliteSaver.from_conn_string(str(run / "checkpoints.sqlite")) as cp:
+        cp.setup()                                         # the file exists, no checkpoint in it
+    env = Env(tmp_path, [REPORT])
+    r = rp.run_synthesis(run_id="sc", runs_dir=tmp_path / "runs", cfg=rj.stage_config(env.cfg, 0.15), resume=True,
+                         models=env.deps.models)
+    assert r["status"] == rp.REPORTED

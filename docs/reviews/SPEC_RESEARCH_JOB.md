@@ -107,8 +107,10 @@ SubmitReport:
 ```
 
 Gate: setiap `cites` menunjuk finding yang ada dan lolos gate; tidak ada URL di `text`/`summary` (sumber hanya lewat
-`cites`, supaya model tidak bisa menambah sumber yang tidak dibaca). Implementasi PR C: URL = skema `x://`, `www.`, atau
-domain diikuti path, juga di heading dan uncertainties; paragraf dinomori `P1..` oleh harness; paling banyak 16 paragraf
+`cites`, supaya model tidak bisa menambah sumber yang tidak dibaca). Implementasi PR C: ditolak apa pun yang dijadikan link atau
+fetch oleh viewer markdown (skema `x://`, `mailto:`/`javascript:`/`data:`, `//host`, `www.`, target link `](`, tag HTML)
+dan nomor sumber `[n]` buatan model, juga di heading, uncertainties, dan alasan e1; domain polos (`example.com/x`) tetap
+teks biasa supaya prosa seperti `Node.js/Deno` tidak ditolak; teks diratakan jadi satu baris; paragraf dinomori `P1..` oleh harness; paling banyak 16 paragraf
 dan 8 cite per paragraf; lewat `max_submits` = 3 → `SYNTHESIS_FAILED`. `REPORT.md` **dirender harness**: paragraf dengan nomor
 sitasi, daftar sumber (URL, kutipan, waktu ambil, sha256 halaman), sub-pertanyaan yang gagal atau tidak cukup bukti.
 

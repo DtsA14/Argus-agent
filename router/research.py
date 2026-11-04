@@ -180,8 +180,7 @@ def _run(job, cfg, deps):
         _write(job.dir / "plan.json", json.dumps(r["plan"], indent=2, ensure_ascii=False) + "\n")
         job.move(RESEARCHING, deps, stage="p1", sub_questions=len(r["plan"]["sub_questions"]))
     if job.data["state"] == RESEARCHING:
-        if not _research(job, cfg, deps, question):
-            return
+        _research(job, cfg, deps, question)
     if job.data["state"] == SYNTHESIZING:
         cap = _cap(job, cfg, deps, "synthesis", "s1")
         if cap is None:
@@ -221,7 +220,7 @@ def _run(job, cfg, deps):
 
 
 def _research(job, cfg, deps, question):
-    """The workers, in plan order, then findings.json; False when the job stopped (BLOCKED or inconclusive)."""
+    """The workers, in plan order, then findings.json and the next state (SYNTHESIZING, INCONCLUSIVE or BLOCKED)."""
     from research.stages import ANSWERED, run_worker
     paid = getattr(deps, "paid", None)
     for n, sub in enumerate(job.data["plan"]["sub_questions"], 1):
@@ -245,12 +244,11 @@ def _research(job, cfg, deps, question):
         if r.get("status") == "BLOCKED":                   # the provider failed: not a missing answer
             _write_findings(job)
             job.move(BLOCKED, deps, stage=sid, reason=r.get("stop_reason"))
-            return False
+            return
     findings = _write_findings(job)
     answered = any(f["verdict"] == ANSWERED for f in findings["workers"])
     n = sum(len(f["findings"]) for f in findings["workers"])
     job.move(SYNTHESIZING if answered else INCONCLUSIVE, deps, findings=n)
-    return answered
 
 
 def _write_report(job):
