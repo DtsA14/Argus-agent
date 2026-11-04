@@ -41,6 +41,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["code_task"]["max_output_tokens_by_model"]  # SPEC_AGENT_OUTPUT_BUDGET (only USD profiles; these arms had none)
     del base["drafter"], base["roles"]["drafter"], base["tools"]["drafter"]   # W2b (a role and section they never used)
     del base["router"]                                                      # router v0 (never used by these arms)
+    del base["gateway_models"], base["gateway"], base["providers"]["openrouter"]   # SPEC_GATEWAY_PROVIDER (never used)
     del base["web"]                       # SPEC_WEB_TOOLS (ReadDocs; granted only at approve, never to these arms)
     del base["research"], base["roles"]["researcher"], base["tools"]["researcher"]   # SPEC_RESEARCH_STAGE (never used)
     del base["research_job"]              # SPEC_RESEARCH_JOB (argus research, never used by these arms)

@@ -270,6 +270,13 @@ providers:
   fake:                  # scripted model for tests and offline demos (no network, no key)
     kind: fake
     script_env: ARGUS_FAKE_SCRIPT
+  # SPEC_GATEWAY_PROVIDER: one key for many models. Only models in gateway_models (below), each pinned to its upstream
+  # providers with no fallback; the charge is the larger of our count and the gateway's reported usage.cost.
+  openrouter:
+    kind: gateway
+    vendor: openrouter
+    api_key_env: OPENROUTER_API_KEY
+    base_url: https://openrouter.ai/api/v1
   # Example: uncomment to add another provider without touching any code
   # together:
   #   kind: openai_compatible
@@ -353,6 +360,14 @@ prices:
   "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
   "fake:scripted":               {input: 1.00, output: 5.00, cache_read: 0.10, cache_write_5m: 1.25, cache_write_1h: 2.00}
                                  # made-up prices so tests exercise USD limits
+
+# SPEC_GATEWAY_PROVIDER: the models a gateway may serve, each pinned to upstream provider slugs (no fallback), and
+# whether it is free (then only for gateway.free_roles, never a role that reads repositories). Each needs a price above
+# (a free one: input 0, output 0). Filled after the smoke run (Atha 2026-11-04: DeepSeek, Gemini Flash, one :free).
+gateway_models: {}
+gateway:
+  free_roles: [research_free]   # Atha 2026-11-04; the role itself comes with the smoke run
+  cost_drift_warn: 0.10         # price_drift when the gateway's cost and ours differ by more than this share
 
 # DeepSeek charges double during these UTC windows on weekdays (Chinese public holidays are off-peak;
 # that exception is not modelled here). 01-04 and 06-10 UTC = 08-11 and 13-17 WIB.

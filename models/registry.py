@@ -197,7 +197,7 @@ def build_chat_model(cfg, role):
     if pcfg is None:
         raise ConfigError(f"role {role!r} uses unknown provider {ref.provider!r}")
     builder = BUILDERS.get(pcfg.get("kind"))
-    if builder is None:
+    if builder is None and pcfg.get("kind") != "gateway":
         raise ConfigError(f"provider {ref.provider!r} has unknown kind {pcfg.get('kind')!r}; known: {sorted(BUILDERS)}")
     params = dict(rcfg.get("params", {}))
     # The provider SDKs retry on their own by default (Anthropic: 2, OpenAI client: 2). Those hidden
@@ -205,6 +205,9 @@ def build_chat_model(cfg, role):
     params["max_retries"] = 0
     if "timeout_s" in rcfg:
         params.setdefault("timeout", rcfg["timeout_s"])
+    if pcfg.get("kind") == "gateway":            # SPEC_GATEWAY_PROVIDER: needs the config (pinned models, free roles)
+        from . import gateway
+        return gateway.build(cfg, role, ref, pcfg, params, _api_key(ref, pcfg))
     return builder(ref, pcfg, params)
 
 
