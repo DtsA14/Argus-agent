@@ -54,11 +54,10 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
   satu task (stop/retry/replan). Versi lengkap sekitar satu spek + 4-6 PR jalur ketat. Usul Claude, langkah kecil dulu:
-  - [~] `argus code ... --from-research <job> [--items ...]` (`docs/reviews/SPEC_FROM_RESEARCH.md`, disetujui Atha
-    2026-11-04): item e1 SUPPORTED + kutipannya dibekukan ke job kode (sha di `job.json`), ke drafter dan
-    `inputs.research` kontrak agen, terpisah dari issue; batas 24.000 karakter. 36 tes, mutants 30/30, review medium
-    (6 diperbaiki, 2 diterima), security review tanpa temuan, verify.sh PASS. Menunggu "merge"; lalu pilot up2 dua
-    lengan (riset → kode vs kode saja, butuh "go live"). Planner berhirarki hanya bila ini terbukti
+  - [x] `argus code ... --from-research <job> [--items ...]` (#297, `docs/reviews/SPEC_FROM_RESEARCH.md`). Pilot
+    `pilots/from_research_v0` (issue 015, argus-ledger 4e947a0): kedua lengan benar menurut grader tersembunyi; tanpa
+    riset $0,0384, dengan riset $0,0743 (agen 1 percobaan vs 2). Riset tidak dibutuhkan untuk issue ini (n = 1)
+  - [ ] Bukti berikutnya: issue yang salah dikerjakan lengan tanpa riset. Planner berhirarki belum dibenarkan
   - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
