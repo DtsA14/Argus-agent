@@ -352,7 +352,8 @@ def _collect(job):
         f = r.get("findings") or {"verdict": r.get("status") or "NOT_RUN", "findings": [], "uncertainties": []}
         out["workers"].append({"stage": sid, "sub_question": sub, "status": r.get("status"), "verdict": f["verdict"],
                                "findings": [{**x, "id": f"W{n}.{x['id']}"} for x in f["findings"]],
-                               "uncertainties": f["uncertainties"]})
+                               "uncertainties": f["uncertainties"],
+                               **({"dropped": f["dropped"]} if f.get("dropped") else {})})
     return out
 
 
