@@ -157,6 +157,10 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
 
 1. **PR 1 (jalur ketat):** kind `gateway` vendor `openrouter`, `gateway_models`, pin, cost max, free_roles, tes §8.
    Belum ada role yang memakainya di config default.
+   Implementasi (2026-11-04): PR 1 menolak model gratis di **setiap** role yang membaca repo (lebih ketat dari §5.1);
+   `free_repos` + `scripts/check_secrets.py` menyusul di PR 1b, hanya bila dibutuhkan (role eksperimen `research_free`
+   tidak membaca repo). Tool yang dihitung "membaca repo": list_files, search_files, read_file, write_file,
+   run_validation, read_docs.
 2. **Smoke live (butuh "go live", ≤ $0,10):** satu panggilan + satu loop tool kecil ke 2–3 model terpilih (§10 no. 4),
    membandingkan cost gateway dengan hitungan kita dan memeriksa pin. Hasilnya menentukan harga di config.
 3. **Eksperimen:** satu stage riset (worker atau s1) memakai model gateway, dibandingkan dengan DeepSeek langsung di
