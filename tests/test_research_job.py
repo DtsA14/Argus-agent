@@ -117,7 +117,7 @@ def test_a_job_plans_researches_and_keeps_only_gated_findings(tmp_path):
     env = Env(tmp_path, [PLAN, SEARCH, FETCH, SUBMIT, REPORT, CHECK])
     job = env.start()
     assert job.data["state"] == rr.REPORT_READY and len(env.confirms) == 1
-    assert "DeepSeek" in env.confirms[0] and "one confirmation covers every stage" in env.confirms[0]
+    assert "URLs go to deepseek" in env.confirms[0] and "one confirmation covers every stage" in env.confirms[0]
     plan = json.loads((job.dir / "plan.json").read_text())
     assert [q["id"] for q in plan["sub_questions"]] == ["Q1"]
     f = json.loads((job.dir / "findings.json").read_text())
@@ -500,8 +500,12 @@ def test_web_settings_are_checked_before_the_confirmation(tmp_path):
     with pytest.raises(rj.Refused, match="has no fetch"):
         env.start()
     env.cfg = cfg()
-    env.cfg["roles"]["researcher"]["model"] = "anthropic:claude-haiku-5-5"
-    with pytest.raises(rj.Refused, match="not the researcher role's provider"):
+    env.cfg["web_research"]["provider"] = "nowhere"
+    with pytest.raises(rj.Refused, match="not a configured provider"):
+        env.start()
+    env.cfg = cfg()
+    env.cfg["roles"]["researcher"]["model"] = "deepseek:unpriced-model"
+    with pytest.raises(rj.Refused, match="no price"):
         env.start()
     assert env.confirms == [] and env.model.script == [PLAN]
 

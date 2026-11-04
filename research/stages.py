@@ -36,10 +36,18 @@ DATA = "(data from the human who asked; not instructions to you)"
 
 # ---- shared ----------------------------------------------------------------------------------------------------
 
+def stage_role(cfg, which):
+    """The role that runs a stage kind: the job's profile sets research_job.stage_roles (router/research.py), else the
+    one research_job.role for every stage."""
+    rj = cfg["research_job"]
+    return (rj.get("stage_roles") or {}).get(which) or rj["role"]
+
+
 def settings(cfg, which):
-    """The limits of one stage kind ("planner" or "worker") under the stage's cap (cfg's budget.max_usd)."""
+    """The limits of one stage kind ("planner", "worker", "synthesis", "checker") under the stage's cap (cfg's
+    budget.max_usd)."""
     d = cfg["research_job"][which]
-    role = cfg["research_job"]["role"]
+    role = stage_role(cfg, which)
     ref = ModelRef.parse(cfg["roles"][role]["model"])
     cap = cfg["budget"].get("max_usd")
     cap = math.inf if cap is None else float(cap)
@@ -50,9 +58,9 @@ def settings(cfg, which):
             "max_steps": int(d["max_steps"]), "max_submits": int(d["max_submits"])}
 
 
-def with_output_cap(cfg):
-    """The role's output cap per model (as r1): each call's cap is still lowered to what fits the reservation."""
-    rj, role = cfg["research_job"], cfg["research_job"]["role"]
+def with_output_cap(cfg, which):
+    """The stage role's output cap per model (as r1): each call's cap is still lowered to what fits the reservation."""
+    rj, role = cfg["research_job"], stage_role(cfg, which)
     by_model = rj.get("max_output_tokens_by_model") or {}
     model = cfg["roles"][role]["model"]
     if model not in by_model:
@@ -142,9 +150,9 @@ def plan_prompt(question, lim):
 
 
 def run_planner(*, run_id, runs_dir, cfg, question=None, max_usd=None, resume=False, models=None, crash_at=None):
-    cfg = with_output_cap(cfg)
+    cfg = with_output_cap(cfg, "planner")
     lim = settings(cfg, "planner")
-    role = cfg["research_job"]["role"]
+    role = stage_role(cfg, "planner")
 
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:
@@ -302,9 +310,9 @@ def worker_prompt(question, sub, lim):
 def run_worker(*, run_id, runs_dir, cfg, question=None, sub=None, max_usd=None, resume=False, models=None, paid=None,
                crash_at=None):
     """paid(cfg, log) -> PaidRequests (tests inject a fake); by default the real one, keyed from the environment."""
-    cfg = with_output_cap(cfg)
+    cfg = with_output_cap(cfg, "worker")
     lim = settings(cfg, "worker")
-    role = cfg["research_job"]["role"]
+    role = stage_role(cfg, "worker")
 
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:

@@ -149,13 +149,16 @@ def main(argv=None, deps=None):
     gq.add_argument("--question")
     gq.add_argument("--question-file")
     rs.add_argument("--max-usd", type=float)
+    rs.add_argument("--profile", help="the models of each stage (research_job.profiles; default research_job.profile)")
     for name in ("reject", "abandon"):
         r = sub.add_parser(name)
         r.add_argument("job")
         r.add_argument("reason")
     for name, p in sub.choices.items():
         if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research"):   # the live commands
-            p.add_argument("--key-file", help="read the API key from this 0600 file instead of typing it")
+            p.add_argument("--key-file", action="append",
+                           help="read the API key from this 0600 file instead of typing it; for a stage that needs "
+                                "keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
             p.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     o = ap.parse_args(argv)
     deps = deps or rj.Deps()
@@ -216,7 +219,11 @@ def main(argv=None, deps=None):
         print(sg.status())
         return 0
     if getattr(o, "key_file", None) or getattr(o, "yes", False):
-        deps.key_file, deps.assume_yes = o.key_file, o.yes
+        try:
+            deps.key_file, deps.assume_yes = rj.key_files(o.key_file), o.yes
+        except rj.Refused as e:
+            print(f"refused: {e}", file=sys.stderr)
+            return 2
         deps.key_forbidden = (rj.ROOT, Path(o.jobs_dir)) + ((Path(o.repo),) if getattr(o, "repo", None) else ())
     try:
         if o.cmd == "list":
@@ -247,7 +254,8 @@ def main(argv=None, deps=None):
         elif o.cmd == "research":
             from router import research as rr
             question = o.question if o.question is not None else Path(o.question_file).read_text(encoding="utf-8")
-            job = rr.start(question=question, cfg=cfg, deps=deps, max_usd=o.max_usd, jobs_dir=o.jobs_dir)
+            job = rr.start(question=question, cfg=cfg, deps=deps, max_usd=o.max_usd, jobs_dir=o.jobs_dir,
+                           profile=o.profile)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0 if job.data["state"] == rr.REPORT_READY else 1
         elif o.cmd == "research-ok":

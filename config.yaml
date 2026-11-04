@@ -177,8 +177,19 @@ web_research:
 # and each stage's cap (a stage the job's remainder cannot fund is not started). Workers' web requests are paid from their stage's reservation.
 research_job:
   role: researcher
+  # SPEC_GATEWAY_PROVIDER PR 2: the models of each stage, chosen per job (argus research --profile NAME). "free" uses
+  # free OpenRouter models (Atha 2026-11-04: free first) on roles with no repository tools; the web stays DeepSeek.
+  profile: deepseek
+  profiles:
+    deepseek: {planner: researcher, worker: researcher, synthesis: researcher, checker: researcher}
+    free: {planner: free_planner, worker: free_worker, synthesis: free_planner, checker: free_checker}
+    deepinfra: {planner: or_deepseek, worker: or_deepseek, synthesis: or_deepseek, checker: or_deepseek}
   max_usd: 1.00
-  max_output_tokens_by_model: {"deepseek:deepseek-flash": 16000, "deepseek:deepseek-v4-pro": 16000}
+  max_output_tokens_by_model: {"deepseek:deepseek-flash": 16000, "deepseek:deepseek-v4-pro": 16000,
+                               "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": 16000,
+                               "openrouter:thinkingmachines/inkling:free": 16000,
+                               "openrouter:google/gemma-4-31b-it:free": 16000,
+                               "openrouter:deepseek/deepseek-v4.1-flash": 16000}
   planner: {cap_usd: 0.05, attempt_tokens: 100000, max_input_tokens: 30000, max_steps: 4, max_submits: 3,
             max_sub_questions: 4}
   worker: {cap_usd: 0.15, attempt_tokens: 600000, max_input_tokens: 60000, max_steps: 16, max_submits: 3,
@@ -276,6 +287,7 @@ providers:
     kind: gateway
     vendor: openrouter
     api_key_env: OPENROUTER_API_KEY
+    key_prefix: sk-or-v1-
     base_url: https://openrouter.ai/api/v1
   # Example: uncomment to add another provider without touching any code
   # together:
@@ -314,6 +326,24 @@ roles:
     max_output_tokens: 16000
     timeout_s: 180
     params: {extra_body: {thinking: {type: enabled}}}
+  # SPEC_GATEWAY_PROVIDER PR 2: the research job's free profile (no tools of their own; never a repository) and the
+  # same DeepSeek V4.1 Flash through OpenRouter, pinned to DeepInfra (DeepSeek itself does not serve it there).
+  free_planner:
+    model: "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"
+    max_output_tokens: 16000
+    timeout_s: 180
+  free_worker:
+    model: "openrouter:thinkingmachines/inkling:free"
+    max_output_tokens: 16000
+    timeout_s: 180
+  free_checker:
+    model: "openrouter:google/gemma-4-31b-it:free"
+    max_output_tokens: 16000
+    timeout_s: 180
+  or_deepseek:
+    model: "openrouter:deepseek/deepseek-v4.1-flash"
+    max_output_tokens: 16000
+    timeout_s: 180
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
@@ -360,13 +390,24 @@ prices:
   "deepseek:deepseek-v4-pro":    {input: 0.66, output: 1.98, cache_read: 0.022, peak_multiplier: 2}
   "fake:scripted":               {input: 1.00, output: 5.00, cache_read: 0.10, cache_write_5m: 1.25, cache_write_1h: 2.00}
                                  # made-up prices so tests exercise USD limits
+  # SPEC_GATEWAY_PROVIDER PR 2, checked 2026-11-04 on openrouter.ai/api/v1/models/<id>/endpoints. Free models: 0 (their
+  # gateway_models entry says free). DeepSeek V4.1 Flash on DeepInfra fp8; no peak window there.
+  "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {input: 0, output: 0}
+  "openrouter:thinkingmachines/inkling:free":          {input: 0, output: 0}
+  "openrouter:google/gemma-4-31b-it:free":             {input: 0, output: 0}
+  "openrouter:deepseek/deepseek-v4.1-flash":           {input: 0.14, output: 0.42, cache_read: 0.0042}
 
 # SPEC_GATEWAY_PROVIDER: the models a gateway may serve, each pinned to upstream provider slugs (no fallback), and
 # whether it is free (then only for gateway.free_roles, never a role that reads repositories). Each needs a price above
 # (a free one: input 0, output 0). Filled after the smoke run (Atha 2026-11-04: DeepSeek, Gemini Flash, one :free).
-gateway_models: {}
+# Checked 2026-11-04 on openrouter.ai/api/v1/models/<id>/endpoints: each free model has one endpoint, its own maker.
+gateway_models:
+  "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {upstream: [nvidia], free: true}
+  "openrouter:thinkingmachines/inkling:free":          {upstream: [thinkingmachines/nvfp4], free: true}
+  "openrouter:google/gemma-4-31b-it:free":             {upstream: [google-ai-studio], free: true}
+  "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
 gateway:
-  free_roles: [research_free]   # Atha 2026-11-04; the role itself comes with the smoke run
+  free_roles: [free_planner, free_worker, free_checker]   # Atha 2026-11-04 (research_free, split per stage)
   cost_drift_warn: 0.10         # price_drift when the gateway's cost and ours differ by more than this share
 
 # DeepSeek charges double during these UTC windows on weekdays (Chinese public holidays are off-peak;
