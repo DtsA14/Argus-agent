@@ -55,6 +55,6 @@ Sesudahnya: `RESULT.md` di folder ini, PENDING.md, dan memori staging (jalur cep
 - `stage status` sama dengan langkah 0 (bila ada rilis lain sejak Stage 13, nama di tabel diganti).
 - Versi di `requirements.txt` up2: starlette 1.10.0 dan fastapi 0.162.0 masih yang terbaru yang boleh (tidak ada rilis
   yang ditarik/yanked di PyPI); pin lain (anyio, pydantic, httpx2, …) ≥ 14 hari dan, sedapat mungkin, sama dengan up1.
-- Perubahan breaking fastapi 0.143.2 → 0.162.0 yang menyentuh kode ledger: tidak ada yang dipakai (login lewat
-  `request.form()`, tanpa model form/query/body; lihat `pilots/research_need_v0/CANDIDATES.md`); `FastAPI(root_path=)`
+- Perubahan breaking fastapi 0.143.2 → 0.162.0 yang menyentuh kode ledger: tidak ada yang dipakai (login membaca body
+  sendiri dengan `parse_qs`, tanpa model form/query/body; lihat `pilots/research_need_v0/CANDIDATES.md`); `FastAPI(root_path=)`
   tidak dipakai.

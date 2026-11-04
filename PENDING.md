@@ -107,7 +107,10 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   pertama berhenti: job ada di `~/pilot3a_live`)
 
 - [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), environment `*_up2`, PLAN.md + satu
-  "go live" (`docs/reviews/SPEC_DEP_UPGRADE_V0.md`). Ulangi cek gzip Stage 13 (langkah 3
+  "go live" (`docs/reviews/SPEC_DEP_UPGRADE_V0.md`). **Draf `pilots/dep_upgrade_v0/p2/PLAN.md` ada**; sebelum "go live"
+  ada prasyarat jalur ketat: `RUNTIMES["ledger_staging_up2"]` di `router/stage.py` (+ `config.yaml`, `environments/*_up2`,
+  tes `test_stage.py:589` memakai nama itu sebagai runtime asing), dan image baru hanya bisa dibangun sesudah 2026-11-07
+  15:05 UTC (upload starlette 1.10.0 24 Okt 15:04 UTC). Ulangi cek gzip Stage 13 (langkah 3
   `pilots/staging_stage13`) di up2. Sesudah up2: kandidat issue dengan API baru starlette/fastapi, disaring dulu dengan
   pertanyaan langsung ke DeepSeek tanpa tool sebelum pilot dua lengan (bukti untuk planner berhirarki)
 
