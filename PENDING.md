@@ -45,8 +45,9 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   (`docs/reviews/RESEARCH_EVAL_V0.md`, #290): `deepinfra` 8/8 benar; fix #291 (checker free di Nemotron, aturan kutipan),
   #292 (submit terakhir menyimpan temuan yang lolos), rerun R2/R5/R8 (#293): e1 selesai 6/6, free tanpa laporan kosong.
   Output e1 berbayar dinaikkan ke 32.000 (#294; `reasoning.max_tokens` ternyata tidak dipatuhi). Terbuka:
-  - [ ] Ambang v1 (usul di eval v0 §Reading: ≥7/8 benar, tidak ada yang salah, tidak ada UNSUPPORTED, ≥60% SUPPORTED,
-    e1 selesai ≥7/8) belum diputuskan Atha
+  - [x] Ambang v1 diputuskan Atha 2026-11-04 (profil berbayar: ≥7/8 benar, tidak ada yang salah, tidak ada
+    UNSUPPORTED, ≥60% SUPPORTED, e1 selesai ≥7/8)
+  - [ ] Batch v1: R1-R8 di profil `deepinfra` (sekitar $0,45, butuh "go live"), sekaligus bukti output e1 32k
   - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
