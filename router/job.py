@@ -534,7 +534,9 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
                     **({"environment_image": image} if environment else {}),
                     "stages": {}, "approval": None, "log": []}
         if context:                                 # SPEC_FROM_RESEARCH 3: frozen with the job, before any stage
-            (job.dir / RESEARCH_CONTEXT).write_text(context[0], encoding="utf-8")
+            tmp = job.dir / (RESEARCH_CONTEXT + ".tmp")     # the exact bytes whose sha was recorded, atomically
+            tmp.write_bytes(context[0].encode("utf-8"))
+            os.replace(tmp, job.dir / RESEARCH_CONTEXT)
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
             rec = (intake.intake(repo, full, BASE, exclude=exclude, root=job.root, protected=protected) if full

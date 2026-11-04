@@ -923,10 +923,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         issue = inputs["issue"]
         if not isinstance(issue, str) or not issue.strip() or len(issue) > MAX_ISSUE:
             return stop(BLOCKED, f"the issue must be non-empty text of at most {MAX_ISSUE} characters", "invalid_input")
-        research = inputs.get("research")
-        if research is not None and (not isinstance(research, str) or not research.strip()
-                                     or len(research) > ct.MAX_RESEARCH):
-            return stop(BLOCKED, f"the research context must be non-empty text of at most {ct.MAX_RESEARCH} characters",
+        if "research" in inputs and ct.research_problem(inputs["research"]):
+            return stop(BLOCKED, "the " + ct.research_problem(inputs["research"]).replace("research", "research context", 1),
                         "invalid_input")
         name = inputs["intake"]
         if not isinstance(name, str) or not intake.NAME.match(name):

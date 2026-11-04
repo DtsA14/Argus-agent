@@ -102,6 +102,13 @@ def matches(path, globs):
     return any(glob_regex(g).match(path) for g in globs)
 
 
+def research_problem(r):
+    """Why r cannot be a research context (SPEC_FROM_RESEARCH 4), or None; the contract and the drafter share it."""
+    if not isinstance(r, str) or not r.strip() or len(r) > MAX_RESEARCH:
+        return f"research must be a non-empty string of at most {MAX_RESEARCH} characters"
+    return None
+
+
 def validate(c):
     """Every problem with the contract, or [] if it is valid. Never fixes or loosens anything."""
     if not isinstance(c, dict):
@@ -120,9 +127,8 @@ def validate(c):
     if not isinstance(inp, dict) or set(inp) - {"research"} != {"workspace", "issue"}:
         errors.append("inputs must have exactly 'workspace' and 'issue' (and optionally 'research')")
     else:
-        r = inp.get("research")
-        if "research" in inp and (not isinstance(r, str) or not r.strip() or len(r) > MAX_RESEARCH):
-            errors.append(f"inputs.research must be a non-empty string of at most {MAX_RESEARCH} characters")
+        if "research" in inp and research_problem(inp["research"]):
+            errors.append("inputs." + research_problem(inp["research"]))
         ws = inp["workspace"]
         if not check_glob(ws) or any(ch in ws for ch in "*?") or not ws.startswith("fixtures/repos/"):
             errors.append("inputs.workspace must be a plain relative path under fixtures/repos/")

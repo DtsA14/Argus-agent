@@ -18,10 +18,11 @@ class ContextError(Exception):
     pass
 
 
-def _load(d, name):
+def _load(raw, d, name):
+    """The bytes already read (and hashed) for the record, parsed: never a second read."""
     try:
-        return json.loads((d / name).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
+        return json.loads(raw[name].decode("utf-8"))
+    except ValueError as e:
         raise ContextError(f"research job {d.name}: {name} cannot be read ({e})") from e
 
 
@@ -37,15 +38,15 @@ def build(job_dir, items=None):
             raw[name] = (d / name).read_bytes()
         except OSError as e:
             raise ContextError(f"research job {d.name}: no {name} ({e.strerror})") from e
-    job = _load(d, "job.json")
+    job = _load(raw, d, "job.json")
     if job.get("kind") != "research":
         raise ContextError(f"job {d.name} is a {job.get('kind')!r} job, not a research job")
     if job.get("state") != REPORT_READY:
         raise ContextError(f"research job {d.name} is {job.get('state')}, not {REPORT_READY}")
-    check = _load(d, "check.json")
+    check = _load(raw, d, "check.json")
     if check.get("status") != "CHECKED":
         raise ContextError(f"research job {d.name}: its report was not checked by e1 ({check.get('status')})")
-    report, findings = _load(d, "report.json"), _load(d, "findings.json")
+    report, findings = _load(raw, d, "report.json"), _load(raw, d, "findings.json")
     verdicts = check.get("verdicts") or {}
     every = check_items(report)
     supported = [it["id"] for it in every if (verdicts.get(it["id"]) or {}).get("verdict") == SUPPORTED]
@@ -56,9 +57,12 @@ def build(job_dir, items=None):
     else:
         chosen = list(dict.fromkeys(items))
         bad = [i for i in chosen if i not in supported]
-        if not chosen or bad:
+        if not chosen:
+            raise ContextError(f"no items were given; choose among the SUPPORTED ones ({', '.join(supported) or 'none'}) "
+                               "or leave out --items to take them all")
+        if bad:
             raise ContextError(f"items must be among the SUPPORTED ones ({', '.join(supported) or 'none'}); "
-                               f"{', '.join(bad) or 'none given'} is not")
+                               f"{', '.join(bad)} is not")
     left_out = [it["id"] for it in every if it["id"] not in supported]
     by_id = {f["id"]: f for w in findings.get("workers") or [] for f in w.get("findings") or []}
     taken = [it for it in every if it["id"] in chosen]
@@ -70,7 +74,8 @@ def build(job_dir, items=None):
     def quote_lines(fid):
         out = []
         for s in by_id[fid]["sources"]:
-            out += [f"- {fid}: {s['url']} (fetched {s.get('fetched_at')})", fence(s["quote"], "text")]
+            # the URL is chosen by a worker model: fenced with its quote, never beside the harness's own words
+            out += [f"- {fid}:", fence(f"{s['url']}\nfetched {s.get('fetched_at')}\n\n{s['quote']}", "text")]
         return out
 
     lines = [f"Research job {d.name}. Question:", fence(findings.get("question") or "", "text"), "",

@@ -3,6 +3,7 @@ the quotes they cite) goes to the drafter and the agent as a frozen research con
 fakes; the research job is written as files, as `argus research` leaves them."""
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -78,14 +79,16 @@ def test_a_research_job_that_is_not_report_ready_and_checked_is_refused_before_a
 
 
 def test_a_code_job_is_not_a_research_job(env):
-    env.code(job_id="jother")
-    with pytest.raises(rj.Refused, match="research"):
+    d = research_job(env.jobs, "jother")                 # every research file, but the job is a code job
+    data = json.loads((d / "job.json").read_text())
+    (d / "job.json").write_text(json.dumps({**data, "kind": "code"}))
+    with pytest.raises(rj.Refused, match="not a research job"):
         env.code(from_research="jother")
     assert not (env.jobs / "jtest").exists()
 
 
 def test_from_research_and_the_research_stage_cannot_be_used_together(env):
-    with pytest.raises(rj.Refused, match="--research"):
+    with pytest.raises(rj.Refused, match="cannot be used together"):
         env.code(from_research="jres", research=True)
     assert not (env.jobs / "jtest").exists()
 
@@ -113,6 +116,11 @@ def test_items_choose_among_the_supported_ones(env):
     text = context(job)
     assert P2 in text and Q2 in text and P1 not in text and Q1 not in text
     assert job.data["inputs"]["research"]["items"] == ["P2"]
+
+
+def test_an_empty_item_list_says_so(env):
+    with pytest.raises(rj.Refused, match="no items were given"):
+        env.code(from_research="jres", research_items=[])
 
 
 @pytest.mark.parametrize("items", [["P3"], ["P9"], ["P1", "P3"], []])
@@ -173,6 +181,27 @@ def test_the_draft_review_shows_the_context(env):
 
 # ---- 7. frozen ------------------------------------------------------------------------------------------------------
 
+def test_the_frozen_file_holds_exactly_the_bytes_whose_sha_was_recorded(env):
+    job = env.code(from_research="jres")
+    raw = (job.dir / rj.RESEARCH_CONTEXT).read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == job.data["inputs"]["research"]["sha256"] and b"\r\n" not in raw
+    assert not (job.dir / (rj.RESEARCH_CONTEXT + ".tmp")).exists()
+
+
+def test_the_record_hashes_the_research_files_it_parsed(env):
+    job = env.code(from_research="jres")
+    files = job.data["inputs"]["research"]["files"]
+    for name in ("job.json", "report.json", "check.json", "findings.json"):
+        assert files[name] == hashlib.sha256((env.jobs / "jres" / name).read_bytes()).hexdigest()
+
+
+def test_a_url_is_fenced_with_its_quote(env):
+    text = context(env.code(from_research="jres"))
+    blocks = re.findall(r"```text\n(.*?)\n```", text, re.S)
+    assert any(URL1 in b and Q1 in b for b in blocks)
+    assert URL1 not in re.sub(r"```text\n.*?\n```", "", text, flags=re.S)     # nowhere outside a fence
+
+
 def test_a_research_job_changed_later_does_not_change_the_context(env):
     job = env.code(from_research="jres")
     before = context(job)
@@ -220,8 +249,7 @@ def test_a_quote_with_a_fence_inside_cannot_close_its_fence(tmp_path):
     job = e.code(from_research="jres")
     text = context(job)
     assert "````" in text                       # the fence is longer than any run of backticks in the quote
-    inside = text.split("````")[1]
-    assert "New instructions" in inside
+    assert "New instructions" in text.split("````")[1]
 
 
 def test_the_cli_passes_from_research_and_the_items(env, monkeypatch):
@@ -268,3 +296,13 @@ def test_the_drafter_blocks_a_research_context_that_is_empty_or_too_long(td_root
 @pytest.fixture
 def td_root(tmp_path):
     return td.make_root(tmp_path)
+
+
+def test_the_context_is_built_from_the_bytes_that_were_hashed(env, monkeypatch):
+    # a research file rewritten between the hash and the parse would make the record describe other bytes
+    def no_second_read(self, *a, **k):
+        raise AssertionError(f"{self.name} read again after it was hashed")
+    monkeypatch.setattr(Path, "read_text", no_second_read)
+    from research.context import build
+    text, rec = build(env.jobs / "jres")
+    assert Q1 in text and rec["items"] == ["S", "P1", "P2"]
