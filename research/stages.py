@@ -59,9 +59,13 @@ def settings(cfg, which):
 
 
 def with_output_cap(cfg, which):
-    """The stage role's output cap per model (as r1): each call's cap is still lowered to what fits the reservation."""
+    """The stage role's output cap per model (as r1): each call's cap is still lowered to what fits the reservation.
+    A stage's own max_output_tokens_by_model overrides the job's for that stage, fallbacks included (rerun 2026-11-04:
+    e1's reasoning needs more room than the workers on the same model)."""
     rj, role = cfg["research_job"], stage_role(cfg, which)
-    by_model = rj.get("max_output_tokens_by_model") or {}
+    by_model = {**(rj.get("max_output_tokens_by_model") or {}),
+                **((rj.get(which) or {}).get("max_output_tokens_by_model") or {})}
+    cfg = {**cfg, "research_job": {**rj, "max_output_tokens_by_model": by_model}}
     model = cfg["roles"][role]["model"]
     if model not in by_model:
         return cfg

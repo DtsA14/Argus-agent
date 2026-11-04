@@ -39,13 +39,18 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Keputusan Atha yang ditunggu
 
-- [ ] **Deep research, `argus research`** (Atha 2026-11-03: arah general-purpose agent; keputusan dan urutan gap di
-  Reconciliation bagian 7). Dipindah dari "Ditunda": mesin pencari (tahap 2 akses web) dan deep research (gate kutipan klaim
-  ↔ sumber). Langkah: pilih provider web search, lalu spek `SPEC_RESEARCH_JOB` (job tanpa repo, tool search dengan biaya di cap
-  job, baca web umum, isi web sebagai data, gate klaim ↔ sumber) dan eval set riset kecil; implementasi jalur ketat.
-  Kandidat provider (2026-11-03): DeepSeek Search/Fetch API (REST terpisah, $0,75 per 1.000 request sukses masing-masing,
-  harga dari halaman resmi), Anthropic `web_search` (server-side di dalam panggilan model, $10 per 1.000), Brave/Exa/Tavily
-  (sekitar $5 sampai $8 per 1.000, dari blog perbandingan, belum dicek ke halaman resmi)
+- [~] **Deep research, `argus research`** (Atha 2026-11-03: arah general-purpose agent; keputusan di Reconciliation
+  bagian 7). Sudah jalan: `SPEC_RESEARCH_JOB` (planner, worker paralel, sintesis s1, checker e1, gate G1/G2/G4), web lewat
+  DeepSeek Search/Fetch (#285-#289), gateway OpenRouter dengan profil `deepseek`, `deepinfra` dan `free`. Eval v0
+  (`docs/reviews/RESEARCH_EVAL_V0.md`, #290): `deepinfra` 8/8 benar; fix #291 (checker free di Nemotron, aturan kutipan),
+  #292 (submit terakhir menyimpan temuan yang lolos), rerun R2/R5/R8 (#293): e1 selesai 6/6, free tanpa laporan kosong.
+  Output e1 berbayar dinaikkan ke 32.000 (#294; `reasoning.max_tokens` ternyata tidak dipatuhi). Terbuka:
+  - [ ] Ambang v1 (usul di eval v0 §Reading: ≥7/8 benar, tidak ada yang salah, tidak ada UNSUPPORTED, ≥60% SUPPORTED,
+    e1 selesai ≥7/8) belum diputuskan Atha
+  - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
+    bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
+  - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
+  - [ ] Nanti: worker paralel, OpenRouter Batch API, PR 1b `free_repos`, Vercel sebagai cadangan (Atha "kapan2")
 
 - [ ] **UI kontrol interaktif** (Atha 2026-10-30, scope dibahas di chat): fase 0 spek `SPEC_CONTROL_UI` (service kontrol
   terpisah `127.0.0.1:8711`, proxy viewer tetap GET-only, CSRF/Origin, audit di `job.json`, batas biaya server-side), fase 1

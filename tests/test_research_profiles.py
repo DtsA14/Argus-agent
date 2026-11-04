@@ -9,9 +9,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_research_job as t  # noqa: E402
 
-from models import gateway  # noqa: E402
 from models.fake import StrictScriptedChatModel  # noqa: E402
-from models.registry import ModelRef  # noqa: E402
+from research import stages as st  # noqa: E402
 from router import job as rj  # noqa: E402
 from router import research as rr  # noqa: E402
 from runner import load_config  # noqa: E402
@@ -278,12 +277,22 @@ def test_without_a_profile_every_stage_uses_the_research_role():
     assert set(rr.stage_roles(c).values()) == {"researcher"}
 
 
-def test_the_paid_checker_caps_its_reasoning_below_its_output_cap():
-    # Eval v0 (2026-11-04): e1 spent its whole output cap on reasoning in 6 of 8 jobs; the cap goes out with the request
+def test_the_paid_checker_gets_32k_output_while_the_paid_workers_keep_16k():
+    # Rerun 2026-11-04: reasoning.max_tokens was not enforced and e1's reasoning took 15,519 of 16,000 tokens, so the
+    # checker stage gets 32,000 on the same model the other stages run with 16,000 (Atha "Ok 32k")
     c = load_config()
-    rcfg = c["roles"][c["research_job"]["profiles"]["deepinfra"]["checker"]]
-    cap = rcfg["params"]["extra_body"]["reasoning"]["max_tokens"]
-    assert 0 < cap <= rcfg["max_output_tokens"] // 2
-    ref = ModelRef.parse(rcfg["model"])
-    sent = gateway.request_params(c, ref, dict(rcfg["params"]))["extra_body"]
-    assert sent["reasoning"] == {"max_tokens": cap} and sent["provider"]["only"] == ["deepinfra/fp8"]
+    c["research_job"]["stage_roles"] = c["research_job"]["profiles"]["deepinfra"]
+    checker = st.with_output_cap(c, "checker")
+    assert checker["roles"]["or_deepseek_checker"]["max_output_tokens"] == 32000
+    assert "reasoning" not in (checker["roles"]["or_deepseek_checker"].get("params") or {}).get("extra_body", {})
+    for which in ("planner", "worker", "synthesis"):
+        assert st.with_output_cap(c, which)["roles"]["or_deepseek"]["max_output_tokens"] == 16000
+    assert checker["roles"]["or_deepseek_checker"]["timeout_s"] >= 32000 / 75     # ~75 tokens/s seen on DeepInfra
+
+
+def test_a_stage_output_cap_also_reaches_its_fallback_models():
+    c = load_config()
+    c["research_job"]["checker"]["max_output_tokens_by_model"] = {"openrouter:nvidia/nemotron-3.5-lightning:free": 9000}
+    capped = st.with_output_cap(c, "checker")
+    assert capped["research_job"]["max_output_tokens_by_model"]["openrouter:nvidia/nemotron-3.5-lightning:free"] == 9000
+    assert c["research_job"]["max_output_tokens_by_model"]["openrouter:nvidia/nemotron-3.5-lightning:free"] == 16000

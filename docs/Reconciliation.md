@@ -150,8 +150,16 @@ Diputuskan 2026-11-03 (Atha, sesudah membahas "SPEC-001 Router v1, Guarded Auton
   - *Ditunda sampai ada bukti kebutuhan:* registry dan policy engine formal (M7), layanan approval di kode (ADR-007,
     bersama UI kontrol), memori (M8), capability pack.
 
+Diputuskan 2026-11-04 (Atha):
+- **Provider web: DeepSeek Search/Fetch**; model lewat **gateway OpenRouter** (Vercel cadangan, nanti). Model gratis hanya
+  di role tanpa tool yang membaca repo.
+- **Eval v0 riset** selesai (#290). Fix yang disetujui ("Ok semua"): checker free di Nemotron (Gemma selalu 429), aturan
+  kutipan kalimat utuh, submit terakhir menyimpan temuan yang lolos (#291, #292). Rerun R2/R5/R8 (#293).
+- **Output e1 berbayar 32.000** (Atha "Ok 32k"), bukan reasoning `low` atau mati, agar mutu cek tidak turun; batas
+  output per stage di `research_job.<stage>.max_output_tokens_by_model` (#294).
+
 Menunggu keputusan Atha:
 1. **UI kontrol** (scope di `PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol, port 8711 +
    `permitopen` kedua, waktunya terhadap up2.
 2. **Shadow mode** untuk issue viewer read-only, sesudah berkas yang dilindungi dipaksa harness.
-3. **Provider web search** untuk `argus research` (perbandingan di `PENDING.md`).
+3. **Ambang v1 `argus research`** (usul di `docs/reviews/RESEARCH_EVAL_V0.md`).
