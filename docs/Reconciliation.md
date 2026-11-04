@@ -160,6 +160,11 @@ Diputuskan 2026-11-04 (Atha):
 - **Ambang v1 `argus research`** (Atha "ambang v1 udah ok"), dinilai pada eval set R1-R8 di profil berbayar: minimal 7/8
   jawaban benar dan tidak ada yang salah; tidak ada item UNSUPPORTED; minimal 60% item SUPPORTED (nilai Claude); e1
   selesai mengecek minimal 7/8 laporan.
+- **Batch v1 dilewati**; ambang dan output e1 32k dicek pada job riset berbayar berikutnya.
+- **Pipeline saat ini:** alur A (`main.py`/`graph.py`: orchestrator, worker, synthesize, evaluator) hanya regresi; alur B
+  `argus code` (r1 opsional, drafter, `approve`, agen, review, `applied`, staging); alur C `argus research` (p1, worker
+  web, s1, e1). **Satu pipeline berhirarki** (job → planner → task riset/kode/deploy) dicatat sebagai arah; langkah
+  pertama yang diusulkan `--from-research` (urutan tetap, tanpa planner), menunggu "Ok" Atha untuk spek.
 
 Menunggu keputusan Atha:
 1. **UI kontrol** (scope di `PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol, port 8711 +
