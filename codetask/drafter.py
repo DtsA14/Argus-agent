@@ -500,6 +500,22 @@ def call_path_outside(draft, report, limit=CALL_PATH_MAX):
     return out[:limit]
 
 
+def _caught_kept(caught, named, protected):
+    """SPEC_RED_CAUGHT: the exceptions of `caught` (the red check's record of what the test's own code caught) that the
+    message names and that came from the repository's code: [(names, files)]; None when the record is not readable."""
+    if not isinstance(caught, list) or not all(
+            isinstance(c, dict) and isinstance(c.get("names"), list) and all(isinstance(x, str) for x in c["names"])
+            and isinstance(c.get("handler"), str) and isinstance(c.get("paths"), list)
+            and all(isinstance(x, str) for x in c["paths"]) for c in caught):
+        return None
+    out = []
+    for c in caught:
+        files = [p for p in c["paths"] if _repo_code(p, protected)]
+        if named & set(c["names"]) and not _repo_code(c["handler"], protected) and files:
+            out.append((sorted(named & set(c["names"])), files))
+    return out
+
+
 def swallowed_problems(draft, report):
     """SPEC_DRAFT_CALL_PATH 2.1, judged per node from the red check (SPEC_RED_TESTS_PER_NODE 2.2): a required test that
     fails by an assertion (AssertionError, pytest.fail) whose message names another exception (message_names, read by the
@@ -518,9 +534,19 @@ def swallowed_problems(draft, report):
             if any(_repo_code(p, protected) for p in paths):
                 continue
             names = sorted({x for x in named if isinstance(x, str) and x != "AssertionError"})
-            if names:
-                text = SWALLOWED_VITEST if dr.draft_runners(draft["contract"]) == {"vitest"} else SWALLOWED
-                out.append(text.format(vid=vid, nodes=n, names=", ".join(names)))
+            if not names:
+                continue
+            kept = ""
+            if r.get("caught") is not None:          # watched: only an exception that really came out of the repository
+                hit = _caught_kept(r["caught"], set(names), protected)
+                if hit is None:
+                    out.append(UNREAD.format(vid=vid, node=n))
+                    continue
+                if not hit:
+                    continue
+                kept = " The test caught " + "; ".join(f"{', '.join(a)} raised in {', '.join(b)}" for a, b in hit) + "."
+            text = SWALLOWED_VITEST if dr.draft_runners(draft["contract"]) == {"vitest"} else SWALLOWED
+            out.append(text.format(vid=vid, nodes=n, names=", ".join(names)) + kept)
     return out
 
 

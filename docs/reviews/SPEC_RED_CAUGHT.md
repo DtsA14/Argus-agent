@@ -1,6 +1,6 @@
 # Spek: gate "tes menelan traceback" menilai exception yang benar-benar ditangkap
 
-Status: **usulan Claude 2026-11-05, menunggu persetujuan Atha**. Jalur ketat (gate drafter, kode red check di sandbox).
+Status: **disetujui Atha 2026-11-05** ("Ok gas bro ikut saran lu": jalur `caught` dengan jatuh ke aturan lama, R4 di PR yang sama). Jalur ketat (gate drafter, kode red check di sandbox).
 Alur: spek → tes yang gagal di kode lama → kode → mutants → `/code-review medium` → `verify.sh` sekali → "merge" Atha.
 Sumber masalah: `PENDING.md` ("Gate tes menelan traceback salah tolak", argus-ledger 008, submit 2 dari 3).
 
@@ -48,8 +48,11 @@ lama tetap). Bila `message_names` kosong: tetap lolos seperti sekarang.
 
 **R3. Fail-closed.** `caught` adalah `null` (bukan daftar kosong) bila `sys.monitoring` tidak ada (Python < 3.12, mis.
 `sympy_py39`) atau tool id ID 4 sudah dipakai, atau callback gagal: gate memakai aturan lama (nama di pesan, tanpa berkas
-repo → tolak), jadi tidak pernah lebih longgar dari sekarang di lingkungan itu. Rekaman tanpa kunci `caught` sama sekali
-= `UNREAD` seperti rekaman tanpa `message_names`. Daftar kosong berarti "dipantau, tidak ada yang ditangkap".
+repo → tolak), jadi tidak pernah lebih longgar dari sekarang di lingkungan itu. Rekaman **tanpa kunci** `caught` (rekaman lama
+dan vitest) diperlakukan sama dengan `null`: aturan lama, tidak pernah lebih longgar dan hasil yang sudah tersimpan tidak berubah
+saat dibaca ulang (crash-resume). `caught` yang bukan daftar, atau isinya bukan `{names, handler, paths}`, = `UNREAD`. Lebih dari
+20 catatan = `null` (bukan dipotong: tes yang menangkap banyak exception tidak boleh menyembunyikan satu yang ditelan). Daftar
+kosong berarti "dipantau, tidak ada yang ditangkap".
 
 **R4. Pesan penolakan** tetap `SWALLOWED`, ditambah satu kalimat: exception mana (nama dan berkas repo-nya) yang
 ditangkap, supaya drafter memperbaiki tesnya, bukan mengganti kata.
@@ -62,7 +65,8 @@ semua jaminan AGENTS.md. Tidak ada panggilan model baru.
 1. Lima bentuk di §1 dengan plugin nyata di sandbox (tes docker; skip tidak dihitung lulus): bentuk 1 dan 4 ditolak,
    bentuk 2, 3 dan 5 lolos.
 2. `caught = null` (Python 3.9 atau tool id terpakai) → aturan lama: bentuk 2 ditolak seperti sekarang.
-3. Rekaman tanpa `caught` → `UNREAD`; `caught` yang bukan daftar → `UNREAD`.
+3. Rekaman tanpa `caught` → aturan lama (bukan `UNREAD`); `caught` yang bukan daftar atau berisi entri rusak → `UNREAD`; lebih dari
+   20 catatan → `null`.
 4. Penangkap di kode repo tidak dihitung; path hanya berkas tes (helper tes) tidak dihitung.
 5. Batas `RED_LIMITS` dan pemotongan; callback tidak mengubah hasil tes (sebuah tes yang lolos tetap lolos, exception
    tidak ditelan oleh callback).
@@ -78,3 +82,20 @@ Mengubah aturan untuk vitest; memantau exception di thread lain selain yang dila
 1. Setuju gate memakai `caught` bila ada dan jatuh ke aturan lama bila tidak ada (R3), tanpa menunggu Python 3.9 yang
    tidak punya `sys.monitoring`?
 2. R4 (pesan penolakan menyebut exception dan berkasnya) ikut PR yang sama, atau PR terpisah?
+
+## 7. Implementasi (2026-11-05)
+
+- `acceptance/validation.py` (`RED_CHECK`): tool id 4 `sys.monitoring`, callback `EXCEPTION_HANDLED` hanya selama fase `call`
+  sebuah tes; `caught` per tes ({names, handler, paths}); `null` bila `sys.monitoring` tidak ada, id tidak bisa diambil,
+  callback gagal (tes dengan `__name__` yang melempar error), atau lebih dari 20 catatan berbeda. `RED_LIMITS["caught"] = 20`.
+  Catatan: catatan hanya dibuat bila ada frame berkas repo **lebih dalam** daripada penangkap, jadi `TypeError` di titik
+  panggilan dan exception yang diraise di `<string>` tidak tercatat (bentuk 2 dan 3 di §1 jadi daftar kosong).
+- `codetask/drafter.py` (`swallowed_problems`, `_caught_kept`): R2-R4. Rekaman tanpa `caught` (lama, vitest) = aturan lama.
+  Pesan penolakan menambah "The test caught <nama> raised in <berkas repo>".
+- Tes: `tests/test_red_caught.py` (30: 17 gerbang dari rekaman, 5 sandbox nyata, fallback id tak terambil, >20 catatan,
+  callback gagal, hasil tes tidak berubah, batas); `tests/test_draft.py` diperbarui: `test_long` (hanya menyebut nama,
+  tidak menangkap apa pun) dan `test_exec_frame` (`<string>`) tidak lagi ditolak, yang ditelan sungguhan (`swallowed`,
+  `from None`) tetap.
+- Mutants 15/15 (satu selamat pertama kali, callback yang gagal tidak dicatat `null`; diperbaiki dengan tes).
+- Waktu red check di `argus-ledger` 4e947a0 (137 tes lulus, `ledger_py312_up1`): 44,0 s tanpa, 46,0 s dengan (+4,5%).
+- Seluruh suite dengan image sandbox: 2863 passed, 0 skipped.
