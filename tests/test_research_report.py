@@ -107,6 +107,17 @@ def test_a_checker_that_never_passes_leaves_the_report_marked_not_checked(tmp_pa
     assert "(not checked by e1)" in rj.status("jr", jobs_dir=env.jobs)
 
 
+def test_a_checker_whose_reason_stays_too_long_is_cut_on_its_last_submit(tmp_path):
+    args = t.check_args()
+    args["verdicts"][0]["reason"] = "The quote gives the date. " * 13                 # 350 characters
+    long = call("SubmitCheck", args, "c")
+    env = Env(tmp_path, WORKED + [REPORT, long, long, long])
+    job = env.start()
+    check = json.loads((job.dir / "check.json").read_text())
+    assert job.data["state"] == rr.REPORT_READY and check["status"] == rp.CHECKED
+    assert check["verdicts"]["S"]["reason"].endswith("…") and "*e1: SUPPORTED (" in (job.dir / "REPORT.md").read_text()
+
+
 def test_a_checker_provider_failure_blocks_and_keeps_the_unchecked_report(tmp_path):
     env = Env(tmp_path, WORKED + [REPORT, FakeHTTPError(400, "bad request")])
     job = env.start()
@@ -217,6 +228,27 @@ def test_a_report_lists_only_the_findings_it_cites():
 def test_the_check_gate_wants_one_verdict_per_item(args, problem):
     problems, v = rp.check_gate(args, ["S", "P1"])
     assert v is None and any(problem in p for p in problems), problems
+
+
+def test_a_reason_too_long_is_refused_before_the_last_submit_and_cut_on_it():
+    args = {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "y" * 341},
+                         {"id": "P1", "verdict": "PARTIAL", "reason": "ok"}]}
+    problems, v = rp.check_gate(args, ["S", "P1"])
+    assert v is None and any("reason has 341" in p for p in problems)
+    problems, v = rp.check_gate(args, ["S", "P1"], last=True)
+    assert problems == [] and v["S"]["verdict"] == "SUPPORTED" and v["P1"]["verdict"] == "PARTIAL"
+    assert len(v["S"]["reason"]) == rp.REASON_MAX and v["S"]["reason"].endswith("…")
+
+
+@pytest.mark.parametrize("args", [
+    {"verdicts": [{"id": "S", "verdict": "TRUE", "reason": "y" * 341}, {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]},
+    {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "y" * 341}]},
+    {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "see https://x.org " + "y" * 341},
+                  {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]},
+])
+def test_the_last_submit_still_refuses_a_bad_verdict_a_missing_item_or_a_link(args):
+    problems, v = rp.check_gate(args, ["S", "P1"], last=True)
+    assert v is None and problems
 
 
 def test_the_summary_is_checked_against_everything_the_report_cites():
