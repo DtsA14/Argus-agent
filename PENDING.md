@@ -57,14 +57,17 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     - [x] s1 hanya melihat kutipan, bukan klaim worker (#311). Job 4 `j20261105_123505_b1d4`: 17/17 SUPPORTED,
       identifier di luar kutipan 27 → 0 ($0,0742)
     - [x] Dua topik lain (ekonomi BI/Fed/rupiah 85% SUPPORTED, BRICS 93%; 0 UNSUPPORTED, e1 selesai; $0,1506)
-    - [ ] Jalur cepat kecil dari tiga job ini: petunjuk worker bahwa kutipan boleh lintas baris (G2 menerima); s1 tidak
-      melihat URL (judul di URL bocor jadi klaim, PARTIAL BRICS P9)
+    - [x] Jalur cepat kecil dari tiga job ini (#314): petunjuk worker bahwa kutipan boleh lintas baris (G2 menerima); s1
+      tidak melihat URL (judul di URL bocor jadi klaim, PARTIAL BRICS P9). Belum diuji di job nyata
     - [ ] Kebenaran faktual ("7/8 benar") belum dinilai terhadap sumber independen
     - [ ] Catatan review yang belum dikerjakan: ReadDocs (`tools/web.py`) punya titik buta konfigurasi yang sama;
       konfigurasi berbentuk `window.X = {...}`/`__NEXT_DATA__` tidak terdeteksi; gate s1 masih menolak seluruh submit
       terakhir karena satu bagian kepanjangan; aturan "submit terakhir" tersalin di dua `gate_submit`
 - [ ] **Tahap 2, kurangi supervisi** (Atha 2026-11-05: sesudah tahap 1, sebelum UI kontrol): Reviewer Argus (rencana ke
   Atha sebelum kode), menit kerja Atha per pilot, batch shadow dengan issue yang tidak dijelaskan rinci oleh Claude
+  - [ ] Spek `docs/reviews/SPEC_JUDGE.md` (`argus judge`, stage j1, hanya saran): model GLM-5.3 lewat OpenRouter pin Baidu
+    fp8 (Atha 2026-11-05, harga diskon); K1-K3 disetujui. Lalu satu PR jalur ketat, replay 11 job shadow lama (~$0,20,
+    "go live"), lalu shadow batch 3 dengan issue singkat yang ditulis Claude (Atha: "Issue masih lu dulu")
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
