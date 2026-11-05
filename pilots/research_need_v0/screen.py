@@ -4,6 +4,7 @@ and to say what FastAPI 0.162.0 / Starlette 1.10.0 do; Claude then compares the 
 (probe_params.py, probe_deprecations.py). Same model setup as the code arm of the pilots (deepseek-flash, thinking).
 
   python pilots/research_need_v0/screen.py        # asks for the DeepSeek key (not shown); needs a terminal
+  DEEPSEEK_API_KEY=$(cat <key file>) python pilots/research_need_v0/screen.py     # without typing it
 
 Exit codes: 0 all four answered, 1 an API refusal, 2 refused before sending.
 """
@@ -58,12 +59,14 @@ def text_of(msg):
 
 
 def main():
-    if not sys.stdin.isatty():
-        print("refused: run it in a terminal; the key is typed, never passed", file=sys.stderr)
-        return 2
-    key = getpass.getpass("Type or paste the DeepSeek API key, then Enter (not shown): ").strip()
+    key = os.environ.get("DEEPSEEK_API_KEY", "").strip()        # set by Atha for this one command, e.g. from his key file
+    if not key:
+        if not sys.stdin.isatty():
+            print("refused: run it in a terminal; the key is typed, never passed", file=sys.stderr)
+            return 2
+        key = getpass.getpass("Type or paste the DeepSeek API key, then Enter (not shown): ").strip()
     if not key or any(c.isspace() for c in key):
-        print("refused: the key is empty or has whitespace", file=sys.stderr)
+        print(f"refused: the key is empty or has whitespace (got {len(key)} characters)", file=sys.stderr)
         return 2
     cfg = load_config()
     role = "drafter"
