@@ -1,0 +1,105 @@
+```python
+# argus_ledger/app.py
+from __future__ import annotations
+
+import csv
+import io
+import json
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import FastAPI, Query
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
+
+CSV_FIELDS = ["id", "name", "state", "cost"]
+
+
+class JobFilter(BaseModel):
+    """Reusable filter model: `?state=failed`."""
+
+    state: str | None = Field(default=None, description="Exact job state match")
+
+
+class Page(BaseModel):
+    """Reusable paging model: `?limit=20&offset=0`."""
+
+    limit: int = Field(default=20, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
+
+
+def create_app(jobs_dir: str | Path) -> FastAPI:
+    app = FastAPI(title="argus-ledger")
+    root = Path(jobs_dir)
+
+    def load_jobs() -> list[dict]:
+        jobs: list[dict] = []
+        for path in sorted(root.glob("*.json")):
+            with path.open(encoding="utf-8") as fh:
+                job = json.load(fh)
+            job.setdefault("id", path.stem)
+            jobs.append(job)
+        return jobs
+
+    def select(filters: JobFilter, page: Page) -> list[dict]:
+        jobs = load_jobs()
+        if filters.state is not None:
+            jobs = [j for j in jobs if j.get("state") == filters.state]
+        return jobs[page.offset : page.offset + page.limit]
+
+    FilterDep = Annotated[JobFilter, Query()]
+    PageDep = Annotated[Page, Query()]
+
+    @app.get("/jobs")
+    def list_jobs(filters: FilterDep, page: PageDep) -> list[dict]:
+        return select(filters, page)
+
+    @app.get("/jobs.csv", response_class=PlainTextResponse)
+    def list_jobs_csv(filters: FilterDep, page: PageDep) -> str:
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=CSV_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(select(filters, page))
+        return buf.getvalue()
+
+    return app
+```
+
+```python
+# tests/test_jobs.py
+import json
+
+from fastapi.testclient import TestClient
+
+from argus_ledger.app import create_app
+
+
+def _client(tmp_path):
+    for i in range(5):
+        (tmp_path / f"job-{i}.json").write_text(
+            json.dumps({"id": f"job-{i}", "state": "failed" if i % 2 else "done", "cost": i})
+        )
+    return TestClient(create_app(tmp_path))
+
+
+def test_filter_and_page(tmp_path):
+    client = _client(tmp_path)
+    r = client.get("/jobs", params={"state": "failed", "limit": 2, "offset": 1})
+    assert r.status_code == 200
+    assert [j["id"] for j in r.json()] == ["job-3"]
+
+
+def test_defaults(tmp_path):
+    client = _client(tmp_path)
+    assert len(client.get("/jobs").json()) == 5
+    assert client.get("/jobs", params={"limit": 0}).status_code == 422
+
+
+def test_csv_shares_models(tmp_path):
+    client = _client(tmp_path)
+    text = client.get("/jobs.csv", params={"state": "done", "limit": 1}).text
+    assert text.splitlines()[0] == "id,name,state,cost"
+    assert len(text.splitlines()) == 2
+```
+
+Yes — in 0.162.0 you can declare two (or more) Pydantic query models on one endpoint, since the multi-model support that removed the one-model-per-endpoint restriction. In 0.143.2 that restriction still applies: a second `Query()` model is not folded into the query string (the docs limit you to one model per endpoint), so `state`/`limit`/`offset` would not bind as intended. An optional model — `filters: Annotated[JobFilter | None, Query()] = None` — is supported in 0.162.0, yielding `None` when no fields are supplied. Also note that field names are flat in the query string, so two models sharing a field name collide; keep them disjoint.
