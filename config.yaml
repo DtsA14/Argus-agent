@@ -370,8 +370,9 @@ roles:
     # SPEC_JUDGE J7 (Atha 2026-11-05): GLM-5.3, another family than the drafter's and the agent's DeepSeek, through
     # OpenRouter pinned to Baidu fp8 (gateway_models). No fallback: a failed provider ends the stage NOT_JUDGED.
     model: "openrouter:z-ai/glm-5.3"
-    max_output_tokens: 16000
-    timeout_s: 300
+    # Replay 2026-11-05: 4/11 calls spent all 16000 output tokens on reasoning (~187 s) and never submitted.
+    max_output_tokens: 32000
+    timeout_s: 480
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
