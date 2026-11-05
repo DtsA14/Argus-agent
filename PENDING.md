@@ -4,7 +4,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status). Riwayat butir yang sudah selesai (bukti, angka, PR): [`docs/reviews/PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md)
 (sampai 2026-10-30), [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) (sebelumnya) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-30 malam, jalur cepat sesudahnya (#268) (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
+Terakhir diperbarui: 2026-11-05 (tahap 1 riset "Agentic AI", #307-#309). Sebelumnya: 2026-10-30 malam, jalur cepat sesudahnya (#268) (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
 notifikasi monitor #259/#260). Dirapikan: semua butir `[x]` pindah ke arsip 2026-10-30.
 
 Jalur cepat 2026-10-30 (#268): `audit_run.py` membangun ulang balasan yang ditolak harness (tanpa tool call → `NUDGE`, call
@@ -50,6 +50,18 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   - [~] Batch v1 R1-R8 dilewati (Atha 2026-11-04: lama, kurang sebanding hasilnya). Ambang v1 dan output e1 32k dicek
     di job riset berbayar berikutnya: e1 selesai tanpa terpotong, tidak ada UNSUPPORTED, persen SUPPORTED; "7/8 benar"
     baru terbukti setelah beberapa job
+  - [~] **Tahap 1, riset nyata pertama "Agentic AI"** (2026-11-05, Reconciliation bagian 4d; breakdown tahap 1-4 di
+    bagian 7): tiga job $0,2198; tiga perbaikan jalur cepat: #307 (gate URL salah membaca "file:" di prosa), #308 (halaman
+    docs dengan konfigurasi JSON raksasa), #309 (e1 kehilangan semua verdict karena satu alasan kepanjangan). Job 3
+    `j20261105_121107_718e`: e1 CHECKED, 0 UNSUPPORTED, **SUPPORTED 47% (<60%)**. Berikutnya:
+    - [ ] s1 hanya boleh menulis yang ada di kutipan (prompt; mungkin s1 diberi kutipan saja, bukan klaim worker), lalu
+      job yang sama diulang dan dibandingkan persen SUPPORTED-nya
+    - [ ] 2-3 pertanyaan lain dengan topik berbeda sebelum tahap 1 dianggap selesai
+    - [ ] Catatan review yang belum dikerjakan: ReadDocs (`tools/web.py`) punya titik buta konfigurasi yang sama;
+      konfigurasi berbentuk `window.X = {...}`/`__NEXT_DATA__` tidak terdeteksi; gate s1 masih menolak seluruh submit
+      terakhir karena satu bagian kepanjangan; aturan "submit terakhir" tersalin di dua `gate_submit`
+- [ ] **Tahap 2, kurangi supervisi** (Atha 2026-11-05: sesudah tahap 1, sebelum UI kontrol): Reviewer Argus (rencana ke
+  Atha sebelum kode), menit kerja Atha per pilot, batch shadow dengan issue yang tidak dijelaskan rinci oleh Claude
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
