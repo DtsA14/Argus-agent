@@ -9,7 +9,9 @@ kept by the run before their result is returned.
 - What the model was given of a page is recorded per tool step in <run>/web/served_1.jsonl (part, characters), as
   ReadDocs does: only those parts can be quoted (G2), and their characters count toward the run's web text limit.
 - Every result is labelled data from the internet, not instructions.
-- A line of a fetched page that is one long JSON value (site config) is dropped before the page is kept (_prose).
+- A line of a fetched page that is one long JSON value (site config) is dropped before the page is kept (_prose); a
+  page of only config is kept as a definite "no article text", so it is not bought again. Only pages bought from now
+  on are filtered: a kept page and a committed step stay as they were, so a resumed run is served the same text.
 """
 import hashlib
 import json
@@ -24,7 +26,8 @@ from tools import web
 
 TITLE_MAX, SUMMARY_MAX = 200, 800
 DEFINITE = {400, 403, 404, 413}            # DeepSeek's own error for this URL: kept, so it is not asked (or paid) again
-CONFIG_LINE = 2000                         # a line this long that is one JSON value is site config, not the article
+CONFIG_LINE = 20000                        # a line this long that is one JSON value is site config, not the article
+NO_ARTICLE = "the page has no article text, only site config"
 
 
 def _prose(content):
@@ -36,7 +39,7 @@ def _prose(content):
             return False
         try:
             json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):      # deep nesting raises RecursionError: kept as text
             return False
         return True
     return "\n".join(line for line in content.split("\n") if not config(line))
@@ -137,6 +140,9 @@ class WebTools:
             text = (f"{title}\n\n" if title else "") + content
             page = {"ok": True, "asked": url, "final_url": url, "title": title, "text": text, "fetched_at": self.clock(),
                     "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "attempt": 1}
+            web._write(path, page)
+        elif isinstance(content, str):                 # the page came, with only site config in it (billed)
+            page = {"ok": False, "asked": url, "reason": NO_ARTICLE}
             web._write(path, page)
         elif out.get("reason") == "http_error" and out.get("status") in DEFINITE and out.get("error_body"):
             page = {"ok": False, "asked": url, "reason": f"DeepSeek could not fetch it (HTTP {out['status']})"}

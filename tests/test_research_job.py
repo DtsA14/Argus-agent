@@ -529,7 +529,7 @@ def test_a_page_with_no_room_left_to_serve_is_not_bought(tmp_path):
     assert [a["url"] for k, a in spawn.calls] == [URL] and res.used_nano == PRICE
 
 
-CONFIG = json.dumps({"docsConfig": {"name": "Docs", "nav": ["page %d" % i for i in range(1500)]}})
+CONFIG = json.dumps({"docsConfig": {"name": "Docs", "nav": ["page %d" % i for i in range(4000)]}})
 
 
 def test_a_page_of_site_config_then_the_article_serves_the_article_first(tmp_path):
@@ -541,18 +541,21 @@ def test_a_page_of_site_config_then_the_article_serves_the_article_first(tmp_pat
     assert gate(tmp_path / "run")[0] == []
 
 
-def test_a_page_of_only_site_config_is_an_empty_page_and_uses_no_web_text(tmp_path):
+def test_a_page_of_only_site_config_uses_no_web_text_and_is_not_bought_again(tmp_path):
     log = EventLog(tmp_path / "e.jsonl")
-    w = WebTools(tmp_path / "run", PaidRequests(cfg(), log, spawn=Spawn({URL: CONFIG}), key="k"), log, LIM)
-    assert "empty page" in w.fetch(URL, 1, "k1", Reservation(tokens=10**6, usd=1.0))
-    assert not (tmp_path / "run" / "web" / "served_1.jsonl").exists()
+    spawn = Spawn({URL: CONFIG})
+    w = WebTools(tmp_path / "run", PaidRequests(cfg(), log, spawn=spawn, key="k"), log, LIM)
+    res = Reservation(tokens=10**6, usd=1.0)
+    assert "no article text" in w.fetch(URL, 1, "k1", res) and "no article text" in w.fetch(URL, 1, "k2", res)
+    assert not (tmp_path / "run" / "web" / "served_1.jsonl").exists() and len(spawn.calls) == 1
 
 
-@pytest.mark.parametrize("line", ["x" * 3000, "{" + "x" * 3000, '{"a": 1}', "[1, 2] " + "y" * 3000])
+@pytest.mark.parametrize("line", ["x" * 30000, "{" + "x" * 30000, '{"a": 1}', "[1, 2] " + "y" * 30000,
+                                  json.dumps({"example": "z" * 5000}), "[" * 30000 + "]" * 30000])
 def test_a_long_line_that_is_not_one_json_value_is_kept(tmp_path, line):
     log = EventLog(tmp_path / "e.jsonl")
     w = WebTools(tmp_path / "run", PaidRequests(cfg(), log, spawn=Spawn({URL: line + "\n" + PAGE}), key="k"), log,
-                 {**LIM, "part_chars": 10**5})
+                 {**LIM, "part_chars": 10**5, "attempt_text": 10**5})
     assert line in w.fetch(URL, 1, "k1", Reservation(tokens=10**6, usd=1.0))
 
 
