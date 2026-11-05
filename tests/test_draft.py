@@ -966,6 +966,9 @@ def test_the_red_check_records_the_message_and_the_repository_files_of_the_chain
     from codetask import drafter as dt
     out = dt.swallowed_problems({"contract": {"scope": {"writable": ["src/lib.py"], "protected": ["tests/**"]}}},
                                 {"baseline": {"t": {"status": "fail", "red_check": got, "output_tail": ""}}})
-    # refused: swallowed, `from None`, a name past the cut, and an error only in "<string>" (no file of the repository)
+    # refused: swallowed and `from None` (SPEC_RED_CAUGHT: an exception of the repository was caught and its traceback
+    # lost). Not any more: a name past the cut of the message (test_long catches nothing, it only says KeyError) and an
+    # error only in "<string>" (test_exec_frame: no file of the repository was left behind)
     refused = sorted(n for n in nodes if any(n + " " in p for p in out))
-    assert refused == sorted([nodes[0], nodes[3], nodes[4], nodes[14]])
+    assert refused == sorted([nodes[0], nodes[3]])
+    assert "KeyError raised in src/lib.py" in next(p for p in out if nodes[0] + " " in p)
