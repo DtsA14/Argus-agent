@@ -66,7 +66,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 - [ ] **Tahap 2, kurangi supervisi** (Atha 2026-11-05: sesudah tahap 1, sebelum UI kontrol): Reviewer Argus (rencana ke
   Atha sebelum kode), menit kerja Atha per pilot, batch shadow dengan issue yang tidak dijelaskan rinci oleh Claude
   - [ ] Spek `docs/reviews/SPEC_JUDGE.md` (`argus judge`, stage j1, hanya saran): model GLM-5.3 lewat OpenRouter pin Baidu
-    fp8 (Atha 2026-11-05, harga diskon); menunggu K1-K3. Lalu satu PR jalur ketat, replay 11 job shadow lama (~$0,20,
+    fp8 (Atha 2026-11-05, harga diskon); K1-K3 disetujui. Lalu satu PR jalur ketat, replay 11 job shadow lama (~$0,20,
     "go live"), lalu shadow batch 3 dengan issue singkat yang ditulis Claude (Atha: "Issue masih lu dulu")
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar

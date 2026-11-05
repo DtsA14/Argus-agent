@@ -1,6 +1,6 @@
 # Spek: `argus judge`, penilai draf + patch (Reviewer Argus, tahap 2)
 
-Status: **usulan, menunggu Atha.** Model dipilih Atha 2026-11-05: GLM-5.3 lewat OpenRouter, provider Baidu (fp8, diskon).
+Status: **disetujui Atha 2026-11-05 ("Gass bro"): K1-K3 ya.** Model GLM-5.3 lewat OpenRouter, provider Baidu (fp8, diskon).
 Jalur ketat (panggilan model berbayar baru: ledger, cap, crash-resume). Satu PR. Lanjutan `PENDING.md` tahap 2 dan
 `docs/Reconciliation.md` bagian 7 ("Diputuskan 2026-11-05").
 
