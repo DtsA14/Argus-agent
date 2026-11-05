@@ -113,6 +113,9 @@ def main(argv=None, deps=None):
     a.add_argument("--reference-patch")
     a.add_argument("--web", action="store_true", help="grant the agent ReadDocs (documentation pages from the hosts in "
                    "config web.hosts); refused for an environment off web.environments")
+    jg = sub.add_parser("judge", help="advice on a finished code job: PASS or BLOCK from another model; the job is not "
+                        "changed (docs/reviews/SPEC_JUDGE.md)")
+    jg.add_argument("job")
     q = sub.add_parser("research-ok")
     q.add_argument("job")
     q.add_argument("--sha", required=True, help="the handoff sha status shows (at least 12 characters)")
@@ -159,7 +162,7 @@ def main(argv=None, deps=None):
         r.add_argument("job")
         r.add_argument("reason")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge"):   # the live commands
             p.add_argument("--key-file", action="append",
                            help="read the API key from this 0600 file instead of typing it; for a stage that needs "
                                 "keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
@@ -265,6 +268,11 @@ def main(argv=None, deps=None):
                            profile=o.profile)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0 if job.data["state"] == rr.REPORT_READY else 1
+        elif o.cmd == "judge":
+            from codetask.judge import JUDGED
+            job, r = rj.judge(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
+            print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
+            return 0 if r["status"] == JUDGED else 1
         elif o.cmd == "research-ok":
             job, _ = rj.research_ok(o.job, sha=o.sha, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
         elif o.cmd == "approve":

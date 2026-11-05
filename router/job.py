@@ -5,6 +5,7 @@
   argus research-ok  the reviewer accepts the handoff they saw (its sha); the drafter gets it in its issue
   argus approve  the human approves the draft they saw (its sha), then the agent and the review package -> REVIEW_READY
   argus reject / redraft / resume / status
+  argus judge    advice on a finished job: another model says PASS or BLOCK; the job is not changed (SPEC_JUDGE)
   argus applied  the human applied the review package's patch in a commit of the target repository        -> APPLIED
                  (reject also closes a review package that will not be applied)                           -> REJECTED
   argus retry    the agent again on the approved contract (a new stage, told how the previous one ended)
@@ -929,6 +930,126 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
     return r
 
 
+# ---- the judge (docs/reviews/SPEC_JUDGE.md): advisory, never changes the job's state ----------------------------------
+
+JUDGEABLE = (REVIEW_READY, APPLIED, REJECTED)      # J1; APPLIED and REJECTED for the replay of earlier jobs (K1)
+
+
+def judge_stages(job):
+    return sorted((k for k, s in job.data["stages"].items() if s["kind"] == "judge"), key=lambda k: int(k[1:]))
+
+
+def package_shas(review_dir):
+    from codetask.judge import PACKAGE
+    return {name: hashlib.sha256((Path(review_dir) / name).read_bytes()).hexdigest() for name in PACKAGE}
+
+
+def approved_draft(job):
+    """The draft the human approved (its sha in `approval`), read and checked against that sha."""
+    want = (job.data.get("approval") or {}).get("draft_sha256")
+    for s in job.data["stages"].values():
+        if s["kind"] == "draft" and s.get("status") == "DRAFTED":
+            path = job.runs / s["run_id"] / "draft.json"
+            if want and path.exists() and draft_sha(path) == want:
+                return want, json.loads(path.read_text(encoding="utf-8"))
+    raise Refused(f"job {job.id}: the approved draft was not found; nothing was judged")
+
+
+def _judged_package(job):
+    """(review dir, its shas) of the last agent stage, refused unless it is DONE with a valid package."""
+    sid, st = last_agent(job)
+    rv = (st or {}).get("review") or {}
+    if st is None or st.get("status") != "DONE" or not rv.get("valid"):
+        raise Refused(f"job {job.id}: its last agent stage has no valid review package; nothing was judged")
+    try:
+        return Path(rv["dir"]), package_shas(rv["dir"])
+    except OSError as e:
+        raise Refused(f"job {job.id}: the review package cannot be read ({e}); nothing was judged") from None
+
+
+def judge(job_id, *, cfg, deps, jobs_dir=JOBS):
+    """Run (or continue) the judge on the job's review package and write JUDGE.md. A package already JUDGED is shown,
+    never judged again (J5); a stage cut off by a crash continues with its recorded cap."""
+    job = open_job(job_id, jobs_dir)
+    with job.lock():
+        if job.data.get("kind") == "research" or job.data["state"] not in JUDGEABLE:
+            raise Refused(f"job {job.id} is {job.data['state']}, not one of {', '.join(JUDGEABLE)}; nothing was judged")
+        return job, _judge(job, cfg, deps)
+
+
+def _judge(job, cfg, deps):
+    from codetask import judge as jd
+    from models.registry import ModelRef
+    review_dir, shas = _judged_package(job)
+    sids = judge_stages(job)
+    st = job.data["stages"][sids[-1]] if sids else None
+    if st is not None and st.get("package") == shas and st.get("status") == jd.JUDGED:
+        deps.echo(f"{sids[-1]} already judged this package: {st['verdict']} (nothing was sent)")
+        return {"status": st["status"], "verdict": st["verdict"], "usd_billed": 0.0}
+    resume = st is not None and st.get("package") == shas and st.get("status") is None
+    if resume:
+        sid, cap = sids[-1], st["cap_usd"]
+    else:
+        sid = f"j{len(sids) + 1}"
+        cap = round(min(float((cfg.get("router") or {}).get("judge_max_usd", 0.10)), left_usd(job)), 6)
+        need = jd.settings(stage_config(cfg, 1e9))["attempt_usd"]
+        if cap < need:                            # J6: the judge is advice, so the job is not moved to BLOCKED
+            raise Refused(f"job {job.id}: ${cap:.4f} left for the judge, one attempt needs ${need:.2f}; nothing was "
+                          "judged")
+    draft_sha256, draft = approved_draft(job)
+    package = {name: (review_dir / name).read_text(encoding="utf-8") for name in jd.PACKAGE}
+    if package_shas(review_dir) != shas:
+        raise Refused(f"job {job.id}: the review package changed while it was read; nothing was judged")
+    scfg = stage_config(cfg, cap)
+    lim = jd.settings(scfg)
+    model = scfg["roles"][lim["role"]]["model"]
+    up = ((scfg.get("gateway_models") or {}).get(model) or {}).get("upstream")
+    text = _limits_text(job, f"judge stage {sid}" + (" (resume)" if resume else ""),
+                        [f"model {model}" + (f" pinned to {', '.join(up)}" if up else "") + f"; stage cap ${cap:.4f}; "
+                         f"one attempt ${lim['attempt_usd']:.2f}; {lim['max_steps']} steps, {lim['max_submits']} submits",
+                         "advisory only: the job's state and what approve/applied/reject do are not changed",
+                         "data sent out: the issue, the approved draft, changes.patch, tests.md and claims.md go to "
+                         + ModelRef.parse(model).provider + (f" and on to {', '.join(up)}" if up else ""),
+                         "tools: none (SubmitJudgement only); nothing is read or run"])
+    with live(deps, scfg, [lim["role"]], text, job=job):
+        if not resume:
+            job.data["stages"][sid] = {"kind": "judge", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
+                                       "started_at": deps.clock(), "package": shas, "draft_sha256": draft_sha256}
+            job.save()
+        st = job.data["stages"][sid]
+        run_id = st["run_id"]
+        again = (job.runs / run_id / "checkpoints.sqlite").exists()
+        deps.echo(running(job, f"judge {sid}", run_id).replace(f"argus resume {job.id}", f"argus judge {job.id}"))
+        r = jd.run_judge(run_id=run_id, runs_dir=job.runs, cfg=scfg, issue=job_issue(job), draft=draft, package=package,
+                         max_usd=cap, resume=again, models=deps.models)
+    j = r.get("judgement") or {}
+    st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
+    if j:
+        st.update(verdict=j["verdict"], findings=len(j["findings"]))
+    job.save()
+    (job.dir / "JUDGE.md").write_text(jd.render(job.id, sid, st, r, model), encoding="utf-8")
+    deps.echo(f"judge {sid} finished: {r['status']}" + (f" {j['verdict']}" if j else f" ({r.get('stop_reason')})")
+              + f" (${r['usd_billed']:.4f})")
+    return r
+
+
+def judge_lines(job):
+    """The last judge stage, for status: verdict, JUDGE.md, and `stale` when the package is no longer the one judged."""
+    sids = judge_stages(job)
+    if not sids:
+        return []
+    sid, st = sids[-1], job.data["stages"][sids[-1]]
+    try:
+        _, st_a = last_agent(job)
+        stale = package_shas(st_a["review"]["dir"]) != st.get("package")
+    except (OSError, KeyError, TypeError):
+        stale = True
+    what = st.get("verdict") or st.get("status") or "running"
+    return [f"judge {sid}: {what}" + (f" ({st['findings']} finding(s))" if st.get("findings") is not None else "")
+            + (" STALE: the review package changed since; argus judge runs a new stage" if stale else "")
+            + f" ({job.dir / 'JUDGE.md'})"]
+
+
 def stage_feedback(approval, stage):
     """What the first attempt of an agent stage is told: the approved draft's red baseline (SPEC_LOCATE_FROM_TRACEBACK
     2.2, absent in jobs approved before it) and, for a retry, the carry. Both recorded; nothing is recomputed."""
@@ -963,6 +1084,9 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
                                                           *environment_lines(job)])
             with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
                 return job, _agent(job, cfg, deps, sandbox_cfg, resume=True, sid=sid)
+        sids = judge_stages(job)
+        if sids and job.data["stages"][sids[-1]].get("status") is None and state in JUDGEABLE:
+            return job, _judge(job, cfg, deps)
         raise Refused(f"job {job.id} is {state}: nothing to resume")
 
 
@@ -1275,6 +1399,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     out += _estimate_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
         out += _review_lines(job, last_agent(job)[1]["review"])
+    out += judge_lines(job)
     if d["state"] == APPLIED:
         why = _why(job)
         as_is = {True: "the patch as it was", False: "changes that differ from the patch"}.get(why.get("as_is"),
