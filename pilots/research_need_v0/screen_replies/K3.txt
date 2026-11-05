@@ -1,0 +1,52 @@
+```python
+# argus_ledger/main.py
+import os
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+ROOT_PATH = os.getenv("ROOT_PATH", "/ledger")   # "" when served at "/"
+
+
+def create_app(jobs_dir: str) -> FastAPI:
+    app = FastAPI(
+        title="argus-ledger",
+        root_path=ROOT_PATH,          # <-- the prefix
+        root_path_in_servers=False,   # don't let root_path leak into openapi servers
+    )
+    templates = Jinja2Templates(directory="templates")
+
+    @app.get("/", include_in_schema=False)
+    def root(request: Request):
+        # works stripped (/ledger/ui) or not
+        return RedirectResponse(request.url_for("ui"), status_code=307)
+
+    @app.get("/ui", name="ui", include_in_schema=False)
+    def ui(request: Request):
+        return templates.TemplateResponse(
+            request=request, name="index.html",
+            context={"request": request, "ledgers": read_ledgers(jobs_dir)},
+        )
+
+    @app.get("/login", name="login")
+    def login():
+        ...
+
+    return app
+```
+
+```html
+<!-- templates/index.html: never hardcode "/ui" -->
+<a href="{{ url_for('login') }}">sign in</a>
+<a href="{{ url_for('ui') }}">refresh</a>
+{% for l in ledgers %}<a href="{{ url_for('ui') }}#{{ l.id }}">{{ l.id }}</a>{% endfor %}
+```
+
+```python
+# tests, if you don't want to spin a proxy
+client = TestClient(create_app(tmp_path), root_path="/ledger")
+r = client.get("/", follow_redirects=False)
+assert r.headers["location"] == "http://testserver/ledger/ui"
+```
+
+I use the `root_path` constructor argument of `FastAPI` (the in-code equivalent of `uvicorn --root-path /ledger`); it sets `scope["root_path"]`, and because the proxy strips `/ledger`, the app still matches on `/ui` while `request.url_for(...)` re-adds the prefix. Redirects must be built with `request.url_for(...)` (or `f"{request.scope['root_path']}/login"`) — a literal `RedirectResponse("/login")` sends the browser to `https://host/login`, outside the prefix, and the same applies to every `href`. If you cannot get the server to set `root_path`, add an ASGI/HTTP middleware that sets `scope["root_path"] = "/ledger"` before routing instead of string-prefixing URLs by hand. On the deprecation question: I can only answer from memory and 0.162.0 is past what I know reliably — the parameter to use is `root_path`, and the only related knob I'd expect to be flagged is `root_path_in_servers` (prefer an explicit `servers=[{"url": "/ledger"}]`), so confirm the exact 0.162.0 release notes rather than trusting my version-specific claim.

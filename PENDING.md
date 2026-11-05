@@ -61,8 +61,10 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     - [x] Kandidat dikumpulkan 2026-11-04 (`pilots/research_need_v0/CANDIDATES.md`, #300): 4 kandidat dari release notes
       fastapi 0.143.2→0.162.0 dan starlette 1.8.0→1.10.0, perilaku dibuktikan di dua venv scratch. Penilaian: kebanyakan
       perubahan up2 menambah kemampuan, bukan membuat jalan lama salah; peluang ketemu issue yang gagal tanpa riset rendah
-    - [ ] Penyaringan: satu panggilan DeepSeek per kandidat tanpa tool (< $0,01), butuh "go live" kecil; pilot dua lengan
-      hanya bila jawabannya salah menurut probe. Kalau semua benar: catat dan hentikan jalur ini
+    - [x] Penyaringan 2026-11-05 (`pilots/research_need_v0/RESULT.md`, $0,0240): K1 dan K2 dijawab benar (K2 sampai
+      batas versi lama), K3 dan K4 model mengaku tidak tahu perubahannya tetapi kodenya lolos di up2. Tidak ada kandidat
+      yang membenarkan pilot dua lengan; berhenti mencari. Planner berhirarki tetap belum dibenarkan; catat kegagalan
+      nyata lengan tanpa riset bila muncul
   - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
