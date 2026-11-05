@@ -11,8 +11,8 @@ T = ["-rfEs", "tests/test_code_judge.py"]
 M = [
     # G1
     ("state check removed", J, [('job.data["state"] not in JUDGEABLE:', 'False:')]),
-    ("package validity not checked", J, [('st.get("status") != "DONE" or not rv.get("valid"):',
-                                          'st.get("status") != "DONE":')]),
+    ("package validity not checked", J, [('st.get("status") != "DONE" or not ((st.get("review") or {}).get("valid")):',
+                                          'st.get("status") != "DONE" or not st.get("review"):')]),
     # G2
     ("job.json in the prompt", J, [("issue=job_issue(job), draft=draft, package=package,",
                                     "issue=job_issue(job) + job.file.read_text(), draft=draft, package=package,")]),
@@ -31,8 +31,8 @@ M = [
                                      ('summary = _bounded(args.get("summary"), "summary", SUMMARY_MAX, last, problems)',
                                       'summary = _bounded(args.get("summary"), "summary", SUMMARY_MAX, True, problems)')]),
     # G5
-    ("judge moves the job", J, [('    (job.dir / "JUDGE.md").write_text(',
-                                 '    job.data["state"] = REJECTED\n    job.save()\n    (job.dir / "JUDGE.md").write_text(')]),
+    ("judge moves the job", J, [('    st["status"] = r["status"]\n    job.save()',
+                                 '    st["status"] = r["status"]\n    job.data["state"] = REJECTED\n    job.save()')]),
     # G6
     ("a judged package is bought again", J, [('st.get("package") == shas and st.get("status") == jd.JUDGED:', 'False:')]),
     # G7
@@ -40,15 +40,24 @@ M = [
                                               'resume = False')]),
     ("resume does not continue the judge", J, [('        if sids and job.data["stages"][sids[-1]].get("status") is None and state in JUDGEABLE:',
                                                 '        if False:')]),
+    ("resume starts a new stage on another package", J, [("    if resume_only and not resume:", "    if False:")]),
+    ("judged before its file is written", J, [('    _write_judge_file(job, sid, {**st, "status": r["status"]}, r, cfg)    # the file first: JUDGED means it exists\n    st["status"] = r["status"]\n    job.save()',
+                                               '    st["status"] = r["status"]\n    job.save()\n    _write_judge_file(job, sid, {**st, "status": r["status"]}, r, cfg)')]),
+    ("a missing judge file is not rebuilt", J, [("        if not judge_file(job, sids[-1]).exists():", "        if False:")]),
+    ("the recorded review dir is read", J, [('    return job.runs / st["run_id"] / "review"', '    return Path(st["review"]["dir"])')]),
     # G8
     ("cap check removed", J, [("        if cap < need:                            # J6", "        if False:                            # J6")]),
     ("cap ignores what is left", J, [('judge_max_usd", 0.10)), left_usd(job)), 6)', 'judge_max_usd", 0.10)), 1e9), 6)')]),
     # G9
-    ("package sha not compared", J, [('stale = package_shas(st_a["review"]["dir"]) != st.get("package")', 'stale = False'),
+    ("package sha not compared", J, [('stale = read_package(judged_review_dir(job))[1] != st.get("package")', 'stale = False'),
                                      ('resume = st is not None and st.get("package") == shas and st.get("status") is None',
                                       'resume = st is not None and st.get("status") is None'),
                                      ('if st is not None and st.get("package") == shas and st.get("status") == jd.JUDGED:',
                                       'if st is not None and st.get("status") == jd.JUDGED:')]),
+    # nameable paths
+    ("quoted paths not unquoted", C, [("    for q in QUOTED_PATH_LINE.findall(patch):", "    for q in []:")]),
+    ("binary-only paths missed", C, [("PATH_LINE.findall(patch) + SAME_PATH.findall(patch)", "PATH_LINE.findall(patch)")]),
+    ("CLI resume of a judge exits by state", "scripts/argus.py", [('            if isinstance(r, dict) and r.get("kind") == "judge":', '            if False:')]),
     # G10
     ("pin dropped", "config.yaml", [('  "openrouter:z-ai/glm-5.3":                           {upstream: [baidu/fp8]}\n',
                                      '  "openrouter:z-ai/glm-5.3":                           {upstream: [baidu/fp8, wafer/us]}\n')]),

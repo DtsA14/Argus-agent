@@ -939,37 +939,46 @@ def judge_stages(job):
     return sorted((k for k, s in job.data["stages"].items() if s["kind"] == "judge"), key=lambda k: int(k[1:]))
 
 
-def package_shas(review_dir):
+def read_package(review_dir):
+    """{name: text} and {name: sha256} of the package files the judge reads, each read once (the sha is of the bytes
+    the text comes from)."""
     from codetask.judge import PACKAGE
-    return {name: hashlib.sha256((Path(review_dir) / name).read_bytes()).hexdigest() for name in PACKAGE}
+    raw = {name: (Path(review_dir) / name).read_bytes() for name in PACKAGE}
+    return ({k: b.decode("utf-8") for k, b in raw.items()}, {k: hashlib.sha256(b).hexdigest() for k, b in raw.items()})
 
 
 def approved_draft(job):
-    """The draft the human approved (its sha in `approval`), read and checked against that sha."""
+    """The draft the human approved: the drafted stage whose recorded sha is approval's, parsed from one read and
+    checked against that sha."""
     want = (job.data.get("approval") or {}).get("draft_sha256")
     for s in job.data["stages"].values():
-        if s["kind"] == "draft" and s.get("status") == "DRAFTED":
-            path = job.runs / s["run_id"] / "draft.json"
-            if want and path.exists() and draft_sha(path) == want:
-                return want, json.loads(path.read_text(encoding="utf-8"))
+        if want and s["kind"] == "draft" and s.get("status") == "DRAFTED" and s.get("draft_sha256", want) == want:
+            try:
+                draft = json.loads((job.runs / s["run_id"] / "draft.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if hashlib.sha256(ct.canonical(draft).encode()).hexdigest() == want:
+                return want, draft
     raise Refused(f"job {job.id}: the approved draft was not found; nothing was judged")
 
 
-def _judged_package(job):
-    """(review dir, its shas) of the last agent stage, refused unless it is DONE with a valid package."""
-    sid, st = last_agent(job)
-    rv = (st or {}).get("review") or {}
-    if st is None or st.get("status") != "DONE" or not rv.get("valid"):
+def judged_review_dir(job):
+    """The review package of the last agent stage, under this job's own directory (never the dir recorded in
+    job.json, which names where the job ran first: a copied job is judged on its own files). Refused unless that stage
+    is DONE with a valid package."""
+    _, st = last_agent(job)
+    if st is None or st.get("status") != "DONE" or not ((st.get("review") or {}).get("valid")):
         raise Refused(f"job {job.id}: its last agent stage has no valid review package; nothing was judged")
-    try:
-        return Path(rv["dir"]), package_shas(rv["dir"])
-    except OSError as e:
-        raise Refused(f"job {job.id}: the review package cannot be read ({e}); nothing was judged") from None
+    return job.runs / st["run_id"] / "review"
+
+
+def judge_file(job, sid):
+    return job.dir / f"JUDGE-{sid}.md"
 
 
 def judge(job_id, *, cfg, deps, jobs_dir=JOBS):
-    """Run (or continue) the judge on the job's review package and write JUDGE.md. A package already JUDGED is shown,
-    never judged again (J5); a stage cut off by a crash continues with its recorded cap."""
+    """Run (or continue) the judge on the job's review package and write JUDGE-<stage>.md. A package already JUDGED is
+    shown, never judged again (J5); a stage cut off by a crash continues with its recorded cap."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
         if job.data.get("kind") == "research" or job.data["state"] not in JUDGEABLE:
@@ -977,16 +986,27 @@ def judge(job_id, *, cfg, deps, jobs_dir=JOBS):
         return job, _judge(job, cfg, deps)
 
 
-def _judge(job, cfg, deps):
+def _judge(job, cfg, deps, resume_only=False):
+    """resume_only (argus resume): continue the cut-off stage on the package it started with, never start a new one."""
     from codetask import judge as jd
     from models.registry import ModelRef
-    review_dir, shas = _judged_package(job)
+    review_dir = judged_review_dir(job)
+    try:
+        package, shas = read_package(review_dir)
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refused(f"job {job.id}: the review package cannot be read ({e}); nothing was judged") from None
     sids = judge_stages(job)
     st = job.data["stages"][sids[-1]] if sids else None
     if st is not None and st.get("package") == shas and st.get("status") == jd.JUDGED:
+        if not judge_file(job, sids[-1]).exists():         # cut off after the stage was recorded: from its result
+            r = json.loads((job.runs / st["run_id"] / "result.json").read_text(encoding="utf-8"))
+            _write_judge_file(job, sids[-1], st, r, cfg)
         deps.echo(f"{sids[-1]} already judged this package: {st['verdict']} (nothing was sent)")
         return {"status": st["status"], "verdict": st["verdict"], "usd_billed": 0.0}
     resume = st is not None and st.get("package") == shas and st.get("status") is None
+    if resume_only and not resume:
+        raise Refused(f"job {job.id}: the cut-off judge stage {sids[-1] if sids else '-'} was for another review package; "
+                      f"`argus judge {job.id}` starts a new stage; nothing was judged")
     if resume:
         sid, cap = sids[-1], st["cap_usd"]
     else:
@@ -997,13 +1017,10 @@ def _judge(job, cfg, deps):
             raise Refused(f"job {job.id}: ${cap:.4f} left for the judge, one attempt needs ${need:.2f}; nothing was "
                           "judged")
     draft_sha256, draft = approved_draft(job)
-    package = {name: (review_dir / name).read_text(encoding="utf-8") for name in jd.PACKAGE}
-    if package_shas(review_dir) != shas:
-        raise Refused(f"job {job.id}: the review package changed while it was read; nothing was judged")
     scfg = stage_config(cfg, cap)
     lim = jd.settings(scfg)
     model = scfg["roles"][lim["role"]]["model"]
-    up = ((scfg.get("gateway_models") or {}).get(model) or {}).get("upstream")
+    up = _upstream(scfg, model)
     text = _limits_text(job, f"judge stage {sid}" + (" (resume)" if resume else ""),
                         [f"model {model}" + (f" pinned to {', '.join(up)}" if up else "") + f"; stage cap ${cap:.4f}; "
                          f"one attempt ${lim['attempt_usd']:.2f}; {lim['max_steps']} steps, {lim['max_submits']} submits",
@@ -1023,31 +1040,49 @@ def _judge(job, cfg, deps):
         r = jd.run_judge(run_id=run_id, runs_dir=job.runs, cfg=scfg, issue=job_issue(job), draft=draft, package=package,
                          max_usd=cap, resume=again, models=deps.models)
     j = r.get("judgement") or {}
-    st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
+    st.update(ended_at=deps.clock(), usd=r["usd_billed"])
     if j:
         st.update(verdict=j["verdict"], findings=len(j["findings"]))
+    _write_judge_file(job, sid, {**st, "status": r["status"]}, r, cfg)    # the file first: JUDGED means it exists
+    st["status"] = r["status"]
     job.save()
-    (job.dir / "JUDGE.md").write_text(jd.render(job.id, sid, st, r, model), encoding="utf-8")
     deps.echo(f"judge {sid} finished: {r['status']}" + (f" {j['verdict']}" if j else f" ({r.get('stop_reason')})")
               + f" (${r['usd_billed']:.4f})")
     return r
 
 
+def _upstream(cfg, model):
+    return ((cfg.get("gateway_models") or {}).get(model) or {}).get("upstream")
+
+
+def _write_judge_file(job, sid, st, result, cfg):
+    from codetask import judge as jd
+    model = (cfg.get("roles") or {}).get((cfg.get("code_judge") or {}).get("role"), {}).get("model", "?")
+    up = _upstream(cfg, model)
+    tmp = judge_file(job, sid).with_suffix(".part")
+    tmp.write_text(jd.render(job.id, sid, st, result, model + (f" (pinned to {', '.join(up)})" if up else "")),
+                   encoding="utf-8")
+    os.replace(tmp, judge_file(job, sid))
+
+
 def judge_lines(job):
-    """The last judge stage, for status: verdict, JUDGE.md, and `stale` when the package is no longer the one judged."""
+    """The last judge stage, for status: verdict, its file, `stale` when the package is no longer the one judged, and
+    how to continue a stage that was cut off."""
     sids = judge_stages(job)
     if not sids:
         return []
     sid, st = sids[-1], job.data["stages"][sids[-1]]
     try:
-        _, st_a = last_agent(job)
-        stale = package_shas(st_a["review"]["dir"]) != st.get("package")
-    except (OSError, KeyError, TypeError):
+        stale = read_package(judged_review_dir(job))[1] != st.get("package")
+    except (OSError, UnicodeDecodeError, Refused):
         stale = True
-    what = st.get("verdict") or st.get("status") or "running"
+    if st.get("status") is None:
+        return [f"judge {sid}: cut off before it ended; continue it with `argus judge {job.id}`"
+                + (" (STALE: the review package changed since; that starts a new stage)" if stale else "")]
+    what = st.get("verdict") or st["status"]
     return [f"judge {sid}: {what}" + (f" ({st['findings']} finding(s))" if st.get("findings") is not None else "")
             + (" STALE: the review package changed since; argus judge runs a new stage" if stale else "")
-            + f" ({job.dir / 'JUDGE.md'})"]
+            + f" ({judge_file(job, sid)})"]
 
 
 def stage_feedback(approval, stage):
@@ -1066,8 +1101,11 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
         if job.data.get("kind") == "research":
             from router import research
             return job, research.resume(job, cfg, deps)
-        _check_environment(job, cfg)
         state = job.data["state"]
+        sids = judge_stages(job)                 # the judge runs nothing in the sandbox: no environment check
+        if sids and job.data["stages"][sids[-1]].get("status") is None and state in JUDGEABLE:
+            return job, _judge(job, cfg, deps, resume_only=True)
+        _check_environment(job, cfg)
         if state == RESEARCHING:
             return job, _research(job, cfg, deps, resume=True)
         if state == DRAFTING:
@@ -1084,9 +1122,6 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
                                                           *environment_lines(job)])
             with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
                 return job, _agent(job, cfg, deps, sandbox_cfg, resume=True, sid=sid)
-        sids = judge_stages(job)
-        if sids and job.data["stages"][sids[-1]].get("status") is None and state in JUDGEABLE:
-            return job, _judge(job, cfg, deps)
         raise Refused(f"job {job.id} is {state}: nothing to resume")
 
 

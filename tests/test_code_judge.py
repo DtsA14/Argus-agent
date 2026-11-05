@@ -35,7 +35,7 @@ PASSED = {"verdict": "PASS", "findings": [], "summary": "The patch adds the tota
 
 def cfg():
     c = load_config()
-    c["roles"]["judge"]["model"] = "fake:scripted"
+    c["roles"]["code_judge"]["model"] = "fake:scripted"
     return c
 
 
@@ -71,7 +71,7 @@ class Env:
         self.model = StrictScriptedChatModel(script=list(script))
         self.cfg = cfg()
         self.deps = rj.Deps(confirm=lambda text: self.confirms.append(text) or True, get_key=lambda: "unused",
-                            isatty=lambda: True, models={"judge": self.model}, clock=lambda: "2026-11-05T00:00:00Z",
+                            isatty=lambda: True, models={"code_judge": self.model}, clock=lambda: "2026-11-05T00:00:00Z",
                             echo=self.said.append)
         self.job0 = make_job(self.jobs, **kw)
 
@@ -107,7 +107,7 @@ def test_a_finished_job_is_judged(tmp_path, state):
     assert r["status"] == jd.JUDGED and r["judgement"]["verdict"] == "BLOCK"
     st = job.data["stages"]["j1"]
     assert st["status"] == jd.JUDGED and st["verdict"] == "BLOCK" and st["findings"] == 1 and st["usd"] > 0
-    md = (job.dir / "JUDGE.md").read_text()
+    md = (job.dir / "JUDGE-j1.md").read_text()
     assert "**Verdict**: BLOCK" in md and "`src/App.jsx:1`: The total is hard-coded." in md
     assert len(env.confirms) == 1 and "data sent out" in env.confirms[0] and "advisory only" in env.confirms[0]
 
@@ -145,7 +145,7 @@ def test_the_prompt_has_the_issue_draft_and_package_and_nothing_else(tmp_path):
 
 def test_an_input_too_large_ends_not_judged_before_any_request(tmp_path):
     env = Env(tmp_path, [submit(PASSED)])
-    env.cfg["judge"]["max_input_chars"] = 200
+    env.cfg["code_judge"]["max_input_chars"] = 200
     job, r = env.judge()
     assert r["status"] == jd.NOT_JUDGED and "input too large" in r["stop_reason"] and env.model.calls == []
     assert ledger_calls(job) == 0 and job.data["stages"]["j1"]["status"] == jd.NOT_JUDGED
@@ -216,7 +216,7 @@ def test_status_shows_the_verdict(tmp_path):
     env = Env(tmp_path, [submit(BLOCKED)])
     env.judge()
     text = rj.status("jj", jobs_dir=env.jobs)
-    assert "judge j1: BLOCK (1 finding(s))" in text and "STALE" not in text and "JUDGE.md" in text
+    assert "judge j1: BLOCK (1 finding(s))" in text and "STALE" not in text and "JUDGE-j1.md" in text
 
 
 # ---- G6, G9: never bought twice for one package; a new package is judged again ------------------------------------
@@ -239,13 +239,14 @@ def test_a_changed_package_is_stale_and_judged_in_a_new_stage(tmp_path):
     job, r = env.judge()
     assert rj.judge_stages(job) == ["j1", "j2"] and r["judgement"]["verdict"] == "PASS"
     assert job.data["stages"]["j1"]["verdict"] == "BLOCK" and ledger_calls(job, "j1") == 1
+    assert "BLOCK" in (job.dir / "JUDGE-j1.md").read_text() and "PASS" in (job.dir / "JUDGE-j2.md").read_text()
 
 
 def test_a_not_judged_stage_can_be_run_again_in_a_new_stage(tmp_path):
     env = Env(tmp_path, [submit(PASSED)])
-    env.cfg["judge"]["max_input_chars"] = 200
+    env.cfg["code_judge"]["max_input_chars"] = 200
     env.judge()
-    env.cfg["judge"]["max_input_chars"] = 120000
+    env.cfg["code_judge"]["max_input_chars"] = 120000
     job, r = env.judge()
     assert rj.judge_stages(job) == ["j1", "j2"] and r["status"] == jd.JUDGED
 
@@ -267,7 +268,7 @@ def test_the_stage_cap_is_the_smaller_of_judge_max_usd_and_what_is_left(tmp_path
     assert job.data["stages"]["j1"]["cap_usd"] == 0.10
     env2 = Env(tmp_path / "b", [submit(PASSED)])
     env2.cfg["router"]["judge_max_usd"] = 0.07
-    env2.cfg["judge"]["cap_usd"] = 0.05
+    env2.cfg["code_judge"]["cap_usd"] = 0.05
     job, _ = env2.judge()
     assert job.data["stages"]["j1"]["cap_usd"] == 0.07
 
@@ -327,10 +328,99 @@ def test_the_judge_model_is_pinned_to_its_upstream_with_no_fallback():
     from models import gateway
     from models.registry import ModelRef
     c = load_config()
-    ref = ModelRef.parse(c["roles"]["judge"]["model"])
+    ref = ModelRef.parse(c["roles"]["code_judge"]["model"])
     assert gateway.is_gateway(c, ref) and gateway.entry(c, ref) == {"upstream": ["baidu/fp8"], "free": False}
     p = gateway.request_params(c, ref, {})["extra_body"]["provider"]
     assert p["only"] == ["baidu/fp8"] and p["allow_fallbacks"] is False
-    assert gateway.fallback_chain(c, "judge") == [str(ref)]
-    gateway.check_use(c, "judge", ref)                       # a paid model: no free-role rule applies
+    assert gateway.fallback_chain(c, "code_judge") == [str(ref)]
+    gateway.check_use(c, "code_judge", ref)                       # a paid model: no free-role rule applies
     assert c["prices"][str(ref)]["input"] > 0
+
+
+# ---- review findings (code review medium, 2026-11-05) ----------------------------------------------------------------
+
+def test_a_copied_job_is_judged_on_its_own_package_not_the_recorded_dir(tmp_path):
+    env = Env(tmp_path, [submit(PASSED)])
+    job = env.job()
+    elsewhere = tmp_path / "original" / "review"
+    elsewhere.mkdir(parents=True)
+    for name in jd.PACKAGE:
+        (elsewhere / name).write_text(f"{SECRET}-original {name}")
+    job.data["stages"]["a1"]["review"]["dir"] = str(elsewhere)          # where the job ran before it was copied
+    job.save()
+    env.judge()
+    prompt = "".join(b.get("text", "") if isinstance(b, dict) else str(b)
+                     for m in env.model.calls[0]["messages"] for b in (m.content if isinstance(m.content, list)
+                                                                       else [m.content]))
+    assert "+new" in prompt and SECRET not in prompt
+
+
+def test_the_judge_file_is_written_before_the_stage_is_judged_and_rebuilt_when_missing(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit(BLOCKED)])
+    real = rj._write_judge_file
+
+    def dies(*a, **kw):
+        raise OSError("disk full")
+    monkeypatch.setattr(rj, "_write_judge_file", dies)
+    with pytest.raises(OSError):
+        env.judge()
+    assert env.job().data["stages"]["j1"].get("status") is None       # never JUDGED without its file
+    monkeypatch.setattr(rj, "_write_judge_file", real)
+    job, r = env.judge()                                                # continued from the committed result
+    assert r["status"] == jd.JUDGED and len(env.model.calls) == 1 and ledger_calls(job) == 1
+    judge_md = job.dir / "JUDGE-j1.md"
+    judge_md.unlink()
+    env.judge()
+    assert "**Verdict**: BLOCK" in judge_md.read_text() and len(env.model.calls) == 1
+    assert "pinned to" not in judge_md.read_text() or "baidu/fp8" in judge_md.read_text()
+
+
+def test_the_judge_file_names_the_provider_pin(tmp_path):
+    env = Env(tmp_path, [submit(PASSED)])
+    env.cfg["gateway_models"]["fake:scripted"] = {"upstream": ["somewhere/fp8"]}
+    job, _ = env.judge()
+    assert "fake:scripted (pinned to somewhere/fp8)" in (job.dir / "JUDGE-j1.md").read_text()
+
+
+def test_resume_continues_a_cut_off_judge_but_never_starts_one_on_another_package(tmp_path):
+    env = Env(tmp_path, [submit(PASSED)], state=rj.APPLIED)
+    job = env.job()
+    job.data["stages"]["j1"] = {"kind": "judge", "run_id": "jj-j1", "cap_usd": 0.1, "started_at": "x",
+                                "package": {"changes.patch": "0" * 64}, "draft_sha256": "y"}
+    job.save()
+    assert "cut off before it ended" in rj.status("jj", jobs_dir=env.jobs)
+    with pytest.raises(rj.Refused, match="for another review package"):
+        rj.resume("jj", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    assert env.model.calls == [] and rj.judge_stages(env.job()) == ["j1"]
+
+
+@pytest.mark.parametrize("patch, path", [
+    ('diff --git "a/my page.html" "b/my page.html"\n--- "a/my page.html"\n+++ "b/my page.html"\n', "my page.html"),
+    ('diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"\n--- /dev/null\n+++ "b/caf\\303\\251.txt"\n', "café.txt"),
+    ("diff --git a/x.txt b/x.txt\r\n--- a/x.txt\r\n+++ b/x.txt\r\n", "x.txt"),
+    ("diff --git a/old b/x b/y\nrename from old b/x\nrename to y\n", "old b/x"),
+    ("diff --git a/logo.png b/logo.png\nnew file mode 100644\nGIT binary patch\n", "logo.png"),
+])
+def test_every_kind_of_patch_path_can_be_named(patch, path):
+    paths = jd.nameable(patch, {})
+    assert path in paths and "/dev/null" not in paths and not any(p.endswith("\r") for p in paths)
+
+
+def test_cli_resume_of_a_judge_on_an_applied_job_exits_zero(tmp_path, monkeypatch):
+    import importlib.util
+    import yaml
+    c = yaml.safe_load((ROOT / "config.yaml").read_text())
+    c["roles"]["code_judge"]["model"] = "fake:scripted"
+    (tmp_path / "c.yaml").write_text(yaml.safe_dump(c))
+    env = Env(tmp_path, [submit(PASSED)], state=rj.APPLIED)
+    real = jd.run_judge
+    monkeypatch.setattr(jd, "run_judge", lambda **kw: (_ for _ in ()).throw(KeyboardInterrupt))
+    with pytest.raises(KeyboardInterrupt):
+        env.judge()
+    monkeypatch.setattr(jd, "run_judge", real)
+    spec = importlib.util.spec_from_file_location("argus_cli_judge", ROOT / "scripts" / "argus.py")
+    cli = importlib.util.module_from_spec(spec)
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))         # as when the script runs (approve_draft beside it)
+    spec.loader.exec_module(cli)
+    rc = cli.main(["--config", str(tmp_path / "c.yaml"), "--jobs-dir", str(env.jobs), "resume", "jj"], deps=env.deps)
+    assert rc == 0 and env.job().data["stages"]["j1"]["status"] == jd.JUDGED

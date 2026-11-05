@@ -285,7 +285,11 @@ def main(argv=None, deps=None):
         elif o.cmd == "redraft":
             job, _ = rj.redraft(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, note=o.note)
         else:
-            job, _ = rj.resume(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], jobs_dir=o.jobs_dir)
+            job, r = rj.resume(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], jobs_dir=o.jobs_dir)
+            if isinstance(r, dict) and r.get("kind") == "judge":        # a judge stage continued (SPEC_JUDGE J5)
+                from codetask.judge import JUDGED
+                print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
+                return 0 if r["status"] == JUDGED else 1
     except (rj.Refused, ConfigError, OSError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
