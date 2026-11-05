@@ -6,7 +6,9 @@ and to say what FastAPI 0.162.0 / Starlette 1.10.0 do; Claude then compares the 
   python pilots/research_need_v0/screen.py        # asks for the DeepSeek key (not shown); needs a terminal
   DEEPSEEK_API_KEY=$(cat <key file>) python pilots/research_need_v0/screen.py     # without typing it
 
-Exit codes: 0 all four answered, 1 an API refusal, 2 refused before sending.
+Thinking uses most of the output cap (a 4000 cap cut K2 and K4 on the first run), so the cap is 12000.
+
+Exit codes: 0 all asked answered, 1 an API refusal, 2 refused before sending.
 """
 import getpass
 import os
@@ -70,16 +72,18 @@ def main():
         return 2
     cfg = load_config()
     role = "drafter"
-    cfg["roles"][role] = {**cfg["roles"][role], "model": "deepseek:deepseek-flash", "max_output_tokens": 4000,
+    cfg["roles"][role] = {**cfg["roles"][role], "model": "deepseek:deepseek-flash", "max_output_tokens": 12000,
                           "params": {"extra_body": {"thinking": {"type": "enabled"}}, "reasoning_effort": "low"}}
-    cfg["budget"]["max_usd"] = 0.02 * len(PROMPTS)
+    names = sys.argv[1:] or list(PROMPTS)       # e.g. `screen.py K2 K4` reruns only those
+    cfg["budget"]["max_usd"] = 0.02 * len(names)
     os.environ["DEEPSEEK_API_KEY"] = key
     out = HERE / "screen_replies"
     out.mkdir(exist_ok=True)
     try:
         log = EventLog(HERE / "screen_events.jsonl")
         caller = LLMCaller(cfg, role, log)
-        for name, prompt in PROMPTS.items():
+        for name in names:
+            prompt = PROMPTS[name]
             res = Reservation(tokens=20000, usd=0.02)
             reply = caller.call([SystemMessage(SYSTEM), HumanMessage(prompt)], res,
                                 meta={"node": "screen", "task": name, "iteration": 0, "step": 0})
