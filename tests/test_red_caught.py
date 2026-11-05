@@ -54,7 +54,7 @@ def test_a_helper_of_the_tests_is_not_the_repositorys_code(paths):
 def test_a_base_class_named_in_the_message_matches_the_class_that_was_caught():
     out = judged([entry(["KeyError", "LookupError", "Exception", "BaseException"])], ["LookupError"],
                  "lookup raised LookupError")
-    assert len(out) == 1 and "LookupError" in out[0]
+    assert len(out) == 1 and "reports LookupError" in out[0] and "KeyError raised in src/lib.py" in out[0]
 
 
 def test_another_exception_caught_than_the_one_named_is_not_refused():
@@ -260,6 +260,65 @@ def test_a_catch_the_callback_cannot_read_makes_the_test_unwatched_not_clean(tmp
     got, why = va.red_check([node], str(repo(tmp_path, tests=tests)), scfg, timeout_s=120, environment="argus")
     assert why is None, why
     assert got[node]["assertion"] and got[node]["caught"] is None
+
+
+FIXTURE_AND_CONTEXTS = '''import pytest
+from src import lib
+
+
+@pytest.fixture
+def swallowed_in_setup():
+    err = None
+    try:
+        lib.strict(-1)
+    except ValueError as e:
+        err = e
+    return err
+
+
+def test_caught_in_a_fixture(swallowed_in_setup):
+    assert swallowed_in_setup is None, "strict raised ValueError"
+
+
+def test_pytest_raises_then_a_failing_assert():
+    with pytest.raises(KeyError):
+        lib.lookup({})
+    assert False, "KeyError message was wrong"
+
+
+def test_finally_only():
+    try:
+        try:
+            lib.strict(-1)
+        finally:
+            pass
+    except ValueError:
+        pass
+    assert False, "no ValueError wanted"
+'''
+FNODES = [f"tests/test_cases.py::{n}" for n in ("test_caught_in_a_fixture", "test_pytest_raises_then_a_failing_assert",
+                                                  "test_finally_only")]
+
+
+def test_a_catch_in_a_fixture_counts_and_so_do_with_and_finally_handlers(tmp_path, scfg):
+    got, why = va.red_check(FNODES, str(repo(tmp_path, tests=FIXTURE_AND_CONTEXTS)), scfg, timeout_s=120,
+                            environment="argus")
+    assert why is None, why
+    fx, pr, fi = (got[n] for n in FNODES)
+    assert fx["caught"][0]["names"][0] == "ValueError" and fx["caught"][0]["paths"] == ["src/lib.py"]
+    assert fx["caught"][0]["handler"] == "tests/test_cases.py"
+    # `with pytest.raises` and `finally` raise the same event as `except`: they count (as strict as the name rule was)
+    assert pr["caught"][0]["names"][0] == "KeyError" and fi["caught"][0]["names"][0] == "ValueError"
+
+
+def test_a_traceback_too_deep_to_follow_makes_the_test_unwatched(tmp_path, scfg):
+    tests = ("import pytest\nfrom src import lib\n\n\ndef deep(n):\n    if n == 0:\n        lib.strict(-1)\n    deep(n - 1)\n\n\n"
+             "def test_deep():\n    import sys\n    sys.setrecursionlimit(3000)\n    err = None\n    try:\n"
+             "        deep(1500)\n    except ValueError as e:\n        err = e\n    pytest.fail(f'ValueError {err!r}')\n")
+    node = "tests/test_cases.py::test_deep"
+    got, why = va.red_check([node], str(repo(tmp_path, tests=tests)), scfg, timeout_s=120, environment="argus")
+    assert why is None, why
+    assert got[node]["caught"] is None
 
 
 def test_the_monitoring_does_not_change_a_test_outcome(tmp_path, scfg):

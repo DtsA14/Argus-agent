@@ -431,7 +431,8 @@ def collect_nodes(path, workdir, sandbox_cfg, *, timeout_s, environment=None, lo
 # files only) of every frame of it and of its chain (__cause__, __context__ unless suppressed by `from None`; each file
 # once, the deepest kept), for the review and the swallowed-traceback gate. SPEC_RED_CAUGHT: also `caught`, from
 # sys.monitoring (Python 3.12+): during the test's call, each exception that a handler caught with a traceback going
-# deeper than the handler's own frame into files of the repository: {names (its class and its bases), handler (the file
+# deeper than the handler's own frame into files of the repository (`except`, but also `finally`, `with` and
+# pytest.raises handlers: the event does not tell them apart, so those count as caught too): {names (its class and its bases), handler (the file
 # that caught it), paths (the repository files deeper than it)}; null when it could not be watched (no sys.monitoring,
 # the tool id taken, a callback failed, more than RED_LIMITS["caught"] catches), which the gate reads as "unknown". pytest prints no traceback,
 # short summary or warning summary (only the display: the repository's filterwarnings still apply), so the JSON fits the
@@ -528,14 +529,18 @@ def on_handled(code, offset, exc):
         tb = exc.__traceback__
         while tb is not None and tb.tb_frame.f_code is not code:
             tb = tb.tb_next
-        deeper = []
+        deeper, ended = [], False
         for _ in range(1000):                  # a runaway traceback is not followed to its end
             tb = tb.tb_next if tb is not None else None
             if tb is None:
+                ended = True
                 break
             f = tb.tb_frame.f_code.co_filename
             if inside(f) and rel(f) not in deeper:
                 deeper.append(rel(f))
+        if not ended:
+            caught[node] = None                # cut short: its deepest frames are unknown, so the test is unwatched
+            return
         if not deeper:
             return
         item = {"names": [c.__name__ for c in type(exc).__mro__ if c is not object][:limits["names"]],
@@ -548,13 +553,20 @@ def on_handled(code, offset, exc):
         caught[node] = None
 
 
+if armed:
+    try:
+        mon.register_callback(TOOL, mon.events.EXCEPTION_HANDLED, on_handled)
+    except Exception:
+        armed = False
+
+
 class Record:
     @pytest.hookimpl(hookwrapper=True)
-    def pytest_runtest_call(self, item):
+    def pytest_runtest_protocol(self, item, nextitem):
+        # the whole protocol (setup, call, teardown): a fixture that catches the repository's exception counts as well
         ok = armed
         if ok:
             try:
-                mon.register_callback(TOOL, mon.events.EXCEPTION_HANDLED, on_handled)
                 mon.set_events(TOOL, mon.events.EXCEPTION_HANDLED)
             except Exception:
                 ok = False

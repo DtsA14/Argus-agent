@@ -92,10 +92,32 @@ Mengubah aturan untuk vitest; memantau exception di thread lain selain yang dila
   panggilan dan exception yang diraise di `<string>` tidak tercatat (bentuk 2 dan 3 di §1 jadi daftar kosong).
 - `codetask/drafter.py` (`swallowed_problems`, `_caught_kept`): R2-R4. Rekaman tanpa `caught` (lama, vitest) = aturan lama.
   Pesan penolakan menambah "The test caught <nama> raised in <berkas repo>".
-- Tes: `tests/test_red_caught.py` (30: 17 gerbang dari rekaman, 5 sandbox nyata, fallback id tak terambil, >20 catatan,
+- Tes: `tests/test_red_caught.py` (32: 17 gerbang dari rekaman, 7 sandbox nyata, fallback id tak terambil, >20 catatan,
   callback gagal, hasil tes tidak berubah, batas); `tests/test_draft.py` diperbarui: `test_long` (hanya menyebut nama,
   tidak menangkap apa pun) dan `test_exec_frame` (`<string>`) tidak lagi ditolak, yang ditelan sungguhan (`swallowed`,
   `from None`) tetap.
-- Mutants 15/15 (satu selamat pertama kali, callback yang gagal tidak dicatat `null`; diperbaiki dengan tes).
+- Mutants 19/19 (satu selamat pertama kali, callback yang gagal tidak dicatat `null`; diperbaiki dengan tes).
 - Waktu red check di `argus-ledger` 4e947a0 (137 tes lulus, `ledger_py312_up1`): 44,0 s tanpa, 46,0 s dengan (+4,5%).
-- Seluruh suite dengan image sandbox: 2863 passed, 0 skipped.
+
+### 7a. Review (`/code-review medium`, 2026-11-05, 8 temuan)
+
+Diperbaiki:
+- **Setup dan teardown ikut dipantau** (hook `pytest_runtest_protocol`, bukan hanya `call`): fixture yang menangkap exception repo
+  dicatat. Tes sandbox: `test_a_catch_in_a_fixture_counts...`.
+- **Traceback lebih dari 1000 frame** (rekursi dalam) = `caught: null`, bukan daftar terpotong yang menyembunyikan frame terdalam.
+- **Callback didaftarkan sekali** saat mulai, bukan per tes; per tes hanya `set_events`.
+- **Penjelasan menyebut kelas yang ditangkap** (mis. `KeyError`), bukan kelas dasar yang dinamai pesan (`LookupError`).
+
+Dijawab tanpa perubahan kode:
+- **`caught: []` = "dipantau, tidak ada"**: exception yang ditangkap di proses anak (subprocess) tidak terlihat dari proses
+  pytest; traceback-nya biasanya ada di stderr yang masuk pesan, bukan hilang. Batas ini diterima dan dicatat di sini.
+- **`with`, `finally`, `pytest.raises` ikut tercatat**: terbukti (`EXCEPTION_HANDLED` sama untuk semuanya). Hasilnya sama
+  ketatnya dengan aturan nama lama untuk bentuk itu, jadi bukan kemunduran; dites (`..._with_and_finally_handlers`) agar
+  perubahan di masa depan disengaja.
+- **Aturan baru melonggarkan** `test_long` dan `test_exec_frame` di `tests/test_draft.py`: disengaja (§7). Pemulihan aturan lama
+  saat `caught` null dites di `test_red_caught.py` (`without_caught_the_old_rule`, `a_tool_id_that_cannot_be_taken...`).
+- **`inside()` di jalur panas**: sudah di-cache per nama berkas (`_real`); biaya terukur +4,5%.
+- **Plugin bukti di `docs/reviews/spec_red_caught/`** adalah prototipe eksplorasi (pemisahan repo/tes dengan nama berkas); perilaku
+  yang dijamin dites memakai plugin yang dikirim (`RED_CHECK`), bukan prototipe itu.
+- Tool id 4 tidak dibebaskan: proses red check berakhir sesudah satu `pytest.main`; kegagalan mengambilnya = `null`
+  (gate aturan lama), terlihat di rekaman (`caught: null`).

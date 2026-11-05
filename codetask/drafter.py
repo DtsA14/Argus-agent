@@ -512,7 +512,7 @@ def _caught_kept(caught, named, protected):
     for c in caught:
         files = [p for p in c["paths"] if _repo_code(p, protected)]
         if named & set(c["names"]) and not _repo_code(c["handler"], protected) and files:
-            out.append((sorted(named & set(c["names"])), files))
+            out.append(([c["names"][0]], files))                       # the class that was caught, not the base named
     return out
 
 
