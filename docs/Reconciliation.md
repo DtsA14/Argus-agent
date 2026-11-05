@@ -29,7 +29,7 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat: layanan approval bersama UI kontrol (bagian 7) |
 | M8 penemuan tool, memori prosedural | `[ ]` | – | Seluruhnya (ADR-003) |
 | M9 deployment terkendali | `[~]` (staging) | `argus stage deploy\|rollback\|restart\|check\|status\|monitor\|report` (#244, #246, #249, #251, #258): hanya commit job `APPLIED` apa adanya, container tanpa jaringan/read-only/non-root di Unix socket, peer = pid container, data asli lewat snapshot allowlist, monitor 15 menit, **notifikasi ntfy** sesudah 3 gagal (#259, #260), namespace per direktori staging (#258). **Aplikasi statis** (#257, #261, #263): build tanpa jaringan di `pwa_node22`, cek artifact (A4), `sw.js` dipin, swap `current` atomik sesudah smoke kandidat, proxy `127.0.0.1:8710` GET/HEAD (Host, CSP, `no-store` untuk API, hanya `/sw.js` boleh jadi service worker), unit `systemd --user`. Dua aplikasi, pilot staging #1, upgrade #1, data asli #1, viewer #1–#2 | **Production** (DNS/TLS, pengguna, kredensial): ditunda (keputusan 2026-10-30, pemicu di bagian 7); smoke kandidat tidak menguji lingkungan unit systemd |
-| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web paralel, sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi sejak 2026-11-03 (bagian 7) | Ambang v1: job nyata pertama (bagian 4d) e1 selesai, 0 UNSUPPORTED, tetapi SUPPORTED 47% (<60%): s1 menulis detail di luar kutipan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
+| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web paralel, sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi sejak 2026-11-03 (bagian 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
 | Capability pack (gambar, video/audio, game) | `[ ]` | – | Seluruhnya; gate non-kode ADR-006 |
 
 M4, M7, M8, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (keputusan 2026-10-21, ditegaskan 2026-10-24).
@@ -89,6 +89,7 @@ Profil `deepinfra`, cap $1,00 per job. Tiga job, tiap kegagalan dijadikan perbai
 | `j20261105_104714_120f` | SYNTHESIS_FAILED | $0,0729 | s1: gate URL membaca "Memory berbasis **file:** …" (prosa Indonesia) sebagai skema `file:` di ketiga submit. Fix #307 (`file: x` dengan spasi = prosa; `SubmitReport` v2; verify.sh PASS d99b48d). w1 LangGraph INSUFFICIENT_EVIDENCE: halaman `docs.langchain.com` = satu baris konfigurasi Mintlify 334.421 karakter lalu 3.814 karakter artikel; jatah 48.000 habis di konfigurasi. Fix #308 (baris JSON ≥20.000 karakter dibuang saat fetch; halaman konfigurasi saja disimpan sebagai "no article text"; petunjuk worker: dua part tanpa artikel → cari docs teks) |
 | `j20261105_114525_582c` | REPORT_READY, e1 NOT_CHECKED | $0,0737 | w1 kini ANSWERED (artikel 3.847 karakter disajikan). e1: alasan S 360/343/341 karakter (batas 300) membuang semua verdict. Fix #309 (submit terakhir memotong alasan di batas kata; `SubmitCheck` v2) |
 | `j20261105_121107_718e` | **REPORT_READY, e1 CHECKED** (submit 1) | $0,0732 | e1: 8 SUPPORTED, 9 PARTIAL, 0 UNSUPPORTED |
+| `j20261105_123505_b1d4` | **REPORT_READY, e1 CHECKED** (submit 3, alasan dipotong oleh #309) | $0,0742 | Sesudah #311 (s1 hanya melihat kutipan, bukan klaim worker): e1 **17 SUPPORTED**, 0 PARTIAL, 0 UNSUPPORTED |
 
 **Terhadap ambang v1** (job 3): e1 selesai ✓; tidak ada UNSUPPORTED ✓; SUPPORTED 8/17 = **47%, di bawah 60%** ✗. Claude
 mencocokkan alasan PARTIAL e1 dengan sumber: nama yang ada di laporan tetapi di kutipan mana pun tidak (PostgresSaver,
@@ -96,6 +97,14 @@ mencocokkan alasan PARTIAL e1 dengan sumber: nama yang ada di laporan tetapi di 
 s1 menulis detail dari *klaim* temuan (ringkasan worker) atau dari pengetahuannya sendiri, sedangkan e1 menilai hanya dari
 kutipan. Job 2 juga punya satu sumber sekunder yang kemungkinan keliru (blog pihak ketiga: rename Claude Agent SDK "awal
 2026"); gate tidak bisa menangkapnya karena kutipannya memang ada. "7/8 benar" belum bisa dinilai dari satu pertanyaan.
+
+**Eksperimen #311** (Atha memilih "s1 hanya kutipan" sebelum "model s1 lebih kuat"): job 4, pertanyaan sama, 17/17
+SUPPORTED. Cek Claude yang tidak bergantung pada e1: identifier teknis di laporan yang tidak ada di kutipan mana pun turun
+dari 27 (job 3: PostgresSaver, SqliteSaver, RedisSession, MongoDBSession, `add_node`, ...) ke 0 (sisanya kata bergaris
+miring seperti "read/write"). Penyebab 47% di job 3 adalah klaim worker yang melebihi kutipannya dan disalin s1, bukan
+kemampuan model s1 saja. Batas: n = 1 per lengan, worker juga dijalankan ulang (temuan tidak sama persis). Catatan isi:
+bagian Claude memakai dokumentasi Claude Code (CLAUDE.md, MEMORY.md), tidak khusus Agent SDK (soal cakupan, bukan
+klaim tanpa bukti). Ambang v1 untuk job ini: e1 selesai ✓, 0 UNSUPPORTED ✓, SUPPORTED 100% ✓.
 
 ## 5. Mode kegagalan (`FUTURE_ARCHITECTURE.md` bagian 8)
 

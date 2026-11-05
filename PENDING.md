@@ -54,8 +54,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     bagian 7): tiga job $0,2198; tiga perbaikan jalur cepat: #307 (gate URL salah membaca "file:" di prosa), #308 (halaman
     docs dengan konfigurasi JSON raksasa), #309 (e1 kehilangan semua verdict karena satu alasan kepanjangan). Job 3
     `j20261105_121107_718e`: e1 CHECKED, 0 UNSUPPORTED, **SUPPORTED 47% (<60%)**. Berikutnya:
-    - [ ] s1 hanya boleh menulis yang ada di kutipan (prompt; mungkin s1 diberi kutipan saja, bukan klaim worker), lalu
-      job yang sama diulang dan dibandingkan persen SUPPORTED-nya
+    - [x] s1 hanya melihat kutipan, bukan klaim worker (#311). Job 4 `j20261105_123505_b1d4`: 17/17 SUPPORTED,
+      identifier di luar kutipan 27 → 0 ($0,0742)
     - [ ] 2-3 pertanyaan lain dengan topik berbeda sebelum tahap 1 dianggap selesai
     - [ ] Catatan review yang belum dikerjakan: ReadDocs (`tools/web.py`) punya titik buta konfigurasi yang sama;
       konfigurasi berbentuk `window.X = {...}`/`__NEXT_DATA__` tidak terdeteksi; gate s1 masih menolak seluruh submit
