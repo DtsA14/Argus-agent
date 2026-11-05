@@ -1,0 +1,80 @@
+# Spek: gate "tes menelan traceback" menilai exception yang benar-benar ditangkap
+
+Status: **usulan Claude 2026-11-05, menunggu persetujuan Atha**. Jalur ketat (gate drafter, kode red check di sandbox).
+Alur: spek → tes yang gagal di kode lama → kode → mutants → `/code-review medium` → `verify.sh` sekali → "merge" Atha.
+Sumber masalah: `PENDING.md` ("Gate tes menelan traceback salah tolak", argus-ledger 008, submit 2 dari 3).
+
+## 1. Masalah
+
+`swallowed_problems` (`codetask/drafter.py`, SPEC_DRAFT_CALL_PATH 2.1, SPEC_RED_TESTS_PER_NODE 2.2) menolak tes wajib yang
+gagal lewat assertion bila **pesannya menyebut nama exception lain** (`message_names`, dibaca dari kata-kata tes sendiri) dan
+tidak ada satu pun berkas kode repo di traceback-nya atau rantainya. Maksudnya: tes menangkap exception, membuang
+traceback-nya, dan hanya menyisakan namanya. Gate itu tidak tahu apakah ada exception yang benar-benar ditangkap, jadi ia
+menolak juga tiga hal yang tidak menelan apa pun:
+
+| Bentuk | Contoh | Ditolak sekarang? | Seharusnya |
+|---|---|---|---|
+| Tes **mengharapkan** exception yang kode lama tidak raise | `pytest.fail("must raise ValueError")` | ya (salah) | lolos: tidak ada yang ditelan |
+| `TypeError` di titik panggilan (argumen tak dikenal) | `except TypeError as e` lalu gagal | ya (salah) | lolos: tidak ada frame repo yang bisa hilang |
+| Exception diraise dan ditangkap **di dalam** kode repo | repo `try/except ValueError`, tes menulis "must raise ValueError" | ya (salah) | lolos |
+| Exception repo ditangkap tes, traceback hilang | `err = e` di `except`, `pytest.fail(...)` di luarnya | ya | tetap ditolak |
+
+Akibat di 008: satu submit terbuang, dan drafter "mengakali" dengan mengganti kata di pesan, sehingga gate mengukur
+kata-kata tes, bukan perilakunya.
+
+## 2. Bukti (tanpa model, 2026-11-05)
+
+`docs/reviews/spec_red_caught/` (`mod.py`, `test_cases.py`, `plugin.py`, `output.txt`): lima bentuk di atas, dijalankan
+dengan plugin pytest kecil di Python 3.12.3. Plugin memakai `sys.monitoring` (`EXCEPTION_HANDLED`): saat sebuah `except`
+di **kode tes** menangani exception yang traceback-nya memuat frame di kode repo, plugin mencatat nama kelasnya dan semua
+kelas induknya. Hasil: bentuk 1 (`ValueError` dari repo) dan bentuk 4 (`KeyError`, pesan menyebut `LookupError`) tercatat;
+bentuk 2 (tak ada exception), 3 (`TypeError` di titik panggilan) dan 5 (ditangkap di dalam repo) **tidak** tercatat.
+Aturan lama menolak kelimanya; aturan baru hanya yang benar-benar ditelan.
+
+## 3. Rancangan
+
+**R1. Red check mencatat exception yang ditangkap (hanya pytest, Python ≥ 3.12).** Plugin `Record` (di `RED_CHECK`)
+mendaftarkan callback `EXCEPTION_HANDLED` pada satu tool id `sys.monitoring` (ID 4, bukan debugger/coverage/profiler/
+optimizer) selama fase `call` sebuah tes. Untuk exception yang ditangkap, ia mencatat bila ada frame traceback **lebih
+dalam daripada frame penangkap** yang berkas aslinya di `/workspace` (bukan site-packages):
+`{"names": [kelas dan induknya], "handler": path penangkap, "paths": [berkas frame yang lebih dalam]}`.
+Callback pertama-tama menyaring dengan berkas kode (cache per berkas), jadi frame pytest dan stdlib tidak membebani.
+Disimpan per tes sebagai `caught` (batas `RED_LIMITS`: 20 catatan, 20 path, 20 nama; pemotongan dicatat).
+
+**R2. Gate memakai `caught` bila ada.** Tes wajib yang gagal lewat assertion ditolak hanya bila ada catatan `caught` dengan:
+nama yang beririsan dengan `message_names`, penangkap **bukan** kode repo (`_repo_code` false: berkas tes), dan paling
+sedikit satu path yang kode repo (`_repo_code`), sementara traceback tes dan rantainya tidak memuat berkas repo (syarat
+lama tetap). Bila `message_names` kosong: tetap lolos seperti sekarang.
+
+**R3. Fail-closed.** `caught` adalah `null` (bukan daftar kosong) bila `sys.monitoring` tidak ada (Python < 3.12, mis.
+`sympy_py39`) atau tool id ID 4 sudah dipakai, atau callback gagal: gate memakai aturan lama (nama di pesan, tanpa berkas
+repo → tolak), jadi tidak pernah lebih longgar dari sekarang di lingkungan itu. Rekaman tanpa kunci `caught` sama sekali
+= `UNREAD` seperti rekaman tanpa `message_names`. Daftar kosong berarti "dipantau, tidak ada yang ditangkap".
+
+**R4. Pesan penolakan** tetap `SWALLOWED`, ditambah satu kalimat: exception mana (nama dan berkas repo-nya) yang
+ditangkap, supaya drafter memperbaiki tesnya, bukan mengganti kata.
+
+Tidak berubah: vitest (rekorder JS-nya tetap), `message_names`, `repo_paths`, aturan "tes yang sudah hijau diwajibkan",
+semua jaminan AGENTS.md. Tidak ada panggilan model baru.
+
+## 4. Yang dijamin dan dites (tes harus gagal bila jaminannya rusak; mutants)
+
+1. Lima bentuk di §1 dengan plugin nyata di sandbox (tes docker; skip tidak dihitung lulus): bentuk 1 dan 4 ditolak,
+   bentuk 2, 3 dan 5 lolos.
+2. `caught = null` (Python 3.9 atau tool id terpakai) → aturan lama: bentuk 2 ditolak seperti sekarang.
+3. Rekaman tanpa `caught` → `UNREAD`; `caught` yang bukan daftar → `UNREAD`.
+4. Penangkap di kode repo tidak dihitung; path hanya berkas tes (helper tes) tidak dihitung.
+5. Batas `RED_LIMITS` dan pemotongan; callback tidak mengubah hasil tes (sebuah tes yang lolos tetap lolos, exception
+   tidak ditelan oleh callback).
+6. Ukuran: waktu red check di `argus-ledger` (19 tes merah) tidak naik lebih dari 10%.
+
+## 5. Di luar cakupan
+
+Mengubah aturan untuk vitest; memantau exception di thread lain selain yang dilaporkan `EXCEPTION_HANDLED`; menilai
+"tes menelan" di luar kegagalan assertion; menyentuh Python 3.9 (tetap aturan lama; `sympy_py39` bukan target).
+
+## 6. Pertanyaan untuk Atha
+
+1. Setuju gate memakai `caught` bila ada dan jatuh ke aturan lama bila tidak ada (R3), tanpa menunggu Python 3.9 yang
+   tidak punya `sys.monitoring`?
+2. R4 (pesan penolakan menyebut exception dan berkasnya) ikut PR yang sama, atau PR terpisah?
