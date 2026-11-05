@@ -226,6 +226,19 @@ class SubmitCheck(BaseModel):
     verdicts: List[ItemVerdict] = Field(description="One entry per listed item.")
 
 
+def _cut(text, n):
+    """text cut to at most n characters at a word boundary, ending in "…"; a backtick or asterisk left without its
+    pair by the cut is dropped, so the reason cannot open code or emphasis in REPORT.md."""
+    head = text[:n - 1]
+    if " " in head[n // 2:]:
+        head = head[:head.rindex(" ")]
+    head = head.rstrip()
+    for mark in "`*":
+        if head.count(mark) % 2:
+            head = head.replace(mark, "")
+    return head + "…"
+
+
 def check_gate(args, ids, last=False):
     """(problems, {id: {verdict, reason}}): one verdict per item, no more and no fewer (as nodes/judge.py). On the last
     submit a reason longer than REASON_MAX is cut (ending in "…") instead of refused: the verdict is what the check is
@@ -249,9 +262,9 @@ def check_gate(args, ids, last=False):
             continue
         if v.get("verdict") not in VERDICTS:
             problems.append(f"entry {i} ({vid}): verdict must be one of {list(VERDICTS)}, not {v.get('verdict')!r}")
-        reason = v.get("reason")
-        if last and isinstance(reason, str) and len(reason.strip()) > REASON_MAX:
-            reason = reason.strip()[:REASON_MAX - 1].rstrip() + "…"
+        reason = ws(v["reason"]) if isinstance(v.get("reason"), str) else v.get("reason")
+        if last and isinstance(reason, str) and len(reason) > REASON_MAX:
+            reason = _cut(reason, REASON_MAX)
         reason = _text(reason, f"entry {i} ({vid}) reason", 1, REASON_MAX, problems)
         _no_url(reason, f"entry {i} ({vid}) reason", problems)
         out[vid] = {"verdict": v.get("verdict"), "reason": ws(reason)}

@@ -109,7 +109,7 @@ def test_a_checker_that_never_passes_leaves_the_report_marked_not_checked(tmp_pa
 
 def test_a_checker_whose_reason_stays_too_long_is_cut_on_its_last_submit(tmp_path):
     args = t.check_args()
-    args["verdicts"][0]["reason"] = "The quote gives the date. " * 13                 # 350 characters
+    args["verdicts"][0]["reason"] = "The quote gives the date. " * 13                 # 337 characters
     long = call("SubmitCheck", args, "c")
     env = Env(tmp_path, WORKED + [REPORT, long, long, long])
     job = env.start()
@@ -238,6 +238,19 @@ def test_a_reason_too_long_is_refused_before_the_last_submit_and_cut_on_it():
     problems, v = rp.check_gate(args, ["S", "P1"], last=True)
     assert problems == [] and v["S"]["verdict"] == "SUPPORTED" and v["P1"]["verdict"] == "PARTIAL"
     assert len(v["S"]["reason"]) == rp.REASON_MAX and v["S"]["reason"].endswith("…")
+
+
+def test_a_cut_reason_ends_at_a_word_and_leaves_no_open_code_or_emphasis():
+    cut = rp._cut("The quote backs `asyncio.TaskGroup` and *not* the `3.11 " + "word " * 80, 60)
+    assert len(cut) <= 60 and cut.endswith("…") and not cut[:-1].endswith(("wor", "wo", "w"))
+    assert cut.count("`") % 2 == 0 and cut.count("*") % 2 == 0
+
+
+def test_a_reason_that_fits_once_its_spaces_are_collapsed_is_not_cut():
+    args = {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "ok  \n " * 60},
+                         {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]}
+    problems, v = rp.check_gate(args, ["S", "P1"])
+    assert problems == [] and not v["S"]["reason"].endswith("…")
 
 
 @pytest.mark.parametrize("args", [
