@@ -24,7 +24,7 @@ kata-kata tes, bukan perilakunya.
 
 ## 2. Bukti (tanpa model, 2026-11-05)
 
-`docs/reviews/spec_red_caught/` (`mod.py`, `test_cases.py`, `plugin.py`, `output.txt`): lima bentuk di atas, dijalankan
+`docs/reviews/spec_red_caught/` (`mod.py.txt`, `cases.py.txt`, `plugin.py.txt`, `output.txt` (berkas `.txt` agar pytest tidak mengumpulkannya)): lima bentuk di atas, dijalankan
 dengan plugin pytest kecil di Python 3.12.3. Plugin memakai `sys.monitoring` (`EXCEPTION_HANDLED`): saat sebuah `except`
 di **kode tes** menangani exception yang traceback-nya memuat frame di kode repo, plugin mencatat nama kelasnya dan semua
 kelas induknya. Hasil: bentuk 1 (`ValueError` dari repo) dan bentuk 4 (`KeyError`, pesan menyebut `LookupError`) tercatat;

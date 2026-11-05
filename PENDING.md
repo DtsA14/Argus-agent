@@ -142,7 +142,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 - [~] **Gate "tes menelan traceback" salah tolak** (argus-ledger 008; jalur ketat, `docs/reviews/SPEC_RED_CAUGHT.md`, disetujui
   Atha 2026-11-05, PR #304): red check mencatat exception yang ditangkap tes (`sys.monitoring`), gate menolak hanya yang
   benar-benar ditelan; jatuh ke aturan lama bila tak bisa dipantau. Tes 32, +4,5% waktu.
-  Review medium 8 temuan (4 diperbaiki, 4 dijawab di spek §7a), mutants 19/19, `verify.sh` berjalan di ae5f4f0 (2026-11-05, hasil menyusul). Tersisa: hasil `verify.sh`, "merge" Atha
+  Review medium 8 temuan (4 diperbaiki, 4 dijawab di spek §7a), mutants 19/19, `verify.sh` di ae5f4f0 FAIL (1 error: berkas bukti `test_cases.py` di docs ikut dikumpulkan pytest; log `verification/*.FAIL-doc-file-collected.log`), diperbaiki (berkas `.txt`), dijalankan ulang. Tersisa: hasil `verify.sh`, "merge" Atha
 - [ ] Tes lama yang diubah drafter otomatis wajib (`22456` d1); `swe_grade.py` mencatat nama tes draf yang gagal di atas
   patch maintainer (penilai: jalur ketat)
 - [ ] Kandidat sisa batch 5 / `21379`: drafter mencari titik nilai salah pertama kali muncul (`20428`); gerbang writable
