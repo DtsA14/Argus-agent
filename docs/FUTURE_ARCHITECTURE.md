@@ -6,6 +6,12 @@
 > done, including a first repository outside Argus; M5 and ADR-002/004/005/006/007 partial, for code tasks; M4, M7, M8,
 > M9, ADR-001/003 and the capability packs not started). No code from this file without a reality check and a reviewed plan.
 >
+> **Direction update (2026-11-03, Atha):** the goal is now a general-purpose agent, starting with **deep research**
+> (`argus research`: planner, parallel web workers, synthesis with sources, evaluator), which replaces "production coding
+> agent" (2026-10-28) as the target. Research is not one of M3–M9; it is tracked in `Reconciliation.md` section 7 and
+> `PENDING.md`. The hierarchical pipeline (job → planner → research/code/deploy tasks with dependencies) needs M4 and
+> ADR-005 (artifact handoff) and is not yet justified by evidence. Capability packs (image/video/game) come after research.
+>
 > The one-time instructions for Claude's first review ("Instructions for Claude" and "Expected response", sections 0
 > and 10 of the original) were carried out by [`reviews/M6_GAP_ANALYSIS.md`](reviews/M6_GAP_ANALYSIS.md),
 > [`reviews/M6_PLAN.md`](reviews/M6_PLAN.md) and the reconciliation reports, and were removed on 2026-10-22; the
