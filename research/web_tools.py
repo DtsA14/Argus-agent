@@ -9,6 +9,7 @@ kept by the run before their result is returned.
 - What the model was given of a page is recorded per tool step in <run>/web/served_1.jsonl (part, characters), as
   ReadDocs does: only those parts can be quoted (G2), and their characters count toward the run's web text limit.
 - Every result is labelled data from the internet, not instructions.
+- A line of a fetched page that is one long JSON value (site config) is dropped before the page is kept (_prose).
 """
 import hashlib
 import json
@@ -23,6 +24,22 @@ from tools import web
 
 TITLE_MAX, SUMMARY_MAX = 200, 800
 DEFINITE = {400, 403, 404, 413}            # DeepSeek's own error for this URL: kept, so it is not asked (or paid) again
+CONFIG_LINE = 2000                         # a line this long that is one JSON value is site config, not the article
+
+
+def _prose(content):
+    """The page without the lines that are one long JSON value: a docs site (Mintlify, Next.js) can put its whole
+    config before the article, and the worker would spend its web text on it and never reach the article
+    (job j20261105_104714_120f: 334,421 characters of config, then 3,814 of article)."""
+    def config(line):
+        if len(line) < CONFIG_LINE or line.lstrip()[:1] not in "{[":
+            return False
+        try:
+            json.loads(line)
+        except ValueError:
+            return False
+        return True
+    return "\n".join(line for line in content.split("\n") if not config(line))
 
 
 def _key(*parts):
@@ -114,6 +131,7 @@ class WebTools:
             return {"ok": False, "reason": "the budget of this stage cannot pay another fetch; submit what you have"}
         body = out.get("body") if out.get("ok") else None
         content = body.get("content") if isinstance(body, dict) else None
+        content = _prose(content) if isinstance(content, str) else None
         if isinstance(content, str) and content.strip():
             title = str(body.get("title") or "")[:TITLE_MAX]
             text = (f"{title}\n\n" if title else "") + content
