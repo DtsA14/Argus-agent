@@ -96,6 +96,7 @@ Mengubah aturan untuk vitest; memantau exception di thread lain selain yang dila
   callback gagal, hasil tes tidak berubah, batas); `tests/test_draft.py` diperbarui: `test_long` (hanya menyebut nama,
   tidak menangkap apa pun) dan `test_exec_frame` (`<string>`) tidak lagi ditolak, yang ditelan sungguhan (`swallowed`,
   `from None`) tetap.
+- `verify.sh`: PASS 728a8b7 (2956 passed, 0 skipped; `verification/verify-20261105T043121Z-aarch64.log`). Percobaan pertama FAIL di ae5f4f0 (1 error: `test_cases.py` bukti ikut dikumpulkan pytest; log `.FAIL-doc-file-collected.log`), berkas bukti jadi `.txt`.
 - Mutants 19/19 (satu selamat pertama kali, callback yang gagal tidak dicatat `null`; diperbaiki dengan tes).
 - Waktu red check di `argus-ledger` 4e947a0 (137 tes lulus, `ledger_py312_up1`): 44,0 s tanpa, 46,0 s dengan (+4,5%).
 
