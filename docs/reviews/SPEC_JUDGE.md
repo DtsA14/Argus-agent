@@ -25,7 +25,7 @@ bisa menandai blok seperti itu, sehingga Claude cukup membaca vonis BLOCK ditamb
 **J1. Perintah dan tempat.** `argus judge <job>` menjalankan satu stage model `j1` (kind `judge`) pada job kode yang punya
 stage agen terakhir berstatus DONE dengan paket review `valid`. State job yang diterima: REVIEW_READY, APPLIED, REJECTED
 (dua terakhir untuk replay, J8). State lain ditolak sebelum apa pun. `j1` **tidak pernah mengubah state job**, `approval`,
-atau perilaku `approve`/`retry`/`applied`/`reject`; ia hanya menambah `stages.j1` dan berkas `JUDGE.md` di direktori job.
+atau perilaku `approve`/`retry`/`applied`/`reject`; ia hanya menambah `stages.j1` dan berkas `JUDGE-j1.md` (satu per stage) di direktori job.
 
 **J2. Yang dibaca model (dan hanya itu).** Prompt dibangun harness dari:
 1. teks issue (`job_issue(job)`, yang juga diterima drafter);
@@ -34,7 +34,7 @@ atau perilaku `approve`/`retry`/`applied`/`reject`; ia hanya menambah `stages.j1
 3. paket review agen terakhir: `changes.patch`, `tests.md`, `claims.md`.
 
 Tidak pernah: `job.json` (berisi alasan `reject` dan log keputusan manusia), `SHADOW.md`, `PR.md`, `provenance.json`, isi
-repo di luar patch, atau vonis judge lain. Batas ukuran: bila prompt melebihi `judge.max_input_chars` (default 120.000),
+repo di luar patch, atau vonis judge lain. Batas ukuran: bila prompt melebihi `code_judge.max_input_chars` (default 120.000),
 stage berakhir `NOT_JUDGED` ("input too large") **sebelum** ada request.
 
 **J3. Keluaran.** Satu tool `SubmitJudgement`:
@@ -49,7 +49,7 @@ patch maupun di tes draf; teks kepanjangan (pada submit terakhir dipotong di bat
 
 **J4. Hasil stage.** `JUDGED` (dengan verdict) atau `NOT_JUDGED` (gerbang gagal di semua submit, model gagal, cap habis,
 input kebesaran). `stages.j1` menyimpan `status`, `verdict`, jumlah finding, `usd`, dan sha256 dari tiga berkas paket review
-yang dibaca. `JUDGE.md` berisi verdict, summary, finding, model + provider, biaya, dan sha tadi.
+yang dibaca. `JUDGE-<stage>.md` (ditulis sebelum stage dicatat JUDGED; dibangun ulang dari `result.json` bila hilang) berisi verdict, summary, finding, model + provider, biaya, dan sha tadi.
 
 **J5. Sekali saja.** Hasil `j1` yang sudah tercatat tidak pernah dibeli ulang: `argus judge` kedua menampilkan vonis yang ada
 dan tidak mengirim apa pun. Stage yang terputus dilanjutkan oleh `argus resume <job>` atau `argus judge <job>` lagi (memo
@@ -57,16 +57,16 @@ langkah seperti e1). Retry agen yang menghasilkan paket baru (stage `a2`) membua
 `stale` (sha paket berbeda) dan `argus judge` menjalankan `j2`. Tidak ada `--again`.
 
 **J6. Uang.** Cap stage = `min(router.judge_max_usd` (default 0,10), sisa cap job). Lebih kecil dari satu percobaan
-(`judge.attempt_usd`) ditolak sebelum mengirim, **tanpa** memindah job ke BLOCKED (judge hanya saran). Semua panggilan
+(`code_judge.attempt_usd`) ditolak sebelum mengirim, **tanpa** memindah job ke BLOCKED (judge hanya saran). Semua panggilan
 lewat `LLMCaller.call`, ledger di run `j1`, `reservation_from_ledger` untuk resume, checkpoint `durability="sync"`, semua
 dipakai ulang dari stage riset (`run_stage`, `tool_loop`, `with_fallbacks`). Konfirmasi seperti stage lain (`live()`):
 model, provider, cap, dan **data yang keluar** (issue, draf, patch, hasil tes dikirim ke OpenRouter lalu ke Baidu).
 
-**J7. Model.** Role baru `judge` → `openrouter:z-ai/glm-5.3`, `gateway_models` upstream `[baidu/fp8]` (pin tanpa fallback,
+**J7. Model.** Role baru `code_judge` (config `code_judge:`; `judge:` sudah milik rubric judge) → `openrouter:z-ai/glm-5.3`, `gateway_models` upstream `[baidu/fp8]` (pin tanpa fallback,
 SPEC_GATEWAY_PROVIDER), harga di `prices` = harga diskon sekarang (input 0,28, output 0,88 USD per juta token).
 Konsekuensi (Atha 2026-11-05): ledger tetap jujur karena tagihan = yang lebih besar dari hitungan kita dan `usage.cost`
 OpenRouter; tetapi reservasi dihitung dengan harga config, jadi bila diskon berakhir satu stage bisa melewati capnya. Cap
-$0,10 membatasi selisih itu. `max_output_tokens` 16.000, `timeout_s` 300. Tidak ada model cadangan: Baidu gagal =
+$0,10 membuat selisih itu kecil, tetapi bukan batas mutlak (hitungan token heuristik, bukan tokenizer GLM). `max_output_tokens` 16.000, `timeout_s` 300. Tidak ada model cadangan: Baidu gagal =
 `NOT_JUDGED`, dijalankan lagi nanti.
 
 **J8. Replay (sesudah merge, perlu "go live").** Salin 11 job shadow yang punya paket review (`~/pilot3a_live/jobs`, batch 1
@@ -105,7 +105,7 @@ cadangan; perubahan pada `argus research`.
 - **G8.** Cap: sisa cap job lebih kecil dari satu percobaan ditolak sebelum mengirim, state job tidak berubah (bukan BLOCKED).
 - **G9.** Paket baru dari `a2` sesudah `j1`: `status` menandai `j1` `stale`; `argus judge` menjalankan `j2`, `j1` tidak
   dibeli ulang.
-- **G10.** Role `judge` hanya bisa memakai model yang ada di `gateway_models` dengan pin (tes gateway yang ada mencakup
+- **G10.** Role `code_judge` hanya bisa memakai model yang ada di `gateway_models` dengan pin (tes gateway yang ada mencakup
   model baru; request membawa `provider.only = [baidu/fp8]`).
 
 Mutants (`verification/judge_mutants.py`): cek state dihapus; `job.json` ikut ke prompt; cek ukuran sesudah request;
@@ -118,3 +118,19 @@ dibandingkan. Lalu `/code-review medium`, verify.sh, "merge" Atha.
 - **K2.** Harga config = harga diskon Baidu (cap bisa sedikit terlewati bila diskon berakhir), bukan harga resmi Z.AI
   (ledger mencatat lebih mahal dari yang dibayar)? Usul: diskon, cap $0,10.
 - **K3.** Ambang replay J8 (2 dari 2 akal-akalan tertangkap, paling banyak 1 dari 8 salah blok)? Usul: ya.
+
+## 5. Implementasi (#316)
+
+**Code review (medium, 2026-11-05), 10 temuan, semua diperbaiki:**
+- paket review dibaca dari direktori job sendiri (`runs/<a>/review`), bukan `review.dir` di job.json (job salinan untuk
+  replay J8 akan membaca berkas job asli);
+- `JUDGE-<stage>.md` per stage (stage berikutnya tidak menimpa vonis sebelumnya), ditulis sebelum status JUDGED, dibangun
+  ulang dari `result.json` bila hilang; menyebut pin provider;
+- `max_input_tokens` 100.000 dan `attempt_tokens` 400.000 agar submit yang ditolak masih bisa diulang dengan prompt
+  120.000 karakter; komentar cap tidak lagi menyebutnya batas;
+- `argus resume` melanjutkan judge tanpa cek environment, keluar 0 bila JUDGED, dan tidak pernah memulai stage baru
+  untuk paket lain;
+- path patch: path yang di-quote git, CRLF, rename, perubahan biner;
+- paket dan draf dibaca sekali (sha dari byte yang sama); `status` menunjukkan cara melanjutkan stage yang terputus.
+
+Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.log`).
