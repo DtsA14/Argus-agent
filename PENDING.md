@@ -56,7 +56,10 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     `j20261105_121107_718e`: e1 CHECKED, 0 UNSUPPORTED, **SUPPORTED 47% (<60%)**. Berikutnya:
     - [x] s1 hanya melihat kutipan, bukan klaim worker (#311). Job 4 `j20261105_123505_b1d4`: 17/17 SUPPORTED,
       identifier di luar kutipan 27 → 0 ($0,0742)
-    - [ ] 2-3 pertanyaan lain dengan topik berbeda sebelum tahap 1 dianggap selesai
+    - [x] Dua topik lain (ekonomi BI/Fed/rupiah 85% SUPPORTED, BRICS 93%; 0 UNSUPPORTED, e1 selesai; $0,1506)
+    - [ ] Jalur cepat kecil dari tiga job ini: petunjuk worker bahwa kutipan boleh lintas baris (G2 menerima); s1 tidak
+      melihat URL (judul di URL bocor jadi klaim, PARTIAL BRICS P9)
+    - [ ] Kebenaran faktual ("7/8 benar") belum dinilai terhadap sumber independen
     - [ ] Catatan review yang belum dikerjakan: ReadDocs (`tools/web.py`) punya titik buta konfigurasi yang sama;
       konfigurasi berbentuk `window.X = {...}`/`__NEXT_DATA__` tidak terdeteksi; gate s1 masih menolak seluruh submit
       terakhir karena satu bagian kepanjangan; aturan "submit terakhir" tersalin di dua `gate_submit`
