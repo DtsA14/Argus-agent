@@ -207,6 +207,16 @@ def test_a_scheme_glued_to_its_target_is_still_a_link(text):
     assert r is None and any("URL" in p for p in problems), problems
 
 
+def test_s1_sees_each_finding_as_its_quotes_without_the_workers_claim():
+    known = rp.citable(FINDINGS)
+    prompt = rp.report_prompt(FINDINGS, {"max_submits": 3})
+    for f in known.values():
+        assert f"{f['id']} (sub-question {f['sub']}):\n" in prompt and f"): {f['claim']}" not in prompt
+        assert all(s["quote"] in prompt for s in f["sources"])
+    check = rp.check_prompt(rp.report_gate(report(), KNOWN)[1], FINDINGS, {"max_submits": 3})
+    assert f"W1.F1 (sub-question Q1): {known['W1.F1']['claim']}" in check             # e1 still reads the claim
+
+
 def test_a_report_lists_only_the_findings_it_cites():
     _, r = rp.report_gate(report(cites=("W1.F2",), text="It supports free threading."), KNOWN)
     md = rp.render(FINDINGS, r)
