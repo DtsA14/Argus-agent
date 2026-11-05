@@ -182,6 +182,20 @@ def test_the_report_gate_refuses(change, problem):
     assert r is None and any(problem in p for p in problems), problems
 
 
+@pytest.mark.parametrize("text", ["Memory berbasis file: file instruksi proyek.", "State file: sesi disimpan.",
+                                  "Two kinds of data: rows and files.", "Ask by mailto: no, by chat."])
+def test_a_word_before_a_colon_and_a_space_is_not_a_link(text):
+    problems, r = rp.report_gate(report(text=text), KNOWN)
+    assert problems == [] and r is not None, problems
+
+
+@pytest.mark.parametrize("text", ["Open file:///etc/passwd now.", "See data:text/html,<b>x</b> here.",
+                                  "Run javascript:alert(1) now.", "Mail mailto:x@y.org now."])
+def test_a_scheme_glued_to_its_target_is_still_a_link(text):
+    problems, r = rp.report_gate(report(text=text), KNOWN)
+    assert r is None and any("URL" in p for p in problems), problems
+
+
 def test_a_report_lists_only_the_findings_it_cites():
     _, r = rp.report_gate(report(cites=("W1.F2",), text="It supports free threading."), KNOWN)
     md = rp.render(FINDINGS, r)
