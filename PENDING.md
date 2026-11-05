@@ -139,10 +139,11 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 
 ### Kemampuan agen (jalur cepat, kandidat)
 
-- [~] **Gate "tes menelan traceback" salah tolak** (argus-ledger 008; jalur ketat, `docs/reviews/SPEC_RED_CAUGHT.md`, disetujui
-  Atha 2026-11-05, PR #304): red check mencatat exception yang ditangkap tes (`sys.monitoring`), gate menolak hanya yang
-  benar-benar ditelan; jatuh ke aturan lama bila tak bisa dipantau. Tes 32, +4,5% waktu.
-  Review medium 8 temuan (4 diperbaiki, 4 dijawab di spek §7a), mutants 19/19, `verify.sh` PASS 728a8b7 (2956 passed, sandbox skipped 0; sebelumnya FAIL di ae5f4f0 karena berkas bukti docs ikut dikumpulkan pytest, diperbaiki). Tersisa: "merge" Atha
+- [x] **Gate "tes menelan traceback" salah tolak** (argus-ledger 008; jalur ketat, `docs/reviews/SPEC_RED_CAUGHT.md`, #304,
+  merged d9e6e8b 2026-11-05): red check mencatat exception yang ditangkap tes (`sys.monitoring`, Python 3.12+; setup, call dan
+  teardown), gate menolak hanya yang benar-benar ditelan; jatuh ke aturan lama bila tak bisa dipantau. 32 tes, mutants 19/19,
+  review medium 8 temuan, +4,5% waktu, `verify.sh` PASS 728a8b7 (2956 passed). Batas yang diterima: catatan di proses anak
+  tidak terlihat; `with`/`finally`/`pytest.raises` dihitung seperti `except`
 - [ ] Tes lama yang diubah drafter otomatis wajib (`22456` d1); `swe_grade.py` mencatat nama tes draf yang gagal di atas
   patch maintainer (penilai: jalur ketat)
 - [ ] Kandidat sisa batch 5 / `21379`: drafter mencari titik nilai salah pertama kali muncul (`20428`); gerbang writable
