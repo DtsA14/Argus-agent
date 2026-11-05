@@ -106,6 +106,19 @@ kemampuan model s1 saja. Batas: n = 1 per lengan, worker juga dijalankan ulang (
 bagian Claude memakai dokumentasi Claude Code (CLAUDE.md, MEMORY.md), tidak khusus Agent SDK (soal cakupan, bukan
 klaim tanpa bukti). Ambang v1 untuk job ini: e1 selesai ✓, 0 UNSUPPORTED ✓, SUPPORTED 100% ✓.
 
+**Dua topik lain** (Atha 2026-11-05: ekonomi dan geopolitik; dipersempit Claude agar bisa dicek), sesudah #311:
+
+| Job | Pertanyaan | Hasil | Biaya |
+|---|---|---|---|
+| `j20261105_125836_ebbd` | Suku bunga BI dan The Fed sepanjang 2026, kurs rupiah sampai November 2026 | e1 11 SUPPORTED, 2 PARTIAL, 0 UNSUPPORTED (85%); w1 (BI) INSUFFICIENT_EVIDENCE: 4 keputusan BI terverifikasi dari halaman, sisanya hanya di ringkasan pencarian | $0,0601 |
+| `j20261105_125836_eca9` | Keanggotaan Indonesia di BRICS Januari 2025 - November 2026 | e1 13 SUPPORTED, 1 PARTIAL, 0 UNSUPPORTED (93%) | $0,0905 |
+
+Cek Claude: semua angka di laporan ada di kutipan (ekonomi 28/28, BRICS 3/3). PARTIAL ekonomi: fakta ada di temuan lain
+yang tidak dikutip paragraf itu (salah rujuk, bukan karangan). PARTIAL BRICS: s1 mengambil klaim dari **judul di URL**
+sumber (URL tampil di samping kutipan untuk s1). Catatan worker ekonomi: tidak mau mengutip kalimat yang terpotong baris
+baru di halaman, padahal G2 menerima kutipan lintas baris. Kebenaran faktual per November 2026 tidak dicek terhadap
+sumber independen; "7/8 benar" belum dinilai.
+
 ## 5. Mode kegagalan (`FUTURE_ARCHITECTURE.md` bagian 8)
 
 | Mode | Status | Bukti / gap |
