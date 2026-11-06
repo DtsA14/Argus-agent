@@ -46,10 +46,12 @@ def make_repo(tmp_path):
 
 
 def cfg(**drafter):
+    """drafter.red_question is off unless given: these scripts end their drafts with one SubmitDraft
+    (test_drafter_red_question.py covers the question)."""
     c = load_config()
     c["roles"]["drafter"]["model"] = "fake:scripted"
     c["roles"]["coder"]["model"] = "fake:scripted"
-    c["drafter"].update(drafter)
+    c["drafter"].update({"red_question": False, **drafter})
     return c
 
 

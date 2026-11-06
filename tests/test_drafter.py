@@ -144,9 +144,11 @@ def fake_red(nodes, workspace, sandbox_cfg, **kw):
 
 
 def cfg(**drafter):
+    """The repository's config with the scripted model. drafter.red_question is off unless given: these scripts end with
+    one SubmitDraft (test_drafter_red_question.py covers the question)."""
     c = load_config()
     c["roles"]["drafter"]["model"] = "fake:scripted"
-    c["drafter"].update(drafter)
+    c["drafter"].update({"red_question": False, **drafter})
     return c
 
 
@@ -594,8 +596,7 @@ PROC = ("import sys, json; sys.path[:0] = [sys.argv[1], sys.argv[1] + '/tests'];
 
 def _proc(root, runs, crash_at, resume):
     """One process of a drafter run with the scripted model of ARGUS_FAKE_SCRIPT (its position survives a crash)."""
-    c = load_config()
-    c["roles"]["drafter"]["model"] = "fake:scripted"
+    c = cfg()
     r = dt.run_drafter(run_id="rc", runs_dir=runs, cfg=c, intake_name="shop", issue=ISSUE, max_usd=0.4,
                        resume=resume == "1", crash_at=None if crash_at == "-" else crash_at, validate=fake_validate,
                        preflight=lambda: (True, "ok"), env_preflight=lambda name: (True, "ok"), root=root, red=fake_red)
