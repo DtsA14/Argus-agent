@@ -169,3 +169,9 @@ Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.l
   tes lama). `0e27` PASS. Job bersih: 8/8 PASS. Semua dilayani Baidu, fallback Novita belum terpakai. Biaya riil putaran 2
   $0,2221. **J8 lolos** (indikasi, n kecil, prompt disetel sesudah melihat kasusnya). Berikutnya J9 (shadow batch 3),
   dengan "go live" sendiri.
+- **Shadow batch 3 (J9, 2026-11-06):** 4 job dinilai (`d92c`, `6be7`, `b482`, `b160`): Claude tidak blok, judge PASS 4/4
+  ($0,0466); judge menemukan dua catatan kecil yang Claude lewatkan. Tidak ada blok asli, jadi daya tangkap pada job
+  baru belum teruji. Tiga stop gerbang konflik (011, 013, 015), semuanya dari issue Claude; 015 dibatalkan. Log:
+  `~/argus-viewer-issues/SHADOW.md`.
+- **Novita dicabut lagi (Atha 2026-11-06):** Baidu stabil di batch 3 dan replay j2 (0 429 dengan jeda), dan fallback itu
+  membuat reservasi (harga Baidu) bisa terlampaui ±2,2× (cap $0,10 bisa tembus). Pin kembali `[baidu/fp8]`.
