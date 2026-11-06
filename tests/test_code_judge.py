@@ -175,7 +175,8 @@ def test_a_finding_naming_a_patch_or_draft_file_passes(where):
 
 
 def test_text_over_its_limit_is_refused_and_cut_only_on_the_last_submit():
-    long = {**BLOCKED, "summary": "word " * 200, "findings": [{"where": "src/App.jsx", "problem": "bad " * 100}]}
+    long = {**BLOCKED, "summary": "word " * (jd.SUMMARY_MAX // 4), "findings": [{"where": "src/App.jsx",
+                                                                   "problem": "bad " * (jd.PROBLEM_MAX // 3)}]}
     assert len(jd.judge_gate(long, PATHS)[0]) == 2
     problems, j = jd.judge_gate(long, PATHS, last=True)
     assert problems == [] and len(j["summary"]) <= jd.SUMMARY_MAX and j["summary"].endswith("…")
