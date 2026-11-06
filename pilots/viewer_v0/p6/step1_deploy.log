@@ -1,0 +1,6 @@
+refused: job j20261106_151840_e81c was applied with changes that differ from the reviewed patch (as_is False); only the reviewed patch is deployed
+viewer live: j20261106_085425_46a7-0b02b87bad84
+  job j20261106_085425_46a7, commit 0b02b87bad84, image sha256:9ac2fb4376d2
+viewer rollback would publish: j20261106_043047_b160-8e8a2d790399
+proxy: 127.0.0.1:8710
+exit=2
