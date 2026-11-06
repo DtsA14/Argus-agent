@@ -149,6 +149,10 @@ drafter:
   # submit and ran out at 16 with one problem left, twice. The money bound is unchanged (attempt_usd, the stage cap).
   max_steps: 24
   max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
+  # Before a passing draft is accepted, it is shown why each required test fails now and asked once whether each is the
+  # behaviour the issue asks for (pilots 021 t1 and prompt_injection_v0 V4: a test failing on its own data was padded
+  # around by the agent). Shares the one question with the scope question; a held draft is accepted if never answered.
+  red_question: true
   # The profiles a draft may give the agent. Not `large` (45,000 tokens per attempt): an agent's input is re-sent at
   # every step, and in router pilot #1 reading a 23 KB file used it up before any edit (2026-10-23).
   agent_profiles: [default, large_usd]
