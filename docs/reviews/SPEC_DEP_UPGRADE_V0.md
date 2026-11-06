@@ -138,3 +138,14 @@ Pertanyaan Alur A tetap terbuka: apakah riset membantu bila jawaban **tidak** ad
 menjawabnya karena tidak ada yang rusak. Kandidat yang lebih tepat: issue yang benar-benar membutuhkan API rilis baru
 (mis. fitur yang hanya ada di `httpx2` atau starlette 1.10), atau upgrade berikutnya yang memang merusak tes. Dicatat di
 PENDING.md sebagai kandidat, tanpa jadwal.
+
+## 9. Upgrade 2 (starlette 1.10.0, fastapi 0.162.0; 2026-11-04)
+
+Dijalankan lewat mekanisme yang sama tanpa perubahan jaminan (§4): `RUNTIMES["ledger_staging_up2"] = "ledger_py312_up2"`,
+entri `config.yaml`, dan `environments/ledger_{py312,staging}_up2/` = pin up1 dengan dua pin diganti (fastapi 0.162.0,
+starlette 1.10.0; syarat dependensinya sudah dipenuhi pin up1, jadi anyio, pydantic, httpx2 dan lainnya tidak berubah).
+Tes baru: up2 hanya diterima dengan `stage check` di `ledger_py312_up2` (pass di `up1` tidak cukup), rollback up2 → up1
+memakai image rekaman up1; `ledger_staging_up2` tidak lagi dipakai sebagai contoh runtime asing (`ledger_staging_up9`).
+Mutants 4/4 (pasangan salah, tanpa check, tidak terdaftar, up1 dipasangkan ke up2). Image tidak boleh dibangun sebelum
+2026-11-07 15:05 UTC (aturan 2 minggu, starlette 1.10.0 diunggah 2026-10-24T15:04Z); dua tes docker (`real_cfg`) skip sampai
+image ada dan tidak dihitung lulus. Rencana jalan: `pilots/dep_upgrade_v0/p2/PLAN.md`.

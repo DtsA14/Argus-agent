@@ -52,7 +52,8 @@ FIXTURE = ROOT / "fixtures" / "staging" / "jobs"
 ENVIRONMENT = "ledger_staging"
 # SPEC_DEP_UPGRADE_V0 U3: each staging runtime and the sandbox environment whose `stage check` a commit must have passed
 # before it runs on that runtime. The default one needs none (its releases are those staging v0 deployed).
-RUNTIMES = {"ledger_staging": None, "ledger_staging_up1": "ledger_py312_up1"}
+RUNTIMES = {"ledger_staging": None, "ledger_staging_up1": "ledger_py312_up1",
+            "ledger_staging_up2": "ledger_py312_up2"}
 # The one image staging v0 ever ran (SPEC_STAGING_V0 §6): its releases recorded no image, so this is theirs.
 V0_IMAGE = "sha256:4ab2ff53a34f46ccecde0c8030298bcb37be41d7c565847590de4875a5578f5a"
 CHECK_ARGV = ["python3", "-I", "-B", "-m", "pytest", *va.PYTEST_FIXED, "-W", "error::DeprecationWarning"]
