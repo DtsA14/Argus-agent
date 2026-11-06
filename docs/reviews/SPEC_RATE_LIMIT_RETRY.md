@@ -68,3 +68,19 @@ dibatasi; `rate_limit_attempts` diabaikan; 429 gateway tetap worst-case; 429 pro
 - **K2.** Default 30 s / 120 s / 4 percobaan? Usul: ya. Judge menunggu paling lama ±4 menit; job `argus code` (DeepSeek
   langsung) jarang 429 dan ikut aturan yang sama.
 - **K3.** Sesudah merge: ulang stage judge `81ed` (cacat tanam terakhir) sebagai bukti hidup (±$0,02, "go live")? Usul: ya.
+
+## 5. Implementasi dan code review (medium, 10 finding)
+
+Diperbaiki:
+- **Penghitung terpisah.** 429 dan error transient lain dihitung sendiri-sendiri (`seen`), dan backoff 429 mulai dari
+  jumlah 429 saja: 500, 500 lalu 429 menunggu ±30 s, bukan 120 s; 429, 429 lalu 500 masih punya dua retry 500. Batas
+  loop = `attempts + rate_limit_attempts - 1`.
+- **Model `:free` tetap cepat** (penyempitan R1-R2): rantai model gratis pindah ke model berikutnya lebih cepat daripada
+  menunggu, jadi 429 di model `:free` tetap memakai `base_delay` dan `attempts` (tetap tidak ditagih seperti sebelumnya).
+- **Error rate limit tanpa status** (nama kelas `RateLimit...`) ikut jeda panjang.
+- **`Retry-After` negatif, NaN atau tak hingga** diabaikan (jeda dihitung sendiri); `inf`/NaN di config, `attempts` < 1
+  dan `base_delay` negatif ditolak `ConfigError`.
+
+Dibiarkan: 429 gateway berbayar $0 (K1, disetujui Atha); 429 provider langsung tetap worst-case sehingga empat
+percobaan bisa menghabiskan reservasi (reservasi tetap dicek sebelum setiap percobaan; ReservationExhausted, bukan
+pengiriman tanpa reservasi); duplikasi override di helper tes.

@@ -56,6 +56,8 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     # after them. Their runs had no cache reads or writes, so their costs are the same under either table; every other
     # rate must still be the one they ran with.
     del base["llm"]["prompt_cache"]
+    for k in ("rate_limit_delay_s", "rate_limit_max_delay_s", "rate_limit_attempts"):   # SPEC_RATE_LIMIT_RETRY (after)
+        del base["llm"][k]
     arm_prices = config("30k")["prices"]
     for model, p in base["prices"].items():
         rest = lambda q: {k: v for k, v in q.items() if not k.startswith("cache_") and k != "long_context_above"}  # noqa: E731

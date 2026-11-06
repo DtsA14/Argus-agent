@@ -43,6 +43,7 @@ def cfg_llm(**budget):
     cfg["roles"]["orchestrator"]["model"] = "fake:scripted"
     cfg["token_estimates"]["orchestrator"] = 12_000   # a real planner needs room for retries
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     cfg["budget"].update(budget)
     return cfg
 

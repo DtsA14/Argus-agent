@@ -46,6 +46,11 @@ judge:
 llm:
   attempts: 3                       # transient errors (429, 5xx, timeouts) are retried, others are not
   base_delay: 1.0                   # seconds; exponential with jitter, Retry-After wins when present
+  # SPEC_RATE_LIMIT_RETRY (Atha 2026-11-06): a 429 waits 30 s doubling (jitter), at most 120 s (Retry-After too), and
+  # has its own number of attempts; a 429 from the gateway is not charged (harness/llm.py)
+  rate_limit_delay_s: 30
+  rate_limit_max_delay_s: 120
+  rate_limit_attempts: 4
   min_output_tokens: 64
   input_margin: 1.2                 # safety factor on heuristic input counts (Anthropic counts exactly)
   # D5: Anthropic prompt caching (markers added only to what is sent; hashes and memo keys unchanged). Off by default,

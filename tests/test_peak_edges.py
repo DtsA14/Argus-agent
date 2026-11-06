@@ -36,6 +36,7 @@ class Clock:
 def make(tmp_path, clock, *, model=DS, est_in=1000, script=None):
     cfg = copy.deepcopy(load_config())
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     cfg["roles"]["worker"]["model"] = model
     fake = ScriptedChatModel(script=list(script or [reply(input_tokens=900, output_tokens=500)]))
     log = EventLog(tmp_path / "e.jsonl")
