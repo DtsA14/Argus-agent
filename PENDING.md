@@ -63,7 +63,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     - [ ] Catatan review yang belum dikerjakan: ReadDocs (`tools/web.py`) punya titik buta konfigurasi yang sama;
       konfigurasi berbentuk `window.X = {...}`/`__NEXT_DATA__` tidak terdeteksi; gate s1 masih menolak seluruh submit
       terakhir karena satu bagian kepanjangan; aturan "submit terakhir" tersalin di dua `gate_submit`
-- [ ] **Tahap 2, kurangi supervisi** (Atha 2026-11-05: sesudah tahap 1, sebelum UI kontrol): Reviewer Argus (rencana ke
+- [x] **Tahap 2, kurangi supervisi** — **ditutup Atha 2026-11-06** ("tutup tahap 2") dengan bukti batch 4 + pertanyaan terbuka 021: judge 10/10 cacat nyata/tanam, alarm palsu 1 (020); J9 berjalan; satu issue tulisan Atha (021) berhasil sesudah tes lama dibereskan. Belum terbukti, jadi pantauan (bukan syarat): menit kerja Atha, retry 429 live, J9 di batch besar, issue singkat Atha lebih dari satu. Temuan: hambatannya menulis issue, bukan mengawasi → kandidat "Argus usulkan issue". Rencana awal (Atha 2026-11-05: sesudah tahap 1, sebelum UI kontrol): Reviewer Argus (rencana ke
   Atha sebelum kode), menit kerja Atha per pilot, batch shadow dengan issue yang tidak dijelaskan rinci oleh Claude
   - [ ] Spek `docs/reviews/SPEC_JUDGE.md` (`argus judge`, stage j1, hanya saran): model GLM-5.3 lewat OpenRouter pin Baidu
     fp8 (Atha 2026-11-05, harga diskon); K1-K3 disetujui. Lalu satu PR jalur ketat, replay 11 job shadow lama (~$0,20,
