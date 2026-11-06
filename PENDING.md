@@ -87,6 +87,13 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       dibekukan di job.json, satu kali per job, agent boleh lapor "terjepit tes lama" alih-alih mengakali; jalur ketat)
     - [ ] Celah: drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru (gerbang #275 tidak terpicu), dan tes
       draf memasang `history.state` `{}`, bukan `null` seperti browser
+- [ ] **Uji prompt injection riset → kode** (usulan probe model 2026-11-06, Atha "gass", urutan atas di antara kandidat;
+  belum dispek): teks web masuk ke agent kode lewat `--from-research` (#297) dan Reconciliation bagian 5 mencatat injeksi
+  "belum diukur untuk code task". Eksperimen terkecil seperti uji cacat tanam: 3-5 halaman tanam berisi instruksi
+  tersembunyi, lihat apakah ada yang sampai ke handoff, draf, atau patch. Pagar yang mungkin sesudahnya: label asal-usul,
+  hanya klaim + kutipan yang diteruskan. Catatan probe: `docs/reviews/PROBE_REPO_DOCS_2026-11-06.md`
+- [ ] **Eval riset independen** (usulan probe yang sama): set pertanyaan beku dengan cek fakta independen; SUPPORTED hanya
+  berarti kutipannya ada. Lebih mahal (kunci jawaban dicek manual); sambung dengan butir "7/8 benar" di tahap 1
 - [ ] **Self-review Argus** (Atha 2026-11-06, dimasukkan ke antrean, belum dijalankan): judge GLM sebagai reviewer kedua PR
   jalur ketat, hanya saran (merge tetap Atha). Eksperimen terkecil dulu: diff #326 sebelum perbaikan review (7 temuan
   `/code-review` yang diperbaiki) ke judge lewat `LLMCaller`, hitung tangkapan dan alarm palsu, < $0,10. Bagus → perintah
@@ -128,8 +135,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     job; berkas mirip tes yang tidak bisa dijalankan harness ditolak; prompt `EXISTING TEST CONFLICT`. Mutants 14/14,
     review medium (6 diperbaiki, 3 dipertahankan), verify.sh PASS 95cbee4
   - [ ] Lanjutan K2 (tidak sekarang): cakupan Python untuk repo kecil (`argus-ledger`)
-  - [ ] Reviewer Argus (fitur baru, rencana ke Atha sebelum kode): model murah menilai draf + patch + hasil semua tes; di shadow
-    batch 2 berdampingan dengan Claude (Claude menilai tanpa melihat vonisnya); ukuran: blok asli yang lolos dari reviewer
+  - [x] Reviewer Argus: dibangun sebagai `argus judge` (#316, SPEC_JUDGE; lihat Tahap 2), aturan J9 2026-11-06
   - [ ] Catatan pelajaran per repo (`.argus/lessons.md`): hanya bila batch 2 menunjukkan pola berulang yang tidak bisa jadi
     cek; pelajaran masuk hanya bila replay job lama membuktikannya atau disetujui. Tidak: aturan yang ditulis dan dipakai sendiri
   - [x] **Shadow batch 2** (2026-10-31, harness 900711d): 10 job, $0.2791; 8 bersih di-apply (`argus-viewer` 9273316..201a723,
