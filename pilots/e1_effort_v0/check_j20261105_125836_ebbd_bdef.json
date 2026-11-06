@@ -1,0 +1,58 @@
+{
+  "status": "CHECKED",
+  "stop_reason": "every item has a verdict",
+  "verdicts": {
+    "S": {
+      "verdict": "SUPPORTED",
+      "reason": "All claims trace to cited findings: BI rates (W1.F1/F3/F5/F6), rationale (W1.F2/F4/F7), Fed holds/hike (W2.F2-F8), rupiah levels (W3.F1/F2/F4/F6)."
+    },
+    "P1": {
+      "verdict": "PARTIAL",
+      "reason": "Rates, Fed holds/hike, Jan/Mar levels and 4-Nov JISDOR Rp18.140 are backed; but 'lowest since 2022' (W1.F8), July Rp18.078 (W3.F2) and spot Rp18.168 (W3.F6) are not in the cited findings."
+    },
+    "P2": {
+      "verdict": "SUPPORTED",
+      "reason": "W1.F8 (150bps since Sept 2024, lowest since 2022), W1.F1 (March hold with facilities) and W1.F2 (rationale) all back the text."
+    },
+    "P3": {
+      "verdict": "SUPPORTED",
+      "reason": "W1.F3 (May +50bps to 5.25%) and W1.F4 (pro-stability external resilience) back the text."
+    },
+    "P4": {
+      "verdict": "SUPPORTED",
+      "reason": "W1.F5, W1.F6 and W1.F7 quotes back the July/Sept holds, the facility rates and the stated rationales."
+    },
+    "P5": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F1 lists all eight 2026 meeting dates and the minutes release dates exactly as stated."
+    },
+    "P6": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F2 and W2.F3 quotes back the Jan 28 and Mar 18 holds, the indicators, Middle East language and Miran/Waller dissents."
+    },
+    "P7": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F4 and W2.F5 back the Apr 29 and Jun 17 holds, the inflation/energy language and the dissents."
+    },
+    "P8": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F6, W2.F7 and W2.F8 back the Jul 29 hold, Sept 16 hike and Oct 28 hold, with the stated dissents."
+    },
+    "P9": {
+      "verdict": "SUPPORTED",
+      "reason": "W3.F1 and W3.F3 back the Jan/Mar levels, the June JISDOR breach and the end-June figures."
+    },
+    "P10": {
+      "verdict": "SUPPORTED",
+      "reason": "W3.F2, W3.F5, W3.F1 and W3.F4 back the monthly levels, Rp17.870, the 8.46% JISDOR rise and the 7.23%/8th-weakest ranking."
+    },
+    "P11": {
+      "verdict": "SUPPORTED",
+      "reason": "W3.F5, W3.F6 and W3.F7 back the 2 Nov level, the 4 Nov spot/JISDOR figures and the cited drivers incl. analyst Lukman."
+    },
+    "P12": {
+      "verdict": "PARTIAL",
+      "reason": "Rate/intervention quotes and BI rationales are backed, but the Fed hold 'pada 28 Oktober 2026' is not in the cited findings (W2.F8 is uncited)."
+    }
+  }
+}

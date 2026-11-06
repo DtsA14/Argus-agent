@@ -94,7 +94,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   hanya klaim + kutipan yang diteruskan. Catatan probe: `docs/reviews/PROBE_REPO_DOCS_2026-11-06.md`
 - [ ] **Eval riset independen** (usulan probe yang sama): set pertanyaan beku dengan cek fakta independen; SUPPORTED hanya
   berarti kutipannya ada. Lebih mahal (kunci jawaban dicek manual); sambung dengan butir "7/8 benar" di tahap 1
-- [ ] **Self-review Argus** (Atha 2026-11-06, dimasukkan ke antrean, belum dijalankan): judge GLM sebagai reviewer kedua PR
+- [x] **Self-review Argus** (Atha 2026-11-06; dijalankan 2026-11-06, `pilots/self_review_v0`: judge PASS 2x, 0/5 bug review tertangkap, 1 alarm palsu, $0,057; usul: `argus review --diff` tidak dibangun): judge GLM sebagai reviewer kedua PR
   jalur ketat, hanya saran (merge tetap Atha). Eksperimen terkecil dulu: diff #326 sebelum perbaikan review (7 temuan
   `/code-review` yang diperbaiki) ke judge lewat `LLMCaller`, hitung tangkapan dan alarm palsu, < $0,10. Bagus → perintah
   `argus review --diff` (jalur ketat). `argus code` di repo Argus sendiri: tidak, sampai inti harness dilindungi
@@ -113,7 +113,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       batas versi lama), K3 dan K4 model mengaku tidak tahu perubahannya tetapi kodenya lolos di up2. Tidak ada kandidat
       yang membenarkan pilot dua lengan; berhenti mencari. Planner berhirarki tetap belum dibenarkan; catat kegagalan
       nyata lengan tanpa riset bila muncul
-  - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
+  - [x] (2026-11-06, `pilots/e1_effort_v0`: low = rujukan 30/30, reasoning -40..50%, biaya/waktu ±separuh; def ulang 12/17 di laporan A; usul: low di `or_deepseek_checker`, menunggu Atha) Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
   - [ ] Nanti: worker paralel, OpenRouter Batch API, PR 1b `free_repos`, Vercel sebagai cadangan (Atha "kapan2")
