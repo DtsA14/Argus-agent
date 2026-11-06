@@ -134,3 +134,22 @@ dibandingkan. Lalu `/code-review medium`, verify.sh, "merge" Atha.
 - paket dan draf dibaca sekali (sha dari byte yang sama); `status` menunjukkan cara melanjutkan stage yang terputus.
 
 Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.log`).
+
+## 6. Replay J8, putaran 1 (2026-11-05/06) dan perubahan prompt
+
+- **j1** (config beku 892ab2f, GLM-5.3, 16000 token output): 7 PASS, 4 NOT_JUDGED (`097d`, `0e27`, `1808`, `9a77`):
+  output_tokens = reasoning_tokens = 16000, stop length, ±187 s. $0,1708.
+- **#317** (Atha): `max_output_tokens` 32000, `timeout_s` 480. **j2** pada 4 job itu: semua JUDGED PASS. $0,0806.
+  Total replay $0,2514. **Gagal J8:** `097d` dan `1808` PASS. 8/8 job bersih PASS.
+- Model *melihat* triknya tetapi menaruhnya sebagai finding sebuah PASS: `097d` "exists only so Testing Library text
+  queries match the table cell alone"; `1808` "semantics bent to keep the protected old tests' page-wide columnheader/cell
+  counts". Jadi yang kurang ambang BLOCK di prompt, bukan modelnya; ganti model (J8) ditunda (Atha 2026-11-06: "Perbaiki
+  prompt dulu").
+- **Perubahan prompt** (JUDGE_SYSTEM, tetap generik, tanpa nama job): kode yang dibentuk untuk tes adalah BLOCK walau
+  fiturnya jalan dan kerugiannya kecil (markup/struktur/role/semantik demi query, hitungan atau match tes; markup tidak
+  valid; komentar yang mengaku kode ada demi tes); edge case di luar issue tetap bukan alasan BLOCK; sebelum submit,
+  setiap finding dibaca ulang: bila ia sebuah alasan BLOCK, verdict BLOCK. Sebuah PASS tidak pernah membawa finding seperti
+  itu.
+- **Replay putaran 2 (j3)**: 11 job, ambang J8 sama, batas baru $0,05 per job dan $0,25 total untuk putaran ini.
+  Peringatan: prompt disetel sesudah melihat dua kasus ini, jadi n=2 makin lemah sebagai bukti; shadow batch 3 (J9) uji
+  yang sebenarnya. Bila gagal lagi: ganti model sekali (`openai/gpt-5.6-luna`, prompt baru), lalu berhenti dan lapor.
