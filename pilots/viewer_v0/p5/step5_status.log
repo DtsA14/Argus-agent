@@ -1,0 +1,11 @@
+viewer live: j20261106_085425_46a7-0b02b87bad84
+  job j20261106_085425_46a7, commit 0b02b87bad84, image sha256:9ac2fb4376d2
+viewer rollback would publish: j20261106_043047_b160-8e8a2d790399
+proxy: 127.0.0.1:8710
+staging live: j20261104_152512_b93a-4e947a0ffe8b.up1
+  job j20261104_152512_b93a, commit 4e947a0ffe8b, runtime ledger_staging_up1
+  last smoke: pass at 2026-11-04T17:58:53Z
+data snapshot: 2026-11-06T09:23:27Z, 76 jobs, 35 excluded
+last monitor: pass at 2026-11-06T09:23:26Z
+rollback would start: j20261030_060939_8433-1f31e34c1ff2.up1 on ledger_staging_up1
+f81794a9979b argus-staging-ledger-j20261104_152512_b93a-4e947a0ffe8b.up1
