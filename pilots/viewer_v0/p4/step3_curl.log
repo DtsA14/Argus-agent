@@ -1,0 +1,21 @@
+HTTP/1.0 200 OK
+Server: argus-staging 
+Date: Fri, 06 Nov 2026 05:02:16 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 622
+Cache-Control: no-cache
+Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+Connection: close
+
+assets/index-BY466fXP.js
+assets/index-9R6eDnXZ.css
+HTTP/1.0 200 OK
+Server: argus-staging 
+Date: Fri, 06 Nov 2026 05:02:16 GMT
+Content-Type: application/json
+Content-Length: 628
+Cache-Control: no-store
+Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+X-Content-Type-Options: nosniff
