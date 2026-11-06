@@ -68,6 +68,9 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   - [ ] Spek `docs/reviews/SPEC_JUDGE.md` (`argus judge`, stage j1, hanya saran): model GLM-5.3 lewat OpenRouter pin Baidu
     fp8 (Atha 2026-11-05, harga diskon); K1-K3 disetujui. Lalu satu PR jalur ketat, replay 11 job shadow lama (~$0,20,
     "go live"), lalu shadow batch 3 dengan issue singkat yang ditulis Claude (Atha: "Issue masih lu dulu")
+    - [x] #316 `argus judge`; replay J8 (#317 32k token, #318 aturan BLOCK, #319 batas teks 500/1000, #320 fallback
+      Novita): `097d` dan `1808` BLOCK, 8/8 bersih PASS, biaya riil ±$0,47 total (spek bagian 6)
+    - [ ] J9 shadow batch 3 (perlu "go live" sendiri)
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal

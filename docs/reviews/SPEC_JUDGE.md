@@ -164,3 +164,8 @@ Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.l
   ($0,63/$1,98) di belakang Baidu (`order = only = [baidu/fp8, novita/fp8]`, tetap tanpa provider lain). Harga reservasi
   tetap harga Baidu: panggilan yang dilayani Novita bisa ±2,2× reservasinya (paling buruk ±$0,07), ditagih penuh dari
   `usage.cost`; cap $0,10 tetap.
+- **Putaran 2, j2 pada 7 job itu (8507d04, jeda 150 s):** `097d` **BLOCK** dan `1808` **BLOCK**, keduanya dengan finding
+  di `src/App.jsx` yang menyebut triknya (span di `<option>` demi query tes; `<th scope="row">` demi hitungan columnheader
+  tes lama). `0e27` PASS. Job bersih: 8/8 PASS. Semua dilayani Baidu, fallback Novita belum terpakai. Biaya riil putaran 2
+  $0,2221. **J8 lolos** (indikasi, n kecil, prompt disetel sesudah melihat kasusnya). Berikutnya J9 (shadow batch 3),
+  dengan "go live" sendiri.
