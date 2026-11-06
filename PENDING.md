@@ -72,8 +72,9 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       Novita): `097d` dan `1808` BLOCK, 8/8 bersih PASS, biaya riil ±$0,47 total (spek bagian 6)
     - [x] J9 shadow batch 3: 4 applied, Claude dan judge sepakat 4/4, tanpa blok asli (spek bagian 6)
     - [x] Uji cacat tanam: 6/6 tertangkap (spek bagian 6)
-    - [ ] 429 Baidu: retry dengan jeda panjang untuk 429 (jalur ketat, retry harness) sebelum judge dipakai rutin; lalu
-      aturan J9 (Claude hanya me-review BLOCK + sampel acak), keputusan Atha
+    - [x] 429: #326 (SPEC_RATE_LIMIT_RETRY), verify PASS 17721f3 (3059), mutants 16/16; `81ed` sesudahnya BLOCK benar
+      (7/7 cacat tanam), panggilan itu tanpa 429 jadi retry baru belum teruji live
+    - [ ] Aturan J9 (Claude hanya me-review BLOCK + sampel acak): keputusan Atha
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
