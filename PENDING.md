@@ -87,6 +87,10 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       dibekukan di job.json, satu kali per job, agent boleh lapor "terjepit tes lama" alih-alih mengakali; jalur ketat)
     - [ ] Celah: drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru (gerbang #275 tidak terpicu), dan tes
       draf memasang `history.state` `{}`, bukan `null` seperti browser
+- [ ] **Self-review Argus** (Atha 2026-11-06, dimasukkan ke antrean, belum dijalankan): judge GLM sebagai reviewer kedua PR
+  jalur ketat, hanya saran (merge tetap Atha). Eksperimen terkecil dulu: diff #326 sebelum perbaikan review (7 temuan
+  `/code-review` yang diperbaiki) ke judge lewat `LLMCaller`, hitung tangkapan dan alarm palsu, < $0,10. Bagus → perintah
+  `argus review --diff` (jalur ketat). `argus code` di repo Argus sendiri: tidak, sampai inti harness dilindungi
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
