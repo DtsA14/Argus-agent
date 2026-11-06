@@ -1,0 +1,74 @@
+{
+  "status": "CHECKED",
+  "stop_reason": "every item has a verdict",
+  "verdicts": {
+    "S": {
+      "verdict": "PARTIAL",
+      "reason": "Almost all summarised claims match the cited quotes, but the '/memories' directory path is not in them (W3.F3 quotes only say 'a directory of memory files')."
+    },
+    "P1": {
+      "verdict": "SUPPORTED",
+      "reason": "LangGraph's checkpointer/store pair, its durability-as-differentiator framing, OpenAI's session memory/five tool categories/guardrails, and Claude's inherited production harness all match the cited quotes."
+    },
+    "P2": {
+      "verdict": "PARTIAL",
+      "reason": "The 'gated research preview' point is quoted (features list + delta sentence), but the April 2026 / July 2026 dates and the November-2026 framing are only in the finding claims, not in any quote."
+    },
+    "P3": {
+      "verdict": "SUPPORTED",
+      "reason": "Thread-scoped checkpointer vs cross-thread store, the memory-type/scope table, and the thread_id vs node/app-code access pattern are all quoted (W1.F1, W1.F2)."
+    },
+    "P4": {
+      "verdict": "PARTIAL",
+      "reason": "RAM-only storage and 'use a persistent checkpointer for production' are quoted, but the named PostgresSaver/SqliteSaver examples are not in the quotes."
+    },
+    "P5": {
+      "verdict": "PARTIAL",
+      "reason": "Session retrieval/prepending and the conversation_id/previous_response_id restriction are quoted, but of the ten named implementations only OpenAIConversationsSession appears in the quotes."
+    },
+    "P6": {
+      "verdict": "SUPPORTED",
+      "reason": "SessionSettings(limit=N), RunConfig.session_input_callback and pop_item for undoing the last item are each directly quoted."
+    },
+    "P7": {
+      "verdict": "PARTIAL",
+      "reason": "Accumulation, automatic prompt caching, PreCompact and client-side tool execution are quoted, but the '/memories' path is not — W3.F3 says only 'a directory of memory files'."
+    },
+    "P8": {
+      "verdict": "SUPPORTED",
+      "reason": "Five tool categories, hosted tools executed on OpenAI servers, FunctionTool wrapping Python functions, and the docstring-as-schema point are all quoted."
+    },
+    "P9": {
+      "verdict": "PARTIAL",
+      "reason": "HostedMCPTool and MCPServerStreamableHttp are quoted, but MCPServerSse/MCPServerStdio and the search/execution/web/discovery categories are not in the quotes."
+    },
+    "P10": {
+      "verdict": "SUPPORTED",
+      "reason": "The 'Yes (12+ tools)'/'(full toolset)' vs three 'No (BYO)' row, the no-built-in-OS-tools note, the fixed tool set with AgentTool, and the OpenAI hosted-tool tension are all quoted."
+    },
+    "P11": {
+      "verdict": "PARTIAL",
+      "reason": "Retry semantics, max_attempts=3 default, discarded writes/idempotency and the timeouts/error-handler langgraph>=1.2 points are quoted, but 'retry_policy=' on add_node is not."
+    },
+    "P12": {
+      "verdict": "PARTIAL",
+      "reason": "Interrupt/resume via Command and the super-step snapshot organised by thread are quoted, but the time-travel replay (and the interrupt() name) are not in W1.F7/W4.F5's quotes."
+    },
+    "P13": {
+      "verdict": "SUPPORTED",
+      "reason": "Input/output/tool guardrails, tripwire exceptions halting execution, blocking vs parallel guarantees, and MCP retry/failure_error_function/require_approval are all quoted."
+    },
+    "P14": {
+      "verdict": "SUPPORTED",
+      "reason": "PreToolUse, PostToolUseFailure, TypeScript-only StopFailure, disallowed_tools, bypassPermissions, denial messages and ResultMessage error subtypes are all quoted."
+    },
+    "P15": {
+      "verdict": "PARTIAL",
+      "reason": "State persistence, model-agnosticism rows and the 35k/1,350 and 8.5s/2.5s figures are quoted, but the attribution to inheriting Claude Code's whole harness is not."
+    },
+    "P16": {
+      "verdict": "SUPPORTED",
+      "reason": "Its recommendations rest on quoted points: in-memory loss, at-least-once idempotency, session impls/limits, blocking guardrails, disallowed_tools/hooks, ResultMessage.subtype and the BYO/gated-stateful tension."
+    }
+  }
+}
