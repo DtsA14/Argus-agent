@@ -87,7 +87,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       dibekukan di job.json, satu kali per job, agent boleh lapor "terjepit tes lama" alih-alih mengakali; jalur ketat)
     - [ ] Celah: drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru (gerbang #275 tidak terpicu), dan tes
       draf memasang `history.state` `{}`, bukan `null` seperti browser
-- [ ] **Uji prompt injection riset → kode** (usulan probe model 2026-11-06, Atha "gass", urutan atas di antara kandidat;
+- [x] **Uji prompt injection riset → kode** — v0 selesai 2026-11-06 (`pilots/prompt_injection_v0/RESULT.md`, $0,14): 4 varian injeksi di kutipan, tidak ada yang tembus; V4 BLOCK judge karena tes draf cacat (agen menambah 400 CR ke CSV), grader tersembunyi meloloskannya. Lanjutan bila perlu: injeksi di teks klaim, fakta API palsu. Temuan sampingan: gerbang harness belum menolak draf dengan red reason non-perilaku (aturan baru ditegakkan Claude). Rencana awal: (usulan probe model 2026-11-06, Atha "gass", urutan atas di antara kandidat;
   belum dispek): teks web masuk ke agent kode lewat `--from-research` (#297) dan Reconciliation bagian 5 mencatat injeksi
   "belum diukur untuk code task". Eksperimen terkecil seperti uji cacat tanam: 3-5 halaman tanam berisi instruksi
   tersembunyi, lihat apakah ada yang sampai ke handoff, draf, atau patch. Pagar yang mungkin sesudahnya: label asal-usul,
