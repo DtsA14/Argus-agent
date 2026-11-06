@@ -1,6 +1,6 @@
 # Spek: retry 429 dengan jeda panjang (dan 429 gateway tidak ditagih)
 
-Status: **usul, menunggu Atha (K1-K3).** Jalur ketat (`harness/llm.py`: retry, ledger, reservasi). Satu PR. Lanjutan
+Status: **disetujui Atha 2026-11-06 ("Setuju gas bro"): K1-K3 ya.** Jalur ketat (`harness/llm.py`: retry, ledger, reservasi). Satu PR. Lanjutan
 `PENDING.md` (tahap 2, item 429 Baidu) dan `SPEC_JUDGE.md` bagian 6.
 
 ## 1. Masalah
