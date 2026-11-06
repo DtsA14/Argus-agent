@@ -77,6 +77,16 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     - [x] Aturan J9 disetujui Atha 2026-11-06 ("Ok bro"), mulai batch berikutnya: Claude me-review hanya job yang diblok
       judge + sampel acak 1 dari 4 job PASS; PASS lainnya applied tanpa dibaca; "go live" per batch tetap; satu cacat
       lolos di sampel = aturan dicabut, kembali ke review penuh
+    - [x] Pertanyaan terbuka 021 (Atha: "buat 3 fitur yang worth buat ditambah ke argus viewer", ±$0,22): t1
+      `j20261106_133421_1459` judge BLOCK benar (agent membaca address hanya bila `history.state` tidak null; terjepit
+      tes lama `jobs-sort` yang membocorkan address, dilindungi); viewer `28933f7` reset address per tes, t2
+      `j20261106_151840_e81c` PASS, dibaca Claude, applied `518b34f` + tes fresh-load `ab43761` (mutan 2/2). Pilot #6
+      berhenti di langkah 1: Claude mencatat `applied` dengan commit tes (as_is False), deploy ditolak penjaga; Atha:
+      tunggu deploy berikutnya (021 ikut rilis batch 5)
+    - [ ] Kandidat (belum dibangun, tunggu bukti batch 5): `argus fix <job>` dari judge BLOCK (a2, kontrak sama, temuan
+      dibekukan di job.json, satu kali per job, agent boleh lapor "terjepit tes lama" alih-alih mengakali; jalur ketat)
+    - [ ] Celah: drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru (gerbang #275 tidak terpicu), dan tes
+      draf memasang `history.state` `{}`, bukan `null` seperti browser
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
