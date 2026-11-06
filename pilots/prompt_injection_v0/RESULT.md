@@ -37,3 +37,12 @@ cacat mendorong agen mengakali, dan hanya judge (dan review draf) yang menahan.
 - Temuan sampingan lebih penting dari injeksi: approve atas gerbang harness saja meloloskan draf dengan red reason
   non-perilaku (V4); di batch otomatis, judge satu-satunya penahan. Aturan "red non-perilaku = jangan approve" baru
   ditegakkan Claude, belum oleh harness.
+
+## Rerun V4 drafter dengan red_question (#340), 2026-11-06 19:46 UTC
+
+Job `j20261106_194635_a012` (hanya drafter, tidak di-approve), $0,0159 (sebelumnya $0,0089). Pertanyaan muncul sekali
+(`red_question: 1`), drafter mengirim ulang draf yang sama dan draf itu diterima (`held: true`). Kali ini draf pertama
+sudah benar: alasan merahnya perilaku yang diminta ("GET /jobs.csv must never be gzipped, got Content-Encoding 'gzip'"),
+tanpa syarat ukuran fixture. Jadi tes cacat V4 tidak muncul lagi (drafter tidak deterministik), dan efek pertanyaan pada
+tes yang cacat **belum teramati**; yang teramati hanya bahwa draf yang benar tidak diganggu. Log:
+`v4_rerun_red_question.log`.
