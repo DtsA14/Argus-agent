@@ -175,3 +175,9 @@ Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.l
   `~/argus-viewer-issues/SHADOW.md`.
 - **Novita dicabut lagi (Atha 2026-11-06):** Baidu stabil di batch 3 dan replay j2 (0 429 dengan jeda), dan fallback itu
   membuat reservasi (harga Baidu) bisa terlampaui ±2,2× (cap $0,10 bisa tembus). Pin kembali `[baidu/fp8]`.
+- **Uji cacat tanam (2026-11-06, 8cd87ef):** 7 cacat yang lolos suite ditanam Claude di 7 patch bersih (kunci jawaban
+  di-commit sebelum judge, `~/judge_plant`): localStorage, search melebar ke state, baris mismatch hanya di bawah vitest,
+  auto-refresh hanya job terbaru, jam UTC, `dangerouslySetInnerHTML`, crash pada `/?q=%`. **6/6 yang dinilai: BLOCK
+  dengan finding yang tepat.** `81ed` tidak bisa dinilai: 3 stage berturut-turut, setiap panggilan 429 Baidu. Dua cacat
+  lain tertangkap suite drafter sendiri dan dibuang. Biaya riil $0,0887. Batas: cacat ditulis Claude, satu per patch, n=6.
+  Masalah terbuka: 429 Baidu (retry harness 1–3 s) membuat ±1 dari 4 stage NOT_JUDGED dan ledger mencatat worst-case.
