@@ -84,3 +84,9 @@ Diperbaiki:
 Dibiarkan: 429 gateway berbayar $0 (K1, disetujui Atha); 429 provider langsung tetap worst-case sehingga empat
 percobaan bisa menghabiskan reservasi (reservasi tetap dicek sebelum setiap percobaan; ReservationExhausted, bukan
 pengiriman tanpa reservasi); duplikasi override di helper tes.
+
+## 6. Hasil
+
+Merge #326 (Atha "langsung merge kalo udah lulus verify"): verify.sh PASS 17721f3, 3059 passed, sandbox skipped 0.
+K3: judge `81ed` (cacat tanam XSS) j4 **BLOCK** dengan finding yang tepat, $0,0096, satu panggilan tanpa 429; jadi
+jeda 429 yang baru belum teruji di lapangan (akan terlihat di ledger berikutnya: `http_status` 429 dengan `charged: none`).
