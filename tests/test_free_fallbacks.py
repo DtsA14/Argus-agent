@@ -24,7 +24,7 @@ from router import research as rr  # noqa: E402
 FIRST = "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"          # free_checker's chain in config.yaml
 SECOND, THIRD = "openrouter:nvidia/nemotron-3.5-super-vl:free", "openrouter:nvidia/nemotron-3.5-lightning:free"
 PAID = "openrouter:deepseek/deepseek-v4.1-flash"
-LIMITED = [FakeHTTPError(429, "rate-limited upstream")] * 4          # LLMCaller tries a 429 4 times
+LIMITED = [FakeHTTPError(429, "rate-limited upstream")] * 3          # LLMCaller tries 3 times (a free model: no long wait)
 
 
 def checker_env(tmp_path, first, second=(), third=()):
@@ -86,7 +86,7 @@ def test_a_rate_limited_checker_moves_to_its_next_free_model(tmp_path):
     [fb] = events(job, "e1", "model_fallback")
     assert fb["model"] == FIRST and fb["next"] == SECOND
     calls = [e for e in events(job, "e1", "llm_call")]
-    assert [e["model"] for e in calls] == [FIRST] * 4 + [SECOND] and calls[-1]["status"] == "ok"
+    assert [e["model"] for e in calls] == [FIRST] * 3 + [SECOND] and calls[-1]["status"] == "ok"
 
 
 def test_the_whole_chain_rate_limited_blocks_the_job(tmp_path):
@@ -159,12 +159,12 @@ def test_an_unpriced_fallback_creates_no_job(tmp_path):
 # ---- added from the code review ----------------------------------------------------------------------------------
 
 def test_a_free_rate_limit_uses_none_of_the_reservation(tmp_path):
-    env = checker_env(tmp_path, LIMITED, LIMITED, [t.CHECK])          # 8 refusals, then the third model answers
+    env = checker_env(tmp_path, LIMITED, LIMITED, [t.CHECK])          # 6 refusals, then the third model answers
     env.cfg["research_job"]["checker"]["attempt_tokens"] = 30000       # less than one worst case per refusal
     job = env.start(profile="free")
     assert job.data["state"] == rr.REPORT_READY
     refused = [e for e in events(job, "e1", "llm_call") if e.get("http_status") == 429]
-    assert len(refused) == 8 and all(e["tokens"] == 0 and e["usd_nano"] == 0 for e in refused)
+    assert len(refused) == 6 and all(e["tokens"] == 0 and e["usd_nano"] == 0 for e in refused)
 
 
 def test_a_stage_resumed_on_a_model_no_longer_in_its_chain_stops(tmp_path):

@@ -26,6 +26,8 @@ def make(tmp_path, script, *, model_ref=None, est_in=100, **llm):
     cfg["llm"].update(llm)
     if model_ref:
         cfg["roles"]["worker"]["model"] = model_ref
+        if model_ref.endswith(":free"):
+            cfg["gateway"]["free_roles"] = ["worker"]
     waits = []
     fake = ScriptedChatModel(script=list(script))
     log = tmp_path / "e.jsonl"
@@ -91,12 +93,48 @@ def test_other_errors_keep_their_number_of_attempts(tmp_path):
     assert len(fake.calls) == 3
 
 
-def test_a_500_after_two_429s_stops_at_the_other_errors_limit(tmp_path):
-    caller, fake, _, _ = make(tmp_path, [FakeHTTPError(429), FakeHTTPError(429), FakeHTTPError(500), reply()],
+def test_rate_limits_and_other_errors_are_counted_apart(tmp_path):
+    """Review: one kind's retries must not use up the other's, and a 429's backoff starts from its own count."""
+    caller, fake, waits, _ = make(tmp_path, [FakeHTTPError(500), FakeHTTPError(500), FakeHTTPError(429),
+                                             FakeHTTPError(429), FakeHTTPError(429), reply()],
+                                  attempts=3, rate_limit_attempts=4, base_delay=1.0)
+    caller.call(MSGS, res())
+    assert len(fake.calls) == 6
+    assert all(w <= 3 for w in waits[:2]) and 15 <= waits[2] <= 45 and 30 <= waits[3] <= 90
+
+
+def test_two_429s_then_three_500s_fail_on_the_third_500(tmp_path):
+    caller, fake, _, _ = make(tmp_path, [FakeHTTPError(429)] * 2 + [FakeHTTPError(500)] * 3 + [reply()],
                               attempts=3, rate_limit_attempts=4)
+    with pytest.raises(LLMCallFailed, match="after 5 attempts"):
+        caller.call(MSGS, res())
+    assert len(fake.calls) == 5
+
+
+def test_a_rate_limit_error_without_a_status_gets_the_long_wait(tmp_path):
+    class RateLimitError(Exception):
+        pass
+    caller, _, waits, _ = make(tmp_path, [RateLimitError("slow down"), reply()])
+    caller.call(MSGS, res())
+    assert 15 <= waits[0] <= 45
+
+
+def test_a_free_gateway_model_keeps_the_short_wait_and_three_attempts(tmp_path):
+    """Review: a free model's chain falls back to the next free model, which is faster than waiting."""
+    caller, fake, waits, _ = make(tmp_path, [FakeHTTPError(429)] * 9, attempts=3, base_delay=1.0,
+                                  model_ref="openrouter:nvidia/nemotron-3.5-lightning:free")
     with pytest.raises(LLMCallFailed, match="after 3 attempts"):
         caller.call(MSGS, res())
-    assert len(fake.calls) == 3
+    assert len(fake.calls) == 3 and all(w <= 3 for w in waits)
+
+
+@pytest.mark.parametrize("after", ["-1", "nan", "inf"])
+def test_a_retry_after_that_is_negative_or_not_finite_is_ignored(tmp_path, after):
+    err = FakeHTTPError(429)
+    err.response.headers = {"retry-after": after}
+    caller, _, waits, _ = make(tmp_path, [err, reply()])
+    caller.call(MSGS, res())
+    assert 15 <= waits[0] <= 45
 
 
 # G5
@@ -143,9 +181,11 @@ def test_every_attempt_is_started_then_recorded_also_when_not_charged(tmp_path):
 # G8
 @pytest.mark.parametrize("bad", [{"rate_limit_delay_s": -1}, {"rate_limit_attempts": 0},
                                  {"rate_limit_delay_s": 30, "rate_limit_max_delay_s": 10},
-                                 {"rate_limit_attempts": "four"}, {"rate_limit_delay_s": True}])
+                                 {"rate_limit_attempts": "four"}, {"rate_limit_delay_s": True},
+                                 {"rate_limit_max_delay_s": float("inf")}, {"rate_limit_delay_s": float("nan")},
+                                 {"attempts": 0}, {"base_delay": -1}])
 def test_a_bad_rate_limit_setting_is_refused_before_anything_is_sent(tmp_path, bad):
-    with pytest.raises(ConfigError, match="rate_limit"):
+    with pytest.raises(ConfigError, match="llm\\."):
         make(tmp_path, [reply()], **bad)
 
 
