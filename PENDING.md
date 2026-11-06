@@ -74,7 +74,9 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     - [x] Uji cacat tanam: 6/6 tertangkap (spek bagian 6)
     - [x] 429: #326 (SPEC_RATE_LIMIT_RETRY), verify PASS 17721f3 (3059), mutants 16/16; `81ed` sesudahnya BLOCK benar
       (7/7 cacat tanam), panggilan itu tanpa 429 jadi retry baru belum teruji live
-    - [ ] Aturan J9 (Claude hanya me-review BLOCK + sampel acak): keputusan Atha
+    - [x] Aturan J9 disetujui Atha 2026-11-06 ("Ok bro"), mulai batch berikutnya: Claude me-review hanya job yang diblok
+      judge + sampel acak 1 dari 4 job PASS; PASS lainnya applied tanpa dibaca; "go live" per batch tetap; satu cacat
+      lolos di sampel = aturan dicabut, kembali ke review penuh
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
