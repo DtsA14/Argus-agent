@@ -53,6 +53,7 @@ def cfg_llm(**budget):
     cfg["roles"]["worker"]["model"] = "fake:scripted"
     cfg["token_estimates"]["worker"] = 20_000
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     cfg["budget"].update(budget)
     return cfg
 
@@ -398,6 +399,7 @@ def test_llm_worker_gets_its_llm_estimate_as_reservation(tmp_path):
     cfg["impl"]["worker"] = "llm"
     cfg["roles"]["worker"]["model"] = "fake:scripted"
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     r, _, evs = run(tmp_path, script, cfg=cfg)
     assert r["status"] == "DONE", [e for e in evs if e["event"] in ("worker_failed", "llm_call")]
     assert not any(e["event"] == "llm_call" and e["status"] == "refused" for e in evs)

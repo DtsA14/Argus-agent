@@ -65,6 +65,7 @@ def test_a_worker_overspend_is_a_durable_failed_budget(tmp_path):
     cfg["roles"]["worker"]["model"] = "fake:scripted"
     cfg["token_estimates"]["worker"] = 20_000
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     # Every worker's first reply is billed 30,000 input tokens against a 20,000-token reservation.
     over = {"tool_calls": [{"name": "ReadData", "args": {}, "id": "r1"}],
             "usage": {"input_tokens": 30_000, "output_tokens": 50}}

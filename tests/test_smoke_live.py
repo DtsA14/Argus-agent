@@ -44,6 +44,7 @@ def fake_cfg(max_usd=5.0):
         cfg["roles"][role]["model"] = "fake:scripted"
     cfg["token_estimates"].update(orchestrator=12_000, worker=20_000)
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     cfg["budget"]["max_usd"] = max_usd
     return cfg
 

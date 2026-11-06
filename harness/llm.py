@@ -198,6 +198,19 @@ def retry_after_seconds(exc):
         return None
 
 
+def _rate_limit_settings(llm):
+    delay, top, attempts = (llm.get("rate_limit_delay_s", 30), llm.get("rate_limit_max_delay_s", 120),
+                            llm.get("rate_limit_attempts", 4))
+    for name, v in (("rate_limit_delay_s", delay), ("rate_limit_max_delay_s", top)):
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0:
+            raise ConfigError(f"llm.{name} must be a number of seconds, 0 or more, not {v!r}")
+    if top < delay:
+        raise ConfigError(f"llm.rate_limit_max_delay_s ({top}) must be at least llm.rate_limit_delay_s ({delay})")
+    if isinstance(attempts, bool) or not isinstance(attempts, int) or attempts < 1:
+        raise ConfigError(f"llm.rate_limit_attempts must be a whole number, 1 or more, not {attempts!r}")
+    return float(delay), float(top), attempts
+
+
 def _text(m):
     """Everything in a message that is sent to the provider: content, tool calls (name + args), ids."""
     # sort_keys: the memo stores replies with sorted keys, so a replayed reply must hash like the original or the
@@ -325,6 +338,8 @@ class LLMCaller:
         self.min_output = int(llm.get("min_output_tokens", 64))
         self.attempts = int(llm.get("attempts", 3))
         self.base_delay = float(llm.get("base_delay", 1.0))
+        # SPEC_RATE_LIMIT_RETRY R1-R2: a 429 waits long and has its own number of attempts
+        self.rl_delay, self.rl_max, self.rl_attempts = _rate_limit_settings(llm)
         self.failed_charge = llm.get("failed_attempt_charge", "worst_case")
         self.window = window_for(cfg, self.ref.provider)
         self.cache = prompt_cache_for(cfg, role, self.ref)       # D5; raises ConfigError before anything is sent
@@ -390,6 +405,20 @@ class LLMCaller:
 
     # ---- the call ------------------------------------------------------------------
 
+    def _attempts_for(self, exc):
+        """How many attempts the error just seen allows: a 429 its own (R2), any other transient error `attempts`."""
+        return self.rl_attempts if http_status(exc) == 429 else self.attempts
+
+    def _wait(self, exc, attempt):
+        """The pause before the next attempt: Retry-After when sent, else exponential with jitter; a 429 starts at
+        rate_limit_delay_s and every 429 wait is at most rate_limit_max_delay_s (R1)."""
+        wait = retry_after_seconds(exc)
+        if http_status(exc) == 429:
+            if wait is None:
+                wait = self.rl_delay * 2 ** (attempt - 1) * (0.5 + random.random())
+            return min(wait, self.rl_max)
+        return self.base_delay * 2 ** (attempt - 1) * (0.5 + random.random()) if wait is None else wait
+
     def call(self, messages, reservation, *, tools=None, tool_choice=None, meta=None):
         meta = dict(meta or {})
         bad = sorted(set(meta) - META_KEYS)
@@ -407,7 +436,7 @@ class LLMCaller:
         def emit(event, **fields):
             self.log.emit(event, **meta, **system, **fields)  # system fields last; meta cannot collide
 
-        for attempt in range(1, self.attempts + 1):
+        for attempt in range(1, max(self.attempts, self.rl_attempts) + 1):
             # A violated reservation needs no special case: its tokens or USD left are negative, so the
             # output cap below is negative and the call is refused before sending.
             try:
@@ -418,11 +447,10 @@ class LLMCaller:
                      error=f"{type(exc).__name__}: {str(exc)[:200]}")
                 if not transient:
                     raise LLMCallFailed(f"{self.role}: counting the input failed: {type(exc).__name__}: {exc}") from exc
-                if attempt == self.attempts:
+                if attempt >= self._attempts_for(exc):
                     raise LLMCallFailed(f"{self.role}: counting the input still failing after {attempt} attempts: "
                                         f"{exc}") from exc
-                wait = retry_after_seconds(exc)
-                self.sleep(self.base_delay * 2 ** (attempt - 1) * (0.5 + random.random()) if wait is None else wait)
+                self.sleep(self._wait(exc, attempt))
                 continue
             if reservation.max_input is not None and est_in > reservation.max_input:
                 emit("llm_call", status="refused", reason="input_limit", attempt=attempt, est_input=est_in,
@@ -457,8 +485,10 @@ class LLMCaller:
                 transient = is_transient(exc)
                 status_code = http_status(exc)
                 tok, nano = (worst_tokens, worst_nano) if self.failed_charge == "worst_case" else (0, 0)
-                if self.gateway is not None and self.gateway["free"] and status_code == 429:
-                    tok, nano = 0, 0     # a free model's rate limit: refused unprocessed, and nothing to bill
+                if self.gateway is not None and status_code == 429:
+                    # SPEC_RATE_LIMIT_RETRY R3 (free and paid models): the gateway refused it unprocessed, nothing
+                    # to bill. A direct provider's 429 stays worst case.
+                    tok, nano = 0, 0
 
                 try:
                     emit("llm_call", call_id=call_id, status="transient_error" if transient else "error",
@@ -473,12 +503,9 @@ class LLMCaller:
                     reservation.charge(tok, nano)
                 if not transient:
                     raise LLMCallFailed(f"{self.role}: {type(exc).__name__}: {exc}") from exc
-                if attempt == self.attempts:
+                if attempt >= self._attempts_for(exc):
                     raise LLMCallFailed(f"{self.role}: still failing after {attempt} attempts: {exc}") from exc
-                wait = retry_after_seconds(exc)
-                if wait is None:
-                    wait = self.base_delay * 2 ** (attempt - 1) * (0.5 + random.random())
-                self.sleep(wait)
+                self.sleep(self._wait(exc, attempt))
                 continue
 
             latency = round(time.monotonic() - t0, 3)

@@ -46,6 +46,7 @@ def cfg(cache=True, model="fake:scripted", **llm_over):
     c = load_config()
     c["roles"]["coder"]["model"] = model
     c["llm"]["base_delay"] = 0
+    c["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     c["llm"]["prompt_cache"] = {"enabled": cache, "ttl": "5m"}
     c["llm"].update(llm_over)
     return c
