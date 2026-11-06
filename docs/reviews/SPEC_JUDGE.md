@@ -158,3 +158,9 @@ Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.l
   $0,1000 (429 ditagih worst-case), biaya riil $0,0269. Perbaikan: batas teks 500/1000 (GLM melebihi batas yang
   disebut ±15–25%, dan setiap penolakan = satu panggilan reasoning lagi). Putaran 2 diulang pada salinan baru; aturan
   berhenti memakai biaya riil (`charged: actual`), ledger ikut dilaporkan.
+- **Putaran 2, percobaan 2 (48f1e27):** 4 PASS (`ca50`, `d97e`, `837b`, `4e83`), 7 NOT_JUDGED karena 429 Baidu (tiga
+  percobaan retry dalam 1–3 s, semuanya kena). Biaya riil ±$0,09; ledger $0,78 (setiap 429 ditagih worst-case). Atha
+  2026-11-06: "1 + 2": ulang 7 job itu (j2, satu per satu dengan jeda) dan pasang fallback **Novita fp8**
+  ($0,63/$1,98) di belakang Baidu (`order = only = [baidu/fp8, novita/fp8]`, tetap tanpa provider lain). Harga reservasi
+  tetap harga Baidu: panggilan yang dilayani Novita bisa ±2,2× reservasinya (paling buruk ±$0,07), ditagih penuh dari
+  `usage.cost`; cap $0,10 tetap.

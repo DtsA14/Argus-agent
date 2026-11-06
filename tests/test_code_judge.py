@@ -325,14 +325,15 @@ def test_a_crashed_judge_continues_without_buying_again(tmp_path, point, again):
 
 # ---- G10: the gateway pin --------------------------------------------------------------------------------------------
 
-def test_the_judge_model_is_pinned_to_its_upstream_with_no_fallback():
+def test_the_judge_model_is_pinned_to_its_upstreams_with_no_other_provider():
     from models import gateway
     from models.registry import ModelRef
     c = load_config()
     ref = ModelRef.parse(c["roles"]["code_judge"]["model"])
-    assert gateway.is_gateway(c, ref) and gateway.entry(c, ref) == {"upstream": ["baidu/fp8"], "free": False}
+    assert gateway.is_gateway(c, ref) and gateway.entry(c, ref) == {"upstream": ["baidu/fp8", "novita/fp8"],
+                                                                     "free": False}
     p = gateway.request_params(c, ref, {})["extra_body"]["provider"]
-    assert p["only"] == ["baidu/fp8"] and p["allow_fallbacks"] is False
+    assert p["order"] == p["only"] == ["baidu/fp8", "novita/fp8"] and p["allow_fallbacks"] is False
     assert gateway.fallback_chain(c, "code_judge") == [str(ref)]
     gateway.check_use(c, "code_judge", ref)                       # a paid model: no free-role rule applies
     assert c["prices"][str(ref)]["input"] > 0

@@ -368,7 +368,8 @@ roles:
     timeout_s: 480
   code_judge:
     # SPEC_JUDGE J7 (Atha 2026-11-05): GLM-5.3, another family than the drafter's and the agent's DeepSeek, through
-    # OpenRouter pinned to Baidu fp8 (gateway_models). No fallback: a failed provider ends the stage NOT_JUDGED.
+    # OpenRouter pinned to Baidu fp8, then Novita fp8 (gateway_models; Atha 2026-11-06 after replay 429s). No provider
+    # outside that list: when both fail, the stage ends NOT_JUDGED.
     model: "openrouter:z-ai/glm-5.3"
     # Replay 2026-11-05: 4/11 calls spent all 16000 output tokens on reasoning (~187 s) and never submitted.
     max_output_tokens: 32000
@@ -428,7 +429,9 @@ prices:
   # SPEC_JUDGE J7, checked 2026-11-05 on openrouter.ai/api/v1/models/z-ai/glm-5.3/endpoints: Baidu fp8 at its discounted
   # price (80% off Z.AI's $1.40/$4.40; K2). If the discount ends, the ledger still takes the gateway's usage.cost when it
   # is larger, but a reservation made at this price (and on a heuristic token count, not GLM's tokenizer) can be
-  # exceeded: the judge's small $0.10 cap keeps such an overrun small; it is not an absolute bound.
+  # exceeded: the judge's small $0.10 cap keeps such an overrun small; it is not an absolute bound. The same holds for
+  # the Novita fp8 fallback ($0.63/$1.98, checked 2026-11-06): a call it serves costs up to ~2.2x this reservation
+  # (worst ~$0.07 at 32000 output tokens), charged in full from usage.cost.
   "openrouter:z-ai/glm-5.3":                           {input: 0.28, output: 0.88, cache_read: 0.052}
 
 # SPEC_GATEWAY_PROVIDER: the models a gateway may serve, each pinned to upstream provider slugs (no fallback), and
@@ -440,7 +443,7 @@ gateway_models:
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {upstream: [nvidia], free: true}
   "openrouter:nvidia/nemotron-3.5-lightning:free":     {upstream: [nvidia], free: true}
   "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
-  "openrouter:z-ai/glm-5.3":                           {upstream: [baidu/fp8]}
+  "openrouter:z-ai/glm-5.3":                           {upstream: [baidu/fp8, novita/fp8]}
 gateway:
   free_roles: [free_planner, free_worker, free_checker]   # Atha 2026-11-04 (research_free, split per stage)
   cost_drift_warn: 0.10         # price_drift when the gateway's cost and ours differ by more than this share
