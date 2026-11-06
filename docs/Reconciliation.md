@@ -1,4 +1,4 @@
-# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30)
+# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30, isi diperbarui sampai 2026-11-06)
 
 Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` sesudah #266. Status di bawah berasal
 dari kode, dari bukti di `verification/` dan `pilots/`, dan dari review di `docs/reviews/`. Laporan sebelumnya diarsipkan:
@@ -12,7 +12,7 @@ Yang berubah sejak 2026-10-27: **arah coding agent untuk production** (2026-10-2
 14 task di `main`; batch SWE 4 dan 5 serta dev set 1–2 (regresi); ReadDocs (#229), stage riset (#242), counter reasoning (#240),
 harga peak (#241); **staging** (#244, #246, #249, #251, #258) dengan monitor dan notifikasi (#259, #260); **aplikasi kedua
 `argus-viewer`** (React PWA, JS divalidasi dengan vitest di `pwa_node22`, #256, #257, #261, #263): dua issue ditulis agen,
-dirilis ke staging dan **dipakai Atha di HP** lewat SSH port forwarding.
+dirilis ke staging dan **dipakai Atha di HP** lewat SSH port forwarding. Tambahan sampai 2026-11-06: 21 issue viewer dikerjakan Argus (001-020 live; 021 di `main`, ikut rilis berikutnya), `argus judge` (#316) dan aturan review J9.
 
 Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu, sisanya belum) · `[ ]` belum dimulai.
 
@@ -25,11 +25,11 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | General-task agent | `[x]` | `codetask/`, `acceptance/`; Eval Set v1 16/16 | Eval Set v1 jenuh: regresi saja |
 | **M4** multi-agent dengan dependensi | `[ ]` | Graf riset punya fan-out tanpa dependensi; code task satu agen | Belum ada bukti single-agent menjadi penghalang |
 | **M5** observability dan benchmark | `[~]` | Ledger per panggilan; `audit_run.py`, `failure_trace.py`, `pilot_report.py`; keputusan manusia dengan waktunya di `job.json` (#185; `argus-ledger` 014 menampilkannya); `swe_grade.py`; `argus-ledger report` (biaya per stage); jumlah keputusan per pilot di setiap `RESULT.md` | Tracing/dashboard; benchmark single vs multi; **menit kerja Atha** belum ditanyakan; **eval set yang tidak jenuh** |
-| **M6** repo → PR | `[x]` MVP | Repo Argus (pilot M6, W2b, router); **sympy** (SWE, bagian 4b); **`argus-ledger`** Python/FastAPI, 14 task (bagian 4c); **`argus-viewer`** JS/React, 2 task, vitest di `pwa_node22` (bagian 4c) | Tingkat sukses umum (SWE tanpa bocoran sampel kecil); PR/apply tetap oleh manusia/Claude (disengaja); `argus apply` belum ada; berkas yang dilindungi di repo JS dicek skrip di luar harness; vitest: tes lama belum bisa diubah, tanpa Playwright |
+| **M6** repo → PR | `[x]` MVP | Repo Argus (pilot M6, W2b, router); **sympy** (SWE, bagian 4b); **`argus-ledger`** Python/FastAPI, 14 task (bagian 4c); **`argus-viewer`** JS/React, 21 issue (001-020 live), vitest di `pwa_node22` (bagian 4c) | Tingkat sukses umum (SWE tanpa bocoran sampel kecil); PR/apply tetap oleh manusia/Claude (disengaja); `argus apply` belum ada; berkas yang dilindungi ditegakkan harness (`.argus/protected`, #270); tes lama tidak bisa diubah agen, tanpa Playwright |
 | M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat: layanan approval bersama UI kontrol (bagian 7) |
 | M8 penemuan tool, memori prosedural | `[ ]` | – | Seluruhnya (ADR-003) |
 | M9 deployment terkendali | `[~]` (staging) | `argus stage deploy\|rollback\|restart\|check\|status\|monitor\|report` (#244, #246, #249, #251, #258): hanya commit job `APPLIED` apa adanya, container tanpa jaringan/read-only/non-root di Unix socket, peer = pid container, data asli lewat snapshot allowlist, monitor 15 menit, **notifikasi ntfy** sesudah 3 gagal (#259, #260), namespace per direktori staging (#258). **Aplikasi statis** (#257, #261, #263): build tanpa jaringan di `pwa_node22`, cek artifact (A4), `sw.js` dipin, swap `current` atomik sesudah smoke kandidat, proxy `127.0.0.1:8710` GET/HEAD (Host, CSP, `no-store` untuk API, hanya `/sw.js` boleh jadi service worker), unit `systemd --user`. Dua aplikasi, pilot staging #1, upgrade #1, data asli #1, viewer #1–#2 | **Production** (DNS/TLS, pengguna, kredensial): ditunda (keputusan 2026-10-30, pemicu di bagian 7); smoke kandidat tidak menguji lingkungan unit systemd |
-| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web paralel, sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi sejak 2026-11-03 (bagian 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
+| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web berurutan (paralel belum, PENDING), sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi sejak 2026-11-03 (bagian 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
 | Capability pack (gambar, video/audio, game) | `[ ]` | – | Seluruhnya; gate non-kode ADR-006 |
 
 M4, M7, M8, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (keputusan 2026-10-21, ditegaskan 2026-10-24).

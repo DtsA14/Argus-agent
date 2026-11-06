@@ -4,7 +4,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status). Riwayat butir yang sudah selesai (bukti, angka, PR): [`docs/reviews/PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md)
 (sampai 2026-10-30), [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) (sebelumnya) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-05 (tahap 1 riset "Agentic AI", #307-#309). Sebelumnya: 2026-10-30 malam, jalur cepat sesudahnya (#268) (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
+Terakhir diperbarui: 2026-11-06 (judge, retry 429 #326, aturan J9, pertanyaan terbuka 021, self-review). Sebelumnya: 2026-11-05 (tahap 1 riset "Agentic AI", #307-#309). Sebelumnya: 2026-10-30 malam, jalur cepat sesudahnya (#268) (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
 notifikasi monitor #259/#260). Dirapikan: semua butir `[x]` pindah ke arsip 2026-10-30.
 
 Jalur cepat 2026-10-30 (#268): `audit_run.py` membangun ulang balasan yang ditolak harness (tanpa tool call → `NUDGE`, call
@@ -40,7 +40,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 ### Keputusan Atha yang ditunggu
 
 - [~] **Deep research, `argus research`** (Atha 2026-11-03: arah general-purpose agent; keputusan di Reconciliation
-  bagian 7). Sudah jalan: `SPEC_RESEARCH_JOB` (planner, worker paralel, sintesis s1, checker e1, gate G1/G2/G4), web lewat
+  bagian 7). Sudah jalan: `SPEC_RESEARCH_JOB` (planner, worker berurutan, sintesis s1, checker e1, gate G1/G2/G4), web lewat
   DeepSeek Search/Fetch (#285-#289), gateway OpenRouter dengan profil `deepseek`, `deepinfra` dan `free`. Eval v0
   (`docs/reviews/RESEARCH_EVAL_V0.md`, #290): `deepinfra` 8/8 benar; fix #291 (checker free di Nemotron, aturan kutipan),
   #292 (submit terakhir menyimpan temuan yang lolos), rerun R2/R5/R8 (#293): e1 selesai 6/6, free tanpa laporan kosong.
@@ -71,7 +71,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     - [x] #316 `argus judge`; replay J8 (#317 32k token, #318 aturan BLOCK, #319 batas teks 500/1000, #320 fallback
       Novita): `097d` dan `1808` BLOCK, 8/8 bersih PASS, biaya riil ±$0,47 total (spek bagian 6)
     - [x] J9 shadow batch 3: 4 applied, Claude dan judge sepakat 4/4, tanpa blok asli (spek bagian 6)
-    - [x] Uji cacat tanam: 6/6 tertangkap (spek bagian 6)
+    - [x] Uji cacat tanam: 6/6 tertangkap (spek bagian 6); 7/7 sesudah rerun `81ed` (butir berikut)
     - [x] 429: #326 (SPEC_RATE_LIMIT_RETRY), verify PASS 17721f3 (3059), mutants 16/16; `81ed` sesudahnya BLOCK benar
       (7/7 cacat tanam), panggilan itu tanpa 429 jadi retry baru belum teruji live
     - [x] Aturan J9 disetujui Atha 2026-11-06 ("Ok bro"), mulai batch berikutnya: Claude me-review hanya job yang diblok
