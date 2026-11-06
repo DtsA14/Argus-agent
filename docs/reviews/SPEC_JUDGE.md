@@ -153,3 +153,8 @@ Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.l
 - **Replay putaran 2 (j3)**: 11 job, ambang J8 sama, batas baru $0,05 per job dan $0,25 total untuk putaran ini.
   Peringatan: prompt disetel sesudah melihat dua kasus ini, jadi n=2 makin lemah sebagai bukti; shadow batch 3 (J9) uji
   yang sebenarnya. Bila gagal lagi: ganti model sekali (`openai/gpt-5.6-luna`, prompt baru), lalu berhenti dan lapor.
+- **Putaran 2, percobaan 1 (2026-11-06, 27bb49e):** `097d` submit pertama **BLOCK** dengan finding yang tepat, tetapi
+  ditolak gerbang (finding 352 karakter, batas 300); panggilan berikutnya tiga kali 429 dari Baidu → NOT_JUDGED. Ledger
+  $0,1000 (429 ditagih worst-case), biaya riil $0,0269. Perbaikan: batas teks 500/1000 (GLM melebihi batas yang
+  disebut ±15–25%, dan setiap penolakan = satu panggilan reasoning lagi). Putaran 2 diulang pada salinan baru; aturan
+  berhenti memakai biaya riil (`charged: actual`), ledger ikut dilaporkan.
