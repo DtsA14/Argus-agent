@@ -2,6 +2,6 @@ Upgrade 2 of ledger_py312 (docs/reviews/SPEC_DEP_UPGRADE_V0.md U1, section 6.1):
 fastapi 0.143.2 -> 0.162.0 and starlette 1.8.0 -> 1.10.0 (uploaded 2026-10-23 and 2026-10-24: usable from 2026-11-07
 15:05 UTC under the two-week rule). Their requirements (fastapi: starlette>=0.46, pydantic>=2.9, typing-inspection>=0.4.2,
 annotated-doc>=0.0.2, opentelemetry-api>=1.44; starlette: anyio<5,>=4) are met by the up1 pins. Same base as up1.
-Pre-check 2026-11-04 (scratch venv, not this image): argus-ledger Stage 13 behaves as on up1; see
-pilots/research_need_v0/CANDIDATES.md for the behaviours that differ. Built by scripts/build_env_from_base.sh
+Pre-check 2026-11-04 (scratch venv, not this image): argus-ledger Stage 13 passes and behaves as on up1 (it uses
+none of the framework behaviours that differ; those are in pilots/research_need_v0/CANDIDATES.md). Built by scripts/build_env_from_base.sh
 ledger_py312_up2; checked by scripts/check_env_image.py ledger_py312_up2. Not in web.environments.

@@ -621,6 +621,27 @@ def test_rollback_from_upgrade_2_restores_upgrade_1_on_its_recorded_image(tmp_pa
                        (first, IMAGES["ledger_staging_up1"])]
 
 
+def test_an_upgrade_2_check_covers_the_upgrade_2_runtime_image(tmp_path, checkable):
+    st, jid, commit = checkable
+    out = pytest_output(tmp_path, "def test_a():\n    pass\n")
+    rec = sg.check(jid, "ledger_py312_up2", cfg={}, jobs_dir=tmp_path / "jobs", staging=st,
+                   run=lambda argv, workdir, cfg: out)
+    assert rec["ok"] is True and rec["image"] == SANDBOX_UP2, rec
+    assert rec["runtime"] == "ledger_staging_up2" and rec["runtime_image"] == IMAGES["ledger_staging_up2"], rec
+
+
+def test_an_upgrade_2_check_made_for_another_runtime_image_does_not_count(tmp_path, repo, two_runtimes):
+    r, c = repo
+    st, images, started = two_runtimes
+    jobs = tmp_path / "jobs"
+    jid = applied_job(jobs, "jb", r, c["good2"])
+    passed_check(st, c["good2"], environment="ledger_py312_up2", image=SANDBOX_UP2,
+                 runtime_image=IMAGES["ledger_staging_up1"])             # right environment, the up1 runtime's image
+    with pytest.raises(sg.Refused, match="no passed `argus stage check`"):
+        sg.deploy(jid, cfg={}, deps=deps(), jobs_dir=jobs, staging=st, runtime="ledger_staging_up2")
+    assert started == [] and st.releases() == {}
+
+
 @pytest.mark.parametrize("runtime", ["ledger_py312_up1", "ledger_py312_up2", "argus", "ledger_staging_up9"])
 def test_only_a_staging_runtime_is_deployed_on(tmp_path, repo, two_runtimes, runtime):
     r, c = repo
@@ -733,6 +754,28 @@ def test_rollback_across_an_upgrade_in_the_real_containers(tmp_path, tested_repo
         assert image(second) == sg.runtime_image(real_cfg, "ledger_staging_up1") and st.running() == [TEST_PREFIX + second]
         assert sg.rollback(cfg=real_cfg, deps=deps(), staging=st) == first
         assert image(first) == sg.runtime_image(real_cfg) and st.running() == [TEST_PREFIX + first]
+        assert all(ok for _, ok, _ in st.smoke(first))
+    finally:
+        for release in st.releases():
+            st.run("rm", "-f", TEST_PREFIX + release)
+
+
+def test_upgrade_2_is_checked_and_runs_in_its_real_images_and_rolls_back_to_upgrade_1(tmp_path, tested_repo, real_cfg):
+    r, c = tested_repo
+    jobs, st = tmp_path / "jobs", with_fixture(Staging(tmp_path / "staging"))
+    image = lambda rel: json.loads(st.run("inspect", TEST_PREFIX + rel)[1])[0]["Image"]   # noqa: E731
+    try:
+        ja = applied_job(jobs, "ja", r, c["good"])
+        assert sg.check(ja, "ledger_py312_up1", cfg=real_cfg, jobs_dir=jobs, staging=st)["ok"]
+        first = sg.deploy(ja, cfg=real_cfg, deps=deps(), jobs_dir=jobs, staging=st, runtime="ledger_staging_up1")
+        jb = applied_job(jobs, "jb", r, c["good2"])
+        rec = sg.check(jb, "ledger_py312_up2", cfg=real_cfg, jobs_dir=jobs, staging=st)
+        assert rec["ok"] and rec["runtime_image"] == sg.runtime_image(real_cfg, "ledger_staging_up2"), rec
+        second = sg.deploy(jb, cfg=real_cfg, deps=deps(), jobs_dir=jobs, staging=st, runtime="ledger_staging_up2")
+        assert image(second) == sg.runtime_image(real_cfg, "ledger_staging_up2") and st.running() == [TEST_PREFIX + second]
+        assert all(ok for _, ok, _ in st.smoke(second))
+        assert sg.rollback(cfg=real_cfg, deps=deps(), staging=st) == first
+        assert image(first) == sg.runtime_image(real_cfg, "ledger_staging_up1") and st.running() == [TEST_PREFIX + first]
         assert all(ok for _, ok, _ in st.smoke(first))
     finally:
         for release in st.releases():
