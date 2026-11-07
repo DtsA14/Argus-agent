@@ -183,6 +183,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 - [ ] **Kunci HP di `authorized_keys` VM** (2026-10-30): `restrict,port-forwarding,permitopen="127.0.0.1:8710"`, perintah
   paksa `sleep`; dites. Bukan di repo; dicatat di sini agar dicabut bila HP hilang (`~/.ssh/authorized_keys`, baris
   `iphone-viewer`)
+- [ ] `argus applied` tidak bisa dikoreksi: job 021 viewer (`j20261106_151840_e81c`) tercatat dengan commit tes `ab43761`, bukan patch `518b34f`, jadi `viewer-deploy` menolak (pilot viewer p6). Atha 2026-11-07: tunggu batch 5 (rilis berikutnya membawa 021). Kandidat jalur ketat bila terulang: `argus applied --amend <commit>` hanya untuk APPLIED yang belum di-deploy, commit baru wajib `as_is` True, koreksi tercatat di log
 - [ ] `argus code` yang ditolak karena key (tanpa `--key-file`) tetap membuat job `NEW` (`j20261030_164146_9b3d`, di-abandon);
   layar penolakan tidak menyebutnya. Kecil, tetapi menyentuh jalur key (`live()`): jalur ketat
 
