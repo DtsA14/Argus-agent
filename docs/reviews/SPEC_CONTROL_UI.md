@@ -42,6 +42,10 @@ argus-ledger ditulis agen Argus (shadow batch), jadi fase 1 sekalian menjadi pek
   ≤ 256 KB per berkas (lebih besar: dipotong di batas baris dengan penanda `[dipotong harness: N byte]`); lolos pemindaian
   pola key yang sudah ada (gagal → berkas tidak dipublikasikan, job tetap ada, alasan di manifest tanpa nilai). Berkas
   lain di `runs/` tetap tidak ikut.
+  **Integritas (masukan review GPT, Atha 2026-11-07):** review, `draft.json` dan sha berasal dari **stage yang sama**
+  (`runs/<job>-dN/`). Saat snapshot dibaca, sha kanonik `draft.json` di direktori itu dihitung ulang dan harus sama dengan
+  `stages.dN.draft_sha256` di `job.json`; berbeda atau tidak terbaca → review stage itu tidak dipublikasikan (alasan di
+  manifest). Jadi sha yang tampil di HP selalu sha draf yang reviewnya tampil. `DRAFT_REVIEW.md` sendiri tidak memuat sha.
 - **D2 (argus-ledger, issue untuk agen, jalur cepat):** `GET /api/jobs/<id>/draft` → `{"draft_sha256", "review": {"sha256",
   "text"}, "judge": null | {"sha256", "text"}}` dari snapshot; 404 bila tidak ada.
 - **D3 (harness, jalur ketat, proxy):** allowlist A1 ditambah tepat satu bentuk, `/api/jobs/<id>/draft`. Aturan lain proxy
@@ -60,6 +64,8 @@ tidak ada pekerjaan untuk agen.
 **Jaminan fase 1 (jalur A), dites dan di-mutant:**
 - F1. Tidak ada berkas dari `runs/` selain `DRAFT_REVIEW.md` dan `JUDGE-*.md` di snapshot; tidak ada berkas lewat
   symlink/hardlink (pola `openat`/`O_NOFOLLOW` yang sudah ada).
+- F1b. Sha yang dipublikasikan = sha kanonik `draft.json` stage yang sama, dihitung ulang (D1 integritas); mutant: sha
+  dari stage lain atau dari `approval` → tes gagal.
 - F2. Berkas dengan pola key tidak dipublikasikan; manifest menyebut alasan tanpa nilai.
 - F3. Batas ukuran dan karakter kontrol seperti di D1.
 - F4. Proxy: path baru hanya untuk id job yang sah; varian lain (`/draft/x`, query, trailing slash, `..`) 404; POST 405.
@@ -84,9 +90,11 @@ Aturan yang sudah pasti untuk semua aksi:
   gerbang yang ada tetap berlaku: sha draf, penanda konflik, cap, ledger, crash-resume. Service tidak punya jalan pintas.
 - C2. Hanya `POST`, dengan token CSRF per halaman, cek `Origin` dan `Host` (`127.0.0.1:8711`/`localhost:8711`), tanpa CORS.
   Mencegah situs lain di browser HP memicu aksi lewat port forward.
-- C3. Setiap aksi tercatat di `job.json` (`log`: `what`, `by: "ui"`, waktu, sha yang dilihat), menutup gap ADR-007 untuk
-  aksi lewat UI. Penolakan juga tercatat.
-- C4. Approve hanya untuk sha yang tampil di halaman (seperti `--sha` sekarang); klik ganda ditolak oleh state job.
+- C3. Setiap aksi tercatat di `job.json` (`log`: `what`, `by: "ui"`, waktu, job, sha yang dilihat, hasil, dan untuk aksi
+  berbayar biaya yang terpakai saat selesai), menutup gap ADR-007 untuk aksi lewat UI. Penolakan juga tercatat.
+- C4. Approve hanya untuk sha yang tampil di halaman dan dicek terhadap draf **live**, bukan snapshot (seperti `--sha`
+  sekarang). Halaman bisa sampai 15 menit tertinggal: draf yang sudah berganti (redraft) → approve ditolak, Atha membaca
+  ulang. Klik ganda ditolak oleh state job.
 - C5. Aksi panjang (agen) jalan sebagai proses latar dengan log; halaman hanya menampilkan status. Satu aksi per job
   sekaligus (lock job yang ada).
 - C6. Batas biaya dicek **di server** (K3), tidak dari form.
