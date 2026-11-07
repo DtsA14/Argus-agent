@@ -457,7 +457,9 @@ gateway_models:
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {upstream: [nvidia], free: true}
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {upstream: [nvidia], free: true}
   "openrouter:nvidia/nemotron-3.5-lightning:free":     {upstream: [nvidia], free: true}
-  "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
+  # Atha 2026-11-07: Morph fp8 behind DeepInfra, used only when DeepInfra does not serve (pilots/e1_morph_v0: e1 55/60
+  # vs the reference, mostly lenient, so not first). Its $0.022/$0.40 is under the list price sent as max_price.
+  "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8, morph/fp8]}
   # Atha 2026-11-07: Novita first (cheapest, 55% off), Tenstorrent (cheap, undiscounted), Baidu last (judge J8/J9 and
   # the planted-defect test ran on it). All fp8; order = only, so no other upstream; max_price bounds each.
   "openrouter:z-ai/glm-5.3":                           {upstream: [novita/fp8, tenstorrent/fp8, baidu/fp8]}

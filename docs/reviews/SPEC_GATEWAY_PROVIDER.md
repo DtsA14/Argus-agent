@@ -196,7 +196,9 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
    - `gateway.free_roles` = `free_planner`, `free_worker`, `free_checker` (pengganti satu role `research_free`, karena
      tiap stage memakai model lain), tanpa tool sendiri.
    - DeepSeek **tidak** melayani DeepSeek V4.1 Flash di OpenRouter (cek endpoints 2026-11-04); pembandingnya dipin ke
-     DeepInfra fp8 ($0,14/$0,42 per 1M, tanpa peak).
+     DeepInfra fp8 ($0,14/$0,42 per 1M, tanpa peak). Tambahan 2026-11-07 (Atha): Morph fp8 di belakangnya (`[deepinfra/fp8,
+     morph/fp8]`), dipakai hanya bila DeepInfra tidak melayani, misalnya 429. `pilots/e1_morph_v0`: e1 55/60 vs rujukan,
+     kebanyakan terlalu longgar, jadi bukan yang pertama.
    - Key: worker tetap butuh key DeepSeek untuk web, jadi satu stage bisa butuh dua key. `--key-file` bisa diulang
      sebagai `--key-file PROVIDER=PATH` (bentuk satu PATH tetap untuk satu key); file harus pas dengan provider yang
      butuh key (kurang atau lebih → ditolak); key OpenRouter dicek berawalan `sk-or-v1-` (`providers.*.key_prefix`).
