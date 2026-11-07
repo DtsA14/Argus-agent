@@ -1,7 +1,7 @@
 # Spek: UI kontrol (fase 0)
 
 Status: **disetujui Atha 2026-11-07** ("Ok gw setuju bro. Boleh merge"): K1-K6 sesuai usul Claude (bagian 5), dengan
-tambahan integritas dan audit dari review GPT. **Amandemen 1 (usul Claude 2026-11-07, menunggu "merge" Atha):**
+tambahan integritas dan audit dari review GPT. **Amandemen 1 (usul Claude, disetujui Atha 2026-11-07, #346):**
 ringkasan terstruktur buatan harness untuk halaman approve (D1 `summary`, D2, D4 urutan halaman, F6), karena memecah
 `DRAFT_REVIEW.md` per heading bisa dipalsukan oleh teks tidak tepercaya di dalamnya. Hanya dokumen; tidak ada kode di PR ini. Lanjutan butir PENDING "UI kontrol interaktif" (Atha 2026-10-30) dan `docs/Reconciliation.md`
 bagian 6-7 (ADR-007). Fase 1 dirinci untuk dikoding; fase 2-4 hanya kerangka dan keputusan, dispek lagi sebelum dikoding.
