@@ -266,7 +266,7 @@ def test_too_little_left_is_refused_before_sending_and_the_job_is_not_blocked(tm
 def test_the_stage_cap_is_the_smaller_of_judge_max_usd_and_what_is_left(tmp_path):
     env = Env(tmp_path, [submit(PASSED)], max_usd=0.5)
     job, _ = env.judge()
-    assert job.data["stages"]["j1"]["cap_usd"] == 0.10
+    assert job.data["stages"]["j1"]["cap_usd"] == 0.30
     env2 = Env(tmp_path / "b", [submit(PASSED)])
     env2.cfg["router"]["judge_max_usd"] = 0.07
     env2.cfg["code_judge"]["cap_usd"] = 0.05
@@ -330,12 +330,27 @@ def test_the_judge_model_is_pinned_to_its_upstream_with_no_fallback():
     from models.registry import ModelRef
     c = load_config()
     ref = ModelRef.parse(c["roles"]["code_judge"]["model"])
-    assert gateway.is_gateway(c, ref) and gateway.entry(c, ref) == {"upstream": ["baidu/fp8"], "free": False}
+    up = ["novita/fp8", "tenstorrent/fp8", "baidu/fp8"]          # Atha 2026-11-07
+    assert gateway.is_gateway(c, ref) and gateway.entry(c, ref) == {"upstream": up, "free": False}
     p = gateway.request_params(c, ref, {})["extra_body"]["provider"]
-    assert p["only"] == ["baidu/fp8"] and p["allow_fallbacks"] is False
+    assert p["only"] == p["order"] == up and p["allow_fallbacks"] is False
+    assert p["max_price"] == {"prompt": 1.40, "completion": 4.40}  # the GLM-5.3 list price, never a discounted one
     assert gateway.fallback_chain(c, "code_judge") == [str(ref)]
     gateway.check_use(c, "code_judge", ref)                       # a paid model: no free-role rule applies
     assert c["prices"][str(ref)]["input"] > 0
+
+
+def test_one_largest_judge_step_at_the_list_price_fits_both_judge_caps():
+    """2026-11-07: at the GLM-5.3 list price a cap of $0.10 is below one full step, so the judge's first call would be
+    cut or refused; both caps (the stage's router.judge_max_usd and code_judge.cap_usd) must hold the largest step."""
+    from codetask import judge as j
+    c = load_config()
+    role = c["roles"]["code_judge"]
+    price = c["prices"][role["model"]]
+    step = (c["code_judge"]["max_input_tokens"] * price["input"] + role["max_output_tokens"] * price["output"]) / 1e6
+    stage = c["router"]["judge_max_usd"]
+    c["budget"]["max_usd"] = stage
+    assert step <= stage and step <= j.settings(c)["attempt_usd"]
 
 
 # ---- review findings (code review medium, 2026-11-05) ----------------------------------------------------------------
