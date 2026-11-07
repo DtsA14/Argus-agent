@@ -113,7 +113,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       batas versi lama), K3 dan K4 model mengaku tidak tahu perubahannya tetapi kodenya lolos di up2. Tidak ada kandidat
       yang membenarkan pilot dua lengan; berhenti mencari. Planner berhirarki tetap belum dibenarkan; catat kegagalan
       nyata lengan tanpa riset bila muncul
-  - [x] (2026-11-06, `pilots/e1_effort_v0`: low = rujukan 30/30, reasoning -40..50%, biaya/waktu ±separuh; def ulang 12/17 di laporan A; usul: low di `or_deepseek_checker`, menunggu Atha) Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
+  - [x] (2026-11-06, `pilots/e1_effort_v0`: low = rujukan 30/30, reasoning -40..50%, biaya/waktu ±separuh; def ulang 12/17 di laporan A; dipasang di `or_deepseek_checker` 2026-11-07, Atha "Ok gas"; pantau 2-3 job riset `deepinfra` berikutnya) Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
   - [ ] Nanti: worker paralel, OpenRouter Batch API, PR 1b `free_repos`, Vercel sebagai cadangan (Atha "kapan2")

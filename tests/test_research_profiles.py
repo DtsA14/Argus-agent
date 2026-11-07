@@ -284,7 +284,7 @@ def test_the_paid_checker_gets_32k_output_while_the_paid_workers_keep_16k():
     c["research_job"]["stage_roles"] = c["research_job"]["profiles"]["deepinfra"]
     checker = st.with_output_cap(c, "checker")
     assert checker["roles"]["or_deepseek_checker"]["max_output_tokens"] == 32000
-    assert "reasoning" not in (checker["roles"]["or_deepseek_checker"].get("params") or {}).get("extra_body", {})
+    assert checker["roles"]["or_deepseek_checker"]["params"]["extra_body"]["reasoning"] == {"effort": "low"}
     for which in ("planner", "worker", "synthesis"):
         assert st.with_output_cap(c, which)["roles"]["or_deepseek"]["max_output_tokens"] == 16000
     assert checker["roles"]["or_deepseek_checker"]["timeout_s"] >= 32000 / 75     # ~75 tokens/s seen on DeepInfra
@@ -296,3 +296,14 @@ def test_a_stage_output_cap_also_reaches_its_fallback_models():
     capped = st.with_output_cap(c, "checker")
     assert capped["research_job"]["max_output_tokens_by_model"]["openrouter:nvidia/nemotron-3.5-lightning:free"] == 9000
     assert c["research_job"]["max_output_tokens_by_model"]["openrouter:nvidia/nemotron-3.5-lightning:free"] == 16000
+
+
+def test_the_paid_checker_asks_for_low_reasoning_effort_alongside_the_gateway_pin():
+    # pilots/e1_effort_v0: effort low kept e1's verdicts (30/30) at about half the reasoning; no max_tokens (not enforced)
+    from models import gateway
+    from models.registry import ModelRef
+    c = load_config()
+    role = c["roles"]["or_deepseek_checker"]
+    extra = gateway.request_params(c, ModelRef.parse(role["model"]), role["params"])["extra_body"]
+    assert extra["reasoning"] == {"effort": "low"} and extra["provider"]["require_parameters"] is True
+    assert c["roles"]["or_deepseek"].get("params") is None          # the other paid research stages are unchanged
