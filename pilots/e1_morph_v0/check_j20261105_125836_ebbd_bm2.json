@@ -1,0 +1,58 @@
+{
+  "status": "CHECKED",
+  "stop_reason": "every item has a verdict",
+  "verdicts": {
+    "S": {
+      "verdict": "SUPPORTED",
+      "reason": "All BI rate moves, Fed holds/raise, rupiah levels and 7.23% H1 depreciation are backed by the cited findings' quotes."
+    },
+    "P1": {
+      "verdict": "PARTIAL",
+      "reason": "'Lowest since 2022' is not in the cited findings (W1.F8 not cited); July Rp18.078 and spot Rp18.168 are not in W3.F1, the only rupiah finding cited."
+    },
+    "P2": {
+      "verdict": "SUPPORTED",
+      "reason": "F8 backs the lowest-since-2022/150bps detail; F1 backs March rates; F2 backs the Middle East and inflation rationale."
+    },
+    "P3": {
+      "verdict": "SUPPORTED",
+      "reason": "F3 backs the 50bps May hike to 5.25%; F4 backs the pro-stability external resilience rationale."
+    },
+    "P4": {
+      "verdict": "SUPPORTED",
+      "reason": "F5 backs July hold and rationale; F6 backs September rates; F7 backs September stabilization rationale."
+    },
+    "P5": {
+      "verdict": "SUPPORTED",
+      "reason": "F1 quote lists all eight meeting dates and the minutes release dates matching the item."
+    },
+    "P6": {
+      "verdict": "SUPPORTED",
+      "reason": "F2 backs January hold, economic assessment and Miran/Waller dissents; F3 backs March hold, Middle East uncertainty and Miran dissent."
+    },
+    "P7": {
+      "verdict": "SUPPORTED",
+      "reason": "F4 backs April hold, energy inflation and the four dissents; F5 backs June hold, ample reserves, supply shocks and price stability pledge."
+    },
+    "P8": {
+      "verdict": "SUPPORTED",
+      "reason": "F6 backs July hold and dissents; F7 backs September raise and rationale; F8 backs October hold and Cook/Hammack dissents."
+    },
+    "P9": {
+      "verdict": "SUPPORTED",
+      "reason": "F1 backs Jan/Mar levels and Iran timing; F3 backs all June/July JISDOR figures."
+    },
+    "P10": {
+      "verdict": "SUPPORTED",
+      "reason": "F2 backs May/July/Aug/Sept levels; F5 backs end-Sept 17.870; F1 backs 16.725 to 18.140 and 8.46%; F4 backs 8th/7.23%."
+    },
+    "P11": {
+      "verdict": "SUPPORTED",
+      "reason": "F5 backs 18.145 on 2 Nov; F6 backs spot 18.168 and JISDOR 18.140; F7 backs the cited factors and Lukman quote."
+    },
+    "P12": {
+      "verdict": "PARTIAL",
+      "reason": "The Oct 28 hold is not backed by any cited finding (W2.F8 not cited); the Jan-July holding claim is only supported at its Jan and July endpoints."
+    }
+  }
+}
