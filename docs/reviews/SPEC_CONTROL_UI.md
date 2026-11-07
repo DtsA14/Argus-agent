@@ -1,7 +1,7 @@
 # Spek: UI kontrol (fase 0)
 
-Status: **draf, menunggu Atha** (Atha 2026-11-07 "Ok fase 0 dulu bro, bikin open pull request"). Hanya dokumen; tidak
-ada kode di PR ini. Lanjutan butir PENDING "UI kontrol interaktif" (Atha 2026-10-30) dan `docs/Reconciliation.md`
+Status: **disetujui Atha 2026-11-07** ("Ok gw setuju bro. Boleh merge"): K1-K6 sesuai usul Claude (bagian 5), dengan
+tambahan integritas dan audit dari review GPT. Hanya dokumen; tidak ada kode di PR ini. Lanjutan butir PENDING "UI kontrol interaktif" (Atha 2026-10-30) dan `docs/Reconciliation.md`
 bagian 6-7 (ADR-007). Fase 1 dirinci untuk dikoding; fase 2-4 hanya kerangka dan keputusan, dispek lagi sebelum dikoding.
 
 ## 1. Masalah dan ukuran
