@@ -42,9 +42,11 @@ STAGE = re.compile(r"^[a-z][0-9]{1,3}$")
 UPPER = re.compile(r"^[A-Z][A-Z_]{0,29}$")
 LOWER = re.compile(r"^[a-z][a-z_]{0,39}$")
 CALL_ID = re.compile(r"^[0-9a-z]{1,40}$")
-MODEL = re.compile(r"^[a-z0-9_.-]{1,30}:[a-z0-9_.-]{1,60}$")
+# provider:model, an OpenRouter model as vendor/name with an optional :variant (#357: the judge and research jobs
+# use openrouter:z-ai/glm-5.3, openrouter:nvidia/...:free; 36 of 112 jobs were left out before)
+MODEL = re.compile(r"^[a-z0-9_.-]{1,30}:[a-z0-9][a-z0-9_.-]{0,59}(/[a-z0-9][a-z0-9_.-]{0,79})?(:[a-z0-9][a-z0-9_.-]{0,19})?$")
 LOG_WHAT = {"created", "intaken", "state", "approved", "limits_shown", "confirmed", "confirmed_by_flag", "key_typed",
-            "key_from_file", "retry", "redraft", "staged", "research_ok", "applied"}
+            "key_from_file", "retry", "redraft", "staged", "research_ok", "applied", "stage_started"}
 # A second layer over the projection (A1): nothing like a key may be in what is published.
 KEY = re.compile(rb"sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|(?i:api[_-]?key|secret|password|token)\"?\s*[:=]\s*\"")
 

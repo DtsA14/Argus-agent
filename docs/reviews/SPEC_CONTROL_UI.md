@@ -115,7 +115,7 @@ Untuk issue D2: `GET /jobs/<id>/draft` → `{"draft_sha256": meta.draft_sha256, 
 {"sha256", "text": isi review.md}, "judge": null | {"sha256", "text": isi judge.md}}`; 404 bila `draft/meta.json` tidak
 ada. `review` bisa `null` (bentuk D2 di atas dilonggarkan untuk itu). Cek pada data nyata `~/pilot3a_live` (76 job): 71
 draf terbit; 7 review ditahan karena `PASSWORD = "..."` di tes login argus-ledger (positif palsu yang disengaja, F2; ringkasannya
-tetap terbit), 3 stage draf tanpa `draft_sha256` (draf gagal). Mutants 25/25.
+tetap terbit), 3 stage draf tanpa `draft_sha256` (draf gagal). Mutants 25/25. **A1 diperluas (Atha 2026-11-07, digabung ke PR ini):** allowlist lama menolak model gateway (`openrouter:vendor/nama[:varian]`) dan log `stage_started`, sehingga 36 dari 112 job (semua job yang di-judge dan job riset) tidak ada di snapshot dan halaman draf tidak bisa muncul untuk mereka. Sekarang 112/112 job, 81 draf, 10 dengan judge; argus-ledger Stage 13 di `ledger_py312_up2` (tanpa network) menjawab snapshot itu: `/summary` 112 job, `skipped` 0, semua `/jobs/<id>` 200. Setelah merge, refresh monitor berikutnya dari `~/pilot3a_live` menerbitkannya ke staging live. Mutants 3/3.
 
 **Urutan PR fase 1 (jalur A):** satu PR jalur ketat untuk D1+D3 (spek ini bagian 3, mutants, `/code-review medium` dan
 `/security-review`, `verify.sh`, "merge" Atha), lalu issue D2 dan D4 untuk Argus (dua job, shadow), lalu deploy viewer dan

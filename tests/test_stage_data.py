@@ -105,8 +105,22 @@ def test_a_wrong_allowlisted_field_excludes_only_that_job_and_never_quotes_it(tm
     assert "rm -rf" not in json.dumps(man) and "sk-ant" not in json.dumps(man)
 
 
+@pytest.mark.parametrize("model", ["openrouter:z-ai/glm-5.3", "openrouter:nvidia/nemotron-3.5-super-vl:free",
+                                   "openrouter:deepseek/deepseek-v4.1-flash", "deepseek:deepseek-flash"])
+def test_gateway_models_and_research_stage_starts_are_published(tmp_path, source, model):
+    # #357: the judge's and the research jobs' models (vendor/name[:variant]) and the research job's stage_started log
+    make_job(source, "jgw", events=[started("c1", model=model), final("c1", model=model)],
+             job={"log": [{"at": T, "what": "stage_started", "stage": "p1", "role": "free_planner"}]})
+    man = sd.refresh(source, tmp_path / "data")
+    assert "jgw" in man["jobs"] and man["excluded"] == []
+    job = json.loads((sd.pub(tmp_path / "data") / "jobs" / "jgw" / "job.json").read_text())
+    assert job["log"] == [{"at": T, "what": "stage_started", "stage": "p1"}]
+
+
 @pytest.mark.parametrize("event", [
     final("c1", nano=-5), final("c1", model="evil model"), started("c1", worst="lots"), final("c1", status="OK!"),
+    final("c1", model="openrouter:a/b/c"), final("c1", model="openrouter:../x"), final("c1", model="openrouter:A/b"),
+    final("c1", model="openrouter:z-ai/glm:free:x"), final("c1", model="openrouter:z-ai/"),
     {"event": "attempt_end", "reason": "<script>", "steps": 1},
 ])
 def test_a_wrong_field_in_a_ledger_event_excludes_the_job(tmp_path, source, event):
