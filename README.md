@@ -1,8 +1,11 @@
 # Argus
 
-Agent harness: orchestrator / workers / harness controller / evaluator on LangGraph.
-Milestone 1 (harness, budget, crash-resume) plus the provider layer.
-Nodes are still fake (deterministic); the provider layer is ready for the real ones.
+Agent harness on LangGraph with a budget, a ledger and crash-resume on every model call. The pipelines in use are the
+code job and the research job (`scripts/argus.py code` / `research`); see `AGENTS.md` for their stages.
+
+The quick start below runs `main.py`: the M1–M3 demo graph (`graph.py`, orchestrator → workers → synthesize → evaluator
+on a sales report), fake nodes by default. It is not a production path. Of the guarantees below, the iteration rule is the demo graph's; the per-request,
+ledger and crash-resume ones hold on every pipeline.
 
 ## Run
 

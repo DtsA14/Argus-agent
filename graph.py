@@ -1,3 +1,5 @@
+"""The M1–M3 demo graph (main.py, runner.py): orchestrator → workers → synthesize → evaluator on a sales report. Not
+a production path: the code job and the research job build their own graphs (AGENTS.md)."""
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
