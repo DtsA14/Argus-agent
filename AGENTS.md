@@ -1,7 +1,15 @@
 # Argus: notes for agents and reviewers
 
-Argus is an agent harness (orchestrator → parallel workers → synthesize → evaluator) on LangGraph.
-Its value is in the guarantees below; review changes against them first.
+Argus is an agent harness on LangGraph. Its value is in the guarantees below; review changes against them first.
+The guarantees hold on every pipeline:
+
+- **Code job** (`scripts/argus.py code`, `router/job.py`): optional research r1 (`codetask/research.py`) → drafter
+  (`codetask/drafter.py`) → human approve → code task (`codetask/run.py`: setup → agent → acceptance) → `argus judge`
+  (advice) → applied by a human → staging (`argus stage`).
+- **Research job** (`scripts/argus.py research`, `router/research.py`): planner p1 → web workers → synthesis s1 →
+  claim checker e1 (`research/stages.py`); each stage is its own one-node graph (`research/loop.py`).
+- **`graph.py`** (`main.py`, `runner.py`): the M1–M3 demo (orchestrator → parallel workers → synthesize → evaluator on a
+  sales report). Not a production path; kept as the reference graph and for the crash-resume and budget tests on it.
 
 How to verify: `bash scripts/verify.sh` (fresh venv, pinned deps, full suite incl. crash-resume
 repeats and stress). Evidence logs are kept in `verification/`. Open work is in `PENDING.md`,
