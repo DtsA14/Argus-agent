@@ -83,6 +83,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       `j20261106_151840_e81c` PASS, dibaca Claude, applied `518b34f` + tes fresh-load `ab43761` (mutan 2/2). Pilot #6
       berhenti di langkah 1: Claude mencatat `applied` dengan commit tes (as_is False), deploy ditolak penjaga; Atha:
       tunggu deploy berikutnya (021 ikut rilis batch 5)
+    - [ ] **Harga GLM-5.3 (2026-11-07, `pilots/glm_reviewer_v0`): diskon Baidu 80% habis**, gateway menagih $1,40/$4,40 per juta (config $0,28/$0,88): reservasi judge 5x terlalu rendah, cap $0,10 bisa terlampaui. Jalur ketat, keputusan Atha sebelum judge berikutnya (batch 5): harga config dinaikkan + cap/`max_output_tokens` judge, atau pin provider fp8 lain yang lebih murah. Judge tidak dijalankan sampai ini selesai.
     - [ ] Kandidat (belum dibangun, tunggu bukti batch 5): `argus fix <job>` dari judge BLOCK (a2, kontrak sama, temuan
       dibekukan di job.json, satu kali per job, agent boleh lapor "terjepit tes lama" alih-alih mengakali; jalur ketat)
     - [ ] Celah: drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru (gerbang #275 tidak terpicu), dan tes
