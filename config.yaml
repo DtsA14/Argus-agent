@@ -542,6 +542,12 @@ sandbox:
       image: null
     ledger_staging_up1:
       image: null
+    # ledger_py312_up2 / ledger_staging_up2 (SPEC_DEP_UPGRADE_V0 section 6.1): upgrade 2 (fastapi 0.162.0, starlette 1.10.0);
+    # built and checked like up1, paired in router/stage.py (RUNTIMES). Never in web.environments.
+    ledger_py312_up2:
+      image: null
+    ledger_staging_up2:
+      image: null
     # pwa_node22 (docs/reviews/SPEC_PWA_VIEWER.md E): Node 22 from its official image pinned by digest, with the exact
     # npm packages of its lock (sha512 each) in a read-only /node_modules; defined in environments/pwa_node22/, built by
     # scripts/build_env_node.sh, checked by scripts/check_env_image.py. Its validations run vitest, never pytest
