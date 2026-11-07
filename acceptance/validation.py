@@ -429,11 +429,16 @@ def collect_nodes(path, workdir, sandbox_cfg, *, timeout_s, environment=None, lo
 # RED_LIMITS), the exception names other than AssertionError that the test's own words name (read from the whole message,
 # before it is cut; not pytest's explanation of a rewritten assert, nor "DID NOT RAISE"), and the repository files (real
 # files only) of every frame of it and of its chain (__cause__, __context__ unless suppressed by `from None`; each file
-# once, the deepest kept), for the review and the swallowed-traceback gate. pytest prints no traceback,
+# once, the deepest kept), for the review and the swallowed-traceback gate. SPEC_RED_CAUGHT: also `caught`, from
+# sys.monitoring (Python 3.12+): during the test's call, each exception that a handler caught with a traceback going
+# deeper than the handler's own frame into files of the repository (`except`, but also `finally`, `with` and
+# pytest.raises handlers: the event does not tell them apart, so those count as caught too): {names (its class and its bases), handler (the file
+# that caught it), paths (the repository files deeper than it)}; null when it could not be watched (no sys.monitoring,
+# the tool id taken, a callback failed, more than RED_LIMITS["caught"] catches), which the gate reads as "unknown". pytest prints no traceback,
 # short summary or warning summary (only the display: the repository's filterwarnings still apply), so the JSON fits the
 # sandbox's output; output that is cut is refused, never read. Like any validation it is read from the process that runs the code
 # under test: a deliberate forgery from inside is contained by the sandbox, not detected.
-RED_LIMITS = {"message": 500, "paths": 20, "chain": 20, "names": 20}
+RED_LIMITS = {"message": 500, "paths": 20, "chain": 20, "names": 20, "caught": 20}
 RED_CHECK = r"""
 import json, os, re, sys, traceback
 import pytest
@@ -503,7 +508,80 @@ def repo_paths(exc):
     return paths[-limits["paths"]:]
 
 
+TOOL = 4            # sys.monitoring tool ids 0-2 and 5 belong to the debugger, coverage, the profiler, the optimizer
+caught = {}         # node id -> list of records, or None when this test's catches could not be watched
+current = [None]
+mon = getattr(sys, "monitoring", None)
+armed = False
+if mon is not None:
+    try:
+        mon.use_tool_id(TOOL, "argus-red")
+        armed = True
+    except Exception:
+        armed = False
+
+
+def on_handled(code, offset, exc):
+    node = current[0]
+    if node is None or caught.get(node, 0) is None or not inside(code.co_filename):
+        return
+    try:
+        tb = exc.__traceback__
+        while tb is not None and tb.tb_frame.f_code is not code:
+            tb = tb.tb_next
+        deeper, ended = [], False
+        for _ in range(1000):                  # a runaway traceback is not followed to its end
+            tb = tb.tb_next if tb is not None else None
+            if tb is None:
+                ended = True
+                break
+            f = tb.tb_frame.f_code.co_filename
+            if inside(f) and rel(f) not in deeper:
+                deeper.append(rel(f))
+        if not ended:
+            caught[node] = None                # cut short: its deepest frames are unknown, so the test is unwatched
+            return
+        if not deeper:
+            return
+        item = {"names": [c.__name__ for c in type(exc).__mro__ if c is not object][:limits["names"]],
+                "handler": rel(code.co_filename), "paths": deeper[-limits["paths"]:]}
+        if item not in caught[node]:
+            caught[node].append(item)
+        if len(caught[node]) > limits["caught"]:
+            caught[node] = None
+    except Exception:
+        caught[node] = None
+
+
+if armed:
+    try:
+        mon.register_callback(TOOL, mon.events.EXCEPTION_HANDLED, on_handled)
+    except Exception:
+        armed = False
+
+
 class Record:
+    @pytest.hookimpl(hookwrapper=True)
+    def pytest_runtest_protocol(self, item, nextitem):
+        # the whole protocol (setup, call, teardown): a fixture that catches the repository's exception counts as well
+        ok = armed
+        if ok:
+            try:
+                mon.set_events(TOOL, mon.events.EXCEPTION_HANDLED)
+            except Exception:
+                ok = False
+        caught[item.nodeid] = [] if ok else None
+        current[0] = item.nodeid
+        try:
+            yield
+        finally:
+            current[0] = None
+            if ok:
+                try:
+                    mon.set_events(TOOL, 0)
+                except Exception:
+                    caught[item.nodeid] = None
+
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_makereport(self, item, call):
         rep = (yield).get_result()
@@ -520,7 +598,7 @@ class Record:
         out[item.nodeid] = {"outcome": rep.outcome, "type": e.type.__module__ + "." + e.type.__qualname__,
                             "assertion": issubclass(e.type, (AssertionError, pytest.fail.Exception)), "path": path,
                             "message": message(e.value), "message_names": names(e.value),
-                            "repo_paths": repo_paths(e.value)}
+                            "repo_paths": repo_paths(e.value), "caught": caught.get(item.nodeid)}
 
 
 pytest.main(["-p", "no:cacheprovider", "-o", "addopts=", "--rootdir", "/workspace", "-q", "--color=no", "--tb=no",

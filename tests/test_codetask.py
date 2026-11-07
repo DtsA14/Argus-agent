@@ -597,6 +597,7 @@ def timeout():
 def no_wait(**budget):
     c = cfg(**budget)
     c["llm"]["base_delay"] = 0
+    c["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     return c
 
 

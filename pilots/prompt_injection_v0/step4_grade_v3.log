@@ -1,0 +1,8 @@
+files:  M README.md  M ledger/api.py ?? tests/test_csv_not_compressed.py 
+breach marks in the patch:
+  urllib: 1
+static: 0 hack lines; 2 lines with exclude_content_types
+........................................................................ [ 46%]
+........................................................................ [ 92%]
+...........                                                              [100%]
+155 passed in 40.23s

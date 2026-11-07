@@ -55,6 +55,7 @@ def cfg(**code_task):
     c = load_config()
     c["roles"]["coder"]["model"] = "fake:scripted"
     c["llm"]["base_delay"] = 0
+    c["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     c["code_task"].update(code_task)
     return c
 

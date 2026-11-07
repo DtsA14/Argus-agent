@@ -1,0 +1,54 @@
+```python
+from pathlib import Path
+import json
+import os
+import tempfile
+
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
+
+router = APIRouter()
+
+
+class NoteUpdate(BaseModel):
+    note: str | None = None
+
+
+@router.post("/jobs/{job_id}/note")
+def set_job_note(job_id: str, update: NoteUpdate, request: Request):
+    if job_id in {".", ".."} or "/" in job_id or "\\" in job_id:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    jobs_dir = Path(request.app.state.jobs_dir)
+    path = jobs_dir / f"{job_id}.json"
+
+    if path.parent != jobs_dir or not path.is_file():
+        raise HTTPException(status_code=404, detail="job not found")
+
+    with path.open("r", encoding="utf-8") as f:
+        ledger = json.load(f)
+
+    if "note" in update.model_fields_set:
+        if update.note is None:
+            ledger.pop("note", None)
+        else:
+            ledger["note"] = update.note
+
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(ledger, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+    return {"job_id": job_id, "note": ledger.get("note")}
+```
+
+With `update: NoteUpdate`, FastAPI hands the JSON object to Pydantic: `{"note": null}` yields `note=None` and includes `"note"` in `update.model_fields_set`, while `{}` leaves it unset. The endpoint uses that membership to distinguish “clear” from “leave unchanged.” FastAPI 0.143 did not differ for a Pydantic model parameter; it also delegated to Pydantic and preserved the distinction. If you instead declared `note: str | None = Body(None)`, both versions collapse omitted and explicit null to `None`, so the model parameter is required for this behavior.

@@ -46,6 +46,11 @@ judge:
 llm:
   attempts: 3                       # transient errors (429, 5xx, timeouts) are retried, others are not
   base_delay: 1.0                   # seconds; exponential with jitter, Retry-After wins when present
+  # SPEC_RATE_LIMIT_RETRY (Atha 2026-11-06): a 429 waits 30 s doubling (jitter), at most 120 s (Retry-After too), and
+  # has its own number of attempts; a 429 from the gateway is not charged (harness/llm.py)
+  rate_limit_delay_s: 30
+  rate_limit_max_delay_s: 120
+  rate_limit_attempts: 4
   min_output_tokens: 64
   input_margin: 1.2                 # safety factor on heuristic input counts (Anthropic counts exactly)
   # D5: Anthropic prompt caching (markers added only to what is sent; hashes and memo keys unchanged). Off by default,
@@ -144,6 +149,10 @@ drafter:
   # submit and ran out at 16 with one problem left, twice. The money bound is unchanged (attempt_usd, the stage cap).
   max_steps: 24
   max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
+  # Before a passing draft is accepted, it is shown why each required test fails now and asked once whether each is the
+  # behaviour the issue asks for (pilots 021 t1 and prompt_injection_v0 V4: a test failing on its own data was padded
+  # around by the agent). Shares the one question with the scope question; a held draft is accepted if never answered.
+  red_question: true
   # The profiles a draft may give the agent. Not `large` (45,000 tokens per attempt): an agent's input is re-sent at
   # every step, and in router pilot #1 reading a 23 KB file used it up before any edit (2026-10-23).
   agent_profiles: [default, large_usd]
@@ -199,10 +208,18 @@ research_job:
   checker: {cap_usd: 0.10, attempt_tokens: 200000, max_input_tokens: 40000, max_steps: 4, max_submits: 3,
             max_output_tokens_by_model: {"openrouter:deepseek/deepseek-v4.1-flash": 32000}}
 
+# SPEC_JUDGE: argus judge <job> reads the issue, the approved draft and the review package and says PASS or BLOCK
+# (advice only). max_input_chars: a larger prompt ends the stage NOT_JUDGED before any request. 120,000 characters are
+# ~48,000 tokens by the heuristic count (chars/3 x 1.2); max_input_tokens leaves room for a rejected submit's reply
+# (16,000 output) and the gate's feedback on the next step, so all max_submits can be used.
+code_judge: {role: code_judge, cap_usd: 0.10, attempt_tokens: 400000, max_input_tokens: 100000, max_steps: 4,
+             max_submits: 3, max_input_chars: 120000}   # not `judge:` (the rubric judge's, above)
+
 router:
   job_max_usd: 1.00
   draft_max_usd: 0.75
   research_max_usd: 0.30   # SPEC_RESEARCH_STAGE r1, one stage (Atha 2026-10-29)
+  judge_max_usd: 0.10      # SPEC_JUDGE J6: one judge stage, advice only (Atha 2026-11-05)
   agent_max_usd: {default: 0.50, large_usd: 0.75}   # by the profile the drafter chose (drafter.agent_profiles)
   overrides:
     budget.max_tokens: 3000000         # 1,200,000 until router pilot #1 on DeepSeek: tokens re-sent at every step
@@ -358,6 +375,16 @@ roles:
     model: "openrouter:deepseek/deepseek-v4.1-flash"
     max_output_tokens: 32000
     timeout_s: 480
+    # pilots/e1_effort_v0 (2026-11-06, Atha "Ok gas"): effort low matched the graded reference 30/30 with ~40-50% less
+    # reasoning, about half the cost and time (honoured only in part: 12,493 reasoning tokens on report A).
+    params: {extra_body: {reasoning: {effort: low}}}
+  code_judge:
+    # SPEC_JUDGE J7 (Atha 2026-11-05): GLM-5.3, another family than the drafter's and the agent's DeepSeek, through
+    # OpenRouter pinned to Baidu fp8 (gateway_models). No fallback: a failed provider ends the stage NOT_JUDGED.
+    model: "openrouter:z-ai/glm-5.3"
+    # Replay 2026-11-05: 4/11 calls spent all 16000 output tokens on reasoning (~187 s) and never submitted.
+    max_output_tokens: 32000
+    timeout_s: 480
   orchestrator:
     model: "anthropic:claude-sonnet-5-5"
     max_output_tokens: 2048
@@ -410,6 +437,11 @@ prices:
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {input: 0, output: 0}
   "openrouter:nvidia/nemotron-3.5-lightning:free":     {input: 0, output: 0}
   "openrouter:deepseek/deepseek-v4.1-flash":           {input: 0.14, output: 0.42, cache_read: 0.0042}
+  # SPEC_JUDGE J7, checked 2026-11-05 on openrouter.ai/api/v1/models/z-ai/glm-5.3/endpoints: Baidu fp8 at its discounted
+  # price (80% off Z.AI's $1.40/$4.40; K2). If the discount ends, the ledger still takes the gateway's usage.cost when it
+  # is larger, but a reservation made at this price (and on a heuristic token count, not GLM's tokenizer) can be
+  # exceeded: the judge's small $0.10 cap keeps such an overrun small; it is not an absolute bound.
+  "openrouter:z-ai/glm-5.3":                           {input: 0.28, output: 0.88, cache_read: 0.052}
 
 # SPEC_GATEWAY_PROVIDER: the models a gateway may serve, each pinned to upstream provider slugs (no fallback), and
 # whether it is free (then only for gateway.free_roles, never a role that reads repositories). Each needs a price above
@@ -420,6 +452,7 @@ gateway_models:
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {upstream: [nvidia], free: true}
   "openrouter:nvidia/nemotron-3.5-lightning:free":     {upstream: [nvidia], free: true}
   "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
+  "openrouter:z-ai/glm-5.3":                           {upstream: [baidu/fp8]}
 gateway:
   free_roles: [free_planner, free_worker, free_checker]   # Atha 2026-11-04 (research_free, split per stage)
   cost_drift_warn: 0.10         # price_drift when the gateway's cost and ours differ by more than this share

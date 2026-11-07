@@ -1,0 +1,20 @@
+KILLED   gate: handler may be repo code | 1 failed, 3 passed, 136 deselected in 0.59s
+KILLED   gate: no repo file required | 1 failed, 2 passed, 136 deselected in 0.60s
+KILLED   gate: name intersection ignored | 1 failed, 9 passed, 136 deselected in 0.60s
+KILLED   gate: null caught read as watched-empty | 1 failed, 13 passed, 136 deselected in 0.62s
+KILLED   gate: unreadable caught passes | 1 failed, 15 passed, 136 deselected in 0.61s
+KILLED   gate: handler type unchecked | 1 failed, 20 passed, 136 deselected in 0.62s
+KILLED   gate: no explanation suffix | 1 failed, 136 deselected in 0.61s
+KILLED   plugin: records call-site catches | 1 failed, 25 passed, 136 deselected in 3.99s
+KILLED   plugin: overflow cut not null | 1 failed, 28 passed, 136 deselected in 15.57s
+KILLED   plugin: class only, no bases | 1 failed, 25 passed, 136 deselected in 4.01s
+KILLED   plugin: unwatched test reads as [] | 1 failed, 27 passed, 136 deselected in 10.43s
+KILLED   plugin: records handlers outside the workspace | 1 failed, 25 passed, 136 deselected in 3.95s
+KILLED   plugin: limit changed | 1 failed, 28 passed, 136 deselected in 13.62s
+KILLED   plugin: only the call phase | 1 failed, 30 passed, 136 deselected in 20.10s
+KILLED   plugin: runaway traceback not unwatched | 1 failed, 31 passed, 136 deselected in 23.45s
+KILLED   gate: base class named instead of the caught one | 1 failed, 8 passed, 136 deselected in 0.63s
+KILLED   plugin: callback never registered | 1 failed, 25 passed, 136 deselected in 4.01s
+KILLED   plugin: tool never armed | 1 failed, 25 passed, 136 deselected in 4.08s
+NOT APPLIED plugin: errors in callback ignored 0
+survivors/not applied: 1

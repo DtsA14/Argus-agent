@@ -108,6 +108,7 @@ def judge_with(tmp_path, script, tokens=40_000, attempts=2):
     cfg = copy.deepcopy(load_config())
     cfg["roles"]["evaluator"]["model"] = "fake:scripted"
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     log = EventLog(tmp_path / "e.jsonl")
     model = ScriptedChatModel(script=list(script))
     j = make_judge(LLMCaller(cfg, "evaluator", log, model=model), Memo(tmp_path / "memo.sqlite"), log,
@@ -316,6 +317,7 @@ def graph_cfg(**budget):
     cfg["impl"]["evaluator"] = "llm"
     cfg["roles"]["evaluator"]["model"] = "fake:scripted"
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     cfg["budget"].update(budget)
     return cfg
 

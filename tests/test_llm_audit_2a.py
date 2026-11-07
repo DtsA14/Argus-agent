@@ -26,6 +26,7 @@ def events(path):
 def make(tmp_path, script, *, est_in=100, cfg=None, counter="fixed", log=None):
     cfg = cfg or copy.deepcopy(load_config())
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     fake = ScriptedChatModel(script=list(script))
     log = log or EventLog(tmp_path / "e.jsonl")
     kw = {} if counter is None else {"counter": lambda m, t: est_in}

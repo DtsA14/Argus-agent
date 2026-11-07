@@ -176,6 +176,7 @@ def writer(tmp_path, script, attempts=3):
     cfg = copy.deepcopy(load_config())
     cfg["roles"]["writer"]["model"] = "fake:scripted"
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     log = EventLog(tmp_path / "e.jsonl")
     model = ScriptedChatModel(script=list(script))
     fn = make_llm_synthesize(LLMCaller(cfg, "writer", log, model=model), ToolGate("orchestrator", ["write_file"], log),
@@ -285,6 +286,7 @@ def test_llm_synthesize_runs_in_the_graph_and_is_budgeted(tmp_path):
     cfg["impl"]["synthesize"] = "llm"
     cfg["roles"]["writer"]["model"] = "fake:scripted"
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     assert node_usd_estimates(cfg)["synthesize"] == pytest.approx(8000 * 5.00 / 1e6)   # fake:scripted, output rate
     model = ScriptedChatModel(script=[submit(good_recs())])
     r = run_task(goal="x", scenario="pass", run_id="t", runs_dir=tmp_path, cfg=cfg, models={"writer": model})

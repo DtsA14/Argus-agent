@@ -50,11 +50,14 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["research"], base["roles"]["researcher"], base["tools"]["researcher"]   # SPEC_RESEARCH_STAGE (never used)
     del base["research_job"]              # SPEC_RESEARCH_JOB (argus research, never used by these arms)
     del base["web_research"]              # SPEC_RESEARCH_JOB (paid DeepSeek Search/Fetch, never used by these arms)
+    del base["code_judge"], base["roles"]["code_judge"]   # SPEC_JUDGE (argus judge, never used by these arms)
     base["roles"]["coder"] = config("30k")["roles"]["coder"]   # the coder moved to DeepSeek on 2026-10-23; the arms ran Sonnet
     # D5: llm.prompt_cache added after the arms ran (absent means off); cache prices corrected and write rates added
     # after them. Their runs had no cache reads or writes, so their costs are the same under either table; every other
     # rate must still be the one they ran with.
     del base["llm"]["prompt_cache"]
+    for k in ("rate_limit_delay_s", "rate_limit_max_delay_s", "rate_limit_attempts"):   # SPEC_RATE_LIMIT_RETRY (after)
+        del base["llm"][k]
     arm_prices = config("30k")["prices"]
     for model, p in base["prices"].items():
         rest = lambda q: {k: v for k, v in q.items() if not k.startswith("cache_") and k != "long_context_above"}  # noqa: E731

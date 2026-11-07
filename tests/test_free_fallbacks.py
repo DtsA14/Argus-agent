@@ -24,7 +24,7 @@ from router import research as rr  # noqa: E402
 FIRST = "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"          # free_checker's chain in config.yaml
 SECOND, THIRD = "openrouter:nvidia/nemotron-3.5-super-vl:free", "openrouter:nvidia/nemotron-3.5-lightning:free"
 PAID = "openrouter:deepseek/deepseek-v4.1-flash"
-LIMITED = [FakeHTTPError(429, "rate-limited upstream")] * 3          # LLMCaller tries 3 times
+LIMITED = [FakeHTTPError(429, "rate-limited upstream")] * 3          # LLMCaller tries 3 times (a free model: no long wait)
 
 
 def checker_env(tmp_path, first, second=(), third=()):
@@ -32,6 +32,7 @@ def checker_env(tmp_path, first, second=(), third=()):
     env.models[f"free_checker@{SECOND}"] = StrictScriptedChatModel(script=list(second))
     env.models[f"free_checker@{THIRD}"] = StrictScriptedChatModel(script=list(third))
     env.cfg["llm"]["base_delay"] = 0
+    env.cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     return env
 
 

@@ -232,11 +232,11 @@ def test_an_empty_balance_is_not_retried(fake, tmp_path):
 
 
 def test_a_rate_limit_is_retried_on_the_same_model_only_and_never_by_the_sdk(fake, tmp_path):
-    fake.queue = [(429, {"error": {"code": 429, "message": "Rate limit exceeded"}})] * 3
+    fake.queue = [(429, {"error": {"code": 429, "message": "Rate limit exceeded"}})] * 4
     c, log = caller(config(fake), tmp_path)
-    with pytest.raises(LLMCallFailed, match="still failing after 3 attempts"):
+    with pytest.raises(LLMCallFailed, match="still failing after 4 attempts"):   # SPEC_RATE_LIMIT_RETRY R2
         c.call([HumanMessage("hello")], res())
-    assert len(fake.requests) == 3 == len(events(log))          # one request per ledger attempt: no SDK retries
+    assert len(fake.requests) == 4 == len(events(log))          # one request per ledger attempt: no SDK retries
     assert {r["body"]["model"] for r in fake.requests} == {"deepseek/deepseek-chat"}
 
 

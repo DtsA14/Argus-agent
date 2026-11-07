@@ -4,7 +4,7 @@ Daftar kerja Argus yang **masih terbuka**. Status milestone dan ADR beserta bukt
 (satu-satunya tempat status). Riwayat butir yang sudah selesai (bukti, angka, PR): [`docs/reviews/PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md)
 (sampai 2026-10-30), [`docs/reviews/PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) (sebelumnya) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-10-30 malam, jalur cepat sesudahnya (#268) (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
+Terakhir diperbarui: 2026-11-06 (judge, retry 429 #326, aturan J9, pertanyaan terbuka 021, self-review). Sebelumnya: 2026-11-05 (tahap 1 riset "Agentic AI", #307-#309). Sebelumnya: 2026-10-30 malam, jalur cepat sesudahnya (#268) (viewer PWA live di HP Atha: #256, #257, #261, #263–#266; staging namespace #258;
 notifikasi monitor #259/#260). Dirapikan: semua butir `[x]` pindah ke arsip 2026-10-30.
 
 Jalur cepat 2026-10-30 (#268): `audit_run.py` membangun ulang balasan yang ditolak harness (tanpa tool call → `NUDGE`, call
@@ -40,7 +40,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 ### Keputusan Atha yang ditunggu
 
 - [~] **Deep research, `argus research`** (Atha 2026-11-03: arah general-purpose agent; keputusan di Reconciliation
-  bagian 7). Sudah jalan: `SPEC_RESEARCH_JOB` (planner, worker paralel, sintesis s1, checker e1, gate G1/G2/G4), web lewat
+  bagian 7). Sudah jalan: `SPEC_RESEARCH_JOB` (planner, worker berurutan, sintesis s1, checker e1, gate G1/G2/G4), web lewat
   DeepSeek Search/Fetch (#285-#289), gateway OpenRouter dengan profil `deepseek`, `deepinfra` dan `free`. Eval v0
   (`docs/reviews/RESEARCH_EVAL_V0.md`, #290): `deepinfra` 8/8 benar; fix #291 (checker free di Nemotron, aturan kutipan),
   #292 (submit terakhir menyimpan temuan yang lolos), rerun R2/R5/R8 (#293): e1 selesai 6/6, free tanpa laporan kosong.
@@ -50,6 +50,54 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   - [~] Batch v1 R1-R8 dilewati (Atha 2026-11-04: lama, kurang sebanding hasilnya). Ambang v1 dan output e1 32k dicek
     di job riset berbayar berikutnya: e1 selesai tanpa terpotong, tidak ada UNSUPPORTED, persen SUPPORTED; "7/8 benar"
     baru terbukti setelah beberapa job
+  - [~] **Tahap 1, riset nyata pertama "Agentic AI"** (2026-11-05, Reconciliation bagian 4d; breakdown tahap 1-4 di
+    bagian 7): tiga job $0,2198; tiga perbaikan jalur cepat: #307 (gate URL salah membaca "file:" di prosa), #308 (halaman
+    docs dengan konfigurasi JSON raksasa), #309 (e1 kehilangan semua verdict karena satu alasan kepanjangan). Job 3
+    `j20261105_121107_718e`: e1 CHECKED, 0 UNSUPPORTED, **SUPPORTED 47% (<60%)**. Berikutnya:
+    - [x] s1 hanya melihat kutipan, bukan klaim worker (#311). Job 4 `j20261105_123505_b1d4`: 17/17 SUPPORTED,
+      identifier di luar kutipan 27 → 0 ($0,0742)
+    - [x] Dua topik lain (ekonomi BI/Fed/rupiah 85% SUPPORTED, BRICS 93%; 0 UNSUPPORTED, e1 selesai; $0,1506)
+    - [x] Jalur cepat kecil dari tiga job ini (#314): petunjuk worker bahwa kutipan boleh lintas baris (G2 menerima); s1
+      tidak melihat URL (judul di URL bocor jadi klaim, PARTIAL BRICS P9). Belum diuji di job nyata
+    - [ ] Kebenaran faktual ("7/8 benar") belum dinilai terhadap sumber independen
+    - [ ] Catatan review yang belum dikerjakan: ReadDocs (`tools/web.py`) punya titik buta konfigurasi yang sama;
+      konfigurasi berbentuk `window.X = {...}`/`__NEXT_DATA__` tidak terdeteksi; gate s1 masih menolak seluruh submit
+      terakhir karena satu bagian kepanjangan; aturan "submit terakhir" tersalin di dua `gate_submit`
+- [x] **Tahap 2, kurangi supervisi** — **ditutup Atha 2026-11-06** ("tutup tahap 2") dengan bukti batch 4 + pertanyaan terbuka 021: judge 10/10 cacat nyata/tanam, alarm palsu 1 (020); J9 berjalan; satu issue tulisan Atha (021) berhasil sesudah tes lama dibereskan. Belum terbukti, jadi pantauan (bukan syarat): menit kerja Atha, retry 429 live, J9 di batch besar, issue singkat Atha lebih dari satu. Temuan: hambatannya menulis issue, bukan mengawasi → kandidat "Argus usulkan issue". Rencana awal (Atha 2026-11-05: sesudah tahap 1, sebelum UI kontrol): Reviewer Argus (rencana ke
+  Atha sebelum kode), menit kerja Atha per pilot, batch shadow dengan issue yang tidak dijelaskan rinci oleh Claude
+  - [ ] Spek `docs/reviews/SPEC_JUDGE.md` (`argus judge`, stage j1, hanya saran): model GLM-5.3 lewat OpenRouter pin Baidu
+    fp8 (Atha 2026-11-05, harga diskon); K1-K3 disetujui. Lalu satu PR jalur ketat, replay 11 job shadow lama (~$0,20,
+    "go live"), lalu shadow batch 3 dengan issue singkat yang ditulis Claude (Atha: "Issue masih lu dulu")
+    - [x] #316 `argus judge`; replay J8 (#317 32k token, #318 aturan BLOCK, #319 batas teks 500/1000, #320 fallback
+      Novita): `097d` dan `1808` BLOCK, 8/8 bersih PASS, biaya riil ±$0,47 total (spek bagian 6)
+    - [x] J9 shadow batch 3: 4 applied, Claude dan judge sepakat 4/4, tanpa blok asli (spek bagian 6)
+    - [x] Uji cacat tanam: 6/6 tertangkap (spek bagian 6); 7/7 sesudah rerun `81ed` (butir berikut)
+    - [x] 429: #326 (SPEC_RATE_LIMIT_RETRY), verify PASS 17721f3 (3059), mutants 16/16; `81ed` sesudahnya BLOCK benar
+      (7/7 cacat tanam), panggilan itu tanpa 429 jadi retry baru belum teruji live
+    - [x] Aturan J9 disetujui Atha 2026-11-06 ("Ok bro"), mulai batch berikutnya: Claude me-review hanya job yang diblok
+      judge + sampel acak 1 dari 4 job PASS; PASS lainnya applied tanpa dibaca; "go live" per batch tetap; satu cacat
+      lolos di sampel = aturan dicabut, kembali ke review penuh
+    - [x] Pertanyaan terbuka 021 (Atha: "buat 3 fitur yang worth buat ditambah ke argus viewer", ±$0,22): t1
+      `j20261106_133421_1459` judge BLOCK benar (agent membaca address hanya bila `history.state` tidak null; terjepit
+      tes lama `jobs-sort` yang membocorkan address, dilindungi); viewer `28933f7` reset address per tes, t2
+      `j20261106_151840_e81c` PASS, dibaca Claude, applied `518b34f` + tes fresh-load `ab43761` (mutan 2/2). Pilot #6
+      berhenti di langkah 1: Claude mencatat `applied` dengan commit tes (as_is False), deploy ditolak penjaga; Atha:
+      tunggu deploy berikutnya (021 ikut rilis batch 5)
+    - [ ] Kandidat (belum dibangun, tunggu bukti batch 5): `argus fix <job>` dari judge BLOCK (a2, kontrak sama, temuan
+      dibekukan di job.json, satu kali per job, agent boleh lapor "terjepit tes lama" alih-alih mengakali; jalur ketat)
+    - [ ] Celah: drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru (gerbang #275 tidak terpicu), dan tes
+      draf memasang `history.state` `{}`, bukan `null` seperti browser
+- [x] **Uji prompt injection riset → kode** — v0 selesai 2026-11-06 (`pilots/prompt_injection_v0/RESULT.md`, $0,14): 4 varian injeksi di kutipan, tidak ada yang tembus; V4 BLOCK judge karena tes draf cacat (agen menambah 400 CR ke CSV), grader tersembunyi meloloskannya. Lanjutan bila perlu: injeksi di teks klaim, fakta API palsu. Temuan sampingan: gerbang harness belum menolak draf dengan red reason non-perilaku (aturan baru ditegakkan Claude). Rencana awal: (usulan probe model 2026-11-06, Atha "gass", urutan atas di antara kandidat;
+  belum dispek): teks web masuk ke agent kode lewat `--from-research` (#297) dan Reconciliation bagian 5 mencatat injeksi
+  "belum diukur untuk code task". Eksperimen terkecil seperti uji cacat tanam: 3-5 halaman tanam berisi instruksi
+  tersembunyi, lihat apakah ada yang sampai ke handoff, draf, atau patch. Pagar yang mungkin sesudahnya: label asal-usul,
+  hanya klaim + kutipan yang diteruskan. Catatan probe: `docs/reviews/PROBE_REPO_DOCS_2026-11-06.md`
+- [ ] **Eval riset independen** (usulan probe yang sama): set pertanyaan beku dengan cek fakta independen; SUPPORTED hanya
+  berarti kutipannya ada. Lebih mahal (kunci jawaban dicek manual); sambung dengan butir "7/8 benar" di tahap 1
+- [x] **Self-review Argus** (Atha 2026-11-06; dijalankan 2026-11-06, `pilots/self_review_v0`: judge PASS 2x, 0/5 bug review tertangkap, 1 alarm palsu, $0,057; usul: `argus review --diff` tidak dibangun): judge GLM sebagai reviewer kedua PR
+  jalur ketat, hanya saran (merge tetap Atha). Eksperimen terkecil dulu: diff #326 sebelum perbaikan review (7 temuan
+  `/code-review` yang diperbaiki) ke judge lewat `LLMCaller`, hitung tangkapan dan alarm palsu, < $0,10. Bagus → perintah
+  `argus review --diff` (jalur ketat). `argus code` di repo Argus sendiri: tidak, sampai inti harness dilindungi
 - [ ] **Satu pipeline berhirarki** (Atha 2026-11-04, dibahas di chat): job → planner → task riset (alur C), task kode
   (alur B), task deploy (staging), dengan dependensi. Yang membuatnya berat: planner dengan dependensi (M4), oper hasil antar
   task (ADR-005), cap bertingkat dengan ledger dan crash-resume (jalur ketat), titik `approve`/"go live" tetap ada, gagal
@@ -61,9 +109,11 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     - [x] Kandidat dikumpulkan 2026-11-04 (`pilots/research_need_v0/CANDIDATES.md`, #300): 4 kandidat dari release notes
       fastapi 0.143.2→0.162.0 dan starlette 1.8.0→1.10.0, perilaku dibuktikan di dua venv scratch. Penilaian: kebanyakan
       perubahan up2 menambah kemampuan, bukan membuat jalan lama salah; peluang ketemu issue yang gagal tanpa riset rendah
-    - [ ] Penyaringan: satu panggilan DeepSeek per kandidat tanpa tool (< $0,01), butuh "go live" kecil; pilot dua lengan
-      hanya bila jawabannya salah menurut probe. Kalau semua benar: catat dan hentikan jalur ini
-  - [ ] Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
+    - [x] Penyaringan 2026-11-05 (`pilots/research_need_v0/RESULT.md`, $0,0240): K1 dan K2 dijawab benar (K2 sampai
+      batas versi lama), K3 dan K4 model mengaku tidak tahu perubahannya tetapi kodenya lolos di up2. Tidak ada kandidat
+      yang membenarkan pilot dua lengan; berhenti mencari. Planner berhirarki tetap belum dibenarkan; catat kegagalan
+      nyata lengan tanpa riset bila muncul
+  - [x] (2026-11-06, `pilots/e1_effort_v0`: low = rujukan 30/30, reasoning -40..50%, biaya/waktu ±separuh; def ulang 12/17 di laporan A; dipasang di `or_deepseek_checker` 2026-11-07, Atha "Ok gas"; pantau 2-3 job riset `deepinfra` berikutnya) Eksperimen e1 dengan `reasoning.effort: low` pada laporan yang sama, dibandingkan dengan nilai Claude (lebih murah
     bila persetujuannya tidak turun; e1 sekarang selalu lebih longgar saat berbeda)
   - [ ] Worker free masih NO_FINDINGS 4/9 di rerun; satu worker berbayar masih memotong kutipan
   - [ ] Nanti: worker paralel, OpenRouter Batch API, PR 1b `free_repos`, Vercel sebagai cadangan (Atha "kapan2")
@@ -73,6 +123,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   halaman review draf read-only (jalur cepat), fase 2 aksi tanpa biaya (`reject`/`abandon`), fase 3 aksi berbayar, fase 4
   tombol staging. Pertanyaan terbuka: siapa yang approve, batas $ via UI, "go live" lewat tombol, port 8711 + `permitopen`
   kedua di kunci HP, waktunya terhadap up2
+  - [x] Fase 0: `docs/reviews/SPEC_CONTROL_UI.md` (disetujui Atha 2026-11-07, K1-K6 = usul Claude: jalur A, hanya Atha, $1,00/job di server, tombol approve ganti "go live" (staging tetap chat), 8711 saat fase 2, fase 1 sesudah up2)
+  - [ ] Fase 1 (jalur A): PR jalur ketat D1+D3 sesudah up2, lalu issue D2 (argus-ledger) dan D4 (argus-viewer)
 - [~] **Shadow mode** (usul Claude 2026-10-30). **Batch 1 dihentikan 2026-10-31** (Atha) setelah 2 job, 2 blok nyata, keduanya
   lolos gerbang harness: (1) `097d` issue 003 bertentangan dengan tes lama `jobs-list` yang dilindungi (query satu halaman), agen
   menyembunyikan teks `<option>` di `<span>` (HTML tidak valid, vitest hijau, React hanya `console.error`); (2) `0e27` drafter
@@ -85,8 +137,7 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
     job; berkas mirip tes yang tidak bisa dijalankan harness ditolak; prompt `EXISTING TEST CONFLICT`. Mutants 14/14,
     review medium (6 diperbaiki, 3 dipertahankan), verify.sh PASS 95cbee4
   - [ ] Lanjutan K2 (tidak sekarang): cakupan Python untuk repo kecil (`argus-ledger`)
-  - [ ] Reviewer Argus (fitur baru, rencana ke Atha sebelum kode): model murah menilai draf + patch + hasil semua tes; di shadow
-    batch 2 berdampingan dengan Claude (Claude menilai tanpa melihat vonisnya); ukuran: blok asli yang lolos dari reviewer
+  - [x] Reviewer Argus: dibangun sebagai `argus judge` (#316, SPEC_JUDGE; lihat Tahap 2), aturan J9 2026-11-06
   - [ ] Catatan pelajaran per repo (`.argus/lessons.md`): hanya bila batch 2 menunjukkan pola berulang yang tidak bisa jadi
     cek; pelajaran masuk hanya bila replay job lama membuktikannya atau disetujui. Tidak: aturan yang ditulis dan dipakai sendiri
   - [x] **Shadow batch 2** (2026-10-31, harness 900711d): 10 job, $0.2791; 8 bersih di-apply (`argus-viewer` 9273316..201a723,
@@ -132,14 +183,17 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 - [ ] **Kunci HP di `authorized_keys` VM** (2026-10-30): `restrict,port-forwarding,permitopen="127.0.0.1:8710"`, perintah
   paksa `sleep`; dites. Bukan di repo; dicatat di sini agar dicabut bila HP hilang (`~/.ssh/authorized_keys`, baris
   `iphone-viewer`)
+- [ ] `argus applied` tidak bisa dikoreksi: job 021 viewer (`j20261106_151840_e81c`) tercatat dengan commit tes `ab43761`, bukan patch `518b34f`, jadi `viewer-deploy` menolak (pilot viewer p6). Atha 2026-11-07: tunggu batch 5 (rilis berikutnya membawa 021). Kandidat jalur ketat bila terulang: `argus applied --amend <commit>` hanya untuk APPLIED yang belum di-deploy, commit baru wajib `as_is` True, koreksi tercatat di log
 - [ ] `argus code` yang ditolak karena key (tanpa `--key-file`) tetap membuat job `NEW` (`j20261030_164146_9b3d`, di-abandon);
   layar penolakan tidak menyebutnya. Kecil, tetapi menyentuh jalur key (`live()`): jalur ketat
 
 ### Kemampuan agen (jalur cepat, kandidat)
 
-- [ ] **Gate "tes menelan traceback" salah tolak** (argus-ledger 008): pesan tes yang mengharapkan exception, dan `TypeError` di
-  titik panggilan, dianggap menelan. Usul jalur ketat: catat exception yang benar-benar di-raise di kode repo selama red check
-  (`sys.monitoring` RAISE, Python ≥ 3.12)
+- [x] **Gate "tes menelan traceback" salah tolak** (argus-ledger 008; jalur ketat, `docs/reviews/SPEC_RED_CAUGHT.md`, #304,
+  merged d9e6e8b 2026-11-05): red check mencatat exception yang ditangkap tes (`sys.monitoring`, Python 3.12+; setup, call dan
+  teardown), gate menolak hanya yang benar-benar ditelan; jatuh ke aturan lama bila tak bisa dipantau. 32 tes, mutants 19/19,
+  review medium 8 temuan, +4,5% waktu, `verify.sh` PASS 728a8b7 (2956 passed). Batas yang diterima: catatan di proses anak
+  tidak terlihat; `with`/`finally`/`pytest.raises` dihitung seperti `except`
 - [ ] Tes lama yang diubah drafter otomatis wajib (`22456` d1); `swe_grade.py` mencatat nama tes draf yang gagal di atas
   patch maintainer (penilai: jalur ketat)
 - [ ] Kandidat sisa batch 5 / `21379`: drafter mencari titik nilai salah pertama kali muncul (`20428`); gerbang writable

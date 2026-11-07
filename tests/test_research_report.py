@@ -107,6 +107,17 @@ def test_a_checker_that_never_passes_leaves_the_report_marked_not_checked(tmp_pa
     assert "(not checked by e1)" in rj.status("jr", jobs_dir=env.jobs)
 
 
+def test_a_checker_whose_reason_stays_too_long_is_cut_on_its_last_submit(tmp_path):
+    args = t.check_args()
+    args["verdicts"][0]["reason"] = "The quote gives the date. " * 13                 # 337 characters
+    long = call("SubmitCheck", args, "c")
+    env = Env(tmp_path, WORKED + [REPORT, long, long, long])
+    job = env.start()
+    check = json.loads((job.dir / "check.json").read_text())
+    assert job.data["state"] == rr.REPORT_READY and check["status"] == rp.CHECKED
+    assert check["verdicts"]["S"]["reason"].endswith("…") and "*e1: SUPPORTED (" in (job.dir / "REPORT.md").read_text()
+
+
 def test_a_checker_provider_failure_blocks_and_keeps_the_unchecked_report(tmp_path):
     env = Env(tmp_path, WORKED + [REPORT, FakeHTTPError(400, "bad request")])
     job = env.start()
@@ -182,6 +193,31 @@ def test_the_report_gate_refuses(change, problem):
     assert r is None and any(problem in p for p in problems), problems
 
 
+@pytest.mark.parametrize("text", ["Memory berbasis file: file instruksi proyek.", "State file: sesi disimpan.",
+                                  "Two kinds of data: rows and files.", "Ask by mailto: no, by chat."])
+def test_a_word_before_a_colon_and_a_space_is_not_a_link(text):
+    problems, r = rp.report_gate(report(text=text), KNOWN)
+    assert problems == [] and r is not None, problems
+
+
+@pytest.mark.parametrize("text", ["Open file:///etc/passwd now.", "See data:text/html,<b>x</b> here.",
+                                  "Run javascript:alert(1) now.", "Mail mailto:x@y.org now."])
+def test_a_scheme_glued_to_its_target_is_still_a_link(text):
+    problems, r = rp.report_gate(report(text=text), KNOWN)
+    assert r is None and any("URL" in p for p in problems), problems
+
+
+def test_s1_sees_each_finding_as_its_quotes_without_the_workers_claim_or_urls():
+    known = rp.citable(FINDINGS)
+    prompt = rp.report_prompt(FINDINGS, {"max_submits": 3})
+    for f in known.values():
+        assert f"{f['id']} (sub-question {f['sub']}):\n" in prompt and f"): {f['claim']}" not in prompt
+        assert all(s["quote"] in prompt and s["url"] not in prompt for s in f["sources"])
+    check = rp.check_prompt(rp.report_gate(report(), KNOWN)[1], FINDINGS, {"max_submits": 3})
+    assert f"W1.F1 (sub-question Q1): {known['W1.F1']['claim']}" in check             # e1 still reads the claim
+    assert known["W1.F1"]["sources"][0]["url"] in check                                 # and the pages
+
+
 def test_a_report_lists_only_the_findings_it_cites():
     _, r = rp.report_gate(report(cites=("W1.F2",), text="It supports free threading."), KNOWN)
     md = rp.render(FINDINGS, r)
@@ -203,6 +239,40 @@ def test_a_report_lists_only_the_findings_it_cites():
 def test_the_check_gate_wants_one_verdict_per_item(args, problem):
     problems, v = rp.check_gate(args, ["S", "P1"])
     assert v is None and any(problem in p for p in problems), problems
+
+
+def test_a_reason_too_long_is_refused_before_the_last_submit_and_cut_on_it():
+    args = {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "y" * 341},
+                         {"id": "P1", "verdict": "PARTIAL", "reason": "ok"}]}
+    problems, v = rp.check_gate(args, ["S", "P1"])
+    assert v is None and any("reason has 341" in p for p in problems)
+    problems, v = rp.check_gate(args, ["S", "P1"], last=True)
+    assert problems == [] and v["S"]["verdict"] == "SUPPORTED" and v["P1"]["verdict"] == "PARTIAL"
+    assert len(v["S"]["reason"]) == rp.REASON_MAX and v["S"]["reason"].endswith("…")
+
+
+def test_a_cut_reason_ends_at_a_word_and_leaves_no_open_code_or_emphasis():
+    cut = rp._cut("The quote backs `asyncio.TaskGroup` and *not* the `3.11 " + "word " * 80, 60)
+    assert len(cut) <= 60 and cut.endswith("…") and not cut[:-1].endswith(("wor", "wo", "w"))
+    assert cut.count("`") % 2 == 0 and cut.count("*") % 2 == 0
+
+
+def test_a_reason_that_fits_once_its_spaces_are_collapsed_is_not_cut():
+    args = {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "ok  \n " * 60},
+                         {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]}
+    problems, v = rp.check_gate(args, ["S", "P1"])
+    assert problems == [] and not v["S"]["reason"].endswith("…")
+
+
+@pytest.mark.parametrize("args", [
+    {"verdicts": [{"id": "S", "verdict": "TRUE", "reason": "y" * 341}, {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]},
+    {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "y" * 341}]},
+    {"verdicts": [{"id": "S", "verdict": "SUPPORTED", "reason": "see https://x.org " + "y" * 341},
+                  {"id": "P1", "verdict": "SUPPORTED", "reason": "ok"}]},
+])
+def test_the_last_submit_still_refuses_a_bad_verdict_a_missing_item_or_a_link(args):
+    problems, v = rp.check_gate(args, ["S", "P1"], last=True)
+    assert v is None and problems
 
 
 def test_the_summary_is_checked_against_everything_the_report_cites():

@@ -1,0 +1,30 @@
+## Code
+
+```python
+# argus_ledger/app.py
+from __future__ import annotations
+
+import asyncio
+import json
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
+
+HEARTBEAT_SECONDS = 15.0
+
+
+def _iter_jobs(jobs_dir: Path) -> Iterator[dict[str, Any]]:
+    for path in sorted(jobs_dir.glob("*.json")):
+        yield json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
+
+
+def create_app(jobs_dir: str | Path) -> FastAPI:
+    jobs_dir = Path(jobs_dir)
+   

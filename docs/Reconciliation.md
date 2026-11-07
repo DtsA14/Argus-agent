@@ -1,4 +1,4 @@
-# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30)
+# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30, isi diperbarui sampai 2026-11-06)
 
 Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` sesudah #266. Status di bawah berasal
 dari kode, dari bukti di `verification/` dan `pilots/`, dan dari review di `docs/reviews/`. Laporan sebelumnya diarsipkan:
@@ -12,7 +12,7 @@ Yang berubah sejak 2026-10-27: **arah coding agent untuk production** (2026-10-2
 14 task di `main`; batch SWE 4 dan 5 serta dev set 1–2 (regresi); ReadDocs (#229), stage riset (#242), counter reasoning (#240),
 harga peak (#241); **staging** (#244, #246, #249, #251, #258) dengan monitor dan notifikasi (#259, #260); **aplikasi kedua
 `argus-viewer`** (React PWA, JS divalidasi dengan vitest di `pwa_node22`, #256, #257, #261, #263): dua issue ditulis agen,
-dirilis ke staging dan **dipakai Atha di HP** lewat SSH port forwarding.
+dirilis ke staging dan **dipakai Atha di HP** lewat SSH port forwarding. Tambahan sampai 2026-11-06: 21 issue viewer dikerjakan Argus (001-020 live; 021 di `main`, ikut rilis berikutnya), `argus judge` (#316) dan aturan review J9.
 
 Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu, sisanya belum) · `[ ]` belum dimulai.
 
@@ -25,10 +25,11 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | General-task agent | `[x]` | `codetask/`, `acceptance/`; Eval Set v1 16/16 | Eval Set v1 jenuh: regresi saja |
 | **M4** multi-agent dengan dependensi | `[ ]` | Graf riset punya fan-out tanpa dependensi; code task satu agen | Belum ada bukti single-agent menjadi penghalang |
 | **M5** observability dan benchmark | `[~]` | Ledger per panggilan; `audit_run.py`, `failure_trace.py`, `pilot_report.py`; keputusan manusia dengan waktunya di `job.json` (#185; `argus-ledger` 014 menampilkannya); `swe_grade.py`; `argus-ledger report` (biaya per stage); jumlah keputusan per pilot di setiap `RESULT.md` | Tracing/dashboard; benchmark single vs multi; **menit kerja Atha** belum ditanyakan; **eval set yang tidak jenuh** |
-| **M6** repo → PR | `[x]` MVP | Repo Argus (pilot M6, W2b, router); **sympy** (SWE, bagian 4b); **`argus-ledger`** Python/FastAPI, 14 task (bagian 4c); **`argus-viewer`** JS/React, 2 task, vitest di `pwa_node22` (bagian 4c) | Tingkat sukses umum (SWE tanpa bocoran sampel kecil); PR/apply tetap oleh manusia/Claude (disengaja); `argus apply` belum ada; berkas yang dilindungi di repo JS dicek skrip di luar harness; vitest: tes lama belum bisa diubah, tanpa Playwright |
+| **M6** repo → PR | `[x]` MVP | Repo Argus (pilot M6, W2b, router); **sympy** (SWE, bagian 4b); **`argus-ledger`** Python/FastAPI, 14 task (bagian 4c); **`argus-viewer`** JS/React, 21 issue (001-020 live), vitest di `pwa_node22` (bagian 4c) | Tingkat sukses umum (SWE tanpa bocoran sampel kecil); PR/apply tetap oleh manusia/Claude (disengaja); `argus apply` belum ada; berkas yang dilindungi ditegakkan harness (`.argus/protected`, #270); tes lama tidak bisa diubah agen, tanpa Playwright |
 | M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat: layanan approval bersama UI kontrol (bagian 7) |
 | M8 penemuan tool, memori prosedural | `[ ]` | – | Seluruhnya (ADR-003) |
 | M9 deployment terkendali | `[~]` (staging) | `argus stage deploy\|rollback\|restart\|check\|status\|monitor\|report` (#244, #246, #249, #251, #258): hanya commit job `APPLIED` apa adanya, container tanpa jaringan/read-only/non-root di Unix socket, peer = pid container, data asli lewat snapshot allowlist, monitor 15 menit, **notifikasi ntfy** sesudah 3 gagal (#259, #260), namespace per direktori staging (#258). **Aplikasi statis** (#257, #261, #263): build tanpa jaringan di `pwa_node22`, cek artifact (A4), `sw.js` dipin, swap `current` atomik sesudah smoke kandidat, proxy `127.0.0.1:8710` GET/HEAD (Host, CSP, `no-store` untuk API, hanya `/sw.js` boleh jadi service worker), unit `systemd --user`. Dua aplikasi, pilot staging #1, upgrade #1, data asli #1, viewer #1–#2 | **Production** (DNS/TLS, pengguna, kredensial): ditunda (keputusan 2026-10-30, pemicu di bagian 7); smoke kandidat tidak menguji lingkungan unit systemd |
+| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web berurutan (paralel belum, PENDING), sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi sejak 2026-11-03 (bagian 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
 | Capability pack (gambar, video/audio, game) | `[ ]` | – | Seluruhnya; gate non-kode ADR-006 |
 
 M4, M7, M8, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (keputusan 2026-10-21, ditegaskan 2026-10-24).
@@ -79,6 +80,45 @@ $0,02–0,08 per fitur; repo JS dengan jaminan red check yang sama.
 **Belum terbukti:** task yang tidak dijelaskan rinci oleh Claude (semua issue ditulis Claude); tanpa review Claude (shadow
 mode diusulkan).
 
+## 4d. Riset nyata pertama tahap 1: "Agentic AI" (2026-11-05)
+
+Profil `deepinfra`, cap $1,00 per job. Tiga job, tiap kegagalan dijadikan perbaikan harness di jalur cepat.
+
+| Job | Hasil | Biaya | Penyebab dan perbaikan |
+|---|---|---|---|
+| `j20261105_104714_120f` | SYNTHESIS_FAILED | $0,0729 | s1: gate URL membaca "Memory berbasis **file:** …" (prosa Indonesia) sebagai skema `file:` di ketiga submit. Fix #307 (`file: x` dengan spasi = prosa; `SubmitReport` v2; verify.sh PASS d99b48d). w1 LangGraph INSUFFICIENT_EVIDENCE: halaman `docs.langchain.com` = satu baris konfigurasi Mintlify 334.421 karakter lalu 3.814 karakter artikel; jatah 48.000 habis di konfigurasi. Fix #308 (baris JSON ≥20.000 karakter dibuang saat fetch; halaman konfigurasi saja disimpan sebagai "no article text"; petunjuk worker: dua part tanpa artikel → cari docs teks) |
+| `j20261105_114525_582c` | REPORT_READY, e1 NOT_CHECKED | $0,0737 | w1 kini ANSWERED (artikel 3.847 karakter disajikan). e1: alasan S 360/343/341 karakter (batas 300) membuang semua verdict. Fix #309 (submit terakhir memotong alasan di batas kata; `SubmitCheck` v2) |
+| `j20261105_121107_718e` | **REPORT_READY, e1 CHECKED** (submit 1) | $0,0732 | e1: 8 SUPPORTED, 9 PARTIAL, 0 UNSUPPORTED |
+| `j20261105_123505_b1d4` | **REPORT_READY, e1 CHECKED** (submit 3, alasan dipotong oleh #309) | $0,0742 | Sesudah #311 (s1 hanya melihat kutipan, bukan klaim worker): e1 **17 SUPPORTED**, 0 PARTIAL, 0 UNSUPPORTED |
+
+**Terhadap ambang v1** (job 3): e1 selesai ✓; tidak ada UNSUPPORTED ✓; SUPPORTED 8/17 = **47%, di bawah 60%** ✗. Claude
+mencocokkan alasan PARTIAL e1 dengan sumber: nama yang ada di laporan tetapi di kutipan mana pun tidak (PostgresSaver,
+`/memories`, SQLiteSession, `retry_policy=`, "research preview", MCPServerStdio, `interrupt()`) — e1 benar. Penyebab:
+s1 menulis detail dari *klaim* temuan (ringkasan worker) atau dari pengetahuannya sendiri, sedangkan e1 menilai hanya dari
+kutipan. Job 2 juga punya satu sumber sekunder yang kemungkinan keliru (blog pihak ketiga: rename Claude Agent SDK "awal
+2026"); gate tidak bisa menangkapnya karena kutipannya memang ada. "7/8 benar" belum bisa dinilai dari satu pertanyaan.
+
+**Eksperimen #311** (Atha memilih "s1 hanya kutipan" sebelum "model s1 lebih kuat"): job 4, pertanyaan sama, 17/17
+SUPPORTED. Cek Claude yang tidak bergantung pada e1: identifier teknis di laporan yang tidak ada di kutipan mana pun turun
+dari 27 (job 3: PostgresSaver, SqliteSaver, RedisSession, MongoDBSession, `add_node`, ...) ke 0 (sisanya kata bergaris
+miring seperti "read/write"). Penyebab 47% di job 3 adalah klaim worker yang melebihi kutipannya dan disalin s1, bukan
+kemampuan model s1 saja. Batas: n = 1 per lengan, worker juga dijalankan ulang (temuan tidak sama persis). Catatan isi:
+bagian Claude memakai dokumentasi Claude Code (CLAUDE.md, MEMORY.md), tidak khusus Agent SDK (soal cakupan, bukan
+klaim tanpa bukti). Ambang v1 untuk job ini: e1 selesai ✓, 0 UNSUPPORTED ✓, SUPPORTED 100% ✓.
+
+**Dua topik lain** (Atha 2026-11-05: ekonomi dan geopolitik; dipersempit Claude agar bisa dicek), sesudah #311:
+
+| Job | Pertanyaan | Hasil | Biaya |
+|---|---|---|---|
+| `j20261105_125836_ebbd` | Suku bunga BI dan The Fed sepanjang 2026, kurs rupiah sampai November 2026 | e1 11 SUPPORTED, 2 PARTIAL, 0 UNSUPPORTED (85%); w1 (BI) INSUFFICIENT_EVIDENCE: 4 keputusan BI terverifikasi dari halaman, sisanya hanya di ringkasan pencarian | $0,0601 |
+| `j20261105_125836_eca9` | Keanggotaan Indonesia di BRICS Januari 2025 - November 2026 | e1 13 SUPPORTED, 1 PARTIAL, 0 UNSUPPORTED (93%) | $0,0905 |
+
+Cek Claude: semua angka di laporan ada di kutipan (ekonomi 28/28, BRICS 3/3). PARTIAL ekonomi: fakta ada di temuan lain
+yang tidak dikutip paragraf itu (salah rujuk, bukan karangan). PARTIAL BRICS: s1 mengambil klaim dari **judul di URL**
+sumber (URL tampil di samping kutipan untuk s1). Catatan worker ekonomi: tidak mau mengutip kalimat yang terpotong baris
+baru di halaman, padahal G2 menerima kutipan lintas baris. Kebenaran faktual per November 2026 tidak dicek terhadap
+sumber independen; "7/8 benar" belum dinilai.
+
 ## 5. Mode kegagalan (`FUTURE_ARCHITECTURE.md` bagian 8)
 
 | Mode | Status | Bukti / gap |
@@ -104,8 +144,9 @@ mode diusulkan).
 ## 6. Gap terbuka, diurutkan menurut nilai sekarang
 
 1. **Supervisi dan "melepas" Argus:** di dua aplikasi latihan Claude masih menulis issue, mereview draf dan patch, dan
-   men-deploy. Review Claude belum mengubah hasil di task viewer (sampel 2). Langkah: **shadow mode** per kelas task, dengan
-   **berkas yang dilindungi dipaksa harness** sebagai prasyarat. Ukuran: jumlah blok yang akan terjadi, menit Atha.
+   men-deploy. Review Claude belum mengubah hasil di task viewer (sampel 2). Langkah: **shadow mode** per kelas task;
+   prasyarat **berkas yang dilindungi dipaksa harness** sudah selesai (#270). Berikutnya: Reviewer Argus (tahap 2, bagian 7).
+   Ukuran: jumlah blok yang akan terjadi, menit Atha.
 2. **UI kontrol interaktif** (permintaan Atha 2026-10-30): menunggu keputusan scope (bagian 7). Menyentuh ADR-007 (approval
    tercatat), key, dan CSRF; fase 1 read-only bisa jalan lebih dulu.
 3. **Operasional staging:** pin image per checkout disalin manual; smoke kandidat tidak menguji unit systemd; up2 mulai
@@ -165,6 +206,33 @@ Diputuskan 2026-11-04 (Atha):
   `argus code` (r1 opsional, drafter, `approve`, agen, review, `applied`, staging); alur C `argus research` (p1, worker
   web, s1, e1). **Satu pipeline berhirarki** (job → planner → task riset/kode/deploy) dicatat sebagai arah; langkah
   pertama `--from-research` (urutan tetap, tanpa planner): spek disetujui Atha, diimplementasi (`SPEC_FROM_RESEARCH`).
+
+Diputuskan 2026-11-05 (Atha, breakdown arah general-purpose; "1. Ok, 2. Tahap 2, 3. Agentic AI"):
+- **Lapisan** (status per 2026-11-05): L0 fondasi (budget, ledger, crash-resume, sandbox, evaluator) `[x]`; L1 kode
+  (`argus code`) `[x]` MVP; L2 riset (`argus research`) `[~]`; L3 gabungan (`--from-research`, urutan tetap) `[~]`;
+  L4 hirarki (job → planner → task riset/kode/deploy dengan dependensi) `[ ]`; L5 kemampuan baru (gambar, video/audio,
+  game, penemuan tool) `[ ]`.
+- **Urutan tahap:** 1 → 2 → (3 hanya bila terbukti) → 4.
+  - *Tahap 1, buktikan riset:* beberapa job riset berbayar nyata terhadap ambang v1; perbaiki worker free (NO_FINDINGS)
+    dan kutipan terpotong; eksperimen e1 `reasoning.effort: low`. Keluaran: angka, bukan klaim.
+  - *Tahap 2, kurangi supervisi* (dipilih Atha sebelum UI kontrol): berkas yang dilindungi sudah dipaksa harness (#270);
+    sisa: **Reviewer Argus** (model murah menilai draf + patch + hasil tes, berdampingan dengan Claude yang menilai tanpa
+    melihat vonisnya; rencana ke Atha sebelum kode), **menit kerja Atha** per pilot, batch shadow dengan issue yang tidak
+    dijelaskan rinci oleh Claude.
+  - *Tahap 3, pipeline berhirarki:* hanya bila ada issue yang salah dikerjakan lengan tanpa riset, atau pekerjaan gabungan
+    yang tidak cukup dengan urutan tetap. Isi: satu spek + 4-6 PR jalur ketat (planner dengan dependensi/M4, oper hasil
+    antar task/ADR-005, cap bertingkat dengan ledger dan crash-resume, stop/retry/replan); planner tetap stage run.
+  - *Tahap 4, perluasan kemampuan:* satu pack per kali menurut nilai terukur dan kesiapan provider; gate non-kode ADR-006
+    dulu; registry dan policy formal (M7) saat jumlah tool membutuhkannya.
+  - *Jalur samping:* UI kontrol (fase 1 read-only kapan saja; fase berbayar menunggu scope).
+- **Tidak dibangun sekarang:** Router v1 SPEC-001 utuh, memori berlapis (M8), penemuan tool, production.
+- **Risiko yang dicatat:** pilot terlalu bersih (issue ditulis Claude, sampel 1-2); riset belum terbukti dibutuhkan oleh
+  kode (#298: kedua lengan benar, riset 2× lebih mahal); cap USD non-Anthropic bertumpu pada hitungan heuristik; isi web
+  adalah data tidak tepercaya (prompt injection pada code task belum diukur).
+- **Riset pertama tahap 1: "Agentic AI"**, dipersempit Claude menjadi pertanyaan yang bisa dicek (pola memory, tool use
+  dan recovery di LangGraph, OpenAI Agents SDK dan Claude Agent SDK, per November 2026). Hasil di bagian 4d.
+- **Izin sesi 2026-11-05:** perbaikan riset dikerjakan di jalur cepat, termasuk "go live" dan merge oleh Claude, dengan
+  `/code-review medium` bila perlu (#307-#309).
 
 Menunggu keputusan Atha:
 1. **UI kontrol** (scope di `PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol, port 8711 +

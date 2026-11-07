@@ -1,0 +1,13 @@
+RAISED_CAUGHT_BY_TEST {
+ "test_t1_true_swallow": [
+  "BaseException",
+  "Exception",
+  "ValueError"
+ ],
+ "test_t4_c_raised_in_repo_base_name": [
+  "BaseException",
+  "Exception",
+  "KeyError",
+  "LookupError"
+ ]
+}

@@ -1,0 +1,58 @@
+{
+  "status": "CHECKED",
+  "stop_reason": "every item has a verdict",
+  "verdicts": {
+    "S": {
+      "verdict": "SUPPORTED",
+      "reason": "All cited findings back it: BI holds/hikes (W1.F1,F3,F5,F6), reasons (W1.F2,F4,F7), Fed holds and Sept raise/Oct hold (W2.F2-F8), rupiah levels and 7.23% H1 drop (W3.F1,F2,F5,F6,F4)."
+    },
+    "P1": {
+      "verdict": "PARTIAL",
+      "reason": "'Lowest since 2022' (W1.F8 not cited), July Rp18.078 (W3.F2 not cited) and Rp18.168 spot (W3.F6 not cited) aren't backed by the cited findings; the March/May/July/Sept rates, Fed holds and Rp16.786/Rp16.993/Rp18.140 are."
+    },
+    "P2": {
+      "verdict": "SUPPORTED",
+      "reason": "W1.F8 covers lowest-since-2022 and 150bps cuts; W1.F1 the March hold with DF/LF; W1.F2 the Middle East/2.5±1% rationale."
+    },
+    "P3": {
+      "verdict": "SUPPORTED",
+      "reason": "W1.F3 supports the 50bps May hike to 5.25%; W1.F4 supports the pro-stability external-resilience rationale."
+    },
+    "P4": {
+      "verdict": "SUPPORTED",
+      "reason": "W1.F5 July hold and rationale, W1.F6 Sept hold with DF 4.75%/LF 6.50%, W1.F7 Sept rationale all match."
+    },
+    "P5": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F1 lists exactly the eight meeting dates and the minutes release dates cited (Jan 18 Feb, Mar 8 Apr, Apr 20 May, Jun 8 Jul, Jul 19 Aug, Sep 7 Oct)."
+    },
+    "P6": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F2 backs the Jan 28 hold, all cited indicators and Miran/Waller dissents; W2.F3 backs the Mar 18 hold, Middle East wording and Miran dissent."
+    },
+    "P7": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F4 backs the Apr 29 hold, energy-price inflation and the Miran/Hammack/Kashkari/Logan votes; W2.F5 backs the Jun 17 hold, reserves, supply shocks and price-stability pledge."
+    },
+    "P8": {
+      "verdict": "SUPPORTED",
+      "reason": "W2.F6 backs Jul 29 hold and three dissents; W2.F7 the Sept 16 raise and rationale; W2.F8 the Oct 28 hold, wording and Cook/Hammack dissents."
+    },
+    "P9": {
+      "verdict": "SUPPORTED",
+      "reason": "W3.F1 backs Rp16.786 Jan/Rp16.993 Mar after the Iran attack; W3.F3 backs Rp18.039, Rp18.171, Rp18.141, Rp17.971, Rp17.899 and Rp17.961 figures."
+    },
+    "P10": {
+      "verdict": "SUPPORTED",
+      "reason": "W3.F2 backs May Rp17.798, July Rp18.078, Aug Rp17.703, Sep 30 Rp17.894; W3.F5 the Rp17.870 end-Sep; W3.F1 the JISDOR 8.46%; W3.F4 the 8th/7.23% ranking."
+    },
+    "P11": {
+      "verdict": "SUPPORTED",
+      "reason": "W3.F5 backs Rp18.145 on 2 Nov; W3.F6 the spot/JISDOR 4 Nov figures; W3.F7 the Middle East, US tightening, EM sentiment and Lukman's domestic equity/wiretapping reasons."
+    },
+    "P12": {
+      "verdict": "PARTIAL",
+      "reason": "Perry Warjiyo, Destry 'bold' intervention (W3.F8), March (W1.F2), July/Sept (W1.F5,F7), and Fed shift (W2.F2,F6,F7) are backed, but the Oct 28 hold relies on W2.F8, which is not cited."
+    }
+  }
+}

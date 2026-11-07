@@ -54,6 +54,7 @@ def cfg_for(role):
     cfg = copy.deepcopy(load_config())
     cfg["roles"][role]["model"] = "fake:scripted"
     cfg["llm"]["base_delay"] = 0
+    cfg["llm"].update(rate_limit_delay_s=0, rate_limit_max_delay_s=0)   # SPEC_RATE_LIMIT_RETRY
     return cfg
 
 
