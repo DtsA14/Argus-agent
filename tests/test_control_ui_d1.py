@@ -52,7 +52,8 @@ def a_report(draft, **more):
 def draft_job(root, job_id="jdraft", *, stage="d1", draft=None, report=None, review="# Draft review\n\nok\n",
               stage_sha=None, judges=(), stages=None):
     """A job whose `stage` drafted `draft`: draft.json, check_report.json and DRAFT_REVIEW.md in runs/<job>-<stage>,
-    job.json's stage with the draft's sha (or `stage_sha`), and JUDGE-jN.md files in the job's directory."""
+    job.json's stage with the draft's sha (or `stage_sha`), and JUDGE-jN.md files in the job's directory with their
+    judge stages (each judged this draft unless it names another sha)."""
     draft = draft or a_draft()
     d = make_job(root, job_id)
     body = json.loads((d / "job.json").read_text())
@@ -69,8 +70,12 @@ def draft_job(root, job_id="jdraft", *, stage="d1", draft=None, report=None, rev
         (run / "DRAFT_REVIEW.md").write_bytes(review if isinstance(review, bytes) else review.encode())
     for name, text in ((f"inputs.json", '{"issue": "x"}'), ("issue.txt", "the issue"), ("result.json", "{}")):
         (run / name).write_text(text)
-    for n, text in judges:
+    body = json.loads((d / "job.json").read_text())
+    for n, text, *judged in judges:                       # (n, text[, the sha the judge stage records])
+        body["stages"][f"j{n}"] = {"kind": "judge", "run_id": f"{job_id}-j{n}", "status": "JUDGED", "started_at": T,
+                                   "draft_sha256": judged[0] if judged else body["stages"][stage]["draft_sha256"]}
         (d / f"JUDGE-j{n}.md").write_text(text)
+    (d / "job.json").write_text(json.dumps(body))
     return d
 
 
@@ -188,8 +193,9 @@ def test_a_linked_review_or_judge_is_never_read(tmp_path, root, link):
     # F1: the review and the judge are read by name, never through a link
     secret = tmp_path / "outside.md"
     secret.write_text("a file outside the job\n")
-    d = draft_job(root, review=None)
+    d = draft_job(root, review=None, judges=[(1, "v\n")])
     review, judge = d / "runs" / "jdraft-d1" / "DRAFT_REVIEW.md", d / "JUDGE-j1.md"
+    judge.unlink()
     for target in (review, judge):
         os.symlink(secret, target) if link == "symlink" else os.link(secret, target)
     man, dd, meta = published(tmp_path, root)
@@ -344,3 +350,71 @@ def test_validate_reads_each_summary_string_for_a_key_not_its_json_escaped_form(
     meta["summary"]["plan"]["steps"] = ['set password: "x" in the client']
     (d / "meta.json").write_text(json.dumps(meta))
     assert any("meta.json matches a key pattern" in p for p in sd.validate(tmp, man))
+
+
+def test_a_verdict_on_another_draft_is_never_shown_beside_this_one(tmp_path, root):
+    # review of PR #357: d1 judged (j1), then redrafted as d2; j2 judged d2, j3 an older draft again
+    first, second = a_draft(), a_draft(unverifiable=["the second reading"])
+    draft_job(root, stage="d2", draft=second, stages={
+        "d1": {"kind": "draft", "run_id": "jdraft-d1", "status": "DRAFTED", "started_at": T, "draft_sha256": sha(first)}},
+              judges=[(1, "on the first draft\n", sha(first)), (2, "on the second draft\n"),
+                      (3, "on the first again\n", sha(first))])
+    _, d, meta = published(tmp_path, root)
+    assert meta["judge"]["file"] == "JUDGE-j2.md" and (d / "judge.md").read_text() == "on the second draft\n"
+
+
+def test_a_judge_only_of_an_earlier_draft_gives_no_judge(tmp_path, root):
+    first, second = a_draft(), a_draft(unverifiable=["the second reading"])
+    draft_job(root, stage="d2", draft=second, judges=[(1, "on the first draft\n", sha(first))], stages={
+        "d1": {"kind": "draft", "run_id": "jdraft-d1", "status": "DRAFTED", "started_at": T, "draft_sha256": sha(first)}})
+    _, d, meta = published(tmp_path, root)
+    assert meta["judge"] is None and not (d / "judge.md").exists()
+
+
+def test_an_unexpected_failure_of_the_summary_keeps_the_review_and_the_judge(tmp_path, root, monkeypatch):
+    draft_job(root, judges=[(1, "v\n")])
+    monkeypatch.setattr(sd, "draft_summary", lambda *a: [][0])
+    man, d, meta = published(tmp_path, root)
+    assert meta["summary"] is None and meta["review"] and meta["judge"]
+    assert man["withheld"] == [{"job": "jdraft", "why": "d1: summary not published: IndexError"}]
+
+
+def test_invisible_format_characters_are_removed(tmp_path, root):
+    draft = a_draft()
+    draft["plan"]["steps"] = ["assert \u202eTRUE\u202c is\u200b\u2066 fine\ufeff"]
+    draft_job(root, draft=draft, review="x = 1 \u202e# not what it reads\u2069\u200d\n")
+    _, d, meta = published(tmp_path, root)
+    assert (d / "review.md").read_text() == "x = 1 # not what it reads\n"
+    assert meta["summary"]["plan"]["steps"] == ["assert TRUE is fine"]
+
+
+def test_the_marker_counts_a_character_cut_in_two(tmp_path, root):
+    big = "a" + "\u00e9" * 200_000                           # one line; the cut falls inside a two-byte character
+    draft_job(root, review=big)
+    _, d, _ = published(tmp_path, root)
+    text = (d / "review.md").read_text()
+    kept, marker = text.split("[dipotong harness: ")
+    assert int(marker.split()[0]) == len(big.encode()) - len(kept.encode())
+
+
+def test_a_source_file_over_the_read_limit_is_not_read(tmp_path, root, monkeypatch):
+    monkeypatch.setattr(sd, "READ_MAX", 50)
+    draft_job(root, review="r" * 60 + "\n")
+    man, _, meta = published(tmp_path, root)
+    assert man["withheld"] == [{"job": "jdraft", "why": "d1: draft.json cannot be read"}] and meta is None
+
+
+@pytest.mark.parametrize("change, problem", [
+    (lambda m: m.update(stage=["d1"]), "names no draft stage"),
+    (lambda m: m.update(judge={"file": "../job.json", "sha256": m["judge"]["sha256"]}), "names no judge file"),
+    (lambda m: m["summary"]["plan"]["steps"].append("bell \x07"), "control characters"),
+    (lambda m: m["summary"].update(unverifiable=["x"] * 51), "longer than the limit"),
+    (lambda m: m.update(summary={"draft_sha256": m["draft_sha256"], "plan": {"files": 3}}), None),
+])
+def test_validate_checks_the_meta_it_wrote(tmp_path, root, change, problem):
+    tmp, man, d = written(tmp_path, root)
+    meta = json.loads((d / "meta.json").read_text())
+    change(meta)
+    (d / "meta.json").write_text(json.dumps(meta))
+    problems = sd.validate(tmp, man)
+    assert (any(problem in p for p in problems) if problem else isinstance(problems, list)), problems

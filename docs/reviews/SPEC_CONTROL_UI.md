@@ -105,7 +105,7 @@ tidak ada pekerjaan untuk agen.
 `judge.md` (bukan di `runs/`: argus-ledger membaca `runs/` sendiri). `meta.json` = `{"stage", "draft_sha256", "review":
 null | {"sha256"}, "summary": null | {...}, "judge": null | {"file", "sha256"}}`; `summary` persis field amandemen 1
 (`draft_sha256`, `cost`, `conflicts`, `red`, `plan`, `scope`, `warnings`, `unverifiable`). Stage = stage draf dengan nomor
-terbesar; judge = `JUDGE-jN.md` dengan N terbesar. Gagal cek sha `draft.json` → tidak ada `draft/` sama sekali; review atau
+terbesar; judge = `JUDGE-jN.md` dari stage judge terakhir yang `draft_sha256`-nya sama dengan draf itu (review #357: vonis atas draf lama tidak pernah tampil di samping draf baru). Selain karakter kontrol, karakter format tak terlihat (bidi override/isolate, zero-width, BOM) juga dibuang (review #357), karena manusia menyetujui apa yang tampil; berkas sumber > 16 MB tidak dibaca. Gagal cek sha `draft.json` → tidak ada `draft/` sama sekali; review atau
 judge yang gagal D1 (bukan UTF-8, pola key, link) → `null` di meta, berkasnya tidak ada; `summary` yang gagal (sha
 `check_report.json` lain, pola key di salah satu string) → `null`. Alasan di manifest `withheld` (`{job, why}`, tanpa nilai).
 Daftar > 50 → 49 butir + penanda `[dipotong harness: N]` (untuk `red`: butir dengan `test` = penanda, field lain kosong).
@@ -115,7 +115,7 @@ Untuk issue D2: `GET /jobs/<id>/draft` → `{"draft_sha256": meta.draft_sha256, 
 {"sha256", "text": isi review.md}, "judge": null | {"sha256", "text": isi judge.md}}`; 404 bila `draft/meta.json` tidak
 ada. `review` bisa `null` (bentuk D2 di atas dilonggarkan untuk itu). Cek pada data nyata `~/pilot3a_live` (76 job): 71
 draf terbit; 7 review ditahan karena `PASSWORD = "..."` di tes login argus-ledger (positif palsu yang disengaja, F2; ringkasannya
-tetap terbit), 3 stage draf tanpa `draft_sha256` (draf gagal). Mutants 18/18.
+tetap terbit), 3 stage draf tanpa `draft_sha256` (draf gagal). Mutants 25/25.
 
 **Urutan PR fase 1 (jalur A):** satu PR jalur ketat untuk D1+D3 (spek ini bagian 3, mutants, `/code-review medium` dan
 `/security-review`, `verify.sh`, "merge" Atha), lalu issue D2 dan D4 untuk Argus (dua job, shadow), lalu deploy viewer dan
