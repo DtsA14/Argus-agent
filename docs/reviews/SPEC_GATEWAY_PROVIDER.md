@@ -108,6 +108,13 @@ bisa terlampaui sampai 5x sebelum ledger mencatatnya.
 - Karena reservasi tidak lagi bisa terlampaui oleh harga upstream, satu model boleh di-pin ke lebih dari satu upstream
   berbayar (alasan pencabutan fallback Novita 2026-11-06 sudah tidak berlaku). Tes: `tests/test_gateway.py` bagian
   max_price, `tests/test_code_judge.py` (pin judge, cap muat satu langkah terbesar).
+- Batas yang diketahui (`/code-review medium` #351): `max_price` hanya membatasi harga per token prompt dan completion,
+  bukan biaya per request, gambar, atau cache (upstream GLM dan DeepSeek yang di-pin tidak menagihnya per 2026-11-07).
+  Bahwa harga config adalah harga list tertinggi tidak dicek kode (butuh jaringan); dicek manual dari halaman endpoints
+  setiap kali pin atau harga diubah. Selama upstream pertama diskon, `price_drift` muncul di setiap panggilan (sudah
+  diketahui, bukan tanda harga berubah). Model gateway berbayar tanpa harga kini ditolak juga saat `budget.max_usd` tak
+  terbatas (lebih ketat dari aturan umum, disengaja). DeepSeek naik 43% di ledger profil riset `deepinfra`: checker e1
+  langkah terbesar sekitar $0,03 dari cap $0,10.
 
 ## 5. Data dan model gratis
 

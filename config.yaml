@@ -220,7 +220,8 @@ router:
   draft_max_usd: 0.75
   research_max_usd: 0.30   # SPEC_RESEARCH_STAGE r1, one stage (Atha 2026-10-29)
   judge_max_usd: 0.30      # SPEC_JUDGE J6: one judge stage, advice only (Atha 2026-11-05); 0.30 at the GLM list price,
-                           # one 32k-output step reserves ~$0.16 (Atha 2026-11-07)
+                           # one 32k-output step reserves ~$0.16 with a 15k-token prompt, ~$0.28 at max_input_tokens
+                           # (Atha 2026-11-07)
   agent_max_usd: {default: 0.50, large_usd: 0.75}   # by the profile the drafter chose (drafter.agent_profiles)
   overrides:
     budget.max_tokens: 3000000         # 1,200,000 until router pilot #1 on DeepSeek: tokens re-sent at every step
