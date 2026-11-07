@@ -1,0 +1,6 @@
+staging live: j20261104_152512_b93a-4e947a0ffe8b.up2
+  job j20261104_152512_b93a, commit 4e947a0ffe8b, runtime ledger_staging_up2
+  last smoke: pass at 2026-11-07T15:45:53Z
+data snapshot: 2026-11-07T15:46:01Z, 76 jobs, 36 excluded
+last monitor: pass at 2026-11-07T15:46:00Z
+rollback would start: j20261104_152512_b93a-4e947a0ffe8b.up1 on ledger_staging_up1

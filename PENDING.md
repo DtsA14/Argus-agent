@@ -158,7 +158,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
   live `j20261104_152512_b93a-4e947a0ffe8b.up1`, CSV tanpa gzip, JSON gzip; rollback → 014 `.up1`. Dua "go live" (yang
   pertama berhenti: job ada di `~/pilot3a_live`)
 
-- [ ] **up2** mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), environment `*_up2`, PLAN.md + satu
+- [x] **up2 selesai 2026-11-07** (#302, `pilots/dep_upgrade_v0/p2/RESULT.md`): staging live Stage 13 `.up2` di
+  starlette 1.10.0 + fastapi 0.162.0, langkah 0-8 sesuai, rollback antar image terlatih. Catatan asli: up2 mulai 2026-11-07: starlette 1.10.0, fastapi 0.162.0 (aturan 2 minggu), environment `*_up2`, PLAN.md + satu
   "go live" (`docs/reviews/SPEC_DEP_UPGRADE_V0.md`). **Draf `pilots/dep_upgrade_v0/p2/PLAN.md` ada**; sebelum "go live"
   ada prasyarat jalur ketat: `RUNTIMES["ledger_staging_up2"]` di `router/stage.py` (+ `config.yaml`, `environments/*_up2`,
   tes `test_stage.py:589` memakai nama itu sebagai runtime asing), dan image baru hanya bisa dibangun sesudah 2026-11-07
