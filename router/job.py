@@ -289,7 +289,12 @@ def job_config(job, cfg):
 
 
 def draft_sha(path):
-    return hashlib.sha256(ct.canonical(json.loads(Path(path).read_text(encoding="utf-8"))).encode()).hexdigest()
+    return draft_sha_of(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def draft_sha_of(draft):
+    """The sha a draft is approved and staged by: sha256 of its canonical form."""
+    return hashlib.sha256(ct.canonical(draft).encode()).hexdigest()
 
 
 # ---- live stages: the human confirms, then types the key -----------------------------------------------------------

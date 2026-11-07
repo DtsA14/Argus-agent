@@ -249,6 +249,8 @@ class Upstream:
                 return 200, json.dumps([{"job": j} for j in man["jobs"]]).encode()
             if path.startswith("/jobs/") and path[6:] in man["jobs"]:
                 return 200, json.dumps({"job": path[6:]}).encode()
+            if path.startswith("/jobs/") and path.endswith("/draft") and path[6:-6] in man["jobs"]:
+                return 200, json.dumps({"draft_sha256": "0" * 64}).encode()
             return 404, b'{"detail": "Not Found"}'
 
         self.srv = serve(sock / "app.sock", answer, self.requests)
@@ -385,6 +387,30 @@ def test_the_three_api_paths_reach_the_live_ledger_without_being_cached(proxy, l
         assert ledger.upstream.requests[-1][:2] == ("GET", want)
     got, headers, _ = request(proxy, "GET", "/api/jobs/jnot_there")
     assert got == 404 and headers["cache-control"] == "no-store"
+
+
+def test_the_draft_of_a_job_reaches_the_live_ledger_without_being_cached(proxy, ledger):
+    # SPEC_CONTROL_UI D3: the one added path
+    job = sd.manifest(ledger.data)["jobs"][0]
+    got, headers, body = request(proxy, "GET", f"/api/jobs/{job}/draft")
+    assert got == 200 and headers["cache-control"] == "no-store" and json.loads(body)["draft_sha256"] == "0" * 64
+    assert ledger.upstream.requests[-1][:2] == ("GET", f"/jobs/{job}/draft")
+    got, _, _ = request(proxy, "HEAD", f"/api/jobs/{job}/draft")
+    assert got == 200
+    got, _, _ = request(proxy, "POST", f"/api/jobs/{job}/draft", body=b"x")
+    assert got == 405 and len(ledger.upstream.requests) == 2
+
+
+@pytest.mark.parametrize("path", [
+    "/api/jobs/jabc/draft/", "/api/jobs/jabc/draft/x", "/api/jobs/jabc/draft?x=1", "/api/jobs/jabc/drafts",
+    "/api/jobs/jabc/draft/../summary", "/api/jobs/jabc/%64raft", "/api/jobs/BAD/draft", "/api/jobs/draft",
+    "/api/jobs//draft", "/api/jobs/jabc/draft%00", "/api/jobs/../jabc/draft", "/api/summary/draft",
+    "/api/jobs/j" + "a" * 41 + "/draft", "/api/jobs/jabc/x/draft",
+])
+def test_any_other_form_of_the_draft_path_is_404_and_never_forwarded(proxy, ledger, path):
+    got, _, _ = request(proxy, "GET", path)
+    assert got == 404, (path, got)
+    assert ledger.upstream.requests == []
 
 
 @pytest.mark.parametrize("path", [

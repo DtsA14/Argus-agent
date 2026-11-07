@@ -11,6 +11,8 @@ Layout under ~/argus-staging/data (host only: .refresh.lock and the .tmp-* build
   pub/                         mounted read-only at /data in the container, and nothing else is
   pub/snap-<UTC>/manifest.json, pub/snap-<UTC>/jobs/<job>/job.json, .../jobs/<job>/runs/<run>/events.jsonl
   pub/jobs -> snap-<UTC>/jobs  (relative symlink; replaced with rename(), so a reader sees the old or the new one)
+  .../jobs/<job>/draft/meta.json, review.md, judge.md: the review of the job's latest draft stage and its latest judge
+                               verdict (SPEC_CONTROL_UI D1), only when that stage's draft.json hashes to its draft_sha256
 """
 import fcntl
 import hashlib
@@ -40,11 +42,26 @@ STAGE = re.compile(r"^[a-z][0-9]{1,3}$")
 UPPER = re.compile(r"^[A-Z][A-Z_]{0,29}$")
 LOWER = re.compile(r"^[a-z][a-z_]{0,39}$")
 CALL_ID = re.compile(r"^[0-9a-z]{1,40}$")
-MODEL = re.compile(r"^[a-z0-9_.-]{1,30}:[a-z0-9_.-]{1,60}$")
+# provider:model, an OpenRouter model as vendor/name with an optional :variant (#357: the judge and research jobs
+# use openrouter:z-ai/glm-5.3, openrouter:nvidia/...:free; 36 of 112 jobs were left out before)
+MODEL = re.compile(r"^[a-z0-9_.-]{1,30}:[a-z0-9][a-z0-9_.-]{0,59}(/[a-z0-9][a-z0-9_.-]{0,79})?(:[a-z0-9][a-z0-9_.-]{0,19})?$")
 LOG_WHAT = {"created", "intaken", "state", "approved", "limits_shown", "confirmed", "confirmed_by_flag", "key_typed",
-            "key_from_file", "retry", "redraft", "staged", "research_ok", "applied"}
+            "key_from_file", "retry", "redraft", "staged", "research_ok", "applied", "stage_started"}
 # A second layer over the projection (A1): nothing like a key may be in what is published.
 KEY = re.compile(rb"sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|(?i:api[_-]?key|secret|password|token)\"?\s*[:=]\s*\"")
+
+
+# SPEC_CONTROL_UI D1: the draft review files. Control characters other than \n and \t are removed (C0, DEL, C1), and
+# so are the invisible format characters that make text read otherwise than it is (bidi overrides and isolates,
+# zero-width characters, BOM: review of PR #357), since a human approves what the page shows.
+TEXT_MAX = 256 * 1024
+MARK_ROOM = 64                                            # the cut text and its marker stay within TEXT_MAX
+LIST_MAX = 50
+CONTROL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]")
+READ_MAX = 16 * 1024 * 1024                               # a source file larger than this is not read at all
+SHA = re.compile(r"^[0-9a-f]{64}$")
+JUDGE_FILE = re.compile(r"^JUDGE-j([0-9]{1,3})\.md$")
+DRAFT_FILES = ("meta.json", "review.md", "judge.md")
 
 
 class Excluded(Exception):
@@ -165,12 +182,16 @@ def _open_dir(name, dir_fd=None):
     return os.open(name, _DIR, dir_fd=dir_fd)
 
 
-def _read_at(dir_fd, name):
-    """The bytes of regular file `name` in dir_fd, never through a symlink (O_NOFOLLOW), or OSError."""
+def _read_at(dir_fd, name, single=False, limit=None):
+    """The bytes of regular file `name` in dir_fd, never through a symlink (O_NOFOLLOW), or OSError. single: the file
+    has no other name (D1, F1: no hardlink brings another file in); limit: at most this many bytes (else OSError)."""
     fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise OSError(f"{name} is not a regular file")
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or (single and st.st_nlink != 1):
+            raise OSError(f"{name} is not a regular file" + (" with one name" if single else ""))
+        if limit is not None and st.st_size > limit:
+            raise OSError(f"{name} is larger than {limit} bytes")
         with os.fdopen(fd, "rb", closefd=False) as f:
             return f.read()
     finally:
@@ -215,6 +236,235 @@ def read_job(source_fd, job_id):
     finally:
         for fd in fds:
             os.close(fd)
+
+
+# ---- D1 (SPEC_CONTROL_UI 3): the latest draft's review, read-only ----------------------------------------------------
+
+def _read_single(dir_fd, name):
+    return _read_at(dir_fd, name, single=True, limit=READ_MAX)
+
+
+def clean_text(raw):
+    """D1 for one file: valid UTF-8 (else Excluded), control characters other than \\n and \\t removed, cut at a line
+    end with the marker `[dipotong harness: N byte]` to stay within TEXT_MAX, and no key pattern (else Excluded)."""
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Excluded("not valid UTF-8") from None
+    data = CONTROL.sub("", text).encode("utf-8")
+    if len(data) > TEXT_MAX:
+        cut = data[:TEXT_MAX - MARK_ROOM]
+        cut = cut[:cut.rfind(b"\n") + 1] if b"\n" in cut else cut
+        kept = cut.decode("utf-8", "ignore")              # a character cut in two is dropped, and counted
+        text = kept + f"[dipotong harness: {len(data) - len(kept.encode('utf-8'))} byte]\n"
+    else:
+        text = data.decode("utf-8")
+    if KEY.search(text.encode("utf-8")):
+        raise Excluded("matches a key pattern")
+    return text
+
+
+def _short(v, limit):
+    """One summary string: control characters removed, whitespace collapsed, cut to `limit` as cell() does in
+    DRAFT_REVIEW.md (without its table escaping: this is JSON)."""
+    t = " ".join(CONTROL.sub("", str(v if v is not None else "")).split())
+    return t if len(t) <= limit else t[:limit - 3] + "..."
+
+
+def _list(items, limit, mark=None):
+    """At most LIST_MAX items; more: the first LIST_MAX - 1 and a marker naming how many were left out."""
+    items = list(items or [])
+    if len(items) <= LIST_MAX:
+        return [_short(i, limit) for i in items] if mark is None else items
+    kept, left = items[:LIST_MAX - 1], len(items) - (LIST_MAX - 1)
+    marker = f"[dipotong harness: {left}]"
+    return ([_short(i, limit) for i in kept] + [marker]) if mark is None else kept + [mark(marker)]
+
+
+def _strings(v):
+    """Every string inside a JSON value: the key scan reads each one as it is, not as JSON escapes it (`\\"`)."""
+    if isinstance(v, str):
+        yield v
+    elif isinstance(v, dict):
+        for x in v.values():
+            yield from _strings(x)
+    elif isinstance(v, list):
+        for x in v:
+            yield from _strings(x)
+
+
+def _lists(v):
+    if isinstance(v, list):
+        yield v
+        for x in v:
+            yield from _lists(x)
+    elif isinstance(v, dict):
+        for x in v.values():
+            yield from _lists(x)
+
+
+def _has_key(v):
+    return any(KEY.search(t.encode("utf-8")) for t in _strings(v))
+
+
+def _money(v):
+    return v if _nonneg_num(v) else None
+
+
+def draft_summary(draft, report, stage):
+    """Amendment 1: what the approve page is built from, from draft.json and check_report.json of one stage, with the
+    functions DRAFT_REVIEW.md is rendered with (codetask.drafter), never from the markdown."""
+    from acceptance import draft as dr
+    from codetask import drafter as cd
+    c, p = draft["contract"], draft["plan"]
+    paths, red = dr.red_paths(draft), []
+    for v in c["validation"]:
+        b = (report.get("baseline") or {}).get(v.get("id")) or {}
+        for n in v.get("must_pass") or []:
+            if n.split("::", 1)[0] not in paths:
+                continue
+            line = cd.red_lines(b, [n])[0]
+            red.append({"validation": _short(v.get("id"), 160), "test": _short(n, 300),
+                        "status": _short((b.get("must_pass") or {}).get(n), 40),
+                        "reason": _short(line[len(n) + 2:] if line.startswith(n + ": ") else line, 500)})
+    warn = cd.warnings(draft) + [w for w in [cd.call_path_warning(draft, report)] if w]
+    return {"draft_sha256": report["draft_sha256"],
+            "cost": {"usd": _money(stage.get("usd")), "cap_usd": _money(stage.get("cap_usd"))},
+            "conflicts": _list(dr.conflict_entries(draft), 500),
+            "red": _list(red, None, mark=lambda m: {"validation": "", "test": m, "status": "", "reason": ""}),
+            "plan": {"files": _list(p["files"], 160), "steps": _list(p["steps"], 500), "risks": _list(p["risks"], 500)},
+            "scope": {"writable": _list(c["scope"]["writable"], 160), "protected": _list(c["scope"]["protected"], 160)},
+            "warnings": _list(warn, 500), "unverifiable": _list(draft.get("unverifiable"), 500)}
+
+
+def _latest(stages, kind):
+    names = [n for n, s in stages.items() if isinstance(n, str) and STAGE.match(n) and isinstance(s, dict)
+             and s.get("kind") == kind]
+    return max(names, key=lambda n: int(n[1:])) if names else None
+
+
+def _judge_of(stages, sha):
+    """JUDGE-jN.md of the latest judge stage that judged the draft with this sha (its stage records draft_sha256), or
+    None: a verdict on an earlier draft is never shown beside a later one (review of PR #357)."""
+    judged = {n: s for n, s in stages.items() if isinstance(n, str) and STAGE.match(n) and isinstance(s, dict)
+              and s.get("kind") == "judge" and s.get("draft_sha256") == sha}
+    return f"JUDGE-{max(judged, key=lambda n: int(n[1:]))}.md" if judged else None
+
+
+def draft_view(source_fd, job_id, raw):
+    """({file: text} for jobs/<job>/draft/, [why something was left out]) of one job (D1). The review, the summary and
+    the sha come from the latest draft stage's own directory: its draft.json, hashed canonically again, must equal the
+    stage's draft_sha256 in job.json, and check_report.json must name that sha too (F1b, F6); otherwise nothing of that
+    stage is published. Files are read by name in opened directories, never through a link (F1)."""
+    stages = raw.get("stages") if isinstance(raw, dict) else None
+    sid = _latest(stages, "draft") if isinstance(stages, dict) else None
+    if sid is None:
+        return {}, []
+    stage, why = stages[sid], []
+    want = stage.get("draft_sha256")
+    if not (isinstance(want, str) and SHA.match(want)):
+        return {}, [f"{sid}: the stage has no draft_sha256 (nothing to review)"]
+    fds = []
+    try:
+        try:
+            fds.append(_open_dir(job_id, source_fd))
+            fds.append(_open_dir("runs", fds[0]))
+            fds.append(_open_dir(f"{job_id}-{sid}", fds[1]))
+            draft = json.loads(_read_single(fds[2], "draft.json"))
+            sha = rj.draft_sha_of(draft)
+        except (OSError, ValueError, TypeError):
+            return {}, [f"{sid}: draft.json cannot be read"]
+        if sha != want:
+            return {}, [f"{sid}: draft.json does not hash to the stage's draft_sha256"]
+        meta = {"stage": sid, "draft_sha256": sha, "review": None, "summary": None, "judge": None}
+        files = {}
+        try:
+            files["review.md"] = clean_text(_read_single(fds[2], "DRAFT_REVIEW.md"))
+            meta["review"] = {"sha256": hashlib.sha256(files["review.md"].encode("utf-8")).hexdigest()}
+        except (OSError, Excluded) as e:
+            why.append(f"{sid}: DRAFT_REVIEW.md not published: {e if isinstance(e, Excluded) else 'unreadable'}")
+        try:
+            report = json.loads(_read_single(fds[2], "check_report.json"))
+            if not isinstance(report, dict) or report.get("draft_sha256") != sha:
+                raise Excluded("check_report.json is for another draft")
+            summary = draft_summary(draft, report, stage)
+            if _has_key(summary):
+                raise Excluded("matches a key pattern")
+            meta["summary"] = summary
+        except Excluded as e:
+            why.append(f"{sid}: summary not published: {e}")
+        except Exception as e:                        # noqa: BLE001  (only the summary is lost, not the review)
+            why.append(f"{sid}: summary not published: {type(e).__name__}")
+        judge = _judge_of(stages, sha)
+        if judge:
+            try:
+                files["judge.md"] = clean_text(_read_single(fds[0], judge))
+                meta["judge"] = {"file": judge, "sha256": hashlib.sha256(files["judge.md"].encode("utf-8")).hexdigest()}
+            except (OSError, Excluded) as e:
+                why.append(f"{judge} not published: {e if isinstance(e, Excluded) else 'unreadable'}")
+        files["meta.json"] = json.dumps(meta, indent=1, ensure_ascii=False) + "\n"
+        return files, why
+    finally:
+        for fd in fds:
+            os.close(fd)
+
+
+META_KEYS = {"stage", "draft_sha256", "review", "summary", "judge"}
+
+
+def draft_problems(job_dir, job):
+    """validate() for jobs/<job>/draft: the meta names a draft stage of the published job and the sha of each text it
+    lists, each text follows D1 (UTF-8, no control characters, within TEXT_MAX), and no text is there unlisted."""
+    d = job_dir / "draft"
+    if not d.exists():
+        return []
+    problems, names = [], sorted(p.name for p in d.iterdir())
+    if "meta.json" not in names:
+        return ["no meta.json"]
+    try:
+        meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["meta.json is not JSON"]
+    if not isinstance(meta, dict) or set(meta) != META_KEYS:
+        return ["meta.json has other fields"]
+    stage = meta["stage"] if isinstance(meta["stage"], str) and STAGE.match(meta["stage"]) else None
+    if stage is None or ((job.get("stages") or {}).get(stage) or {}).get("kind") != "draft":
+        problems.append("meta.json names no draft stage of the job")
+    judge = meta["judge"]
+    if judge is not None and not (isinstance(judge, dict) and isinstance(judge.get("file"), str)
+                                  and JUDGE_FILE.match(judge["file"])):
+        problems.append("meta.json names no judge file")
+    if any(CONTROL.search(t) for t in _strings(meta)):
+        problems.append("meta.json has control characters")
+    if any(len(v) > LIST_MAX for v in _lists(meta["summary"])):
+        problems.append("the summary has a list longer than the limit")
+    if not (isinstance(meta["draft_sha256"], str) and SHA.match(meta["draft_sha256"])):
+        problems.append("meta.json has no draft sha")
+    if meta["summary"] is not None and (not isinstance(meta["summary"], dict)
+                                        or meta["summary"].get("draft_sha256") != meta["draft_sha256"]):
+        problems.append("the summary is for another draft")
+    if _has_key(meta):
+        problems.append("meta.json matches a key pattern")
+    for name, key in (("review.md", "review"), ("judge.md", "judge")):
+        listed = meta[key]
+        if (name in names) != (listed is not None):
+            problems.append(f"{name} and meta.json disagree")
+            continue
+        if listed is None:
+            continue
+        raw = (d / name).read_bytes()
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            problems.append(f"{name} is not UTF-8")
+            continue
+        if CONTROL.search(text) or len(raw) > TEXT_MAX:
+            problems.append(f"{name} has control characters or is too large")
+        if not isinstance(listed, dict) or listed.get("sha256") != hashlib.sha256(raw).hexdigest():
+            problems.append(f"{name} does not match its sha in meta.json")
+    if set(names) - set(DRAFT_FILES):
+        problems.append("draft/ holds other files")
+    return problems
 
 
 # ---- A2/A3: refresh ----------------------------------------------------------------------------------------------------
@@ -288,31 +538,36 @@ def _remove(path):
 
 def build(source, tmp):
     """Project every job of `source` into tmp/jobs; the manifest of what was written. Nothing is published here."""
-    jobs, excluded, total = {}, [], 0
+    jobs, excluded, withheld, total = {}, [], [], 0
     (tmp / "jobs").mkdir()
     source_fd = _open_dir(str(source))
     try:
         names = sorted(n for n in os.listdir(source_fd) if JOB_ID.match(n))
         for job_id in names:
-            got = _one(source_fd, job_id, excluded)
+            got = _one(source_fd, job_id, excluded, withheld)
             if got is None:
                 continue
-            job, runs, nano = got
+            job, runs, nano, files = got
             d = tmp / "jobs" / job_id
             (d / "runs").mkdir(parents=True)
             (d / "job.json").write_text(json.dumps(job, indent=1) + "\n", encoding="utf-8")   # stage order kept
             for run, events in runs.items():
                 (d / "runs" / run).mkdir()
                 (d / "runs" / run / "events.jsonl").write_text(_jsonl(events), encoding="utf-8")
+            if files:
+                (d / "draft").mkdir()
+                for name, text in files.items():
+                    (d / "draft" / name).write_text(text, encoding="utf-8")
             jobs[job_id], total = nano, total + nano
     finally:
         os.close(source_fd)
-    return {"jobs": sorted(jobs), "cost_nano": total, "per_job": jobs, "excluded": excluded}
+    return {"jobs": sorted(jobs), "cost_nano": total, "per_job": jobs, "excluded": excluded, "withheld": withheld}
 
 
-def _one(source_fd, job_id, excluded):
-    """(projected job, {run: projected events}, nano) of one job, or None: not a job (not a directory, a symlink, no
-    job.json), or excluded (noted in `excluded`, never with a value)."""
+def _one(source_fd, job_id, excluded, withheld):
+    """(projected job, {run: projected events}, nano, {draft file: text}) of one job, or None: not a job (not a
+    directory, a symlink, no job.json), or excluded (noted in `excluded`, never with a value). A draft file left out is
+    noted in `withheld`; the job is published all the same."""
     try:
         jfd = _open_dir(job_id, source_fd)
     except OSError:
@@ -346,7 +601,12 @@ def _one(source_fd, job_id, excluded):
     except OSError as e:
         excluded.append({"job": job_id, "why": f"unreadable: {type(e).__name__}"})
         return None
-    return job, runs, nano
+    try:
+        files, why = draft_view(source_fd, job_id, json.loads(raw_job))
+    except Exception as e:                            # noqa: BLE001  (the job is published without its draft)
+        files, why = {}, [f"draft not published: {type(e).__name__}"]
+    withheld.extend({"job": job_id, "why": w[:200]} for w in why)
+    return job, runs, nano, files
 
 
 def validate(tmp, man):
@@ -359,7 +619,8 @@ def validate(tmp, man):
         if p.is_symlink() or not (p.is_dir() or p.is_file()):
             problems.append(f"{rel} is not a plain file or directory")
         elif p.is_file():
-            if not re.fullmatch(r"j[0-9a-z_]{1,40}/(job\.json|runs/j[0-9a-z_]{1,40}-[a-z][0-9]{1,3}/events\.jsonl)", rel):
+            if not re.fullmatch(r"j[0-9a-z_]{1,40}/(job\.json|runs/j[0-9a-z_]{1,40}-[a-z][0-9]{1,3}/events\.jsonl"
+                                r"|draft/(meta\.json|review\.md|judge\.md))", rel):
                 problems.append(f"{rel} is not a snapshot file")
             data = p.read_bytes()
             if KEY.search(data):
@@ -378,6 +639,10 @@ def validate(tmp, man):
                 got += ledger_nano(events)
             if got != nano:
                 problems.append(f"{job_id}: cost {got} written, {nano} read")
+            try:
+                problems += [f"{job_id}/draft: {p}" for p in draft_problems(root / job_id, job)]
+            except Exception as e:                    # noqa: BLE001  (a malformed draft/ is a problem, not a crash)
+                problems.append(f"{job_id}/draft: {type(e).__name__}")
         except (OSError, ValueError, Excluded) as e:
             problems.append(f"{job_id}: {type(e).__name__}: {str(e)[:120]}")
     if sorted(p.name for p in root.iterdir()) != man["jobs"]:
