@@ -1,7 +1,9 @@
 # Spek: UI kontrol (fase 0)
 
 Status: **disetujui Atha 2026-11-07** ("Ok gw setuju bro. Boleh merge"): K1-K6 sesuai usul Claude (bagian 5), dengan
-tambahan integritas dan audit dari review GPT. Hanya dokumen; tidak ada kode di PR ini. Lanjutan butir PENDING "UI kontrol interaktif" (Atha 2026-10-30) dan `docs/Reconciliation.md`
+tambahan integritas dan audit dari review GPT. **Amandemen 1 (usul Claude 2026-11-07, menunggu "merge" Atha):**
+ringkasan terstruktur buatan harness untuk halaman approve (D1 `summary`, D2, D4 urutan halaman, F6), karena memecah
+`DRAFT_REVIEW.md` per heading bisa dipalsukan oleh teks tidak tepercaya di dalamnya. Hanya dokumen; tidak ada kode di PR ini. Lanjutan butir PENDING "UI kontrol interaktif" (Atha 2026-10-30) dan `docs/Reconciliation.md`
 bagian 6-7 (ADR-007). Fase 1 dirinci untuk dikoding; fase 2-4 hanya kerangka dan keputusan, dispek lagi sebelum dikoding.
 
 ## 1. Masalah dan ukuran
@@ -46,13 +48,36 @@ argus-ledger ditulis agen Argus (shadow batch), jadi fase 1 sekalian menjadi pek
   (`runs/<job>-dN/`). Saat snapshot dibaca, sha kanonik `draft.json` di direktori itu dihitung ulang dan harus sama dengan
   `stages.dN.draft_sha256` di `job.json`; berbeda atau tidak terbaca → review stage itu tidak dipublikasikan (alasan di
   manifest). Jadi sha yang tampil di HP selalu sha draf yang reviewnya tampil. `DRAFT_REVIEW.md` sendiri tidak memuat sha.
-- **D2 (argus-ledger, issue untuk agen, jalur cepat):** `GET /api/jobs/<id>/draft` → `{"draft_sha256", "review": {"sha256",
-  "text"}, "judge": null | {"sha256", "text"}}` dari snapshot; 404 bila tidak ada.
+  **Ringkasan terstruktur (amandemen 1).** Per stage draf yang lolos cek integritas, harness juga menerbitkan `summary`
+  (JSON), dibangun dari `draft.json` dan `check_report.json` di direktori stage yang sama dengan fungsi yang sama yang
+  merender `DRAFT_REVIEW.md` (`codetask/drafter.py`), bukan dengan membaca markdown. `check_report.json` ikut cek
+  integritas: `draft_sha256`-nya harus sama dengan sha hasil hitung ulang; berbeda → `summary` stage itu tidak terbit.
+  Isi, tidak lebih:
+  - `draft_sha256`; `cost`: `{"usd", "cap_usd"}` stage dari `job.json`;
+  - `conflicts`: daftar entri penanda konflik (`conflict_entries`, gerbang yang sama dengan `argus approve`);
+  - `red`: per tes baru yang wajib lulus, `{"validation", "test", "status", "reason"}`, `reason` = baris `red_lines`
+    (tipe, berkas, baris pertama pesan; tercatat tidak ada → teks "how it fails was not recorded");
+  - `plan`: `{"files", "steps", "risks"}`; `scope`: `{"writable", "protected"}`; `warnings` (peringatan scope harness);
+  - `unverifiable`.
+  Setiap string melewati aturan D1 (karakter kontrol dibuang, pemindaian key) dan batas panjang per field seperti di
+  `DRAFT_REVIEW.md` (`cell`); daftar dibatasi jumlahnya dengan penanda `[dipotong harness: N]`. Field lain dari draf
+  (isi tes, issue, konteks riset) **tidak** masuk `summary`; itu hanya ada di teks lengkap.
+- **D2 (argus-ledger, issue untuk agen, jalur cepat):** `GET /api/jobs/<id>/draft` → `{"draft_sha256", "summary": {...},
+  "review": {"sha256", "text"}, "judge": null | {"sha256", "text"}}` dari snapshot; 404 bila tidak ada. `summary`
+  diteruskan apa adanya (ledger tidak menghitung ulang atau menambah field).
 - **D3 (harness, jalur ketat, proxy):** allowlist A1 ditambah tepat satu bentuk, `/api/jobs/<id>/draft`. Aturan lain proxy
   tidak berubah (GET/HEAD saja, tanpa query, `no-store`).
 - **D4 (argus-viewer, issue untuk agen, jalur cepat):** halaman `/jobs/<id>/draft`: teks ditampilkan sebagai teks
   (`<pre>` atau subset markdown tanpa HTML mentah; **tidak** `dangerouslySetInnerHTML`), 12 karakter pertama sha draf
-  terlihat jelas (itu yang nanti diapprove), tautan dari halaman job.
+  terlihat jelas (itu yang nanti diapprove), tautan dari halaman job. **Urutan (amandemen 1), dari atas:**
+  1. kartu keputusan dari `summary`: job, state, sha12, biaya stage vs cap, `conflicts` (bila ada, menonjol);
+  2. alasan merah per tes (`summary.red`), dikutip apa adanya: bagian terpenting, karena alasan merah yang bukan
+     perilaku yang diminta issue berarti jangan approve (pilot prompt injection V4);
+  3. rencana, scope, `warnings`, `unverifiable`;
+  4. teks lengkap review (`review.text`) di bawah, tertutup secara default; judge (bila ada) sebagai bagian terpisah.
+  Struktur halaman hanya dari field `summary`; viewer **tidak** memecah atau mencari di `review.text`/`judge.text`
+  (heading di teks itu bisa berasal dari konteks riset atau kode tes). Vonis judge baru ada sesudah agen
+  (`REVIEW_READY`), jadi bukan bagian keputusan approve draf.
 - Kesegaran: draf muncul paling lambat saat refresh snapshot berikutnya (≤ 15 menit). Lebih cepat (refresh sesudah
   `argus code` selesai) bukan bagian fase 1.
 
@@ -71,6 +96,10 @@ tidak ada pekerjaan untuk agen.
 - F4. Proxy: path baru hanya untuk id job yang sah; varian lain (`/draft/x`, query, trailing slash, `..`) 404; POST 405.
 - F5. Isi draf adalah **data tidak tepercaya** (issue dan konteks riset bisa memuat teks web; pilot prompt injection v0
   memuat baris injeksi di draf): viewer merendernya sebagai teks; CSP yang ada tetap berlaku.
+- F6 (amandemen 1). `summary` hanya dari `draft.json` dan `check_report.json` stage yang sama dan lolos cek integritas;
+  `check_report.json` dengan sha lain → tidak ada `summary`. Mutant: `red` dari stage lain, dari `DRAFT_REVIEW.md`, atau
+  tanpa cek sha `check_report.json` → tes gagal. Satu tes dengan baris `## Why they fail now` palsu di konteks riset:
+  `summary.red` tetap sama dengan cek merah.
 
 **Urutan PR fase 1 (jalur A):** satu PR jalur ketat untuk D1+D3 (spek ini bagian 3, mutants, `/code-review medium` dan
 `/security-review`, `verify.sh`, "merge" Atha), lalu issue D2 dan D4 untuk Argus (dua job, shadow), lalu deploy viewer dan
