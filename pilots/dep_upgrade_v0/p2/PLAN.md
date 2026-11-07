@@ -1,7 +1,9 @@
-# Pilot dependency upgrade v0 #2 (DRAF): argus-ledger Stage 13 ke stack up2
+# Pilot dependency upgrade v0 #2: argus-ledger Stage 13 ke stack up2
 
-**Status: draf, belum boleh dijalankan.** Tidak ada "go live" yang diminta sebelum bagian A selesai dan versi di bagian
-C dicek ulang pada hari-H. Spek: `docs/reviews/SPEC_DEP_UPGRADE_V0.md` (§3 U1-U4, §6.1: up2 = starlette 1.10.0 + fastapi
+**Status: "go live" Atha 2026-11-07 (sesudah verify.sh #302 PASS).** Bagian A selesai: #302 merge (`ea760f9`, verify
+PASS 3077, sandbox skip 0), image `ledger_py312_up2` `3e48cd98c8de` dan `ledger_staging_up2` `6d8fc5cc3639` lolos
+`check_env_image` (2026-11-07 15:19Z), pin disalin ke `~/pilot3a_live` (`pin_status` ok). Bagian C dicek 2026-11-07
+15:5xZ: 22 pin ada dan tidak ditarik; fastapi 0.162.1/0.162.2 terbit hari ini (belum 14 hari), jadi 0.162.0 tetap. Spek: `docs/reviews/SPEC_DEP_UPGRADE_V0.md` (§3 U1-U4, §6.1: up2 = starlette 1.10.0 + fastapi
 0.162.0 mulai 2026-11-07).
 
 Tujuan: staging berakhir di Stage 13 (argus-ledger `4e947a0`, job `j20261104_152512_b93a`) di atas starlette 1.10.0 +
