@@ -1,0 +1,58 @@
+{
+  "status": "CHECKED",
+  "stop_reason": "every item has a verdict",
+  "verdicts": {
+    "S": {
+      "verdict": "SUPPORTED",
+      "reason": "All BI moves (Mar hold 4.75/DF3.75/LF5.50, May +50bps to 5.25, Jul & Sep hold 5.75 with DF4.75/LF6.50), reasons, Fed holds Jan-Jul then +1/4 to 3.75-4 on Sep 16 and hold Oct 28, and rupiah levels (16.786, 16.993, 18.078, 18.140-18.168) plus 7.23% H1 depreciation are backed by the cited quotes."
+    },
+    "P1": {
+      "verdict": "SUPPORTED",
+      "reason": "March hold, May +50bps to 5.25, July/Sept hold 5.75 (DF4.75/LF6.50), Fed Jan hold, Sep 16 +1/4 to 3.75-4, Oct 28 hold, and rupiah 16.786/16.993/18.078/18.140-18.168 all match the cited findings."
+    },
+    "P2": {
+      "verdict": "SUPPORTED",
+      "reason": "F8 supports lowest-since-2022, 150bps cuts since Sept 2024 (25+125); F1 supports March hold with DF/LF; F2 supports the Middle East war and 2.5±1% inflation rationale."
+    },
+    "P3": {
+      "verdict": "SUPPORTED",
+      "reason": "F3 supports May +50bps to 5.25; F4 supports the pro-stability external resilience rationale."
+    },
+    "P4": {
+      "verdict": "SUPPORTED",
+      "reason": "F5 supports July hold 5.75 and its rationale; F6 and F7 support Sept hold 5.75 with DF4.75/LF6.50 and the stabilization/inflation/growth rationale."
+    },
+    "P5": {
+      "verdict": "SUPPORTED",
+      "reason": "F1 quote lists all eight 2026 meeting dates and the minutes release dates (Feb 18, Apr 8, May 20, Jul 8, Aug 19, Oct 7) exactly as stated."
+    },
+    "P6": {
+      "verdict": "SUPPORTED",
+      "reason": "F2 supports Jan 28 hold, solid activity/low job gains/stabilizing unemployment/somewhat elevated inflation, and Miran-Waller dissents; F3 supports March 18 hold, Middle East uncertainty, dual-mandate risks, and Miran dissent."
+    },
+    "P7": {
+      "verdict": "SUPPORTED",
+      "reason": "F4 supports April 29 hold, elevated inflation from energy, Miran dissent and Hammack/Kashkari/Logan easing-bias objection; F5 supports June 17 hold, ample reserves, supply-shock inflation and price-stability pledge."
+    },
+    "P8": {
+      "verdict": "SUPPORTED",
+      "reason": "F6 supports July 29 hold, ample reserves, and the three dissents for a 1/4 increase; F7 supports Sept 16 +1/4 to 3.75-4 and rationale; F8 supports Oct 28 hold and Cook/Hammack dissents."
+    },
+    "P9": {
+      "verdict": "SUPPORTED",
+      "reason": "F1 supports Jan 16.786, Mar 16.993 and the post-Iran-attack context; F3 supports June 4 18.039, June 8 18.171, June 9 18.141, 17.971, and end-June 17.899 / July 1 17.961."
+    },
+    "P10": {
+      "verdict": "SUPPORTED",
+      "reason": "F2 supports May 17.798, July 18.078, Aug 17.703, Sept 30 17.894; F5 supports end-Sept 17.870; F1 supports 16.725 to 18.140 (~8.46%); F4 supports 8th of 10 weakest and 7.23% H1 depreciation."
+    },
+    "P11": {
+      "verdict": "SUPPORTED",
+      "reason": "F5 supports 18.145 on Nov 2; F6 supports spot 18.168 (-0.04%) and JISDOR 18.140 (+0.04%); F7 supports the Middle East/US tightening/EM sentiment factors and Lukman's domestic equity and wiretapping remarks."
+    },
+    "P12": {
+      "verdict": "SUPPORTED",
+      "reason": "F8 supports Perry Warjiyo's 5.75% June hike and Destry's 'bold' intervention; F2 supports March rationale; F5/F7 support July/Sept stabilization rationale; F2/F6/F7 support Fed holds then Sept 16 hike and Oct 28 hold; F7 supports US-tightening link."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+== j20261105_121107_718e_am1
+  Q3 Menurut dokumentasi resmi Claude Agent SDK (Anthropic), bagaimana pola untuk memory (context compaction, memory tool, CLAUDE.md), tool use (built-in t
+  Q4 Apa perbedaan konkret yang diidentifikasi artikel perbandingan atau catatan rilis sepanjang 2026 antara LangGraph, OpenAI Agents SDK, dan Claude Agent
+findings: /home/ubuntu/morph_jobs/j20261105_121107_718e_am1/findings.json
+report: /home/ubuntu/morph_jobs/j20261105_121107_718e_am1/REPORT.md (e1 flags: 7 supported, 10 partial, 0 unsupported)
+== j20261105_121107_718e_am2
+  Q3 Menurut dokumentasi resmi Claude Agent SDK (Anthropic), bagaimana pola untuk memory (context compaction, memory tool, CLAUDE.md), tool use (built-in t
+  Q4 Apa perbedaan konkret yang diidentifikasi artikel perbandingan atau catatan rilis sepanjang 2026 antara LangGraph, OpenAI Agents SDK, dan Claude Agent
+findings: /home/ubuntu/morph_jobs/j20261105_121107_718e_am2/findings.json
+report: /home/ubuntu/morph_jobs/j20261105_121107_718e_am2/REPORT.md (e1 flags: 10 supported, 7 partial, 0 unsupported)
+== j20261105_125836_ebbd_bm1
+  Q2 What were all US Federal Reserve (FOMC) interest rate decisions during 2026 — the meeting dates, the resulting federal funds target range, and the Fed
+  Q3 How did the rupiah (IDR) move against the US dollar through November 2026 — starting level in January 2026, high/low points, level at end of each mont
+findings: /home/ubuntu/morph_jobs/j20261105_125836_ebbd_bm1/findings.json
+report: /home/ubuntu/morph_jobs/j20261105_125836_ebbd_bm1/REPORT.md (e1 flags: 13 supported, 0 partial, 0 unsupported)
+== j20261105_125836_ebbd_bm2
+  Q2 What were all US Federal Reserve (FOMC) interest rate decisions during 2026 — the meeting dates, the resulting federal funds target range, and the Fed
+  Q3 How did the rupiah (IDR) move against the US dollar through November 2026 — starting level in January 2026, high/low points, level at end of each mont
+findings: /home/ubuntu/morph_jobs/j20261105_125836_ebbd_bm2/findings.json
+report: /home/ubuntu/morph_jobs/j20261105_125836_ebbd_bm2/REPORT.md (e1 flags: 11 supported, 2 partial, 0 unsupported)
