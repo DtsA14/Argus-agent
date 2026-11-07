@@ -90,6 +90,32 @@ membuat harga itu salah. Karena itu setiap request membawa pin, dan request tanp
   di-charge (aturan max di atas).
 - Saldo gateway habis (HTTP 402) = error provider pasti, tidak di-retry, stage BLOCKED.
 
+### 4.1 Harga list dan `max_price` (Atha 2026-11-07, "Ledger = batas atas")
+
+Kejadian: diskon 80% Baidu untuk GLM-5.3 habis antara 2026-11-06 20:00 dan 2026-11-07 06:00 UTC; gateway menagih
+$0,1707 untuk panggilan yang dihitung $0,0342 (`pilots/glm_reviewer_v0`). Reservasi dibuat dengan harga config, jadi cap
+bisa terlampaui sampai 5x sebelum ledger mencatatnya.
+
+- Harga di `prices` untuk model gateway berbayar = **harga list tertinggi di antara upstream yang di-pin**, bukan harga
+  diskon. Diskon hanya menurunkan tagihan nyata, tidak pernah reservasi.
+- Setiap request model berbayar membawa `provider.max_price = {"prompt": prices.input, "completion": prices.output}`
+  (USD per juta token). Upstream yang menagih di atas harga itu tidak boleh melayani: bila tidak ada yang memenuhi,
+  OpenRouter menolak (error provider, tercatat) alih-alih menagih di atas reservasi. Model gratis tidak membawa
+  `max_price`. Harga yang hilang, nol, negatif, NaN/inf, atau boolean → `ConfigError` sebelum kirim.
+- Akibat yang diterima: dengan aturan max di atas, panggilan yang dilayani upstream diskon tercatat di ledger sampai
+  harga list (batas atas); tagihan nyata tetap di `usd_reported_nano`, dan `price_drift` muncul. Rekonsiliasi pakai
+  `usd_reported_nano`/dashboard gateway.
+- Karena reservasi tidak lagi bisa terlampaui oleh harga upstream, satu model boleh di-pin ke lebih dari satu upstream
+  berbayar (alasan pencabutan fallback Novita 2026-11-06 sudah tidak berlaku). Tes: `tests/test_gateway.py` bagian
+  max_price, `tests/test_code_judge.py` (pin judge, cap muat satu langkah terbesar).
+- Batas yang diketahui (`/code-review medium` #351): `max_price` hanya membatasi harga per token prompt dan completion,
+  bukan biaya per request, gambar, atau cache (upstream GLM dan DeepSeek yang di-pin tidak menagihnya per 2026-11-07).
+  Bahwa harga config adalah harga list tertinggi tidak dicek kode (butuh jaringan); dicek manual dari halaman endpoints
+  setiap kali pin atau harga diubah. Selama upstream pertama diskon, `price_drift` muncul di setiap panggilan (sudah
+  diketahui, bukan tanda harga berubah). Model gateway berbayar tanpa harga kini ditolak juga saat `budget.max_usd` tak
+  terbatas (lebih ketat dari aturan umum, disengaja). DeepSeek naik 43% di ledger profil riset `deepinfra`: checker e1
+  langkah terbesar sekitar $0,03 dari cap $0,10.
+
 ## 5. Data dan model gratis
 
 - Model gratis di OpenRouter sering dilayani provider yang menyimpan atau melatih pakai prompt. Karena itu:

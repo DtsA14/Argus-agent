@@ -181,3 +181,11 @@ Mutants `verification/judge_mutants.py` 23/23 (log `verification/judge_mutants.l
   dengan finding yang tepat.** `81ed` tidak bisa dinilai: 3 stage berturut-turut, setiap panggilan 429 Baidu. Dua cacat
   lain tertangkap suite drafter sendiri dan dibuang. Biaya riil $0,0887. Batas: cacat ditulis Claude, satu per patch, n=6.
   Masalah terbuka: 429 Baidu (retry harness 1–3 s) membuat ±1 dari 4 stage NOT_JUDGED dan ledger mencatat worst-case.
+- **Harga penuh dan pin baru (Atha 2026-11-07):** diskon Baidu habis (tagihan 5x harga config, `pilots/glm_reviewer_v0`).
+  Harga config = list $1,40/$4,40 dan dikirim sebagai `max_price` (SPEC_GATEWAY_PROVIDER §4.1); pin `[novita/fp8,
+  tenstorrent/fp8, baidu/fp8]` (Novita 55% off, Tenstorrent tanpa diskon $0,60/$2,50, Baidu terakhir karena J8/J9 dan uji
+  cacat tanam jalan di sana); `judge_max_usd` dan `code_judge.cap_usd` $0,30 (satu langkah terbesar sekitar $0,28 pada
+  harga list). Biaya nyata per job di Novita diperkirakan $0,02-0,04; ledger mencatat batas atas. Judge di Novita belum
+  teruji: batch 5 dibaca Claude seluruhnya, jadi vonis yang aneh terlihat di sana. Bila sisa job (cap $1,00 dikurangi draf dan agen) kurang
+  dari satu langkah terbesar, LLMCaller mengecilkan `max_tokens` agar muat (seperti di replay J8); sisa < cap terkecil →
+  ditolak sebelum kirim seperti sebelumnya. Biasanya draf + agen $0,02-0,08, jadi sisa sekitar $0,9.

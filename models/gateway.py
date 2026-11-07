@@ -3,7 +3,8 @@ OpenAI-compatible gateway. Vendor openrouter only (Vercel later, §9).
 
   - Only models listed in `gateway_models` may be used; each names the upstream providers it is pinned to.
   - Every request carries the pin: order = only = upstream, no fallbacks, no `models` list, no sort (§3). A reply that
-    says it was served by another provider is a pin violation: recorded and charged, then the call fails.
+    says it was served by another provider is a pin violation: recorded and charged, then the call fails. A paid
+    model's request also carries its configured price as max_price (§4.1).
   - A free model (`free: true`) is used only by a role in `gateway.free_roles`, and never by a role with a tool that
     reads a repo (§5.1; per-repo opening comes with scripts/check_secrets.py in a later PR).
   - The gateway's reported cost is kept; LLMCaller charges the larger of it and its own count (§4).
@@ -76,7 +77,24 @@ def request_params(cfg, ref, params):
             raise ConfigError(f"{ref}: extra_body.{k} is set by the gateway pin, not by role params")
     extra["provider"] = {"order": e["upstream"], "only": e["upstream"], "allow_fallbacks": False,
                          "require_parameters": True, "data_collection": "allow" if e["free"] else "deny"}
+    if not e["free"]:
+        extra["provider"]["max_price"] = max_price(cfg, ref)
     return {**params, "extra_body": extra}
+
+
+def max_price(cfg, ref):
+    """SPEC_GATEWAY_PROVIDER §4.1 (2026-11-07): a paid model's request carries its configured price as OpenRouter's
+    max_price (USD per million tokens), so no upstream that charges more than the price the reservation was made at can
+    serve it (a provider's discount that ends, as Baidu's for GLM-5.3 did, then refuses instead of overrunning the cap).
+    The configured price is therefore the highest list price among the pinned upstreams, not a discounted one."""
+    price = (cfg.get("prices") or {}).get(str(ref)) or {}
+    out = {}
+    for ours, theirs in (("input", "prompt"), ("output", "completion")):
+        v = price.get(ours)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
+            raise ConfigError(f"{ref}: a paid gateway model needs a positive finite prices.{ours} (sent as max_price)")
+        out[theirs] = v
+    return out
 
 
 def check_tools(ref, free, tools):

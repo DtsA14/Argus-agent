@@ -212,14 +212,16 @@ research_job:
 # (advice only). max_input_chars: a larger prompt ends the stage NOT_JUDGED before any request. 120,000 characters are
 # ~48,000 tokens by the heuristic count (chars/3 x 1.2); max_input_tokens leaves room for a rejected submit's reply
 # (16,000 output) and the gate's feedback on the next step, so all max_submits can be used.
-code_judge: {role: code_judge, cap_usd: 0.10, attempt_tokens: 400000, max_input_tokens: 100000, max_steps: 4,
+code_judge: {role: code_judge, cap_usd: 0.30, attempt_tokens: 400000, max_input_tokens: 100000, max_steps: 4,
              max_submits: 3, max_input_chars: 120000}   # not `judge:` (the rubric judge's, above)
 
 router:
   job_max_usd: 1.00
   draft_max_usd: 0.75
   research_max_usd: 0.30   # SPEC_RESEARCH_STAGE r1, one stage (Atha 2026-10-29)
-  judge_max_usd: 0.10      # SPEC_JUDGE J6: one judge stage, advice only (Atha 2026-11-05)
+  judge_max_usd: 0.30      # SPEC_JUDGE J6: one judge stage, advice only (Atha 2026-11-05); 0.30 at the GLM list price,
+                           # one 32k-output step reserves ~$0.16 with a 15k-token prompt, ~$0.28 at max_input_tokens
+                           # (Atha 2026-11-07)
   agent_max_usd: {default: 0.50, large_usd: 0.75}   # by the profile the drafter chose (drafter.agent_profiles)
   overrides:
     budget.max_tokens: 3000000         # 1,200,000 until router pilot #1 on DeepSeek: tokens re-sent at every step
@@ -436,12 +438,16 @@ prices:
   "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free": {input: 0, output: 0}
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {input: 0, output: 0}
   "openrouter:nvidia/nemotron-3.5-lightning:free":     {input: 0, output: 0}
-  "openrouter:deepseek/deepseek-v4.1-flash":           {input: 0.14, output: 0.42, cache_read: 0.0042}
-  # SPEC_JUDGE J7, checked 2026-11-05 on openrouter.ai/api/v1/models/z-ai/glm-5.3/endpoints: Baidu fp8 at its discounted
-  # price (80% off Z.AI's $1.40/$4.40; K2). If the discount ends, the ledger still takes the gateway's usage.cost when it
-  # is larger, but a reservation made at this price (and on a heuristic token count, not GLM's tokenizer) can be
-  # exceeded: the judge's small $0.10 cap keeps such an overrun small; it is not an absolute bound.
-  "openrouter:z-ai/glm-5.3":                           {input: 0.28, output: 0.88, cache_read: 0.052}
+  # SPEC_GATEWAY_PROVIDER §4.1 (Atha 2026-11-07): a paid gateway model's price is the highest LIST price among its pinned
+  # upstreams, never a discounted one, and every request sends it as max_price: an upstream whose discount ends cannot
+  # serve above the price a reservation was made at (Baidu's 80% off GLM-5.3 ended 2026-11-06/07: billed 5x this file's
+  # price). The ledger keeps the larger of this count and the gateway's usage.cost, so a discounted upstream is recorded
+  # at up to the list price: an upper bound (Atha: "Ledger = batas atas"); usd_reported_nano keeps the real bill.
+  # Checked 2026-11-07 on openrouter.ai/api/v1/models/<id>/endpoints. DeepInfra fp8: $0.14/$0.42 at 30% off.
+  "openrouter:deepseek/deepseek-v4.1-flash":           {input: 0.20, output: 0.60, cache_read: 0.006}
+  # GLM-5.3 list (Z.AI, Baidu now, Tenstorrent below it): $1.40/$4.40; Novita fp8 $0.63/$1.98 at 55% off, Tenstorrent fp8
+  # $0.60/$2.50 undiscounted. The reservation is on a heuristic token count, not GLM's tokenizer: not an absolute bound.
+  "openrouter:z-ai/glm-5.3":                           {input: 1.40, output: 4.40, cache_read: 0.26}
 
 # SPEC_GATEWAY_PROVIDER: the models a gateway may serve, each pinned to upstream provider slugs (no fallback), and
 # whether it is free (then only for gateway.free_roles, never a role that reads repositories). Each needs a price above
@@ -452,7 +458,9 @@ gateway_models:
   "openrouter:nvidia/nemotron-3.5-super-vl:free":          {upstream: [nvidia], free: true}
   "openrouter:nvidia/nemotron-3.5-lightning:free":     {upstream: [nvidia], free: true}
   "openrouter:deepseek/deepseek-v4.1-flash":           {upstream: [deepinfra/fp8]}
-  "openrouter:z-ai/glm-5.3":                           {upstream: [baidu/fp8]}
+  # Atha 2026-11-07: Novita first (cheapest, 55% off), Tenstorrent (cheap, undiscounted), Baidu last (judge J8/J9 and
+  # the planted-defect test ran on it). All fp8; order = only, so no other upstream; max_price bounds each.
+  "openrouter:z-ai/glm-5.3":                           {upstream: [novita/fp8, tenstorrent/fp8, baidu/fp8]}
 gateway:
   free_roles: [free_planner, free_worker, free_checker]   # Atha 2026-11-04 (research_free, split per stage)
   cost_drift_warn: 0.10         # price_drift when the gateway's cost and ours differ by more than this share

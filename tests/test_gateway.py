@@ -98,7 +98,8 @@ def test_every_request_is_pinned_with_no_fallback(fake, tmp_path):
     [r] = fake.requests
     assert r["path"] == "/api/v1/chat/completions" and r["body"]["model"] == "deepseek/deepseek-chat"
     assert r["body"]["provider"] == {"order": ["deepseek"], "only": ["deepseek"], "allow_fallbacks": False,
-                                     "require_parameters": True, "data_collection": "deny"}
+                                     "require_parameters": True, "data_collection": "deny",
+                                     "max_price": {"prompt": 0.30, "completion": 1.20}}
     assert "models" not in r["body"] and "route" not in r["body"] and "sort" not in r["body"]
     assert r["auth"] == f"Bearer {KEY}" and KEY not in (tmp_path / "events.jsonl").read_text()
 
@@ -334,3 +335,49 @@ def test_a_bad_drift_threshold_is_a_config_error_for_gateway_roles_only(fake, tm
     cfg["roles"]["other"] = {"model": "fake:scripted"}
     from models.fake import StrictScriptedChatModel
     LLMCaller(cfg, "other", EventLog(tmp_path / "o.jsonl"), model=StrictScriptedChatModel(script=[]))
+
+
+# ---- max_price (§4.1, 2026-11-07: Baidu's GLM-5.3 discount ended and the gateway billed 5x the configured price) -------
+
+def test_a_paid_request_carries_its_configured_price_as_max_price(fake, tmp_path):
+    cfg = config(fake)
+    cfg["prices"][PAID] = {"input": 1.4, "output": 4.4, "cache_read": 0.26}
+    c, log = caller(cfg, tmp_path)
+    c.call([HumanMessage("hello")], res())
+    assert fake.requests[0]["body"]["provider"]["max_price"] == {"prompt": 1.4, "completion": 4.4}
+
+
+def test_a_free_request_carries_no_max_price(fake, tmp_path):
+    fake.queue = [ok(provider="Chutes", cost=0)]
+    c, log = caller(config(fake, model=FREE, tools=[]), tmp_path)
+    c.call([HumanMessage("hello")], res())
+    assert "max_price" not in fake.requests[0]["body"]["provider"]
+
+
+@pytest.mark.parametrize("price", [{"output": 1.2}, {"input": 0, "output": 1.2}, {"input": float("inf"), "output": 1.2},
+                                   {"input": 0.3, "output": True}, {"input": 0.3, "output": float("nan")},
+                                   {"input": 0.3, "output": -1}])
+def test_a_paid_model_without_a_usable_price_is_refused_before_anything_is_sent(fake, tmp_path, price):
+    cfg = config(fake)
+    cfg["prices"][PAID] = price
+    with pytest.raises(ConfigError):
+        c, log = caller(cfg, tmp_path)
+        c.call([HumanMessage("hello")], res())
+    with pytest.raises(ConfigError):
+        gateway.request_params(cfg, gateway_ref(PAID), {})
+    assert fake.requests == []
+
+
+def gateway_ref(model):
+    from models.registry import ModelRef
+    return ModelRef.parse(model)
+
+
+def test_every_paid_gateway_model_of_the_config_sends_its_price_as_max_price():
+    c = load_config()
+    paid = [m for m, e in c["gateway_models"].items() if not e.get("free")]
+    assert paid
+    for m in paid:
+        p = gateway.request_params(c, gateway_ref(m), {})["extra_body"]["provider"]
+        assert p["max_price"] == {"prompt": c["prices"][m]["input"], "completion": c["prices"][m]["output"]}
+
