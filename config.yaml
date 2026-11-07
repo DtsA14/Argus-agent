@@ -375,6 +375,9 @@ roles:
     model: "openrouter:deepseek/deepseek-v4.1-flash"
     max_output_tokens: 32000
     timeout_s: 480
+    # pilots/e1_effort_v0 (2026-11-06, Atha "Ok gas"): effort low matched the graded reference 30/30 with ~40-50% less
+    # reasoning, about half the cost and time (honoured only in part: 12,493 reasoning tokens on report A).
+    params: {extra_body: {reasoning: {effort: low}}}
   code_judge:
     # SPEC_JUDGE J7 (Atha 2026-11-05): GLM-5.3, another family than the drafter's and the agent's DeepSeek, through
     # OpenRouter pinned to Baidu fp8 (gateway_models). No fallback: a failed provider ends the stage NOT_JUDGED.
