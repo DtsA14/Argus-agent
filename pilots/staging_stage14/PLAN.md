@@ -34,3 +34,17 @@ Rollback (bukan bagian rencana ini, masing-masing butuh "go live" sendiri): `$A 
 
 Sesudahnya di HP: `/jobs/<id>/draft` untuk job yang menunggu approve (kartu keputusan, sha12, biaya, alasan merah, plan,
 review penuh tertutup); link "draft review" di halaman job. Lalu `RESULT.md`, PENDING, memori (jalur cepat).
+
+## Revisi 1 (2026-11-08 02:3x UTC)
+
+"Go live" pertama berhenti di langkah 6: `/api/jobs/j20261107_174855_60fa/draft` → 404 `{"error": "not found"}` (404 milik
+proxy, bukan ledger). Langkah 0-5 sesuai harapan: ledger Stage 14 `.up2` dan viewer rilis 023 live. Penyebab: proxy
+`argus-stage-proxy` berjalan sejak 2026-10-30 17:02 dan belum memuat regex API D3 (#357); rencana ini lupa restart.
+"Go live" kedua Atha 2026-11-08 untuk langkah lanjutan (unit proxy tidak diubah, hanya di-restart):
+
+| # | perintah | harapan |
+|---|---|---|
+| r1 | `systemctl --user restart argus-stage-proxy` | exit 0; unit active, listen hanya `127.0.0.1:8710` |
+| r2 | `$A stage viewer-smoke` | exit 0, semua pass |
+| r3 | langkah 6 lagi | seperti langkah 6 |
+| r4 | langkah 7 lagi | seperti langkah 7 |
