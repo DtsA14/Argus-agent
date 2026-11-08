@@ -1,0 +1,11 @@
+== staging viewer deploy (job j20261108_162504_124b) ==
+release j20261108_162504_124b-06aeee76b1c4: /home/ubuntu/argus-viewer at 06aeee76b1c4 (applied as reviewed)
+build: vite build in pwa_node22 sha256:87a74d68f23b, no network, read-only archive
+published at /home/ubuntu/argus-staging/apps/viewer/current, served by the proxy on 127.0.0.1:8710
+live now: j20261108_103705_ffce-10329bd9e0e3; rollback after this: j20261108_103705_ffce-10329bd9e0e3
+staging only: argus-ledger's release is not touched
+(--yes: approved in chat; no [y/N] asked)
+viewer live: j20261108_162504_124b-06aeee76b1c4
+  job j20261108_162504_124b, commit 06aeee76b1c4, image sha256:87a74d68f23b
+viewer rollback would publish: j20261108_103705_ffce-10329bd9e0e3
+proxy: 127.0.0.1:8710
