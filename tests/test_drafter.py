@@ -878,6 +878,7 @@ def test_the_drafter_is_asked_for_a_sentence_for_the_human_in_the_configured_lan
     assert r["status"] == dt.DRAFTED
     first = "\n".join(str(m.content) for m in model.calls[0]["messages"])
     assert "for_human (asked for): one or two short sentences in Indonesian" in first
+    assert f"one line, at most {dr.FOR_HUMAN_MAX} characters" in first
     assert [e for e in events(d) if e.get("event") == "drafter_policy"][0]["for_human"] == "Indonesian"
     draft = json.loads((d / "draft.json").read_text())
     # In draft.json, so the sha a human approves covers it
@@ -895,11 +896,11 @@ def test_a_draft_without_the_sentence_is_still_accepted_and_has_none(root, tmp_p
 
 
 def test_without_a_configured_language_the_sentence_is_neither_asked_for_nor_taken(root, tmp_path, vlog):
-    r, model, d = run(root, tmp_path, [READ, call("SubmitDraft", {**ARGS, "for_human": FOR_HUMAN}, "s1"), SUBMIT],
+    # Ignored, never refused: a refusal would cost a submit, and ReviseDraft cannot take a field away (review of #367)
+    r, model, d = run(root, tmp_path, [READ, call("SubmitDraft", {**ARGS, "for_human": FOR_HUMAN}, "s1")],
                       config=cfg(for_human_language=None))
-    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 1
     assert "for_human (asked for)" not in "\n".join(str(m.content) for m in model.calls[0]["messages"])
-    assert "for_human is not asked for in this task" in tool_texts(model, 2)[-1]
     assert "for_human" not in [e for e in events(d) if e.get("event") == "drafter_policy"][0]
     assert "for_human" not in json.loads((d / "draft.json").read_text())
 

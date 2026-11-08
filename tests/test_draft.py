@@ -153,6 +153,10 @@ def good_report(tmp_path_factory, scfg):
     (lambda d: d.update(for_human="baris satu\nbaris dua"), "for_human must be one line"),
     (lambda d: d.update(for_human="jam\x7f WIB"), "for_human must be one line"),
     (lambda d: d.update(for_human="jam\x85 WIB"), "for_human must be one line"),
+    (lambda d: d.update(for_human="baris satu\u2028baris dua"), "for_human must be one line"),
+    (lambda d: d.update(for_human="jam \u202eBIW"), "for_human must be one line"),
+    (lambda d: d.update(for_human="jam\u200b WIB"), "for_human must be one line"),
+    (lambda d: d.update(for_human="\ufeffjam WIB"), "for_human must be one line"),
 ])
 def test_malformed_drafts_and_drafts_that_set_what_only_a_human_sets_are_refused(change, why):
     d = copy.deepcopy(DRAFT)

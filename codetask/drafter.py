@@ -126,6 +126,11 @@ class ChangedTest(BaseModel):
                                                                        "that are not required (must_pass)")
 
 
+FOR_HUMAN_DESC = ("Only when the task asks for it: one or two short sentences, in the language the task names, for a "
+                  "person who does not read code, saying what they will see change; one line, at most "
+                  f"{dr.FOR_HUMAN_MAX} characters")
+
+
 class SubmitDraft(BaseModel):
     """Submit the task draft. The harness checks it at once: its shape, the scope, and in the sandbox that every
     required test of your new test files fails by assertion on the code as it is now while everything else passes.
@@ -141,9 +146,7 @@ class SubmitDraft(BaseModel):
     tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, search_files)")
     changed_tests: Optional[List[ChangedTest]] = Field(default=None, description="Existing test files whose "
                                                                                  "expectations the issue changes")
-    for_human: Optional[str] = Field(default=None, description="When the task asks for it: one or two short sentences, "
-                                     "in the language the task names, for a person who does not read code, saying what "
-                                     "they will see change (one line, at most 400 characters)")
+    for_human: Optional[str] = Field(default=None, description=FOR_HUMAN_DESC)
 
 
 class ReviseDraft(BaseModel):
@@ -184,10 +187,7 @@ def _vitest_submits():
                                                 "enough for one attempt to read what the fix needs and write it")
         tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, "
                                                                      "search_files)")
-        for_human: Optional[str] = Field(default=None, description="When the task asks for it: one or two short "
-                                         "sentences, in the language the task names, for a person who does not "
-                                         "read code, saying what they will see change (one line, at most 400 "
-                                         "characters)")
+        for_human: Optional[str] = Field(default=None, description=FOR_HUMAN_DESC)
 
     class ReviseDraft(BaseModel):
         plan: Optional[PlanArgs] = None
@@ -334,8 +334,9 @@ def task_prompt(inputs, files, policy):
         "writable files are too large to rewrite in one call is refused unless it adds edit_file.",
         *([f"for_human (asked for): one or two short sentences in {policy['for_human']}, written for a person who does "
            "not read code, saying what they will see change when the task is done (what appears, where, what it says), "
-           "without file names, test names or code. A human approves the draft by reading it first, so it must say "
-           "only what the tests check and the plan does."] if policy.get("for_human") else []),
+           f"without file names, test names or code; one line, at most {dr.FOR_HUMAN_MAX} characters. A human approves "
+           "the draft by reading it first, so it must say only what the tests check and the plan does."]
+          if policy.get("for_human") else []),
         f"SubmitDraft and ReviseDraft are checked at most {policy['max_submits']} times together."])
 
 
@@ -398,9 +399,10 @@ def draft_from_args(args, *, base, policy):
              "new_tests": args.get("new_tests"), "unverifiable": args.get("unverifiable")}
     if args.get("changed_tests"):                     # W2a-ext; absent or empty: a draft as before
         draft["changed_tests"] = args["changed_tests"]
-    if args.get("for_human") is not None:              # SPEC_CONTROL_UI amendment 2: asked for, never required (a
-        if not policy.get("for_human"):                # draft without it is shown as having none); checked when given
-            return None, ["for_human is not asked for in this task: leave it out"]
+    # SPEC_CONTROL_UI amendment 2: asked for, never required (a draft without it is shown as having none), checked
+    # when given. A policy that does not ask for it ignores it: refusing would cost a submit, and ReviseDraft could not
+    # take the field away again.
+    if policy.get("for_human") and args.get("for_human") is not None:
         draft["for_human"] = args["for_human"]
     return draft, [f"draft: {e}" for e in dr.validate_draft(draft)]
 
@@ -990,7 +992,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
     from tools.sandbox import tool_version
     env = cfg["drafter"]["environment"]
     versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3",
-                "SubmitDraft": f"2:{tool_version(scfg, [env])}", "ReviseDraft": f"2:{tool_version(scfg, [env])}"}
+                # 3: SPEC_CONTROL_UI amendment 2 (for_human taken and checked); a memo of a 2 is never reused
+                "SubmitDraft": f"3:{tool_version(scfg, [env])}", "ReviseDraft": f"3:{tool_version(scfg, [env])}"}
     common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
     task_id = f"draft:{inputs['intake']}"
 

@@ -39,6 +39,7 @@ import os
 import re
 import shutil
 import tempfile
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -93,14 +94,15 @@ def _strings_problem(name, v, limit=50, length=500):
 
 
 def for_human_problem(v):
-    """Why `v` is not a for_human text (SPEC_CONTROL_UI amendment 2), or None: one line of 1 to FOR_HUMAN_MAX characters,
-    no control characters. It is shown to a person as plain text, so one line is all it may be."""
+    """Why `v` is not a for_human text (SPEC_CONTROL_UI amendment 2), or None: one line of 1 to FOR_HUMAN_MAX characters.
+    It is shown to a person as plain text and bound to the approved sha, so what the approver sees must be what was
+    approved: no control (Cc) or format characters (Cf: bidi overrides, zero width, BOM), no line or paragraph separator."""
     if not isinstance(v, str) or not v.strip():
         return "for_human must be a non-empty string"
     if len(v) > FOR_HUMAN_MAX:
         return f"for_human has {len(v)} characters, at most {FOR_HUMAN_MAX}: one or two short sentences"
-    if any(ord(ch) < 32 or 127 <= ord(ch) < 160 for ch in v):
-        return "for_human must be one line, without line breaks or control characters"
+    if any(unicodedata.category(ch) in ("Cc", "Cf", "Zl", "Zp") for ch in v):
+        return "for_human must be one line, without line breaks, control or invisible formatting characters"
     return None
 
 

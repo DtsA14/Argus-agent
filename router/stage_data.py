@@ -336,7 +336,8 @@ def draft_summary(draft, report, stage):
             "scope": {"writable": _list(c["scope"]["writable"], 160), "protected": _list(c["scope"]["protected"], 160)},
             "warnings": _list(warn, 500), "unverifiable": _list(draft.get("unverifiable"), 500),
             # Amendment 2: the drafter's sentence for a person who does not read code; null for a draft without one
-            "for_human": _short(draft["for_human"], 500) if isinstance(draft.get("for_human"), str) else None}
+            "for_human": (_short(draft["for_human"], dr.FOR_HUMAN_MAX) if isinstance(draft.get("for_human"), str)
+                          else None)}
 
 
 def _latest(stages, kind):
