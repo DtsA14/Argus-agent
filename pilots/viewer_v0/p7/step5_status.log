@@ -1,0 +1,6 @@
+viewer live: j20261108_031013_808b-85171747a5fd
+  job j20261108_031013_808b, commit 85171747a5fd, image sha256:9ac2fb4376d2
+viewer rollback would publish: j20261107_174855_60fa-70b553214782
+proxy: 127.0.0.1:8710
+rc=0
+1a3c52e4173c 6d8fc5cc3639 argus-staging-ledger-j20261107_171214_be81-1d3a8ea82356.up2
