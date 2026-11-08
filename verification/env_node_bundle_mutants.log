@@ -1,0 +1,11 @@
+KILLED  bundled always accepted: 1 failed, 5 passed, 2 deselected in 0.23s
+KILLED  bundled never accepted: 1 failed, 21 passed, 2 deselected in 0.82s
+KILLED  truthy inBundle: 1 failed, 13 passed, 2 deselected in 0.54s
+KILLED  own source allowed: 1 failed, 11 passed, 2 deselected in 0.44s
+KILLED  own hash allowed: 1 failed, 12 passed, 2 deselected in 0.50s
+KILLED  bundleDependencies not checked: 1 failed, 18 passed, 2 deselected in 0.72s
+KILLED  parent not checked: 1 failed, 15 passed, 2 deselected in 0.59s
+KILLED  any ancestor, bundled too: 1 failed, 16 passed, 2 deselected in 0.64s
+KILLED  missing ancestor skipped: 1 failed, 17 passed, 2 deselected in 0.68s
+KILLED  orphan accepted: 1 failed, 10 passed, 2 deselected in 0.41s
+RESULT: 10/10 killed

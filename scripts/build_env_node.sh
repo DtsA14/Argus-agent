@@ -22,17 +22,35 @@ DEF="$DEFS/$NAME"
   || { echo "no definition in $DEF (base, package.json, package-lock.json)" >&2; exit 1; }
 BASE="$(tr -d '[:space:]' < "$DEF/base")"
 [[ "$BASE" =~ ^[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || { echo "$DEF/base must be an image pinned by digest: $BASE" >&2; exit 1; }
-# Every locked package from the npm registry with a sha512 integrity; exact versions only in package.json.
+# Every locked package from the npm registry with a sha512 integrity, or bundled in one that is; exact versions only in
+# package.json.
 python3 - "$DEF" <<'EOF' || exit 1
 import json, re, sys
 d = sys.argv[1]
 pkg, lock = json.load(open(d + "/package.json")), json.load(open(d + "/package-lock.json"))
 bad = [f"{k}: {v}" for s in ("dependencies", "devDependencies") for k, v in (pkg.get(s) or {}).items()
        if not re.fullmatch(r"\d+\.\d+\.\d+", str(v))]
-bad += [k for k, v in lock.get("packages", {}).items() if k and not (
-    str(v.get("integrity", "")).startswith("sha512-") and str(v.get("resolved", "")).startswith("https://registry.npmjs.org/"))]
+packages = lock.get("packages", {})
+def fetched(v):
+    return str(v.get("integrity", "")).startswith("sha512-") and str(v.get("resolved", "")).startswith("https://registry.npmjs.org/")
+def bundled(k, v):
+    # A bundled package (inBundle) is no download of its own: its files are inside the tarball of the nearest enclosing
+    # package that is not bundled, whose sha512 npm checks and which names it in bundleDependencies. It may name no
+    # source or hash of its own.
+    if v.get("inBundle") is not True or "resolved" in v or "integrity" in v:
+        return False
+    parts = k.split("/node_modules/")
+    for i in range(len(parts) - 1, 0, -1):         # every package between it and that one is in the lock, bundled
+        parent = packages.get("/node_modules/".join(parts[:i]))
+        if parent is None:
+            return False
+        if parent.get("inBundle") is not True:
+            return fetched(parent) and parts[i] in (parent.get("bundleDependencies") or [])
+    return False
+bad += [k for k, v in packages.items() if k and not (fetched(v) or bundled(k, v))]
 if lock.get("lockfileVersion") != 3 or bad:
-    sys.exit("package.json must pin exact versions and every locked package needs a registry sha512 (lockfile v3): "
+    sys.exit("package.json must pin exact versions and every locked package needs a registry sha512, or to be bundled "
+             "in a package that has one (lockfile v3): "
              + ", ".join(bad[:10]))
 EOF
 mkdir -p "$CACHE"

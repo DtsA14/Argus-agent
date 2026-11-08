@@ -4,4 +4,6 @@ from registry.npmjs.org with a sha512 integrity) in /node_modules, read-only, th
 scripts/build_env_node.sh pwa_node22 (npm ci --ignore-scripts is the only step with network); checked by
 scripts/check_env_image.py pwa_node22 on fixtures/repos/vitest_demo. Distroless: node and its libraries, no shell, npm
 or git. Validations in it run vitest (config.yaml runner: vitest), never pytest. A new package is a new environment
-(the dependency upgrade path), never an install in a job. Never in web.environments.
+(the dependency upgrade path), never an install in a job; the exception is Tailwind (SPEC_PWA_VIEWER E2), added here
+because viewer releases are static and never rebuilt on a rollback. A locked package bundled in another (inBundle) has no
+sha512 of its own: its files come in the tarball of the nearest fetched package above it. Never in web.environments.
