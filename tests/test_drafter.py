@@ -865,3 +865,53 @@ def test_a_python_environment_keeps_the_pytest_drafter(root, tmp_path):
     assert [e["runner"] for e in events(d) if e["event"] == "drafter_policy"] == ["pytest"]
     from codetask import drafter as cdr
     assert model.calls[0]["messages"][0].content == cdr.SYSTEM
+
+
+# ---- SPEC_CONTROL_UI amendment 2: a sentence for the human who approves ------------------------------------------
+
+FOR_HUMAN = "Di halaman job akan muncul jam dibuat dalam WIB."
+
+
+def test_the_drafter_is_asked_for_a_sentence_for_the_human_in_the_configured_language(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [READ, call("SubmitDraft", {**ARGS, "for_human": FOR_HUMAN}, "s1")],
+                      config=cfg(for_human_language="Indonesian"))
+    assert r["status"] == dt.DRAFTED
+    first = "\n".join(str(m.content) for m in model.calls[0]["messages"])
+    assert "for_human (asked for): one or two short sentences in Indonesian" in first
+    assert [e for e in events(d) if e.get("event") == "drafter_policy"][0]["for_human"] == "Indonesian"
+    draft = json.loads((d / "draft.json").read_text())
+    # In draft.json, so the sha a human approves covers it
+    assert draft["for_human"] == FOR_HUMAN and dr.validate_draft(draft) == []
+    review = (d / "DRAFT_REVIEW.md").read_text()
+    assert "## For the human (written by the drafter, not checked by a test)" in review and FOR_HUMAN in review
+    assert review.index("## For the human") < review.index("## Plan")
+
+
+def test_a_draft_without_the_sentence_is_still_accepted_and_has_none(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [READ, SUBMIT], config=cfg(for_human_language="Indonesian"))
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 1
+    draft = json.loads((d / "draft.json").read_text())
+    assert "for_human" not in draft and "## For the human" not in (d / "DRAFT_REVIEW.md").read_text()
+
+
+def test_without_a_configured_language_the_sentence_is_neither_asked_for_nor_taken(root, tmp_path, vlog):
+    r, model, d = run(root, tmp_path, [READ, call("SubmitDraft", {**ARGS, "for_human": FOR_HUMAN}, "s1"), SUBMIT],
+                      config=cfg(for_human_language=None))
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
+    assert "for_human (asked for)" not in "\n".join(str(m.content) for m in model.calls[0]["messages"])
+    assert "for_human is not asked for in this task" in tool_texts(model, 2)[-1]
+    assert "for_human" not in [e for e in events(d) if e.get("event") == "drafter_policy"][0]
+    assert "for_human" not in json.loads((d / "draft.json").read_text())
+
+
+def test_a_sentence_that_is_not_one_short_line_is_refused_and_a_revision_fixes_it(root, tmp_path, vlog):
+    bad = call("SubmitDraft", {**ARGS, "for_human": "baris satu\nbaris dua"}, "s1")
+    r, model, d = run(root, tmp_path, [READ, bad, revise({"for_human": FOR_HUMAN})],
+                      config=cfg(for_human_language="Indonesian"))
+    assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
+    assert "for_human must be one line" in tool_texts(model, 2)[-1]
+    assert json.loads((d / "draft.json").read_text())["for_human"] == FOR_HUMAN
+
+
+def test_the_repository_config_asks_for_indonesian():
+    assert load_config()["drafter"]["for_human_language"] == "Indonesian"

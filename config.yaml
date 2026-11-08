@@ -158,6 +158,10 @@ drafter:
   agent_profiles: [default, large_usd]
   environment: argus       # the sandbox environment of every drafted validation (K4: python -m pytest <paths> only)
   validation_timeout_s: 300
+  # SPEC_CONTROL_UI amendment 2 (Atha 2026-11-08: "cenderung approve aja", the draft page is too technical): the drafter
+  # also writes for_human, one or two sentences in this language for a person who does not read code, saying what they
+  # will see change. Part of draft.json, so the approved sha covers it; shown first on the approve page. null: not asked.
+  for_human_language: Indonesian
 
 # Router v0 (docs/reviews/SPEC_ROUTER_V0.md): `argus code` runs a code task as one job with one cap. job_max_usd: from the
 # W2b ledger (worst drafter run $0.29 + one `large` agent attempt $0.45 = $0.74, room for one median redraft). Each stage

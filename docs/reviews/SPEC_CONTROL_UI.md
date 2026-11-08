@@ -121,6 +121,24 @@ tetap terbit), 3 stage draf tanpa `draft_sha256` (draf gagal). Mutants 25/25. **
 `/security-review`, `verify.sh`, "merge" Atha), lalu issue D2 dan D4 untuk Argus (dua job, shadow), lalu deploy viewer dan
 ledger lewat `PLAN.md` dengan satu "go live". Mulai **sesudah up2** (D1 dan D3 menyentuh jalur staging yang dipakai up2).
 
+**Amandemen 2: kalimat untuk orang awam (Atha 2026-11-08, "gw kurang ngerti issue nya jadi cenderung approve aja").**
+Ukuran K6 bersih (draf 025: 3 menit, approve) menunjukkan keputusan cepat tetapi tanpa paham isi: approve yang tidak
+dipahami bukan pengawasan. Harness meminta drafter menulis `for_human`: satu-dua kalimat dalam `drafter.for_human_language`
+(config, sekarang `Indonesian`) untuk orang yang tidak membaca kode, tentang apa yang akan ia lihat berubah.
+- Dibekukan di policy drafter (`drafter_policy.for_human`); job lama dan policy tanpa bahasa: tidak diminta, dan
+  `for_human` yang tetap dikirim ditolak sebagai argumen ("not asked for").
+- Diminta, tidak wajib: draf tanpa `for_human` tetap diterima (halaman menulis bahwa kalimat itu tidak ada). Bila dikirim,
+  dicek `acceptance/draft.py` (`for_human_problem`): string satu baris, 1-400 karakter, tanpa karakter kontrol (C0, DEL,
+  C1).
+- Bagian dari `draft.json`, jadi sha yang di-approve mencakupnya: kalimat yang dibaca Atha terikat ke draf yang
+  di-approve. `DRAFT_REVIEW.md` menampilkannya di bagian "For the human (written by the drafter, not checked by a test)",
+  sebelum Plan.
+- D1: `summary.for_human` (string dibersihkan seperti field ringkasan lain, maks 500, atau `null`), ikut pemindaian key per
+  string (key → `summary` null). argus-ledger meneruskan `summary` apa adanya (issue 016), jadi tanpa perubahan ledger.
+- Viewer (issue terpisah, jalur cepat): kalimat itu di baris pertama kotak Ringkasan dengan label bahwa ia ditulis model
+  dan tidak dicek tes; bagian teknis di bawahnya tertutup.
+- Batas: kalimat ditulis model dari issue dan rencana; tes tidak memeriksanya. Ia membantu membaca, bukan bukti.
+
 ## 4. Fase 2-4: aksi (kerangka; dispek lagi sebelum dikoding)
 
 Aksi selalu lewat **service kontrol terpisah** di `127.0.0.1:8711` (kode harness, stdlib, `systemd --user`), bukan lewat

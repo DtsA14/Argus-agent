@@ -51,7 +51,8 @@ from .workspace import diff, digest, snapshot
 
 VERSION = 1
 KEYS = {"draft_version", "base", "plan", "contract", "new_tests", "unverifiable"}
-OPTIONAL_KEYS = {"changed_tests"}                 # W2a-ext; absent is the same as []
+OPTIONAL_KEYS = {"changed_tests", "for_human"}   # W2a-ext (absent: []); for_human: SPEC_CONTROL_UI amendment 2
+FOR_HUMAN_MAX = 400
 PLAN_KEYS = {"files", "steps", "risks"}
 CONTRACT_KEYS = {"scope", "validation", "tools", "budget_profile"}
 MAX_TEST_BYTES = 50_000
@@ -91,6 +92,18 @@ def _strings_problem(name, v, limit=50, length=500):
     return None
 
 
+def for_human_problem(v):
+    """Why `v` is not a for_human text (SPEC_CONTROL_UI amendment 2), or None: one line of 1 to FOR_HUMAN_MAX characters,
+    no control characters. It is shown to a person as plain text, so one line is all it may be."""
+    if not isinstance(v, str) or not v.strip():
+        return "for_human must be a non-empty string"
+    if len(v) > FOR_HUMAN_MAX:
+        return f"for_human has {len(v)} characters, at most {FOR_HUMAN_MAX}: one or two short sentences"
+    if any(ord(ch) < 32 or 127 <= ord(ch) < 160 for ch in v):
+        return "for_human must be one line, without line breaks or control characters"
+    return None
+
+
 def validate_draft(d):
     """Problems with the shape of a draft, or []."""
     if not isinstance(d, dict):
@@ -103,6 +116,8 @@ def validate_draft(d):
         errors.append(f"draft_version must be {VERSION}")
     if not isinstance(d["base"], str) or not intake.NAME.match(d["base"]):
         errors.append("base must be the name of an intake")
+    if "for_human" in d and (why := for_human_problem(d["for_human"])):
+        errors.append(why)
     p = d["plan"]
     if not isinstance(p, dict) or set(p) != PLAN_KEYS:
         errors.append("plan must have files, steps and risks, each a list of non-empty strings")
