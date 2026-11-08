@@ -24,6 +24,13 @@ def lock(**entry):
     return {"lockfileVersion": 3, "packages": {"": {"name": "x"}, "node_modules/react": {**ENTRY, **entry}}}
 
 
+def bundle_lock(path="node_modules/react/node_modules/tslib", extra=None, parent=None):
+    """A lock whose react bundles tslib (npm: inBundle, no resolved or integrity of its own)."""
+    lck = lock(**(parent or {}))
+    lck["packages"][path] = {"version": "2.8.1", "inBundle": True, **(extra or {})}
+    return lck
+
+
 def load(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
     m = importlib.util.module_from_spec(spec)
@@ -59,6 +66,14 @@ def build(tmp_path, name, base=DIGEST, pkg=PKG, lck=None):
     ("elsewhere", DIGEST, PKG, lock(resolved="https://example.com/react.tgz"), "sha512"),
     ("git", DIGEST, PKG, lock(resolved="git+ssh://git@github.com/x/react.git"), "sha512"),
     ("v2", DIGEST, PKG, {**lock(), "lockfileVersion": 2}, "lockfile v3"),
+    # a bundled package is accepted only inside a fetched one, with no source or hash of its own
+    ("toplevelbundle", DIGEST, PKG, bundle_lock("node_modules/tslib"), "tslib"),
+    ("bundleresolved", DIGEST, PKG, bundle_lock(extra={"resolved": "https://example.com/tslib.tgz"}), "tslib"),
+    ("bundlehash", DIGEST, PKG, bundle_lock(extra={"integrity": "sha512-abc"}), "tslib"),
+    ("bundlenotrue", DIGEST, PKG, bundle_lock(extra={"inBundle": "yes"}), "tslib"),
+    ("bundleorphan", DIGEST, PKG, bundle_lock("node_modules/ghost/node_modules/tslib"), "tslib"),
+    ("bundleinbadparent", DIGEST, PKG, bundle_lock(parent={"integrity": ""}), "tslib"),
+    ("bundleinbundle", DIGEST, PKG, bundle_lock(parent={"inBundle": True}), "tslib"),
 ])
 def test_an_unpinned_definition_is_refused_before_docker(tmp_path, name, base, pkg, lck, why):
     r = build(tmp_path, name, base, pkg, lck)
@@ -71,6 +86,16 @@ def test_a_pinned_definition_gets_to_docker(tmp_path):
     assert r.returncode != 0 and (tmp_path / "docker_called").exists()       # the fake docker fails; it was called
 
 
+@pytest.mark.parametrize("path", ["node_modules/react/node_modules/tslib",
+                                  "node_modules/react/node_modules/@emnapi/core/node_modules/tslib"])
+def test_a_package_bundled_in_a_fetched_one_gets_to_docker(tmp_path, path):
+    lck = bundle_lock(path)
+    if path.count("/node_modules/") == 2:          # bundled in a bundled package, itself in the fetched react
+        lck["packages"]["node_modules/react/node_modules/@emnapi/core"] = {"version": "1.4.3", "inBundle": True}
+    r = build(tmp_path, "bundled", lck=lck)
+    assert r.returncode != 0 and (tmp_path / "docker_called").exists(), r.stderr
+
+
 def test_the_pwa_node22_definition_is_pinned():
     d = ROOT / "environments" / "pwa_node22"
     assert (d / "base").read_text().strip() == \
@@ -78,7 +103,13 @@ def test_the_pwa_node22_definition_is_pinned():
     pkg, lck = json.loads((d / "package.json").read_text()), json.loads((d / "package-lock.json").read_text())
     assert pkg["devDependencies"]["vitest"] == "3.1.4" and pkg["dependencies"]["react"] == "19.1.0"
     entries = {k: v for k, v in lck["packages"].items() if k}
-    assert entries and all(v["integrity"].startswith("sha512-") for v in entries.values())
+    fetched = {k: v for k, v in entries.items() if not v.get("inBundle")}
+    assert fetched and all(v["integrity"].startswith("sha512-") for v in fetched.values())
+    # Tailwind (Atha 2026-11-08): the only bundled packages are those of its wasm32 build, which is never installed here
+    assert {k for k in entries if k not in fetched} == {
+        f"node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/{n}" for n in
+        ("@emnapi/core", "@emnapi/runtime", "@emnapi/wasi-threads", "@napi-rs/wasm-runtime", "@tybys/wasm-util", "tslib")}
+    assert pkg["devDependencies"]["tailwindcss"] == pkg["devDependencies"]["@tailwindcss/vite"] == "4.3.3"
     assert lck["packages"][""]["devDependencies"] == pkg["devDependencies"]   # the lock is of this package.json
 
 

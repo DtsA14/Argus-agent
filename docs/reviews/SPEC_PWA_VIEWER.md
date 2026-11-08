@@ -59,6 +59,20 @@ dan vite jalan tanpa jaringan dengan tes contoh bawaan harness. `config.yaml`: `
 **subset persis** (nama dan versi) dari lock environment; selain itu intake dan validasi ditolak dengan pesan yang
 menyebut paketnya. Agen tidak bisa memasang paket (tanpa jaringan); paket baru = environment baru (`*_up1`, alur U).
 
+**E2. Amandemen 1: Tailwind di `pwa_node22` (Atha 2026-11-08, "pasang tailwind dulu"; jalur cepat atas delegasi Atha:
+review dan merge oleh Claude).** `tailwindcss` dan `@tailwindcss/vite` 4.3.3 (rilis 2026-07-16) masuk lock
+`pwa_node22` **di tempat**, bukan `pwa_node22_up1`: rilis viewer adalah file statis yang dibangun sekali dan rollback
+memasang `dist` yang sudah ada tanpa membangun ulang, jadi rilis lama tidak bergantung pada image hari ini (ledger memakai
+`_up*` karena kontainernya jalan di atas image). Lock dibuat ulang dari lock lama: 0 paket lama berubah, 39 baru.
+- Lock Tailwind berisi 6 paket **bundled** (`inBundle`, di dalam `@tailwindcss/oxide-wasm32-wasi`) tanpa `resolved` dan
+  `integrity` sendiri. `build_env_node.sh` menerimanya hanya bila tidak menyebut sumber atau hash sendiri, bersarang di
+  bawah paket lain, dan paket tidak-bundled terdekat di atasnya diunduh dari registry dengan sha512 (isinya ikut hash
+  itu); selain itu tetap ditolak. Paket wasm32 itu tidak terpasang di VM (`cpu: wasm32`).
+- Cek awal (scratchpad): image dibangun ulang dengan Tailwind, `vite build` tanpa jaringan di aarch64 menghasilkan class
+  Tailwind, 187/187 tes argus-viewer lulus. `@tailwindcss/oxide` tanpa install script (`npm ci --ignore-scripts` tetap).
+- argus-viewer memakai theme + utilities saja, **tanpa preflight** (reset CSS), agar halaman lama tidak berubah tampilan
+  sampai issue mengubahnya; `package.json`, `vite.config.js` dan `src/index.css` diubah tangan (file dilindungi, izin Atha).
+
 ## 4. S: staging aplikasi statis
 
 **S1. Rilis = build dari commit applied**, di container `pwa_node22` tanpa jaringan: workspace = `git archive`
