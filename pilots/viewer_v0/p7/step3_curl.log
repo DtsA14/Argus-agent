@@ -1,0 +1,6 @@
+== /jobs/j20261108_031013_808b/draft
+200 text/html; charset=utf-8
+b'<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset='
+== /api/jobs/j20261108_031013_808b/draft
+200 application/json
+['draft_sha256', 'judge', 'review', 'summary'] e3f709d8fb09
