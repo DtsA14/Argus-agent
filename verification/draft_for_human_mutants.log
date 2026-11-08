@@ -1,18 +1,22 @@
-KILLED  not an optional key: 1 failed, 11 passed in 1.52s
-KILLED  never checked: 1 failed, 11 passed in 0.64s
-KILLED  any type: 1 failed, 11 passed in 0.67s
-KILLED  blank accepted: 1 failed, 12 passed in 0.65s
+KILLED  not an optional key: 1 failed, 11 passed in 1.48s
+KILLED  never checked: 1 failed, 11 passed in 0.63s
+KILLED  any type: 1 failed, 11 passed in 0.66s
+KILLED  blank accepted: 1 failed, 12 passed in 0.63s
 KILLED  no length limit: 1 failed, 13 passed in 0.64s
-KILLED  limit off by one: 1 failed, 13 passed in 0.64s
+KILLED  limit off by one: 1 failed, 13 passed in 0.65s
 KILLED  line breaks allowed: 1 failed, 14 passed in 0.65s
-KILLED  C1 allowed: 1 failed, 16 passed in 0.65s
-KILLED  not a submit key: 1 failed, 175 passed, 49 skipped in 25.67s
-KILLED  dropped from the draft: 1 failed, 175 passed, 49 skipped in 25.48s
-KILLED  taken when not asked: 1 failed, 177 passed, 49 skipped in 26.19s
-KILLED  not in the policy: 1 failed, 175 passed, 49 skipped in 25.41s
-KILLED  not asked in the prompt: 1 failed, 175 passed, 49 skipped in 25.50s
-KILLED  not in the review: 1 failed, 175 passed, 49 skipped in 25.84s
-KILLED  not in the summary: 1 failed, 223 passed, 49 skipped in 26.75s
-KILLED  not cleaned: 1 failed, 223 passed, 49 skipped in 26.96s
-KILLED  not in the config: 1 failed, 179 passed, 49 skipped in 26.07s
-RESULT: 17/17 killed
+KILLED  bidi and zero width allowed: 1 failed, 18 passed in 0.66s
+KILLED  separators allowed: 1 failed, 17 passed in 0.65s
+KILLED  not a submit key: 1 failed, 179 passed, 49 skipped in 25.68s
+KILLED  dropped from the draft: 1 failed, 179 passed, 49 skipped in 27.65s
+KILLED  taken when not asked: 1 failed, 181 passed, 49 skipped in 26.03s
+KILLED  old tool version: 1 failed, 242 passed, 49 skipped in 29.00s
+KILLED  limits not in the prompt: 1 failed, 179 passed, 49 skipped in 25.87s
+KILLED  not in the policy: 1 failed, 179 passed, 49 skipped in 25.80s
+KILLED  not asked in the prompt: 1 failed, 179 passed, 49 skipped in 25.62s
+KILLED  not in the review: 1 failed, 179 passed, 49 skipped in 25.60s
+KILLED  not in the summary: 1 failed, 227 passed, 49 skipped in 26.80s
+KILLED  not cleaned: 1 failed, 228 passed, 49 skipped in 26.91s
+KILLED  cut at 500: 1 failed, 228 passed, 49 skipped in 26.24s
+KILLED  not in the config: 1 failed, 183 passed, 49 skipped in 26.33s
+RESULT: 21/21 killed
