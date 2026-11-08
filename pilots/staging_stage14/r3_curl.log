@@ -1,0 +1,9 @@
+== /api/jobs/j20261107_174855_60fa/draft
+200 application/json
+['draft_sha256', 'judge', 'review', 'summary'] 27312a728673 summary True review True judge False
+== /api/jobs/j20261022_193403_3beb/draft
+404 application/json
+{'detail': 'no draft: j20261022_193403_3beb'}
+== /jobs/j20261107_174855_60fa/draft
+200 text/html; charset=utf-8
+b'<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8">\n    <meta name="viewport" content="width=device-wid'

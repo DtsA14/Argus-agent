@@ -1,0 +1,9 @@
+== /api/jobs/j20261107_174855_60fa/draft
+404 application/json
+{'error': 'not found'}  review False
+== /api/jobs/j20261022_193403_3beb/draft
+404 application/json
+{'error': 'not found'}  review False
+== /jobs/j20261107_174855_60fa/draft
+200 text/html; charset=utf-8
+b'<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8">\n    <meta name="viewport" content="width=device-wid'
