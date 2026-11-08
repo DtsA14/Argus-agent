@@ -126,6 +126,11 @@ class ChangedTest(BaseModel):
                                                                        "that are not required (must_pass)")
 
 
+FOR_HUMAN_DESC = ("Only when the task asks for it: one or two short sentences, in the language the task names, for a "
+                  "person who does not read code, saying what they will see change; one line, at most "
+                  f"{dr.FOR_HUMAN_MAX} characters")
+
+
 class SubmitDraft(BaseModel):
     """Submit the task draft. The harness checks it at once: its shape, the scope, and in the sandbox that every
     required test of your new test files fails by assertion on the code as it is now while everything else passes.
@@ -141,6 +146,7 @@ class SubmitDraft(BaseModel):
     tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, search_files)")
     changed_tests: Optional[List[ChangedTest]] = Field(default=None, description="Existing test files whose "
                                                                                  "expectations the issue changes")
+    for_human: Optional[str] = Field(default=None, description=FOR_HUMAN_DESC)
 
 
 class ReviseDraft(BaseModel):
@@ -155,6 +161,7 @@ class ReviseDraft(BaseModel):
     budget_profile: Optional[str] = None
     tools: Optional[List[str]] = None
     changed_tests: Optional[List[ChangedTest]] = None
+    for_human: Optional[str] = None
 
 
 class VitestValidationArgs(BaseModel):
@@ -180,6 +187,7 @@ def _vitest_submits():
                                                 "enough for one attempt to read what the fix needs and write it")
         tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, "
                                                                      "search_files)")
+        for_human: Optional[str] = Field(default=None, description=FOR_HUMAN_DESC)
 
     class ReviseDraft(BaseModel):
         plan: Optional[PlanArgs] = None
@@ -189,6 +197,7 @@ def _vitest_submits():
         unverifiable: Optional[List[str]] = None
         budget_profile: Optional[str] = None
         tools: Optional[List[str]] = None
+        for_human: Optional[str] = None
 
     SubmitDraft.__doc__ = globals()["SubmitDraft"].__doc__
     ReviseDraft.__doc__ = globals()["ReviseDraft"].__doc__
@@ -198,7 +207,8 @@ def _vitest_submits():
 VITEST_SUBMIT_TOOLS = _vitest_submits()
 SUBMITS = ("SubmitDraft", "ReviseDraft")       # each one is checked, and counts toward max_submits
 READ_TOOLS = [ListFiles, SearchFiles, ReadFile]
-SUBMIT_KEYS = {"plan", "scope", "validation", "new_tests", "unverifiable", "budget_profile", "tools", "changed_tests"}
+SUBMIT_KEYS = {"plan", "scope", "validation", "new_tests", "unverifiable", "budget_profile", "tools", "changed_tests",
+               "for_human"}
 VALIDATION_ARG_KEYS = {"id", "paths", "must_pass", "min_tests"}
 # Never written by the drafter: the task repository's own files are read in a copy, and nothing here writes.
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
@@ -322,6 +332,11 @@ def task_prompt(inputs, files, policy):
         "without edit_file every change rewrites the whole file within one call's output. `tools` may add "
         + " and ".join(sorted(ct.CONTRACT_TOOLS)) + " (edit_file replaces one exact piece of text); a draft whose "
         "writable files are too large to rewrite in one call is refused unless it adds edit_file.",
+        *([f"for_human (asked for): one or two short sentences in {policy['for_human']}, written for a person who does "
+           "not read code, saying what they will see change when the task is done (what appears, where, what it says), "
+           f"without file names, test names or code; one line, at most {dr.FOR_HUMAN_MAX} characters. A human approves "
+           "the draft by reading it first, so it must say only what the tests check and the plan does."]
+          if policy.get("for_human") else []),
         f"SubmitDraft and ReviseDraft are checked at most {policy['max_submits']} times together."])
 
 
@@ -384,6 +399,11 @@ def draft_from_args(args, *, base, policy):
              "new_tests": args.get("new_tests"), "unverifiable": args.get("unverifiable")}
     if args.get("changed_tests"):                     # W2a-ext; absent or empty: a draft as before
         draft["changed_tests"] = args["changed_tests"]
+    # SPEC_CONTROL_UI amendment 2: asked for, never required (a draft without it is shown as having none), checked
+    # when given. A policy that does not ask for it ignores it: refusing would cost a submit, and ReviseDraft could not
+    # take the field away again.
+    if policy.get("for_human") and args.get("for_human") is not None:
+        draft["for_human"] = args["for_human"]
     return draft, [f"draft: {e}" for e in dr.validate_draft(draft)]
 
 
@@ -860,6 +880,9 @@ def review_text(run_id, inputs, state, cost, source=None):
     if draft:
         p, c = draft["plan"], draft["contract"]
         new_paths = {t["path"] for t in draft["new_tests"]}
+        if draft.get("for_human"):              # SPEC_CONTROL_UI amendment 2: written by the drafter, not checked
+            out += ["", "## For the human (written by the drafter, not checked by a test)", "",
+                    fence(draft["for_human"], "text")]
         out += ["", "## Plan", "", "Files: " + ", ".join(f"`{cell(f)}`" for f in p["files"]), "", "Steps:"]
         out += [f"- {cell(s, 500)}" for s in p["steps"]] + ["", "Risks:"] + [f"- {cell(r, 500)}" for r in p["risks"]]
         out += ["", "## Scope", "", "Writable: " + ", ".join(f"`{cell(w)}`" for w in c["scope"]["writable"]),
@@ -969,7 +992,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
     from tools.sandbox import tool_version
     env = cfg["drafter"]["environment"]
     versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3",
-                "SubmitDraft": f"2:{tool_version(scfg, [env])}", "ReviseDraft": f"2:{tool_version(scfg, [env])}"}
+                # 3: SPEC_CONTROL_UI amendment 2 (for_human taken and checked); a memo of a 2 is never reused
+                "SubmitDraft": f"3:{tool_version(scfg, [env])}", "ReviseDraft": f"3:{tool_version(scfg, [env])}"}
     common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
     task_id = f"draft:{inputs['intake']}"
 
@@ -1015,6 +1039,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
                   "runner": ct.runner(scfg["environments"][env]),
                   "validation_timeout_s": cfg["drafter"]["validation_timeout_s"],
                   "red_question": bool(cfg["drafter"].get("red_question", False)),
+                  **({"for_human": str(cfg["drafter"]["for_human_language"])}
+                     if cfg["drafter"].get("for_human_language") else {}),
                   "profiles": agent_profiles(cfg),
                   "profile_info": effective_profiles(cfg),
                   "max_output_tokens": int(cfg["roles"][role]["max_output_tokens"]),

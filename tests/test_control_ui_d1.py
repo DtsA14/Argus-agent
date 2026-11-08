@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from acceptance import contract as ct
+from acceptance import draft as dr
 from router import stage_data as sd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -103,7 +104,9 @@ def test_the_latest_draft_is_published_with_its_sha_its_summary_and_the_latest_j
     assert meta["review"] == {"sha256": hashlib.sha256((d / "review.md").read_bytes()).hexdigest()}
     assert meta["judge"]["file"] == "JUDGE-j10.md" and (d / "judge.md").read_text() == "verdict ten\n"
     s = meta["summary"]
-    assert set(s) == {"draft_sha256", "cost", "conflicts", "red", "plan", "scope", "warnings", "unverifiable"}
+    assert set(s) == {"draft_sha256", "cost", "conflicts", "red", "plan", "scope", "warnings", "unverifiable",
+                      "for_human"}
+    assert s["for_human"] is None            # amendment 2: a draft without the sentence has none
     assert s["draft_sha256"] == sha(draft) and s["cost"] == {"usd": 0.02, "cap_usd": 0.75}
     assert s["red"] == [
         {"validation": "target", "test": NODE_A, "status": "FAIL",
@@ -418,3 +421,32 @@ def test_validate_checks_the_meta_it_wrote(tmp_path, root, change, problem):
     (d / "meta.json").write_text(json.dumps(meta))
     problems = sd.validate(tmp, man)
     assert (any(problem in p for p in problems) if problem else isinstance(problems, list)), problems
+
+
+# ---- amendment 2: the drafter's sentence for the human -----------------------------------------------------------
+
+def test_the_sentence_for_the_human_is_published_in_the_summary_as_written_and_bound_to_the_draft(tmp_path, root):
+    text = ("Di halaman job akan muncul jam dibuat dalam WIB. " * 9)[:dr.FOR_HUMAN_MAX].strip()
+    draft = a_draft(for_human=text)
+    assert dr.for_human_problem(text) is None and len(text) > 390     # a sentence the harness accepts, near the cap
+    draft_job(root, draft=draft)
+    man, d, meta = published(tmp_path, root)
+    s = meta["summary"]
+    assert s["draft_sha256"] == sha(draft) == meta["draft_sha256"] and s["for_human"] == text
+    assert man["withheld"] == []              # and validate() passed it: refresh publishes nothing it refuses
+
+
+def test_a_sentence_the_harness_would_refuse_is_still_cleaned_and_cut_in_the_snapshot(tmp_path, root):
+    # draft.json is read as it is on disk: D1 cleans it again whatever wrote it
+    draft_job(root, draft=a_draft(for_human="Di halaman job\u202e akan muncul " + "jam WIB " * 80))
+    man, d, meta = published(tmp_path, root)
+    s = meta["summary"]["for_human"]
+    assert s.startswith("Di halaman job akan muncul jam WIB") and "\u202e" not in s
+    assert len(s) == dr.FOR_HUMAN_MAX and s.endswith("...")
+
+
+def test_a_key_in_the_sentence_for_the_human_withholds_the_summary(tmp_path, root):
+    draft_job(root, draft=a_draft(for_human='set api_key: "x" in the client'))
+    man, d, meta = published(tmp_path, root)
+    assert meta["summary"] is None
+    assert "api_key" not in json.dumps(meta)

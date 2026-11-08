@@ -146,6 +146,17 @@ def good_report(tmp_path_factory, scfg):
     (lambda d: d["new_tests"][0].update(content="x" * 60_000), "larger than"),
     (lambda d: d["plan"].pop("risks"), "plan must have"),
     (lambda d: d.update(unverifiable=[""]), "unverifiable"),
+    # SPEC_CONTROL_UI amendment 2: for_human is shown to a person as one plain line
+    (lambda d: d.update(for_human=["Di halaman job ada jam WIB"]), "for_human must be a non-empty string"),
+    (lambda d: d.update(for_human="   "), "for_human must be a non-empty string"),
+    (lambda d: d.update(for_human="x" * 401), "for_human has 401 characters"),
+    (lambda d: d.update(for_human="baris satu\nbaris dua"), "for_human must be one line"),
+    (lambda d: d.update(for_human="jam\x7f WIB"), "for_human must be one line"),
+    (lambda d: d.update(for_human="jam\x85 WIB"), "for_human must be one line"),
+    (lambda d: d.update(for_human="baris satu\u2028baris dua"), "for_human must be one line"),
+    (lambda d: d.update(for_human="jam \u202eBIW"), "for_human must be one line"),
+    (lambda d: d.update(for_human="jam\u200b WIB"), "for_human must be one line"),
+    (lambda d: d.update(for_human="\ufeffjam WIB"), "for_human must be one line"),
 ])
 def test_malformed_drafts_and_drafts_that_set_what_only_a_human_sets_are_refused(change, why):
     d = copy.deepcopy(DRAFT)
@@ -972,3 +983,10 @@ def test_the_red_check_records_the_message_and_the_repository_files_of_the_chain
     refused = sorted(n for n in nodes if any(n + " " in p for p in out))
     assert refused == sorted([nodes[0], nodes[3]])
     assert "KeyError raised in src/lib.py" in next(p for p in out if nodes[0] + " " in p)
+
+
+def test_a_draft_may_carry_one_line_for_the_human_of_up_to_400_characters():
+    # SPEC_CONTROL_UI amendment 2: optional; a draft without it is as before
+    assert dr.validate_draft(copy.deepcopy(DRAFT)) == []
+    for text in ["Di halaman job muncul jam dibuat dalam WIB.", "x" * 400]:
+        assert dr.validate_draft({**copy.deepcopy(DRAFT), "for_human": text}) == []
