@@ -17,10 +17,11 @@ M = [
      'if v.get("inBundle") is not True or "integrity" in v:'),
     ("own hash allowed", B, 'if v.get("inBundle") is not True or "resolved" in v or "integrity" in v:',
      'if v.get("inBundle") is not True or "resolved" in v:'),
-    ("parent not checked", B, "            return fetched(parent)", "            return True"),
-    ("any ancestor, bundled too", B, "        if parent is not None and not parent.get(\"inBundle\"):",
-     "        if parent is not None:"),
-    ("orphan accepted", B, "            return fetched(parent)\n    return False", "            return fetched(parent)\n    return True"),
+    ("bundleDependencies not checked", B, ' and parts[i] in (parent.get("bundleDependencies") or [])', ""),
+    ("parent not checked", B, "            return fetched(parent) and", "            return True and"),
+    ("any ancestor, bundled too", B, '        if parent.get("inBundle") is not True:', "        if True:"),
+    ("missing ancestor skipped", B, "        if parent is None:\n            return False", "        if parent is None:\n            continue"),
+    ("orphan accepted", B, "bundleDependencies\") or [])\n    return False", "bundleDependencies\") or [])\n    return True"),
 ]
 # Equivalent, not listed: starting the ancestor walk at the package itself (range(len(parts), ...)), which is inBundle and
 # so skipped; a top-level bundled package is refused either way (tested).
@@ -32,11 +33,13 @@ if __name__ == "__main__":
         orig = p.read_text()
         assert orig.count(old) == 1, (name, orig.count(old))
         p.write_text(orig.replace(old, new, 1))
-        r = subprocess.run([PY, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *T], cwd=WT,
-                           capture_output=True, text=True, timeout=300)
-        p.write_text(orig)
+        try:
+            r = subprocess.run([PY, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *T], cwd=WT,
+                               capture_output=True, text=True, timeout=300)
+        finally:
+            p.write_text(orig)
         last = (r.stdout.strip().splitlines() or [""])[-1]
-        k = "failed" in last
+        k = r.returncode == 1 and "failed" in last          # a test failed (not a collection or internal error)
         killed += k
         print(f"{'KILLED ' if k else 'SURVIVED'} {name}: {last}", flush=True)
     print(f"RESULT: {killed}/{len(M)} killed")

@@ -26,7 +26,7 @@ def lock(**entry):
 
 def bundle_lock(path="node_modules/react/node_modules/tslib", extra=None, parent=None):
     """A lock whose react bundles tslib (npm: inBundle, no resolved or integrity of its own)."""
-    lck = lock(**(parent or {}))
+    lck = lock(**{"bundleDependencies": ["tslib", "@emnapi/core"], **(parent or {})})
     lck["packages"][path] = {"version": "2.8.1", "inBundle": True, **(extra or {})}
     return lck
 
@@ -74,6 +74,10 @@ def build(tmp_path, name, base=DIGEST, pkg=PKG, lck=None):
     ("bundleorphan", DIGEST, PKG, bundle_lock("node_modules/ghost/node_modules/tslib"), "tslib"),
     ("bundleinbadparent", DIGEST, PKG, bundle_lock(parent={"integrity": ""}), "tslib"),
     ("bundleinbundle", DIGEST, PKG, bundle_lock(parent={"inBundle": True}), "tslib"),
+    ("bundledeeporphan", DIGEST, PKG, bundle_lock("node_modules/react/node_modules/ghost/node_modules/tslib",
+                                                  parent={"bundleDependencies": ["ghost", "tslib"]}), "tslib"),
+    ("bundlenotnamed", DIGEST, PKG, bundle_lock(parent={"bundleDependencies": ["@emnapi/core"]}), "tslib"),
+    ("bundlenolist", DIGEST, PKG, bundle_lock(parent={"bundleDependencies": None}), "tslib"),
 ])
 def test_an_unpinned_definition_is_refused_before_docker(tmp_path, name, base, pkg, lck, why):
     r = build(tmp_path, name, base, pkg, lck)
@@ -103,8 +107,9 @@ def test_the_pwa_node22_definition_is_pinned():
     pkg, lck = json.loads((d / "package.json").read_text()), json.loads((d / "package-lock.json").read_text())
     assert pkg["devDependencies"]["vitest"] == "3.1.4" and pkg["dependencies"]["react"] == "19.1.0"
     entries = {k: v for k, v in lck["packages"].items() if k}
-    fetched = {k: v for k, v in entries.items() if not v.get("inBundle")}
-    assert fetched and all(v["integrity"].startswith("sha512-") for v in fetched.values())
+    fetched = {k: v for k, v in entries.items() if v.get("inBundle") is not True}
+    assert fetched and all(v["integrity"].startswith("sha512-") and v["resolved"].startswith("https://registry.npmjs.org/")
+                           for v in fetched.values())
     # Tailwind (Atha 2026-11-08): the only bundled packages are those of its wasm32 build, which is never installed here
     assert {k for k in entries if k not in fetched} == {
         f"node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/{n}" for n in

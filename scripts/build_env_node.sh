@@ -35,14 +35,17 @@ def fetched(v):
     return str(v.get("integrity", "")).startswith("sha512-") and str(v.get("resolved", "")).startswith("https://registry.npmjs.org/")
 def bundled(k, v):
     # A bundled package (inBundle) is no download of its own: its files are inside the tarball of the nearest enclosing
-    # package that is not bundled, whose sha512 npm checks. It may name no source or hash of its own.
+    # package that is not bundled, whose sha512 npm checks and which names it in bundleDependencies. It may name no
+    # source or hash of its own.
     if v.get("inBundle") is not True or "resolved" in v or "integrity" in v:
         return False
     parts = k.split("/node_modules/")
-    for i in range(len(parts) - 1, 0, -1):
+    for i in range(len(parts) - 1, 0, -1):         # every package between it and that one is in the lock, bundled
         parent = packages.get("/node_modules/".join(parts[:i]))
-        if parent is not None and not parent.get("inBundle"):
-            return fetched(parent)
+        if parent is None:
+            return False
+        if parent.get("inBundle") is not True:
+            return fetched(parent) and parts[i] in (parent.get("bundleDependencies") or [])
     return False
 bad += [k for k, v in packages.items() if k and not (fetched(v) or bundled(k, v))]
 if lock.get("lockfileVersion") != 3 or bad:
