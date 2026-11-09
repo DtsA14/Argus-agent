@@ -389,3 +389,27 @@ def test_a_crashed_turn_resumes_without_buying_again(tmp_path, point):
     rebought = {e["step"] for e in evs[i:] if e["event"] == "llm_call" and e.get("status") == "ok"}
     assert not committed & rebought
     assert reconcile_ledger(evs)[1]["unknown_after_crash"] == 0
+
+
+# ---- added for the mutants --------------------------------------------------------------------------------------
+
+def test_a_turn_the_job_cannot_fund_blocks_the_job_without_a_model_call(tmp_path, monkeypatch):
+    env = Env(tmp_path, [SUBMIT, SUBMIT])
+    env.new()
+    job = env.job()
+    with job.lock():
+        job.data["conversation"].append({"from": "human", "at": "t", "text": "lagi"})
+        job.move(ri.WRITING, env.deps, stage="w2")
+        monkeypatch.setattr(rj, "left_usd", lambda j: 0.05)
+        ri._turn(job, env.cfg, env.deps)
+    assert job.data["state"] == ri.BLOCKED and "w2" not in job.data["stages"] and len(env.model.calls) == 1
+
+
+def test_a_turn_with_nothing_to_spend_asks_no_model(tmp_path):
+    repo = make_repo(tmp_path)
+    model = StrictScriptedChatModel(script=[SUBMIT])
+    inputs = {"repo": "demo", "commit": "0" * 40, "environment": ENV, "previous_issue": None, "max_usd": 0,
+              "conversation": [{"from": "human", "text": FIRST}]}
+    r = iw.run_writer(run_id="w0", runs_dir=tmp_path / "runs", cfg=rj.stage_config(cfg(repo), 0), inputs=inputs,
+                      models={"issue_writer": model}, prepare=lambda d: repo)
+    assert r["status"] == iw.FAILED_BUDGET and model.calls == []

@@ -1,0 +1,31 @@
+KILLED  any repository: 1 failed, 8 passed in 2.02s
+KILLED  first message unchecked: 1 failed, 9 passed in 2.08s
+KILLED  reply unchecked: 1 failed, 18 passed in 2.65s
+KILLED  reply limit is the first limit: 1 failed, 18 passed in 2.62s
+KILLED  reply in any state: 1 failed, 3 passed in 1.25s
+KILLED  reply to any kind: 1 failed, 47 passed in 3.86s
+KILLED  turn cap above the job cap: 1 failed, 20 passed in 2.80s
+KILLED  unfunded reply taken: 1 failed, 21 passed in 2.87s
+KILLED  unfunded turn run: 1 failed, 52 passed in 12.58s
+KILLED  message after the turn: 1 failed, 2 passed in 1.11s
+KILLED  live repository: 1 failed, 1 passed in 0.95s
+KILLED  no previous issue: 1 failed, 2 passed in 1.17s
+KILLED  failed turn final: 1 failed, 7 passed in 1.85s
+KILLED  unknown log entry: 1 failed, 45 passed in 3.47s
+KILLED  not confirmed kept: 1 failed, 19 passed in 2.67s
+KILLED  control characters: 1 failed, 13 passed in 2.18s
+KILLED  newline anywhere: 1 failed, 39 passed in 3.13s
+KILLED  no length limit: 1 failed, 11 passed in 2.18s
+KILLED  no title rule: 1 failed, 25 passed in 3.09s
+KILLED  no Tests rule: 1 failed, 26 passed in 3.15s
+KILLED  environment anywhere: 1 failed, 28 passed in 3.07s
+KILLED  clash outside: 1 failed, 34 passed in 3.14s
+KILLED  clash not a file: 1 failed, 33 passed in 3.19s
+KILLED  bool line: 1 failed, 38 passed in 3.23s
+KILLED  too many clashes: 1 failed, 40 passed in 3.32s
+KILLED  too many questions: 1 failed, 41 passed in 3.27s
+KILLED  multi-line question: 1 failed, 42 passed in 3.14s
+KILLED  a writing tool: 1 failed, 44 passed in 3.50s
+KILLED  nothing to spend: 1 failed, 53 passed in 12.67s
+KILLED  issue resume as code: 1 failed, 2 passed in 1.12s
+RESULT: 30/30 killed

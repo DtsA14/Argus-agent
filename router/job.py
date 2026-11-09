@@ -988,7 +988,7 @@ def judge(job_id, *, cfg, deps, jobs_dir=JOBS):
     shown, never judged again (J5); a stage cut off by a crash continues with its recorded cap."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
-        if job.data.get("kind") in ("research", "issue") or job.data["state"] not in JUDGEABLE:
+        if job.data.get("kind") == "research" or job.data["state"] not in JUDGEABLE:
             raise Refused(f"job {job.id} is {job.data['state']}, not one of {', '.join(JUDGEABLE)}; nothing was judged")
         return job, _judge(job, cfg, deps)
 
