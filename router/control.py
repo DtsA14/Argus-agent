@@ -59,7 +59,13 @@ STYLE = (b"body{margin:0;padding:16px;background:#0a0e13;color:#e8eef4;font:16px
          b"button{min-height:2.75rem;padding:0 1rem;border:0;border-radius:.75rem;font:inherit;font-weight:600}"
          b".reject{background:#f26d6d;color:#0a0e13}.abandon{background:#232d39;color:#e8eef4}"
          b".bad{color:#f26d6d}.ok{color:#6ee7b7}ul{padding:0;list-style:none}li{margin:.5rem 0}"
-         b"h1{font-size:1.15rem;font-family:monospace;overflow-wrap:anywhere}")
+         b"h1{font-size:1.15rem;font-family:monospace;overflow-wrap:anywhere}"
+         b"textarea,select{width:100%;box-sizing:border-box;padding:.5rem;margin:.5rem 0;color:inherit;"
+         b"background:#18202a;border:1px solid #232d39;border-radius:.75rem;font:inherit}select{min-height:2.75rem}"
+         b".text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:0}"
+         b".start,.reply{background:#7db4ff;color:#0a0e13}.button{display:inline-block;padding:.6rem 1rem;"
+         b"background:#7db4ff;color:#0a0e13;border-radius:.75rem;font-weight:600;text-decoration:none}"
+         b".human{border-left:3px solid #7db4ff}summary{cursor:pointer;min-height:2.75rem}")
 
 
 class Tokens:
@@ -155,6 +161,15 @@ class Control:
     def __init__(self, jobs_dir, audit=AUDIT, clock=time.time, run=cli):
         self.jobs_dir, self.audit_path, self.tokens, self.run = Path(jobs_dir), Path(audit), Tokens(clock), run
         self.clock = clock
+        self.issues = None                         # router/control_issues.IssuePages, when the config has a writer
+
+    def origin_problem(self, headers):
+        """F3.2: why a POST did not come from this service's own page, or None."""
+        if headers.get("Origin") not in ORIGINS:
+            return "this page did not come from the control service"
+        if headers.get("Sec-Fetch-Site") not in (None, "same-origin"):
+            return "a cross-site request"
+        return None
 
     def audit(self, **rec):
         """F5: one JSON line per POST, never the token."""
@@ -180,7 +195,8 @@ class Control:
                 rows.append(f'<li><a href="/jobs/{html.escape(job.id)}">{html.escape(job.id)}</a> '
                             f'<span class="muted">{html.escape(str(job.data["state"]))}</span></li>')
         listing = f"<ul>{''.join(rows)}</ul>" if rows else '<p class="muted">Nothing waits for a decision.</p>'
-        return page("Argus control", f'<h1>Argus control</h1><div class="card">{listing}</div>')
+        issues = '<p><a class="button" href="/issues">Issues</a></p>' if self.issues is not None else ""
+        return page("Argus control", f'<h1>Argus control</h1>{issues}<div class="card">{listing}</div>')
 
     def job_page(self, job, message=None, bad=False, reason=""):
         e = html.escape
@@ -218,12 +234,11 @@ class Control:
                 return status, self.job_page(job, f"refused: {why}", bad=True, reason=reason)
             return status, page("refused", f'<p class="bad">refused: {html.escape(why)}</p><p><a href="/">All</a></p>')
 
-        origin = headers.get("Origin")
-        if origin not in ORIGINS:
+        why = self.origin_problem(headers)
+        if why:
+            origin = headers.get("Origin")
             rec["origin"] = (origin or "")[:100] if origin is not None else None
-            return refuse(403, "origin", "this page did not come from the control service")
-        if headers.get("Sec-Fetch-Site") not in (None, "same-origin"):
-            return refuse(403, "origin", "a cross-site request")
+            return refuse(403, "origin", why)
         job = self.job(job_id)
         if job is None or action not in ACTIONS:
             return refuse(404, "path", "no such job or action")
@@ -304,6 +319,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, self.control.index())
         if path == "/style.css":
             return self._send(200, STYLE, "text/css; charset=utf-8")
+        issues = self.control.issues
+        if issues is not None and path == "/issues":
+            return self._send(200, issues.index())
+        if issues is not None and path == "/issues/new":
+            return self._send(200, issues.new_page())
+        m = re.fullmatch(r"/issues/([^/]+)", path)
+        if issues is not None and m:
+            job = issues.issue_job(m.group(1))
+            if job is not None:
+                return self._send(200, issues.job_page(job))
+            return self._send(404, page("not found", '<p>not found</p><p><a href="/issues">Issues</a></p>'))
         m = re.fullmatch(r"/jobs/([^/]+)", path)
         job = self.control.job(m.group(1)) if m else None
         if job is None:
@@ -314,13 +340,20 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok(audit=True):
             return
         m = re.fullmatch(r"/jobs/([^/]+)/([a-z]+)", self.path)
+        issue = re.fullmatch(r"/issues/new|/issues/([^/]+)/([a-z]+)", self.path)
+        issues = self.control.issues
+        limit = int(issues.cfg.get("control", {}).get("message_body_max", BODY_MAX)) if issue and issues else BODY_MAX
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = -1
-        body = self.rfile.read(length) if 0 <= length <= BODY_MAX else None
+        body = self.rfile.read(length) if 0 <= length <= limit else None
         if body is None:
             self.close_connection = True
+        if issue and issues is not None:
+            action = "new" if self.path == "/issues/new" else issue.group(2)
+            status, out = issues.act(None if action == "new" else issue.group(1), action, self.headers, body)
+            return self._send(status, out)
         if not m:
             self.control.audit(path=self.path[:200], refused="path", why="no such action")
             return self._send(404, page("not found", "<p>not found</p>"))
@@ -341,8 +374,12 @@ def server(control, port=PORT):
     return HTTPServer((BIND, port), handler)
 
 
-def serve(jobs_dir):
-    """`argus control serve`: forever, one request at a time."""
-    srv = server(Control(jobs_dir))
+def serve(jobs_dir, cfg=None):
+    """`argus control serve`: forever, one request at a time. cfg: the config, for the issue writer's pages."""
+    control = Control(jobs_dir)
+    if cfg is not None and cfg.get("issue_writer"):
+        from router.control_issues import IssuePages
+        control.issues = IssuePages(control, cfg)
+    srv = server(control)
     print(f"argus control on http://{BIND}:{PORT} (jobs {jobs_dir})", flush=True)
     srv.serve_forever()

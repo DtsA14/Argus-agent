@@ -233,6 +233,12 @@ issue_writer:
   turn: {cap_usd: 0.10, attempt_tokens: 400000, max_input_tokens: 60000, max_steps: 20, max_submits: 3}
   code_max_usd: 1.00   # K3: the cap of a code job `argus issue start` makes (router/issue.py refuses more than $1.00)
 
+# SPEC_ISSUE_WRITER 6: the control service on 127.0.0.1:8711 (router/control.py). The key file it passes to the CLI as
+# --key-file comes from the service's environment (ARGUS_CONTROL_KEY_FILE, set by Atha in the unit's drop-in), never
+# from this file or a form; the service never reads the key.
+control:
+  message_body_max: 32768   # bytes of a POST that carries a message (4,000 characters, percent-encoded)
+
 router:
   job_max_usd: 1.00
   draft_max_usd: 0.75

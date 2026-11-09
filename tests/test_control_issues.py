@@ -1,0 +1,317 @@
+"""The issue writer's pages of the control service (SPEC_ISSUE_WRITER 6, router/control_issues.py): every POST through
+the F3 gates, the CLI run in the background with the message in a file and the key file from the environment. A real
+server on a free port; the issue job is a real one written by a fake model; the background runs are recorded."""
+import json
+import os
+import re
+import stat
+import sys
+import threading
+import time
+import http.client
+from pathlib import Path
+from urllib.parse import urlencode
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_issue_writer as tiw  # noqa: E402
+
+from router import control as rc  # noqa: E402
+from router import control_issues as ci  # noqa: E402
+from router import issue as ri  # noqa: E402
+from router import job as rj  # noqa: E402
+
+JOB = "j20261109_150000_abcd"
+ORIGIN = "http://localhost:8711"
+KEY = "/nowhere/key-file-path"
+
+
+class Spawned:
+    """A Spawner that records the runs instead of starting them; `busy` is set by a test."""
+
+    def __init__(self, state):
+        self.real = ci.Spawner(state)
+        self.calls, self.busy_ids = [], set()
+
+    def busy(self, job_id):
+        return job_id in self.busy_ids
+
+    def message_file(self, text):
+        return self.real.message_file(text)
+
+    def spawn(self, job_id, argv, message=None):
+        self.calls.append((job_id, argv, message))
+
+
+class Svc:
+    def __init__(self, tmp_path, key=KEY):
+        self.env = tiw.Env(tmp_path, [tiw.SUBMIT])
+        self.jobs = self.env.jobs
+        self.jobs.mkdir(exist_ok=True)
+        self.audit = tmp_path / "audit.jsonl"
+        self.runs = []
+
+        def run(action, job_id, reason, sha, jobs_dir):
+            self.runs.append((action, job_id, reason, sha))
+            return 0, "ok"
+        self.control = rc.Control(self.jobs, audit=self.audit, run=run)
+        self.spawner = Spawned(tmp_path / "state")
+        self.control.issues = ci.IssuePages(self.control, self.env.cfg, spawner=self.spawner,
+                                            environ={ci.KEY_ENV: key} if key else {})
+        self.srv = rc.server(self.control, port=0)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def stop(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+    def new_job(self):
+        return ri.new(repo="demo", message=tiw.FIRST, cfg=self.env.cfg, deps=self.env.deps, jobs_dir=self.jobs,
+                      job_id=JOB)
+
+    def request(self, method, path, body=b"", headers=None, host="localhost:8711"):
+        c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=30)
+        h = {"Host": host, **(headers or {})}
+        if method == "POST":
+            h.setdefault("Content-Type", "application/x-www-form-urlencoded")
+            h.setdefault("Content-Length", str(len(body)))
+        c.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
+        for k, v in h.items():
+            c.putheader(k, v)
+        c.endheaders()
+        if body:
+            c.send(body)
+        r = c.getresponse()
+        out = (r.status, dict(r.getheaders()), r.read().decode())
+        c.close()
+        return out
+
+    def form(self, path, action):
+        status, _, text = self.request("GET", path)
+        assert status == 200, text
+        m = re.search(rf'action="{re.escape(action)}"><input type="hidden" name="token" value="([^"]+)">'
+                      r'(?:<input type="hidden" name="sha" value="([^"]*)">)?', text)
+        assert m, text
+        return m.group(1), m.group(2)
+
+    def post(self, path, fields, headers=None):
+        return self.request("POST", path, urlencode(fields).encode(), {"Origin": ORIGIN, **(headers or {})})
+
+    def audit_lines(self):
+        return [json.loads(x) for x in self.audit.read_text().splitlines()] if self.audit.exists() else []
+
+
+@pytest.fixture
+def svc(tmp_path):
+    s = Svc(tmp_path)
+    yield s
+    s.stop()
+
+
+def new_fields(svc, message="Kartu job\r\ntambahin tanggal", repo="demo"):
+    token, _ = svc.form("/issues/new", "/issues/new")
+    return {"token": token, "repo": repo, "message": message}
+
+
+# ---- pages -------------------------------------------------------------------------------------------------------
+
+def test_the_index_lists_issue_jobs_only_and_links_new_issue(svc):
+    svc.new_job()
+    (svc.jobs / "j20261109_150001_beef").mkdir()
+    _, _, text = svc.request("GET", "/issues")
+    assert f'/issues/{JOB}' in text and "beef" not in text and 'href="/issues/new"' in text
+    assert "Kartu job tambahin" in text
+    assert 'href="/issues"' in svc.request("GET", "/")[2]
+
+
+def test_the_new_page_offers_only_the_configured_repositories(svc):
+    _, _, text = svc.request("GET", "/issues/new")
+    assert re.findall(r'<option value="([^"]+)"', text) == ["demo"] and "<textarea" in text
+
+
+def test_without_the_key_file_variable_the_writer_is_not_offered(tmp_path):
+    s = Svc(tmp_path, key=None)
+    try:
+        _, _, text = s.request("GET", "/issues/new")
+        assert ci.KEY_ENV in text and "<form" not in text
+        s.new_job()
+        _, _, page = s.request("GET", f"/issues/{JOB}")
+        assert "Start job" not in page and "Your reply" not in page and "Discard" in page
+    finally:
+        s.stop()
+
+
+def test_the_job_page_shows_the_conversation_issue_clashes_and_questions_as_text(svc):
+    job = svc.new_job()
+    job.data["conversation"][0]["text"] = "<script>alert(1)</script>\nbaris dua"
+    job.save()
+    _, headers, text = svc.request("GET", f"/issues/{JOB}")
+    assert "<script>alert" not in text and "&lt;script&gt;alert(1)&lt;/script&gt;\nbaris dua" in text
+    assert "clash: src/list.test.js:2 reads the cell" in text and "question: Pakai jam juga?" in text
+    assert tiw.ISSUE.splitlines()[0] in text and "Start job" in text and "Send" in text
+    assert 'http-equiv="refresh"' not in text and headers["Content-Security-Policy"].startswith("default-src 'none'")
+
+
+def test_a_busy_or_writing_job_reloads_itself_and_offers_no_action(svc):
+    svc.new_job()
+    svc.spawner.busy_ids.add(JOB)
+    _, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert 'http-equiv="refresh" content="5"' in text and "<form" not in text
+
+
+def test_a_job_of_another_kind_has_no_issue_page(svc):
+    job = svc.new_job()
+    job.data["kind"] = "code"
+    job.save()
+    assert svc.request("GET", f"/issues/{JOB}")[0] == 404
+
+
+# ---- new ---------------------------------------------------------------------------------------------------------
+
+def test_new_runs_the_cli_in_the_background_with_the_message_in_a_file(svc):
+    status, _, text = svc.post("/issues/new", new_fields(svc))
+    assert status == 200, text
+    (job_id, argv, message), = svc.spawner.calls
+    assert rc.UI_ID.fullmatch(job_id) and f"/issues/{job_id}" in text
+    assert argv[argv.index("issue") + 1] == "new" and argv[argv.index("--repo") + 1] == "demo"
+    assert argv[argv.index("--job-id") + 1] == job_id and argv[argv.index("--key-file") + 1] == KEY
+    assert argv[-3:] == ["--key-file", KEY, "--yes"] and "--via" in argv and argv[argv.index("--via") + 1] == "ui"
+    assert Path(message).read_text() == "Kartu job\ntambahin tanggal"            # CRLF from a textarea, as typed
+    assert stat.S_IMODE(os.stat(message).st_mode) == 0o600
+    assert not any("tambahin" in a for a in argv)                                 # never in argv
+    lines = svc.audit_lines()
+    assert [ln.get("attempt") or ln.get("action") for ln in lines] == ["new", "new"]
+    assert "tambahin" not in svc.audit.read_text() and "token" not in svc.audit.read_text()
+
+
+@pytest.mark.parametrize("fields, why", [
+    ({"repo": "other"}, "is not one the writer reads"),
+    ({"repo": "../demo"}, "is not one the writer reads"),
+    ({"message": ""}, "empty"),
+    ({"message": "a‮b"}, "control"),
+    ({"message": "x" * 4001}, "more than 4000"),
+])
+def test_a_bad_new_form_is_refused_before_the_token_and_keeps_what_was_typed(svc, fields, why):
+    f = {**new_fields(svc, message="tetap ada"), **fields}
+    status, _, text = svc.post("/issues/new", f)
+    assert status == 400 and why in text and svc.spawner.calls == []
+    if "message" not in fields:
+        assert ">tetap ada</textarea>" in text
+    assert svc.post("/issues/new", {**f, "repo": "demo", "message": "sekarang benar"})[0] == 200
+
+
+@pytest.mark.parametrize("headers", [{"Origin": "http://evil.example"}, {"Origin": "null"},
+                                     {"Sec-Fetch-Site": "cross-site"}])
+def test_new_from_another_origin_is_refused(svc, headers):
+    status, _, _ = svc.post("/issues/new", new_fields(svc), headers)
+    assert status == 403 and svc.spawner.calls == [] and svc.audit_lines()[-1]["refused"] == "origin"
+
+
+def test_new_without_its_token_or_twice_is_refused(svc):
+    f = new_fields(svc)
+    assert svc.post("/issues/new", {**f, "token": ""})[0] == 403
+    assert svc.post("/issues/new", f)[0] == 200
+    assert svc.post("/issues/new", f)[0] == 403 and len(svc.spawner.calls) == 1
+
+
+def test_new_without_the_key_file_variable_is_refused(tmp_path):
+    s = Svc(tmp_path)
+    try:
+        f = new_fields(s)
+        s.control.issues.environ = {}
+        status, _, text = s.post("/issues/new", f)
+        assert status == 409 and ci.KEY_ENV in text and s.spawner.calls == []
+    finally:
+        s.stop()
+
+
+def test_a_long_message_in_another_script_fits_and_a_larger_body_is_refused(svc):
+    f = new_fields(svc, message="é" * 4000)                    # 24,000 bytes once percent-encoded
+    assert len(urlencode(f)) > rc.BODY_MAX
+    assert svc.post("/issues/new", f)[0] == 200
+    big = urlencode({**new_fields(svc), "message": "x" * 40000}).encode()
+    assert svc.request("POST", "/issues/new", big, {"Origin": ORIGIN})[0] == 413
+    assert len(svc.spawner.calls) == 1
+
+
+# ---- reply, start, abandon ---------------------------------------------------------------------------------------
+
+def test_reply_runs_in_the_background_with_its_file_and_the_job_after_the_separator(svc):
+    svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/reply")
+    status, _, _ = svc.post(f"/issues/{JOB}/reply", {"token": token, "sha": sha, "message": "Pakai jam"})
+    assert status == 200
+    (job_id, argv, message), = svc.spawner.calls
+    assert job_id == JOB and argv[argv.index("issue") + 1] == "reply" and argv[-2:] == ["--", JOB]
+    assert Path(message).read_text() == "Pakai jam"
+
+
+def test_start_names_the_sha_shown_and_is_refused_once_the_issue_changed(svc):
+    job = svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/start")
+    assert sha == job.data["issue_sha256"][:12]
+    job.data["issue_sha256"] = "f" * 64                       # another turn wrote another issue meanwhile
+    job.save()
+    status, _, text = svc.post(f"/issues/{JOB}/start", {"token": token, "sha": sha})
+    assert status in (403, 409) and svc.spawner.calls == []
+    job.data["issue_sha256"] = ri.last_issue(job)[1]
+    job.save()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/start")
+    assert svc.post(f"/issues/{JOB}/start", {"token": token, "sha": sha})[0] == 200
+    (_, argv, message), = svc.spawner.calls
+    assert argv[argv.index("start") + 1:argv.index("start") + 3] == ["--sha", sha] and argv[-2:] == ["--", JOB]
+    assert message is None
+
+
+def test_a_token_is_bound_to_its_action(svc):
+    svc.new_job()
+    reply_token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/reply")
+    assert svc.post(f"/issues/{JOB}/start", {"token": reply_token, "sha": sha})[0] == 403
+    assert svc.spawner.calls == []
+
+
+def test_a_busy_job_takes_no_second_run(svc):
+    svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/reply")
+    svc.spawner.busy_ids.add(JOB)
+    status, _, text = svc.post(f"/issues/{JOB}/reply", {"token": token, "sha": sha, "message": "lagi"})
+    assert status == 409 and "still working" in text and svc.spawner.calls == []
+
+
+def test_discard_runs_abandon_at_once_with_a_default_reason(svc):
+    svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/abandon")
+    status, _, _ = svc.post(f"/issues/{JOB}/abandon", {"token": token, "sha": sha, "reason": ""})
+    assert status == 200 and svc.runs == [("abandon", JOB, "discarded from the phone", "")]
+
+
+def test_a_handed_off_job_links_its_code_job_and_offers_nothing(svc):
+    job = svc.new_job()
+    job.data["state"], job.data["handoff"] = ri.HANDED_OFF, {"job": "j20261109_150002_cafe"}
+    job.save()
+    _, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert "j20261109_150002_cafe/draft" in text and 'href="/jobs/j20261109_150002_cafe"' in text and "<form" not in text
+
+
+@pytest.mark.parametrize("path", ["/issues/..%2Fx/reply", "/issues/jtest/reply", f"/issues/{JOB}/approve",
+                                  "/issues/new/x"])
+def test_an_unknown_issue_path_is_refused(svc, path):
+    svc.new_job()
+    status, _, _ = svc.request("POST", path, b"token=x&sha=&message=m", {"Origin": ORIGIN})
+    assert status == 404 and svc.spawner.calls == []
+
+
+# ---- the real spawner --------------------------------------------------------------------------------------------
+
+def test_the_spawner_runs_one_child_per_job_and_removes_its_message_file_after(tmp_path):
+    sp = ci.Spawner(tmp_path / "state")
+    msg = sp.message_file("halo")
+    assert stat.S_IMODE(os.stat(msg).st_mode) == 0o600
+    sp.spawn(JOB, [sys.executable, "-c", "import time; time.sleep(0.5)"], msg)
+    assert sp.busy(JOB)
+    for _ in range(100):
+        if not sp.busy(JOB):
+            break
+        time.sleep(0.05)
+    assert not sp.busy(JOB) and not msg.exists() and list((tmp_path / "state" / "runs").glob(f"{JOB}-*.log"))

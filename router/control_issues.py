@@ -1,0 +1,294 @@
+"""The issue writer's pages of the control service (docs/reviews/SPEC_ISSUE_WRITER.md section 6): a conversation
+with the writer from the phone, then Start job.
+
+  GET  /issues                    the issue jobs, newest first, and New issue
+  GET  /issues/new                a repository of issue_writer.repos and the first message
+  GET  /issues/<id>               the conversation, the current issue (folded), its clashes and questions, the forms
+  POST /issues/new                `argus issue new` in the background, then the job's page
+  POST /issues/<id>/reply         `argus issue reply` in the background
+  POST /issues/<id>/start         `argus issue start --sha` in the background (the code job's drafter runs)
+  POST /issues/<id>/abandon       `argus abandon`, at once
+
+Every POST passes the gates of router/control.py (Host, Origin and Sec-Fetch-Site, the form before the token, a
+one-time token bound to the action, the job and its issue's sha), then runs the same CLI a human types: the job's lock,
+its states, the funding and the sha checks stay in router/issue.py. A message goes to the CLI in a file the service
+writes (never in argv). The CLI gets --key-file from the service's environment (ARGUS_CONTROL_KEY_FILE, set by Atha);
+the service never reads a key. Runs that take minutes (a writer's turn, a drafter) are child processes in their own
+session; a page shows that the job is busy and reloads itself every few seconds (no JavaScript).
+"""
+import html
+import os
+import re
+import secrets
+import subprocess
+import sys
+import time
+from pathlib import Path
+from urllib.parse import parse_qs
+
+from router import issue as ri
+from router import job as rj
+
+KEY_ENV = "ARGUS_CONTROL_KEY_FILE"
+STATE = Path.home() / ".local" / "state" / "argus-control"
+REFRESH_S = 5
+ISSUE_ACTIONS = ("reply", "start", "abandon")
+FIELDS = {"new": ("token", "repo", "message"), "reply": ("token", "sha", "message"), "start": ("token", "sha"),
+          "abandon": ("token", "sha", "reason")}
+E = html.escape
+
+
+def normalize(text):
+    """A browser's textarea sends CRLF line ends: one `\\n` each, so the CLI's rules see the text as typed."""
+    return text.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+class Spawner:
+    """The background runs, one per job at a time: a child process in its own session, its output in a log file of the
+    service's state directory. A run's message file is removed once the run has ended."""
+
+    def __init__(self, state=STATE):
+        self.state = Path(state)
+        self.runs = {}                             # job id -> (Popen, message file or None)
+
+    def busy(self, job_id):
+        run = self.runs.get(job_id)
+        if run is None:
+            return False
+        if run[0].poll() is None:
+            return True
+        if run[1] is not None:
+            Path(run[1]).unlink(missing_ok=True)
+        del self.runs[job_id]
+        return False
+
+    def message_file(self, text):
+        d = self.state / "messages"
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / f"{secrets.token_hex(8)}.txt"
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        return p
+
+    def spawn(self, job_id, argv, message=None):
+        logs = self.state / "runs"
+        logs.mkdir(parents=True, exist_ok=True)
+        log = open(logs / f"{job_id}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}.log", "ab")
+        try:
+            p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=rj.ROOT,
+                                 start_new_session=True)
+        finally:
+            log.close()
+        self.runs[job_id] = (p, message)
+
+
+def issue_cli(jobs_dir, key_file, *args):
+    """The argv of an `argus issue ...` run (positionals after `--`)."""
+    return [sys.executable, str(rj.ROOT / "scripts" / "argus.py"), "--jobs-dir", str(jobs_dir), "issue", *args,
+            "--via", "ui", "--key-file", str(key_file), "--yes"]
+
+
+class IssuePages:
+    """The /issues pages; `control` is the router/control.py Control whose gates, tokens and audit they use."""
+
+    def __init__(self, control, cfg, spawner=None, environ=os.environ):
+        self.control, self.cfg, self.spawner, self.environ = control, cfg, spawner or Spawner(), environ
+
+    # ---- reading ---------------------------------------------------------------------------------------------------
+
+    def issue_job(self, job_id):
+        job = self.control.job(job_id)
+        return job if job is not None and job.data.get("kind") == "issue" else None
+
+    def key_file(self):
+        k = self.environ.get(KEY_ENV)
+        return k if k else None
+
+    def repos(self):
+        return sorted((self.cfg.get("issue_writer") or {}).get("repos") or {})
+
+    def index(self):
+        rows = []
+        d = self.control.jobs_dir
+        for p in sorted(d.iterdir(), reverse=True) if d.is_dir() else []:
+            job = self.issue_job(p.name)
+            if job is None:
+                continue
+            first = next((m["text"] for m in job.data.get("conversation") or [] if m["from"] == "human"), "")
+            rows.append(f'<li><a href="/issues/{E(job.id)}">{E(first[:80] or job.id)}</a> '
+                        f'<span class="muted">{E(str(job.data["state"]))}</span></li>')
+        listing = f"<ul>{''.join(rows)}</ul>" if rows else '<p class="muted">No issue yet.</p>'
+        return self._page("Issues", '<p><a href="/">Decisions</a></p><h1>Issues</h1>'
+                          '<p><a class="button" href="/issues/new">New issue</a></p>'
+                          f'<div class="card">{listing}</div>')
+
+    def new_page(self, message=None, bad=False, text="", repo=""):
+        if self.key_file() is None:
+            return self._page("New issue", '<p><a href="/issues">Issues</a></p><h1>New issue</h1>'
+                              f'<p class="bad">{E(KEY_ENV)} is not set for the service: the writer cannot run.</p>')
+        token = self.control.tokens.issue("issue-new", "", "")
+        options = "".join(f'<option value="{E(r)}"{" selected" if r == repo else ""}>{E(r)}</option>'
+                          for r in self.repos())
+        hi = int(self.cfg["issue_writer"]["message_max"])
+        note = f'<p class="{"bad" if bad else "ok"}">{E(message)}</p>' if message else ""
+        return self._page("New issue", f'<p><a href="/issues">Issues</a></p><h1>New issue</h1>{note}'
+                          '<form class="card" method="post" action="/issues/new">'
+                          f'<input type="hidden" name="token" value="{E(token)}">'
+                          f'<label>Repository<select name="repo">{options}</select></label>'
+                          f'<label>What do you want? (Indonesian is fine)<textarea name="message" rows="8" '
+                          f'maxlength="{hi}" required>{E(text)}</textarea></label>'
+                          '<button class="start" type="submit">Ask the writer</button></form>')
+
+    def job_page(self, job, message=None, bad=False, text=""):
+        d = job.data
+        state = str(d["state"])
+        busy = self.spawner.busy(job.id)
+        sha = d.get("issue_sha256") or ""
+        parts = ['<p><a href="/issues">Issues</a></p>', f'<h1>{E(job.id)}</h1>']
+        if message:
+            parts.append(f'<p class="{"bad" if bad else "ok"}">{E(message)}</p>')
+        parts.append(f'<p class="muted">{E(d["inputs"]["repo_name"])} · {E(state)} · spent '
+                     f'${rj.spent_nano(job) / 1e9:.4f} of ${float(d.get("max_usd") or 0):.2f}</p>')
+        for m in d.get("conversation") or []:
+            who = "You" if m["from"] == "human" else "Writer"
+            extra = ""
+            if m["from"] == "writer":
+                extra += "".join(f'<li class="bad">clash: {E(c["file"])}:{E(str(c["line"]))} {E(c["why"])}</li>'
+                                 for c in m.get("clashes") or [])
+                extra += "".join(f'<li>question: {E(q)}</li>' for q in m.get("questions") or [])
+                extra = f"<ul>{extra}</ul>" if extra else ""
+            parts.append(f'<div class="card {m["from"]}"><p class="muted">{who}</p>'
+                         f'<p class="text">{E(m["text"])}</p>{extra}</div>')
+        text_now, _ = ri.last_issue(job)
+        if text_now:
+            parts.append(f'<details class="card"><summary>The issue (English), {E(sha[:12])}</summary>'
+                         f'<pre class="text">{E(text_now)}</pre></details>')
+        working = busy or state == ri.WRITING
+        if working:
+            parts.append('<p class="ok">Working… this page reloads by itself.</p>')
+        if state == ri.HANDED_OFF and d.get("handoff"):
+            code = d["handoff"]["job"]
+            parts.append(f'<div class="card"><p>Started as job {E(code)}.</p>'
+                         f'<p><a href="http://localhost:8710/jobs/{E(code)}/draft">Read its draft</a> · '
+                         f'<a href="/jobs/{E(code)}">Decide</a></p></div>')
+        if not busy:
+            if self.key_file() is None and state in ri.REPLYABLE:
+                parts.append(f'<p class="bad">{E(KEY_ENV)} is not set for the service: the writer cannot run.</p>')
+            elif state in ri.REPLYABLE:
+                hi = int(self.cfg["issue_writer"]["reply_max"])
+                parts.append(self._form(job, "reply", sha, f'<label>Your reply<textarea name="message" rows="5" '
+                                        f'maxlength="{hi}" required>{E(text)}</textarea></label>', "Send"))
+            if state == ri.AWAITING_HUMAN and self.key_file() is not None and sha:
+                cap = float(self.cfg["issue_writer"].get("code_max_usd") or 0)
+                parts.append(self._form(job, "start", sha, f'<p class="muted">Starts a code job on '
+                                        f'{E(d["inputs"]["repo_name"])} at {E(d["inputs"]["commit"][:12])} with this '
+                                        f'issue ({E(sha[:12])}), cap ${cap:.2f}; its draft is then yours to decide.</p>',
+                                        "Start job"))
+            if state not in (ri.HANDED_OFF, rj.ABANDONED) and not (state == ri.WRITING):
+                parts.append(self._form(job, "abandon", sha, '<label>Why (optional)<input type="text" name="reason" '
+                                        f'maxlength="300"></label>', "Discard"))
+        return self._page(job.id, "".join(parts), refresh=REFRESH_S if working else None)
+
+    def _form(self, job, action, sha, inner, label):
+        token = self.control.tokens.issue(f"issue-{action}", job.id, sha)
+        return (f'<form class="card" method="post" action="/issues/{E(job.id)}/{action}">'
+                f'<input type="hidden" name="token" value="{E(token)}">'
+                f'<input type="hidden" name="sha" value="{E(sha[:12])}">{inner}'
+                f'<button class="{action}" type="submit">{E(label)}</button></form>')
+
+    def _page(self, title, body, refresh=None):
+        from router.control import page
+        out = page(title, body)
+        if refresh:
+            out = out.replace(b"<head>", f'<head><meta http-equiv="refresh" content="{int(refresh)}">'.encode(), 1)
+        return out
+
+    # ---- acting ----------------------------------------------------------------------------------------------------
+
+    def act(self, job_id, action, headers, body):
+        """Host was checked by the handler; the rest of F3 here, in order. Returns (status, page)."""
+        c = self.control
+        rec = {"path": (f"/issues/{job_id}/{action}" if job_id else "/issues/new")[:200]}
+
+        def refuse(status, gate, why, job=None, text="", repo=""):
+            c.audit(**rec, refused=gate, why=why)
+            if job is not None:
+                return status, self.job_page(job, f"refused: {why}", bad=True, text=text)
+            if action == "new" and gate not in ("origin", "path"):
+                return status, self.new_page(f"refused: {why}", bad=True, text=text, repo=repo)
+            return status, self._page("refused", f'<p class="bad">refused: {E(why)}</p><p><a href="/issues">Issues</a></p>')
+
+        why = c.origin_problem(headers)
+        if why:
+            rec["origin"] = (headers.get("Origin") or "")[:100] if headers.get("Origin") is not None else None
+            return refuse(403, "origin", why)
+        job = None
+        if action != "new":
+            job = self.issue_job(job_id)
+            if job is None or action not in ISSUE_ACTIONS:
+                return refuse(404, "path", "no such issue job or action")
+            rec["job"] = job.id
+        if body is None:
+            return refuse(413, "form", "the form is too large", job)
+        try:
+            form = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True, max_num_fields=8)
+        except ValueError:
+            return refuse(400, "form", "too many fields", job)
+        values = {}
+        for k in FIELDS[action]:
+            v = form.get(k) or [""]
+            if len(v) != 1:
+                return refuse(400, "form", "a field was sent twice", job)
+            values[k] = v[0]
+        text = normalize(values.get("message", ""))
+        repo = values.get("repo", "")
+        # the form before the token: what was typed comes back with the refusal and the page's token is kept
+        why = None
+        if action in ("new", "reply"):
+            why = ri.message_problem(self.cfg, text, first=action == "new")
+        if action == "new" and repo not in self.repos():
+            why = f"repository {repo!r} is not one the writer reads"
+        if action == "abandon":
+            from router.control import reason_problem
+            values["reason"] = values["reason"].strip(" ")
+            why = reason_problem(values["reason"], required=False)
+        if action != "new" and values["sha"] and not re.fullmatch(r"[0-9a-f]{12}", values["sha"]):
+            why = "the issue sha is not 12 hex characters"
+        if why:
+            return refuse(400, "form", why, job, text, repo)
+        sha_now = (job.data.get("issue_sha256") or "") if job is not None else ""
+        why = c.tokens.spend(values["token"], f"issue-{action}", job.id if job else "", sha_now)
+        if why:
+            return refuse(403, "token", why, job, text, repo)
+        if job is not None and values["sha"] != sha_now[:12]:
+            return refuse(409, "issue", "the issue changed since the page was opened: read it again", job, text)
+        if action == "abandon":
+            c.audit(**rec, attempt=action)
+            code, line = c.run("abandon", job.id, values["reason"] or "discarded from the phone", "", c.jobs_dir)
+            c.audit(**rec, action=action, exit=code, line=line)
+            fresh = self.issue_job(job.id) or job
+            return (200, self.job_page(fresh, "discarded")) if code == 0 else \
+                (409, self.job_page(fresh, f"refused: {line or 'the command failed'}", bad=True))
+        key = self.key_file()
+        if key is None:
+            return refuse(409, "key", f"{KEY_ENV} is not set for the service", job, text, repo)
+        new_id = rj.new_job_id() if action == "new" else job.id
+        if self.spawner.busy(new_id):
+            return refuse(409, "busy", "the writer is still working on this job", job, text)
+        message = self.spawner.message_file(text) if action in ("new", "reply") else None
+        if action == "new":
+            argv = issue_cli(c.jobs_dir, key, "new", "--repo", repo, "--job-id", new_id, "--message-file", str(message))
+        elif action == "reply":
+            argv = issue_cli(c.jobs_dir, key, "reply", "--message-file", str(message)) + ["--", job.id]
+        else:
+            argv = issue_cli(c.jobs_dir, key, "start", "--sha", values["sha"]) + ["--", job.id]
+        rec["job"] = new_id
+        c.audit(**rec, attempt=action, sha=values.get("sha") or None)
+        self.spawner.spawn(new_id, argv, message)
+        c.audit(**rec, action=action, started=True)
+        body = (f'<p class="ok">{"Asked the writer" if action != "start" else "Started"}: job {E(new_id)}.</p>'
+                f'<p><a href="/issues/{E(new_id)}">Open it</a></p>')
+        out = self._page("started", body).replace(
+            b"<head>", f'<head><meta http-equiv="refresh" content="2;url=/issues/{E(new_id)}">'.encode(), 1)
+        return 200, out
