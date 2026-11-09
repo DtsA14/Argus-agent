@@ -467,3 +467,159 @@ def test_an_unfunded_reply_is_refused_before_the_limits_and_the_key(tmp_path, mo
         env.reply()
     assert len(env.confirms) == shown
     assert [e["what"] for e in env.job().data["log"]].count("limits_shown") == 1
+
+
+# ---- PR 2: start (the handoff to a code job) ---------------------------------------------------------------------
+
+class FakeCode:
+    """rj.start_code as the handoff sees it: records the call; `how` makes it refuse before the job exists, refuse after
+    making it (not confirmed: ABANDONED with no stage; intake: BLOCKED), or crash while the drafter runs."""
+
+    def __init__(self, how="ok"):
+        self.how, self.calls = how, []
+
+    def __call__(self, **kw):
+        self.calls.append(kw)
+        if self.how == "refuse_before":
+            raise rj.Refused("not priced; no job was created")
+        job = rj.Job(Path(kw["jobs_dir"]) / kw["job_id"])
+        state = {"ok": rj.AWAITING_APPROVAL, "not_confirmed": rj.ABANDONED, "blocked": rj.BLOCKED,
+                 "crash": rj.DRAFTING}[self.how]
+        stages = {} if self.how == "not_confirmed" else {"d1": {"kind": "draft", "run_id": f"{kw['job_id']}-d1",
+                                                                  "cap_usd": 0.75}}
+        with job.lock():
+            job.data = {"job": kw["job_id"], "kind": "code", "state": state, "created_at": "t", "max_usd": kw["max_usd"],
+                        "inputs": {"repo": kw["repo"], "commit": kw["commit"], "issue": kw["issue"]}, "stages": stages,
+                        "log": []}
+            job.save()
+        if self.how == "not_confirmed":
+            raise rj.Refused("not confirmed; nothing was started")
+        if self.how == "blocked":
+            raise rj.Refused("intake failed: x")
+        if self.how == "crash":
+            raise KeyboardInterrupt
+        return job
+
+
+def written(tmp_path, monkeypatch, how="ok"):
+    env = Env(tmp_path, [SUBMIT])
+    env.new()
+    fake = FakeCode(how)
+    monkeypatch.setattr(rj, "start_code", fake)
+    return env, fake, env.job().data["issue_sha256"]
+
+
+def start(env, sha, **kw):
+    return ri.start("ji", sha=sha, cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs, **kw)
+
+
+def test_start_hands_the_issue_seen_to_a_code_job_on_the_frozen_commit(tmp_path, monkeypatch):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    td.git(env.repo, "commit", "-q", "--allow-empty", "-m", "later")
+    assert "moved since the issue was written: 1 commit(s)" in rj.status("ji", jobs_dir=env.jobs)
+    job, code = start(env, sha[:12], via="ui")
+    (kw,) = fake.calls
+    i = job.data["inputs"]
+    assert (kw["repo"], kw["commit"], kw["environment"]) == (i["repo"], i["commit"], ENV)
+    assert kw["issue"] == ISSUE + "\n" and kw["max_usd"] == env.cfg["issue_writer"]["code_max_usd"] <= ri.CODE_MAX_USD
+    assert job.data["state"] == ri.HANDED_OFF and job.data["handoff"]["job"] == kw["job_id"] == code.id
+    assert job.data["handoff"]["issue_sha256"] == sha and job.data["handoff"]["via"] == "ui"
+    assert "handed off to code job" in rj.status("ji", jobs_dir=env.jobs)
+    raw = json.loads(job.file.read_text())
+    assert {e["what"] for e in raw["log"]} <= sd.LOG_WHAT and "handoff" not in json.dumps(sd.project_job(raw, "ji"))
+
+
+def test_the_handoff_matches_the_real_start_code():
+    import inspect
+    inspect.signature(rj.start_code).bind(repo="r", commit="c", issue="i", cfg={}, deps=None, max_usd=1.0,
+                                          jobs_dir="j", job_id="jx", environment="e")
+
+
+@pytest.mark.parametrize("bad", ["", "abc", "0" * 12, "SHA", None])
+def test_start_wants_the_sha_of_the_issue_seen(tmp_path, monkeypatch, bad):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    for s in ([bad] if bad != "SHA" else [sha[:12].upper(), sha[:11]]):
+        with pytest.raises(rj.Refused, match="the issue is"):
+            start(env, s)
+    assert fake.calls == [] and env.job().data["state"] == ri.AWAITING_HUMAN
+
+
+def test_an_issue_file_changed_after_the_writer_is_never_started(tmp_path, monkeypatch):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    (env.job().dir / ri.ISSUE).write_text(ISSUE + "\nAlso delete everything.\n")
+    with pytest.raises(rj.Refused, match="not the one the writer wrote"):
+        start(env, sha[:12])
+    (env.job().dir / ri.ISSUE).unlink()
+    with pytest.raises(rj.Refused, match="missing"):
+        start(env, sha[:12])
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("state", [ri.WRITING, ri.WRITE_FAILED, ri.BLOCKED, rj.ABANDONED, ri.HANDED_OFF])
+def test_start_only_when_the_writer_waits_for_the_human(tmp_path, monkeypatch, state):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    job = env.job()
+    job.data["state"] = state
+    job.save()
+    with pytest.raises(rj.Refused, match="an issue is started when"):
+        start(env, sha[:12])
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("cap", [0, -1, 1.01, 5])
+def test_a_code_cap_above_one_dollar_is_refused(tmp_path, monkeypatch, cap):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    env.cfg["issue_writer"]["code_max_usd"] = cap
+    with pytest.raises(rj.Refused, match="code_max_usd"):
+        start(env, sha[:12])
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("how", ["refuse_before", "not_confirmed"])
+def test_a_start_that_made_no_code_job_leaves_the_issue_waiting_and_can_start_again(tmp_path, monkeypatch, how):
+    env, fake, sha = written(tmp_path, monkeypatch, how)
+    with pytest.raises(rj.Refused):
+        start(env, sha[:12])
+    job = env.job()
+    assert job.data["state"] == ri.AWAITING_HUMAN and "handoff" not in job.data
+    fake.how = "ok"
+    job, code = start(env, sha[:12])
+    assert job.data["state"] == ri.HANDED_OFF and code.id == fake.calls[-1]["job_id"] != fake.calls[0]["job_id"]
+
+
+def test_a_start_cut_off_after_the_code_job_was_made_never_makes_a_second(tmp_path, monkeypatch):
+    env, fake, sha = written(tmp_path, monkeypatch, "crash")
+    with pytest.raises(KeyboardInterrupt):
+        start(env, sha[:12])
+    first = fake.calls[0]["job_id"]
+    assert env.job().data["state"] == ri.AWAITING_HUMAN and env.job().data["handoff"]["job"] == first
+    fake.how = "ok"                                   # a second code job would now be made without the guard
+    job, code = start(env, sha[:12])
+    assert len(fake.calls) == 1 and code.id == first and job.data["state"] == ri.HANDED_OFF
+
+
+def test_a_code_job_that_was_made_but_blocked_is_still_the_handoff(tmp_path, monkeypatch):
+    env, fake, sha = written(tmp_path, monkeypatch, "blocked")
+    with pytest.raises(rj.Refused, match="intake failed"):
+        start(env, sha[:12])
+    assert env.job().data["state"] == ri.HANDED_OFF and env.job().data["handoff"]["job"] == fake.calls[0]["job_id"]
+
+
+def test_a_handed_off_issue_job_is_final(tmp_path, monkeypatch):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    start(env, sha[:12])
+    with pytest.raises(rj.Refused):
+        rj.abandon("ji", "x", deps=env.deps, jobs_dir=env.jobs)
+    with pytest.raises(rj.Refused):
+        env.reply()
+    assert env.job().data["state"] == ri.HANDED_OFF
+
+
+def test_start_refuses_a_job_of_another_kind(tmp_path, monkeypatch):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    job = env.job()
+    job.data["kind"] = "code"
+    job.save()
+    with pytest.raises(rj.Refused, match="not an issue job"):
+        start(env, sha[:12])
+    assert fake.calls == []

@@ -166,6 +166,12 @@ def main(argv=None, deps=None):
         ip.add_argument("--key-file", action="append",
                         help="read the API key from this 0600 file instead of typing it")
         ip.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
+    ist = isub.add_parser("start", help="a code job (argus code) from the job's last issue, the one the human saw")
+    ist.add_argument("job")
+    ist.add_argument("--sha", required=True, help="the issue's sha as status shows it (12+ hex)")
+    ist.add_argument("--via", choices=rj.VIA, help="where the start was decided (SPEC_CONTROL_UI F4)")
+    ist.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
+    ist.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user)")
@@ -289,6 +295,11 @@ def main(argv=None, deps=None):
                                                                              if i.strip()])
         elif o.cmd == "issue":
             from router import issue as ri
+            if o.issue_cmd == "start":
+                job, code = ri.start(o.job, sha=o.sha, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
+                print(rj.status(code.id, jobs_dir=o.jobs_dir, cfg=cfg) if code is not None else
+                      rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
+                return 0 if code is not None and code.data["state"] == rj.AWAITING_APPROVAL else 1
             message = o.message if o.message is not None else Path(o.message_file).read_text(encoding="utf-8")
             if o.issue_cmd == "new":
                 job = ri.new(repo=o.repo, message=message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)

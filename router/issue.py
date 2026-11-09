@@ -2,8 +2,10 @@
 
   argus issue new --repo NAME --message-file F     a job, the human's first message, then the writer's turn w1
   argus issue reply JOB --message-file F           the human's next message, then the next turn
+  argus issue start JOB --sha SHA                  a code job (`argus code`) from the last issue, the one the human saw
 
   NEW -> WRITING (wN) -> AWAITING_HUMAN -> WRITING (reply) -> ... ; WRITING -> WRITE_FAILED (a reply tries again)
+  AWAITING_HUMAN -> HANDED_OFF (start: a code job exists from the issue; the issue job ends there)
   BLOCKED when a turn cannot be funded or the provider fails; every state but HANDED_OFF -> ABANDONED.
 
 The repository is frozen when the job is made (its path and the commit HEAD is then); every turn's read tools see a copy
@@ -25,13 +27,15 @@ from codetask.drafter import _write
 
 from . import job as rj
 
-WRITING, AWAITING_HUMAN, WRITE_FAILED = "WRITING", "AWAITING_HUMAN", "WRITE_FAILED"
+WRITING, AWAITING_HUMAN, WRITE_FAILED, HANDED_OFF = "WRITING", "AWAITING_HUMAN", "WRITE_FAILED", "HANDED_OFF"
 NEW, BLOCKED, ABANDONED = rj.NEW, rj.BLOCKED, rj.ABANDONED
 LEGAL = {(NEW, WRITING), (NEW, BLOCKED), (WRITING, AWAITING_HUMAN), (WRITING, WRITE_FAILED), (WRITING, BLOCKED),
-         (AWAITING_HUMAN, WRITING), (WRITE_FAILED, WRITING)} | \
+         (AWAITING_HUMAN, WRITING), (WRITE_FAILED, WRITING), (AWAITING_HUMAN, HANDED_OFF)} | \
         {(s, ABANDONED) for s in (NEW, WRITING, AWAITING_HUMAN, WRITE_FAILED, BLOCKED)}
 REPLYABLE = (AWAITING_HUMAN, WRITE_FAILED)
 ISSUE = "issue.txt"
+CODE_MAX_USD = 1.00             # K3: a code job started from an issue job never has a larger cap (checked on the config)
+
 
 
 def _settings(cfg):
@@ -254,6 +258,81 @@ def _turn(job, cfg, deps):
     job.move(AWAITING_HUMAN, deps, stage=sid)
 
 
+def start(job_id, *, sha, cfg, deps, jobs_dir=rj.JOBS, via=None):
+    """A code job from the job's last issue, the one the human saw (sha: 12+ hex of its sha256), on the frozen commit and
+    the repository's environment, with issue_writer.code_max_usd. The code job's id is recorded before it is started,
+    so a start cut off by a crash never starts a second one: the next start finds it and hands off to it. Returns
+    (issue job, code job)."""
+    job = rj.open_job(job_id, jobs_dir)
+    with job.lock():
+        if job.data.get("kind") != "issue":
+            raise rj.Refused(f"job {job.id} is not an issue job; nothing was started")
+        if job.data["state"] != AWAITING_HUMAN:
+            raise rj.Refused(f"job {job.id} is {job.data['state']}: an issue is started when the writer waits for the "
+                             "human (AWAITING_HUMAN)")
+        if via is not None and via not in rj.VIA:
+            raise rj.Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was started")
+        text, seen = last_issue(job)
+        if text is None or seen != job.data.get("issue_sha256"):
+            raise rj.Refused(f"job {job.id}: the issue file is missing or is not the one the writer wrote; nothing was "
+                             "started")
+        if not isinstance(sha, str) or not rj.SHA_SEEN.fullmatch(sha) or not seen.startswith(sha):
+            raise rj.Refused(f"the issue is {seen[:12]}, not the {sha!r} given: start the issue status shows (at least "
+                             "its first 12 characters); nothing was started")
+        cap = float(_settings(cfg)["code_max_usd"])
+        if not (0 < cap <= CODE_MAX_USD):
+            raise rj.Refused(f"issue_writer.code_max_usd must be more than 0 and at most ${CODE_MAX_USD:.2f}; nothing "
+                             "was started")
+        handed = _handed(job, jobs_dir)
+        if handed is not None:                      # a start cut off after the code job was made: hand off to it
+            job.move(HANDED_OFF, deps, reason=f"code job {handed.id}")
+            return job, handed
+        code_id = rj.new_job_id()
+        job.data["handoff"] = {"job": code_id, "issue_sha256": seen, "at": deps.clock(),
+                               **({"via": via} if via else {})}
+        job.save()
+        i = job.data["inputs"]
+        try:
+            rj.start_code(repo=i["repo"], commit=i["commit"], issue=text, cfg=cfg, deps=deps, max_usd=cap,
+                          jobs_dir=jobs_dir, job_id=code_id, environment=i["environment"])
+        except rj.Refused:
+            handed = _handed(job, jobs_dir)
+            if handed is None:
+                job.data.pop("handoff", None)
+                job.save()
+            else:
+                job.move(HANDED_OFF, deps, reason=f"code job {handed.id}")
+            raise
+        job.move(HANDED_OFF, deps, reason=f"code job {code_id}")
+        return job, rj.open_job(code_id, jobs_dir)
+
+
+def _handed(job, jobs_dir):
+    """The code job the issue was handed to, when one was made and not abandoned before it started; else None."""
+    h = job.data.get("handoff")
+    if not h:
+        return None
+    try:
+        code = rj.open_job(h["job"], jobs_dir)
+    except rj.Refused:
+        return None
+    if code.data.get("state") == rj.ABANDONED and not code.data.get("stages"):
+        return None
+    return code
+
+
+def moved(job):
+    """How many commits the repository's HEAD is past the frozen commit (0 when it is that commit), or None when that
+    cannot be told (the commit is not an ancestor any more, or git fails)."""
+    i = job.data["inputs"]
+    try:
+        out = intake.git(i["repo"], "rev-list", "--count", f"{i['commit']}..HEAD").decode().strip()
+        intake.git(i["repo"], "merge-base", "--is-ancestor", i["commit"], "HEAD")
+        return int(out)
+    except (intake.IntakeError, ValueError):
+        return None
+
+
 def status_lines(job):
     """The issue job for `argus status`: the last reply, the issue file, the clashes and questions, what comes next."""
     d = job.data
@@ -265,6 +344,15 @@ def status_lines(job):
         out += [f"issue {str(d.get('issue_sha256'))[:12]}: {job.dir / ISSUE}", f"reply ({last['stage']}): {last['text']}"]
         out += [f"clash: {c['file']}:{c['line']} {c['why']}" for c in last["clashes"]]
         out += [f"question: {q}" for q in last["questions"]]
+    if d.get("handoff"):
+        out.append(f"handed off to code job {d['handoff']['job']}: argus status {d['handoff']['job']}")
+    if d["state"] == AWAITING_HUMAN:
+        n = moved(job)
+        if n is None or n > 0:
+            out.append("the repository moved since the issue was written: "
+                       + (f"{n} commit(s)" if n is not None else "the frozen commit is no longer below HEAD")
+                       + "; start still uses the frozen commit")
+        out.append(f"next: argus issue start {job.id} --sha {str(d.get('issue_sha256'))[:12]}")
     if d["state"] in REPLYABLE:
         out.append(f"next: argus issue reply {job.id} --message-file <file>  |  argus abandon {job.id} \"<why>\"")
     return out

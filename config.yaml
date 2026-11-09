@@ -231,6 +231,7 @@ issue_writer:
     argus-viewer: {path: "~/argus-viewer", environment: pwa_node22}
     argus-ledger: {path: "~/argus-ledger", environment: ledger_py312_up2}
   turn: {cap_usd: 0.10, attempt_tokens: 400000, max_input_tokens: 60000, max_steps: 20, max_submits: 3}
+  code_max_usd: 1.00   # K3: the cap of a code job `argus issue start` makes (router/issue.py refuses more than $1.00)
 
 router:
   job_max_usd: 1.00
