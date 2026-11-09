@@ -165,6 +165,15 @@ def test_a_refused_origin_is_named_in_the_audit(svc):
     assert svc.run.calls == []
 
 
+@pytest.mark.parametrize("site", ["none", "same-origin"])
+def test_a_request_the_user_started_or_this_page_sent_passes(svc, site):
+    """control p1: Safari sent Sec-Fetch-Site none on the form of a page reopened from its history."""
+    make_job(svc.jobs)
+    token, sha = svc.form()
+    status, _, text = svc.post(token=token, sha=sha, headers={"Sec-Fetch-Site": site})
+    assert status == 200, text
+
+
 def test_tokens_are_bound_to_page_action_and_job_and_spent_once(svc):
     make_job(svc.jobs)
     other = "j20261109_120001_beef"

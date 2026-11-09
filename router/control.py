@@ -172,8 +172,10 @@ class Control:
         """F3.2: why a POST did not come from this service's own page, or None."""
         if headers.get("Origin") not in ORIGINS:
             return "this page did not come from the control service"
-        if headers.get("Sec-Fetch-Site") not in (None, "same-origin"):
-            return "a cross-site request"
+        # "none" is a request the user started (Safari sends it on a form of a page reopened from its history); a
+        # site can never make a browser send it (control p1: Atha's reject refused at 10:07Z, 2026-11-09)
+        if headers.get("Sec-Fetch-Site") not in (None, "same-origin", "none"):
+            return f"a cross-site request (Sec-Fetch-Site {str(headers.get('Sec-Fetch-Site'))[:30]})"
         return None
 
     def audit(self, **rec):

@@ -672,3 +672,13 @@ def test_start_refuses_a_job_of_another_kind(tmp_path, monkeypatch):
     with pytest.raises(rj.Refused, match="not an issue job"):
         start(env, sha[:12])
     assert fake.calls == []
+
+
+
+def test_the_configured_turn_takes_what_the_drafter_takes_on_its_model():
+    """2026-11-09: 60,000 heuristic tokens ended the first real turn at 28,000 billed ones (context_limit)."""
+    c = load_config()
+    lim = iw.settings(rj.stage_config(c, c["issue_writer"]["turn"]["cap_usd"]))
+    model = c["roles"]["issue_writer"]["model"]
+    assert lim["max_input_tokens"] >= 120000, model             # the drafter's 150,000 on DeepSeek, not 60,000
+    assert lim["attempt_tokens"] >= 4 * lim["max_input_tokens"] and lim["attempt_usd"] <= 0.10

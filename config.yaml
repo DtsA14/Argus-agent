@@ -230,7 +230,10 @@ issue_writer:
   repos:
     argus-viewer: {path: "~/argus-viewer", environment: pwa_node22}
     argus-ledger: {path: "~/argus-ledger", environment: ledger_py312_up2}
-  turn: {cap_usd: 0.10, attempt_tokens: 400000, max_input_tokens: 60000, max_steps: 20, max_submits: 3}
+  # max_input_tokens as the drafter's on DeepSeek (code_task.max_input_tokens_by_model): the heuristic count of a
+  # non-Anthropic prompt is about twice the billed tokens, and 60,000 ended the first turn from the phone at 28,000
+  # real tokens (context_limit, 2026-11-09). cap_usd is the bound: one turn never costs more.
+  turn: {cap_usd: 0.10, attempt_tokens: 1200000, max_input_tokens: 150000, max_steps: 20, max_submits: 3}
   code_max_usd: 1.00   # K3: the cap of a code job `argus issue start` makes (router/issue.py refuses more than $1.00)
 
 # SPEC_ISSUE_WRITER 6: the control service on 127.0.0.1:8711 (router/control.py). The key file it passes to the CLI as
