@@ -1,6 +1,6 @@
 # Spek: chatbox penulis issue (UI kontrol fase 3c)
 
-Status: **usulan Claude, menunggu keputusan Atha (bagian 9) dan "merge"**. Atha 2026-11-09: "Kalo gw pengen nulis issue di
+Status: **disetujui Atha 2026-11-09** ("Ok issue bahasa inggris. Semuanya ok bro. Merge"): K1-K6 sesuai bagian 9 (K4 flash dulu). Atha 2026-11-09: "Kalo gw pengen nulis issue di
 chatbox argus" → "Chatbox aja sekalian". Hanya dokumen; kode menyusul per bagian 10, jalur ketat. Melanjutkan
 `SPEC_CONTROL_UI.md` 4a (service `127.0.0.1:8711`, gerbang F3): chatbox adalah halaman baru service itu, bukan viewer.
 
