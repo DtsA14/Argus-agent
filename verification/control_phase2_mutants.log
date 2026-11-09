@@ -1,26 +1,28 @@
-KILLED  bind anywhere: 1 failed in 0.65s
+KILLED  bind anywhere: 1 failed in 0.59s
 KILLED  no host check: 1 failed, 2 passed in 1.60s
-KILLED  no origin check: 1 failed, 6 passed in 3.62s
-KILLED  missing origin allowed: 1 failed, 6 passed in 3.60s
+KILLED  no origin check: 1 failed, 6 passed in 3.63s
+KILLED  missing origin allowed: 1 failed, 6 passed in 3.61s
 KILLED  sec-fetch-site ignored: 1 failed, 11 passed in 6.13s
-KILLED  token mac unchecked: 1 failed, 13 passed in 7.15s
-KILLED  token never expires: 1 failed, 14 passed in 7.20s
-KILLED  token reusable: 1 failed, 13 passed in 7.16s
+KILLED  token mac unchecked: 1 failed, 13 passed in 7.16s
+KILLED  token never expires: 1 failed, 14 passed in 7.70s
+KILLED  token reusable: 1 failed, 13 passed in 7.15s
 KILLED  token not bound to action: 1 failed, 13 passed in 7.15s
-KILLED  token not bound to sha: 1 failed, 13 passed in 7.15s
-KILLED  reason not required: 1 failed, 27 passed in 14.24s
-KILLED  reason length: 1 failed, 29 passed in 15.75s
-KILLED  control characters: 1 failed, 30 passed in 15.25s
-KILLED  full strip: 1 failed, 33 passed in 16.78s
-KILLED  any id: 1 failed, 26 passed in 13.73s
-KILLED  sha not passed: 1 failed, 39 passed in 21.47s
-KILLED  no -- separator: 1 failed, 39 passed in 21.49s
-KILLED  no body limit: 1 failed, 35 passed in 17.27s
-KILLED  no security headers: 1 failed, 37 passed in 18.81s
-KILLED  state not escaped: 1 failed, 36 passed in 17.79s
-KILLED  duplicate fields: 1 failed, 35 passed in 17.79s
-KILLED  no audit of a refusal: 1 failed, 6 passed in 3.61s
-KILLED  draft sha unchecked: 1 failed, 40 passed in 23.30s
-KILLED  via unchecked: 1 failed, 43 passed in 26.33s
-KILLED  sha without draft accepted: 1 failed, 44 passed in 26.79s
-RESULT: 25/25 killed
+KILLED  token not bound to sha: 1 failed, 13 passed in 7.16s
+KILLED  reason not required: 1 failed, 27 passed in 13.73s
+KILLED  reason length: 1 failed, 29 passed in 15.25s
+KILLED  control characters: 1 failed, 30 passed in 16.25s
+KILLED  full strip: 1 failed, 33 passed in 17.78s
+KILLED  any id: 1 failed, 26 passed in 13.23s
+KILLED  id prefix only: 1 failed, 37 passed in 18.80s
+KILLED  too many fields unaudited: 1 failed, 36 passed in 17.79s
+KILLED  sha not passed: 1 failed, 41 passed in 22.49s
+KILLED  no -- separator: 1 failed, 41 passed in 23.49s
+KILLED  no body limit: 1 failed, 35 passed in 17.78s
+KILLED  no security headers: 1 failed, 39 passed in 19.82s
+KILLED  state not escaped: 1 failed, 38 passed in 19.31s
+KILLED  duplicate fields: 1 failed, 35 passed in 18.28s
+KILLED  no audit of a refusal: 1 failed, 6 passed in 3.62s
+KILLED  draft sha unchecked: 1 failed, 42 passed in 24.24s
+KILLED  via unchecked: 1 failed, 45 passed in 27.20s
+KILLED  sha without draft accepted: 1 failed, 46 passed in 28.23s
+RESULT: 27/27 killed

@@ -27,7 +27,7 @@ from router import job as rj
 BIND, PORT = "127.0.0.1", 8711                    # F1: fixed, never 0.0.0.0 or "localhost", never 8000 or 8710
 HOSTS = ("127.0.0.1:8711", "localhost:8711")
 ORIGINS = ("http://127.0.0.1:8711", "http://localhost:8711")
-UI_ID = re.compile(r"^j\d{8}_\d{6}_[0-9a-f]{4}$")      # F2: stricter than rj.JOB_ID, the shape `argus code` makes
+UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")    # fullmatch      # F2: stricter than rj.JOB_ID, the shape `argus code` makes
 TOKEN_TTL = 30 * 60                                # F3.3: seconds a page's token is good for
 BODY_MAX = 4096                                    # F2: bytes of a POST body
 REASON_MAX = 300                                   # F2: characters of a reason
@@ -149,7 +149,7 @@ class Control:
 
     def job(self, job_id):
         """The job of a path segment, or None: the UI shape first, so nothing else reaches the disk."""
-        if not UI_ID.match(job_id or ""):
+        if not UI_ID.fullmatch(job_id or ""):
             return None
         try:
             return rj.open_job(job_id, self.jobs_dir)
@@ -190,7 +190,7 @@ class Control:
 
     def act(self, job_id, action, headers, body):
         """F3, in order; returns (status, page). Nothing reaches the CLI before every gate passed."""
-        rec = {"path": f"/jobs/{job_id}/{action}"}
+        rec = {"path": f"/jobs/{job_id}/{action}"[:200]}
 
         def refuse(status, gate, why, job=None):
             self.audit(**rec, refused=gate, why=why)
@@ -209,7 +209,10 @@ class Control:
         rec["job"] = job.id
         if body is None:
             return refuse(413, "form", "the form is too large", job)
-        form = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True, max_num_fields=8)
+        try:
+            form = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True, max_num_fields=8)
+        except ValueError:
+            return refuse(400, "form", "too many fields", job)
         one = lambda k: (form.get(k) or [""])[0] if len(form.get(k) or [""]) == 1 else None
         token, sha, reason = one("token"), one("sha"), one("reason")
         if token is None or sha is None or reason is None:

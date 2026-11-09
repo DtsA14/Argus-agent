@@ -247,6 +247,20 @@ def test_a_field_sent_twice_or_a_large_body_is_refused(svc):
     assert svc.run.calls == []
 
 
+def test_too_many_fields_are_refused_and_audited(svc):
+    make_job(svc.jobs)
+    token, sha = svc.form()
+    body = f"token={token}&sha={sha}&reason=x&".encode() + b"&".join(b"f%d=1" % i for i in range(10))
+    status, _, text = svc.post(body=body)
+    assert status == 400 and "too many fields" in text and svc.run.calls == []
+    assert svc.audit_lines()[-1]["refused"] == "form"
+
+
+def test_the_ui_shape_is_the_whole_segment(svc):
+    make_job(svc.jobs, JOB + "\n")                    # a directory the CLI's own id pattern would open
+    assert svc.control.job(JOB + "\n") is None and svc.control.job("j٢٠٢٦١١٠٩_120000_abcd") is None
+
+
 def test_markup_in_a_job_is_text(svc):
     make_job(svc.jobs, state="<script>alert(1)</script>")
     _, _, text = svc.request("GET", f"/jobs/{JOB}")

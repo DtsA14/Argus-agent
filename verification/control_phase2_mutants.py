@@ -22,7 +22,9 @@ M = [
     ("reason length", C, '    if len(reason) > REASON_MAX:', '    if False:'),
     ("control characters", C, '    if any(ord(c) < 32 or 127 <= ord(c) < 160 for c in reason):', '    if False:'),
     ("full strip", C, 'reason = reason.strip(" ")', 'reason = reason.strip()'),
-    ("any id", C, '        if not UI_ID.match(job_id or ""):\n            return None', '        if not job_id:\n            return None'),
+    ("any id", C, '        if not UI_ID.fullmatch(job_id or ""):\n            return None', '        if not job_id:\n            return None'),
+    ("id prefix only", C, '        if not UI_ID.fullmatch(job_id or ""):', '        if not UI_ID.match(job_id or ""):'),
+    ("too many fields unaudited", C, '            return refuse(400, "form", "too many fields", job)', '            raise'),
     ("sha not passed", C, '*(["--sha", sha] if sha else [])', '*([])'),
     ("no -- separator", C, ', "--", job_id, reason]', ', job_id, reason]'),
     ("no body limit", C, 'if 0 <= length <= BODY_MAX else None', 'if 0 <= length else None'),
@@ -35,7 +37,8 @@ M = [
     ("sha without draft accepted", J, '            raise Refused(f"job {job.id} has no draft to check the sha {sha} against; nothing was changed") from None', '            return {"sha": sha}'),
 ]
 # Equivalent, not listed: dropping the 12-hex shape check of the form's sha. The token is bound to the sha the server
-# put in the page (its own sha12 or ""), so a sha of another shape never passes the token gate before it.
+# put in the page (its own sha12 or ""), so a sha of another shape never passes the token gate before it. Also `\\d` for
+# [0-9] in UI_ID: a segment with other Unicode digits is refused by rj.JOB_ID (ASCII) in open_job anyway.
 
 if __name__ == "__main__":
     killed = 0
