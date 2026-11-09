@@ -144,11 +144,12 @@ def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, via=None):
             raise rj.Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was started")
         _preflight(cfg, job.data["max_usd"])
         s = _settings(cfg)
+        left = rj.left_usd(job)
+        if left + 1e-12 < float(s["turn"]["cap_usd"]):        # before the limits, the confirmation and the key
+            raise rj.Refused(f"job {job.id}: ${left:.4f} of the job cap is left, less than one turn "
+                             f"(${float(s['turn']['cap_usd']):.2f}); nothing was started")
         with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                      _screen(job, cfg, "next turn"), job=job):
-            if _left(job) + 1e-12 < float(s["turn"]["cap_usd"]):
-                raise rj.Refused(f"job {job.id}: ${_left(job):.4f} of the job cap is left, less than one turn "
-                                 f"(${float(s['turn']['cap_usd']):.2f}); nothing was started")
             job.data["conversation"].append({"from": "human", "at": deps.clock(), "text": message.strip()})
             job.move(WRITING, deps, stage=_next_sid(job), by=os.environ.get("USER"), **({"via": via} if via else {}))
             _turn(job, cfg, deps)
@@ -165,10 +166,6 @@ def resume(job, cfg, deps):
                  _screen(job, cfg, "resume the turn"), job=job):
         _turn(job, cfg, deps)
     return job
-
-
-def _left(job):
-    return rj.left_usd(job)
 
 
 def _turns(job):
@@ -192,19 +189,18 @@ def last_issue(job):
     return raw.decode("utf-8"), hashlib.sha256(raw).hexdigest()
 
 
-def _snapshot(job):
-    """prepare(run_dir) for the turn: the frozen commit's tracked files, written once into <run>/source."""
-    def prepare(run_dir):
-        source = Path(run_dir) / "source"
-        if not source.is_dir():
-            part = Path(run_dir) / "source.part"
-            if part.exists():
-                shutil.rmtree(part)
-            part.mkdir()
-            intake.write_tree(job.data["inputs"]["repo"], job.data["inputs"]["commit"], part, ())
-            os.replace(part, source)
-        return source
-    return prepare
+def _snapshot(run_dir, repo, commit):
+    """The turn's read-only view: the frozen commit's tracked files, written once into <run>/source (a resume finds it).
+    IntakeError for a commit that is not plain files (a symlink, a submodule)."""
+    source = Path(run_dir) / "source"
+    if not source.is_dir():
+        part = Path(run_dir) / "source.part"
+        if part.exists():
+            shutil.rmtree(part)
+        part.mkdir(parents=True)
+        intake.write_tree(repo, commit, part, ())
+        os.replace(part, source)
+    return source
 
 
 def _turn(job, cfg, deps):
@@ -214,8 +210,9 @@ def _turn(job, cfg, deps):
     st = job.data["stages"].get(sid)
     if st is None:
         cap = round(float(s["turn"]["cap_usd"]), 6)
-        if _left(job) + 1e-12 < cap:
-            job.move(BLOCKED, deps, stage=sid, reason=f"budget: ${_left(job):.4f} left for {sid}, its cap is ${cap:.2f}")
+        left = rj.left_usd(job)
+        if left + 1e-12 < cap:
+            job.move(BLOCKED, deps, stage=sid, reason=f"budget: ${left:.4f} left for {sid}, its cap is ${cap:.2f}")
             return
         job.data["stages"][sid] = {"kind": "write", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
                                    "started_at": deps.clock()}
@@ -228,13 +225,21 @@ def _turn(job, cfg, deps):
     inputs = {"repo": i["repo_name"], "commit": i["commit"], "environment": i["environment"],
               "conversation": [{"from": m["from"], "text": m["text"]} for m in job.data["conversation"]],
               "previous_issue": previous, "max_usd": st["cap_usd"]}
+    try:
+        source = _snapshot(job.runs / run_id, i["repo"], i["commit"])
+    except (intake.IntakeError, OSError) as e:
+        # Before any model call: a commit the copy refuses (a symlink, a submodule) would fail every resume the same way
+        st.update(ended_at=deps.clock(), status=iw.BLOCKED, usd=0.0)
+        job.move(BLOCKED, deps, stage=sid, reason=f"the repository cannot be copied: {e}")
+        return
     deps.echo(rj.running(job, f"issue writer {sid}", run_id))
     scfg = rj.stage_config(cfg, st["cap_usd"])
     r = iw.run_writer(run_id=run_id, runs_dir=job.runs, cfg=scfg, inputs=inputs, resume=again, models=deps.models,
-                      prepare=_snapshot(job))
-    st.update(ended_at=deps.clock(), status=r.get("status"), usd=r.get("usd_billed"))
-    job.save()
+                      prepare=lambda run_dir: source)
     deps.echo(f"{sid} finished: {r.get('status')} (${r.get('usd_billed', 0):.4f})")
+    # The turn's end is ONE save (the move): the stage's status, the issue and the reply together. A crash before it
+    # leaves the stage open, and a resume replays the run from its committed result, never buying a turn again.
+    st.update(ended_at=deps.clock(), status=r.get("status"), usd=r.get("usd_billed"))
     if r.get("status") != iw.WRITTEN:
         job.move(BLOCKED if r.get("status") == iw.BLOCKED else WRITE_FAILED, deps, stage=sid,
                  reason=r.get("stop_reason"))

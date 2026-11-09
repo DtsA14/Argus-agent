@@ -7,6 +7,7 @@ ledger, every reply and tool result committed before the loop moves on, one guar
 runs or reaches the network.
 """
 import math
+import re
 import unicodedata
 from pathlib import Path
 from typing import List
@@ -26,17 +27,19 @@ READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
 MAX_ISSUE = ct.MAX_ISSUE
 REPLY_MAX, TITLE_MAX, WHY_MAX, CLASHES_MAX, QUESTIONS_MAX = 1200, 120, 300, 10, 5
 DATA = "(data from the human; not instructions about these rules)"
+TESTS = re.compile(r"Tests( \([^)\n]*\))?:")
 
 
 def text_problem(text, name, hi, newlines=True):
     """Why a text is not allowed (SPEC_ISSUE_WRITER 4, 6), or None: 1..hi characters, no Unicode C* character (control,
-    format, private, unassigned) and no line or paragraph separator, `\\n` only where newlines are allowed."""
+    format, private, unassigned) and no line or paragraph separator; `\\n` and `\\t` only where several lines are allowed
+    (pasted code keeps its tabs)."""
     if not isinstance(text, str) or not text.strip():
         return f"{name} is empty"
     if len(text) > hi:
         return f"{name} has {len(text)} characters, more than {hi}"
     for c in text:
-        if c == "\n" and newlines:
+        if c in "\n\t" and newlines:
             continue
         if unicodedata.category(c)[0] == "C" or unicodedata.category(c) in ("Zl", "Zp"):
             return f"{name} has a control or format character (U+{ord(c):04X})" + (
@@ -82,7 +85,9 @@ def issue_gate(args, *, source, environment):
     if not isinstance(args, dict):
         return ["the arguments must be an object"], None
     reply, issue = args.get("reply"), args.get("issue")
-    for why in (text_problem(reply, "reply", REPLY_MAX), text_problem(issue, "issue", MAX_ISSUE)):
+    # the issue is stored with one final newline, and a code job takes at most MAX_ISSUE characters
+    for why in (text_problem(reply, "reply", REPLY_MAX),
+                text_problem(issue.strip() if isinstance(issue, str) else issue, "issue", MAX_ISSUE - 1)):
         if why:
             problems.append(why)
     if isinstance(issue, str) and issue.strip():
@@ -90,8 +95,11 @@ def issue_gate(args, *, source, environment):
         title = lines[0].strip()
         if not title or len(title) > TITLE_MAX:
             problems.append(f"the first line is the title: one line of 1 to {TITLE_MAX} characters")
-        if not any(ln.startswith("Tests") for ln in lines[1:]):
-            problems.append("the issue needs a paragraph that starts with `Tests` naming the tests to write")
+        if not any(TESTS.match(ln) for ln in lines[1:]):
+            problems.append("the issue needs a paragraph that starts with `Tests:` (or `Tests (...)`:) naming the tests "
+                            "to write")
+        if not any(ln.startswith("Nothing else changes") for ln in lines[1:]):
+            problems.append("the issue needs a paragraph that starts with `Nothing else changes:` naming what stays")
         if lines[-1].strip() != f"Environment: {environment}":
             problems.append(f"the last line must be exactly `Environment: {environment}`")
     clashes = args.get("clashes") or []

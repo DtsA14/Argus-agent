@@ -184,7 +184,7 @@ def test_only_a_repository_of_the_config_is_read(tmp_path):
 
 @pytest.mark.parametrize("message, why", [("", "empty"), ("   ", "empty"), ("x" * 4001, "more than 4000"),
                                           ("a\x07b", "control"), ("a b", "control"), ("a‮b", "control"),
-                                          ("a\rb", "control"), ("a\tb", "control")])
+                                          ("a\rb", "control")])
 def test_a_bad_message_starts_nothing(tmp_path, message, why):
     env = Env(tmp_path, [SUBMIT])
     with pytest.raises(rj.Refused, match=why):
@@ -192,9 +192,10 @@ def test_a_bad_message_starts_nothing(tmp_path, message, why):
     assert not env.jobs.exists() and env.model.calls == []
 
 
-def test_a_message_of_several_lines_is_taken(tmp_path):
+def test_a_message_of_several_lines_and_tabs_is_taken(tmp_path):
     env = Env(tmp_path, [SUBMIT])
-    assert env.new("baris satu\nbaris dua").data["conversation"][0]["text"] == "baris satu\nbaris dua"
+    text = "baris satu\nbaris dua\n\tkode dengan tab"
+    assert env.new(text).data["conversation"][0]["text"] == text
 
 
 def test_a_reply_longer_than_the_reply_limit_is_refused_and_not_recorded(tmp_path):
@@ -263,6 +264,13 @@ def gate(source, **kw):
     return iw.issue_gate(submit_args(**kw), source=source, environment=ENV)
 
 
+def test_tabs_and_a_tests_paragraph_with_its_condition_pass_and_the_stored_issue_fits_a_code_job(source):
+    body = "\n".join(["Title", "\tcode with a tab", "Nothing else changes.", "Tests (with a fixed time): t"])
+    issue = body + "\n" + "x" * (iw.MAX_ISSUE - 2 - len(body) - len(f"\nEnvironment: {ENV}")) + f"\nEnvironment: {ENV}"
+    problems, r = gate(source, issue=issue)
+    assert problems == [] and len(r["issue"]) <= iw.MAX_ISSUE
+
+
 def test_a_good_issue_passes_the_gate(source):
     problems, r = gate(source, clashes=[{"file": "src/a.test.js", "line": 1, "why": "w"}], questions=["q?"])
     assert problems == [] and r["issue"] == ISSUE + "\n" and r["clashes"][0]["file"] == "src/a.test.js"
@@ -270,7 +278,11 @@ def test_a_good_issue_passes_the_gate(source):
 
 @pytest.mark.parametrize("kw, why", [
     ({"issue": "\n".join(["x" * 121, "Tests: t", f"Environment: {ENV}"])}, "title"),
-    ({"issue": "\n".join(["Title", "Nothing else.", f"Environment: {ENV}"])}, "starts with `Tests`"),
+    ({"issue": "\n".join(["Title", "Nothing else changes.", f"Environment: {ENV}"])}, "starts with `Tests:`"),
+    ({"issue": "\n".join(["Title", "Nothing else changes.", "Testsuite x is slow", f"Environment: {ENV}"])},
+     "starts with `Tests:`"),
+    ({"issue": "\n".join(["Title", "Tests: t", f"Environment: {ENV}"])}, "starts with `Nothing else changes:`"),
+    ({"issue": "x" * iw.MAX_ISSUE}, "more than"),
     ({"issue": "\n".join(["Title", "Tests: t", "Environment: other"])}, f"exactly `Environment: {ENV}`"),
     ({"issue": "\n".join(["Title", "Tests: t", f"Environment: {ENV}", "after"])}, "last line"),
     ({"issue": "\n".join(["Title‮", "Tests: t", f"Environment: {ENV}"])}, "control or format"),
@@ -294,7 +306,7 @@ def test_the_gate_refuses_each_rule(source, kw, why):
 
 
 def test_a_rejected_submit_is_told_why_and_the_next_one_counts(tmp_path):
-    bad = call("SubmitIssue", submit_args(issue="Title\nTests: t\nEnvironment: other"), "b")
+    bad = call("SubmitIssue", submit_args(issue="Title\nNothing else changes.\nTests: t\nEnvironment: other"), "b")
     env = Env(tmp_path, [bad, SUBMIT])
     job = env.new()
     assert job.data["state"] == ri.AWAITING_HUMAN
@@ -413,3 +425,45 @@ def test_a_turn_with_nothing_to_spend_asks_no_model(tmp_path):
     r = iw.run_writer(run_id="w0", runs_dir=tmp_path / "runs", cfg=rj.stage_config(cfg(repo), 0), inputs=inputs,
                       models={"issue_writer": model}, prepare=lambda d: repo)
     assert r["status"] == iw.FAILED_BUDGET and model.calls == []
+
+
+def test_a_crash_between_the_turn_and_its_record_resumes_without_a_new_turn(tmp_path, monkeypatch):
+    """code review: the turn's end was saved before its issue and reply; a crash between made resume buy w2."""
+    env = Env(tmp_path, [READ, SUBMIT])
+    real = rj.Job.move
+
+    def crash(self, new, deps, **why):
+        if new == ri.AWAITING_HUMAN:
+            raise KeyboardInterrupt
+        return real(self, new, deps, **why)
+    monkeypatch.setattr(rj.Job, "move", crash)
+    with pytest.raises(KeyboardInterrupt):
+        env.new()
+    monkeypatch.setattr(rj.Job, "move", real)
+    job = env.job()
+    assert job.data["state"] == ri.WRITING and job.data["stages"]["w1"].get("status") is None
+    calls = len(env.model.calls)
+    job, _ = rj.resume("ji", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    assert job.data["state"] == ri.AWAITING_HUMAN and sorted(job.data["stages"]) == ["w1"]
+    assert len(env.model.calls) == calls                      # the committed run is replayed, nothing bought again
+    assert [m["from"] for m in job.data["conversation"]] == ["human", "writer"]
+
+
+def test_a_commit_the_copy_refuses_blocks_the_job_before_any_model_call(tmp_path):
+    env = Env(tmp_path, [SUBMIT])
+    os.symlink("list.js", env.repo / "src" / "link.js")
+    td.git(env.repo, "add", "-A")
+    td.git(env.repo, "commit", "-qm", "a symlink")
+    job = env.new()
+    assert job.data["state"] == ri.BLOCKED and "cannot be copied" in rj._why(job)["reason"] and env.model.calls == []
+
+
+def test_an_unfunded_reply_is_refused_before_the_limits_and_the_key(tmp_path, monkeypatch):
+    env = Env(tmp_path, [SUBMIT])
+    env.new()
+    shown = len(env.confirms)
+    monkeypatch.setattr(rj, "left_usd", lambda job: 0.05)
+    with pytest.raises(rj.Refused, match="less than one turn"):
+        env.reply()
+    assert len(env.confirms) == shown
+    assert [e["what"] for e in env.job().data["log"]].count("limits_shown") == 1

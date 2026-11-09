@@ -255,7 +255,8 @@ def main(argv=None, deps=None):
         except rj.Refused as e:
             print(f"refused: {e}", file=sys.stderr)
             return 2
-        deps.key_forbidden = (rj.ROOT, Path(o.jobs_dir)) + ((Path(o.repo),) if getattr(o, "repo", None) else ())
+        # o.repo is a path only for `code`; `issue new --repo` names a repository (live() adds its path from the job)
+        deps.key_forbidden = (rj.ROOT, Path(o.jobs_dir)) + ((Path(o.repo),) if o.cmd == "code" and o.repo else ())
     try:
         if o.cmd == "list":
             print(rj.list_jobs(jobs_dir=o.jobs_dir))
