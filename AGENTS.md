@@ -12,7 +12,8 @@ The guarantees hold on every pipeline:
   sales report). Not a production path; kept as the reference graph and for the crash-resume and budget tests on it.
 
 How to verify: `bash scripts/verify.sh` (fresh venv, pinned deps, full suite incl. crash-resume
-repeats and stress). Evidence logs are kept in `verification/`. Open work is in `PENDING.md`,
+repeats and stress), or `bash scripts/verify_at.sh <commit>`: the same on that commit in its own git worktree, so
+this checkout and its `.venv-verify` stay usable meanwhile; the log is copied into `verification/`. Evidence logs are kept in `verification/`. Open work is in `PENDING.md`,
 the status of milestones and ADRs in `docs/Reconciliation.md`, review briefs in `docs/reviews/`.
 
 ## Code Review Rules
