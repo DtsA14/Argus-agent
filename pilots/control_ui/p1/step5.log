@@ -1,0 +1,9 @@
+600 ubuntu
+1
+1
+write exit 0
+600 ubuntu
+4c4
+< restrict,port-forwarding,permitopen="127.0.0.1:8710",command="/usr/bin/sleep infinity" ssh-ed25519 <key> iphone-viewer (Termius), forward to 127.0.0.1:8710 only
+---
+> restrict,port-forwarding,permitopen="127.0.0.1:8710",permitopen="127.0.0.1:8711",command="/usr/bin/sleep infinity" ssh-ed25519 <key> iphone-viewer (Termius), forward to 127.0.0.1:8710 only

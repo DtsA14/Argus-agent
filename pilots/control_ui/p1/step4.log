@@ -1,0 +1,11 @@
+job.json before ea3a73fea8913c4e
+== foreign host
+421
+== POST no Origin
+403
+== POST Origin, no token
+403
+job.json after ea3a73fea8913c4e
+== audit
+{"at": "2026-11-09T08:01:20Z", "path": "/jobs/j20261109_070807_8b33/abandon", "refused": "origin", "why": "this page did not come from the control service"}
+{"at": "2026-11-09T08:01:20Z", "job": "j20261109_070807_8b33", "path": "/jobs/j20261109_070807_8b33/abandon", "refused": "token", "why": "no token of this page"}

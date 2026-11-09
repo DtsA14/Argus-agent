@@ -1,0 +1,2 @@
+Created symlink /home/ubuntu/.config/systemd/user/default.target.wants/argus-control.service → /home/ubuntu/pilot3a_live/deploy/systemd/argus-control.service.
+exit 0
