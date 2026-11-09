@@ -1,0 +1,12 @@
+ok   GET / -> 200 index.html of the release: 200 cf339370d083
+ok   GET /assets/index-BwBRSHWp.js -> 200 as recorded: 200 67eb2a60e0e6
+ok   GET /assets/index-CiAOgjkU.css -> 200 as recorded: 200 15b7fd0868d7
+ok   GET /icon-192.png -> 200 as recorded: 200 9f4269a3acab
+ok   GET /icon.svg -> 200 as recorded: 200 420d6d281b61
+ok   GET /manifest.webmanifest -> 200 as recorded: 200 b688a7eaaeda
+ok   GET /api/summary -> 200 the snapshot's numbers, no-store: 200 no-store b'{"jobs":130,"cost_nano":7199158199,"cost_usd":"7.1992","skipped":0}'
+ok   Host evil.example -> 421: 421
+ok   POST / -> 405: 405
+ok   GET /../x -> 404: 404
+ok   GET /api/x -> 404: 404
+ok   listen 127.0.0.1:8710 only: listening: ['127.0.0.1:8710']
