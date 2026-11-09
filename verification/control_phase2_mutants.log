@@ -1,0 +1,38 @@
+KILLED  bind anywhere: 1 failed in 0.59s
+KILLED  no host check: 1 failed, 2 passed in 4.00s
+KILLED  no origin check: 1 failed, 6 passed in 3.63s
+KILLED  missing origin allowed: 1 failed, 6 passed in 3.60s
+KILLED  sec-fetch-site ignored: 1 failed, 11 passed in 6.13s
+KILLED  token mac unchecked: 1 failed, 13 passed in 7.15s
+KILLED  token never expires: 1 failed, 14 passed in 7.20s
+KILLED  token reusable: 1 failed, 13 passed in 7.16s
+SURVIVED token spelling loose: 56 passed in 30.32s
+KILLED  token not bound to action: 1 failed, 13 passed in 7.15s
+KILLED  token not bound to sha: 1 failed, 13 passed in 7.15s
+KILLED  reason not required: 1 failed, 27 passed in 13.25s
+KILLED  reason length: 1 failed, 29 passed in 14.24s
+KILLED  control characters: 1 failed, 30 passed in 14.75s
+KILLED  line separators: 1 failed, 34 passed in 17.27s
+KILLED  full strip: 1 failed, 33 passed in 16.26s
+KILLED  any id: 1 failed, 26 passed in 13.23s
+KILLED  id prefix only: 1 failed, 46 passed in 22.35s
+KILLED  too many fields unaudited: 1 failed, 45 passed in 21.84s
+KILLED  sha not passed: 1 failed, 50 passed in 26.57s
+KILLED  no -- separator: 1 failed, 50 passed in 26.50s
+KILLED  no body limit: 1 failed, 44 passed in 21.84s
+KILLED  no security headers: 1 failed, 48 passed in 23.86s
+KILLED  state not escaped: 1 failed, 47 passed in 23.35s
+KILLED  duplicate fields: 1 failed, 44 passed in 21.34s
+KILLED  no audit of a refusal: 1 failed, 6 passed in 3.62s
+KILLED  page before the draft: 1 failed, 40 passed in 20.31s
+KILLED  unreadable is no draft: 1 failed, 41 passed in 20.32s
+KILLED  no attempt line: 1 failed, 1 passed in 1.08s
+KILLED  token spent before the form: 1 failed, 27 passed in 13.24s
+KILLED  reason not written back: 1 failed, 38 passed in 18.80s
+KILLED  doubled prefix: 1 failed, 52 passed in 29.00s
+KILLED  no client timeout: 1 failed, 42 passed in 20.86s
+KILLED  sha with a newline: 1 failed, 54 passed in 30.10s
+KILLED  draft sha unchecked: 1 failed, 54 passed in 30.15s
+KILLED  via unchecked: 1 failed, 54 passed in 30.26s
+KILLED  sha without draft accepted: 1 failed, 55 passed in 30.66s
+RESULT: 36/37 killed

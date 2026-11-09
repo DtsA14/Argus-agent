@@ -1221,18 +1221,45 @@ def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
         return job, _draft(job, cfg, deps, n, note=note)
 
 
-def abandon(job_id, reason, *, deps, jobs_dir=JOBS):
+VIA = ("ui",)                   # SPEC_CONTROL_UI F4: the only channel a decision is recorded as coming through
+SHA_SEEN = re.compile(r"[0-9a-f]{12,64}")             # fullmatch
+
+
+def _seen(job, sha, via):
+    """SPEC_CONTROL_UI F4, under the job's lock: the fields a decision adds to its log entry. sha: the draft the human
+    saw (12+ hex), refused unless it starts the sha of the job's last draft; via: where the decision was made."""
+    extra = {}
+    if via is not None:
+        if via not in VIA:
+            raise Refused(f"via {via!r} is not one of {', '.join(VIA)}; nothing was changed")
+        extra["via"] = via
+    if sha is not None:
+        if not SHA_SEEN.fullmatch(sha):
+            raise Refused(f"{sha!r} is not a draft sha (12 to 64 lowercase hex); nothing was changed")
+        try:
+            _, path = _last_draft(job)
+        except Refused:
+            raise Refused(f"job {job.id} has no draft to check the sha {sha} against; nothing was changed") from None
+        seen = draft_sha(path)
+        if not seen.startswith(sha):
+            raise Refused(f"the draft changed: it is {seen[:12]} now, not {sha[:12]}; read it again, nothing was changed")
+        extra["sha"] = sha
+    return extra
+
+
+def abandon(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
     """Close a job that will not be continued (e.g. a stage stopped and a new job was started instead). It takes the
     lock, so a job whose stage is still running cannot be abandoned under it."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
         if job.data["state"] in (REVIEW_READY, REVIEW_INVALID, REJECTED, ABANDONED, APPLIED):
             raise Refused(f"job {job.id} is {job.data['state']}: there is nothing to abandon")
-        job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"))
+        extra = _seen(job, sha, via)
+        job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"), **extra)
         return job
 
 
-def reject(job_id, reason, *, deps, jobs_dir=JOBS):
+def reject(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
     """Reject a draft waiting for approval, or a review package that will not be applied (its outcome, with why)."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
@@ -1240,7 +1267,8 @@ def reject(job_id, reason, *, deps, jobs_dir=JOBS):
                                      AWAITING_RESEARCH_REVIEW):
             raise Refused(f"job {job.id} is {job.data['state']}: only a research handoff or a draft waiting for review, "
                           "or a review package, is rejected (abandon closes the others)")
-        job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"))
+        extra = _seen(job, sha, via)
+        job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"), **extra)
         return job
 
 
