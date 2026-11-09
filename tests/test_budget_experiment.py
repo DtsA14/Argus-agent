@@ -51,6 +51,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["research_job"]              # SPEC_RESEARCH_JOB (argus research, never used by these arms)
     del base["web_research"]              # SPEC_RESEARCH_JOB (paid DeepSeek Search/Fetch, never used by these arms)
     del base["code_judge"], base["roles"]["code_judge"]   # SPEC_JUDGE (argus judge, never used by these arms)
+    del base["issue_writer"], base["roles"]["issue_writer"], base["tools"]["issue_writer"]   # SPEC_ISSUE_WRITER (never used)
     base["roles"]["coder"] = config("30k")["roles"]["coder"]   # the coder moved to DeepSeek on 2026-10-23; the arms ran Sonnet
     # D5: llm.prompt_cache added after the arms ran (absent means off); cache prices corrected and write rates added
     # after them. Their runs had no cache reads or writes, so their costs are the same under either table; every other

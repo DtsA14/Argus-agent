@@ -140,6 +140,8 @@ class Job:
         old = self.data["state"]
         if self.data.get("kind") == "research":         # SPEC_RESEARCH_JOB: its own states (router/research.py)
             from router.research import LEGAL as legal
+        elif self.data.get("kind") == "issue":          # SPEC_ISSUE_WRITER: its own states (router/issue.py)
+            from router.issue import LEGAL as legal
         else:
             legal = LEGAL
         if (old, new) not in legal:
@@ -1106,6 +1108,9 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
         if job.data.get("kind") == "research":
             from router import research
             return job, research.resume(job, cfg, deps)
+        if job.data.get("kind") == "issue":
+            from router import issue
+            return job, issue.resume(job, cfg, deps)
         state = job.data["state"]
         sids = judge_stages(job)                 # the judge runs nothing in the sandbox: no environment check
         if sids and job.data["stages"][sids[-1]].get("status") is None and state in JUDGEABLE:
@@ -1436,6 +1441,12 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     if d.get("kind") == "research":
         from router import research
         return "\n".join(map(clean, research.status_lines(job)))
+    if d.get("kind") == "issue":
+        from router import issue
+        head = [f"job {job.id}: {d['state']} (issue)", f"money: cap ${d['max_usd']:.2f}, spent ${spent_nano(job) / 1e9:.4f}",
+                *[f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
+                  + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else "") for sid, s in d["stages"].items()]]
+        return "\n".join(map(clean, head + issue.status_lines(job)))
     out = [f"job {job.id}: {d['state']}", f"repo {d['inputs']['repo']} at {d['inputs']['commit']}",
            *environment_lines(job), f"money: cap ${d['max_usd']:.2f}, spent ${spent_nano(job) / 1e9:.4f}"]
     changed = environment_changed(job, cfg) if cfg is not None else None
