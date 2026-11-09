@@ -29,6 +29,8 @@ M = [
     ("sha not passed", C, '*(["--sha", sha] if sha else [])', '*([])'),
     ("no -- separator", C, ', "--", job_id, reason]', ', job_id, reason]'),
     ("no body limit", C, 'if 0 <= length <= BODY_MAX else None', 'if 0 <= length else None'),
+    ("no-referrer again", C, '"Referrer-Policy": "same-origin"', '"Referrer-Policy": "no-referrer"'),
+    ("origin not audited", C, '            rec["origin"] = (origin or "")[:100] if origin is not None else None\n', ''),
     ("no security headers", C, '        for k, v in HEADERS.items():\n            self.send_header(k, v)\n', ''),
     ("state not escaped", C, '<p>{e(state)}</p>', '<p>{state}</p>'),
     ("duplicate fields", C, 'if len(form.get(k) or [""]) == 1 else None', 'if True else None'),

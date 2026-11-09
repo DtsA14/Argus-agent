@@ -44,7 +44,10 @@ HEADERS = {
     "Content-Security-Policy": "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; "
                                "base-uri 'none'",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "no-referrer",
+    # Not no-referrer: with it a browser sends `Origin: null` on a POST, even from the same page (Fetch, "append a
+    # request Origin header"), and F3.2 refuses every form (control p1, Atha's first reject from Safari, 2026-11-09).
+    # same-origin still sends no referrer to another site.
+    "Referrer-Policy": "same-origin",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
 }
@@ -55,7 +58,8 @@ STYLE = (b"body{margin:0;padding:16px;background:#0a0e13;color:#e8eef4;font:16px
          b"color:inherit;background:#18202a;border:1px solid #232d39;border-radius:.75rem;font:inherit}"
          b"button{min-height:2.75rem;padding:0 1rem;border:0;border-radius:.75rem;font:inherit;font-weight:600}"
          b".reject{background:#f26d6d;color:#0a0e13}.abandon{background:#232d39;color:#e8eef4}"
-         b".bad{color:#f26d6d}.ok{color:#6ee7b7}ul{padding:0;list-style:none}li{margin:.5rem 0}")
+         b".bad{color:#f26d6d}.ok{color:#6ee7b7}ul{padding:0;list-style:none}li{margin:.5rem 0}"
+         b"h1{font-size:1.15rem;font-family:monospace;overflow-wrap:anywhere}")
 
 
 class Tokens:
@@ -187,7 +191,7 @@ class Control:
             return page(job.id, f'<p><a href="/">All</a></p><h1>{e(job.id)}</h1><p class="bad">{e(str(why))}</p>')
         parts = [f'<p><a href="/">All</a></p><h1>{e(job.id)}</h1><div class="card"><p>{e(state)}</p>',
                  f'<p>draft <span class="sha">{e(sha)}</span></p>' if sha else "",
-                 f'<p class="muted">spent ${rj.spent_nano(job) / 1e9:.4f} of ${float(job.data.get("max_usd") or 0):.2f}'
+                 f'<p class="muted">job spent ${rj.spent_nano(job) / 1e9:.4f} of its cap ${float(job.data.get("max_usd") or 0):.2f}'
                  f'</p><p><a href="http://localhost:8710/jobs/{e(job.id)}/draft">Read the draft</a></p></div>']
         if message:
             parts.insert(0, f'<p class="{"bad" if bad else "ok"}">{e(message)}</p>')
@@ -216,6 +220,7 @@ class Control:
 
         origin = headers.get("Origin")
         if origin not in ORIGINS:
+            rec["origin"] = (origin or "")[:100] if origin is not None else None
             return refuse(403, "origin", "this page did not come from the control service")
         if headers.get("Sec-Fetch-Site") not in (None, "same-origin"):
             return refuse(403, "origin", "a cross-site request")
