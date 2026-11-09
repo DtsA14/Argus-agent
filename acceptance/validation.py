@@ -53,6 +53,7 @@ RAN = re.compile(r"^Ran (\d+) tests? in ")
 FINAL = re.compile(r"^(OK|FAILED)(?: \((.*)\))?$")
 MAX_NODES = 50                  # failed_nodes kept in the evidence
 SKIPPED_NAMED = 10              # skipped nodes named in a reason (SPEC_DRAFTER_SKIPPED_STEPS 2.1); all in the evidence
+NAMED_LIKE = 3                  # tests named for a required test that did not run under the name given
 # Statuses a no_skip rule refuses (W2a-ext): skipped, xfailed, and xpassed (an xfail marker on a test that passed)
 NOT_RUN = {"skipped", "expected failure", "unexpected success"}
 
@@ -291,8 +292,23 @@ def criteria_problems(spec, parsed, must, skipped):
                         + (f": {named}" if named else ""))
     for t, st in must.items():
         if st != "ok":
-            problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}")
+            problems.append(f"required test {t} {'did not run' if st is None else 'is ' + repr(st)}"
+                            + (named_like(t, parsed["tests"]) if st is None else ""))
     return problems
+
+
+def named_like(t, tests):
+    """For a required test that did not run: the tests that ran in its file under a longer name ending with its
+    title (a vitest test inside describe() is `<describe> > <title>`, a pytest one in a class `Class::name`), so the
+    drafter can copy the exact id (030 d1, 031 d1: submits exhausted on guessed names)."""
+    path, _, title = t.partition("::")
+    if not title:
+        return ""
+    near = sorted(n for n in tests if n.startswith(path + "::") and n.endswith((" > " + title, "::" + title)))
+    if not near:
+        return ""
+    more = f" and {len(near) - NAMED_LIKE} more" if len(near) > NAMED_LIKE else ""
+    return f" (ran under the full name: {', '.join(near[:NAMED_LIKE])}{more})"
 
 
 def judge_result(spec, r, nonce=None):

@@ -1,0 +1,9 @@
+KILLED  no hint: 1 failed, 1 passed, 101 deselected in 0.52s
+KILLED  any file: 1 failed, 17 passed, 101 deselected in 0.50s
+KILLED  bare suffix: 1 failed, 1 passed, 101 deselected in 0.48s
+KILLED  no vitest separator: 1 failed, 1 passed, 101 deselected in 0.48s
+KILLED  no pytest separator: 1 failed, 17 passed, 101 deselected in 0.51s
+KILLED  no cap: 1 failed, 2 passed, 101 deselected in 0.48s
+KILLED  no count of the rest: 1 failed, 2 passed, 101 deselected in 0.48s
+KILLED  title-less id hinted: 1 failed, 17 passed, 101 deselected in 0.51s
+RESULT: 8/8 killed
