@@ -1,0 +1,4 @@
+viewer live: j20261109_034712_4409-2839c6d619df
+  job j20261109_034712_4409, commit 2839c6d619df, image sha256:87a74d68f23b
+viewer rollback would publish: j20261109_023512_7b70-4955dc297319
+proxy: 127.0.0.1:8710
