@@ -144,7 +144,7 @@ dipahami bukan pengawasan. Harness meminta drafter menulis `for_human`: satu-dua
 Aksi selalu lewat **service kontrol terpisah** di `127.0.0.1:8711` (kode harness, stdlib, `systemd --user`), bukan lewat
 proxy viewer: proxy tetap GET-only selamanya, sehingga kode agen (viewer, ledger) tidak pernah berada di jalur aksi.
 
-- **Fase 2, aksi tanpa biaya:** `reject` dan `abandon`.
+- **Fase 2, aksi tanpa biaya:** `reject` dan `abandon` (dirinci di 4a).
 - **Fase 3, aksi berbayar:** `approve` (agen jalan), mungkin `redraft`/`retry`.
 - **Fase 4, staging:** `deploy`/`rollback` untuk satu `PLAN.md`.
 
@@ -161,6 +161,74 @@ Aturan yang sudah pasti untuk semua aksi:
 - C5. Aksi panjang (agen) jalan sebagai proses latar dengan log; halaman hanya menampilkan status. Satu aksi per job
   sekaligus (lock job yang ada).
 - C6. Batas biaya dicek **di server** (K3), tidak dari form.
+
+## 4a. Amandemen 3: fase 2 dirinci, fase 3 dikunci desainnya (usul Claude, Atha 2026-11-09 "Ok ikut saran lu")
+
+Fase 2 (reject, abandon) dikoding lebih dulu sebagai kerangka keamanan tanpa risiko uang; fase 3 (approve) memakai
+kerangka yang sama dan dikoding sesudah fase 2 dipakai. Jalur ketat: kode harness yang ditulis Claude, review, mutants,
+`verify.sh`, merge oleh Atha. Agen (viewer, ledger) tidak menulis bagian mana pun dari jalur aksi.
+
+**F1. Service.** `router/control.py`, perintah `argus control serve`, unit `systemd --user` `argus-control`, stdlib
+(`http.server`), satu proses, satu permintaan sekaligus. Bind `127.0.0.1:8711` saja (konstanta, tidak pernah `0.0.0.0`
+atau `localhost`, tidak pernah 8000/8710). Membaca dan mengubah job **live** (`jobs/` di checkout `~/pilot3a_live`),
+bukan snapshot: halamannya tidak tertinggal 15 menit. Tidak memegang key; fase 3 hanya meneruskan path `--key-file`.
+
+**F2. Rute (semua lainnya 404, metode lain 405).**
+- `GET /`: job yang punya aksi di fase yang aktif (`AWAITING_APPROVAL`, `DRAFT_FAILED`, `REVIEW_READY`,
+  `REVIEW_INVALID`, `AWAITING_RESEARCH_REVIEW`), terbaru dulu, masing-masing tautan ke halamannya.
+- `GET /jobs/<id>`: HTML buatan server, semua teks di-escape: id, state, sha12 draf terakhir (bila ada), biaya, tautan ke
+  halaman draf viewer (`http://localhost:8710/jobs/<id>/draft`), lalu satu form per aksi yang diizinkan state itu.
+  Reject: kolom alasan **wajib** (1-300 karakter, satu baris, tanpa karakter kontrol). Abandon: alasan **opsional**
+  (kosong → `abandoned from the phone`).
+- `POST /jobs/<id>/reject`, `POST /jobs/<id>/abandon` (fase 2); `POST /jobs/<id>/approve` (fase 3). Body
+  `application/x-www-form-urlencoded` maks 4 KiB: `token`, `sha` (sha12 yang tampil; wajib bila job punya draf),
+  `reason`. Jawaban: halaman hasil (303 ke `GET /jobs/<id>` dengan pesan) atau penolakan yang menyebut sebabnya.
+- `<id>` harus cocok `^j\d{8}_\d{6}_[0-9a-f]{4}$` dan direktorinya ada; selain itu 404 tanpa menyentuh disk lain.
+
+**F3. Gerbang setiap POST** (urutan, berhenti di yang pertama gagal; tidak ada aksi sebelum semuanya lolos):
+1. `Host` tepat `127.0.0.1:8711` atau `localhost:8711`.
+2. `Origin` ada dan tepat `http://127.0.0.1:8711` atau `http://localhost:8711`; `Sec-Fetch-Site`, bila ada, `same-origin`.
+   Tanpa `Origin` → ditolak (Safari iOS mengirimnya pada POST form).
+3. `token` = HMAC-SHA256(rahasia, `aksi|job|sha|waktu terbit`), terbit di halaman itu, umur ≤ 30 menit, **sekali pakai**.
+   Rahasia 32 byte acak dibuat saat service mulai, hanya di memori (restart membatalkan semua halaman yang terbuka).
+4. Isi form valid (alasan, sha 12 hex).
+5. Aksi dipanggil lewat CLI yang sama (C1): proses anak `scripts/argus.py reject|abandon <job> <reason> --sha <sha12>
+   --via ui`; gerbang state, lock job dan cek sha ada **di `router/job.py` di bawah lock**, bukan di service (C4). Klik
+   ganda: token kedua sudah terpakai; kalaupun lolos, state job menolaknya.
+
+Header setiap jawaban: `Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self';
+frame-ancestors 'none'; base-uri 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control:
+no-store`, `X-Content-Type-Options: nosniff`. Tanpa JavaScript, tanpa CORS, tanpa cookie.
+
+**F4. Perubahan CLI (jalur ketat, PR yang sama).** `reject` dan `abandon` menerima `--sha <12+ hex>` (opsional di CLI;
+bila diberikan dan job punya draf, harus awalan sha draf terakhir, dicek di bawah lock, beda → ditolak "draft changed")
+dan `--via ui` (satu-satunya nilai). Entri log `job.json` dari `job.move` mendapat `via: "ui"` dan `sha` bila ada, di
+samping `by`, `reason`, waktu (C3). Tanpa `--via`, perilaku CLI hari ini tidak berubah.
+
+**F5. Audit di luar job.** Setiap POST (berhasil atau ditolak di gerbang mana pun) ditulis satu baris JSON ke
+`~/.local/state/argus-control/audit.jsonl`: waktu, path, job (bila valid), gerbang yang menolak atau hasil CLI (exit,
+baris terakhir), tanpa isi token. Pengganti C3 untuk penolakan sebelum job tersentuh (id tidak valid, token, Origin):
+tidak menulis ke `job.json` job yang mungkin bukan job.
+
+**F6. Akses HP.** Kunci `iphone-viewer` di `~/.ssh/authorized_keys` mendapat `permitopen="127.0.0.1:8711"` kedua (K5),
+diubah Claude atas "ok" Atha saat fase 2 deploy; Atha menambah forward 8711 di Termius. Tidak ada port publik.
+
+**F7. Viewer (jalur cepat, issue terpisah).** Halaman draf mendapat tautan `Decide` ke `http://localhost:8711/jobs/<id>`
+(navigasi biasa; proxy 8710 tetap GET-only dan tidak meneruskan apa pun ke 8711).
+
+**F8. Fase 3 (desain dikunci, kode nanti).** `POST /jobs/<id>/approve` dengan `sha` yang tampil: gerbang F3, lalu server
+menolak bila `max_usd` job > $1,00 (K3, dicek di server dari `job.json`), lalu menjalankan `argus approve <job> --sha
+<sha12> --key-file <path dari config service> --yes --via ui` sebagai **proses latar** dengan log
+`jobs/<id>/ui-approve-<waktu>.log` (C5); halaman menampilkan "running" dari state job. Approve dari UI hanya untuk job
+yang drafnya tidak berpenanda konflik (gerbang CLI yang ada).
+
+**F9. Tes wajib (masing-masing gagal bila jaminannya rusak; mutants).** Bind hanya 127.0.0.1:8711; `Host` asing →
+ditolak; `Origin` tidak ada / asing / `null` → ditolak; `Sec-Fetch-Site: cross-site` → ditolak; token tidak ada, salah,
+kedaluwarsa, untuk aksi atau job lain, sudah terpakai → ditolak; GET tidak pernah mengubah job; id `..`, `%2F`, id tidak
+cocok pola → 404; alasan kosong pada reject, > 300, multi-baris, karakter kontrol → ditolak; sha draf berganti → ditolak
+oleh CLI dan job tidak berubah; state yang tidak boleh (mis. `APPLIED`) → ditolak oleh CLI; job sedang dikunci → ditolak;
+teks job berisi `<script>`/`<img onerror>` tampil sebagai teks; setiap POST menulis satu baris audit tanpa token; aksi
+berhasil menulis `via: "ui"` dan `sha` ke log job; header keamanan ada di setiap jawaban; body > 4 KiB ditolak.
 
 ## 5. Keputusan untuk Atha
 
