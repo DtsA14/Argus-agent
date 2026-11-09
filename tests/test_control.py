@@ -146,6 +146,25 @@ def test_a_post_from_another_origin_is_refused(svc, headers):
     assert svc.audit_lines()[-1]["refused"] == "origin"
 
 
+def test_the_pages_let_the_browser_send_its_origin_on_a_form(svc):
+    """control p1: with `Referrer-Policy: no-referrer` Safari sent `Origin: null` on the page's own form, and every
+    reject from the phone was refused at F3.2. same-origin (or a policy that keeps the origin) is required."""
+    make_job(svc.jobs)
+    _, headers, _ = svc.request("GET", f"/jobs/{JOB}")
+    assert headers["Referrer-Policy"] == "same-origin"
+
+
+def test_a_refused_origin_is_named_in_the_audit(svc):
+    make_job(svc.jobs)
+    token, sha = svc.form()
+    svc.post(token=token, sha=sha, headers={"Origin": "null"})
+    svc.request("POST", f"/jobs/{JOB}/reject", f"token={token}&sha={sha}&reason=x".encode(), {})
+    *_, null, missing = svc.audit_lines()
+    assert (null["refused"], null["origin"]) == ("origin", "null")
+    assert (missing["refused"], missing["origin"]) == ("origin", None)
+    assert svc.run.calls == []
+
+
 def test_tokens_are_bound_to_page_action_and_job_and_spent_once(svc):
     make_job(svc.jobs)
     other = "j20261109_120001_beef"
