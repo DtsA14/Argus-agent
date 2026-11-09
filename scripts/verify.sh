@@ -87,4 +87,4 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
 echo "evidence saved to $LOG"
 # The verdict is the LAST RESULT line: steps before pytest print their own (check_env_image.py's "RESULT: PASS"), which
 # made a failed run exit 0 since the pwa_node22 check was added (found 2026-11-09).
-grep '^RESULT: ' "$LOG" | tail -n 1 | grep -q '^RESULT: PASS'
+[[ "$(grep '^RESULT: ' "$LOG" | tail -n 1)" == "RESULT: PASS"* ]]

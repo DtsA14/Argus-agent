@@ -8,13 +8,14 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 A, V = "scripts/verify_at.sh", "scripts/verify.sh"
 T = ["tests/test_verify_at.py"]
 M = [
-    ("verify.sh: any PASS line", V, "grep '^RESULT: ' \"$LOG\" | tail -n 1 | grep -q '^RESULT: PASS'", "grep -q '^RESULT: PASS' \"$LOG\""),
-    ("verify_at: any PASS line", A, "grep '^RESULT: ' \"$log\" | tail -n 1 | grep -q '^RESULT: PASS'", "grep -q '^RESULT: PASS' \"$log\""),
+    ("verify.sh: any PASS line", V, "[[ \"$(grep '^RESULT: ' \"$LOG\" | tail -n 1)\" == \"RESULT: PASS\"* ]]", "grep -q '^RESULT: PASS' \"$LOG\""),
+    ("verify_at: any PASS line", A, "[[ \"$(grep '^RESULT: ' \"$log\" | tail -n 1)\" == \"RESULT: PASS\"* ]]", "grep -q '^RESULT: PASS' \"$log\""),
+    ("verify_at: the newest log", A, '  [ -n "${before[$f]:-}" ] || logs+=("$f")', '  logs+=("$f")'),
     ("no pins", A, '  cp -p "${pins[@]}" "$wt"/\n', "  true\n"),
     ("in the main checkout", A, '(cd "$wt" && bash scripts/verify.sh)', '(cd "$root" && bash scripts/verify.sh)'),
     ("no cleanup", A, "trap cleanup EXIT\n", ""),
     ("evidence not copied", A, 'cp -p "$log" "$root/verification/"\n', ""),
-    ("no log passes", A, '  echo "verify_at: verify.sh wrote no log" >&2\n  exit 1', '  echo "verify_at: verify.sh wrote no log" >&2\n  exit 0'),
+    ("no log passes", A, '  echo "verify_at: verify.sh wrote ${#logs[@]} new logs, not one" >&2\n  exit 1', '  echo "verify_at: verify.sh wrote ${#logs[@]} new logs, not one" >&2\n  exit 0'),
 ]
 
 if __name__ == "__main__":

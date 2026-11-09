@@ -24,16 +24,23 @@ if [ ${#pins[@]} -gt 0 ]; then
   cp -p "${pins[@]}" "$wt"/
 fi
 echo "verify_at: $commit in $wt (${#pins[@]} image pin file(s) copied)"
+# The commit already holds many verification logs: the new one is the one that was not there before (never "the
+# newest", and no `ls | head`, whose early close kills the script under pipefail).
+declare -A before=()
+for f in "$wt"/verification/verify-*.log; do before["$f"]=1; done
 set +e
 (cd "$wt" && bash scripts/verify.sh)
 set -e
-logs=("$wt"/verification/verify-*.log)
-if [ ${#logs[@]} -eq 0 ]; then
-  echo "verify_at: verify.sh wrote no log" >&2
+logs=()
+for f in "$wt"/verification/verify-*.log; do
+  [ -n "${before[$f]:-}" ] || logs+=("$f")
+done
+if [ ${#logs[@]} -ne 1 ]; then
+  echo "verify_at: verify.sh wrote ${#logs[@]} new logs, not one" >&2
   exit 1
 fi
-log="$(ls -t "${logs[@]}" | head -n 1)"
+log="${logs[0]}"
 mkdir -p "$root/verification"
 cp -p "$log" "$root/verification/"
 echo "verify_at: evidence copied to verification/$(basename "$log")"
-grep '^RESULT: ' "$log" | tail -n 1 | grep -q '^RESULT: PASS'
+[[ "$(grep '^RESULT: ' "$log" | tail -n 1)" == "RESULT: PASS"* ]]

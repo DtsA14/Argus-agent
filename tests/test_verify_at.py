@@ -36,7 +36,10 @@ def repo(tmp_path):
     r = tmp_path / "repo"
     (r / "scripts").mkdir(parents=True)
     (r / "scripts" / "verify.sh").write_text(STUB)
-    (r / ".gitignore").write_text(".sandbox_image*\nverification/\n")
+    (r / ".gitignore").write_text(".sandbox_image*\n")
+    (r / "verification").mkdir()
+    for i in range(300):                                        # the commit's own old logs, as Argus-agent has
+        (r / "verification" / f"verify-2026010{i % 9 + 1}T{i:06d}Z-old.log").write_text("RESULT: PASS\n")
     git(tmp_path, "init", "-q", str(r))
     git(r, "add", "-A")
     git(r, "commit", "-qm", "base")
@@ -54,8 +57,8 @@ def run(repo, tmp_path, result="RESULT: PASS", **env):
 
 def test_it_verifies_the_commit_in_its_own_worktree_with_the_pins_and_copies_the_evidence(repo, tmp_path):
     r = run(repo, tmp_path)
-    assert r.returncode == 0, r.stderr
-    (log,) = (repo / "verification").glob("verify-*.log")
+    assert r.returncode == 0, (r.stdout[-500:], r.stderr[-500:])
+    (log,) = (repo / "verification").glob("verify-2099*.log")      # the new one, among 300 the commit holds
     text = log.read_text()
     assert f"head: {git(repo, 'rev-parse', 'HEAD')}" in text and "pin: sha256:abc" in text
     assert "dirty: absent" in text                             # only the commit, never the checkout's own files
@@ -67,12 +70,12 @@ def test_it_verifies_the_commit_in_its_own_worktree_with_the_pins_and_copies_the
 def test_a_failed_verify_fails_even_after_an_earlier_pass_line(repo, tmp_path, result):
     r = run(repo, tmp_path, result)
     assert r.returncode != 0
-    assert (repo / "verification").is_dir() and list((repo / "verification").glob("verify-*.log"))
+    assert list((repo / "verification").glob("verify-2099*.log"))
 
 
-def test_no_log_is_a_failure(repo, tmp_path):
+def test_no_new_log_is_a_failure_even_with_old_ones(repo, tmp_path):
     r = run(repo, tmp_path, STUB_NOLOG="1")
-    assert r.returncode != 0 and "wrote no log" in r.stderr
+    assert r.returncode != 0 and "wrote 0 new logs" in r.stderr
 
 
 @pytest.mark.parametrize("result", ["RESULT: PASS", "RESULT: FAIL (x)"])
