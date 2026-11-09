@@ -315,3 +315,18 @@ def test_the_spawner_runs_one_child_per_job_and_removes_its_message_file_after(t
             break
         time.sleep(0.05)
     assert not sp.busy(JOB) and not msg.exists() and list((tmp_path / "state" / "runs").glob(f"{JOB}-*.log"))
+
+
+def test_a_sha_field_changed_with_a_good_token_starts_nothing(svc):
+    svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/start")
+    status, _, text = svc.post(f"/issues/{JOB}/start", {"token": token, "sha": "0" * 12})
+    assert status == 409 and "issue changed" in text and svc.spawner.calls == []
+
+
+@pytest.mark.parametrize("reason", ["two\nlines", "bidi‮", "x" * 301])
+def test_a_bad_discard_reason_is_refused(svc, reason):
+    svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/abandon")
+    status, _, _ = svc.post(f"/issues/{JOB}/abandon", {"token": token, "sha": sha, "reason": reason})
+    assert status == 400 and svc.runs == []
