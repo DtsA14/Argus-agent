@@ -157,6 +157,7 @@ def main(argv=None, deps=None):
         ip = isub.add_parser(name)
         if name == "new":
             ip.add_argument("--repo", required=True, help="a name of issue_writer.repos in the config")
+            ip.add_argument("--job-id", help="the new job's id (the control service picks it to show its page)")
         else:
             ip.add_argument("job")
         im = ip.add_mutually_exclusive_group(required=True)
@@ -197,7 +198,7 @@ def main(argv=None, deps=None):
     deps = deps or rj.Deps()
     if o.cmd == "control":
         from router import control as rc
-        rc.serve(Path(o.jobs_dir))
+        rc.serve(Path(o.jobs_dir), cfg=load_config(o.config))
         return 0
     if o.cmd == "stage":
         from router import stage as sg
@@ -301,7 +302,8 @@ def main(argv=None, deps=None):
                 return 0 if code.data["state"] == rj.AWAITING_APPROVAL else 1
             message = o.message if o.message is not None else Path(o.message_file).read_text(encoding="utf-8")
             if o.issue_cmd == "new":
-                job = ri.new(repo=o.repo, message=message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
+                job = ri.new(repo=o.repo, message=message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via,
+                             job_id=o.job_id)
             else:
                 job = ri.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))

@@ -1259,6 +1259,12 @@ def abandon(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
     with job.lock():
         if job.data["state"] in (REVIEW_READY, REVIEW_INVALID, REJECTED, ABANDONED, APPLIED):
             raise Refused(f"job {job.id} is {job.data['state']}: there is nothing to abandon")
+        if job.data.get("kind") == "issue":
+            from router import issue
+            code = issue._handed(job, jobs_dir)
+            if code is not None:        # a cut-off start made code job X: settle it (start), never orphan X
+                raise Refused(f"job {job.id}: a start was cut off after code job {code.id} was made; run `argus issue "
+                              "start` again to settle it, then abandon the code job if it is not wanted")
         extra = _seen(job, sha, via)
         job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"), **extra)
         return job
