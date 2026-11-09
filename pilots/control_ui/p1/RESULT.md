@@ -18,3 +18,14 @@ Semua langkah sesuai PLAN, tanpa penyimpangan:
 Catatan: komentar di akhir baris kunci `iphone-viewer` masih berbunyi "forward to 127.0.0.1:8710 only" (label saja, tidak
 diubah di rencana ini). Berikutnya: Atha menambah forward 8711 di Termius dan memakai Reject/Abandon dari HP; fase 3
 (approve) dikoding sesudah fase 2 dipakai.
+
+## Pemakaian pertama dari HP (2026-11-09)
+
+- 09:22Z: Reject pertama Atha dari Safari ditolak di F3.2 (Origin). Sebab: `Referrer-Policy: no-referrer` membuat
+  browser mengirim `Origin: null` pada POST form halaman sendiri; tes mengirim Origin buatan, jadi tidak menangkapnya. Job
+  tidak berubah. Perbaikan #395 (`same-origin`, Origin yang ditolak dicatat di audit; mutants 38/38, verify PASS 3247),
+  `argus-control` di-restart sesudah pull.
+- 09:54:35Z: kiriman dari halaman lama, ditolak dengan `origin: "null"` tercatat (diagnosis terbukti).
+- 09:55Z: Reject `j20261028_051613_1861` (REVIEW_READY sejak 2026-10-28, tidak diterapkan) dari HP berhasil: state
+  REJECTED, log `reason` "Lama tidak diterapkan", `via: "ui"`, `sha: 0b0aacce9835`; audit `attempt` lalu hasil `exit 0`.
+- Pelajaran: PLAN deploy service web memuat satu aksi sungguhan dari browser HP sebelum dinyatakan selesai.
