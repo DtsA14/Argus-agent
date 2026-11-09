@@ -219,6 +219,19 @@ research_job:
 code_judge: {role: code_judge, cap_usd: 0.30, attempt_tokens: 400000, max_input_tokens: 100000, max_steps: 4,
              max_submits: 3, max_input_chars: 120000}   # not `judge:` (the rubric judge's, above)
 
+# SPEC_ISSUE_WRITER (Atha 2026-11-09, K1-K6): `argus issue new|reply`, a conversation that writes an issue. repos: the
+# only repositories it reads (K2; never Argus-agent), by name, with the environment their code jobs run in. max_usd: one
+# issue job (K3); turn: one writer turn. Changing this block is a strict-lane PR.
+issue_writer:
+  role: issue_writer
+  max_usd: 0.50
+  message_max: 4000
+  reply_max: 2000
+  repos:
+    argus-viewer: {path: "~/argus-viewer", environment: pwa_node22}
+    argus-ledger: {path: "~/argus-ledger", environment: ledger_py312_up2}
+  turn: {cap_usd: 0.10, attempt_tokens: 400000, max_input_tokens: 60000, max_steps: 20, max_submits: 3}
+
 router:
   job_max_usd: 1.00
   draft_max_usd: 0.75
@@ -257,6 +270,7 @@ tools:
   coder: [list_files, read_file, write_file, run_validation]   # code tasks (codetask/); Finish is not gated
   drafter: [list_files, search_files, read_file]   # W2b; read-only. SubmitDraft is not gated (it ends the run, as Finish)
   researcher: [list_files, search_files, read_file, read_docs]   # SPEC_RESEARCH_STAGE r1: never a tool that writes or runs
+  issue_writer: [list_files, search_files, read_file]   # SPEC_ISSUE_WRITER: read-only, on a copy of a frozen commit
 
 # ReadDocs (docs/reviews/SPEC_WEB_TOOLS.md): documentation pages for the coder, granted only by the human at approve
 # (argus approve --web) and only for jobs whose validations all run in one of `environments` (never the SWE images).
@@ -348,6 +362,13 @@ roles:
     # SPEC_RESEARCH_STAGE r1: the drafter's model and thinking mode; its output cap per model is research.max_output_tokens_by_model.
     model: "deepseek:deepseek-flash"
     max_output_tokens: 16000
+    timeout_s: 180
+    params: {extra_body: {thinking: {type: enabled}}}
+  issue_writer:
+    # SPEC_ISSUE_WRITER K4: DeepSeek V4.1 Flash first (Atha 2026-11-09), thinking mode as the drafter; one SubmitIssue
+    # holds the whole issue and the reply, so the drafter's output room.
+    model: "deepseek:deepseek-flash"
+    max_output_tokens: 16384
     timeout_s: 180
     params: {extra_body: {thinking: {type: enabled}}}
   # SPEC_GATEWAY_PROVIDER PR 2: the research job's free profile (no tools of their own; never a repository) and the

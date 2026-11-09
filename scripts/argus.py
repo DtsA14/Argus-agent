@@ -151,6 +151,21 @@ def main(argv=None, deps=None):
                        ("monitor", "refresh, then the smoke test of the live release; recorded; changes no container"),
                        ("report", "the live release's summary and jobs as an escaped HTML page in ~/argus-staging/reports")):
         gs.add_parser(name, help=text)
+    isp = sub.add_parser("issue", help="the issue writer: a conversation that writes an issue (SPEC_ISSUE_WRITER)")
+    isub = isp.add_subparsers(dest="issue_cmd", required=True)
+    for name in ("new", "reply"):
+        ip = isub.add_parser(name)
+        if name == "new":
+            ip.add_argument("--repo", required=True, help="a name of issue_writer.repos in the config")
+        else:
+            ip.add_argument("job")
+        im = ip.add_mutually_exclusive_group(required=True)
+        im.add_argument("--message")
+        im.add_argument("--message-file")
+        ip.add_argument("--via", choices=rj.VIA, help="where the message was written (SPEC_CONTROL_UI F4)")
+        ip.add_argument("--key-file", action="append",
+                        help="read the API key from this 0600 file instead of typing it")
+        ip.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user)")
@@ -271,6 +286,15 @@ def main(argv=None, deps=None):
                                 from_research=o.from_research,
                                 research_items=None if o.items is None else [i.strip() for i in o.items.split(",")
                                                                              if i.strip()])
+        elif o.cmd == "issue":
+            from router import issue as ri
+            message = o.message if o.message is not None else Path(o.message_file).read_text(encoding="utf-8")
+            if o.issue_cmd == "new":
+                job = ri.new(repo=o.repo, message=message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
+            else:
+                job = ri.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
+            print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
+            return 0 if job.data["state"] == ri.AWAITING_HUMAN else 1
         elif o.cmd == "research":
             from router import research as rr
             question = o.question if o.question is not None else Path(o.question_file).read_text(encoding="utf-8")
