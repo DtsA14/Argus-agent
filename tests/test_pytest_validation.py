@@ -153,6 +153,13 @@ def test_a_required_node_that_was_not_collected_fails():
     v = va.judge_result(spec("tests/test_isolation.py", must=[missing]), result("isolation"))
     assert v["status"] == "fail" and v["evidence"]["must_pass"] == {missing: None}
     assert f"required test {missing} did not run" in v["reason"]
+    assert "ran under the full name" not in v["reason"]
+
+
+def test_a_required_node_named_without_its_class_names_the_one_that_ran():
+    assert va.named_like("t.py::test_a", {"t.py::C::test_a": "ok", "u.py::C::test_a": "ok", "t.py::C::test_ab": "ok"}) \
+        == " (ran under the full name: t.py::C::test_a)"
+    assert va.named_like("t.py", {"t.py::test_a": "ok", "t.py::g > ": "ok", "t.py::C::": "ok"}) == ""
 
 
 @pytest.mark.parametrize("name, why", [

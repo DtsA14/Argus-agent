@@ -96,6 +96,28 @@ def test_a_failed_required_test_fails_and_is_named_with_its_error():
         v["evidence"]["output_tail"]
 
 
+def test_a_required_test_that_ran_under_its_describe_name_is_named_for_the_drafter():
+    """030 d1, 031 d1: the drafter guessed `<file>::<title>` for a test inside describe() and spent every submit."""
+    title = f"{FILE}::fails by an assertion"
+    other = f"{FILE}::other > fails by an assertion"
+    r = recorded({OK: rec("passed"), RED: rec("passed"), other: rec("passed")})
+    v = va.judge_result(spec(must=[title]), run(output(r)), nonce=NONCE)
+    assert v["status"] == "fail", v["reason"]
+    assert f"required test {title} did not run (ran under the full name: {RED}, {other})" in v["reason"]
+    # a test whose name only contains the title, or one in another file, is never offered
+    for near in ({f"{FILE}::group > fails by an assertion too": rec("passed")},
+                 {f"{FILE}::groupfails by an assertion": rec("passed")}):
+        v = va.judge_result(spec(must=[title]), run(output(recorded({OK: rec("passed"), **near}))), nonce=NONCE)
+        assert v["reason"].endswith(f"required test {title} did not run"), v["reason"]
+
+
+def test_the_names_offered_for_a_missing_test_are_capped():
+    title = f"{FILE}::x"
+    tests = {f"{FILE}::g{i} > x": rec("passed") for i in range(5)}
+    v = va.judge_result(spec(must=[title]), run(output(recorded(tests))), nonce=NONCE)
+    assert f"{FILE}::g2 > x and 2 more)" in v["reason"] and f"{FILE}::g3 > x" not in v["reason"], v["reason"]
+
+
 @pytest.mark.parametrize("stdout, why", [
     ("no record at all", "no vitest record"),
     (output(recorded()) + output(recorded()), "no vitest record"),
