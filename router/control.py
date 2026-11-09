@@ -149,6 +149,11 @@ def cli(action, job_id, reason, sha, jobs_dir):
     return r.returncode, line[:300]
 
 
+def strip_refused(line):
+    """A CLI line without its own `refused: ` (the page adds one)."""
+    return line[len("refused: "):] if line.startswith("refused: ") else line
+
+
 def page(title, body):
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" '
             f'content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title>'
@@ -278,8 +283,7 @@ class Control:
         fresh = self.job(job.id) or job
         if code == 0:
             return 200, self.job_page(fresh, {"reject": "rejected", "abandon": "abandoned"}[action])
-        line = line[len("refused: "):] if line.startswith("refused: ") else line
-        return 409, self.job_page(fresh, f"refused: {line or 'the command failed'}", bad=True)
+        return 409, self.job_page(fresh, f"refused: {strip_refused(line) or 'the command failed'}", bad=True)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -329,6 +333,9 @@ class Handler(BaseHTTPRequestHandler):
             job = issues.issue_job(m.group(1))
             if job is not None:
                 return self._send(200, issues.job_page(job))
+            pending = issues.pending_page(m.group(1)) if UI_ID.fullmatch(m.group(1)) else None
+            if pending is not None:                # a new job the background run has not made (yet, or ever)
+                return self._send(200, pending)
             return self._send(404, page("not found", '<p>not found</p><p><a href="/issues">Issues</a></p>'))
         m = re.fullmatch(r"/jobs/([^/]+)", path)
         job = self.control.job(m.group(1)) if m else None
@@ -342,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/jobs/([^/]+)/([a-z]+)", self.path)
         issue = re.fullmatch(r"/issues/new|/issues/([^/]+)/([a-z]+)", self.path)
         issues = self.control.issues
-        limit = int(issues.cfg.get("control", {}).get("message_body_max", BODY_MAX)) if issue and issues else BODY_MAX
+        limit = issues.body_max() if issue and issues else BODY_MAX
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:

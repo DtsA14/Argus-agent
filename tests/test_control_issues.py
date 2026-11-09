@@ -32,16 +32,20 @@ class Spawned:
 
     def __init__(self, state):
         self.real = ci.Spawner(state)
-        self.calls, self.busy_ids = [], set()
+        self.calls, self.busy_ids, self.outcomes = [], set(), {}
 
     def busy(self, job_id):
         return job_id in self.busy_ids
 
+    def outcome(self, job_id):
+        return None if job_id in self.busy_ids else self.outcomes.get(job_id)
+
     def message_file(self, text):
         return self.real.message_file(text)
 
-    def spawn(self, job_id, argv, message=None):
+    def spawn(self, job_id, argv, message=None, action="", text=None):
         self.calls.append((job_id, argv, message))
+        self.texts = getattr(self, "texts", []) + [(action, text)]
 
 
 class Svc:
@@ -227,10 +231,10 @@ def test_new_without_the_key_file_variable_is_refused(tmp_path):
 
 
 def test_a_long_message_in_another_script_fits_and_a_larger_body_is_refused(svc):
-    f = new_fields(svc, message="é" * 4000)                    # 24,000 bytes once percent-encoded
+    f = new_fields(svc, message="😀" * 4000)                   # 48,000 bytes once percent-encoded
     assert len(urlencode(f)) > rc.BODY_MAX
     assert svc.post("/issues/new", f)[0] == 200
-    big = urlencode({**new_fields(svc), "message": "x" * 40000}).encode()
+    big = urlencode({**new_fields(svc), "message": "x" * 70000}).encode()
     assert svc.request("POST", "/issues/new", big, {"Origin": ORIGIN})[0] == 413
     assert len(svc.spawner.calls) == 1
 
@@ -254,7 +258,7 @@ def test_start_names_the_sha_shown_and_is_refused_once_the_issue_changed(svc):
     job.data["issue_sha256"] = "f" * 64                       # another turn wrote another issue meanwhile
     job.save()
     status, _, text = svc.post(f"/issues/{JOB}/start", {"token": token, "sha": sha})
-    assert status in (403, 409) and svc.spawner.calls == []
+    assert status == 409 and "issue changed" in text and svc.spawner.calls == []
     job.data["issue_sha256"] = ri.last_issue(job)[1]
     job.save()
     token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/start")
@@ -330,3 +334,91 @@ def test_a_bad_discard_reason_is_refused(svc, reason):
     token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/abandon")
     status, _, _ = svc.post(f"/issues/{JOB}/abandon", {"token": token, "sha": sha, "reason": reason})
     assert status == 400 and svc.runs == []
+
+
+
+# ---- added for /code-review -------------------------------------------------------------------------------------
+
+def test_a_new_job_not_made_yet_shows_starting_then_why_it_could_not_start_with_the_text(svc):
+    svc.post("/issues/new", new_fields(svc, message="mau fitur X"))
+    (job_id, _, _), = svc.spawner.calls
+    svc.spawner.busy_ids.add(job_id)
+    status, _, text = svc.request("GET", f"/issues/{job_id}")
+    assert status == 200 and "Starting the writer" in text and 'http-equiv="refresh"' in text
+    svc.spawner.busy_ids.discard(job_id)
+    svc.spawner.outcomes[job_id] = {"code": 2, "line": "issue writer (role 'x'): not priced", "action": "new",
+                                    "text": "mau fitur X"}
+    status, _, text = svc.request("GET", f"/issues/{job_id}")
+    assert status == 200 and "could not start: issue writer" in text and ">mau fitur X</textarea>" in text
+    assert svc.request("GET", "/issues/j20261109_150009_ffff")[0] == 404        # a job no run knows of
+
+
+def test_a_refused_background_reply_says_why_and_gives_the_text_back(svc):
+    svc.new_job()
+    svc.spawner.outcomes[JOB] = {"code": 2, "line": "less than one turn", "action": "reply", "text": "balasanku"}
+    _, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert "the last reply was refused: less than one turn" in text and ">balasanku</textarea>" in text
+
+
+def test_discard_is_not_offered_or_taken_while_a_cut_off_start_holds_a_code_job(svc, monkeypatch):
+    job = svc.new_job()
+    job.data["handoff"] = {"job": "j20261109_150003_dead"}
+    job.save()
+    from types import SimpleNamespace
+    monkeypatch.setattr(ri, "_handed", lambda j, d: SimpleNamespace(id="j20261109_150003_dead"))
+    _, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert "A start was cut off" in text and "Discard" not in text
+    with pytest.raises(rj.Refused, match="a start was cut off"):
+        rj.abandon(JOB, "x", deps=svc.env.deps, jobs_dir=svc.jobs)
+
+
+def test_a_refused_discard_has_one_refused(svc):
+    svc.new_job()
+    svc.control.run = lambda *a: (2, "refused: job j is in use by another command")
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/abandon")
+    _, _, text = svc.post(f"/issues/{JOB}/abandon", {"token": token, "sha": sha, "reason": ""})
+    assert "refused: job j is in use" in text and "refused: refused" not in text
+
+
+@pytest.mark.parametrize("value", [None, "big", True, 10])
+def test_a_body_limit_missing_or_wrong_falls_back_and_never_crashes(svc, value):
+    svc.control.issues.cfg = {**svc.env.cfg, "control": value if value is None else {"message_body_max": value}}
+    assert svc.control.issues.body_max() == rc.BODY_MAX
+    status, _, _ = svc.post("/issues/new", new_fields(svc))
+    assert status == 200
+
+
+def test_the_real_spawner_keeps_a_refused_runs_reason_and_text_and_reaps_every_run(tmp_path):
+    sp = ci.Spawner(tmp_path / "state")
+    msg = sp.message_file("teksku")
+    sp.spawn(JOB, [sys.executable, "-c", "print('refused: no budget'); raise SystemExit(2)"], msg, action="reply",
+             text="teksku")
+    other = "j20261109_150004_aaaa"
+    sp.spawn(other, [sys.executable, "-c", "pass"], sp.message_file("x"), action="new", text="x")
+    for _ in range(100):
+        sp.reap()
+        if not sp.runs:
+            break
+        time.sleep(0.05)
+    assert sp.runs == {} and list((tmp_path / "state" / "messages").glob("*.txt")) == []
+    assert sp.outcome(JOB) == {"code": 2, "line": "no budget", "action": "reply", "text": "teksku"}
+    assert sp.outcome(other)["text"] is None                  # a run that was not refused keeps no text
+
+
+def test_message_files_a_restart_left_behind_are_removed_once_stale(tmp_path):
+    d = tmp_path / "state" / "messages"
+    d.mkdir(parents=True)
+    old, fresh = d / "old.txt", d / "fresh.txt"
+    old.write_text("a")
+    fresh.write_text("b")
+    os.utime(old, (time.time() - 3600, time.time() - 3600))
+    ci.Spawner(tmp_path / "state")
+    assert not old.exists() and fresh.exists()
+
+
+def test_the_index_reads_only_the_newest_job_directories(svc, monkeypatch):
+    monkeypatch.setattr(ci, "INDEX_MAX", 1)
+    svc.new_job()
+    (svc.jobs / "j20991231_235959_ffff").mkdir()               # newer, not an issue job
+    _, _, text = svc.request("GET", "/issues")
+    assert JOB not in text

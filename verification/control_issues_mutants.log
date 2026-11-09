@@ -1,24 +1,33 @@
-KILLED  no origin check: 1 failed, 12 passed in 7.65s
-KILLED  token never spent: 1 failed, 15 passed in 9.38s
-KILLED  token for any action: 1 failed, 19 passed in 11.79s
-KILLED  form token for any action: 1 failed, 19 passed in 11.26s
-KILLED  issue seen unchecked: 1 failed, 29 passed in 18.02s
-KILLED  any repository: 1 failed, 7 passed in 4.87s
-KILLED  message unchecked: 1 failed, 9 passed in 5.48s
-KILLED  token before the form: 1 failed, 7 passed in 4.85s
-KILLED  CRLF kept: 1 failed, 6 passed in 4.26s
-KILLED  message in argv: 1 failed, 6 passed in 4.28s
-KILLED  key file anyway: 1 failed, 2 passed in 2.33s
-KILLED  a second run: 1 failed, 21 passed in 12.51s
-KILLED  no separator: 1 failed, 18 passed in 10.63s
-KILLED  small body for messages: 1 failed, 11 passed in 7.10s
-KILLED  text not escaped: 1 failed, 3 passed in 2.46s
-KILLED  no reload while busy: 1 failed, 4 passed in 3.58s
-KILLED  forms while busy: 1 failed, 4 passed in 3.08s
-KILLED  message file readable: 1 failed, 6 passed in 4.26s
-KILLED  message file kept: 1 failed, 28 passed in 17.43s
-KILLED  any kind: 1 failed, 5 passed in 3.70s
-KILLED  no attempt line: 1 failed, 6 passed in 4.76s
-KILLED  abandon reason unchecked: 1 failed, 30 passed in 19.13s
-KILLED  job id from the form: 1 failed, 18 passed in 10.60s
-RESULT: 23/23 killed
+KILLED  no origin check: 1 failed, 12 passed in 7.85s
+KILLED  token never spent: 1 failed, 15 passed in 9.56s
+KILLED  token for any action: 1 failed, 19 passed in 11.47s
+KILLED  form token for any action: 1 failed, 19 passed in 11.79s
+KILLED  issue seen unchecked: 1 failed, 19 passed in 11.23s
+KILLED  any repository: 1 failed, 7 passed in 4.85s
+KILLED  message unchecked: 1 failed, 9 passed in 6.48s
+KILLED  token before the form: 1 failed, 6 passed in 4.84s
+KILLED  CRLF kept: 1 failed, 6 passed in 4.32s
+KILLED  message in argv: 1 failed, 6 passed in 4.29s
+KILLED  key file anyway: 1 failed, 2 passed in 2.34s
+KILLED  a second run: 1 failed, 21 passed in 12.47s
+KILLED  no separator: 1 failed, 18 passed in 10.59s
+KILLED  small body for messages: 1 failed, 11 passed in 7.58s
+KILLED  any body limit: 1 failed, 37 passed in 22.45s
+KILLED  text not escaped: 1 failed, 3 passed in 2.45s
+KILLED  no reload while busy: 1 failed, 4 passed in 3.09s
+KILLED  forms while busy: 1 failed, 4 passed in 3.12s
+KILLED  message file readable: 1 failed, 6 passed in 4.27s
+KILLED  message file kept: 1 failed, 28 passed in 16.95s
+KILLED  refused text not kept: 1 failed, 41 passed in 24.72s
+KILLED  outcome not shown: 1 failed, 34 passed in 20.60s
+KILLED  no pending page: 1 failed, 33 passed in 19.97s
+KILLED  stale files kept: 1 failed, 42 passed in 23.22s
+KILLED  index reads every job: 1 failed, 43 passed in 25.31s
+KILLED  discard beside a cut-off start: 1 failed, 35 passed in 21.76s
+KILLED  abandon orphans a code job: 1 failed, 35 passed in 21.22s
+KILLED  refused twice: 1 failed, 36 passed in 21.34s
+KILLED  any kind: 1 failed, 5 passed in 3.29s
+KILLED  no attempt line: 1 failed, 6 passed in 4.30s
+KILLED  abandon reason unchecked: 1 failed, 30 passed in 18.14s
+KILLED  job id from the form: 1 failed, 18 passed in 10.65s
+RESULT: 32/32 killed

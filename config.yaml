@@ -237,7 +237,7 @@ issue_writer:
 # --key-file comes from the service's environment (ARGUS_CONTROL_KEY_FILE, set by Atha in the unit's drop-in), never
 # from this file or a form; the service never reads the key.
 control:
-  message_body_max: 32768   # bytes of a POST that carries a message (4,000 characters, percent-encoded)
+  message_body_max: 65536   # bytes of a POST with a message: 4,000 characters of 4-byte UTF-8 percent-encoded (48 KB)
 
 router:
   job_max_usd: 1.00
