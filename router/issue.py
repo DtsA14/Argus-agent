@@ -19,6 +19,7 @@ import json
 import math
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 from acceptance import intake
@@ -138,6 +139,10 @@ def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, via=None):
     with job.lock():
         if job.data.get("kind") != "issue":
             raise rj.Refused(f"job {job.id} is not an issue job; nothing was started")
+        code = _settle(job, jobs_dir, deps)
+        if code is not None:                        # code review: never write on beside a live code job
+            raise rj.Refused(f"job {job.id} was already handed to code job {code.id} (a start was cut off); "
+                             "nothing was started")
         if job.data["state"] not in REPLYABLE:
             raise rj.Refused(f"job {job.id} is {job.data['state']}: a reply is taken when the writer waits for the human "
                              "(AWAITING_HUMAN) or its last turn failed (WRITE_FAILED)")
@@ -261,7 +266,7 @@ def _turn(job, cfg, deps):
 def start(job_id, *, sha, cfg, deps, jobs_dir=rj.JOBS, via=None):
     """A code job from the job's last issue, the one the human saw (sha: 12+ hex of its sha256), on the frozen commit and
     the repository's environment, with issue_writer.code_max_usd. The code job's id is recorded before it is started,
-    so a start cut off by a crash never starts a second one: the next start finds it and hands off to it. Returns
+    so a start cut off by a crash never starts a second one: the next start (or reply) settles it first. Returns
     (issue job, code job)."""
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
@@ -276,39 +281,43 @@ def start(job_id, *, sha, cfg, deps, jobs_dir=rj.JOBS, via=None):
         if text is None or seen != job.data.get("issue_sha256"):
             raise rj.Refused(f"job {job.id}: the issue file is missing or is not the one the writer wrote; nothing was "
                              "started")
+        sha = sha.strip().lower() if isinstance(sha, str) else sha
         if not isinstance(sha, str) or not rj.SHA_SEEN.fullmatch(sha) or not seen.startswith(sha):
             raise rj.Refused(f"the issue is {seen[:12]}, not the {sha!r} given: start the issue status shows (at least "
                              "its first 12 characters); nothing was started")
-        cap = float(_settings(cfg)["code_max_usd"])
+        try:
+            cap = float(_settings(cfg)["code_max_usd"])
+        except (KeyError, TypeError, ValueError):
+            cap = math.nan
         if not (0 < cap <= CODE_MAX_USD):
-            raise rj.Refused(f"issue_writer.code_max_usd must be more than 0 and at most ${CODE_MAX_USD:.2f}; nothing "
-                             "was started")
-        handed = _handed(job, jobs_dir)
-        if handed is not None:                      # a start cut off after the code job was made: hand off to it
-            job.move(HANDED_OFF, deps, reason=f"code job {handed.id}")
-            return job, handed
+            raise rj.Refused(f"issue_writer.code_max_usd must be a number more than 0 and at most "
+                             f"${CODE_MAX_USD:.2f}; nothing was started")
+        code = _settle(job, jobs_dir, deps)
+        if code is not None:                        # a start cut off after its code job was made: that is the handoff
+            return job, code
         code_id = rj.new_job_id()
-        job.data["handoff"] = {"job": code_id, "issue_sha256": seen, "at": deps.clock(),
-                               **({"via": via} if via else {})}
+        job.data["handoff"] = {"job": code_id, "issue_sha256": seen, "code_issue_sha256": _sha(text.strip()),
+                               "at": deps.clock(), **({"via": via} if via else {})}
         job.save()
         i = job.data["inputs"]
         try:
             rj.start_code(repo=i["repo"], commit=i["commit"], issue=text, cfg=cfg, deps=deps, max_usd=cap,
                           jobs_dir=jobs_dir, job_id=code_id, environment=i["environment"])
         except rj.Refused:
-            handed = _handed(job, jobs_dir)
-            if handed is None:
-                job.data.pop("handoff", None)
-                job.save()
-            else:
-                job.move(HANDED_OFF, deps, reason=f"code job {handed.id}")
+            _settle(job, jobs_dir, deps)            # made and then refused: handed off; made nothing (or nothing ran): forgot
             raise
         job.move(HANDED_OFF, deps, reason=f"code job {code_id}")
         return job, rj.open_job(code_id, jobs_dir)
 
 
+def _sha(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def _handed(job, jobs_dir):
-    """The code job the issue was handed to, when one was made and not abandoned before it started; else None."""
+    """The code job a recorded handoff made: it exists, holds that handoff's issue on the job's frozen commit and
+    repository, and has not ended without running a stage (ABANDONED or BLOCKED before its first stage, e.g. not
+    confirmed or an intake that failed); else None."""
     h = job.data.get("handoff")
     if not h:
         return None
@@ -316,20 +325,37 @@ def _handed(job, jobs_dir):
         code = rj.open_job(h["job"], jobs_dir)
     except rj.Refused:
         return None
-    if code.data.get("state") == rj.ABANDONED and not code.data.get("stages"):
+    ci, i = code.data.get("inputs") or {}, job.data["inputs"]
+    if (not isinstance(ci.get("issue"), str) or _sha(ci["issue"]) != h.get("code_issue_sha256")
+            or ci.get("commit") != i["commit"] or ci.get("repo") != str(Path(i["repo"]).resolve())):
         return None
+    if code.data.get("state") in (rj.ABANDONED, rj.BLOCKED) and not code.data.get("stages"):
+        return None
+    return code
+
+
+def _settle(job, jobs_dir, deps):
+    """A recorded handoff (a start a crash or a refusal cut off), under the job's lock: HANDED_OFF to its code job when
+    that was made (returned), else the record is dropped (None)."""
+    if not job.data.get("handoff"):
+        return None
+    code = _handed(job, jobs_dir)
+    if code is None:
+        job.data.pop("handoff")
+        job.save()
+        return None
+    job.move(HANDED_OFF, deps, reason=f"code job {code.id}")
     return code
 
 
 def moved(job):
     """How many commits the repository's HEAD is past the frozen commit (0 when it is that commit), or None when that
-    cannot be told (the commit is not an ancestor any more, or git fails)."""
+    cannot be told (the commit is not an ancestor any more, or git fails or is too slow)."""
     i = job.data["inputs"]
     try:
-        out = intake.git(i["repo"], "rev-list", "--count", f"{i['commit']}..HEAD").decode().strip()
         intake.git(i["repo"], "merge-base", "--is-ancestor", i["commit"], "HEAD")
-        return int(out)
-    except (intake.IntakeError, ValueError):
+        return int(intake.git(i["repo"], "rev-list", "--count", f"{i['commit']}..HEAD").decode().strip())
+    except (intake.IntakeError, ValueError, OSError, subprocess.SubprocessError):
         return None
 
 
@@ -344,12 +370,14 @@ def status_lines(job):
         out += [f"issue {str(d.get('issue_sha256'))[:12]}: {job.dir / ISSUE}", f"reply ({last['stage']}): {last['text']}"]
         out += [f"clash: {c['file']}:{c['line']} {c['why']}" for c in last["clashes"]]
         out += [f"question: {q}" for q in last["questions"]]
-    if d.get("handoff"):
+    if d["state"] == HANDED_OFF and d.get("handoff"):
         out.append(f"handed off to code job {d['handoff']['job']}: argus status {d['handoff']['job']}")
+    elif d.get("handoff"):
+        out.append(f"a start was cut off (code job {d['handoff']['job']}); the next start or reply settles it")
     if d["state"] == AWAITING_HUMAN:
         n = moved(job)
         if n is None or n > 0:
-            out.append("the repository moved since the issue was written: "
+            out.append("the repository moved since this job was made: "
                        + (f"{n} commit(s)" if n is not None else "the frozen commit is no longer below HEAD")
                        + "; start still uses the frozen commit")
         out.append(f"next: argus issue start {job.id} --sha {str(d.get('issue_sha256'))[:12]}")

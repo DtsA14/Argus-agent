@@ -485,11 +485,12 @@ class FakeCode:
         job = rj.Job(Path(kw["jobs_dir"]) / kw["job_id"])
         state = {"ok": rj.AWAITING_APPROVAL, "not_confirmed": rj.ABANDONED, "blocked": rj.BLOCKED,
                  "crash": rj.DRAFTING}[self.how]
-        stages = {} if self.how == "not_confirmed" else {"d1": {"kind": "draft", "run_id": f"{kw['job_id']}-d1",
-                                                                  "cap_usd": 0.75}}
+        stages = {} if self.how in ("not_confirmed", "blocked") else {
+            "d1": {"kind": "draft", "run_id": f"{kw['job_id']}-d1", "cap_usd": 0.75}}
         with job.lock():
             job.data = {"job": kw["job_id"], "kind": "code", "state": state, "created_at": "t", "max_usd": kw["max_usd"],
-                        "inputs": {"repo": kw["repo"], "commit": kw["commit"], "issue": kw["issue"]}, "stages": stages,
+                        "inputs": {"repo": str(Path(kw["repo"]).resolve()), "commit": kw["commit"],   # as start_code
+                                   "issue": kw["issue"].strip()}, "stages": stages,
                         "log": []}
             job.save()
         if self.how == "not_confirmed":
@@ -516,7 +517,7 @@ def start(env, sha, **kw):
 def test_start_hands_the_issue_seen_to_a_code_job_on_the_frozen_commit(tmp_path, monkeypatch):
     env, fake, sha = written(tmp_path, monkeypatch)
     td.git(env.repo, "commit", "-q", "--allow-empty", "-m", "later")
-    assert "moved since the issue was written: 1 commit(s)" in rj.status("ji", jobs_dir=env.jobs)
+    assert "moved since this job was made: 1 commit(s)" in rj.status("ji", jobs_dir=env.jobs)
     job, code = start(env, sha[:12], via="ui")
     (kw,) = fake.calls
     i = job.data["inputs"]
@@ -535,13 +536,18 @@ def test_the_handoff_matches_the_real_start_code():
                                           jobs_dir="j", job_id="jx", environment="e")
 
 
-@pytest.mark.parametrize("bad", ["", "abc", "0" * 12, "SHA", None])
+@pytest.mark.parametrize("bad", ["", "abc", "0" * 12, "SHORT", None])
 def test_start_wants_the_sha_of_the_issue_seen(tmp_path, monkeypatch, bad):
     env, fake, sha = written(tmp_path, monkeypatch)
-    for s in ([bad] if bad != "SHA" else [sha[:12].upper(), sha[:11]]):
-        with pytest.raises(rj.Refused, match="the issue is"):
-            start(env, s)
+    with pytest.raises(rj.Refused, match="the issue is"):
+        start(env, sha[:11] if bad == "SHORT" else bad)
     assert fake.calls == [] and env.job().data["state"] == ri.AWAITING_HUMAN
+
+
+def test_a_sha_typed_in_capitals_is_the_same_sha(tmp_path, monkeypatch):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    job, _ = start(env, " " + sha[:12].upper() + " ")
+    assert job.data["state"] == ri.HANDED_OFF and len(fake.calls) == 1
 
 
 def test_an_issue_file_changed_after_the_writer_is_never_started(tmp_path, monkeypatch):
@@ -598,11 +604,54 @@ def test_a_start_cut_off_after_the_code_job_was_made_never_makes_a_second(tmp_pa
     assert len(fake.calls) == 1 and code.id == first and job.data["state"] == ri.HANDED_OFF
 
 
-def test_a_code_job_that_was_made_but_blocked_is_still_the_handoff(tmp_path, monkeypatch):
+def test_a_code_job_blocked_before_any_stage_leaves_the_issue_startable(tmp_path, monkeypatch):
+    """code review: an intake that failed made the issue job HANDED_OFF to a dead code job for good."""
     env, fake, sha = written(tmp_path, monkeypatch, "blocked")
     with pytest.raises(rj.Refused, match="intake failed"):
         start(env, sha[:12])
-    assert env.job().data["state"] == ri.HANDED_OFF and env.job().data["handoff"]["job"] == fake.calls[0]["job_id"]
+    assert env.job().data["state"] == ri.AWAITING_HUMAN and "handoff" not in env.job().data
+    fake.how = "ok"
+    job, code = start(env, sha[:12])
+    assert job.data["state"] == ri.HANDED_OFF and code.id == fake.calls[1]["job_id"]
+
+
+def test_a_reply_after_a_cut_off_start_hands_off_instead_of_writing_beside_the_code_job(tmp_path, monkeypatch):
+    """code review: a reply after the cut-off start, then a start of the new issue, handed off to the old one."""
+    env, fake, sha = written(tmp_path, monkeypatch, "crash")
+    with pytest.raises(KeyboardInterrupt):
+        start(env, sha[:12])
+    assert "a start was cut off (code job" in rj.status("ji", jobs_dir=env.jobs)
+    with pytest.raises(rj.Refused, match="already handed to code job"):
+        env.reply("ganti issue-nya")
+    job = env.job()
+    assert job.data["state"] == ri.HANDED_OFF and len(job.data["conversation"]) == 2 and len(env.model.calls) == 1
+    assert "handed off to code job" in rj.status("ji", jobs_dir=env.jobs)
+
+
+@pytest.mark.parametrize("field", ["issue", "commit", "repo"])
+def test_a_recorded_code_job_that_is_not_this_handoff_is_never_taken_for_it(tmp_path, monkeypatch, field):
+    env, fake, sha = written(tmp_path, monkeypatch, "crash")
+    with pytest.raises(KeyboardInterrupt):
+        start(env, sha[:12])
+    first = fake.calls[0]["job_id"]
+    code = rj.open_job(first, env.jobs)
+    code.data["inputs"][field] = {"issue": "another issue", "commit": "f" * 40, "repo": "/elsewhere"}[field]
+    code.save()
+    fake.how = "ok"
+    job, made = start(env, sha[:12])
+    assert len(fake.calls) == 2 and made.id != first and job.data["handoff"]["job"] == made.id
+
+
+@pytest.mark.parametrize("value", [None, "x", "1.0.0"])
+def test_a_code_cap_missing_or_not_a_number_is_refused(tmp_path, monkeypatch, value):
+    env, fake, sha = written(tmp_path, monkeypatch)
+    if value is None:
+        del env.cfg["issue_writer"]["code_max_usd"]
+    else:
+        env.cfg["issue_writer"]["code_max_usd"] = value
+    with pytest.raises(rj.Refused, match="code_max_usd"):
+        start(env, sha[:12])
+    assert fake.calls == []
 
 
 def test_a_handed_off_issue_job_is_final(tmp_path, monkeypatch):

@@ -8,7 +8,7 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 I, W, J = "router/issue.py", "codetask/issue_writer.py", "router/job.py"
 T = ["tests/test_issue_writer.py"]
 KIND = '        if job.data.get("kind") != "issue":\n            raise rj.Refused(f"job {job.id} is not an issue job; nothing was started")\n'
-REPLY_GATE = '        if job.data["state"] not in REPLYABLE:'
+REPLY_GATE = '        code = _settle(job, jobs_dir, deps)\n        if code is not None:                        # code review'
 START_GATE = '        if job.data["state"] != AWAITING_HUMAN:\n            raise rj.Refused(f"job {job.id} is {job.data[\'state\']}: an issue is started'
 APPEND ='            job.data["conversation"].append({"from": "human", "at": deps.clock(), "text": message.strip()})\n'
 M = [
@@ -33,12 +33,22 @@ M = [
     ("start on HEAD", I, 'rj.start_code(repo=i["repo"], commit=i["commit"],', 'rj.start_code(repo=i["repo"], commit="HEAD",'),
     ("handoff recorded after the start", I, '        job.save()\n        i = job.data["inputs"]\n        try:',
      '        i = job.data["inputs"]\n        try:'),
-    ("second code job after a crash", I, "        if handed is not None:                      # a start cut off",
-     "        if False:                      # a start cut off"),
-    ("an unstarted code job counts", I, '    if code.data.get("state") == rj.ABANDONED and not code.data.get("stages"):',
+    ("second code job after a crash", I, "        if code is not None:                        # a start cut off after",
+     "        if False:                        # a start cut off after"),
+    ("an unstarted code job counts", I, '    if code.data.get("state") in (rj.ABANDONED, rj.BLOCKED) and not code.data.get("stages"):',
      "    if False:"),
-    ("a made code job forgotten", I, '            if handed is None:\n                job.data.pop("handoff", None)',
-     '            if True:\n                job.data.pop("handoff", None)'),
+    ("a blocked code job counts", I, '    if code.data.get("state") in (rj.ABANDONED, rj.BLOCKED) and not code.data.get("stages"):',
+     '    if code.data.get("state") in (rj.ABANDONED,) and not code.data.get("stages"):'),
+    ("a made code job forgotten", I, "        except rj.Refused:\n            _settle(job, jobs_dir, deps)",
+     "        except rj.Refused:\n            job.data.pop('handoff', None)"),
+    ("a foreign code job taken", I, '    if (not isinstance(ci.get("issue"), str) or _sha(ci["issue"]) != h.get("code_issue_sha256")\n'
+     '            or ci.get("commit") != i["commit"] or ci.get("repo") != str(Path(i["repo"]).resolve())):',
+     "    if False:"),
+    ("reply beside a live code job", I, "        if code is not None:                        # code review: never write on",
+     "        if False:                        # code review: never write on"),
+    ("capital sha refused", I, "        sha = sha.strip().lower() if isinstance(sha, str) else sha\n", ""),
+    ("code cap missing crashes", I, "        except (KeyError, TypeError, ValueError):\n            cap = math.nan",
+     "        except ZeroDivisionError:\n            cap = math.nan"),
     ("handed off abandonable", I, "{(s, ABANDONED) for s in (NEW, WRITING, AWAITING_HUMAN, WRITE_FAILED, BLOCKED)}",
      "{(s, ABANDONED) for s in (NEW, WRITING, AWAITING_HUMAN, WRITE_FAILED, BLOCKED, HANDED_OFF)}"),
     ("turn cap above the job cap", I, "    if not (math.isfinite(cap) and cap + 1e-9 >= turn):", "    if False:"),
