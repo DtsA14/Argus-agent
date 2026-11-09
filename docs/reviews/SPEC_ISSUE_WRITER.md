@@ -112,10 +112,10 @@ ditolak; pesan tidak pernah lewat argv; key tidak pernah di halaman/audit; teks 
 
 | | Pertanyaan | Usul Claude |
 |---|---|---|
-| K1 | Bahasa | Chat bahasa Indonesia; issue bahasa Inggris (seperti sekarang; drafter dan tes memakai Inggris) |
+| K1 | Bahasa | Chat bahasa Indonesia; issue bahasa Inggris: drafter menulis tes yang mencocokkan teks persis (label UI Inggris, kelas, contoh), dan kode, tes lama serta issue 026-039 berbahasa Inggris. Balasan penulis menjelaskan isi issue dalam bahasa Indonesia sederhana, jadi Atha tidak perlu membaca issue Inggrisnya |
 | K2 | Repo yang boleh | `argus-viewer` (pwa_node22) dan `argus-ledger` (ledger_py312_up2); Argus-agent sendiri **tidak** (jalur ketat ditulis Claude) |
 | K3 | Batas biaya | $0,10 per giliran, $0,50 per job issue; job code dari chatbox ≤ $1,00 (seperti sekarang) |
-| K4 | Model penulis | `deepseek-v4-pro` (issue menentukan kualitas seluruh job; flash cukup untuk drafter, tapi kesalahan issue mahal). Diukur: bila pro tidak lebih baik dari flash pada 5 issue pertama, turun ke flash |
+| K4 | Model penulis | **`deepseek-flash`** (Atha 2026-11-09: "coba flash dulu"). Diukur pada 5 issue pertama (bagian 1); bila drafnya sering di-redraft/ditolak karena issue, coba `deepseek-v4-pro` |
 | K5 | Approve draf dari job chatbox | Tidak berubah: jalur cepat tetap Claude (delegasi 2026-11-08) atau Atha lewat Fase 3a bila sudah ada |
 | K6 | Urutan kode | Sesudah Fase 3a (Approve) atau sebelum? Usul: **sebelum** — chatbox tidak bergantung pada approve dari HP, dan langsung mengurangi ketergantungan pada Claude |
 
