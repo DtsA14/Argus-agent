@@ -1,0 +1,19 @@
+# SPEC_CONTROL_UI 4a (phase 2): the phone's control service, reject and abandon only, on 127.0.0.1:8711 only (fixed in
+# router/control.py, never 0.0.0.0, never 8000 or 8710). The phone reaches it through a second SSH local forward
+# (permitopen="127.0.0.1:8711" on the iphone-viewer key, F6). It holds no key and runs no model; every action is the
+# `argus reject|abandon ... --via ui` CLI. Audit: ~/.local/state/argus-control/audit.jsonl.
+# Install (after "go live"): ln -s this file into ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload && systemctl --user enable --now argus-control.service
+[Unit]
+Description=Argus control service for the phone (127.0.0.1:8711)
+
+[Service]
+Type=simple
+WorkingDirectory=%h/pilot3a_live
+ExecStart=%h/pilot3a_live/.venv-verify/bin/python scripts/argus.py control serve
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

@@ -182,7 +182,7 @@ bukan snapshot: halamannya tidak tertinggal 15 menit. Tidak memegang key; fase 3
   (kosong → `abandoned from the phone`).
 - `POST /jobs/<id>/reject`, `POST /jobs/<id>/abandon` (fase 2); `POST /jobs/<id>/approve` (fase 3). Body
   `application/x-www-form-urlencoded` maks 4 KiB: `token`, `sha` (sha12 yang tampil; wajib bila job punya draf),
-  `reason`. Jawaban: halaman hasil (303 ke `GET /jobs/<id>` dengan pesan) atau penolakan yang menyebut sebabnya.
+  `reason`. Jawaban: halaman job dengan pesan hasil (200; memuat ulang mengirim token yang sudah terpakai, jadi ditolak), atau penolakan yang menyebut sebabnya (400/403/404/409/413).
 - `<id>` harus cocok `^j\d{8}_\d{6}_[0-9a-f]{4}$` dan direktorinya ada; selain itu 404 tanpa menyentuh disk lain.
 
 **F3. Gerbang setiap POST** (urutan, berhenti di yang pertama gagal; tidak ada aksi sebelum semuanya lolos):

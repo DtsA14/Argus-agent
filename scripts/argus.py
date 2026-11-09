@@ -151,6 +151,9 @@ def main(argv=None, deps=None):
                        ("monitor", "refresh, then the smoke test of the live release; recorded; changes no container"),
                        ("report", "the live release's summary and jobs as an escaped HTML page in ~/argus-staging/reports")):
         gs.add_parser(name, help=text)
+    cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
+    cs.add_subparsers(dest="control_cmd", required=True).add_parser(
+        "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user)")
     rs = sub.add_parser("research", help="a deep research job: planner, web workers, synthesis, claim checker (docs/reviews/SPEC_RESEARCH_JOB.md)")
     gq = rs.add_mutually_exclusive_group(required=True)
     gq.add_argument("--question")
@@ -161,6 +164,8 @@ def main(argv=None, deps=None):
         r = sub.add_parser(name)
         r.add_argument("job")
         r.add_argument("reason")
+        r.add_argument("--sha", help="the draft the human saw (12+ hex): refused when the job's last draft is another")
+        r.add_argument("--via", choices=rj.VIA, help="where the decision was made (SPEC_CONTROL_UI F4)")
     for name, p in sub.choices.items():
         if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge"):   # the live commands
             p.add_argument("--key-file", action="append",
@@ -169,6 +174,10 @@ def main(argv=None, deps=None):
             p.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     o = ap.parse_args(argv)
     deps = deps or rj.Deps()
+    if o.cmd == "control":
+        from router import control as rc
+        rc.serve(Path(o.jobs_dir))
+        return 0
     if o.cmd == "stage":
         from router import stage as sg
         from tools import sandbox as sb
@@ -246,7 +255,8 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd in ("reject", "abandon"):
             fn = rj.reject if o.cmd == "reject" else rj.abandon
-            print(rj.status(fn(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir).id, jobs_dir=o.jobs_dir))
+            print(rj.status(fn(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir, sha=o.sha, via=o.via).id,
+                            jobs_dir=o.jobs_dir))
             return 0
         if o.cmd == "applied":
             print(rj.status(rj.applied(o.job, o.commit, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id,
