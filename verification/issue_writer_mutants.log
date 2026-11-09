@@ -1,37 +1,54 @@
-KILLED  any repository: 1 failed, 8 passed in 1.93s
-KILLED  first message unchecked: 1 failed, 9 passed in 1.99s
-KILLED  reply unchecked: 1 failed, 17 passed in 2.60s
-KILLED  reply limit is the first limit: 1 failed, 17 passed in 2.56s
-KILLED  reply in any state: 1 failed, 3 passed in 1.22s
-KILLED  reply to any kind: 1 failed, 50 passed in 3.71s
-KILLED  turn cap above the job cap: 1 failed, 19 passed in 2.72s
-KILLED  unfunded reply taken: 1 failed, 20 passed in 2.74s
-KILLED  unfunded turn run: 1 failed, 55 passed in 12.88s
-KILLED  turn end saved early: 1 failed, 57 passed in 12.74s
-KILLED  copy refusal unhandled: 1 failed, 58 passed in 13.01s
-KILLED  message after the turn: 1 failed, 2 passed in 1.06s
-KILLED  live repository: 1 failed, 1 passed in 0.95s
-KILLED  no previous issue: 1 failed, 2 passed in 1.13s
-KILLED  failed turn final: 1 failed, 7 passed in 1.80s
-KILLED  unknown log entry: 1 failed, 48 passed in 3.48s
-KILLED  not confirmed kept: 1 failed, 18 passed in 2.56s
-KILLED  control characters: 1 failed, 13 passed in 2.21s
-KILLED  newline anywhere: 1 failed, 42 passed in 2.98s
-KILLED  tabs refused: 1 failed, 16 passed in 2.32s
-KILLED  issue may exceed a code job: 1 failed, 29 passed in 2.96s
+KILLED  any repository: 1 failed, 8 passed in 1.92s
+KILLED  first message unchecked: 1 failed, 9 passed in 2.00s
+KILLED  reply unchecked: 1 failed, 17 passed in 2.59s
+KILLED  reply limit is the first limit: 1 failed, 17 passed in 2.69s
+KILLED  reply in any state: 1 failed, 3 passed in 1.24s
+KILLED  reply to any kind: 1 failed, 50 passed in 3.77s
+KILLED  start for any kind: 1 failed, 90 passed in 17.00s
+KILLED  start any issue: 1 failed, 62 passed in 13.37s
+KILLED  start a short sha: 1 failed, 62 passed in 13.34s
+KILLED  start a changed issue file: 1 failed, 68 passed in 14.41s
+KILLED  start in any state: 1 failed, 69 passed in 14.35s
+KILLED  any code cap: 1 failed, 74 passed in 14.90s
+KILLED  start on HEAD: 1 failed, 60 passed in 13.10s
+KILLED  handoff recorded after the start: 1 failed, 80 passed in 15.49s
+KILLED  second code job after a crash: 1 failed, 80 passed in 15.82s
+KILLED  an unstarted code job counts: 1 failed, 79 passed in 15.53s
+KILLED  a blocked code job counts: 1 failed, 81 passed in 15.96s
+KILLED  a made code job forgotten: 1 failed, 78 passed in 15.65s
+KILLED  a foreign code job taken: 1 failed, 83 passed in 16.00s
+KILLED  reply beside a live code job: 1 failed, 82 passed in 15.97s
+KILLED  capital sha refused: 1 failed, 67 passed in 14.26s
+KILLED  code cap missing crashes: 1 failed, 86 passed in 16.65s
+KILLED  handed off abandonable: 1 failed, 89 passed in 17.19s
+KILLED  turn cap above the job cap: 1 failed, 19 passed in 2.79s
+KILLED  unfunded reply taken: 1 failed, 20 passed in 2.94s
+KILLED  unfunded turn run: 1 failed, 55 passed in 12.84s
+KILLED  turn end saved early: 1 failed, 57 passed in 13.00s
+KILLED  copy refusal unhandled: 1 failed, 58 passed in 13.19s
+KILLED  message after the turn: 1 failed, 2 passed in 1.08s
+KILLED  live repository: 1 failed, 1 passed in 0.99s
+KILLED  no previous issue: 1 failed, 2 passed in 1.16s
+KILLED  failed turn final: 1 failed, 7 passed in 1.87s
+KILLED  unknown log entry: 1 failed, 48 passed in 3.38s
+KILLED  not confirmed kept: 1 failed, 18 passed in 2.58s
+KILLED  control characters: 1 failed, 13 passed in 2.23s
+KILLED  newline anywhere: 1 failed, 42 passed in 3.08s
+KILLED  tabs refused: 1 failed, 16 passed in 2.43s
+KILLED  issue may exceed a code job: 1 failed, 29 passed in 3.01s
 KILLED  no length limit: 1 failed, 11 passed in 2.13s
-KILLED  no title rule: 1 failed, 25 passed in 2.97s
-KILLED  no Tests rule: 1 failed, 26 passed in 2.96s
-KILLED  Tests prefix only: 1 failed, 27 passed in 3.01s
-KILLED  no Nothing-else rule: 1 failed, 28 passed in 3.03s
-KILLED  environment anywhere: 1 failed, 31 passed in 2.97s
-KILLED  clash outside: 1 failed, 37 passed in 3.03s
-KILLED  clash not a file: 1 failed, 36 passed in 3.03s
-KILLED  bool line: 1 failed, 41 passed in 3.10s
-KILLED  too many clashes: 1 failed, 43 passed in 3.02s
-KILLED  too many questions: 1 failed, 44 passed in 2.99s
-KILLED  multi-line question: 1 failed, 45 passed in 3.05s
-KILLED  a writing tool: 1 failed, 47 passed in 3.37s
-KILLED  nothing to spend: 1 failed, 56 passed in 12.81s
-KILLED  issue resume as code: 1 failed, 2 passed in 1.18s
-RESULT: 36/36 killed
+KILLED  no title rule: 1 failed, 25 passed in 2.99s
+KILLED  no Tests rule: 1 failed, 26 passed in 3.03s
+KILLED  Tests prefix only: 1 failed, 27 passed in 3.11s
+KILLED  no Nothing-else rule: 1 failed, 28 passed in 3.15s
+KILLED  environment anywhere: 1 failed, 31 passed in 3.15s
+KILLED  clash outside: 1 failed, 37 passed in 3.10s
+KILLED  clash not a file: 1 failed, 36 passed in 3.08s
+KILLED  bool line: 1 failed, 41 passed in 3.05s
+KILLED  too many clashes: 1 failed, 43 passed in 3.06s
+KILLED  too many questions: 1 failed, 44 passed in 3.05s
+KILLED  multi-line question: 1 failed, 45 passed in 3.16s
+KILLED  a writing tool: 1 failed, 47 passed in 3.46s
+KILLED  nothing to spend: 1 failed, 56 passed in 12.71s
+KILLED  issue resume as code: 1 failed, 2 passed in 1.20s
+RESULT: 53/53 killed
