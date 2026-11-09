@@ -115,7 +115,8 @@ def test_a_good_post_runs_the_cli_once_with_the_sha_seen_and_is_audited(svc):
     status, _, text = svc.post()
     assert status == 200 and "rejected" in text
     assert svc.run.calls == [("reject", JOB, "tests look wrong", sha12(svc.jobs))]
-    (rec,) = svc.audit_lines()
+    attempt, rec = svc.audit_lines()                         # the attempt is written before the job changes (F5)
+    assert attempt["attempt"] == "reject" and "exit" not in attempt
     assert rec["action"] == "reject" and rec["exit"] == 0 and rec["job"] == JOB and rec["sha"] == sha12(svc.jobs)
 
 
@@ -224,11 +225,62 @@ def test_a_job_whose_id_is_not_the_ui_shape_is_404_even_when_it_exists(svc):
 
 @pytest.mark.parametrize("reason, why", [("", "required"), ("   ", "required"), ("x" * 301, "more than 300"),
                                          ("one\ntwo", "one line"), ("tab\there", "one line"),
-                                         ("bell\x07", "one line"), ("c1\x85", "one line")])
+                                         ("bell\x07", "one line"), ("c1\x85", "one line"),
+                                         ("ok\u2028state: APPLIED", "one line"), ("para\u2029x", "one line"),
+                                         ("bidi\u202eevil", "one line"), ("zw\u200bj", "one line")])
 def test_a_bad_reason_is_refused_before_the_cli(svc, reason, why):
     make_job(svc.jobs)
     status, _, text = svc.post(reason=reason)
     assert status == 400 and why in text and svc.run.calls == []
+
+
+def test_a_refused_reason_keeps_the_token_and_what_was_typed(svc):
+    make_job(svc.jobs)
+    token, sha = svc.form()
+    status, _, text = svc.post(token=token, sha=sha, reason="x" * 301)
+    assert status == 400 and 'value="' + "x" * 301 + '"' in text
+    assert svc.post(token=token, sha=sha, reason="fine")[0] == 200
+
+
+def test_a_token_written_another_way_is_not_a_new_token(svc):
+    make_job(svc.jobs)
+    other = "j20261109_120001_beef"
+    make_job(svc.jobs, other)
+    token, sha = svc.form()
+    assert svc.post(token=token, sha=sha)[0] == 200
+    issued, mac = token.split(".")
+    for t in ("0" + token, f"{issued}.{mac.upper()}", f"+{issued}.{mac}", f"{'٠' + issued}.{mac}"):
+        status, _, _ = svc.post(token=t, sha=sha)
+        assert status == 403
+    assert len(svc.run.calls) == 1
+
+
+def test_a_page_opened_before_the_draft_cannot_act_on_the_draft(svc):
+    make_job(svc.jobs, state=rj.DRAFTING, draft=None)
+    token, sha = svc.form(action="abandon")
+    assert sha == ""
+    run = svc.jobs / JOB / "runs" / f"{JOB}-d1"
+    (run / "draft.json").write_text(json.dumps(DRAFT))
+    job = rj.open_job(JOB, svc.jobs)
+    job.data["stages"]["d1"] = {"kind": "draft", "status": "DRAFTED", "run_id": f"{JOB}-d1"}
+    job.data["state"] = rj.AWAITING_APPROVAL
+    job.save()
+    status, _, text = svc.post("abandon", token=token, sha=sha, reason="")
+    assert status == 409 and "draft changed" in text and svc.run.calls == []
+
+
+def test_an_unreadable_draft_shows_no_form_and_acts_on_nothing(svc):
+    make_job(svc.jobs)
+    token, sha = svc.form()
+    (svc.jobs / JOB / "runs" / f"{JOB}-d1" / "draft.json").write_text("{not json")
+    status, _, text = svc.post(token=token, sha=sha)
+    assert status == 409 and "cannot be read" in text and svc.run.calls == []
+    _, _, page = svc.request("GET", f"/jobs/{JOB}")
+    assert "cannot be read" in page and "<form" not in page
+
+
+def test_a_stalled_client_does_not_hold_the_service():
+    assert 0 < rc.Handler.timeout <= 30
 
 
 def test_abandon_without_a_reason_records_the_default(svc):
@@ -332,7 +384,7 @@ def test_a_state_the_cli_does_not_allow_is_refused_by_it(live):
     job.data["state"] = rj.APPLIED
     job.save()
     status, _, text = live.post(token=token, sha=sha)
-    assert status == 409 and "only a research handoff" in text
+    assert status == 409 and "only a research handoff" in text and "refused: refused" not in text
     assert rj.open_job(JOB, live.jobs).data["state"] == rj.APPLIED
 
 
@@ -354,8 +406,9 @@ def test_reject_and_abandon_check_the_sha_seen_and_record_via(tmp_path):
     make_job(tmp_path)
     with pytest.raises(rj.Refused, match="draft changed"):
         rj.reject(JOB, "x", deps=Deps, jobs_dir=tmp_path, sha="0" * 12)
-    with pytest.raises(rj.Refused, match="not a draft sha"):
-        rj.reject(JOB, "x", deps=Deps, jobs_dir=tmp_path, sha="abc")
+    for bad in ("abc", sha12(tmp_path) + "\n", sha12(tmp_path).upper()):
+        with pytest.raises(rj.Refused, match="not a draft sha"):
+            rj.reject(JOB, "x", deps=Deps, jobs_dir=tmp_path, sha=bad)
     with pytest.raises(rj.Refused, match="via"):
         rj.abandon(JOB, "x", deps=Deps, jobs_dir=tmp_path, via="chat")
     assert rj.open_job(JOB, tmp_path).data["state"] == rj.AWAITING_APPROVAL

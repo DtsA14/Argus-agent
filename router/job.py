@@ -1222,7 +1222,7 @@ def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
 
 
 VIA = ("ui",)                   # SPEC_CONTROL_UI F4: the only channel a decision is recorded as coming through
-SHA_SEEN = re.compile(r"^[0-9a-f]{12,64}$")
+SHA_SEEN = re.compile(r"[0-9a-f]{12,64}")             # fullmatch
 
 
 def _seen(job, sha, via):
@@ -1234,7 +1234,7 @@ def _seen(job, sha, via):
             raise Refused(f"via {via!r} is not one of {', '.join(VIA)}; nothing was changed")
         extra["via"] = via
     if sha is not None:
-        if not SHA_SEEN.match(sha):
+        if not SHA_SEEN.fullmatch(sha):
             raise Refused(f"{sha!r} is not a draft sha (12 to 64 lowercase hex); nothing was changed")
         try:
             _, path = _last_draft(job)

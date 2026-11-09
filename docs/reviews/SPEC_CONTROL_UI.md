@@ -189,12 +189,20 @@ bukan snapshot: halamannya tidak tertinggal 15 menit. Tidak memegang key; fase 3
 1. `Host` tepat `127.0.0.1:8711` atau `localhost:8711`.
 2. `Origin` ada dan tepat `http://127.0.0.1:8711` atau `http://localhost:8711`; `Sec-Fetch-Site`, bila ada, `same-origin`.
    Tanpa `Origin` → ditolak (Safari iOS mengirimnya pada POST form).
-3. `token` = HMAC-SHA256(rahasia, `aksi|job|sha|waktu terbit`), terbit di halaman itu, umur ≤ 30 menit, **sekali pakai**.
+3. Isi form valid (alasan, sha 12 hex; maks 8 field, tanpa field ganda). Diperiksa **sebelum** token (code review
+   2026-11-09): alasan yang ditolak karena bentuknya tidak menghanguskan token, dan ditulis kembali ke form.
+   Alasan: satu baris, tanpa karakter kategori Unicode C* (kontrol, format/bidi, privat, belum ditetapkan) dan tanpa
+   pemisah baris/paragraf (Zl, Zp).
+4. `token` = HMAC-SHA256(rahasia, `aksi|job|sha|waktu terbit`), terbit di halaman itu, umur ≤ 30 menit, **sekali pakai**
+   (yang terpakai dicatat per MAC, dan waktu terbit hanya satu ejaan: angka tanpa nol di depan).
    Rahasia 32 byte acak dibuat saat service mulai, hanya di memori (restart membatalkan semua halaman yang terbuka).
-4. Isi form valid (alasan, sha 12 hex).
-5. Aksi dipanggil lewat CLI yang sama (C1): proses anak `scripts/argus.py reject|abandon <job> <reason> --sha <sha12>
+5. `sha` harus sha12 draf terakhir job **saat ini** (kosong hanya bila job tidak punya draf); halaman yang dibuka sebelum
+   draf ada, atau draf yang tidak terbaca, → ditolak (409) tanpa memanggil CLI.
+6. Aksi dipanggil lewat CLI yang sama (C1): proses anak `scripts/argus.py reject|abandon <job> <reason> --sha <sha12>
    --via ui`; gerbang state, lock job dan cek sha ada **di `router/job.py` di bawah lock**, bukan di service (C4). Klik
    ganda: token kedua sudah terpakai; kalaupun lolos, state job menolaknya.
+
+Satu permintaan sekaligus; klien yang macet diputus sesudah 10 detik.
 
 Header setiap jawaban: `Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self';
 frame-ancestors 'none'; base-uri 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control:
@@ -205,7 +213,7 @@ bila diberikan dan job punya draf, harus awalan sha draf terakhir, dicek di bawa
 dan `--via ui` (satu-satunya nilai). Entri log `job.json` dari `job.move` mendapat `via: "ui"` dan `sha` bila ada, di
 samping `by`, `reason`, waktu (C3). Tanpa `--via`, perilaku CLI hari ini tidak berubah.
 
-**F5. Audit di luar job.** Setiap POST (berhasil atau ditolak di gerbang mana pun) ditulis satu baris JSON ke
+**F5. Audit di luar job.** Setiap POST (berhasil atau ditolak di gerbang mana pun) ditulis satu baris JSON (aksi yang lolos gerbang: satu baris `attempt` sebelum CLI dan satu baris hasil sesudahnya) ke
 `~/.local/state/argus-control/audit.jsonl`: waktu, path, job (bila valid), gerbang yang menolak atau hasil CLI (exit,
 baris terakhir), tanpa isi token. Pengganti C3 untuk penolakan sebelum job tersentuh (id tidak valid, token, Origin):
 tidak menulis ke `job.json` job yang mungkin bukan job.

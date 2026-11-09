@@ -18,6 +18,7 @@ import secrets
 import subprocess
 import sys
 import time
+import unicodedata
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -64,7 +65,7 @@ class Tokens:
     def __init__(self, clock=time.time):
         self.secret = secrets.token_bytes(32)
         self.clock = clock
-        self.used = {}                             # token -> when it expires, pruned as they expire
+        self.used = {}                             # mac of a spent token -> when it expires, pruned as they expire
 
     def _mac(self, action, job, sha, issued):
         return hmac.new(self.secret, f"{action}|{job}|{sha}|{issued}".encode(), hashlib.sha256).hexdigest()
@@ -78,15 +79,16 @@ class Tokens:
         now = self.clock()
         self.used = {t: until for t, until in self.used.items() if until > now}
         issued, _, mac = (token or "").partition(".")
-        if not issued.isdigit() or not re.fullmatch(r"[0-9a-f]{64}", mac):
+        # One spelling per token (security review: `0<issued>` would be a fresh string for a spent token).
+        if not re.fullmatch(r"[1-9][0-9]{0,11}", issued) or not re.fullmatch(r"[0-9a-f]{64}", mac):
             return "no token of this page"
         if not hmac.compare_digest(mac, self._mac(action, job, sha, int(issued))):
             return "the token is not this page's (or the service restarted): open the page again"
         if not 0 <= now - int(issued) <= TOKEN_TTL:
             return "the page is too old: open it again"
-        if token in self.used:
+        if mac in self.used:
             return "this page was already sent once: open it again"
-        self.used[token] = int(issued) + TOKEN_TTL + 1
+        self.used[mac] = int(issued) + TOKEN_TTL + 1
         return None
 
 
@@ -95,17 +97,27 @@ def reason_problem(reason, required):
         return "a reason is required" if required else None
     if len(reason) > REASON_MAX:
         return f"the reason has {len(reason)} characters, more than {REASON_MAX}"
-    if any(ord(c) < 32 or 127 <= ord(c) < 160 for c in reason):
+    # Control, format (bidi), private and unassigned characters and the line/paragraph separators (code review)
+    if any(unicodedata.category(c)[0] == "C" or unicodedata.category(c) in ("Zl", "Zp") for c in reason):
         return "the reason must be one line without control characters"
     return None
 
 
+class Unreadable(Exception):
+    pass
+
+
 def draft_sha12(job):
+    """The sha12 of the job's last draft, None when it has none; Unreadable when it has one that cannot be read (never
+    taken for "no draft", which would act without the sha check)."""
     try:
         _, path = rj._last_draft(job)
-        return rj.draft_sha(path)[:12]
-    except (rj.Refused, OSError, ValueError):
+    except rj.Refused:
         return None
+    try:
+        return rj.draft_sha(path)[:12]
+    except (OSError, ValueError) as e:
+        raise Unreadable(f"the draft cannot be read: {type(e).__name__}") from None
 
 
 def allowed(state):
@@ -166,9 +178,13 @@ class Control:
         listing = f"<ul>{''.join(rows)}</ul>" if rows else '<p class="muted">Nothing waits for a decision.</p>'
         return page("Argus control", f'<h1>Argus control</h1><div class="card">{listing}</div>')
 
-    def job_page(self, job, message=None, bad=False):
-        state, sha = str(job.data.get("state")), draft_sha12(job)
+    def job_page(self, job, message=None, bad=False, reason=""):
         e = html.escape
+        state = str(job.data.get("state"))
+        try:
+            sha = draft_sha12(job)
+        except Unreadable as why:
+            return page(job.id, f'<p><a href="/">All</a></p><h1>{e(job.id)}</h1><p class="bad">{e(str(why))}</p>')
         parts = [f'<p><a href="/">All</a></p><h1>{e(job.id)}</h1><div class="card"><p>{e(state)}</p>',
                  f'<p>draft <span class="sha">{e(sha)}</span></p>' if sha else "",
                  f'<p class="muted">spent ${rj.spent_nano(job) / 1e9:.4f} of ${float(job.data.get("max_usd") or 0):.2f}'
@@ -182,7 +198,7 @@ class Control:
                 f'<form class="card" method="post" action="/jobs/{e(job.id)}/{action}">'
                 f'<input type="hidden" name="token" value="{e(token)}"><input type="hidden" name="sha" value="{e(sha or "")}">'
                 f'<label>{"Why (required)" if need else "Why (optional)"}<input type="text" name="reason" '
-                f'maxlength="{REASON_MAX}"{" required" if need else ""}></label>'
+                f'value="{e(reason)}" maxlength="{REASON_MAX}"{" required" if need else ""}></label>'
                 f'<button class="{action}" type="submit">{action.capitalize()}</button></form>')
         if not allowed(state):
             parts.append('<p class="muted">No action for this state.</p>')
@@ -192,10 +208,10 @@ class Control:
         """F3, in order; returns (status, page). Nothing reaches the CLI before every gate passed."""
         rec = {"path": f"/jobs/{job_id}/{action}"[:200]}
 
-        def refuse(status, gate, why, job=None):
+        def refuse(status, gate, why, job=None, reason=""):
             self.audit(**rec, refused=gate, why=why)
             if job is not None:
-                return status, self.job_page(job, f"refused: {why}", bad=True)
+                return status, self.job_page(job, f"refused: {why}", bad=True, reason=reason)
             return status, page("refused", f'<p class="bad">refused: {html.escape(why)}</p><p><a href="/">All</a></p>')
 
         origin = headers.get("Origin")
@@ -217,26 +233,39 @@ class Control:
         token, sha, reason = one("token"), one("sha"), one("reason")
         if token is None or sha is None or reason is None:
             return refuse(400, "form", "a field was sent twice", job)
-        why = self.tokens.spend(token, action, job.id, sha)
-        if why:
-            return refuse(403, "token", why, job)
+        # The form before the token (code review): a reason refused for its shape keeps the page's token and is
+        # written back into the form, so nothing typed is lost.
         reason = reason.strip(" ")                 # only spaces: a control character at an end is refused, not cut
         why = reason_problem(reason, required=action == "reject")
         if sha and not re.fullmatch(r"[0-9a-f]{12}", sha):
             why = "the draft sha is not 12 hex characters"
         if why:
-            return refuse(400, "form", why, job)
+            return refuse(400, "form", why, job, reason)
+        why = self.tokens.spend(token, action, job.id, sha)
+        if why:
+            return refuse(403, "token", why, job, reason)
+        # F2/F4: a job with a draft is acted on only with the sha of the draft it has now, also when the page was
+        # opened before the draft existed (code review: the CLI skips its check without --sha).
+        try:
+            current = draft_sha12(job) or ""
+        except Unreadable as e:
+            return refuse(409, "draft", str(e), job, reason)
+        if sha != current:
+            return refuse(409, "draft", "the draft changed since the page was opened: read it again", job, reason)
+        self.audit(**rec, attempt=action, sha=sha or None)          # before the job changes (F5)
         code, line = self.run(action, job.id, reason or ABANDON_DEFAULT, sha, self.jobs_dir)
         self.audit(**rec, action=action, sha=sha or None, exit=code, line=line)
         fresh = self.job(job.id) or job
         if code == 0:
             return 200, self.job_page(fresh, {"reject": "rejected", "abandon": "abandoned"}[action])
+        line = line[len("refused: "):] if line.startswith("refused: ") else line
         return 409, self.job_page(fresh, f"refused: {line or 'the command failed'}", bad=True)
 
 
 class Handler(BaseHTTPRequestHandler):
     control = None                                 # set by serve()
     server_version = "argus-control"
+    timeout = 10                                   # a stalled client never holds the one-request server (code review)
     sys_version = ""
 
     def end_headers(self):                         # every answer, errors of the base class included
@@ -254,9 +283,11 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _host_ok(self):
+    def _host_ok(self, audit=False):
         if self.headers.get("Host") in HOSTS:
             return True
+        if audit:
+            self.control.audit(path=self.path[:200], refused="host", why="wrong host")
         self._send(421, page("refused", '<p class="bad">refused: wrong host</p>'))
         return False
 
@@ -275,9 +306,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, self.control.job_page(job))
 
     def do_POST(self):
-        if self.headers.get("Host") not in HOSTS:
-            self.control.audit(path=self.path[:200], refused="host", why="wrong host")
-        if not self._host_ok():
+        if not self._host_ok(audit=True):
             return
         m = re.fullmatch(r"/jobs/([^/]+)/([a-z]+)", self.path)
         try:
