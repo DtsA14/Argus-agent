@@ -381,3 +381,31 @@ def test_every_paid_gateway_model_of_the_config_sends_its_price_as_max_price():
         p = gateway.request_params(c, gateway_ref(m), {})["extra_body"]["provider"]
         assert p["max_price"] == {"prompt": c["prices"][m]["input"], "completion": c["prices"][m]["output"]}
 
+
+
+# ---- 2026-11-10: Haiku 5.5, GPT-6 Luna and V4.1 Flash 1017 through OpenRouter (Atha: no Anthropic balance) ---------
+
+NEW_MODELS = {"openrouter:anthropic/claude-haiku-5.5": (["anthropic"], {"prompt": 0.10, "completion": 0.50}),
+              "openrouter:openai/gpt-6-luna": (["openai"], {"prompt": 0.10, "completion": 0.50}),
+              "openrouter:deepseek/deepseek-v4.1-flash-1017": (["deepinfra/fp8", "morph/fp8"],
+                                                               {"prompt": 0.20, "completion": 0.60})}
+
+
+@pytest.mark.parametrize("ref", sorted(NEW_MODELS))
+def test_the_new_gateway_models_are_pinned_and_capped_at_their_list_price(ref):
+    from models.registry import ModelRef
+    cfg = load_config()
+    upstream, price = NEW_MODELS[ref]
+    assert cfg["gateway_models"][ref] == {"upstream": upstream}
+    assert gateway.max_price(cfg, ModelRef.parse(ref)) == price
+    assert not cfg["gateway_models"][ref].get("free")
+
+
+def test_haiku_through_the_gateway_keeps_its_long_context_refusal():
+    from codetask import issue_writer as iw
+    cfg = load_config()
+    cfg["roles"]["issue_writer"]["model"] = "openrouter:anthropic/claude-haiku-5.5"
+    with pytest.raises(ConfigError, match="above 100,000 input tokens"):
+        iw.settings(cfg)
+    cfg["issue_writer"]["turn"]["max_input_tokens"] = 100000
+    assert iw.settings(cfg)["max_input_tokens"] == 100000
