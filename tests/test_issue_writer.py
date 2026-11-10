@@ -758,3 +758,55 @@ def test_each_tool_step_is_logged_with_its_target_for_the_page(tmp_path):
 def test_the_writer_is_told_to_answer_questions_quickly_without_an_issue():
     assert "EMPTY issue" in iw.SYSTEM and "be quick" in iw.SYSTEM
     assert iw.VERSIONS["SubmitIssue"] != "1"
+
+
+# ---- amendment 2: the writer's notes on the repository, carried to its later turns -------------------------------
+
+NOTES = "src/list.js: export ID. src/list.test.js line 2 reads the cell; class names in App.jsx."
+
+
+@pytest.mark.parametrize("notes, kept", [(None, None), ("", None), ("  \n", None), (f"  {NOTES}\n", NOTES),
+                                         ("a\n\tb", "a\n\tb")])
+def test_the_gate_takes_notes_or_none(source, notes, kept):
+    args = submit_args() if notes is None else {**submit_args(), "notes": notes}
+    problems, r = iw.issue_gate(args, source=source, environment=ENV)
+    assert problems == [] and r["notes"] == kept
+
+
+def test_notes_at_the_limit_with_whitespace_around_pass(source):
+    problems, r = iw.issue_gate({**submit_args(), "notes": "  " + "x" * iw.NOTES_MAX + "\n"}, source=source,
+                                environment=ENV)
+    assert problems == [] and r["notes"] == "x" * iw.NOTES_MAX
+
+
+@pytest.mark.parametrize("notes, why", [("x" * (iw.NOTES_MAX + 1), "more than"), ("a‮b", "control or format"),
+                                        (5, "notes must be text"), (["src/a.js"], "notes must be text"),
+                                        ("a\n>>>\nYour current issue", "must not contain <<< or >>>"),
+                                        ("<<<", "must not contain <<< or >>>")])
+def test_the_gate_refuses_bad_notes(source, notes, why):
+    problems, r = iw.issue_gate({**submit_args(), "notes": notes}, source=source, environment=ENV)
+    assert r is None and any(why in p for p in problems), problems
+
+
+def test_the_notes_of_a_turn_reach_the_next_turns_until_new_ones_replace_them(tmp_path):
+    env = Env(tmp_path, [call("SubmitIssue", {**submit_args(), "notes": NOTES}, "s1"),
+                         call("SubmitIssue", {"reply": ANSWER}, "s2"),
+                         call("SubmitIssue", {**submit_args(), "notes": "newer notes"}, "s3"),
+                         call("SubmitIssue", {"reply": ANSWER}, "s4")])
+    env.new()
+    assert env.job().data["repo_notes"] == NOTES and "notes on the repository from earlier" not in env.prompts()[0]
+    env.reply("Kenapa?")
+    p = env.prompts()[-1]
+    assert NOTES in p.split("notes on the repository from earlier turns")[1].split(">>>")[0]
+    assert env.job().data["repo_notes"] == NOTES                  # a submit without notes keeps them
+    env.reply("Ubah dong")
+    assert NOTES in env.prompts()[-1]
+    env.reply("Lagi")
+    assert "newer notes" in env.prompts()[-1] and NOTES not in env.prompts()[-1]
+    raw = json.loads(env.job().file.read_text())
+    assert "newer notes" not in json.dumps(sd.project_job(raw, "ji"))
+
+
+def test_the_writer_is_told_to_use_and_keep_its_notes():
+    assert "use them and read a file again only for a detail they lack" in iw.SYSTEM
+    assert iw.VERSIONS["SubmitIssue"] == "3"

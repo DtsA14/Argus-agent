@@ -233,7 +233,7 @@ def _turn(job, cfg, deps):
     i = job.data["inputs"]
     inputs = {"repo": i["repo_name"], "commit": i["commit"], "environment": i["environment"],
               "conversation": [{"from": m["from"], "text": m["text"]} for m in job.data["conversation"]],
-              "previous_issue": previous, "max_usd": st["cap_usd"]}
+              "previous_issue": previous, "notes": job.data.get("repo_notes"), "max_usd": st["cap_usd"]}
     try:
         source = _snapshot(job.runs / run_id, i["repo"], i["commit"])
     except (intake.IntakeError, OSError) as e:
@@ -254,6 +254,8 @@ def _turn(job, cfg, deps):
                  reason=r.get("stop_reason"))
         return
     w = r["written"]
+    if w.get("notes"):                              # the writer's notes for its later turns (amendment 2)
+        job.data["repo_notes"] = w["notes"]
     if w["issue"] is None:                          # a reply only: the last issue (if any) stays the one to start
         job.data["conversation"].append({"from": "writer", "at": deps.clock(), "stage": sid, "text": w["reply"],
                                          "clashes": [], "questions": w["questions"]})
