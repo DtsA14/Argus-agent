@@ -381,3 +381,57 @@ def test_every_paid_gateway_model_of_the_config_sends_its_price_as_max_price():
         p = gateway.request_params(c, gateway_ref(m), {})["extra_body"]["provider"]
         assert p["max_price"] == {"prompt": c["prices"][m]["input"], "completion": c["prices"][m]["output"]}
 
+
+
+# ---- 2026-11-10: Haiku 5.5, GPT-6 Luna and V4.1 Flash 1017 through OpenRouter (Atha: no Anthropic balance) ---------
+
+NEW_MODELS = {"openrouter:anthropic/claude-haiku-5.5": (["anthropic"], {"input": 0.10, "output": 0.50, "cache_read": 0.01,
+                                                                        "long_context_above": 100000}),
+              "openrouter:openai/gpt-6-luna": (["openai"], {"input": 0.10, "output": 0.50, "cache_read": 0.01,
+                                                            "long_context_above": 272000}),
+              "openrouter:deepseek/deepseek-v4.1-flash-1017": (["deepinfra/fp8", "morph/fp8"],
+                                                               {"input": 0.20, "output": 0.60, "cache_read": 0.006})}
+
+
+@pytest.mark.parametrize("ref", sorted(NEW_MODELS))
+def test_the_new_gateway_models_are_pinned_and_priced_at_their_list_price(ref):
+    from models.registry import ModelRef
+    cfg = load_config()
+    upstream, price = NEW_MODELS[ref]
+    assert cfg["gateway_models"][ref] == {"upstream": upstream}
+    assert cfg["prices"][ref] == price
+    assert gateway.max_price(cfg, ModelRef.parse(ref)) == {"prompt": price["input"], "completion": price["output"]}
+
+
+@pytest.mark.parametrize("ref, bound", [("openrouter:anthropic/claude-haiku-5.5", 40000),
+                                        ("openrouter:openai/gpt-6-luna", 108800)])
+def test_a_long_context_tier_through_the_gateway_is_bounded_on_the_heuristic_count(ref, bound):
+    from codetask import issue_writer as iw
+    cfg = load_config()
+    cfg["roles"]["issue_writer"]["model"] = ref
+    cfg["issue_writer"]["turn"]["max_input_tokens"] = bound + 1
+    with pytest.raises(ConfigError, match=f"set max_input_tokens to {bound:,} or less"):
+        iw.settings(cfg)
+    cfg["issue_writer"]["turn"]["max_input_tokens"] = bound
+    assert iw.settings(cfg)["max_input_tokens"] == bound
+
+
+def test_the_bound_follows_the_models_input_margin():
+    from harness.llm import check_long_context
+    from models.registry import ModelRef
+    cfg = load_config()
+    ref = ModelRef.parse("openrouter:anthropic/claude-haiku-5.5")
+    cfg["llm"]["input_margin_by_model"] = {str(ref): 1.5}
+    check_long_context(cfg, ref, 50000, "t")
+    with pytest.raises(ConfigError, match="50,000 or less"):
+        check_long_context(cfg, ref, 50001, "t")
+
+
+def test_anthropics_own_api_keeps_the_exact_bound():
+    from harness.llm import check_long_context
+    from models.registry import ModelRef
+    cfg = load_config()
+    ref = ModelRef.parse("anthropic:claude-haiku-5-5")
+    check_long_context(cfg, ref, 100000, "t")
+    with pytest.raises(ConfigError, match="100,000 or less"):
+        check_long_context(cfg, ref, 100001, "t")

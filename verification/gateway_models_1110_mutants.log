@@ -1,0 +1,14 @@
+# at 23d7ce1 (aarch64)
+KILLED  haiku long context dropped: 1 failed, 67 passed in 32.51s
+KILLED  luna long context dropped: 1 failed, 69 passed in 32.55s
+KILLED  haiku priced below list: 1 failed, 67 passed in 32.56s
+KILLED  luna at the fast tier's price: 1 failed, 69 passed in 32.64s
+KILLED  1017 at the discounted price: 1 failed, 68 passed in 32.51s
+KILLED  1017 cache read discounted: 1 failed, 68 passed in 32.51s
+KILLED  luna pinned to any OpenAI tier and Azure: 1 failed, 69 passed in 32.59s
+KILLED  1017 without its fallback: 1 failed, 68 passed in 34.91s
+KILLED  haiku free: 1 failed, 67 passed in 32.39s
+KILLED  gateway bound exact: 1 failed, 70 passed in 32.42s
+KILLED  gateway bound ignores the margin: 1 failed, 72 passed in 32.63s
+KILLED  anthropic bound by heuristic: 1 failed, 73 passed in 32.63s
+RESULT: 12/12 killed
