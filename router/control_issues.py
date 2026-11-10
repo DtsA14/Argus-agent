@@ -16,7 +16,9 @@ writes (never in argv). The CLI gets --key-file from the service's environment (
 the service never reads a key. Runs that take minutes (a writer's turn, a drafter) are child processes in their own
 session; a page shows that the job is busy and reloads itself every few seconds (no JavaScript).
 """
+import calendar
 import html
+import json
 import os
 import re
 import secrets
@@ -32,11 +34,14 @@ from router.control import strip_refused
 
 KEY_ENV = "ARGUS_CONTROL_KEY_FILE"
 STATE = Path.home() / ".local" / "state" / "argus-control"
-REFRESH_S = 5
+REFRESH_S = 3
+STEPS_SHOWN = 12                # the last writer steps a page shows while a turn runs (amendment 1, A2)
+EVENTS_TAIL = 16 * 1024         # the bytes of the turn's events.jsonl a page reads
+DOING = {"ReadFile": "Reading", "SearchFiles": "Searching", "ListFiles": "Listing files"}
 ISSUE_ACTIONS = ("reply", "start", "abandon")
 INDEX_MAX = 200                 # the newest job directories /issues reads (job ids sort by time)
-FIELDS = {"new": ("token", "repo", "message"), "reply": ("token", "sha", "message"), "start": ("token", "sha"),
-          "abandon": ("token", "sha", "reason")}
+FIELDS = {"new": ("token", "repo", "message"), "reply": ("token", "sha", "turn", "message"),
+          "start": ("token", "sha", "turn"), "abandon": ("token", "sha", "turn", "reason")}
 E = html.escape
 
 
@@ -118,6 +123,45 @@ def last_line(path):
     return strip_refused(line)[:300]
 
 
+def turn_steps(job, now=None):
+    """(steps, seconds) of the turn the job is running (SPEC_ISSUE_WRITER amendment 1, A2), or None when no turn is
+    open: the last STEPS_SHOWN `writer_step` events of its events.jsonl as (tool, target), read from its last
+    EVENTS_TAIL bytes (a broken or cut line is skipped), and the seconds since the turn started (None when unknown).
+    The targets are the model's text: the page escapes them."""
+    open_turns = [st for k, st in job.data.get("stages", {}).items() if st.get("kind") == "write"
+                  and st.get("status") is None]
+    if not open_turns:
+        return None
+    st = open_turns[-1]
+    steps = []
+    try:
+        with open(job.runs / str(st.get("run_id")) / "events.jsonl", "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - EVENTS_TAIL))
+            raw = f.read()
+    except OSError:
+        raw = b""
+    for line in raw.decode("utf-8", "replace").splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(e, dict) and e.get("event") == "writer_step":
+            steps.append((str(e.get("tool") or ""), str(e.get("target") or "")))
+    seconds = None
+    try:
+        began = calendar.timegm(time.strptime(st.get("started_at") or "", "%Y-%m-%dT%H:%M:%SZ"))
+        seconds = max(0, int((time.time() if now is None else now) - began))
+    except (TypeError, ValueError):
+        pass
+    return steps[-STEPS_SHOWN:], seconds
+
+
+def turn_of(job):
+    """How many messages the job's conversation has: what a page's forms were made after."""
+    return len(job.data.get("conversation") or [])
+
+
 def issue_cli(jobs_dir, key_file, *args):
     """The argv of an `argus issue ...` run (positionals after `--`)."""
     return [sys.executable, str(rj.ROOT / "scripts" / "argus.py"), "--jobs-dir", str(jobs_dir), "issue", *args,
@@ -182,54 +226,70 @@ class IssuePages:
                           '<button class="start" type="submit">Ask the writer</button></form>')
 
     def job_page(self, job, message=None, bad=False, text=""):
+        """The conversation as a chat (SPEC_ISSUE_WRITER amendment 1, A3): the human's messages as bubbles, the
+        writer's replies as text, the steps of a running turn, the issue in a card with Start job, the reply box."""
         d = job.data
         state = str(d["state"])
         busy = self.spawner.busy(job.id)
         sha = d.get("issue_sha256") or ""
-        parts = ['<p><a href="/issues">Issues</a></p>', f'<h1>{E(job.id)}</h1>']
+        conv = d.get("conversation") or []
+        first = next((m["text"] for m in conv if m["from"] == "human"), "")
+        parts = ['<p><a href="/issues">Issues</a></p>',
+                 f'<header class="chat-head"><h2 class="title">{E(first.splitlines()[0][:80] if first else job.id)}</h2>'
+                 f'<p class="muted mono">{E(job.id)} · {E(d["inputs"]["repo_name"])} · {E(state)}</p></header>']
         out = self.spawner.outcome(job.id)
         if message:
             parts.append(f'<p class="{"bad" if bad else "ok"}">{E(message)}</p>')
         elif out is not None and out["code"] not in (0, 1):
             parts.append(f'<p class="bad">the last {E(out["action"])} was refused: {E(out["line"] or "no reason")}</p>')
             text = text or (out["text"] or "")
-        parts.append(f'<p class="muted">{E(d["inputs"]["repo_name"])} · {E(state)} · spent '
-                     f'${rj.spent_nano(job) / 1e9:.4f} of ${float(d.get("max_usd") or 0):.2f}</p>')
-        for m in d.get("conversation") or []:
-            who = "You" if m["from"] == "human" else "Writer"
-            extra = ""
-            if m["from"] == "writer":
-                extra += "".join(f'<li class="bad">clash: {E(c["file"])}:{E(str(c["line"]))} {E(c["why"])}</li>'
-                                 for c in m.get("clashes") or [])
-                extra += "".join(f'<li>question: {E(q)}</li>' for q in m.get("questions") or [])
-                extra = f"<ul>{extra}</ul>" if extra else ""
-            parts.append(f'<div class="card {E(m["from"])}"><p class="muted">{who}</p>'
-                         f'<p class="text">{E(m["text"])}</p>{extra}</div>')
-        text_now, _ = ri.last_issue(job)
-        if text_now:
-            parts.append(f'<details class="card"><summary>The issue (English), {E(sha[:12])}</summary>'
-                         f'<pre class="text">{E(text_now)}</pre></details>')
+        for m in conv:
+            if m["from"] == "human":
+                parts.append(f'<div class="bubble"><p class="text">{E(m["text"])}</p></div>')
+                continue
+            extra = "".join(f'<li class="bad">clash: {E(c["file"])}:{E(str(c["line"]))} {E(c["why"])}</li>'
+                            for c in m.get("clashes") or [])
+            extra += "".join(f'<li>question: {E(q)}</li>' for q in m.get("questions") or [])
+            parts.append(f'<div class="writer"><p class="text">{E(m["text"])}</p>'
+                         f'{f"<ul>{extra}</ul>" if extra else ""}</div>')
         working = busy or state == ri.WRITING
         if working:
-            parts.append('<p class="ok">Working… this page reloads by itself.</p>')
+            run = turn_steps(job)
+            steps, seconds = run if run is not None else ([], None)
+            rows = "".join(f'<li><span class="dot"></span>{E(DOING.get(t, t))} <span class="mono">{E(x)}</span></li>'
+                           for t, x in steps)
+            took = f" ({seconds} s)" if seconds is not None else ""
+            note = (f'<p class="ok">Working…{E(took)} this page reloads by itself.</p>' if busy else
+                    # WRITING with no run of this service: a turn cut off (a crash, a restart) or one from the terminal
+                    f'<p class="bad">No run of this service is working on it{E(took)}. If it stays so, resume it from '
+                    f'the terminal: argus resume {E(job.id)}</p>')
+            parts.append(f'<div class="steps"><ul>{rows}</ul>{note}</div>')
+        text_now, _ = ri.last_issue(job)
+        can_start = (not busy and state == ri.AWAITING_HUMAN and self.key_file() is not None and sha)
+        if text_now:
+            cap = float(self.cfg["issue_writer"].get("code_max_usd") or 0)
+            start = self._form(job, "start", sha, f'<p class="muted">Starts a code job on '
+                               f'{E(d["inputs"]["repo_name"])} at {E(d["inputs"]["commit"][:12])} with this issue '
+                               f'({E(sha[:12])}), cap ${cap:.2f}; its draft is then yours to decide.</p>',
+                               "Start job") if can_start else ""
+            parts.append(f'<section class="card issue"><p class="muted">ISSUE · English · {E(sha[:12])}</p>'
+                         f'<h2 class="title">{E(text_now.splitlines()[0])}</h2>'
+                         f'<details><summary>The issue (English), {E(sha[:12])}</summary>'
+                         f'<pre class="text">{E(text_now)}</pre></details>{start}</section>')
         if state == ri.HANDED_OFF and d.get("handoff"):
             code = d["handoff"]["job"]
             parts.append(f'<div class="card"><p>Started as job {E(code)}.</p>'
                          f'<p><a href="http://localhost:8710/jobs/{E(code)}/draft">Read its draft</a> · '
                          f'<a href="/jobs/{E(code)}">Decide</a></p></div>')
+        parts.append(f'<p class="muted mono">spent ${rj.spent_nano(job) / 1e9:.4f} of '
+                     f'${float(d.get("max_usd") or 0):.2f}</p>')
         if not busy:
             if self.key_file() is None and state in ri.REPLYABLE:
                 parts.append(f'<p class="bad">{E(KEY_ENV)} is not set for the service: the writer cannot run.</p>')
             elif state in ri.REPLYABLE:
                 hi = int(self.cfg["issue_writer"]["reply_max"])
-                parts.append(self._form(job, "reply", sha, f'<label>Your reply<textarea name="message" rows="5" '
+                parts.append(self._form(job, "reply", sha, f'<label>Your reply<textarea name="message" rows="3" '
                                         f'maxlength="{hi}" required>{E(text)}</textarea></label>', "Send"))
-            if state == ri.AWAITING_HUMAN and self.key_file() is not None and sha:
-                cap = float(self.cfg["issue_writer"].get("code_max_usd") or 0)
-                parts.append(self._form(job, "start", sha, f'<p class="muted">Starts a code job on '
-                                        f'{E(d["inputs"]["repo_name"])} at {E(d["inputs"]["commit"][:12])} with this '
-                                        f'issue ({E(sha[:12])}), cap ${cap:.2f}; its draft is then yours to decide.</p>',
-                                        "Start job"))
             if d.get("handoff") and state == ri.AWAITING_HUMAN:
                 parts.append('<p class="bad">A start was cut off after its code job was made: Start job again '
                              'settles it.</p>')
@@ -251,10 +311,12 @@ class IssuePages:
                              text=out["text"] or "")
 
     def _form(self, job, action, sha, inner, label):
-        token = self.control.tokens.issue(f"issue-{action}", job.id, sha)
+        turn = turn_of(job)
+        token = self.control.tokens.issue(f"issue-{action}", job.id, f"{sha}|{turn}")
         return (f'<form class="card" method="post" action="/issues/{E(job.id)}/{action}">'
                 f'<input type="hidden" name="token" value="{E(token)}">'
-                f'<input type="hidden" name="sha" value="{E(sha[:12])}">{inner}'
+                f'<input type="hidden" name="sha" value="{E(sha[:12])}">'
+                f'<input type="hidden" name="turn" value="{turn}">{inner}'
                 f'<button class="{action}" type="submit">{E(label)}</button></form>')
 
     def _page(self, title, body, refresh=None):
@@ -320,7 +382,11 @@ class IssuePages:
         sha_now = (job.data.get("issue_sha256") or "") if job is not None else ""
         if job is not None and values["sha"] != sha_now[:12]:          # before the token, so the reason is this one
             return refuse(409, "issue", "the issue changed since the page was opened: read it again", job, text)
-        why = c.tokens.spend(values["token"], f"issue-{action}", job.id if job else "", sha_now)
+        # a reply without an issue keeps the sha: the page is also bound to the conversation's length (amendment 1)
+        if job is not None and values["turn"] != str(turn_of(job)):
+            return refuse(409, "issue", "the writer answered since the page was opened: read it again", job, text)
+        why = c.tokens.spend(values["token"], f"issue-{action}", job.id if job else "",
+                             f"{sha_now}|{turn_of(job)}" if job is not None else "")
         if why:
             return refuse(403, "token", why, job, text, repo)
         if action == "abandon":

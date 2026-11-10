@@ -131,3 +131,41 @@ ditolak; pesan tidak pernah lewat argv; key tidak pernah di halaman/audit; teks 
 
 Streaming jawaban, JavaScript di halaman kontrol, issue untuk Argus-agent, penulis issue yang mengedit repo, approve
 otomatis, notifikasi push (ntfy sudah ada), percakapan di viewer/ledger, pengguna kedua.
+
+## Amandemen 1 (2026-11-10): chat yang terasa cepat
+
+Status: **usul Claude, menunggu Atha** (Atha 2026-11-10: "Tiap chat argus selalu lama ya bro, ga bisa cepat kayak kita
+chat" → "Ok catat semua ke pending bro. Boleh mulai kerjain"; mockup https://claude.ai/artifact/EDTz2G7Pqipt5GVcJwdtGC
+"Nah ini ok").
+
+**Masalah dan ukuran.** Giliran pertama dari HP (j20261109_162802_3ff8, "Apa yang fitur yang perlu ditambahkan ke argus
+viewer?") makan 24 detik untuk 7 panggilan model (1-9 detik masing-masing, input tumbuh 1,5k → 28k token) sebelum gagal,
+karena (1) penulis selalu membaca repo dan wajib menulis issue, juga untuk pertanyaan umum; (2) tiap giliran mulai dari
+nol; (3) halaman diam sampai giliran selesai. Menyalakan CLI ±1 detik (bukan penyebab). Ukuran: detik dari kirim sampai
+balasan tampil, per giliran (dari `events.jsonl`: `run_start` → `run_end`), dipisah giliran tanpa issue dan dengan
+issue; target giliran tanpa issue ≤ 10 detik. Bukan ukuran: jumlah fitur.
+
+**A1. Giliran tanpa issue.** `SubmitIssue.issue` boleh kosong/tidak ada (versi alat `SubmitIssue` "2"): balasan saja,
+untuk pertanyaan umum, saran, atau pertanyaan balik. Gerbang: `reply` tetap wajib; tanpa issue, `clashes` harus kosong;
+dengan issue, semua aturan bagian 4 tetap. Prompt: jawab pertanyaan umum tanpa membaca repo bila tidak perlu, atau baca
+sesedikit mungkin; tulis issue hanya bila Atha meminta perubahan. Giliran tanpa issue tidak mengubah `issue.txt`,
+`issue_sha256`, atau issue di halaman; pesan penulis dicatat tanpa `issue_sha256`. Job tetap `AWAITING_HUMAN`; **Start
+job** hanya tampil bila sudah ada issue (sudah: `start` menolak tanpa issue, halaman memerlukan sha).
+
+**A2. Progres saat giliran berjalan.** Penulis mencatat event `writer_step` per alat (`tool`, `target` = path atau pola
+pencarian, ≤ 120 karakter, dari argumen model: tidak tepercaya, di-escape di halaman). Halaman job selama `WRITING`
+menampilkan langkah-langkah giliran berjalan (maks 12 terakhir) dan detik berjalan, dibaca dari `events.jsonl` run itu
+(maks 64 KiB terakhir, baris rusak dilewati); tetap tanpa JavaScript, muat ulang tiap 3 detik.
+
+**A3. Tampilan chat (mockup).** Halaman `/issues/<id>` mengikuti mockup: pesan Atha sebagai gelembung kanan, balasan
+penulis teks kiri, issue dalam kartu dengan Start job di dalamnya, kotak balasan di bawah, info biaya kecil. Hanya HTML
+dan CSS (`/style.css` service); `<details>` untuk issue lengkap; semua teks tetap di-escape. Gerbang F3, token, audit
+tidak berubah.
+
+**Tes wajib (mutants).** Gerbang: tanpa issue diterima dengan reply, ditolak bila ada `clashes` atau reply kosong;
+dengan issue aturan lama tetap. Job: giliran tanpa issue tidak mengubah `issue.txt`/`issue_sha256` dan tidak membuat
+Start mungkin bila belum ada issue. Halaman: langkah dan target tampil saat `WRITING`, `<script>`/`<img onerror>` di
+target tampil sebagai teks, events rusak/hilang tidak membuat halaman gagal; Start tidak tampil sebelum ada issue.
+
+**Tidak di amandemen ini (dicatat di PENDING):** jawaban huruf demi huruf (streaming, jalur uang `harness/llm.py`);
+membawa hasil baca giliran sebelumnya ke giliran berikutnya; menggabung 8710 dan 8711.

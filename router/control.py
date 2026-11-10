@@ -65,7 +65,14 @@ STYLE = (b"body{margin:0;padding:16px;background:#0a0e13;color:#e8eef4;font:16px
          b".text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:0}"
          b".start,.reply{background:#7db4ff;color:#0a0e13}.button{display:inline-block;padding:.6rem 1rem;"
          b"background:#7db4ff;color:#0a0e13;border-radius:.75rem;font-weight:600;text-decoration:none}"
-         b".human{border-left:3px solid #7db4ff}summary{cursor:pointer;min-height:2.75rem}")
+         b"summary{cursor:pointer;min-height:2.75rem}"
+         # the issue writer's chat (SPEC_ISSUE_WRITER amendment 1, A3)
+         b".mono{font-family:ui-monospace,Menlo,monospace}.title{font-size:1rem;margin:0}.chat-head{margin:0 0 1rem}"
+         b".bubble{margin:0 0 1rem auto;max-width:85%;width:fit-content;background:#18202a;padding:.6rem .9rem;"
+         b"border-radius:1.1rem 1.1rem .25rem 1.1rem}.writer{margin:0 0 1rem}.writer ul{margin:.5rem 0 0}"
+         b".steps{font-size:.85rem;color:#93a1b0;margin:0 0 1rem}.steps li{margin:.25rem 0}.dot{display:inline-block;"
+         b"width:.5rem;height:.5rem;border-radius:50%;background:#6ee7b7;margin-right:.5rem}"
+         b".issue .title{margin:.25rem 0 .5rem}.issue form{margin:.75rem 0 0;padding:0;border:0;background:none}")
 
 
 class Tokens:
