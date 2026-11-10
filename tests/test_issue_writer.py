@@ -301,6 +301,13 @@ def test_the_claim_is_read_only_in_the_nothing_else_changes_paragraph(source):
     assert problems == [] and r is not None
 
 
+def test_the_claim_paragraph_ends_at_its_blank_line(source):
+    issue = ISSUE.replace("Tests: the date of each example.",
+                          "Tests: the date of each example; the old helper keeps passing unchanged values to the card.")
+    problems, r = gate(source, issue=issue, clashes=[CLASH_A])
+    assert problems == [] and r is not None
+
+
 def test_the_harness_writes_the_clashes_into_the_issue_before_its_environment_line(source):
     (source / "src" / "b.test.js").write_text("y\n")
     clashes = [CLASH_A, {"file": "src/b.test.js", "line": 0, "why": "counts the cells"}]
