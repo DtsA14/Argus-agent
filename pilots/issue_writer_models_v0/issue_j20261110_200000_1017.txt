@@ -1,0 +1,27 @@
+Add a duration column to the stages table of the job page
+
+The stages table of the job page shows the name, kind, status, cost and share of every stage, but not how long a stage took. The human wants the duration of every stage, from its `started_at` to its `ended_at`, shown in a new column, for example `2m 14s`.
+
+Rules:
+- A new column goes between `cost` and `share`. The head of the stages table keeps its hidden row and its column headers become, in order: `stage`, `kind`, `status`, `cost`, `duration`, `share`.
+- Every stage row gets one more cell, the duration, in that position. The first cell of a row is still the stage name, the fourth is still `$` plus `cost_usd`, and the last is still the share.
+- The duration is the time from the stage's `started_at` to its `ended_at`, both ISO timestamps, in whole seconds, rounded down (a part of a second is dropped). 134 seconds shows `2m 14s`, 45 seconds shows `45s`, 0 seconds shows `0s`, 180 seconds shows `3m 0s`, 3600 seconds shows `1h 0m 0s`, 3734 seconds shows `1h 2m 14s`, and 86399 seconds shows `23h 59m 59s`. The hours part appears only from one hour on, the minutes part only from one minute on; the seconds part is always there.
+- A stage whose `started_at` or `ended_at` is missing, `null` or not a text shows `-` in its duration cell. A stage whose `ended_at` is earlier than its `started_at` also shows `-`.
+- Both fields are optional in the answer of `/api/jobs/<id>`: a stage object without `started_at` and without `ended_at` is a stage of the page, it shows `-` and never makes the page say `could not load`. A value that is neither `null` nor a text counts as missing and shows `-`.
+- The sum row in the foot of the table keeps its first cell `sum`, its `$` money in the fourth cell, and gets an empty duration cell, so the sum row has six cells: `sum`, empty, empty, the money, empty, empty.
+- The durations are the only new thing on the page: no new request is made and nothing is stored in the browser. A stage name that holds markup is still shown as its own text in the duration column too, so a stage named `<img src=x onerror=alert(1)>` adds no `img` element.
+- The mobile timeline is unchanged: the body and the foot of the stages table keep the classes they have now, and a duration cell carries no class of its own.
+
+Nothing else changes: the job heading, the `state, $cost, created …` line, the WIB line, the share column and its `-` for a job that cost nothing, the mark on the costliest stage, the `no stages` text, the `stage costs do not match the job cost` line, the decisions table and the phone timeline all stay as they are.
+
+Tests: in a new file `src/job-page-stage-duration.test.jsx`, with a job whose three stages have `started_at` `2025-04-01T08:00:00Z` / `ended_at` `2025-04-01T08:02:14Z`, `2025-04-01T08:02:14Z` / `2025-04-01T08:02:59Z`, and `2025-04-01T08:02:59Z` / `2025-04-01T09:02:59Z`: the column headers are `['stage','kind','status','cost','duration','share']` and the duration cells are `['2m 14s', '45s', '1h 0m 0s']`; durations of 0, 180 and 86399 seconds show `0s`, `3m 0s` and `23h 59m 59s`, and 3734 seconds shows `1h 2m 14s`; a stage with `started_at: null` and a stage without the two fields at all show `-` and the page does not say `could not load`; a stage with `started_at` `2025-04-01T08:02:14Z` and `ended_at` `2025-04-01T08:00:00Z` shows `-`; the sum row has six cells and its fourth cell is `$0.0800` for stages that add up to 80000000 nano dollars; a stage named `<img src=x onerror=alert(1)>` shows that text in its first cell, adds no `img` element, and its duration cell shows its duration; reading the durations costs one request to `/api/jobs/j1` and leaves `localStorage` and `sessionStorage` empty.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-stages-timeline.test.jsx line 183: Expects the head of the stages table to hold exactly the five headers stage/kind/status/cost/share; the new duration column makes six.
+- src/job-page-stages-timeline.test.jsx line 216: cellsOfRow expects each stage row to have exactly five cells (name, kind, status, $money, share); a duration cell makes six.
+- src/job-page-stages-timeline.test.jsx line 243: Expects the sum row to hold exactly five cells ['sum','','','$0.0800','']; the new column adds an empty cell.
+- src/job-page-share.test.jsx line 132: Expects the headers to equal ['stage','kind','status','cost','share'] exactly; the duration column breaks that list.
+- src/job-page-share.test.jsx line 157: Same exact header list ['stage','kind','status','cost','share'] in the zero-cost share test.
+- src/job-page-share.test.jsx line 224: Same exact header list ['stage','kind','status','cost','share'] in the large-cost share test.
+Environment: pwa_node22
