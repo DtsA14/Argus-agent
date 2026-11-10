@@ -65,7 +65,7 @@ STYLE = (b"body{margin:0;padding:16px;background:#0a0e13;color:#e8eef4;font:16px
          b".text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:0}"
          b".start,.reply{background:#7db4ff;color:#0a0e13}.button{display:inline-block;padding:.6rem 1rem;"
          b"background:#7db4ff;color:#0a0e13;border-radius:.75rem;font-weight:600;text-decoration:none}"
-         b".human{border-left:3px solid #7db4ff}summary{cursor:pointer;min-height:2.75rem}"
+         b"summary{cursor:pointer;min-height:2.75rem}"
          # the issue writer's chat (SPEC_ISSUE_WRITER amendment 1, A3)
          b".mono{font-family:ui-monospace,Menlo,monospace}.title{font-size:1rem;margin:0}.chat-head{margin:0 0 1rem}"
          b".bubble{margin:0 0 1rem auto;max-width:85%;width:fit-content;background:#18202a;padding:.6rem .9rem;"

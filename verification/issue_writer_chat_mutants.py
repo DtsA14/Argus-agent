@@ -33,6 +33,13 @@ M = [
      "seconds = max(0, int(time.time() - began))"),
     ("start while busy", C, "        can_start = (not busy and state", "        can_start = (state"),
     ("slow reload", C, "REFRESH_S = 3\n", "REFRESH_S = 5\n"),
+    ("search text not shown", W, 'for k in ("text", "path")', 'for k in ("path", "text")'),
+    ("told to revise every turn", W, "(revise it only when the human's last message asks for \"\n",
+     "(revise it as the human's last message asks \"\n"),
+    ("status clashes of the last reply", I, "for c in wrote[\"clashes\"]]", "for c in last[\"clashes\"]]"),
+    ("page not bound to the conversation", C, '        if job is not None and values["turn"] != str(turn_of(job)):',
+     "        if False:"),
+    ("no run looks like working", C, "this page reloads by itself.</p>' if busy else", "this page reloads by itself.</p>' if True else"),
 ]
 
 if __name__ == "__main__":

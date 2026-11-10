@@ -72,8 +72,9 @@ class SubmitIssue(BaseModel):
     """Submit your reply to the human and, when they asked for a change, the issue with its possible clashes, and your
     questions. The harness checks it; the human reads it before anything is built from it. Call it alone in its
     reply."""
-    reply: str = Field(description=f"To the human, in plain Indonesian, at most {REPLY_MAX} characters: what the issue "
-                                   "asks, in everyday words, and what you changed since the last turn.")
+    reply: str = Field(description=f"To the human, in plain Indonesian, at most {REPLY_MAX} characters: the answer, "
+                                   "or, with an issue, what it asks in everyday words and what you changed since the "
+                                   "last issue.")
     issue: str = Field(default="", description=f"The whole issue in English, at most {MAX_ISSUE} characters, in the "
                                                "style of the rules (title line, rules with examples, nothing else "
                                                "changes, Tests, Environment). Empty for a reply only (a question, "
@@ -191,7 +192,8 @@ def prompt(inputs, lim):
         lines += [f"--- {who}:", m["text"]]
     lines.append("---")
     if inputs.get("previous_issue"):
-        lines += ["", "Your issue of the last turn (revise it as the human's last message asks):", "<<<",
+        lines += ["", "Your current issue, from an earlier turn (revise it only when the human's last message asks for "
+                  "a change; else leave it as it is):", "<<<",
                   inputs["previous_issue"].rstrip("\n"), ">>>"]
     lines += ["", f"At most {lim['max_steps']} steps; SubmitIssue is checked at most {lim['max_submits']} times."]
     return "\n".join(lines)
@@ -213,7 +215,9 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
             problems, result = issue_gate(args, source=source, environment=inputs["environment"])
             log.emit("issue_checked", submit=n, ok=not problems, problems=problems[:20])
             if not problems:
-                return {"content": "Accepted: the issue passed the harness gate.", "finished": True, "result": result}
+                said = "the issue passed the harness gate" if result["issue"] is not None else \
+                    "your reply was sent without an issue; the last issue (if any) stays"
+                return {"content": f"Accepted: {said}.", "finished": True, "result": result}
             left = lim["max_submits"] - n
             head = f"Rejected ({len(problems)} problem(s)); " + (f"{left} submit(s) left:" if left > 0
                                                                  else "no submits left:")
@@ -221,8 +225,8 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
                     "exhausted": left <= 0}
 
         def run_tool(name, args, key, res):
-            target = next((args[k] for k in ("path", "pattern") if isinstance(args, dict)
-                           and isinstance(args.get(k), str)), "")
+            target = next((args[k] for k in ("text", "path") if isinstance(args, dict)
+                           and isinstance(args.get(k), str) and args[k]), "")      # a search's text, else a path
             # what the page shows while the turn runs (SPEC_ISSUE_WRITER amendment 1, A2); model text, escaped there
             log.emit("writer_step", tool=name, target=target[:TARGET_MAX])
             return box.run({"name": name, "args": args}, step_key=key)["content"]

@@ -150,7 +150,7 @@ def test_a_reply_is_recorded_before_its_turn_and_the_turn_sees_the_last_issue(tm
     assert job.data["state"] == ri.AWAITING_HUMAN and [m["from"] for m in job.data["conversation"]] == \
         ["human", "writer", "human", "writer"]
     p = env.prompts()[-1]
-    assert "Pakai jam juga" in p and ISSUE.splitlines()[0] in p.split("Your issue of the last turn")[1]
+    assert "Pakai jam juga" in p and ISSUE.splitlines()[0] in p.split("Your current issue")[1]
     assert sorted(job.data["stages"]) == ["w1", "w2"]
 
 
@@ -733,7 +733,10 @@ def test_a_reply_without_an_issue_keeps_the_last_issue_the_one_to_start(tmp_path
     job = env.reply("Kenapa pakai WIB?")
     assert job.data["state"] == ri.AWAITING_HUMAN and job.data["issue_sha256"] == before
     assert (job.dir / ri.ISSUE).read_text() == ISSUE + "\n" and "issue_sha256" not in job.data["conversation"][-1]
-    assert ISSUE.splitlines()[0] in env.prompts()[-1].split("Your issue of the last turn")[1]
+    text = rj.status("ji", jobs_dir=env.jobs)
+    assert "clash: src/list.test.js:2 reads the cell" in text and f"argus issue start ji --sha {before[:12]}" in text
+    assert "revise it only when the human's last message asks for a change" in env.prompts()[-1]
+    assert ISSUE.splitlines()[0] in env.prompts()[-1].split("Your current issue")[1]
     fake = FakeCode("ok")
     monkeypatch.setattr(rj, "start_code", fake)
     job, _ = start(env, before[:12])
@@ -742,12 +745,14 @@ def test_a_reply_without_an_issue_keeps_the_last_issue_the_one_to_start(tmp_path
 
 def test_each_tool_step_is_logged_with_its_target_for_the_page(tmp_path):
     long = "src/" + "x" * 300
-    env = Env(tmp_path, [call("ReadFile", {"path": long}, "r"), call("SearchFiles", {"pattern": "expect("}, "q"),
-                         call("ListFiles", {}, "l"), ONLY])
+    env = Env(tmp_path, [call("ReadFile", {"path": long}, "r"), call("SearchFiles", {"text": "expect(", "path": "src"}, "q"),
+                         call("SearchFiles", {"text": "cell", "path": ""}, "q2"), call("ListFiles", {"path": ""}, "l"),
+                         ONLY])
     env.new()
     events = [json.loads(ln) for ln in (env.jobs / "ji" / "runs" / "ji-w1" / "events.jsonl").read_text().splitlines()]
     steps = [(e["tool"], e["target"]) for e in events if e["event"] == "writer_step"]
-    assert steps == [("ReadFile", long[:iw.TARGET_MAX]), ("SearchFiles", "expect("), ("ListFiles", "")]
+    assert steps == [("ReadFile", long[:iw.TARGET_MAX]), ("SearchFiles", "expect("), ("SearchFiles", "cell"),
+                     ("ListFiles", "")]
 
 
 def test_the_writer_is_told_to_answer_questions_quickly_without_an_issue():

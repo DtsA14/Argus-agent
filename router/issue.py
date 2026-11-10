@@ -375,7 +375,9 @@ def status_lines(job):
         if d.get("issue_sha256"):
             out.append(f"issue {d['issue_sha256'][:12]}: {job.dir / ISSUE}")
         out.append(f"reply ({last['stage']}): {last['text']}")
-        out += [f"clash: {c['file']}:{c['line']} {c['why']}" for c in last["clashes"]]
+        # the clashes of the issue a start would use: a reply without an issue after it names none of its own
+        wrote = next((m for m in reversed(writer) if m.get("issue_sha256") == d.get("issue_sha256")), last)
+        out += [f"clash: {c['file']}:{c['line']} {c['why']}" for c in wrote["clashes"]]
         out += [f"question: {q}" for q in last["questions"]]
     if d["state"] == HANDED_OFF and d.get("handoff"):
         out.append(f"handed off to code job {d['handoff']['job']}: argus status {d['handoff']['job']}")

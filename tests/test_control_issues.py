@@ -100,6 +100,10 @@ class Svc:
         return m.group(1), m.group(2)
 
     def post(self, path, fields, headers=None):
+        """A form POST; a job's form gets the conversation length it would carry (amendment 1) unless a test sets it."""
+        m = re.fullmatch(r"/issues/([^/]+)/[a-z]+", path)
+        if m and "turn" not in fields and (self.jobs / m.group(1) / "job.json").exists():
+            fields = {**fields, "turn": str(ci.turn_of(rj.open_job(m.group(1), self.jobs)))}
         return self.request("POST", path, urlencode(fields).encode(), {"Origin": ORIGIN, **(headers or {})})
 
     def audit_lines(self):
@@ -458,6 +462,7 @@ def test_a_running_turn_shows_its_steps_as_text_and_reloads(svc):
 
 def test_the_steps_are_escaped_and_a_broken_or_missing_log_still_shows_the_page(svc):
     job = _running(svc, [step("ReadFile", "<img src=x onerror=alert(1)>"), "{broken"])
+    svc.spawner.busy_ids.add(JOB)
     _, _, text = svc.request("GET", f"/issues/{JOB}")
     assert "<img src=x" not in text and "Reading <span class=\"mono\">&lt;img src=x onerror=alert(1)&gt;" in text
     (job.runs / f"{JOB}-w2" / "events.jsonl").unlink()
@@ -472,6 +477,30 @@ def test_the_steps_come_from_the_end_of_a_long_log(svc, monkeypatch):
     _running(svc, lines)
     steps, _ = ci.turn_steps(rj.open_job(JOB, svc.jobs))
     assert steps == [("ReadFile", "late.js")]
+
+
+def test_a_writing_job_no_run_works_on_says_how_to_resume(svc):
+    _running(svc, [step("ReadFile", "a.js")])
+    _, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert "No run of this service is working on it" in text and f"argus resume {JOB}" in text
+    assert "Working…" not in text and 'http-equiv="refresh"' in text
+
+
+@pytest.mark.parametrize("action", ["start", "reply", "abandon"])
+def test_a_page_opened_before_a_reply_without_an_issue_is_refused(svc, action):
+    job = svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/{action}")
+    job.data["conversation"] += [{"from": "human", "at": "t", "text": "kenapa?"},
+                                 {"from": "writer", "at": "t", "stage": "w2", "text": "Karena WIB.", "clashes": [],
+                                  "questions": []}]
+    job.save()
+    fields = {"token": token, "sha": sha, "turn": "2", **({"message": "ok"} if action == "reply" else {}),
+              **({"reason": ""} if action == "abandon" else {})}
+    status, _, text = svc.post(f"/issues/{JOB}/{action}", fields)
+    assert status == 409 and "the writer answered since the page was opened" in text and svc.spawner.calls == []
+    assert svc.runs == []
+    fields["turn"] = "4"                                   # the length now, with the old page's token
+    assert svc.post(f"/issues/{JOB}/{action}", fields)[0] == 403
 
 
 def test_the_turn_seconds_come_from_its_start():

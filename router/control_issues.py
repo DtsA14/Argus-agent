@@ -36,12 +36,12 @@ KEY_ENV = "ARGUS_CONTROL_KEY_FILE"
 STATE = Path.home() / ".local" / "state" / "argus-control"
 REFRESH_S = 3
 STEPS_SHOWN = 12                # the last writer steps a page shows while a turn runs (amendment 1, A2)
-EVENTS_TAIL = 64 * 1024         # the bytes of the turn's events.jsonl a page reads
-DOING = {"ReadFile": "Reading", "SearchFiles": "Searching", "ListFiles": "Listing files", "SubmitIssue": "Writing"}
+EVENTS_TAIL = 16 * 1024         # the bytes of the turn's events.jsonl a page reads
+DOING = {"ReadFile": "Reading", "SearchFiles": "Searching", "ListFiles": "Listing files"}
 ISSUE_ACTIONS = ("reply", "start", "abandon")
 INDEX_MAX = 200                 # the newest job directories /issues reads (job ids sort by time)
-FIELDS = {"new": ("token", "repo", "message"), "reply": ("token", "sha", "message"), "start": ("token", "sha"),
-          "abandon": ("token", "sha", "reason")}
+FIELDS = {"new": ("token", "repo", "message"), "reply": ("token", "sha", "turn", "message"),
+          "start": ("token", "sha", "turn"), "abandon": ("token", "sha", "turn", "reason")}
 E = html.escape
 
 
@@ -157,6 +157,11 @@ def turn_steps(job, now=None):
     return steps[-STEPS_SHOWN:], seconds
 
 
+def turn_of(job):
+    """How many messages the job's conversation has: what a page's forms were made after."""
+    return len(job.data.get("conversation") or [])
+
+
 def issue_cli(jobs_dir, key_file, *args):
     """The argv of an `argus issue ...` run (positionals after `--`)."""
     return [sys.executable, str(rj.ROOT / "scripts" / "argus.py"), "--jobs-dir", str(jobs_dir), "issue", *args,
@@ -254,8 +259,11 @@ class IssuePages:
             rows = "".join(f'<li><span class="dot"></span>{E(DOING.get(t, t))} <span class="mono">{E(x)}</span></li>'
                            for t, x in steps)
             took = f" ({seconds} s)" if seconds is not None else ""
-            parts.append(f'<div class="steps"><ul>{rows}</ul><p class="ok">Working…{E(took)} this page reloads by '
-                         'itself.</p></div>')
+            note = (f'<p class="ok">Working…{E(took)} this page reloads by itself.</p>' if busy else
+                    # WRITING with no run of this service: a turn cut off (a crash, a restart) or one from the terminal
+                    f'<p class="bad">No run of this service is working on it{E(took)}. If it stays so, resume it from '
+                    f'the terminal: argus resume {E(job.id)}</p>')
+            parts.append(f'<div class="steps"><ul>{rows}</ul>{note}</div>')
         text_now, _ = ri.last_issue(job)
         can_start = (not busy and state == ri.AWAITING_HUMAN and self.key_file() is not None and sha)
         if text_now:
@@ -303,10 +311,12 @@ class IssuePages:
                              text=out["text"] or "")
 
     def _form(self, job, action, sha, inner, label):
-        token = self.control.tokens.issue(f"issue-{action}", job.id, sha)
+        turn = turn_of(job)
+        token = self.control.tokens.issue(f"issue-{action}", job.id, f"{sha}|{turn}")
         return (f'<form class="card" method="post" action="/issues/{E(job.id)}/{action}">'
                 f'<input type="hidden" name="token" value="{E(token)}">'
-                f'<input type="hidden" name="sha" value="{E(sha[:12])}">{inner}'
+                f'<input type="hidden" name="sha" value="{E(sha[:12])}">'
+                f'<input type="hidden" name="turn" value="{turn}">{inner}'
                 f'<button class="{action}" type="submit">{E(label)}</button></form>')
 
     def _page(self, title, body, refresh=None):
@@ -372,7 +382,11 @@ class IssuePages:
         sha_now = (job.data.get("issue_sha256") or "") if job is not None else ""
         if job is not None and values["sha"] != sha_now[:12]:          # before the token, so the reason is this one
             return refuse(409, "issue", "the issue changed since the page was opened: read it again", job, text)
-        why = c.tokens.spend(values["token"], f"issue-{action}", job.id if job else "", sha_now)
+        # a reply without an issue keeps the sha: the page is also bound to the conversation's length (amendment 1)
+        if job is not None and values["turn"] != str(turn_of(job)):
+            return refuse(409, "issue", "the writer answered since the page was opened: read it again", job, text)
+        why = c.tokens.spend(values["token"], f"issue-{action}", job.id if job else "",
+                             f"{sha_now}|{turn_of(job)}" if job is not None else "")
         if why:
             return refuse(403, "token", why, job, text, repo)
         if action == "abandon":
