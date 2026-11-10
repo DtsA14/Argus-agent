@@ -1,12 +1,12 @@
-# at a55f321 (aarch64); mutant 'notes unchecked' indentation fixed before this run
-KILLED  notes unchecked: 1 failed, 109 passed in 25.03s
-KILLED  markers allowed: 1 failed, 113 passed in 26.45s
-KILLED  notes not text taken: 1 failed, 111 passed in 31.66s
-KILLED  checked before the strip: 1 failed, 106 passed in 24.88s
-KILLED  notes not kept: 1 failed, 115 passed in 28.06s
-KILLED  no notes erase the old: 1 failed, 115 passed in 28.83s
-KILLED  notes not in the prompt: 1 failed, 115 passed in 28.30s
-KILLED  prompt drops the notes: 1 failed, 115 passed in 26.35s
-KILLED  version kept: 1 failed, 116 passed in 19.00s
-KILLED  not told to use them: 1 failed, 116 passed in 18.51s
+# at ea0c8c0 (aarch64), after the SubmitIssue version 4 bump; the code under these mutants is unchanged at 2c77dae
+KILLED  notes unchecked: 1 failed, 120 passed in 31.74s
+KILLED  markers allowed: 1 failed, 124 passed in 36.17s
+KILLED  notes not text taken: 1 failed, 122 passed in 37.21s
+KILLED  checked before the strip: 1 failed, 117 passed in 33.69s
+KILLED  notes not kept: 1 failed, 126 passed in 24.49s
+KILLED  no notes erase the old: 1 failed, 126 passed in 20.12s
+KILLED  notes not in the prompt: 1 failed, 126 passed in 20.41s
+KILLED  prompt drops the notes: 1 failed, 126 passed in 22.85s
+KILLED  version kept: 1 failed, 35 passed in 3.61s
+KILLED  not told to use them: 1 failed, 127 passed in 19.18s
 RESULT: 10/10 killed
