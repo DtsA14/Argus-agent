@@ -24,7 +24,7 @@ ENV = "pwa_node22"
 FIRST = "Kartu job tambahin tanggal dibuat dong"
 ISSUE = "\n".join(["The list page: the date under each job id", "", "Each job card shows the date it was made.",
                    "1. `9 Nov, 09:35 WIB` for `2026-11-09T02:35:12Z`.", "",
-                   "Nothing else changes: the existing tests keep passing unchanged.", "",
+                   "Nothing else changes: the list page otherwise.", "",
                    "Tests: the date of each example.", f"Environment: {ENV}"])
 REPLY = "Di kartu job akan muncul tanggal dibuat, misalnya 9 Nov, 09:35 WIB."
 
@@ -50,6 +50,8 @@ def tool_answers(call_record):
 READ = call("ReadFile", {"path": "src/list.test.js"}, "r")
 SUBMIT = call("SubmitIssue", submit_args(clashes=[{"file": "src/list.test.js", "line": 2, "why": "reads the cell"}],
                                          questions=["Pakai jam juga?"]), "s")
+# the issue SUBMIT stores: the harness adds its clash (amendment 3)
+STORED = iw.with_clashes(ISSUE, [{"file": "src/list.test.js", "line": 2, "why": "reads the cell"}]) + "\n"
 
 
 def make_repo(tmp_path):
@@ -105,7 +107,7 @@ def test_a_first_message_becomes_an_issue_after_reading_the_frozen_repository(tm
     env = Env(tmp_path, [READ, SUBMIT])
     job = env.new()
     assert job.data["kind"] == "issue" and job.data["state"] == ri.AWAITING_HUMAN and len(env.confirms) == 1
-    assert (job.dir / ri.ISSUE).read_text() == ISSUE + "\n"
+    assert (job.dir / ri.ISSUE).read_text() == STORED
     human, writer = job.data["conversation"]
     assert (human["from"], human["text"]) == ("human", FIRST)
     assert (writer["from"], writer["text"], writer["stage"]) == ("writer", REPLY, "w1")
@@ -273,7 +275,65 @@ def test_tabs_and_a_tests_paragraph_with_its_condition_pass_and_the_stored_issue
 
 def test_a_good_issue_passes_the_gate(source):
     problems, r = gate(source, clashes=[{"file": "src/a.test.js", "line": 1, "why": "w"}], questions=["q?"])
-    assert problems == [] and r["issue"] == ISSUE + "\n" and r["clashes"][0]["file"] == "src/a.test.js"
+    assert problems == [] and r["clashes"][0]["file"] == "src/a.test.js"
+    assert r["issue"] == iw.with_clashes(ISSUE, r["clashes"]) + "\n"
+
+
+# ---- amendment 3: an issue that clashes says so ------------------------------------------------------------------
+
+CLASH_A = {"file": "src/a.test.js", "line": 4, "why": "reads the cell"}
+CLAIM = ISSUE.replace("the list page otherwise.", "the list page otherwise. The existing tests keep passing unchanged.")
+
+
+@pytest.mark.parametrize("claim", ["The existing tests keep passing unchanged.", "the old test keeps passing unchanged",
+                                   "Existing tests KEEP PASSING UNCHANGED", "the tests continue to pass unchanged",
+                                   "they still pass as before", "the suite keeps passing\nwithout any changes"])
+def test_an_issue_with_clashes_cannot_say_the_old_tests_keep_passing(source, claim):
+    issue = CLAIM.replace("The existing tests keep passing unchanged.", claim)
+    problems, r = gate(source, issue=issue, clashes=[CLASH_A])
+    assert r is None and any("cannot say the existing tests keep passing unchanged" in p for p in problems), problems
+
+
+def test_the_claim_is_read_only_in_the_nothing_else_changes_paragraph(source):
+    issue = ISSUE.replace("Each job card shows the date it was made.",
+                          "Each job card shows the date it was made; the header keeps passing unchanged to the card.")
+    problems, r = gate(source, issue=issue, clashes=[CLASH_A])
+    assert problems == [] and r is not None
+
+
+def test_the_claim_paragraph_ends_at_its_blank_line(source):
+    issue = ISSUE.replace("Tests: the date of each example.",
+                          "Tests: the date of each example; the old helper keeps passing unchanged values to the card.")
+    problems, r = gate(source, issue=issue, clashes=[CLASH_A])
+    assert problems == [] and r is not None
+
+
+def test_the_harness_writes_the_clashes_into_the_issue_before_its_environment_line(source):
+    (source / "src" / "b.test.js").write_text("y\n")
+    clashes = [CLASH_A, {"file": "src/b.test.js", "line": 0, "why": "counts the cells"}]
+    problems, r = gate(source, clashes=clashes)
+    lines = r["issue"].rstrip("\n").split("\n")
+    assert problems == [] and lines[-1] == f"Environment: {ENV}"
+    assert lines[-4:-1] == [iw.LOOSEN, "- src/a.test.js line 4: reads the cell", "- src/b.test.js: counts the cells"]
+    assert lines[-5] == "" and r["issue"].startswith(ISSUE.rsplit("\n", 1)[0])
+
+
+def test_the_issue_with_its_clash_list_must_fit_a_code_job(source):
+    body = ISSUE.rsplit("\n", 1)[0]
+    issue = body + "\n" + "x" * (iw.MAX_ISSUE - 2 - len(ISSUE)) + f"\nEnvironment: {ENV}"
+    assert gate(source, issue=issue)[0] == []
+    problems, r = gate(source, issue=issue, clashes=[CLASH_A])
+    assert r is None and any("with the clash list the harness adds" in p for p in problems), problems
+
+
+def test_without_clashes_the_issue_is_stored_as_written_and_may_say_the_old_tests_keep_passing(source):
+    problems, r = gate(source, issue=CLAIM)
+    assert problems == [] and r["issue"] == CLAIM + "\n"
+
+
+def test_the_writer_is_told_to_name_the_tests_to_loosen():
+    assert "never claim the old tests keep passing: the harness adds to the issue the list" in iw.SYSTEM
+    assert iw.VERSIONS["SubmitIssue"] == "4"
 
 
 @pytest.mark.parametrize("kw, why", [
@@ -522,7 +582,7 @@ def test_start_hands_the_issue_seen_to_a_code_job_on_the_frozen_commit(tmp_path,
     (kw,) = fake.calls
     i = job.data["inputs"]
     assert (kw["repo"], kw["commit"], kw["environment"]) == (i["repo"], i["commit"], ENV)
-    assert kw["issue"] == ISSUE + "\n" and kw["max_usd"] == env.cfg["issue_writer"]["code_max_usd"] <= ri.CODE_MAX_USD
+    assert kw["issue"] == STORED and kw["max_usd"] == env.cfg["issue_writer"]["code_max_usd"] <= ri.CODE_MAX_USD
     assert job.data["state"] == ri.HANDED_OFF and job.data["handoff"]["job"] == kw["job_id"] == code.id
     assert job.data["handoff"]["issue_sha256"] == sha and job.data["handoff"]["via"] == "ui"
     assert "handed off to code job" in rj.status("ji", jobs_dir=env.jobs)
@@ -732,7 +792,7 @@ def test_a_reply_without_an_issue_keeps_the_last_issue_the_one_to_start(tmp_path
     before = env.job().data["issue_sha256"]
     job = env.reply("Kenapa pakai WIB?")
     assert job.data["state"] == ri.AWAITING_HUMAN and job.data["issue_sha256"] == before
-    assert (job.dir / ri.ISSUE).read_text() == ISSUE + "\n" and "issue_sha256" not in job.data["conversation"][-1]
+    assert (job.dir / ri.ISSUE).read_text() == STORED and "issue_sha256" not in job.data["conversation"][-1]
     text = rj.status("ji", jobs_dir=env.jobs)
     assert "clash: src/list.test.js:2 reads the cell" in text and f"argus issue start ji --sha {before[:12]}" in text
     assert "revise it only when the human's last message asks for a change" in env.prompts()[-1]
@@ -740,7 +800,7 @@ def test_a_reply_without_an_issue_keeps_the_last_issue_the_one_to_start(tmp_path
     fake = FakeCode("ok")
     monkeypatch.setattr(rj, "start_code", fake)
     job, _ = start(env, before[:12])
-    assert fake.calls[0]["issue"] == ISSUE + "\n" and job.data["state"] == ri.HANDED_OFF
+    assert fake.calls[0]["issue"] == STORED and job.data["state"] == ri.HANDED_OFF
 
 
 def test_each_tool_step_is_logged_with_its_target_for_the_page(tmp_path):
@@ -809,4 +869,4 @@ def test_the_notes_of_a_turn_reach_the_next_turns_until_new_ones_replace_them(tm
 
 def test_the_writer_is_told_to_use_and_keep_its_notes():
     assert "use them and read a file again only for a detail they lack" in iw.SYSTEM
-    assert iw.VERSIONS["SubmitIssue"] == "3"
+    assert int(iw.VERSIONS["SubmitIssue"]) >= 3

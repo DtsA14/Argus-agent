@@ -190,3 +190,22 @@ job code.
 
 **Tes wajib (mutants).** Gerbang: catatan kosong/tidak ada → None, panjang, karakter; job: catatan giliran N ada di prompt
 giliran N+1, submit tanpa catatan mempertahankan, catatan baru mengganti; tidak ada di snapshot publik.
+
+## Amandemen 3 (2026-11-10): issue yang bentrok mengatakannya sendiri
+
+Status: **Atha 2026-11-10 "Ok next bro"** (antrean dari p3/p4).
+
+**Masalah.** p3 w3 dan p4 w2: penulis mencatat `clashes` (7 dan 5 tes lama) dan menjelaskannya di balasan, tapi teks issue
+tetap menulis "The existing tests keep passing unchanged". Drafter dan agen membaca issue, bukan balasan; human yang
+menekan Start tanpa membaca balasan memulai job yang pasti merusak tes lama.
+
+**C1.** Gerbang SubmitIssue (versi alat "4"): issue dengan satu `clashes` atau lebih ditolak bila paragraf "Nothing else
+changes" memuat klaim tes lama tidak berubah ("keep(s) passing unchanged", "continue(s) to pass unchanged", "still pass as
+before", "... without (any) change(s)", tanpa membedakan huruf besar dan spasi/baris). **C2.** Harness sendiri (bukan
+model) menulis daftar clash ke issue yang disimpan, sebagai paragraf sebelum baris Environment: kalimat tetap "A human
+loosens these existing tests first (the issue writer's clash check, added by the harness):" lalu satu baris `- file line
+N: why` per clash; issue beserta daftar itu harus muat batas job code (`MAX_ISSUE`). Issue tanpa clash disimpan apa
+adanya. (Code review: mengawasi kalimat model dengan regex rapuh; daftar dari harness deterministik.)
+
+**Tes wajib (mutants).** Klaim ditolak dengan clash (enam ejaan); klaim di luar paragraf itu tidak ditolak; daftar ditulis
+harness tepat sebelum baris Environment; batas panjang dengan daftar; tanpa clash disimpan apa adanya; prompt, versi alat.

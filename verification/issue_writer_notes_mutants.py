@@ -18,7 +18,7 @@ M = [
      '    if True:                              # the writer'),
     ("notes not in the prompt", I, '"notes": job.data.get("repo_notes"),', '"notes": None,'),
     ("prompt drops the notes", W, '    if inputs.get("notes"):\n', '    if False:\n'),
-    ("version kept", W, '"SubmitIssue": "3"}', '"SubmitIssue": "2"}'),
+    ("version kept", W, '"SubmitIssue": "4"}', '"SubmitIssue": "2"}'),
     ("not told to use them", W, '    "- Your notes from earlier turns, when the prompt has them, describe this same commit: use them and read a file "\n'
      '    "again only for a detail they lack. With every submit, leave in `notes` what a later turn would need (files, what "\n'
      '    "they hold, the tests that touch them, exact classes and texts), or nothing to keep the earlier notes.",\n', ""),

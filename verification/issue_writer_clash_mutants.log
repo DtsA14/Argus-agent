@@ -1,0 +1,15 @@
+# at 2c77dae (aarch64)
+KILLED  claim allowed: 1 failed, 25 passed in 3.42s
+KILLED  claim searched in the whole issue: 1 failed, 31 passed in 3.46s
+KILLED  claim refused without clashes: 1 failed, 35 passed in 3.32s
+KILLED  claim case-sensitive: 1 failed, 27 passed in 3.25s
+KILLED  only 'keep': 1 failed, 28 passed in 3.27s
+KILLED  paragraph runs past its end: 1 failed, 32 passed in 3.28s
+KILLED  no clash list: 1 failed, 33 passed in 3.31s
+KILLED  list after the environment line: 1 failed, 33 passed in 3.32s
+KILLED  list without its why: 1 failed, 33 passed in 3.21s
+KILLED  stored without the list: 1 failed in 0.76s
+KILLED  no length check with the list: 1 failed, 34 passed in 3.27s
+KILLED  version kept: 1 failed, 36 passed in 3.29s
+KILLED  prompt still asks the model to write it: 1 failed, 36 passed in 3.35s
+RESULT: 13/13 killed
