@@ -1,0 +1,4 @@
+## step 5
+HTTP 200
+{"stage": "d1", "kind": "draft", "status": "DRAFTED", "cost_nano": 22302558, "cost_usd": "0.0223", "started_at": "2026-11-10T17:08:37Z", "ended_at": "2026-11-10T17:10:54Z"}
+['stage', 'kind', 'status', 'cost_nano', 'cost_usd', 'started_at', 'ended_at']

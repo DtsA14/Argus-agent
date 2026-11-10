@@ -1,0 +1,15 @@
+== staging deploy (job j20261110_170837_da17) ==
+release j20261110_170837_da17-b712363c860b.up2: /home/ubuntu/argus-ledger at b712363c860b (applied as reviewed)
+image ledger_staging_up2 sha256:6d8fc5cc3639; no network, read-only, Unix socket; data snapshot 2026-11-10T17:15:33Z
+tested: stage check passed in ledger_py312_up2 at 2026-11-10T17:14:30Z (152 tests)
+live now: j20261107_171214_be81-1d3a8ea82356.up2; rollback after this: j20261107_171214_be81-1d3a8ea82356.up2
+staging only: no production, no users, no credentials
+(--yes: approved in chat; no [y/N] asked)
+staging live: j20261110_170837_da17-b712363c860b.up2
+  job j20261110_170837_da17, commit b712363c860b, runtime ledger_staging_up2
+  last smoke: pass at 2026-11-10T17:15:46Z
+data snapshot: 2026-11-10T17:15:33Z, 139 jobs, 0 excluded
+last monitor: pass at 2026-11-10T17:15:31Z
+rollback would start: j20261107_171214_be81-1d3a8ea82356.up2 on ledger_staging_up2
+exit 0
+net=none ro=true cap=[ALL] user=1001:1001 sec=[no-new-privileges] mounts=/home/ubuntu/argus-staging/releases/j20261110_170837_da17-b712363c860b.up2/sock:true /home/ubuntu/argus-staging/releases/j20261110_170837_da17-b712363c860b.up2/src:false /home/ubuntu/argus-staging/releases/j20261110_170837_da17-b712363c860b.up2/entry:false /home/ubuntu/argus-staging/data/pub:false 
