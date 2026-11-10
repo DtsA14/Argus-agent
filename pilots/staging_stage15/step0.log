@@ -1,0 +1,7 @@
+staging live: j20261107_171214_be81-1d3a8ea82356.up2
+  job j20261107_171214_be81, commit 1d3a8ea82356, runtime ledger_staging_up2
+  last smoke: pass at 2026-11-08T02:27:20Z
+data snapshot: 2026-11-10T17:00:33Z, 138 jobs, 0 excluded
+last monitor: pass at 2026-11-10T17:00:32Z
+rollback would start: j20261104_152512_b93a-4e947a0ffe8b.up2 on ledger_staging_up2
+1a3c52e4173c argus-staging-ledger-j20261107_171214_be81-1d3a8ea82356.up2
