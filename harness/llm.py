@@ -82,11 +82,22 @@ def prompt_cache_for(cfg, role, ref):
 
 def check_long_context(cfg, ref, max_input, what):
     """K2 (D5): a model priced higher above a prompt size (Haiku 5.5: x5 above 100,000 tokens, cache included) is refused
-    when one call's input may exceed it; that tier is not modelled. Applies with or without caching."""
+    when one call's input may exceed it; that tier is not modelled. Applies with or without caching. Only Anthropic's
+    own API counts exactly (provider_counter); any other provider (a gateway serving Haiku) counts by heuristic,
+    chars / 3 x margin, and a real token can be one character: the bound is then the count of the most characters a
+    prompt under the tier may hold, above x margin / 3 (100,000 at margin 1.2: 40,000)."""
     above = (price_for(cfg, ref) or {}).get("long_context_above")
-    if above is not None and max_input > int(above):
+    if above is None:
+        return
+    limit, how = int(above), ""
+    if ref.provider != "anthropic":
+        llm = cfg.get("llm") or {}
+        margin = float((llm.get("input_margin_by_model") or {}).get(str(ref), llm.get("input_margin", 1.2)))
+        limit, how = int(int(above) * margin / 3), (f" (counted by heuristic here: a token may be one character, so "
+                                                   f"{int(above):,} tokens bound the count at {int(int(above) * margin / 3):,})")
+    if max_input > limit:
         raise ConfigError(f"{what}: {ref} is billed at a higher rate above {int(above):,} input tokens, and one call "
-                          f"may send {max_input:,}; set max_input_tokens to {int(above):,} or less")
+                          f"may send {max_input:,}{how}; set max_input_tokens to {limit:,} or less")
 
 
 def with_cache_markers(messages):
