@@ -1,0 +1,10 @@
+## step 3
+HTTP/1.0 200 OK
+Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'
+/issues bubble=0 turn=0
+HTTP/1.0 200 OK
+Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'
+/issues/j20261109_162802_3ff8 bubble=1 turn=1
+HTTP/1.0 200 OK
+Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'
+/style.css bubble=1 turn=0
