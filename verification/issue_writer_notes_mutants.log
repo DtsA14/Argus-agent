@@ -1,0 +1,12 @@
+# at a55f321 (aarch64); mutant 'notes unchecked' indentation fixed before this run
+KILLED  notes unchecked: 1 failed, 109 passed in 25.03s
+KILLED  markers allowed: 1 failed, 113 passed in 26.45s
+KILLED  notes not text taken: 1 failed, 111 passed in 31.66s
+KILLED  checked before the strip: 1 failed, 106 passed in 24.88s
+KILLED  notes not kept: 1 failed, 115 passed in 28.06s
+KILLED  no notes erase the old: 1 failed, 115 passed in 28.83s
+KILLED  notes not in the prompt: 1 failed, 115 passed in 28.30s
+KILLED  prompt drops the notes: 1 failed, 115 passed in 26.35s
+KILLED  version kept: 1 failed, 116 passed in 19.00s
+KILLED  not told to use them: 1 failed, 116 passed in 18.51s
+RESULT: 10/10 killed

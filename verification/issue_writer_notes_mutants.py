@@ -8,7 +8,7 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 I, W = "router/issue.py", "codetask/issue_writer.py"
 T = ["tests/test_issue_writer.py"]
 M = [
-    ("notes unchecked", W, '            why = text_problem(notes, "notes", NOTES_MAX)', "            why = None"),
+    ("notes unchecked", W, '        why = text_problem(notes, "notes", NOTES_MAX)', "        why = None"),
     ("markers allowed", W, '        if "<<<" in notes or ">>>" in notes:', "        if False:"),
     ("notes not text taken", W, "    if notes is not None and not isinstance(notes, str):", "    if False:"),
     ("checked before the strip", W, "    notes = notes.strip() or None if isinstance(notes, str) else None",
