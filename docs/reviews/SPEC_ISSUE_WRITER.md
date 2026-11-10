@@ -199,11 +199,13 @@ Status: **Atha 2026-11-10 "Ok next bro"** (antrean dari p3/p4).
 tetap menulis "The existing tests keep passing unchanged". Drafter dan agen membaca issue, bukan balasan; human yang
 menekan Start tanpa membaca balasan memulai job yang pasti merusak tes lama.
 
-**C1.** Gerbang SubmitIssue (versi alat "4"): issue dengan satu `clashes` atau lebih ditolak bila teksnya memuat "keep
-passing unchanged" / "keeps passing unchanged" (tanpa membedakan huruf besar), dan bila ada file clash yang tidak disebut
-di teks issue. Issue tanpa clash tidak berubah aturannya. Prompt: tanpa bentrok paragraf "Nothing else changes" berakhir
-"The existing tests keep passing unchanged."; dengan bentrok berakhir "A human loosens these existing tests first:" dan
-setiap file:baris.
+**C1.** Gerbang SubmitIssue (versi alat "4"): issue dengan satu `clashes` atau lebih ditolak bila paragraf "Nothing else
+changes" memuat klaim tes lama tidak berubah ("keep(s) passing unchanged", "continue(s) to pass unchanged", "still pass as
+before", "... without (any) change(s)", tanpa membedakan huruf besar dan spasi/baris). **C2.** Harness sendiri (bukan
+model) menulis daftar clash ke issue yang disimpan, sebagai paragraf sebelum baris Environment: kalimat tetap "A human
+loosens these existing tests first (the issue writer's clash check, added by the harness):" lalu satu baris `- file line
+N: why` per clash; issue beserta daftar itu harus muat batas job code (`MAX_ISSUE`). Issue tanpa clash disimpan apa
+adanya. (Code review: mengawasi kalimat model dengan regex rapuh; daftar dari harness deterministik.)
 
-**Tes wajib (mutants).** Klaim ditolak dengan clash (tiga ejaan); file clash yang tidak disebut ditolak dan disebut
-namanya; tanpa clash klaim boleh; prompt dan versi alat.
+**Tes wajib (mutants).** Klaim ditolak dengan clash (enam ejaan); klaim di luar paragraf itu tidak ditolak; daftar ditulis
+harness tepat sebelum baris Environment; batas panjang dengan daftar; tanpa clash disimpan apa adanya; prompt, versi alat.

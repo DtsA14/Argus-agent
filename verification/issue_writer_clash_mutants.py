@@ -8,17 +8,22 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 W = "codetask/issue_writer.py"
 T = ["tests/test_issue_writer.py"]
 M = [
-    ("claim allowed", W, "        if UNCHANGED.search(issue):", "        if False:"),
-    ("claim case-sensitive", W, 'UNCHANGED = re.compile(r"keeps? passing unchanged", re.IGNORECASE)',
-     'UNCHANGED = re.compile(r"keeps? passing unchanged")'),
-    ("only 'keep'", W, 'UNCHANGED = re.compile(r"keeps? passing unchanged", re.IGNORECASE)',
-     'UNCHANGED = re.compile(r"keep passing unchanged", re.IGNORECASE)'),
-    ("clash files not named", W, "        if missing:", "        if False:"),
-    ("claim refused without clashes", W, "    if kept and isinstance(issue, str) and issue.strip():",
-     "    if isinstance(issue, str) and issue.strip():"),
+    ("claim allowed", W, "        if kept and UNCHANGED.search(unchanged_paragraph(issue)):", "        if False:"),
+    ("claim searched in the whole issue", W, "        if kept and UNCHANGED.search(unchanged_paragraph(issue)):",
+     "        if kept and UNCHANGED.search(issue):"),
+    ("claim refused without clashes", W, "        if kept and UNCHANGED.search(unchanged_paragraph(issue)):",
+     "        if UNCHANGED.search(unchanged_paragraph(issue)):"),
+    ("claim case-sensitive", W, '"without\\s+(?:any\\s+)?changes?)", re.IGNORECASE)', '"without\\s+(?:any\\s+)?changes?)")'),
+    ("only 'keep'", W, 'r"\\b(?:keeps?|continues?\\s+to|still)', 'r"\\b(?:keeps?)'),
+    ("paragraph runs past its end", W, "        elif inside and not ln.strip():\n            break\n", ""),
+    ("no clash list", W, "    if not clashes:\n        return issue\n", "    return issue\n"),
+    ("list after the environment line", W, 'lines[:-1] + [""] + block + [lines[-1]]', 'lines + [""] + block'),
+    ("list without its why", W, '+ f": {c[\'why\']}"', '+ ""'),
+    ("stored without the list", W, '"issue": None if only else final + "\\n",', '"issue": None if only else issue.strip() + "\\n",'),
+    ("no length check with the list", W, "        if len(final) > MAX_ISSUE - 1:", "        if False:"),
     ("version kept", W, '"SubmitIssue": "4"}', '"SubmitIssue": "3"}'),
-    ("prompt still claims", W, "\"tests keep passing unchanged.' when nothing clashes. When something clashes, end it instead with 'A human loosens \"\n",
-     "\"tests keep passing unchanged.' when nothing clashes. When something clashes, end it instead with 'A person loosens \"\n"),
+    ("prompt still asks the model to write it", W, '"passing: the harness adds to the issue the list of your clashes',
+     '"passing: write in the issue the list of your clashes'),
 ]
 
 if __name__ == "__main__":
