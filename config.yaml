@@ -485,9 +485,10 @@ prices:
   "openrouter:z-ai/glm-5.3":                           {input: 1.40, output: 4.40, cache_read: 0.26}
   # Atha 2026-11-10 (issue writer models through OpenRouter, no Anthropic balance), checked 2026-11-10 on
   # openrouter.ai/api/v1/models/<id>/endpoints. Haiku 5.5 on Anthropic: the list price, x5 above 100,000 prompt tokens
-  # (OpenRouter override min_prompt_tokens 100000, not modelled: refused by check_long_context). GPT-6 Luna on OpenAI's
-  # standard tier (the flex tier is cheaper but queued, fast costs 2x and is refused by max_price); 2.5x/1.5x above
-  # 272,000 prompt tokens. V4.1 Flash 1017 (the model deepseek:deepseek-flash serves) on DeepInfra fp8 at 51% off
+  # (OpenRouter override min_prompt_tokens 100000, not modelled: refused by check_long_context, but through the gateway
+  # on a heuristic token count, not Anthropic's tokenizer: not an absolute bound). GPT-6 Luna on OpenAI's standard tier
+  # (the flex tier is cheaper but queued, fast costs 2x and is refused by max_price); 2.5x/1.5x above 272,000 prompt
+  # tokens, refused the same way (heuristic). V4.1 Flash 1017 (the model deepseek:deepseek-flash serves) on DeepInfra fp8 at 51% off
   # ($0.098/$0.294) and Morph fp8 ($0.022/$0.40): the list price is DeepInfra's undiscounted $0.20/$0.60.
   "openrouter:anthropic/claude-haiku-5.5":             {input: 0.10, output: 0.50, cache_read: 0.01, cache_write_5m: 0.125,
                                                         cache_write_1h: 0.20, long_context_above: 100000}
