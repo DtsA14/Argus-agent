@@ -18,7 +18,7 @@ M = [
     ("no writer step", W, '            log.emit("writer_step", tool=name, target=target[:TARGET_MAX])\n', ""),
     ("SubmitIssue version kept", W, '"SubmitIssue": "2"}', '"SubmitIssue": "1"}'),
     ("not told to be quick", W, '    "The human chats with you from a phone and waits for every answer: be quick.",\n', ""),
-    ("a reply only writes an issue", I, '    if w["issue"] is None:                          # a reply only', "    if False:"),
+    ("a reply only writes an issue", I, '    if w["issue"] is None:                          # a reply only', "    if False:  # a reply only"),
     ("a reply only drops the issue", I, ONLY_END, ONLY_END + '        job.data["issue_sha256"] = None\n'),
     ("start offered without an issue", I,
      '        if d.get("issue_sha256"):\n            out.append(f"next: argus issue start',
