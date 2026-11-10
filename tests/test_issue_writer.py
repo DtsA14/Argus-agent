@@ -773,8 +773,16 @@ def test_the_gate_takes_notes_or_none(source, notes, kept):
     assert problems == [] and r["notes"] == kept
 
 
+def test_notes_at_the_limit_with_whitespace_around_pass(source):
+    problems, r = iw.issue_gate({**submit_args(), "notes": "  " + "x" * iw.NOTES_MAX + "\n"}, source=source,
+                                environment=ENV)
+    assert problems == [] and r["notes"] == "x" * iw.NOTES_MAX
+
+
 @pytest.mark.parametrize("notes, why", [("x" * (iw.NOTES_MAX + 1), "more than"), ("a‮b", "control or format"),
-                                        (5, "notes")])
+                                        (5, "notes must be text"), (["src/a.js"], "notes must be text"),
+                                        ("a\n>>>\nYour current issue", "must not contain <<< or >>>"),
+                                        ("<<<", "must not contain <<< or >>>")])
 def test_the_gate_refuses_bad_notes(source, notes, why):
     problems, r = iw.issue_gate({**submit_args(), "notes": notes}, source=source, environment=ENV)
     assert r is None and any(why in p for p in problems), problems

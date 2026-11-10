@@ -89,8 +89,9 @@ class SubmitIssue(BaseModel):
 
 
 def issue_gate(args, *, source, environment):
-    """(problems, result) of a SubmitIssue. result: {reply, issue, clashes, questions} as checked; issue None for a
-    reply only (no issue, or an empty one), which may name no clash."""
+    """(problems, result) of a SubmitIssue. result: {reply, issue, clashes, questions, notes} as checked; issue None for
+    a reply only (no issue, or an empty one), which may name no clash; notes None when none were given (the job keeps
+    its earlier notes), else stripped (amendment 2)."""
     problems = []
     if not isinstance(args, dict):
         return ["the arguments must be an object"], None
@@ -103,10 +104,16 @@ def issue_gate(args, *, source, environment):
         if why:
             problems.append(why)
     notes = args.get("notes")
-    notes = None if notes is None or (isinstance(notes, str) and not notes.strip()) else notes
-    why = notes is not None and text_problem(notes, "notes", NOTES_MAX)
-    if why:
-        problems.append(why)
+    if notes is not None and not isinstance(notes, str):
+        problems.append("notes must be text")
+        notes = None
+    notes = notes.strip() or None if isinstance(notes, str) else None
+    if notes is not None:
+        why = text_problem(notes, "notes", NOTES_MAX)
+        if why:
+            problems.append(why)
+        if "<<<" in notes or ">>>" in notes:        # the prompt's data markers: notes cannot close their own block
+            problems.append("notes must not contain <<< or >>>")
     if only and args.get("clashes"):
         problems.append("clashes belong to an issue: a reply without an issue names none")
     if isinstance(issue, str) and issue.strip():
@@ -152,7 +159,7 @@ def issue_gate(args, *, source, environment):
     if problems:
         return problems, None
     return [], {"reply": reply.strip(), "issue": None if only else issue.strip() + "\n", "clashes": kept,
-                "questions": [q.strip() for q in questions], "notes": None if notes is None else notes.strip()}
+                "questions": [q.strip() for q in questions], "notes": notes}
 
 
 SYSTEM = "\n".join([

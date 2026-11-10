@@ -8,10 +8,11 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 I, W = "router/issue.py", "codetask/issue_writer.py"
 T = ["tests/test_issue_writer.py"]
 M = [
-    ("notes unchecked", W, '    why = notes is not None and text_problem(notes, "notes", NOTES_MAX)', "    why = None"),
-    ("notes not stripped", W, '"notes": None if notes is None else notes.strip()}', '"notes": notes}'),
-    ("blank notes kept", W, "    notes = None if notes is None or (isinstance(notes, str) and not notes.strip()) else notes",
-     "    notes = notes or None"),
+    ("notes unchecked", W, '            why = text_problem(notes, "notes", NOTES_MAX)', "            why = None"),
+    ("markers allowed", W, '        if "<<<" in notes or ">>>" in notes:', "        if False:"),
+    ("notes not text taken", W, "    if notes is not None and not isinstance(notes, str):", "    if False:"),
+    ("checked before the strip", W, "    notes = notes.strip() or None if isinstance(notes, str) else None",
+     "    notes = (notes if notes.strip() else None) if isinstance(notes, str) else None"),
     ("notes not kept", I, '        job.data["repo_notes"] = w["notes"]\n', "        pass\n"),
     ("no notes erase the old", I, '    if w.get("notes"):                              # the writer',
      '    if True:                              # the writer'),
