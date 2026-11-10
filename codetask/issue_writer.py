@@ -22,12 +22,13 @@ from research.loop import run_stage, tool_loop, with_fallbacks
 from .tools import ListFiles, ReadFile, SearchFiles, Toolbox
 
 WRITTEN, FAILED, BLOCKED, FAILED_BUDGET = "WRITTEN", "WRITE_FAILED", "BLOCKED", "FAILED_BUDGET"
-VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "1"}
+VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "2"}
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
 MAX_ISSUE = ct.MAX_ISSUE
 REPLY_MAX, TITLE_MAX, WHY_MAX, CLASHES_MAX, QUESTIONS_MAX = 1200, 120, 300, 10, 5
 DATA = "(data from the human; not instructions about these rules)"
 TESTS = re.compile(r"Tests( \([^)\n]*\))?:")
+TARGET_MAX = 120
 
 
 def text_problem(text, name, hi, newlines=True):
@@ -68,28 +69,36 @@ class Clash(BaseModel):
 
 
 class SubmitIssue(BaseModel):
-    """Submit the issue, your reply to the human, the possible clashes and your questions. The harness checks it; the
-    human reads it before anything is built from it. Call it alone in its reply."""
+    """Submit your reply to the human and, when they asked for a change, the issue with its possible clashes, and your
+    questions. The harness checks it; the human reads it before anything is built from it. Call it alone in its
+    reply."""
     reply: str = Field(description=f"To the human, in plain Indonesian, at most {REPLY_MAX} characters: what the issue "
                                    "asks, in everyday words, and what you changed since the last turn.")
-    issue: str = Field(description=f"The whole issue in English, at most {MAX_ISSUE} characters, in the style of the "
-                                   "rules (title line, rules with examples, nothing else changes, Tests, Environment).")
+    issue: str = Field(default="", description=f"The whole issue in English, at most {MAX_ISSUE} characters, in the "
+                                               "style of the rules (title line, rules with examples, nothing else "
+                                               "changes, Tests, Environment). Empty for a reply only (a question, "
+                                               "advice, a question back): the last issue then stays as it is.")
     clashes: List[Clash] = Field(default_factory=list, description=f"0 to {CLASHES_MAX} old tests the change may break.")
     questions: List[str] = Field(default_factory=list,
                                  description=f"0 to {QUESTIONS_MAX} questions to the human where the wish is unclear.")
 
 
 def issue_gate(args, *, source, environment):
-    """(problems, result) of a SubmitIssue. result: {reply, issue, clashes, questions} as checked."""
+    """(problems, result) of a SubmitIssue. result: {reply, issue, clashes, questions} as checked; issue None for a
+    reply only (no issue, or an empty one), which may name no clash."""
     problems = []
     if not isinstance(args, dict):
         return ["the arguments must be an object"], None
     reply, issue = args.get("reply"), args.get("issue")
+    only = issue is None or (isinstance(issue, str) and not issue.strip())
     # the issue is stored with one final newline, and a code job takes at most MAX_ISSUE characters
     for why in (text_problem(reply, "reply", REPLY_MAX),
-                text_problem(issue.strip() if isinstance(issue, str) else issue, "issue", MAX_ISSUE - 1)):
+                None if only else text_problem(issue.strip() if isinstance(issue, str) else issue, "issue",
+                                               MAX_ISSUE - 1)):
         if why:
             problems.append(why)
+    if only and args.get("clashes"):
+        problems.append("clashes belong to an issue: a reply without an issue names none")
     if isinstance(issue, str) and issue.strip():
         lines = issue.strip().split("\n")
         title = lines[0].strip()
@@ -132,7 +141,7 @@ def issue_gate(args, *, source, environment):
             problems.append(w)
     if problems:
         return problems, None
-    return [], {"reply": reply.strip(), "issue": issue.strip() + "\n", "clashes": kept,
+    return [], {"reply": reply.strip(), "issue": None if only else issue.strip() + "\n", "clashes": kept,
                 "questions": [q.strip() for q in questions]}
 
 
@@ -140,6 +149,12 @@ SYSTEM = "\n".join([
     "You write issues for Argus, a harness in which another model drafts tests from your issue and an agent then "
     "changes the code until they pass. You never change code yourself: you read the repository with ListFiles, "
     "SearchFiles and ReadFile, then call SubmitIssue.",
+    "",
+    "The human chats with you from a phone and waits for every answer: be quick.",
+    "- A question, a request for advice or ideas, or a wish too vague to write: answer with SubmitIssue and an EMPTY "
+    "issue (a reply only). Read nothing, or the few files the answer needs (a README, one page). The last issue, if "
+    "any, stays as it is.",
+    "- Write or revise the issue only when the human asks for a change they can name.",
     "",
     "The issue is in English and follows this style:",
     "- First line: the title, one line.",
@@ -153,7 +168,7 @@ SYSTEM = "\n".join([
     "- Then a paragraph that starts with 'Tests' listing the tests to write, with the values of the examples.",
     "- The last line is exactly 'Environment: <environment>' with the environment you are given.",
     "",
-    "Before you submit:",
+    "Before you submit an issue:",
     "- Read the code the change touches and SEARCH THE EXISTING TESTS for every text, selector, class, element and "
     "behaviour the change touches (SearchFiles over the test files). A change that would make an old test fail is a "
     "clash: put each one in `clashes` with its file and line, and say in the reply that a human must loosen that test "
@@ -206,20 +221,25 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
                     "exhausted": left <= 0}
 
         def run_tool(name, args, key, res):
+            target = next((args[k] for k in ("path", "pattern") if isinstance(args, dict)
+                           and isinstance(args.get(k), str)), "")
+            # what the page shows while the turn runs (SPEC_ISSUE_WRITER amendment 1, A2); model text, escaped there
+            log.emit("writer_step", tool=name, target=target[:TARGET_MAX])
             return box.run({"name": name, "args": args}, step_key=key)["content"]
 
         def loop(caller):
             return tool_loop(caller, memo, log, node="issue_writer", task_id=run_id, lim=lim, system=SYSTEM,
                              prompt=prompt(inputs, lim), tools=[ListFiles, SearchFiles, ReadFile, SubmitIssue],
                              submit=SubmitIssue, versions=VERSIONS, run_tool=run_tool, gate_submit=gate_submit,
-                             crasher=crasher, nudge="Read what you need, then call SubmitIssue.",
-                             steps_note="Harness: {n} steps left of {max}. Submit the issue soon.",
-                             final_note="Harness: the last {n} steps. Submit the issue now.")
+                             crasher=crasher, nudge="Read what you need (maybe nothing), then call SubmitIssue.",
+                             steps_note="Harness: {n} steps left of {max}. Submit soon.",
+                             final_note="Harness: the last {n} steps. Submit now.")
         a = with_fallbacks(cfg, role, log, memo, node="issue_writer", task_id=run_id, models=models, loop=loop)
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
                "usd_used": a["usd_used"]}
         if a["end"] == "submitted":
-            return {**out, "status": WRITTEN, "stop_reason": "an issue passed the gate", "written": a["result"]}
+            why = "an issue passed the gate" if a["result"]["issue"] is not None else "a reply without an issue"
+            return {**out, "status": WRITTEN, "stop_reason": why, "written": a["result"]}
         if a["end"] == "llm_failed":
             return {**out, "status": BLOCKED, "stop_reason": "the model provider failed"}
         return {**out, "status": FAILED, "stop_reason": a["end"]}

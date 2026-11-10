@@ -254,6 +254,11 @@ def _turn(job, cfg, deps):
                  reason=r.get("stop_reason"))
         return
     w = r["written"]
+    if w["issue"] is None:                          # a reply only: the last issue (if any) stays the one to start
+        job.data["conversation"].append({"from": "writer", "at": deps.clock(), "stage": sid, "text": w["reply"],
+                                         "clashes": [], "questions": w["questions"]})
+        job.move(AWAITING_HUMAN, deps, stage=sid)
+        return
     _write(job.runs / run_id / ISSUE, w["issue"])
     _write(job.dir / ISSUE, w["issue"])
     sha = hashlib.sha256(w["issue"].encode("utf-8")).hexdigest()
@@ -367,7 +372,9 @@ def status_lines(job):
     writer = [m for m in d.get("conversation") or [] if m["from"] == "writer"]
     if writer:
         last = writer[-1]
-        out += [f"issue {str(d.get('issue_sha256'))[:12]}: {job.dir / ISSUE}", f"reply ({last['stage']}): {last['text']}"]
+        if d.get("issue_sha256"):
+            out.append(f"issue {d['issue_sha256'][:12]}: {job.dir / ISSUE}")
+        out.append(f"reply ({last['stage']}): {last['text']}")
         out += [f"clash: {c['file']}:{c['line']} {c['why']}" for c in last["clashes"]]
         out += [f"question: {q}" for q in last["questions"]]
     if d["state"] == HANDED_OFF and d.get("handoff"):
@@ -380,7 +387,8 @@ def status_lines(job):
             out.append("the repository moved since this job was made: "
                        + (f"{n} commit(s)" if n is not None else "the frozen commit is no longer below HEAD")
                        + "; start still uses the frozen commit")
-        out.append(f"next: argus issue start {job.id} --sha {str(d.get('issue_sha256'))[:12]}")
+        if d.get("issue_sha256"):
+            out.append(f"next: argus issue start {job.id} --sha {d['issue_sha256'][:12]}")
     if d["state"] in REPLYABLE:
         out.append(f"next: argus issue reply {job.id} --message-file <file>  |  argus abandon {job.id} \"<why>\"")
     return out

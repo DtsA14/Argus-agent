@@ -161,7 +161,7 @@ def test_a_busy_or_writing_job_reloads_itself_and_offers_no_action(svc):
     svc.new_job()
     svc.spawner.busy_ids.add(JOB)
     _, _, text = svc.request("GET", f"/issues/{JOB}")
-    assert 'http-equiv="refresh" content="5"' in text and "<form" not in text
+    assert 'http-equiv="refresh" content="3"' in text and "<form" not in text
 
 
 def test_a_job_of_another_kind_has_no_issue_page(svc):
@@ -422,3 +422,86 @@ def test_the_index_reads_only_the_newest_job_directories(svc, monkeypatch):
     (svc.jobs / "j20991231_235959_ffff").mkdir()               # newer, not an issue job
     _, _, text = svc.request("GET", "/issues")
     assert JOB not in text
+
+
+# ---- amendment 1: the steps of a running turn, a reply without an issue, the chat --------------------------------
+
+def _running(svc, lines):
+    job = svc.new_job()
+    job.data["state"] = ri.WRITING
+    job.data["stages"]["w2"] = {"kind": "write", "run_id": f"{JOB}-w2", "cap_usd": 0.1,
+                                "started_at": "2026-11-09T12:00:00Z"}
+    job.save()
+    if lines is not None:
+        d = job.runs / f"{JOB}-w2"
+        d.mkdir(parents=True)
+        (d / "events.jsonl").write_text("\n".join(lines) + "\n")
+    return job
+
+
+def step(tool, target):
+    return json.dumps({"ts": 1.0, "event": "writer_step", "tool": tool, "target": target})
+
+
+def test_a_running_turn_shows_its_steps_as_text_and_reloads(svc):
+    lines = [step("ListFiles", ""), "{broken", json.dumps({"event": "tool_call", "tool": "read_file"}),
+             step("ReadFile", "src/<img src=x onerror=alert(1)>.js"), step("SearchFiles", "expect(")]
+    lines += [step("ReadFile", f"src/f{i}.js") for i in range(ci.STEPS_SHOWN)]
+    _running(svc, lines)
+    svc.spawner.busy_ids.add(JOB)
+    status, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert status == 200 and 'http-equiv="refresh" content="3"' in text and "<form" not in text
+    shown = re.findall(r'<li><span class="dot"></span>(.*?)</li>', text)
+    assert len(shown) == ci.STEPS_SHOWN and "src/f0.js" in shown[0] and f"src/f{ci.STEPS_SHOWN - 1}.js" in shown[-1]
+    assert "Working… (" in text
+
+
+def test_the_steps_are_escaped_and_a_broken_or_missing_log_still_shows_the_page(svc):
+    job = _running(svc, [step("ReadFile", "<img src=x onerror=alert(1)>"), "{broken"])
+    _, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert "<img src=x" not in text and "Reading <span class=\"mono\">&lt;img src=x onerror=alert(1)&gt;" in text
+    (job.runs / f"{JOB}-w2" / "events.jsonl").unlink()
+    status, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert status == 200 and "Working…" in text and '<span class="dot">' not in text
+
+
+def test_the_steps_come_from_the_end_of_a_long_log(svc, monkeypatch):
+    monkeypatch.setattr(ci, "EVENTS_TAIL", 400)
+    lines = [step("ReadFile", "early.js")] + [json.dumps({"event": "pad", "x": "y" * 50})] * 20 + \
+        [step("ReadFile", "late.js")]
+    _running(svc, lines)
+    steps, _ = ci.turn_steps(rj.open_job(JOB, svc.jobs))
+    assert steps == [("ReadFile", "late.js")]
+
+
+def test_the_turn_seconds_come_from_its_start():
+    class J:
+        data = {"stages": {"w1": {"kind": "write", "status": "WRITTEN", "run_id": "r1"},
+                           "w2": {"kind": "write", "run_id": "r2", "started_at": "2026-11-09T12:00:00Z"}}}
+        runs = Path("/nowhere")
+    steps, seconds = ci.turn_steps(J(), now=1794225600 + 17)
+    assert steps == [] and seconds == 17
+    J.data["stages"]["w2"]["status"] = "WRITTEN"
+    assert ci.turn_steps(J()) is None
+
+
+def test_a_reply_without_an_issue_offers_no_start_until_an_issue_exists(tmp_path):
+    s = Svc(tmp_path)
+    s.env.model = tiw.StrictScriptedChatModel(script=[tiw.ONLY])
+    s.env.deps.models["issue_writer"] = s.env.model
+    try:
+        s.new_job()
+        _, _, text = s.request("GET", f"/issues/{JOB}")
+        assert tiw.ANSWER in text and "Start job" not in text and "/start" not in text and "ISSUE ·" not in text
+        assert "Your reply" in text and "Discard" in text
+    finally:
+        s.stop()
+
+
+def test_the_chat_shows_the_human_as_bubbles_and_the_issue_card_holds_start(svc):
+    svc.new_job()
+    _, _, text = svc.request("GET", f"/issues/{JOB}")
+    assert f'<div class="bubble"><p class="text">{tiw.FIRST}</p></div>' in text
+    card = text[text.index('<section class="card issue">'):]
+    card = card[:card.index("</section>")]
+    assert tiw.ISSUE.splitlines()[0] in card and f'action="/issues/{JOB}/start"' in card

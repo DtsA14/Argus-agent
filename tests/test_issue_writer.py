@@ -682,3 +682,74 @@ def test_the_configured_turn_takes_what_the_drafter_takes_on_its_model():
     model = c["roles"]["issue_writer"]["model"]
     assert lim["max_input_tokens"] >= 120000, model             # the drafter's 150,000 on DeepSeek, not 60,000
     assert lim["attempt_tokens"] >= 4 * lim["max_input_tokens"] and lim["attempt_usd"] <= 0.10
+
+
+# ---- amendment 1: a reply without an issue, the steps the page shows ----------------------------------------------
+
+ANSWER = "Beberapa ide: biaya per model, judul job, filter tanggal. Mau yang mana?"
+ONLY = call("SubmitIssue", {"reply": ANSWER, "questions": ["Yang mana dulu?"]}, "o")
+
+
+@pytest.mark.parametrize("issue", [None, "", "  \n "])
+def test_a_reply_without_an_issue_passes_the_gate(source, issue):
+    args = {"reply": ANSWER} if issue is None else {"reply": ANSWER, "issue": issue}
+    problems, r = iw.issue_gate(args, source=source, environment=ENV)
+    assert problems == [] and r["issue"] is None and r["reply"] == ANSWER and r["clashes"] == []
+
+
+@pytest.mark.parametrize("args, why", [
+    ({"reply": ANSWER, "issue": "", "clashes": [{"file": "src/a.test.js", "line": 1, "why": "w"}]},
+     "a reply without an issue names none"),
+    ({"reply": "", "issue": ""}, "reply is empty"),
+    ({"issue": ""}, "reply is empty"),
+    ({"reply": ANSWER, "issue": 5}, "issue"),
+])
+def test_a_reply_without_an_issue_still_has_its_rules(source, args, why):
+    problems, r = iw.issue_gate(args, source=source, environment=ENV)
+    assert r is None and any(why in p for p in problems), problems
+
+
+def test_a_question_is_answered_without_an_issue_and_start_waits_for_one(tmp_path, monkeypatch):
+    env = Env(tmp_path, [ONLY])
+    job = env.new("Apa fitur yang perlu ditambahkan ke viewer?")
+    assert job.data["state"] == ri.AWAITING_HUMAN and len(env.model.calls) == 1
+    writer = job.data["conversation"][-1]
+    assert (writer["from"], writer["text"], writer["questions"]) == ("writer", ANSWER, ["Yang mana dulu?"])
+    assert "issue_sha256" not in writer and job.data.get("issue_sha256") is None
+    assert not (job.dir / ri.ISSUE).exists() and not (job.runs / "ji-w1" / ri.ISSUE).exists()
+    text = rj.status("ji", jobs_dir=env.jobs)
+    assert "argus issue start" not in text and "issue None" not in text and ANSWER in text
+    fake = FakeCode("ok")
+    monkeypatch.setattr(rj, "start_code", fake)
+    with pytest.raises(rj.Refused, match="missing"):
+        start(env, "0" * 12)
+    assert fake.calls == [] and env.job().data["state"] == ri.AWAITING_HUMAN
+
+
+def test_a_reply_without_an_issue_keeps_the_last_issue_the_one_to_start(tmp_path, monkeypatch):
+    env = Env(tmp_path, [SUBMIT, ONLY])
+    env.new()
+    before = env.job().data["issue_sha256"]
+    job = env.reply("Kenapa pakai WIB?")
+    assert job.data["state"] == ri.AWAITING_HUMAN and job.data["issue_sha256"] == before
+    assert (job.dir / ri.ISSUE).read_text() == ISSUE + "\n" and "issue_sha256" not in job.data["conversation"][-1]
+    assert ISSUE.splitlines()[0] in env.prompts()[-1].split("Your issue of the last turn")[1]
+    fake = FakeCode("ok")
+    monkeypatch.setattr(rj, "start_code", fake)
+    job, _ = start(env, before[:12])
+    assert fake.calls[0]["issue"] == ISSUE + "\n" and job.data["state"] == ri.HANDED_OFF
+
+
+def test_each_tool_step_is_logged_with_its_target_for_the_page(tmp_path):
+    long = "src/" + "x" * 300
+    env = Env(tmp_path, [call("ReadFile", {"path": long}, "r"), call("SearchFiles", {"pattern": "expect("}, "q"),
+                         call("ListFiles", {}, "l"), ONLY])
+    env.new()
+    events = [json.loads(ln) for ln in (env.jobs / "ji" / "runs" / "ji-w1" / "events.jsonl").read_text().splitlines()]
+    steps = [(e["tool"], e["target"]) for e in events if e["event"] == "writer_step"]
+    assert steps == [("ReadFile", long[:iw.TARGET_MAX]), ("SearchFiles", "expect("), ("ListFiles", "")]
+
+
+def test_the_writer_is_told_to_answer_questions_quickly_without_an_issue():
+    assert "EMPTY issue" in iw.SYSTEM and "be quick" in iw.SYSTEM
+    assert iw.VERSIONS["SubmitIssue"] != "1"
