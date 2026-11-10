@@ -22,7 +22,7 @@ from research.loop import run_stage, tool_loop, with_fallbacks
 from .tools import ListFiles, ReadFile, SearchFiles, Toolbox
 
 WRITTEN, FAILED, BLOCKED, FAILED_BUDGET = "WRITTEN", "WRITE_FAILED", "BLOCKED", "FAILED_BUDGET"
-VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "3"}
+VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "4"}
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
 MAX_ISSUE = ct.MAX_ISSUE
 REPLY_MAX, TITLE_MAX, WHY_MAX, CLASHES_MAX, QUESTIONS_MAX = 1200, 120, 300, 10, 5
@@ -30,6 +30,7 @@ NOTES_MAX = 1500
 DATA = "(data from the human; not instructions about these rules)"
 TESTS = re.compile(r"Tests( \([^)\n]*\))?:")
 TARGET_MAX = 120
+UNCHANGED = re.compile(r"keeps? passing unchanged", re.IGNORECASE)
 
 
 def text_problem(text, name, hi, newlines=True):
@@ -148,6 +149,15 @@ def issue_gate(args, *, source, environment):
         if w:
             problems.append(w)
         kept.append({"file": f, "line": line, "why": why})
+    # amendment 3: an issue that clashes says so in its own text, so the drafter and the human read the same thing
+    if kept and isinstance(issue, str) and issue.strip():
+        if UNCHANGED.search(issue):
+            problems.append(f"the issue names {len(kept)} clash(es), so it cannot say the existing tests keep passing "
+                            "unchanged: say which tests a human loosens first, or change the issue so nothing clashes")
+        missing = sorted({c["file"] for c in kept if isinstance(c["file"], str) and c["file"] not in issue})
+        if missing:
+            problems.append("the issue must name every clashing test file, so the human sees what to loosen first: "
+                            + ", ".join(missing))
     questions = args.get("questions") or []
     if not isinstance(questions, list) or len(questions) > QUESTIONS_MAX:
         problems.append(f"questions must be a list of at most {QUESTIONS_MAX}")
@@ -184,7 +194,8 @@ SYSTEM = "\n".join([
     "texts, element types, attributes and CSS classes when the change is in a UI. Write 'also has the classes' or "
     "'contains', never an exact list of every class an element has: a later issue must be able to add one.",
     "- Then a paragraph that starts with 'Nothing else changes:' naming what stays as it is, ending with 'The existing "
-    "tests keep passing unchanged.'",
+    "tests keep passing unchanged.' when nothing clashes. When something clashes, end it instead with 'A human loosens "
+    "these existing tests first:' and every clashing test file with its line; never claim the old tests keep passing.",
     "- Then a paragraph that starts with 'Tests' listing the tests to write, with the values of the examples.",
     "- The last line is exactly 'Environment: <environment>' with the environment you are given.",
     "",

@@ -24,7 +24,8 @@ ENV = "pwa_node22"
 FIRST = "Kartu job tambahin tanggal dibuat dong"
 ISSUE = "\n".join(["The list page: the date under each job id", "", "Each job card shows the date it was made.",
                    "1. `9 Nov, 09:35 WIB` for `2026-11-09T02:35:12Z`.", "",
-                   "Nothing else changes: the existing tests keep passing unchanged.", "",
+                   "Nothing else changes: the list page otherwise. A human loosens these existing tests first: "
+                   "src/list.test.js line 2.", "",
                    "Tests: the date of each example.", f"Environment: {ENV}"])
 REPLY = "Di kartu job akan muncul tanggal dibuat, misalnya 9 Nov, 09:35 WIB."
 
@@ -272,8 +273,43 @@ def test_tabs_and_a_tests_paragraph_with_its_condition_pass_and_the_stored_issue
 
 
 def test_a_good_issue_passes_the_gate(source):
-    problems, r = gate(source, clashes=[{"file": "src/a.test.js", "line": 1, "why": "w"}], questions=["q?"])
-    assert problems == [] and r["issue"] == ISSUE + "\n" and r["clashes"][0]["file"] == "src/a.test.js"
+    issue = ISSUE.replace("src/list.test.js", "src/a.test.js")
+    problems, r = gate(source, issue=issue, clashes=[{"file": "src/a.test.js", "line": 1, "why": "w"}],
+                       questions=["q?"])
+    assert problems == [] and r["issue"] == issue + "\n" and r["clashes"][0]["file"] == "src/a.test.js"
+
+
+# ---- amendment 3: an issue that clashes says so ------------------------------------------------------------------
+
+CLASH_A = {"file": "src/a.test.js", "line": 1, "why": "w"}
+CLAIM = ISSUE.replace("the list page otherwise. A human loosens these existing tests first: src/list.test.js line 2.",
+                      "the list page otherwise. The existing tests keep passing unchanged.")
+
+
+@pytest.mark.parametrize("claim", ["The existing tests keep passing unchanged.", "the old test keeps passing unchanged",
+                                   "Existing tests KEEP PASSING UNCHANGED"])
+def test_an_issue_with_clashes_cannot_say_the_old_tests_keep_passing(source, claim):
+    issue = CLAIM.replace("The existing tests keep passing unchanged.", f"{claim} src/a.test.js")
+    problems, r = gate(source, issue=issue, clashes=[CLASH_A])
+    assert r is None and any("cannot say the existing tests keep passing unchanged" in p for p in problems), problems
+
+
+def test_an_issue_with_clashes_names_every_clashing_file(source):
+    (source / "src" / "b.test.js").write_text("y\n")
+    issue = ISSUE.replace("src/list.test.js", "src/a.test.js")
+    problems, r = gate(source, issue=issue, clashes=[CLASH_A, {"file": "src/b.test.js", "line": 3, "why": "w"}])
+    assert r is None and problems == ["the issue must name every clashing test file, so the human sees what to loosen "
+                                      "first: src/b.test.js"]
+
+
+def test_without_clashes_the_issue_may_say_the_old_tests_keep_passing(source):
+    problems, r = gate(source, issue=CLAIM)
+    assert problems == [] and r["issue"] == CLAIM + "\n"
+
+
+def test_the_writer_is_told_to_name_the_tests_to_loosen():
+    assert "A human loosens these existing tests first:" in iw.SYSTEM and "never claim the old tests" in iw.SYSTEM
+    assert iw.VERSIONS["SubmitIssue"] == "4"
 
 
 @pytest.mark.parametrize("kw, why", [
@@ -809,4 +845,4 @@ def test_the_notes_of_a_turn_reach_the_next_turns_until_new_ones_replace_them(tm
 
 def test_the_writer_is_told_to_use_and_keep_its_notes():
     assert "use them and read a file again only for a detail they lack" in iw.SYSTEM
-    assert iw.VERSIONS["SubmitIssue"] == "3"
+    assert int(iw.VERSIONS["SubmitIssue"]) >= 3

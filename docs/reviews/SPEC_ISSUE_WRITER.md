@@ -190,3 +190,20 @@ job code.
 
 **Tes wajib (mutants).** Gerbang: catatan kosong/tidak ada → None, panjang, karakter; job: catatan giliran N ada di prompt
 giliran N+1, submit tanpa catatan mempertahankan, catatan baru mengganti; tidak ada di snapshot publik.
+
+## Amandemen 3 (2026-11-10): issue yang bentrok mengatakannya sendiri
+
+Status: **Atha 2026-11-10 "Ok next bro"** (antrean dari p3/p4).
+
+**Masalah.** p3 w3 dan p4 w2: penulis mencatat `clashes` (7 dan 5 tes lama) dan menjelaskannya di balasan, tapi teks issue
+tetap menulis "The existing tests keep passing unchanged". Drafter dan agen membaca issue, bukan balasan; human yang
+menekan Start tanpa membaca balasan memulai job yang pasti merusak tes lama.
+
+**C1.** Gerbang SubmitIssue (versi alat "4"): issue dengan satu `clashes` atau lebih ditolak bila teksnya memuat "keep
+passing unchanged" / "keeps passing unchanged" (tanpa membedakan huruf besar), dan bila ada file clash yang tidak disebut
+di teks issue. Issue tanpa clash tidak berubah aturannya. Prompt: tanpa bentrok paragraf "Nothing else changes" berakhir
+"The existing tests keep passing unchanged."; dengan bentrok berakhir "A human loosens these existing tests first:" dan
+setiap file:baris.
+
+**Tes wajib (mutants).** Klaim ditolak dengan clash (tiga ejaan); file clash yang tidak disebut ditolak dan disebut
+namanya; tanpa clash klaim boleh; prompt dan versi alat.
