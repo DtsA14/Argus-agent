@@ -169,3 +169,24 @@ target tampil sebagai teks, events rusak/hilang tidak membuat halaman gagal; Sta
 
 **Tidak di amandemen ini (dicatat di PENDING):** jawaban huruf demi huruf (streaming, jalur uang `harness/llm.py`);
 membawa hasil baca giliran sebelumnya ke giliran berikutnya; menggabung 8710 dan 8711.
+
+## Amandemen 2 (2026-11-10): catatan repo antar giliran
+
+Status: **Atha 2026-11-10 "Ok gass"** (usul Claude: kecepatan dulu, gerbang "keep passing unchanged" sesudahnya).
+
+**Masalah dan ukuran.** Pilot p3 (#406): giliran w3 (60 detik, 10 panggilan) membaca ulang `App.jsx` dan file tes kartu
+yang sudah dibaca w2; tiap giliran mulai dari nol. Ukuran: panggilan model dan detik per giliran kedua dan seterusnya,
+dibanding w3 p3 (10 panggilan, 60 detik). Giliran pertama tidak berubah.
+
+**N1.** `SubmitIssue.notes` (opsional, ≤ 1500 karakter, aturan karakter bagian 6, multi-baris boleh; versi alat "3"):
+catatan penulis tentang repo untuk gilirannya nanti (file penting, isinya, tes yang menyentuhnya, kelas dan teks persis).
+Disimpan di `job.json` `repo_notes` pada simpan akhir giliran yang sama (crash-resume: tidak ada simpan baru); submit tanpa
+catatan mempertahankan yang lama, catatan baru menggantinya. Giliran berikutnya menerima catatan itu di prompt sebagai
+data tentang commit beku yang sama, dengan aturan: pakai catatan, baca file lagi hanya untuk detail yang tidak ada.
+
+**N2.** Catatan tidak tampil di halaman dan tidak masuk snapshot publik (allowlist `stage_data` tidak memuatnya). Catatan
+berasal dari model yang membaca repo tidak tepercaya: hanya masuk prompt penulis issue yang sama, tidak ke drafter atau
+job code.
+
+**Tes wajib (mutants).** Gerbang: catatan kosong/tidak ada → None, panjang, karakter; job: catatan giliran N ada di prompt
+giliran N+1, submit tanpa catatan mempertahankan, catatan baru mengganti; tidak ada di snapshot publik.
