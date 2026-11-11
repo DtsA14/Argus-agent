@@ -211,3 +211,23 @@ Claude's checks on 2026-11-11 (public GitHub reads only, nothing cloned or run):
 **Decision (Atha, 2026-11-11):** run the **retrospective** version first (issues closed by a merged PR, run at the fix's parent commit, graded by the maintainer's tests plus the
 blind rubric). A second phase of truly open issues is not decided; it depends on the first result. Still to do before a first job: measure the three candidates (suite time under
 120 s in the sandbox, size under 30,000 lines, one pinned image each), confirm the `boltons` licence, build and check one sandbox environment per repository, and fix D1 and D6.
+
+## 12. Session B4: scoreboard definition ([`FABLE_SCOREBOARD_DEFINITION.md`](FABLE_SCOREBOARD_DEFINITION.md))
+
+Fable defined outcome categories, money, decisions, human wait (upper bound), judge and the unknowns from `job.json` alone. Claude checked the field names against the 150 real
+`job.json` files in `~/pilot3a_live/jobs` on 2026-11-11 (read-only; counts below are from that scan):
+
+| Point | Result |
+|---|---|
+| Jobs by kind | 119 code, 26 research, 5 issue |
+| Code and other states | APPLIED 62, REJECTED 18, ABANDONED 14, REVIEW_READY 20, AGENT_FAILED 5, DRAFT_FAILED 1, BLOCKED 1, REPORT_READY 22, HANDED_OFF 5, RESEARCH_INCONCLUSIVE 2 |
+| `as_is` | present on exactly the 62 APPLIED jobs, as Fable assumed |
+| Decision log | the entries sit under `log` (not `decisions`); `what` values seen: `created` 150, `intaken` 119, `state` 752, `approved` 107, `limits_shown` 285, `confirmed_by_flag` 285, `key_from_file` 311, `staged` 38, `stage_started` 169, `retry` 11, `redraft` 16, `research_ok` 1. Fields seen on entries include `by`, `via`, `as_is`, `commit`, `patch_sha256`, `old`, `new`, `at`, `note`, `draft`, `sha` |
+| `confirmed` entries | **none**: every confirmation is `confirmed_by_flag` (all runs used `--yes`), so the "interval under `--yes` is zero" pitfall applies to every job; human wait must come from `approval.at` and the stage `ended_at` values |
+| Judge coverage | 10 judge stages across 119 code jobs: the judge ran on about 8% of code jobs, so "judge verdict" is missing for most of them |
+| Stage kinds | draft 133, agent 118, judge 10, write 13, plan 26, research_worker 84, report 23, check 23, research 1 |
+
+**Verdict:** the definition fits the real data; build the script from it (a new script: `pilot_report.py` works on run directories). Two things to carry into the script:
+the log key is `log`, and `by` cannot distinguish Atha from Claude, so Atha's time stays an upper bound. Fable's "what the script cannot know" list (re-issues of one issue,
+who decided, minutes of attention, Claude's token cost, spend of cut-off stages) stands; the ledgers are the money record, so the script should read them for spend and use
+`job.json` stage `usd` only as a cross-check.
