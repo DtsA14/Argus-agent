@@ -37,3 +37,5 @@ Belum diukur: perekat S dan T2 (bentuk field dari patch T1 ke issue viewer), men
 | Satu "go live" per PLAN.md untuk S, satu per job `argus code` | gerbang manusia yang disengaja, bukan perekat |
 
 Kesimpulan awal: T2 berjalan tanpa gesekan karena kontraknya ditulis dari patch yang ter-apply. Gesekan terbesar rantai ini ada di T1 (tes lama bocor), bukan di oper hasil antar repo. Itu mendukung operator rantai tetap (T1 → apply → S → T2) lebih dulu daripada planner; planner berhirarki tetap belum dibenarkan.
+
+**Note (2026-11-11, from Fable's review):** the spec (`SPEC_CHAIN_PROBE` section 3) asked for the judge result per step; the judge was **not run** on T1 or T2, so whether it would have caught the pytest-detection cheat is unknown.

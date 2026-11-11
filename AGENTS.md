@@ -21,6 +21,7 @@ the status of milestones and ADRs in `docs/Reconciliation.md`, review briefs in 
 ### Budget and money
 - Every model call must go through `harness/llm.py` (`LLMCaller.call`). Flag any `.invoke`, `.stream`,
   `.batch` or `build_chat_model` outside `harness/llm.py` / `models/registry.py`.
+  Exception, by decision (2026-11-11): `scripts/smoke_models.py`, a manual smoke script that a human runs on purpose; it is not part of any job.
 - A request must be refused before sending when it does not fit the node's reservation (tokens and USD).
   Flag code paths that can send first and check later.
 - Every attempt must reach the ledger (`llm_call_started` before sending, `llm_call` after), and the
@@ -39,6 +40,13 @@ the status of milestones and ADRs in `docs/Reconciliation.md`, review briefs in 
 ### Plans and tools
 - Orchestrator plans are validated by the harness (`nodes/plan.py`), not trusted from the model.
 - File tools must stay inside allowed roots; code execution only in the Docker sandbox, never unsandboxed.
+
+### Advisory lane (Atha, 2026-11-11)
+A change is **advisory** only if all of these hold: it adds a hint, warning or display for a human; it can never refuse, block, fail or change
+a draft, an approval, a verdict, a ledger entry, a budget, a sandbox run, a key or a deployment; it never raises into its caller (any error
+returns "no finding"); it reads nothing outside the repository inputs it is given. Advisory changes need a short spec, a test that fails on the
+old code and one review; they do not need mutants or a full `verify_at` (run the touched tests). If any condition fails, or a reviewer doubts it,
+it is strict-lane. A hint that becomes a gate (refuses, fails or blocks something) is a new strict-lane change.
 
 ### Tests
 - A new guarantee needs a test that fails when the guarantee is broken (we mutation-check them).

@@ -1,6 +1,6 @@
 # Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30, isi diperbarui sampai 2026-11-11)
 
-Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` sesudah #266. Status di bawah berasal
+Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` sesudah #444 (2026-11-11); angka kerja nyata dikutip dari `verification/scoreboard-2026-11-11.json` (`scripts/scoreboard.py`). Status di bawah berasal
 dari kode, dari bukti di `verification/` dan `pilots/`, dan dari review di `docs/reviews/`. Laporan sebelumnya diarsipkan:
 [`reviews/RECONCILIATION_2026-10-27.md`](reviews/RECONCILIATION_2026-10-27.md) (dengan tambahan sampai 2026-10-30),
 [`reviews/RECONCILIATION_2026-10-24.md`](reviews/RECONCILIATION_2026-10-24.md),
@@ -14,7 +14,7 @@ harga peak (#241); **staging** (#244, #246, #249, #251, #258) dengan monitor dan
 `argus-viewer`** (React PWA, JS divalidasi dengan vitest di `pwa_node22`, #256, #257, #261, #263): dua issue ditulis agen,
 dirilis ke staging dan **dipakai Atha di HP** lewat SSH port forwarding. Tambahan sampai 2026-11-06: 21 issue viewer dikerjakan Argus (001-020 live; 021 di `main`, ikut rilis berikutnya), `argus judge` (#316) dan aturan review J9.
 
-Yang berubah sejak 2026-11-06 (sampai 2026-11-11, #357-#437): **`argus judge` dan aturan J9** dipakai di shadow batch 4-5; **UI kontrol**
+Yang berubah sejak 2026-11-06 (sampai 2026-11-11, #357-#437): **`argus judge`** (saran, #316) ada, tetapi dijalankan pada 10 dari 119 job kode (8,4%, scoreboard); aturan J9 disetujui 2026-11-06 untuk batch 4, sedangkan dari catatan tidak terbukti judge dijalankan pada batch 5; **UI kontrol**
 fase 1-2 live di 8711 (baca, reject/abandon, chatbox penulis issue); **penulis issue** (`SPEC_ISSUE_WRITER`, Haiku 5.5 lewat
 OpenRouter, pencarian bentrok oleh harness); **viewer PWA** sampai issue 044 (rilis 044 live), Tailwind di `pwa_node22` (#370);
 **staging Stage 14-17** untuk `argus-ledger` (review draf, waktu stage, judul job, `max_usd`) dan snapshot yang menerbitkan
@@ -30,7 +30,7 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | Milestone | Status | Bukti | Gap yang belum tertutup |
 |---|---|---|---|
 | M1–M2 harness, LLM nyata, sandbox | `[x]` | `harness/`, `tools/sandbox.py`; arsip `PENDING` | – |
-| M3 evaluasi | `[x]` | `docs/reviews/M3_CLOSING.md`; kalibrasi judge PASS | – |
+| M3 evaluasi | `[x]` | `docs/reviews/M3_CLOSING.md` (koreksi 2026-11-11: berkas itu tidak memuat kalibrasi judge; klaim "kalibrasi judge PASS" belum punya rujukan di sini) | Rujukan kalibrasi judge |
 | General-task agent | `[x]` | `codetask/`, `acceptance/`; Eval Set v1 16/16 | Eval Set v1 jenuh: regresi saja |
 | **M4** multi-agent dengan dependensi | `[ ]` | Graf riset punya fan-out tanpa dependensi; code task satu agen | Belum ada bukti single-agent menjadi penghalang |
 | **M5** observability dan benchmark | `[~]` | Ledger per panggilan; `audit_run.py`, `failure_trace.py`, `pilot_report.py`; keputusan manusia dengan waktunya di `job.json` (#185; `argus-ledger` 014 menampilkannya); `swe_grade.py`; `argus-ledger report` (biaya per stage); jumlah keputusan per pilot di setiap `RESULT.md` | Tracing/dashboard; benchmark single vs multi; **menit kerja Atha** belum ditanyakan; **eval set yang tidak jenuh** |
@@ -52,7 +52,7 @@ M4, M7, M8, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (ke
 | 003 memori berlapis | `[ ]` | Hanya state eksekusi | Target M8 |
 | 004 durable, idempotensi, budget | `[~]` (kuat) | Reservasi sebelum kirim, ledger, `durability="sync"`, memo per langkah, crash-resume, `reservation_from_ledger`; cap per job; `max_input`/`max_output` per model; counter heuristik menghitung reasoning yang dikirim (#240); worst case selalu ×peak (#241) | Idempotency key provider; cap USD non-Anthropic bertumpu pada perkiraan heuristik |
 | 005 artifact dan workspace | `[~]` | Workspace per run (jail, scope, digest); environment per job dengan image dipin (Python dan **Node `pwa_node22`** distroless dari lock sha512); rilis staging = `git archive` commit applied, read-only, image/runtime/hash dist tercatat | Artifact store; id image tidak reproducible (hanya rootfs); **pin image per checkout disalin manual** |
-| 006 quality gate | `[~]` (kuat untuk kode) | Kontrak beku, validasi di sandbox, verdict dengan bukti, validasi ulang; penilai SWE dengan tes tersembunyi; staging: smoke dari host, cek artifact, pin service worker; **gerbang `scope:no_test_detection`** (kode produksi yang mengenali pytest/vitest gagal di acceptance, #436); **peringatan tes lama bocor** sebelum approve (penasihat, Python, #437); `argus judge` (saran) | Gate non-kode; peringatan tes lama bocor belum untuk JS |
+| 006 quality gate | `[~]` (kuat untuk kode) | Kontrak beku, validasi di sandbox, verdict dengan bukti, validasi ulang; penilai SWE dengan tes tersembunyi; staging: smoke dari host, cek artifact, pin service worker; **gerbang `scope:no_test_detection`** (kode produksi yang mengenali pytest/vitest gagal di acceptance, #436; enam regex per baris: pagar, bukan bukti, pola lain lolos); **peringatan tes lama bocor** sebelum approve (penasihat, Python, #437); `argus judge` (saran) | Gate non-kode; peringatan tes lama bocor belum untuk JS |
 | 007 keamanan dan approval | `[~]` | Sandbox Docker; key dari file 0600 (`--key-file`); output sandbox berlabel data; staging tanpa jaringan; proxy viewer hanya `127.0.0.1`, akses HP lewat kunci SSH yang dibatasi `permitopen` ke 8710 | Persetujuan "go live" hanya di chat (satu per `PLAN.md` untuk staging); layanan approval di kode tidak ada; dibuka bersama UI kontrol fase 2–3 atau `argus apply` |
 
 ## 3. Kriteria MVP M6
@@ -81,15 +81,16 @@ kemungkinan terkontaminasi); penilai milik Argus, tidak dibandingkan dengan lead
 
 | Aplikasi | Task di `main` | Biaya job | Catatan |
 |---|---|---|---|
-| **`argus-ledger`** (Python, FastAPI, SQLite) | 14 (tahap 0–12 + satu fix), lalu issue 015-019 (Stage 13-17) | tahap 0–10 $0,5688; 013 $0,0179; 014 $0,0800 | CLI, API, HTML, login + hardening, report, keputusan manusia; 010 tidak di-merge (2 cacat ditemukan uji serangan); 0 tes lama dilonggarkan, 0 patch ditulis ulang; di staging dengan data asli |
-| **`argus-viewer`** (React 19 PWA, vitest) | issue 001-044 (044 live; 2 pertama: daftar job, halaman job) + kerangka Claude | $0,0198 + $0,0243 | drafter dan agen berhasil di percobaan pertama; 23 tes baru, semua merah karena assertion; review Claude tidak mengubah hasil apa pun (sampel 2); live di staging, dipakai Atha di HP |
+| **`argus-ledger`** (Python, FastAPI, SQLite) | issue 001-019 (Stage 17 live); 25 job kode di scoreboard | $1,0992 untuk 25 job (ledger, job gagal ikut): 19 di-apply, $0,058 per perubahan | 19 applied (as_is), 4 ditolak, 1 ditinggalkan, 1 terbuka; CLI, API, HTML, login + hardening, report, keputusan manusia; di staging dengan data asli; sejak issue 015 draf boleh mengubah tes lama lewat `changed_tests` (K3) |
+| **`argus-viewer`** (React 19 PWA, vitest) | issue 001-044 (044 live) + kerangka Claude; 56 job kode di scoreboard | $2,5711 untuk 56 job: 43 di-apply, $0,060 per perubahan | 43 applied (42 sesuai patch yang direview, 1 diubah), 6 ditolak, 7 ditinggalkan; Claude memblok dan memperbaiki beberapa draf dan tes lama sepanjang jalan (shadow batch 1 memblok 2 dari 2; 021 t1; 030/031 `NO_DRAFT`); live di staging, dipakai Atha di HP |
 
 Sejak 2026-11-07 issue ditulis lewat chatbox di HP (penulis Haiku, UI kontrol 8711) dan Claude mereview, meng-apply dan merilis
 (jalur cepat didelegasikan, bagian 7). Tiga rilis ledger berturut-turut (Stage 15-17) dan viewer 041-044 memakai rantai ledger → viewer.
 
-**Terbukti (sampel kecil):** fitur nyata dari issue ke rilis staging dengan 1–2 keputusan Atha per job ("go live"), biaya
-$0,02–0,08 per fitur; repo JS dengan jaminan red check yang sama.
-**Belum terbukti:** task yang tidak dijelaskan rinci oleh Claude (semua issue ditulis Claude); tanpa review Claude (shadow
+**Terbukti (sampel kecil):** fitur nyata dari issue ke rilis staging; per perubahan yang di-apply $0,058 (ledger) dan $0,060 (viewer), job gagal ikut
+dihitung (scoreboard); sejak 2026-11-08 approve dilakukan Claude dan "go live" per job tetap dari Atha; jeda tunggu manusia, batas atas,
+median 2 menit per tahap; repo JS dengan jaminan red check yang sama.
+**Belum terbukti:** task yang tidak dijelaskan rinci oleh Claude (issue ditulis Claude, atau Atha lewat chatbox sejak 2026-11-07; belum ada penulis luar); tanpa review Claude (shadow
 mode diusulkan).
 
 ## 4d. Riset nyata pertama tahap 1: "Agentic AI" (2026-11-05)
@@ -156,7 +157,7 @@ menunjukkan pola sama, adalah operator rantai tetap (T1 → apply → S → T2).
 | Konflik/overrun budget | ✓ | reservasi sebelum kirim, `FAILED_BUDGET` durable; cap per job; `flock` per job |
 | Workflow tidak valid atau siklik | ~ | transisi legal job dan code task; tanpa workflow dengan dependensi |
 | Perubahan schema/versi tool | ~ | versi tool dan image di kunci memo; image dipin per job; tanpa registry |
-| Dokumen berbahaya, prompt injection | ~ | output sandbox berlabel data; teks dibersihkan dari karakter kontrol; belum diukur untuk code task |
+| Dokumen berbahaya, prompt injection | ~ | output sandbox berlabel data; teks dibersihkan dari karakter kontrol; uji v0: empat varian komentar di kutipan riset, n = 1 tiap varian, halaman simulasi, tidak ada yang tembus (#339); 16 rancangan lain di `FABLE_INJECTION_ATTACKS.md` belum dijalankan |
 | Lolos sandbox, jaringan tak sah | ✓ | hardening Docker diuji; build rilis viewer tanpa jaringan dites |
 | Artefak hilang/rusak | ~ | cek intake dan digest; rilis staging read-only dengan hash tercatat; tanpa artifact store |
 | Memori/prosedur basi | n/a | belum ada memori |
@@ -173,11 +174,11 @@ menunjukkan pola sama, adalah operator rantai tetap (T1 → apply → S → T2).
 
 1. **Supervisi dan "melepas" Argus:** di dua aplikasi latihan Atha menulis issue dari HP (chatbox, Haiku) dan Claude masih
    mereview draf dan patch, meng-apply dan men-deploy (didelegasikan 2026-11-08). Berkas yang dilindungi dipaksa harness
-   (#270), `argus judge` memberi saran (J9). Yang belum terukur: menit kerja Atha dan jumlah keputusan Claude per pilot
-   secara sistematis. Pantau penolakan formulir drafter sesudah #431/#434 dan false positive `leaks` (#437).
-2. **UI kontrol interaktif** (permintaan Atha 2026-10-30): menunggu keputusan scope (bagian 7). Menyentuh ADR-007 (approval
-   tercatat), key, dan CSRF; fase 1 read-only bisa jalan lebih dulu.
-3. **Operasional staging:** pin image per checkout disalin manual; smoke kandidat tidak menguji unit systemd; up2 mulai
+   (#270), `argus judge` memberi saran (J9). Terukur sejak 2026-11-11 (scoreboard): 1,9 keputusan per job kode, jeda tunggu
+   manusia batas atas median 2 menit; belum terukur: menit perhatian sebenarnya dan token Claude. Pantau penolakan formulir drafter sesudah #431/#434 dan false positive `leaks` (#437).
+2. **UI kontrol interaktif** (permintaan Atha 2026-10-30): fase 1-2 live di 8711; fase 3 (tombol approve) dan 4 (staging) **ditahan**
+   (rencana Fable 2026-11-11: dibuka bila Atha menolak 4 dari 5 draf buruk yang ditanam, lewat ringkasan di HP).
+3. **Operasional staging:** pin image per checkout disalin manual; smoke kandidat tidak menguji unit systemd; up2 selesai
    2026-11-07.
 4. **Tingkat sukses di repo luar tanpa bocoran** (SWE, alat regresi ±20% usaha).
 5. **Eval set yang tidak jenuh** dan **menit kerja manusia** (M5).
