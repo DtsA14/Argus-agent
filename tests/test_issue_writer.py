@@ -740,13 +740,18 @@ def test_start_refuses_a_job_of_another_kind(tmp_path, monkeypatch):
 
 
 
-def test_the_configured_turn_takes_what_the_drafter_takes_on_its_model():
-    """2026-11-09: 60,000 heuristic tokens ended the first real turn at 28,000 billed ones (context_limit)."""
+def test_the_configured_turn_runs_haiku_within_its_gateway_bound():
+    """Amendment 5: Haiku 5.5 through OpenRouter; its long-context bound is 100,000 x 1.2 / 3 = 40,000 heuristic
+    tokens (#415), which settings() checks (check_long_context refuses more)."""
     c = load_config()
     lim = iw.settings(rj.stage_config(c, c["issue_writer"]["turn"]["cap_usd"]))
-    model = c["roles"]["issue_writer"]["model"]
-    assert lim["max_input_tokens"] >= 120000, model             # the drafter's 150,000 on DeepSeek, not 60,000
+    assert c["roles"]["issue_writer"]["model"] == "openrouter:anthropic/claude-haiku-5.5"
+    assert "params" not in c["roles"]["issue_writer"]                # DeepSeek's thinking switch is not sent to it
+    assert lim["max_input_tokens"] == 40000 and lim["max_submits"] == 4
     assert lim["attempt_tokens"] >= 4 * lim["max_input_tokens"] and lim["attempt_usd"] <= 0.10
+    c["issue_writer"]["turn"]["max_input_tokens"] = 40001
+    with pytest.raises(Exception, match="set max_input_tokens to 40,000 or less"):
+        iw.settings(rj.stage_config(c, c["issue_writer"]["turn"]["cap_usd"]))
 
 
 # ---- amendment 1: a reply without an issue, the steps the page shows ----------------------------------------------
@@ -986,16 +991,16 @@ def test_git_folders_and_symlinks_are_never_searched(tmp_path):
                                           "exactly as the code has them"]
 
 
-def test_the_list_shows_at_most_eight_lines_a_file_and_forty_in_all(tmp_path):
+def test_the_list_shows_at_most_eight_lines_a_file(tmp_path):
     root = touched_repo(tmp_path, tests=12)
     report = touch_gate(root)[0][0]
     assert report.count("\n  src/page.test.js:") == iw.HITS_PER_FILE
     assert "found 12 line(s) in 1 file(s)" in report and "... 4 more line(s) in src/page.test.js" in report
-    for i in range(6):
-        (root / "src" / f"p{i}.test.js").write_text("'share'\n" * 8)
+    for i in range(4):
+        (root / "src" / f"p{i}.test.js").write_text("'share'\n" * 7)
     report = touch_gate(root)[0][0]
-    assert report.count("\n  src/") == iw.HITS_SHOWN and "found 60 line(s) in 7 file(s)" in report
-    assert "... 8 more line(s) in src/p5.test.js" in report and "... 12 more line(s) in src/page.test.js" in report
+    assert "found 40 line(s) in 5 file(s)" in report and report.count("\n  src/") == 4 * 7 + iw.HITS_PER_FILE
+    assert report.count("more line(s) in") == 1 and "... 4 more line(s) in src/page.test.js" in report
 
 
 def test_a_file_too_large_to_search_is_said(tmp_path, monkeypatch):
@@ -1003,7 +1008,8 @@ def test_a_file_too_large_to_search_is_said(tmp_path, monkeypatch):
     (root / "src" / "big.test.js").write_text("'share'\n" * 10)
     monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
     report = touch_gate(root)[0][0]
-    assert "src/big.test.js" not in report and "too large or too many to search" in report
+    assert "src/big.test.js:" not in report and "1 test file(s) too large or too many to search" in report
+    assert "SearchFiles them yourself: src/big.test.js" in report
 
 
 def test_an_incomplete_search_wants_the_code_even_without_test_lines_and_refuses_no_touch_as_missing(tmp_path,
@@ -1028,7 +1034,7 @@ def test_a_file_that_cannot_be_looked_at_makes_the_search_incomplete_not_a_crash
             raise PermissionError(p)
         return real(p, *a, **k)
     monkeypatch.setattr(iw.os, "lstat", lstat)
-    found, hits, incomplete = iw.scan(root, ["'share'"])
+    found, hits, incomplete, per = iw.scan(root, ["'share'"])
     assert incomplete and hits == [("src/page.test.js", 1, "expect(h).toEqual(['stage', 'share']) // 0")]
 
 
@@ -1048,3 +1054,49 @@ def test_the_writer_is_asked_for_its_touches_and_gets_the_old_test_lines_back(tm
     assert "`touches`" in iw.SYSTEM and "submit again with that code" in iw.SYSTEM
     assert {"touches", "clash_check"} <= set(iw.SubmitIssue.model_json_schema()["properties"])
     assert load_config()["issue_writer"]["turn"]["max_submits"] == 4
+
+
+# ---- amendment 5: touches too broad to read, Haiku as the writer, the writer's own key -----------------------------
+
+def test_touches_holding_more_old_test_lines_than_can_be_shown_are_refused_with_the_count_per_touch(tmp_path):
+    root = touched_repo(tmp_path, tests=iw.HITS_SHOWN)
+    (root / "src" / "b.test.js").write_text("'stage' only\n")
+    touches = ["'share'", "'stage'", "const H"]
+    problems, r = touch_gate(root, touches=touches)
+    assert r is None and len(problems) == 1
+    assert problems[0].startswith(f"your touches are too broad: the existing tests hold them in {iw.HITS_SHOWN + 1} "
+                                  "line(s) in 2 file(s)")
+    assert problems[0].split("\n")[1:] == [f"  {touches[0]!r}: 40 line(s) in 1 file(s)",
+                                           f"  {touches[1]!r}: 41 line(s) in 2 file(s)",
+                                           "  'const H': 0 line(s) in 0 file(s)"]
+    assert "clash_check" not in problems[0]
+    for code in (iw.hits_code(iw.scan(root, touches)[1]), ""):
+        assert touch_gate(root, touches=touches, clash_check=code)[1] is None
+
+
+def test_forty_old_test_lines_are_still_shown_with_their_code(tmp_path):
+    root = touched_repo(tmp_path, tests=iw.HITS_SHOWN)
+    problems, r = touch_gate(root)
+    assert r is None and "found 40 line(s) in 1 file(s)" in problems[0] and "clash_check" in problems[0]
+
+
+def test_a_large_file_that_is_no_test_neither_wants_a_code_nor_hides_a_missing_touch_from_the_tests(tmp_path,
+                                                                                                  monkeypatch):
+    root = touched_repo(tmp_path, tests=0)
+    (root / "package-lock.json").write_text("x" * 100)
+    monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
+    problems, r = touch_gate(root)
+    assert problems == [] and r["test_hits"] == 0                  # no clash_check round for the lock file
+    assert iw.scan(root, ["'share'"])[2] == ["package-lock.json"]
+
+
+def test_an_issue_given_back_with_its_clash_list_is_stored_with_one_list(source):
+    clash = [{"file": "src/a.test.js", "line": 1, "why": "reads x"}]
+    stored = gate(source, clashes=clash)[1]["issue"]
+    assert stored.count(iw.LOOSEN) == 1
+    for clashes in (clash, [{"file": "src/a.test.js", "line": 2, "why": "reads y"}]):
+        again = gate(source, issue=stored, clashes=clashes)[1]["issue"]
+        assert again == iw.with_clashes(ISSUE, clashes) + "\n" and again.count(iw.LOOSEN) == 1
+    assert gate(source, issue=stored)[1]["issue"] == ISSUE + "\n"   # no clash now: the old list goes too
+    assert iw.without_clash_list("a\n- b\n\nc") == "a\n- b\n\nc"      # a list of the writer's own stays
+

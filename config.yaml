@@ -230,15 +230,16 @@ issue_writer:
   repos:
     argus-viewer: {path: "~/argus-viewer", environment: pwa_node22}
     argus-ledger: {path: "~/argus-ledger", environment: ledger_py312_up2}
-  # max_input_tokens as the drafter's on DeepSeek (code_task.max_input_tokens_by_model): the heuristic count of a
-  # non-Anthropic prompt is about twice the billed tokens, and 60,000 ended the first turn from the phone at 28,000
-  # real tokens (context_limit, 2026-11-09). cap_usd is the bound: one turn never costs more.
-  turn: {cap_usd: 0.10, attempt_tokens: 1200000, max_input_tokens: 150000, max_steps: 20, max_submits: 4}
+  # max_input_tokens: Haiku's bound through the gateway (#415): its long-context price starts at 100,000 tokens and the
+  # heuristic count of an OpenRouter prompt is not exact, so 100,000 x 1.2 / 3 = 40,000 (harness/llm.py
+  # check_long_context); the replays used at most ~25,000. cap_usd is the bound: one turn never costs more.
+  turn: {cap_usd: 0.10, attempt_tokens: 1200000, max_input_tokens: 40000, max_steps: 20, max_submits: 4}
   code_max_usd: 1.00   # K3: the cap of a code job `argus issue start` makes (router/issue.py refuses more than $1.00)
 
 # SPEC_ISSUE_WRITER 6: the control service on 127.0.0.1:8711 (router/control.py). The key file it passes to the CLI as
 # --key-file comes from the service's environment (ARGUS_CONTROL_KEY_FILE, set by Atha in the unit's drop-in), never
-# from this file or a form; the service never reads the key.
+# from this file or a form; the service never reads the key. Amendment 5: the writer's turns (new, reply) take
+# ARGUS_CONTROL_WRITER_KEY_FILE when set (its provider differs from the code job's), else ARGUS_CONTROL_KEY_FILE.
 control:
   message_body_max: 65536   # bytes of a POST with a message: 4,000 characters of 4-byte UTF-8 percent-encoded (48 KB)
 
@@ -375,12 +376,12 @@ roles:
     timeout_s: 180
     params: {extra_body: {thinking: {type: enabled}}}
   issue_writer:
-    # SPEC_ISSUE_WRITER K4: DeepSeek V4.1 Flash first (Atha 2026-11-09), thinking mode as the drafter; one SubmitIssue
-    # holds the whole issue and the reply, so the drafter's output room.
-    model: "deepseek:deepseek-flash"
+    # SPEC_ISSUE_WRITER amendment 5 (Atha 2026-11-11, pilots/issue_writer_models_v1): Haiku 5.5 through OpenRouter,
+    # the only model that flagged the API data the issue needs (3/3; DeepSeek 0/3), 5x faster. K4 was DeepSeek V4.1
+    # Flash (2026-11-09). One SubmitIssue holds the whole issue and the reply, so the drafter's output room.
+    model: "openrouter:anthropic/claude-haiku-5.5"
     max_output_tokens: 16384
     timeout_s: 180
-    params: {extra_body: {thinking: {type: enabled}}}
   # SPEC_GATEWAY_PROVIDER PR 2: the research job's free profile (no tools of their own; never a repository) and the
   # same DeepSeek V4.1 Flash through OpenRouter, pinned to DeepInfra (DeepSeek itself does not serve it there).
   # fallback_models: free models only, tried in order when the one before was rate limited (HTTP 429) before the

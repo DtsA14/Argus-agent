@@ -123,6 +123,23 @@ def unchanged_paragraph(issue):
     return "\n".join(out)
 
 
+def without_clash_list(issue):
+    """The issue without a clash list the harness wrote into it (the LOOSEN line, its `- ` lines and the blank line
+    before it): a writer that gives back its stored issue does not get the list twice (amendment 5)."""
+    lines, out, i = issue.split("\n"), [], 0
+    while i < len(lines):
+        if lines[i] == LOOSEN:
+            if out and not out[-1].strip():
+                out.pop()
+            i += 1
+            while i < len(lines) and lines[i].startswith("- "):
+                i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out)
+
+
 def with_clashes(issue, clashes):
     """The issue as stored: with clashes, a paragraph naming each (file, line, why) put before its last line (the
     Environment line), so the drafter, the agent and the human read the same list; without, the issue as it is."""
@@ -142,11 +159,13 @@ def is_test(rel):
 
 
 def scan(source, terms):
-    """(found, hits, incomplete) for the snapshot at source: the terms that occur in some file; every (file, line, text)
-    of a test file holding one, in file and line order; whether a bound or an unreadable file left something unread.
+    """(found, hits, unread, per) for the snapshot at source: the terms that occur in some file; every (file, line,
+    text) of a test file holding one, in file and line order; the files a bound or an error left unread, sorted;
+    {term: (test lines, test files)} holding it.
     Read through the path jail like the read tools: no symlink or special file, .git skipped, SearchFiles' bounds."""
     jail = PathJail(source)
-    found, hits, files, read, incomplete = set(), [], 0, 0, False
+    found, hits, files, read, unread = set(), [], 0, 0, set()
+    per = {t: [0, set()] for t in terms}
     for dirpath, dirnames, filenames in os.walk(jail.root, followlinks=False):
         here = os.path.relpath(dirpath, jail.root)
         dirnames[:] = sorted(d for d in dirnames if d != ".git" and not os.path.islink(os.path.join(dirpath, d)))
@@ -155,19 +174,19 @@ def scan(source, terms):
             try:
                 st = os.lstat(os.path.join(dirpath, name))
             except OSError:
-                incomplete = True
+                unread.add(rel)
                 continue
             if not stat.S_ISREG(st.st_mode):
                 continue                                           # symlink, FIFO, device: never read
             if st.st_size > SEARCH_MAX_FILE or files >= SEARCH_MAX_FILES or read + st.st_size > SEARCH_MAX_BYTES:
-                incomplete = True
+                unread.add(rel)
                 continue
             files += 1
             read += st.st_size
             try:
                 text = jail.read_text(rel, max_bytes=SEARCH_MAX_FILE)
             except (PathEscape, OSError):
-                incomplete = True
+                unread.add(rel)
                 continue
             if not any(t in text for t in terms):
                 continue
@@ -178,7 +197,10 @@ def scan(source, terms):
                     found.update(got)
                     if test:
                         hits.append((rel, n, line.strip()[:SEARCH_MAX_LINE]))
-    return found, hits, incomplete
+                        for t in got:
+                            per[t][0] += 1
+                            per[t][1].add(rel)
+    return found, hits, sorted(unread), {t: (n, len(f)) for t, (n, f) in per.items()}
 
 
 def hits_code(hits):
@@ -186,26 +208,38 @@ def hits_code(hits):
     return hashlib.sha256("\n".join(f"{f}:{n}:{t}" for f, n, t in hits).encode("utf-8")).hexdigest()[:12]
 
 
-def hits_report(hits, code, incomplete):
+def hits_report(hits, code, unread):
     """The rejection that shows the writer the old test lines holding its touches, with the code to submit again."""
     count = Counter(f for f, _, _ in hits)
     files = sorted(count)
     out = [f"the harness searched the existing tests for your touches and found {len(hits)} line(s) in {len(files)} "
            "file(s); read the lines your change may break and put each in clashes (or change the issue so it does not "
            f"clash), then submit again with clash_check \"{code}\":"]
-    shown, per = 0, {}
+    per = {}                                # at most HITS_SHOWN lines reach here (broad_report above that)
     for f, n, t in hits:
-        if shown >= HITS_SHOWN or per.get(f, 0) >= HITS_PER_FILE:
+        if per.get(f, 0) >= HITS_PER_FILE:
             continue
         per[f] = per.get(f, 0) + 1
-        shown += 1
         out.append(f"  {f}:{n}: {t}")
     for f in files:
         more = count[f] - per.get(f, 0)
         if more:
             out.append(f"  ... {more} more line(s) in {f}: SearchFiles or ReadFile to see them")
-    if incomplete:
-        out.append("  ... some files were too large or too many to search: SearchFiles the rest yourself")
+    if unread:
+        out.append(f"  ... {len(unread)} test file(s) too large or too many to search, SearchFiles them yourself: "
+                   + ", ".join(unread[:5]) + (" ..." if len(unread) > 5 else ""))
+    return "\n".join(out)
+
+
+def broad_report(hits, per):
+    """The rejection of touches whose old test lines are too many to read (amendment 5): the count per touch, so the
+    writer can replace the broad ones with the exact texts the tests assert on."""
+    files = len({f for f, _, _ in hits})
+    out = [f"your touches are too broad: the existing tests hold them in {len(hits)} line(s) in {files} file(s), more "
+           f"than the {HITS_SHOWN} the harness can show. Replace each broad touch with the exact text the tests assert "
+           "on (a whole list of column headers, a selector, a class, a sentence), or drop it; then submit again. Lines "
+           "per touch:"]
+    out += [f"  {t!r}: {n} line(s) in {k} file(s)" for t, (n, k) in per.items()]
     return "\n".join(out)
 
 
@@ -227,14 +261,17 @@ def touches_problems(args, source):
             terms.append(t.strip())
     if problems:
         return problems, [], 0
-    found, hits, incomplete = scan(source, terms)
+    found, hits, unread, per = scan(source, terms)
+    tests_unread = [f for f in unread if is_test(f)]
     missing = [t for t in terms if t not in found]
-    if missing and not incomplete:          # an unread file may hold it: the list below says what was not searched
+    if missing and not unread:              # an unread file may hold it
         return [f"touch {t!r} occurs in no file of the repository: name texts that exist, exactly as the code has them"
                 for t in missing], [], 0
+    if len(hits) > HITS_SHOWN:              # amendment 5: a list too long to read is no check; no code for it
+        return [broad_report(hits, per)], terms, len(hits)
     code = hits_code(hits)
-    if (hits or incomplete) and args.get("clash_check") != code:
-        return [hits_report(hits, code, incomplete)], terms, len(hits)
+    if (hits or tests_unread) and args.get("clash_check") != code:      # an unread test may hold one
+        return [hits_report(hits, code, tests_unread)], terms, len(hits)
     return [], terms, len(hits)
 
 
@@ -305,7 +342,7 @@ def issue_gate(args, *, source, environment):
         why, touches, test_hits = touches_problems(args, source)
         problems += why
     if not only and isinstance(issue, str) and issue.strip():
-        final = with_clashes(issue.strip(), kept)
+        final = with_clashes(without_clash_list(issue.strip()), kept)
         if kept and UNCHANGED.search(unchanged_paragraph(issue)):
             problems.append(f"you named {len(kept)} clash(es), so the issue cannot say the existing tests keep passing "
                             "unchanged: drop that claim (the harness adds the tests a human loosens first), or change "

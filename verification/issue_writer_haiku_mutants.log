@@ -1,0 +1,24 @@
+KILLED  broad allowed: 1 failed, 180 passed in 20.03s
+KILLED  broad at forty: 1 failed, 175 passed in 23.57s
+KILLED  broad gets a code: 1 failed, 180 passed in 25.53s
+KILLED  lines per touch miscounted: 1 failed, 180 passed in 28.00s
+KILLED  files per touch not counted: 1 failed, 180 passed in 23.32s
+KILLED  counts not shown: 1 failed, 180 passed in 25.51s
+KILLED  model kept: 1 failed, 103 passed in 22.06s
+KILLED  thinking params kept: 1 failed, 103 passed in 26.19s
+KILLED  input bound changed: 1 failed, 103 passed in 28.57s
+KILLED  writer key ignored: 1 failed, 238 passed in 61.97s (0:01:01)
+KILLED  writer key for start: 1 failed, 238 passed in 57.33s
+KILLED  writer key for reply only: 1 failed, 238 passed in 60.43s (0:01:00)
+KILLED  new page wants the start key: 1 failed, 239 passed in 50.69s
+KILLED  reply form wants the start key: 1 failed, 239 passed in 51.02s
+KILLED  start offered with the writer key: 1 failed, 239 passed in 51.00s
+KILLED  old clash list kept: 1 failed, 183 passed in 19.18s
+KILLED  old list's blank line kept: 1 failed, 183 passed in 19.37s
+KILLED  old list's lines kept: 1 failed, 183 passed in 19.59s
+KILLED  a non-test file wants a code: 1 failed, 182 passed in 19.60s
+KILLED  an unread test wants no code: 1 failed, 177 passed in 19.04s
+KILLED  unread tests not named: 1 failed, 176 passed in 19.21s
+KILLED  writer variable not named: 1 failed, 186 passed in 21.17s
+KILLED  refusal names only the old variable: 1 failed, 200 passed in 35.16s
+RESULT: 23/23 killed
