@@ -7,16 +7,19 @@ leaves alone: an old set that is a new set minus one or two words that the issue
 Python lists, tuples, sets and dicts of strings; advice for the human, never a reason to refuse a draft.
 """
 import ast
+import os
 import re
+import stat
 from pathlib import Path
 
 from .testdetect import is_test_file
-from .workspace import snapshot
+from .workspace import SPECIAL, snapshot
 
 MIN_ELEMENTS = 4
 MAX_ADDED = 2
 MAX_BYTES = 1 << 20
 MAX_FOUND = 20
+MAX_SETS = 2000           # sets taken from one file: the comparison is bounded whatever a file holds
 WORD = re.compile(r"[A-Za-z0-9_]+")
 
 
@@ -37,31 +40,47 @@ def _sets(source):
         values = [i.value for i in items if isinstance(i, ast.Constant) and isinstance(i.value, str)]
         if len(values) >= MIN_ELEMENTS and len(values) == len(items):
             out.append((node.lineno, kind, frozenset(values)))
-    return out
+    return sorted(out, key=lambda t: t[0])[:MAX_SETS]
 
 
 def _text(path):
+    """The text of a regular file of at most MAX_BYTES, never through a symlink and never waiting on a FIFO; else None."""
     try:
-        if path.stat().st_size > MAX_BYTES:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_BYTES:
             return None
-        return path.read_bytes().decode("utf-8")
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            return f.read(MAX_BYTES + 1).decode("utf-8")
     except (OSError, UnicodeDecodeError):
         return None
+    finally:
+        os.close(fd)
 
 
 def find(base_dir, draft, issue):
     """[{path, line, kind, added}] of the old test files (in base_dir) that the draft does not change and that look
-    affected; sorted by path, at most MAX_FOUND."""
-    base_dir = Path(base_dir)
+    affected; sorted by path, at most MAX_FOUND. Advisory: whatever goes wrong, the answer is no finding, never an error
+    that could stop a check, an approval or a status."""
+    try:
+        return _find(Path(base_dir), draft, issue)
+    except Exception:           # noqa: BLE001 (MemoryError and a vanished file included: this is a hint, not a gate)
+        return []
+
+
+def _find(base_dir, draft, issue):
     mine = {t["path"] for t in (draft.get("new_tests") or []) + (draft.get("changed_tests") or [])}
     new_sets = [s for t in (draft.get("new_tests") or []) + (draft.get("changed_tests") or [])
                 for s in _sets(t["content"])]
-    words = set(WORD.findall(issue or ""))
+    words = set(WORD.findall(issue))
     found = []
-    for path in sorted(snapshot(base_dir, skip_cache=True)):
+    for path, digest in sorted(snapshot(base_dir, skip_cache=True).items()):
         if len(found) >= MAX_FOUND:
             break
-        if not path.endswith(".py") or not is_test_file(path) or path in mine:
+        if digest == SPECIAL or not path.endswith(".py") or not is_test_file(path) or path in mine:
             continue
         text = _text(base_dir / path)
         if text is None:

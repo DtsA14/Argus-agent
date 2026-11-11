@@ -132,3 +132,38 @@ def test_the_approve_screen_line_comes_from_the_intake_not_the_report(tmp_path, 
     assert rj.leak_lines(job, d) == [line]
     assert rj.leak_lines(job, {**draft(changed={"tests/test_old.py": lst(NEW_KEYS)}), "base": "shop"}) == []
     assert rj.leak_lines(SimpleNamespace(root=root, data={"inputs": {"issue": "nothing"}}), d) == []
+
+
+# ---- advisory: nothing here may stop a check, an approval or a status -----------------------------------------------
+
+def test_whatever_goes_wrong_the_answer_is_no_finding(tmp_path, monkeypatch):
+    d = base(tmp_path, {"tests/test_old.py": lst(OLD_KEYS)})
+    assert lk.find(d, draft(), ISSUE) != []
+    assert lk.find(d, draft(), None) == []                                         # an issue that is not a text
+    assert lk.find(d, {"new_tests": [{"path": "tests/n.py"}]}, ISSUE) == []        # a draft of the wrong shape
+    monkeypatch.setattr(lk, "snapshot", lambda *a, **k: (_ for _ in ()).throw(PermissionError("denied")))
+    assert lk.find(d, draft(), ISSUE) == []
+    monkeypatch.setattr(lk, "_sets", lambda source: (_ for _ in ()).throw(MemoryError()))
+    assert lk.find(d, draft(), ISSUE) == []
+
+
+def test_a_fifo_or_symlink_named_like_a_test_is_never_read(tmp_path):
+    import os
+    d = base(tmp_path, {"tests/test_real.py": lst(OLD_KEYS)})
+    os.mkfifo(d / "tests" / "test_pipe.py")                       # a read would block here forever
+    os.symlink(d / "tests" / "test_real.py", d / "tests" / "test_link.py")
+    assert [h["path"] for h in lk.find(d, draft(), ISSUE)] == ["tests/test_real.py"]
+    assert lk._text(d / "tests" / "test_pipe.py") is None and lk._text(d / "tests" / "test_link.py") is None
+
+
+def test_the_reported_line_is_the_first_matching_set_in_the_file(tmp_path):
+    nested = "def f():\n    return [" + ", ".join(repr(k) for k in OLD_KEYS) + "]\n"
+    d = base(tmp_path, {"tests/test_old.py": "# c\n" + nested + lst(OLD_KEYS)})         # nested at 3, top level at 4
+    assert lk.find(d, draft(), ISSUE)[0]["line"] == 3
+
+
+def test_the_sets_taken_from_one_file_are_capped(tmp_path, monkeypatch):
+    monkeypatch.setattr(lk, "MAX_SETS", 2)
+    src = lst(["a1", "a2", "a3", "a4"]) + lst(["b1", "b2", "b3", "b4"]) + lst(OLD_KEYS)
+    d = base(tmp_path, {"tests/test_old.py": src})
+    assert lk.find(d, draft(), ISSUE) == []                                    # the third set is past the cap
