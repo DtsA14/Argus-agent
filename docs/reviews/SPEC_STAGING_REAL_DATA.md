@@ -165,8 +165,8 @@ Penulis issue di 8711 menolak menulis issue viewer karena data job tidak punya j
 pun: `\n`, `\r`, `\u2028`, ...) dari `inputs.issue` (judul issue, gaya Argus); job `research` → baris pertama yang tidak kosong dari `inputs.question`; jenis
 lain (mis. `issue`) → tanpa `title`. Teksnya: karakter kontrol dan format tak terlihat dibuang (`CONTROL`, sama dengan
 D1), spasi berderet jadi satu, tepi dipotong, paling panjang 120 karakter (lebih panjang: 119 karakter, spasi ujung dibuang, + `…`). Kosong,
-bukan string, atau cocok dengan pola key (`KEY`, diperiksa sebelum **dan** sesudah dipotong, jadi key yang terpotong di
-batas tidak terbit sebagian) → tanpa `title` (job tetap terbit; issue/pertanyaan lain tidak ikut).
+bukan string, atau cocok dengan pola key (`KEY`, diperiksa pada baris utuh **sebelum** dipotong, jadi key yang
+terpotong di batas tidak terbit sebagian) → tanpa `title` (job tetap terbit; issue/pertanyaan lain tidak ikut).
 Hanya judul yang terbit: sisa `inputs` (issue utuh, path repo, commit) tetap tidak. Validasi A2 memproyeksikan job yang sudah terbit
 dengan mode terbit: judulnya hanya dari `title` lewat aturan yang sama (proyeksi memetakan dirinya sendiri); `title` milik
 `job.json` sumber tidak pernah dibaca (code review).

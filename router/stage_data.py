@@ -129,8 +129,8 @@ def _keyish(text):
 def job_title(raw, published=False):
     """The job's title (amendment 9, T1): the first non-empty line (any line break) of a code job's issue or a research
     job's question, without control or invisible format characters, spaces folded, at most TITLE_MAX characters; None
-    when there is none or it looks like a key (checked before and after the cut). published: a published job projected
-    again by validate (A2), whose title is its only source; a source job's own `title` is never read."""
+    when there is none or it looks like a key (checked on the whole line, before the cut). published: a published job
+    projected again by validate (A2), whose title is its only source; a source job's own `title` is never read."""
     if published:
         text = raw.get("title")
     else:
@@ -138,12 +138,13 @@ def job_title(raw, published=False):
         text = inputs.get(TITLE_FROM.get(raw.get("kind"))) if isinstance(inputs, dict) else None
     if not isinstance(text, str):
         return None
-    line = next((c for c in (" ".join(CONTROL.sub("", ln).split()) for ln in text.splitlines()) if c), "")
+    lines = (" ".join(CONTROL.sub("", ln).split()) for ln in text.splitlines())
+    line = next((c for c in lines if c), "")
     if not line or _keyish(line):
         return None
     if len(line) > TITLE_MAX:
         line = line[:TITLE_MAX - 1].rstrip() + "…"
-    return None if _keyish(line) else line
+    return line                          # a prefix of a line no key pattern matches matches none either
 
 
 def project_job(raw, job_id, published=False):
