@@ -277,6 +277,14 @@ param thinking DeepSeek; `issue_writer.turn.max_input_tokens` 150000 → 40000 (
 `ARGUS_CONTROL_KEY_FILE`; Start (job code) tetap `ARGUS_CONTROL_KEY_FILE`. Aturan key file (satu provider per file,
 tidak ada key lebih) tidak berubah. Atha menulis variabel itu di drop-in unit; Claude tidak membacanya.
 
+**B4 (code review).** (1) Issue yang diberikan kembali dengan daftar clash buatan harness (giliran berikut menerima issue
+tersimpan sebagai issue sekarang) disimpan dengan satu daftar, yang baru: harness membuang daftar lamanya (baris kalimat
+tetap amandemen 3, baris `- ` sesudahnya, baris kosong sebelumnya) sebelum menulis yang baru. (2) Hanya file **tes** yang
+tidak terbaca (terlalu besar, batas, error) yang membuat kode `clash_check` tetap diminta, dan penolakannya menyebut
+file-file itu; file non-tes yang tidak terbaca (mis. lock file besar) hanya mematikan penolakan "touch tidak ada".
+(3) Halaman dan penolakan menyebut `ARGUS_CONTROL_WRITER_KEY_FILE` bila penulis tidak punya key.
+
 **Tes wajib (mutants).** > 40 baris ditolak tanpa kode dengan jumlah per touch; tepat 40 tetap ditunjukkan dengan kode;
 model, tanpa params, batas 40000; key penulis untuk new/reply, key lama untuk start, kosong → key lama, hanya key
-penulis → Start tidak ditawarkan dan ditolak.
+penulis → Start tidak ditawarkan dan ditolak; daftar lama dibuang (satu daftar), file non-tes besar tidak meminta kode,
+file tes besar disebut; pesan key penulis.
