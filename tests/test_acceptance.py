@@ -452,3 +452,13 @@ def test_contract_tools_are_known_gated_tools():
     from codetask.tools import GATED
     assert ct.CONTRACT_TOOLS <= set(GATED.values())
     assert ct.contract_tools(CONTRACT) == [] and ct.contract_tools(contract(tools=["search_files"])) == ["search_files"]
+
+
+def test_a_globstar_glob_that_misses_files_directly_in_the_folder_names_the_glob_that_matches():
+    files = {"src/a.test.jsx", "src/b.js"}
+    c = contract(scope={"writable": ["lib/**"], "protected": ["src/**/*.test.jsx"]})
+    assert ct.check_scope_against(c, files) == [
+        "protected glob 'src/**/*.test.jsx' matches no input file ('**/' needs a subfolder; "
+        "files directly there match 'src/*.test.jsx')"]
+    c = contract(scope={"writable": ["lib/**"], "protected": ["src/**/*.nope"]})
+    assert ct.check_scope_against(c, files) == ["protected glob 'src/**/*.nope' matches no input file"]
