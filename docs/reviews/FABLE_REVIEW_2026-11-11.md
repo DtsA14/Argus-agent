@@ -162,3 +162,29 @@ The verdict-fix sketch was not built or run.
 **Combined fix list from sessions A (sections 8-9), by risk:** D1 run wedge; E1 unknown cost charged as zero; E2 non-positive prices; D2 ledger durability; D6 unlabelled
 `RunValidation` output; D7 key redaction in error text; D3 `smoke_models.py` rule; then E3 (design) and the low items. D1, E1, E2, D2 are strict-lane code that the money and
 crash-resume guarantees in `AGENTS.md` depend on: each needs a test that fails on the old code, review, mutants and `verify_at`.
+
+## 10. Session B1: `ReportConflict` spec ([v1](FABLE_SPEC_REPORT_CONFLICT_v1.md), [v2](FABLE_SPEC_REPORT_CONFLICT_v2.md))
+
+Fable drafted the spec (v1), then corrected it after Claude pointed out that `codetask/run.py` freezes the tool allowlist at setup (v2 keeps the tool in the
+allowlist and refuses a second use inside the tool reply). v2 also replays six incidents on paper and cuts an MVP. **Draft, not approved; v2 replaces parts of v1.**
+Claude re-checked these code claims on 2026-11-11: the allowlist is frozen at setup (`codetask/run.py:312-332`); `GATED` and `tools.coder` are where v2 puts the tool
+(`codetask/tools.py:124-126`, `config.yaml` tools block); changed tests are refused for vitest drafts (`acceptance/draft.py:167-170`); `redraft` is allowed only from
+`DRAFT_FAILED`/`AWAITING_APPROVAL` (`router/job.py:1232`); `MAX_NODES = 50` (`acceptance/validation.py:54`); `red_check` takes named nodes and returns
+`outcome/type/assertion/path`. Not re-checked: the line references into `job.py` and `steps.py` beyond those, and the replay rows (inference from notes, as Fable says).
+
+| # | Finding or design point | Status | Claude's view |
+|---|---|---|---|
+| F1 | Tool stays in the allowlist; a second use is refused inside the tool reply, memo-keyed; the "used" state lives in graph state committed after acceptance | design, partly **verified** against `run.py` | Right fix for the frozen allowlist. |
+| F2 | The agent names test files, not nodes; the harness derives the red set (v1's five-node limit could have refused `c4be`) | design | Agree. |
+| F3 | "Red by assertion" is too narrow (097d fails on a library query error); the new condition is "failed, in the test's own frame" | design | Agree; weaker evidence, so the human still decides. |
+| F4 | An unconfirmed report stays visible on the status screen | design | Agree. |
+| F5 | Replay: of six incidents, a report would be confirmed in `097d`, `1808` (already caught at approve, #275), `j20261111_112252_11b3` and `c4be`; undecided for 021 t1; correctly refused for V4 (a defective new test, no exit for it) | inference from notes | The honest gain is smaller than it looks: with the leak warning (#437) the ledger cases are also caught at draft time, so `ReportConflict` is the backstop. Still the only structural answer for the vitest cases (`097d`, 021 t1), where leak detection does not exist. |
+| F6 | MVP: tool, verification (`acceptance/conflict.py`), `BLOCKED/test_conflict`, status lines, `retry` refused; no new `CONFLICT` job state, no `--from-conflict`, no approve gate; about 230 lines of code, 350 of tests; riskiest piece is the new branch in the acceptance node (`run.py:366-387`) | design | Reasonable size for the strict lane. Limit stated by Fable: it provides an exit, it does not force the agent to use it. |
+| F7 | Until the verdict-forgery fix exists, `ReportConflict` can be built, because a confirmed conflict never becomes a pass or an apply; checks 4, 6, 7 are solid (baseline without agent code), checks 2, 3, 5, 8 are read from a process that contains agent code | design | Agree with the caveat. |
+| F8 | The detection-gate hit should become terminal (not feedback) once `ReportConflict` exists, in its own PR | design | Agree; sequence after the MVP. |
+
+**Proposed order of the strict-lane work from sessions A and B1** (each: test that fails on the old code, review, mutants, one `verify_at`, then "merge"):
+1. D1 run wedge + E1 unknown cost charged as zero + E2 non-positive prices (money and crash-resume; small).
+2. D2 ledger fsync + D6 `RunValidation` label + D7 key redaction + D3 `smoke_models.py`.
+3. `ReportConflict` MVP (F6), then the terminal detection gate (F8).
+4. The verdict-forgery fix (E3, canaries and nonce) as its own spec.
