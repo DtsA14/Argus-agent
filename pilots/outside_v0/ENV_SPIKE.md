@@ -23,3 +23,21 @@ What this means for ENV (not done; needs a decision):
    reject a draft whose collection fails and make it learn, is untested. A harness or prompt change is a strict-lane item and was not started (doubt, deferred).
 2. **Replace humanize.** A third candidate must be flat layout, pure Python, pytest only, with no plugin missing from the image, at least 10 qualifying issues. Not searched yet.
 3. **The existing image is enough for pytest-only repositories** (no new image for boltons or cachetools); the per-repository work is the environment entry in `config.yaml` and its `check_env_image.py` record.
+
+
+## Addendum: a replacement for humanize, and which repositories need no harness change (2026-11-11, later)
+
+Candidates screened by GitHub metadata (activity, licence, issues closed by a linked PR in 12 months), then measured in the same sandbox:
+
+| Repository | Commit | Licence | Lines (py) | Issues closed by a PR, 12 months | Suite in the sandbox (as Argus runs pytest) |
+|---|---|---|---|---|---|
+| `more-itertools/more-itertools` | `ceafee8` | MIT | 16,818 | **50** | 771 passed + 21,203 subtests, **36.7 s**, no option needed (flat layout) |
+| `r1chardj0n3s/parse` | `616ac26` | MIT | 2,730 | 9 | 178 passed in 0.4 s, but only with `-o pythonpath=.` (collection errors without it) |
+| `Suor/funcy` | `a876c7e` | BSD-3 | 7,963 | 6 | needs a module (`whatever`) that the image does not have; also has `AGENTS.md`/`CLAUDE.md` |
+| others screened (tabulate 7, slugify 5, typeguard 7, structlog 6, markupsafe 3, wasmtime-py 3, idna 0, jmespath 0, inflection 0, sortedcontainers 0) | – | – | – | fewer than 10, or dormant | not measured |
+
+Neither `more-itertools` nor `boltons` has an AI-contribution notice in its docs; `cachetools` and `funcy` do (their own `AGENTS.md`).
+
+**Recommendation for v0:** use the two repositories that run with Argus's own command and no harness change, `boltons` (13 qualifying issues) and `more-itertools` (50), five issues from each; keep `cachetools` for a later batch,
+after the `src`-layout question (`-o pythonpath=src`) is settled. This keeps the protocol's rules (ten issues, a fixed selection rule) and removes the only strict-lane work from phase 1. A third repository is optional.
+The deviation (two repositories, five issues each, instead of three with 4/3/3) is for Atha to accept; it lowers diversity, not the integrity of the selection rule.

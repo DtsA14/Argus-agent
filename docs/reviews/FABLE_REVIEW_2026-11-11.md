@@ -14,7 +14,7 @@ Status: **done** (merged, with the evidence named) · **in PR** (written, not ye
 condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
 in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 
-**Counts (rows below):** done 4 · in PR 21 · open 22 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Scoreboard, FIX-A and the ENV spike are merged (see their rows); FIX-B (E1, E2) is in a PR. C7, C9 and C10 stay open; every other code fix waits for its phase.
+**Counts (rows below):** done 10 · in PR 15 · open 22 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2). E1 waits for a decision. C7, C9 and C10 stay open; the remaining code fixes wait for their phase.
 
 ### A. Stale or unsupported documentation (section 2)
 | Id | What | Status | Evidence or next step |
@@ -69,7 +69,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | D13 | Path jail, sandbox flags, no unsandboxed exec hold | info | Good news |
 | D14 | Memo keys, reservation, `durability="sync"` hold | info | Good news |
 | E1 | **Unknown cost charged as zero** to the reservation | in PR | FIX-B: a call whose cost cannot be computed is charged the larger of its worst case and its real usage at the highest write rate (`charged = worst_case_unknown_cost`); tests, 22 mutants killed (`verification/fix_b_unknown_cost_mutants.log`) |
-| E2 | Zero and negative prices not rejected | in PR | FIX-B: rates must be finite numbers of at least 0; zero input/output refused on a direct provider with a finite budget; peak multiplier at least 1; missing input/output refused |
+| E2 | Zero and negative prices not rejected | done | Merged #448 (`91d2572`): rates must be finite numbers of at least 0; zero input/output refused on a direct provider with a finite budget; peak multiplier at least 1; missing input/output refused; 15/15 mutants; verify_at 3689 passed |
 | E3 | Verdict-forgery fix (canaries, nonce, frozen node set) | open | = VF |
 | E4 | Zero written on a billing assumption (paid web) | dropped | Check with E1 only if cheap |
 | E5 | Gateway provider pin is a prefix test | dropped | Low |
@@ -91,13 +91,13 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | ADV | Advisory lane in `AGENTS.md` | in PR | This PR (Atha: yes, 2026-11-11) |
 | WEEKLY | One weekly line: Atha hours and Claude usage | open | Phase 1; Atha fills it, the scoreboard cites it |
 | FIX-A | D1 + D6 (+ tests for attacks A8, A7) | done | Merged #446 (`ef64710`) |
-| ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done (`pilots/outside_v0/ENV_SPIKE.md`): cachetools 416 tests in 0.6 s (needs `-o pythonpath=src`), boltons 621 in 3.7 s (BSD-3 confirmed, 25,874 lines), humanize unusable; the environment entries and the src-layout handling are not started (strict, deferred) |
+| ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done; addendum: `more-itertools` (771 tests, 36.7 s, no option) replaces humanize; v0 can use boltons + more-itertools with no harness change; the src-layout handling (cachetools) is deferred |
 | GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
 | PRE | `PREFLIGHT.md`: ten issues by the fixed rule | open | Phase 1, after ENV |
 | EXP | The retrospective outside experiment (kill at 2 or fewer A of 10, success at 5 or more) | open | Phase 2; Atha's "go live" and verdict |
-| FIX-B | E1 + E2 | in PR | PR `fix-b-unknown-cost`; spec `SPEC_FIX_B_UNKNOWN_COST.md`; waits for `verify_at`, then merge (phase 2 item done early: it needs no model) |
+| FIX-B | E1 + E2 | done | E2 merged (#448); E1 held for Atha's decision (see row E1) |
 | RC / GATE / VF / FIX-C | `ReportConflict` MVP; terminal gate; verdict forgery; ledger fsync and key redaction | open | Phase 3, only on a success verdict |
-| G4, G6 | Candidate suites measured; environments built | in PR | Measured for the sandbox (see ENV_SPIKE); building the environment entries still open |
+| G4, G6 | Candidate suites measured; environments built | in PR | Measured (see ENV_SPIKE and its addendum); building the environment entries still open |
 | G5 | Retrospective version first | done | Decided by Atha 2026-11-11 |
 | H1 | CSV half of A15 not exploitable (the CSV has no title) | done | Checked, section 13 |
 | H2 | Attacks A8, A9, A7, A10 become regression tests of the fixes | open | With FIX-A, FIX-C, VF |
