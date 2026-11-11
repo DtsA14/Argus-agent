@@ -1,10 +1,3 @@
-KILLED   E1 removed
-KILLED   E1 also for unpriced models
-KILLED   E1 label
-KILLED   E1 ignores real usage
-KILLED   E1 ignores worst case
-KILLED   E1 write rate = input
-KILLED   E1 multiplier
 KILLED   missing key allowed
 KILLED   multiplier unchecked
 KILLED   multiplier floor 0
