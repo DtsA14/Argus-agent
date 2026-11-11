@@ -88,8 +88,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       dibekukan di job.json, satu kali per job, agent boleh lapor "terjepit tes lama" alih-alih mengakali; jalur ketat)
     - [~] Tes lama bocor (probe rantai `pilots/chain_probe_v0`, 2026-11-11): **(1) gerbang `scope:no_test_detection`** (kode produksi yang
       mengenali tes gagal di acceptance; `SPEC_TEST_DETECTION_GATE`, PR ini). Belum: (2) pesan "terjepit tes lama" saat `FAILED_ACCEPTANCE`
-      karena tes lama terkunci (retry tak menolong; abandon + issue yang menyebut tes itu), (3) deteksi sebelum approve tes lama yang memuat
-      key/daftar tetangga fitur baru. Dan: operator rantai tetap (`argus chain`: T1 → apply → S → T2), belum dibenarkan, tunggu rantai kedua
+      karena tes lama terkunci (retry tak menolong; abandon + issue yang menyebut tes itu), (3) ~~deteksi sebelum approve tes lama yang memuat
+      key/daftar tetangga fitur baru~~ **selesai (penasihat, `SPEC_OLD_TEST_LEAKS`)**: `report["leaks"]`, bagian DRAFT_REVIEW, baris approve/status; Python saja. Ukur false positive di job berikutnya; bila tepat, usul: tolak draf dengan jalan keluar. JS/vitest belum. Dan: operator rantai tetap (`argus chain`: T1 → apply → S → T2), belum dibenarkan, tunggu rantai kedua
     - [ ] Celah: drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru (gerbang #275 tidak terpicu), dan tes
       draf memasang `history.state` `{}`, bukan `null` seperti browser
 - [x] **Uji prompt injection riset → kode** — v0 selesai 2026-11-06 (`pilots/prompt_injection_v0/RESULT.md`, $0,14): 4 varian injeksi di kutipan, tidak ada yang tembus; V4 BLOCK judge karena tes draf cacat (agen menambah 400 CR ke CSV), grader tersembunyi meloloskannya. Lanjutan bila perlu: injeksi di teks klaim, fakta API palsu. Temuan sampingan: gerbang harness belum menolak draf dengan red reason non-perilaku (aturan baru ditegakkan Claude). Rencana awal: (usulan probe model 2026-11-06, Atha "gass", urutan atas di antara kandidat;
