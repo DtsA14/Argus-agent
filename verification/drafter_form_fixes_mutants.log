@@ -1,0 +1,21 @@
+KILLED  no normalization: 1 failed, 17 passed in 1.24s
+KILLED  ids kept: 1 failed in 0.66s
+KILLED  id not lower-cased: 1 failed in 0.66s
+KILLED  no v_ prefix: 1 failed, 2 passed in 0.64s
+KILLED  taken id reused: 1 failed, 6 passed in 0.63s
+KILLED  new tests not protected: 1 failed, 7 passed in 0.64s
+KILLED  new test added twice: 1 failed in 0.62s
+KILLED  globs never dropped: 1 failed, 9 passed in 0.63s
+KILLED  old tests not checked: 1 failed, 21 passed in 0.65s
+KILLED  refused globs dropped: 1 failed, 22 passed in 0.87s
+KILLED  directory globs dropped: 1 failed, 9 passed in 0.64s
+KILLED  pytest tests not old: 1 failed, 21 passed in 0.65s
+KILLED  args changed in place: 1 failed, 10 passed in 0.63s
+KILLED  reply silent: 1 failed, 17 passed in 0.64s
+KILLED  no event: 1 failed, 17 passed in 0.65s
+KILLED  held silent: 1 failed, 24 passed in 0.69s
+KILLED  old name hint gone: 1 failed, 20 passed in 0.69s
+KILLED  new name hint gone: 1 failed, 25 passed in 0.67s
+KILLED  evidence without hints: 1 failed, 19 passed in 0.67s
+KILLED  version kept: 1 failed, 222 passed, 49 skipped in 28.72s
+RESULT: 20/20 killed
