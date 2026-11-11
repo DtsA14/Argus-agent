@@ -1027,3 +1027,21 @@ def test_status_shows_the_estimate_misses_of_a_stage(env, monkeypatch):
     text = rj.status("jtest", jobs_dir=env.jobs)
     assert "  a1 estimate misses: 1 of 2 calls, max 1.25" in text
     assert "d1 estimate misses" not in text and job.data["stages"]["d1"]["run_id"]
+
+
+def test_the_approve_screen_and_status_say_which_old_tests_may_break(tmp_path, monkeypatch):
+    # SPEC_OLD_TEST_LEAKS L2c: computed from the job's intake and issue at the time, not read from the drafter's report
+    shown = []
+    e = Env(tmp_path, confirm=lambda text: shown.append(text) or "approve" not in text)
+    e.code()
+    asked = []
+    hit = [{"path": "tests/test_other.py", "line": 3, "kind": "list", "added": ["k"]}]
+    monkeypatch.setattr(rj.leaks, "find", lambda base_dir, draft, issue: asked.append((base_dir.name, issue)) or hit)
+    line = "old tests that may break (not changed by the draft): tests/test_other.py: read DRAFT_REVIEW.md"
+    assert line in rj.status("jtest", jobs_dir=e.jobs)
+    with pytest.raises(rj.Refused, match="not confirmed"):
+        e.approve()
+    assert line in shown[-1] and e.coder.calls == []
+    assert asked and asked[0][0] == "base" and asked[0][1] == e.job().data["inputs"]["issue"]
+    monkeypatch.setattr(rj.leaks, "find", lambda *a: [])
+    assert "old tests that may break" not in rj.status("jtest", jobs_dir=e.jobs)
