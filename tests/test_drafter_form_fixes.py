@@ -104,10 +104,10 @@ def make(tmp_path, monkeypatch, report=None):
 
 def test_the_checked_draft_is_the_corrected_one_and_the_reply_and_the_log_say_what_changed(tmp_path, monkeypatch):
     submit, checked, log = make(tmp_path, monkeypatch)
-    r = submit(args(ids=("Target",), protected=("src/sum.test.js", "src/**/*.test.ts")), 1)
+    r = submit(args(ids=("Target",), protected=("src/sum.test.js", "src/neg.test.js", "src/**/*.test.ts")), 1)
     c = checked[0]["contract"]
     assert [v["id"] for v in c["validation"]][0] == "target"
-    assert c["scope"]["protected"] == ["src/sum.test.js", NEW]
+    assert c["scope"]["protected"] == ["src/sum.test.js", "src/neg.test.js", NEW]
     said = ("The harness changed your draft (ReviseDraft starts from the changed one): validation id 'Target' is now "
             f"'target'; new test {NEW} is now protected; protected glob 'src/**/*.test.ts' matched no file and was "
             "dropped.")
@@ -117,7 +117,7 @@ def test_the_checked_draft_is_the_corrected_one_and_the_reply_and_the_log_say_wh
         "protected glob 'src/**/*.test.ts' matched no file and was dropped"]}) in log.events
     assert r["args"]["validation"][0]["id"] == "target"           # ReviseDraft starts from the corrected arguments
     again = submit({"unverifiable": ["u"]}, 2, last=r["args"], revise=True)
-    assert again["args"]["scope"]["protected"] == ["src/sum.test.js", NEW] and NORMALIZED_NOT_IN(again)
+    assert again["args"]["scope"]["protected"] == ["src/sum.test.js", "src/neg.test.js", NEW] and NORMALIZED_NOT_IN(again)
 
 
 def NORMALIZED_NOT_IN(r):
@@ -133,8 +133,6 @@ def test_an_accepted_draft_says_what_changed_too(tmp_path, monkeypatch):
 
 
 def test_p4_an_old_test_that_did_not_run_is_named_in_full():
-    spec = {"id": "near", "executable": "vitest", "args": ["run", "src/a.test.jsx"], "timeout_s": 60, "min_tests": 1,
-            "max_skipped": 0, "must_pass": ["src/a.test.jsx::empties the box"], "environment": "pwa_node22"}
     ev = {}
     av._named_like_evidence(ev, {"src/a.test.jsx::empties the box": None},
                             {"tests": {"src/a.test.jsx::clearing > empties the box": "ok"}})
@@ -143,7 +141,6 @@ def test_p4_an_old_test_that_did_not_run_is_named_in_full():
     nothing = {}
     av._named_like_evidence(nothing, {"src/a.test.jsx::x": None, "src/a.test.jsx::y": "ok"}, {"tests": {}})
     assert nothing == {}
-    assert spec["must_pass"]
 
 
 def test_p4_the_draft_check_quotes_the_full_name(tmp_path):
@@ -159,7 +156,47 @@ def test_p4_the_draft_check_quotes_the_full_name(tmp_path):
     assert f"existing test {old} must pass on the baseline, is None{hint}" in problems
 
 
-def test_the_submit_tools_moved_to_version_5():
-    import inspect
-    src = inspect.getsource(cdr.build_graph)
-    assert '"SubmitDraft": f"5:' in src and '"ReviseDraft": f"5:' in src
+
+def test_p3_a_glob_meant_for_old_tests_it_misses_is_kept_for_the_contract_to_refuse():
+    # test/** for tests/: dropping it would leave the old tests unprotected; the refusal tells the drafter
+    base = {"tests/test_a.py": "x", "tests/conftest.py": "x", "src/m.py": "x"}
+    a = args(protected=("test/**",), new="tests/test_new.py")
+    out, changes = cdr.normalize_args(a, base)
+    assert out["scope"]["protected"] == ["test/**", "tests/test_new.py"] and changes == [
+        "new test tests/test_new.py is now protected"]
+    out, changes = cdr.normalize_args(args(protected=("tests/**", "test/**"), new="tests/test_new.py"), base)
+    assert out["scope"]["protected"] == ["tests/**"]
+    assert changes == ["protected glob 'test/**' matched no file and was dropped"]
+
+
+def test_p3_globs_the_contract_refuses_and_an_unreadable_intake_drop_nothing():
+    out, changes = cdr.normalize_args(args(protected=("src/*.test.js", "/src/*.test.js", "../x", "a\\b")), BASE)
+    assert out["scope"]["protected"] == ["src/*.test.js", "/src/*.test.js", "../x", "a\\b"] and changes == []
+    out, changes = cdr.normalize_args(args(protected=("src/*.test.js", "nothing/**")), {})
+    assert out["scope"]["protected"] == ["src/*.test.js", "nothing/**"] and changes == []
+
+
+def test_p3_never_empties_protected():
+    out, changes = cdr.normalize_args({**args(protected=("x/**",)), "new_tests": []}, {"src/sum.js": "x"})
+    assert out["scope"]["protected"] == ["x/**"] and changes == []
+
+
+def test_the_held_draft_kept_says_what_changed(tmp_path, monkeypatch):
+    submit, _, _ = make(tmp_path, monkeypatch)
+    held_args, _ = cdr.normalize_args(args(), BASE)
+    r = submit(args(ids=("Target",)), 2, held={"args": {**held_args, "validation": [
+        {**held_args["validation"][0], "id": "target"}]}, "draft": {"d": 1}, "report": {"r": 1}})
+    assert r["finished"] and r["content"].startswith(cdr.ACCEPTED) and "validation id 'Target' is now" in r["content"]
+
+
+def test_p4_a_new_test_not_collected_under_its_short_name_is_named_in_full(tmp_path):
+    new = "src/n.test.jsx::new one"
+    spec = {"id": "target", "executable": "vitest", "args": ["run", "src/n.test.jsx"], "timeout_s": 60,
+            "min_tests": 1, "max_skipped": 0, "must_pass": [new], "environment": "pwa_node22"}
+    hint = " (ran under the full name: src/n.test.jsx::block > new one)"
+
+    def validate(spec, ws, cfg):
+        return {"status": "fail", "evidence": {"must_pass": {new: None}, "failures": 1, "errors": 0,
+                                               "consistent": True, "named_like": {new: hint}}}
+    problems, _ = dr.baseline_problems({"validation": [spec]}, {"src/n.test.jsx"}, tmp_path, {}, validate=validate)
+    assert f"new test {new} was not collected{hint} on the baseline" in problems

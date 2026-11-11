@@ -32,11 +32,22 @@ mempersempit writable).
 
 **P3. Glob protected yang tidak melindungi apa pun.** Glob `scope.protected` yang tidak cocok dengan berkas input mana pun
 (berkas intake ditambah tes baru, sama dengan `check_scope_against`) dibuang. Glob yang menamai direktori (cocok dengan
-awalan berkas) tidak dibuang: pesan lama yang menyarankan `dir/**` tetap. Protected yang kosong sesudahnya ditolak seperti
-sekarang oleh kontrak.
+awalan berkas) tidak dibuang: pesan lama yang menyarankan `dir/**` tetap. Glob yang ditolak `check_glob` (absolut, `..`,
+backslash, kosong) tidak dibuang. **Glob hanya dibuang bila setiap berkas tes lama (nama vitest `*.test.*` atau pytest
+`test_*.py`, `*_test.py`, `conftest.py`) tetap terlindungi tanpa glob itu**, dan sisanya tidak kosong, dan berkas intake
+terbaca: glob salah ketik yang dimaksudkan untuk tes lama (`test/**` untuk `tests/`) tetap ditolak kontrak, jadi drafter
+melihat apa yang terlewat (code review 2026-11-11: membuangnya diam-diam akan meloloskan draf dengan tes lama tidak
+terlindungi).
 
 **P4. Nama tes lama.** Penolakan `existing test <id> must pass on the baseline, is None` menyebut nama lengkap tes yang
 berjalan di berkas yang sama dan berakhir dengan judul itu (`named_like`, maks 3), seperti "did not run".
+
+**P4** juga untuk tes baru yang "was not collected" karena namanya tanpa awalan `describe`. Jawaban "keep it" (draf yang
+ditahan) juga menyebut perubahan.
+
+**Code review (2026-11-11), tidak diubah:** hash snapshot intake per submit (repo kecil); `named_like` dihitung dua kali
+(evidence dan alasan); perbaikan di akar (harness memberi id sendiri, tes baru selalu protected tanpa disebut) lebih besar,
+dicatat bila aturan formulir baru muncul lagi.
 
 **Tidak berubah:** writable, validasi, tes, isi lain; draf Python mendapat P1, P2, P3, P4 juga (aturan formulir sama);
 versi alat SubmitDraft/ReviseDraft naik ke "5".

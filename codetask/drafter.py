@@ -363,13 +363,19 @@ def _fixed_id(vid, used):
     return new if ct.ID.match(new) and new not in used else None
 
 
+PYTEST_FILE = re.compile(r"(^|/)(test_[^/]*\.py|[^/]*_test\.py|conftest\.py)$")
+
+
 def _protects(g, files):
     """Whether protected glob g matches an input file, or names a directory of one (kept: the contract's message then
-    says how to write it); a glob the contract cannot read is kept for the contract to refuse."""
-    try:
-        return any(ct.glob_regex(g).match(f) for f in files) or any(f.startswith(g.rstrip("/") + "/") for f in files)
-    except Exception:                                              # noqa: BLE001
-        return True
+    says how to write it); a glob the contract refuses (absolute, '..', a backslash) is kept for it to refuse."""
+    return (not ct.check_glob(g) or any(ct.glob_regex(g).match(f) for f in files)
+            or any(f.startswith(g.rstrip("/") + "/") for f in files))
+
+
+def _old_tests(base_files):
+    """The intake's test files (vitest or pytest names): what a protected glob is there for."""
+    return [f for f in base_files if VITEST_FILE.match(f) or PYTEST_FILE.search(f)]
 
 
 def normalize_args(args, base_files):
@@ -401,8 +407,11 @@ def normalize_args(args, base_files):
                 changes.append(f"new test {p} is now protected")
         files = set(base_files) | set(news)
         dropped = [g for g in prot if not _protects(g, files)]
-        if dropped:
-            scope["protected"] = [g for g in prot if g not in dropped]
+        kept = [g for g in prot if g not in dropped]
+        # a glob that protects nothing is dropped only when every old test file stays protected without it: a typo
+        # meant for them (test/** for tests/) keeps the contract's refusal, so the drafter sees what it missed
+        if dropped and base_files and kept and all(ct.matches(f, kept) for f in _old_tests(base_files)):
+            scope["protected"] = kept
             changes += [f"protected glob {g!r} matched no file and was dropped" for g in dropped]
     return out, changes
 
@@ -708,8 +717,8 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
             log.emit("draft_normalized", submit=n, changes=changes[:20])
         if held and args == held["args"]:       # the answer "keep it": the draft already checked, not checked again
             log.emit("draft_submitted", submit=n, ok=True, problems=0, revise=revise, held=True)
-            return {"content": ACCEPTED, "finished": True, "draft": held["draft"], "report": held["report"],
-                    "args": args}
+            return {"content": "\n".join([ACCEPTED, *said]), "finished": True, "draft": held["draft"],
+                    "report": held["report"], "args": args}
         draft, problems = draft_from_args(args, base=inputs["intake"], policy=policy,
                                           base_files=base_files if policy.get("runner") == "vitest" else None)
         if not problems:                       # before the sandbox: a contract the agent cannot meet is not checked
