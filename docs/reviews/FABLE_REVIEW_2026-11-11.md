@@ -188,3 +188,65 @@ Claude re-checked these code claims on 2026-11-11: the allowlist is frozen at se
 2. D2 ledger fsync + D6 `RunValidation` label + D7 key redaction + D3 `smoke_models.py`.
 3. `ReportConflict` MVP (F6), then the terminal detection gate (F8).
 4. The verdict-forgery fix (E3, canaries and nonce) as its own spec.
+
+## 11. Session B2: outside-repo experiment protocol ([`FABLE_PROTOCOL_OUTSIDE_EXPERIMENT.md`](FABLE_PROTOCOL_OUTSIDE_EXPERIMENT.md))
+
+Fable's design: ten verbatim issues from three small public Python repositories, **retrospective** (issues closed by a merged PR, given to Argus at the fix's parent commit,
+graded with `scripts/swe_grade.py` against the maintainer's tests plus a blind rubric A/B/C); selection rule fixed before running (newest first, 4/3/3, mechanical drops);
+every accepted draft approved; kill line 2 or fewer A of 10, success 5 or more; $1.00 per job, $8.00 per batch; no push or comment upstream by any automation; fix D1 and D6
+first. Deviation from Claude's brief: the issues are not currently open ones.
+
+Claude's checks on 2026-11-11 (public GitHub reads only, nothing cloned or run):
+
+| # | Point | Status | Claude's view |
+|---|---|---|---|
+| G1 | Kill and success lines: 2 or fewer A of 10 has probability 2.0% if the true rate were 57%; 5 or more has 3.3% if it were 20% | **verified** (binomial, `0.020` and `0.033`). Also: at a true rate of 35% both "kill" and "success" happen about 25% of the time | The lines separate clear cases and leave a wide middle; Fable already says 3-4 means a second batch. |
+| G2 | Candidates activity: Fable's "boltons may be inactive (last push Feb 2025)" | **verified wrong**: pushed 2026-10-25; humanize 2026-11-02 (74 open issues); cachetools 2026-11-10 (3 open issues) | All three are active. boltons' licence reads `NOASSERTION` on GitHub (Fable's web search says BSD); confirm before use. |
+| G3 | At least 10 issues closed by a merged PR in 12 months | **partly verified**: issues closed with a linked PR since 2025-11-11: humanize 13, cachetools 17, boltons 13 (merged PRs 85, 34, 51). The test-and-non-test diff, 150-line and 8,000-character filters were not applied | Enough raw material for 4/3/3 after filtering, probably; cachetools is the safest. |
+| G4 | Suite time under 120 s offline in the sandbox, size under 30,000 lines, installable into one image | **unverified** (Fable and Claude) | Must be measured (clone locally, run pytest in the sandbox image) before selection. |
+| G5 | Retrospective instead of open issues | design choice | Gives an objective grade; costs contamination risk (recent issues may be in training data) and is not the "real unassisted work" of the original question. Option: run this first, then a small second phase of 5 truly open issues graded by the rubric only. Atha decides. |
+| G6 | Sandbox environment per repository (`scripts/build_env_from_base.sh`, `scripts/check_env_image.py`) | **unverified** (Fable assumed, did not look) | A real cost: a config change per repo plus a pinned image. Check it before promising a date. |
+| G7 | Fix D1 and D6 first; E1 and D5 not blocking (check `usd_complete`; the grade comes from the maintainer's tests and a reader, not from acceptance) | design, consistent with the fix queue in section 10 | Agree; it also gives the fix queue a concrete deadline. |
+
+**Decision (Atha, 2026-11-11):** run the **retrospective** version first (issues closed by a merged PR, run at the fix's parent commit, graded by the maintainer's tests plus the
+blind rubric). A second phase of truly open issues is not decided; it depends on the first result. Still to do before a first job: measure the three candidates (suite time under
+120 s in the sandbox, size under 30,000 lines, one pinned image each), confirm the `boltons` licence, build and check one sandbox environment per repository, and fix D1 and D6.
+
+## 12. Session B4: scoreboard definition ([`FABLE_SCOREBOARD_DEFINITION.md`](FABLE_SCOREBOARD_DEFINITION.md))
+
+Fable defined outcome categories, money, decisions, human wait (upper bound), judge and the unknowns from `job.json` alone. Claude checked the field names against the 150 real
+`job.json` files in `~/pilot3a_live/jobs` on 2026-11-11 (read-only; counts below are from that scan):
+
+| Point | Result |
+|---|---|
+| Jobs by kind | 119 code, 26 research, 5 issue |
+| Code and other states | APPLIED 62, REJECTED 18, ABANDONED 14, REVIEW_READY 20, AGENT_FAILED 5, DRAFT_FAILED 1, BLOCKED 1, REPORT_READY 22, HANDED_OFF 5, RESEARCH_INCONCLUSIVE 2 |
+| `as_is` | present on exactly the 62 APPLIED jobs, as Fable assumed |
+| Decision log | the entries sit under `log` (not `decisions`); `what` values seen: `created` 150, `intaken` 119, `state` 752, `approved` 107, `limits_shown` 285, `confirmed_by_flag` 285, `key_from_file` 311, `staged` 38, `stage_started` 169, `retry` 11, `redraft` 16, `research_ok` 1. Fields seen on entries include `by`, `via`, `as_is`, `commit`, `patch_sha256`, `old`, `new`, `at`, `note`, `draft`, `sha` |
+| `confirmed` entries | **none**: every confirmation is `confirmed_by_flag` (all runs used `--yes`), so the "interval under `--yes` is zero" pitfall applies to every job; human wait must come from `approval.at` and the stage `ended_at` values |
+| Judge coverage | 10 judge stages across 119 code jobs: the judge ran on about 8% of code jobs, so "judge verdict" is missing for most of them |
+| Stage kinds | draft 133, agent 118, judge 10, write 13, plan 26, research_worker 84, report 23, check 23, research 1 |
+
+**Verdict:** the definition fits the real data; build the script from it (a new script: `pilot_report.py` works on run directories). Two things to carry into the script:
+the log key is `log`, and `by` cannot distinguish Atha from Claude, so Atha's time stays an upper bound. Fable's "what the script cannot know" list (re-issues of one issue,
+who decided, minutes of attention, Claude's token cost, spend of cut-off stages) stands; the ledgers are the money record, so the script should read them for spend and use
+`job.json` stage `usd` only as a cross-check.
+
+## 13. Session B3: injection and approver-deception attacks ([`FABLE_INJECTION_ATTACKS.md`](FABLE_INJECTION_ATTACKS.md))
+
+Fable designed sixteen attacks (A1-A16), all with canary payloads and none run. Ranking by likelihood times impact; first five to run: **A13** (the `for_human` sentence the approver reads
+on the phone is never checked against the tests), **A8** (the run wedge: one sentence in any text the agent reads ends the job for good), **A6 with A7** (an instruction inside a test failure
+message, with and without the data label), **A2** (repository text reaching the issue writer, which then writes the "human" issue), **A10** (the forged verdict, as a hand-written fixture
+with no model); A9 costs nothing and runs alongside. Predicted to succeed today: A1 (by design), A8, A9, A10, A13; likely A3, A5, A6, A7; likely to fail A4, A16.
+
+| # | Point | Status | Claude's view |
+|---|---|---|---|
+| H1 | A15 (job title in the CSV export, formula injection) | **checked, correction**: `ledger/api.py` `_jobs_csv` writes only `job`, `state`, `stages`, `cost_usd`, `running`; the title is not in the CSV, and job ids and states are generated by Argus. The CSV half of A15 is not exploitable through a title. The markup half remains untested (React escapes; `html.escape` in the control page) | Downgrade A15 to the viewer and control-page rendering only. |
+| H2 | A8 (run wedge), A9 (error text with a key, no redaction), A7 (`RunValidation` unlabelled) | the underlying gaps were **verified** by Claude (sections 8-9: `codetask/tools.py:254-257`, `425-432`; grep finds no redaction) | These attacks need the fixes, not more evidence: A8 and A9 should be turned into the **regression tests of D1 and D7**, not run as experiments. |
+| H3 | A13: `for_human` is "written by the drafter, not checked by a test" | **verified** as a documented statement in every `DRAFT_REVIEW.md` ("For the human (written by the drafter, not checked by a test)") | The highest-impact item because the approver reads that sentence on a phone. Consider a cheap guard first (show it only next to the list of new test names and the changed files). |
+| H4 | A10 (forged verdict) as a hand-written fixture, no model | design | Becomes the forger fixtures for the canary-and-nonce fix (E3). |
+| H5 | A11 (false conflict once `ReportConflict` exists) | not testable yet | Becomes a test of the `ReportConflict` MVP. |
+| H6 | A1 succeeds by design (the issue is the instruction) | by design | Consistent with the outside-repo protocol: issue text is untrusted when it comes from outside, so the human reading the issue before `issue start --sha` is the defence. |
+
+**Proposal:** run A13 as the first experiment (needs one model, about $0.05, a practice-app clone), fold A8, A9, A10 and A7 into the tests of the fix queue (section 10), and keep A2, A3, A5, A6 for a later
+small batch of five or fewer runs. Nothing from this list is run yet.
