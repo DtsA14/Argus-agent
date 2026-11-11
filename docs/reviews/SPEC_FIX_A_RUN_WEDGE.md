@@ -27,6 +27,14 @@ padahal pemeriksaan otomatis dan ReadDocs memakainya (`AUTO_LABEL`, `EXCERPT_LAB
    bila versi dinaikkan, tool jalan lagi, teksnya berbeda, kunci langkah LLM berikutnya meleset, dan balasan dibeli ulang. Run baru memakai teks berlabel; run lama
    memutar teks lamanya. Itu aman justru karena kuncinya tidak berubah.
 
+**Perubahan sesudah review (Sonnet, kode dan keamanan):**
+5. `Finish` ikut terlindungi (tadinya di luar `try`): `OSError`, `ValueError`, `TypeError` dan `AttributeError` dari `Finish` menjadi `Refused`; `SUMMARY.json` yang memuat surrogate
+   tunggal ditulis dengan `ensure_ascii=True` (terbaca kembali sama); `claims` yang bukan list ditolak.
+6. Penangkapan `OSError`/`ValueError` hanya untuk tool yang menyentuh workspace (`FS_TOOLS`: ListFiles, SearchFiles, ReadFile, WriteFile, EditFile). Untuk `RunValidation` dan `ReadDocs` error
+   sementara (docker, jaringan) tetap melempar: refusal akan membekukannya di memo sedangkan resume seharusnya mengulang. `RunValidation` dengan `id` yang bukan teks: `Unknown validation`.
+7. Argumen yang bukan objek ditolak; `path` dengan surrogate tunggal ditolak sebelum tool apa pun melihatnya (juga yang bisa lolos lewat `surrogateescape`).
+8. Setiap balasan `Toolbox.run` dibersihkan dari surrogate tunggal (`backslashreplace`), karena balasan disimpan di memo dan dikirim ke provider.
+
 ## 3. Tes (gagal di kode lama)
 
 1. `WriteFile` ke direktori yang ada, ke nama 300 karakter, ke path berisi NUL, dan dengan konten surrogate tunggal: balasan `Refused:`, tidak melempar.

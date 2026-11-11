@@ -121,6 +121,7 @@ class Finish(BaseModel):
 
 
 TOOLS = [ListFiles, SearchFiles, ReadFile, WriteFile, EditFile, RunValidation, ReadDocs, Finish]
+FS_TOOLS = {"ListFiles", "SearchFiles", "ReadFile", "WriteFile", "EditFile"}   # tools whose inputs are paths and text
 GATED = {"ListFiles": "list_files", "SearchFiles": "search_files", "ReadFile": "read_file",
          "WriteFile": "write_file", "EditFile": "edit_file",
          "RunValidation": "run_validation", "ReadDocs": "read_docs"}   # Finish ends the attempt; it is not gated
@@ -238,10 +239,33 @@ class Toolbox:
 
     def run(self, call, step_key=None):
         """Execute one tool call -> {"content": text for the model, "finished": bool}. step_key: the memo key of this
-        tool step, the same when a crashed step runs again; EditFile needs it to be safe to repeat."""
+        tool step, the same when a crashed step runs again; EditFile needs it to be safe to repeat. The reply text never
+        carries a lone surrogate (SPEC_FIX_A_RUN_WEDGE): it is stored in the memo and sent to the provider as it is."""
+        record = self._run(call, step_key)
+        record["content"] = record["content"].encode("utf-8", "backslashreplace").decode("utf-8")
+        return record
+
+    def _refused(self, name, e):
+        """The reply for an input the model chose that the file system or the text cannot take (SPEC_FIX_A_RUN_WEDGE).
+        The reply was committed before the tool ran, so an exception here would repeat on every resume. It names the
+        kind of error and never the input."""
+        self.log.emit("tool_error", role=self.role, tool=GATED.get(name, name), error=type(e).__name__)
+        return {"content": f"Refused: {name} could not be done ({type(e).__name__}).", "finished": False}
+
+    def _run(self, call, step_key):
         name, args = call.get("name"), call.get("args") or {}
+        if not isinstance(args, dict):
+            return {"content": f"Rejected: the arguments of {name} must be an object.", "finished": False}
+        if isinstance(args.get("path"), str):
+            try:
+                args["path"].encode("utf-8")
+            except UnicodeEncodeError:                 # a lone surrogate: no file name, and it cannot be stored or sent
+                return {"content": "Refused: the path is not valid text.", "finished": False}
         if name == "Finish":
-            return self.finish(args)
+            try:
+                return self.finish(args)
+            except (OSError, ValueError, TypeError, AttributeError) as e:
+                return self._refused(name, e)
         if name not in GATED:
             return {"content": f"Unknown tool {name!r}.", "finished": False}
         denied = self._gate(name)
@@ -258,12 +282,12 @@ class Toolbox:
         except FileNotFoundError:
             return {"content": f"No such file: {args.get('path')!r}", "finished": False}
         except (OSError, ValueError) as e:
-            # SPEC_FIX_A_RUN_WEDGE: an input the model chose that the file system or the text cannot take (a directory
-            # where a file was meant, a name over 255 bytes, a NUL, a lone surrogate) is refused like any other bad call.
-            # The reply was committed before the tool ran, so an exception here would repeat on every resume. The reply
-            # names the kind of error and never the input; other exceptions (our own bugs) still raise.
-            self.log.emit("tool_error", role=self.role, tool=GATED[name], error=type(e).__name__)
-            return {"content": f"Refused: {name} could not be done ({type(e).__name__}).", "finished": False}
+            # Only the tools that touch the workspace: for RunValidation and ReadDocs an OSError may be the sandbox or the
+            # network failing for a moment, and a refusal would freeze that in the memo where a resume would retry. Other
+            # exceptions (our own bugs) still raise.
+            if name in FS_TOOLS:
+                return self._refused(name, e)
+            raise
 
     def listfiles(self, args):
         under = args.get("path") or ""
@@ -430,7 +454,7 @@ class Toolbox:
 
     def runvalidation(self, args):
         specs = {v["id"]: v for v in self.contract["validation"]}
-        spec = specs.get(args.get("id"))
+        spec = specs.get(args.get("id")) if isinstance(args.get("id"), str) else None
         if spec is None:
             return f"Unknown validation {args.get('id')!r}. Available: {sorted(specs)}."
         v = self.validate(spec, self.workspace, self.sandbox_cfg, TaggedLog(self.log, origin="tool"))
@@ -450,11 +474,18 @@ class Toolbox:
         return [self.validate(spec, self.workspace, self.sandbox_cfg, log) for spec in self.contract["validation"]]
 
     def finish(self, args):
+        if not isinstance(args.get("claims") or [], list):
+            return {"content": "Rejected, nothing was written:\n- claims must be a list", "finished": False}
         doc = claims_doc(args)
         problems = schema_problems(doc, claims_schema(self.contract))
         if problems:
             return {"content": "Rejected, nothing was written:\n- " + "\n- ".join(problems), "finished": False}
-        self.jail.write_text(SUMMARY, json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2))
+        text = json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2)
+        try:
+            text.encode("utf-8")
+        except UnicodeEncodeError:        # a lone surrogate in the summary: written escaped, read back the same
+            text = json.dumps(doc, ensure_ascii=True, sort_keys=True, indent=2)
+        self.jail.write_text(SUMMARY, text)
         return {"content": f"{SUMMARY} written; the attempt is over and the harness now checks the contract.",
                 "finished": True}
 
