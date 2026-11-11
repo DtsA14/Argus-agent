@@ -207,3 +207,7 @@ Claude's checks on 2026-11-11 (public GitHub reads only, nothing cloned or run):
 | G5 | Retrospective instead of open issues | design choice | Gives an objective grade; costs contamination risk (recent issues may be in training data) and is not the "real unassisted work" of the original question. Option: run this first, then a small second phase of 5 truly open issues graded by the rubric only. Atha decides. |
 | G6 | Sandbox environment per repository (`scripts/build_env_from_base.sh`, `scripts/check_env_image.py`) | **unverified** (Fable assumed, did not look) | A real cost: a config change per repo plus a pinned image. Check it before promising a date. |
 | G7 | Fix D1 and D6 first; E1 and D5 not blocking (check `usd_complete`; the grade comes from the maintainer's tests and a reader, not from acceptance) | design, consistent with the fix queue in section 10 | Agree; it also gives the fix queue a concrete deadline. |
+
+**Decision (Atha, 2026-11-11):** run the **retrospective** version first (issues closed by a merged PR, run at the fix's parent commit, graded by the maintainer's tests plus the
+blind rubric). A second phase of truly open issues is not decided; it depends on the first result. Still to do before a first job: measure the three candidates (suite time under
+120 s in the sandbox, size under 30,000 lines, one pinned image each), confirm the `boltons` licence, build and check one sandbox environment per repository, and fix D1 and D6.
