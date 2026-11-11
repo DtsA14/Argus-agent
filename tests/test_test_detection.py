@@ -187,3 +187,19 @@ def test_the_evidence_is_capped_and_the_total_is_kept(tmp_path):
     c = scan(tmp_path, {"src/a.py": HITS["sys.modules"] * 80})
     assert len(c["evidence"]["hits"]) == td.MAX_EVIDENCE and c["evidence"]["total"] == 80
     assert "+75 more" in c["reason"]
+
+
+def test_read_refuses_a_symlink_and_does_not_wait_on_a_fifo(tmp_path):
+    import os
+    real = tmp_path / "real.py"
+    real.write_text("x = 1\n", encoding="utf-8")
+    os.symlink(real, tmp_path / "link.py")
+    os.mkfifo(tmp_path / "pipe.py")
+    assert td._read(tmp_path / "real.py") == "x = 1\n"
+    assert td._read(tmp_path / "link.py") is None
+    assert td._read(tmp_path / "pipe.py") is None
+
+
+def test_line_numbers_are_editor_lines_even_with_a_form_feed(tmp_path):
+    c = scan(tmp_path, {"src/a.py": "a = 1\x0c\nimport sys\nif 'pytest' in sys.modules:\n    pass\n"})
+    assert c["evidence"]["hits"][0]["line"] == 3
