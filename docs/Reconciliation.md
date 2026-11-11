@@ -30,7 +30,7 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | Milestone | Status | Bukti | Gap yang belum tertutup |
 |---|---|---|---|
 | M1–M2 harness, LLM nyata, sandbox | `[x]` | `harness/`, `tools/sandbox.py`; arsip `PENDING` | – |
-| M3 evaluasi | `[x]` | `docs/reviews/M3_CLOSING.md` (koreksi 2026-11-11: berkas itu tidak memuat kalibrasi judge; klaim "kalibrasi judge PASS" belum punya rujukan di sini) | Rujukan kalibrasi judge |
+| M3 evaluasi | `[x]` | `docs/reviews/M3_CLOSING.md`; kalibrasi judge (set 3d): baseline #2 2026-10-15 PASS (deteksi 25/25, injeksi 4/4, karangan 6/6, false reject 0, 1 run, belum diuji kestabilan antar run), `docs/reviews/GOOD5_DECISION.md` bagian 6, `docs/reviews/REVIEW_3D.md`, `verification/calibration-3d-*` | Stabilitas antar run kalibrasi (judge tidak deterministik) |
 | General-task agent | `[x]` | `codetask/`, `acceptance/`; Eval Set v1 16/16 | Eval Set v1 jenuh: regresi saja |
 | **M4** multi-agent dengan dependensi | `[ ]` | Graf riset punya fan-out tanpa dependensi; code task satu agen | Belum ada bukti single-agent menjadi penghalang |
 | **M5** observability dan benchmark | `[~]` | Ledger per panggilan; `audit_run.py`, `failure_trace.py`, `pilot_report.py`; keputusan manusia dengan waktunya di `job.json` (#185; `argus-ledger` 014 menampilkannya); `swe_grade.py`; `argus-ledger report` (biaya per stage); jumlah keputusan per pilot di setiap `RESULT.md` | Tracing/dashboard; benchmark single vs multi; **menit kerja Atha** belum ditanyakan; **eval set yang tidak jenuh** |
