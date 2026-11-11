@@ -1,0 +1,9 @@
+Saya belum bisa membuat issue yang pasti. Data stage di aplikasi belum punya started_at atau ended_at: pencarian di seluruh repo tidak menemukan kedua nama itu, dan readStage di src/App.jsx hanya membaca stage, kind, status, cost_nano, cost_usd. Jadi durasi belum bisa dihitung.
+
+Tolong jawab dulu:
+1. Dari mana started_at dan ended_at tiap stage akan datang?
+2. Kolom durasi ditaruh di mana? Kalau sesudah share, tes lama akan rusak.
+3. Stage yang belum selesai (tanpa ended_at) tampil '-' atau dihitung sampai sekarang?
+
+Kalau durasi jadi kolom baru, tes lama yang perlu dilonggarkan manusia dulu: src/job-page-share.test.jsx baris 132, 133, 157, 158, 225; src/job-page-stages-timeline.test.jsx baris 216-218; dan src/job-page-stages-sum.test.jsx baris 150 kalau kolom diletakkan sebelum cost. Belum ada issue yang dikirim.</reply>
+<parameter name="questions">["Dari mana started_at dan ended_at tiap stage diambil? Field itu belum ada di data stage yang dibaca aplikasi.", "Kolom durasi ditaruh sesudah kolom share atau di tempat lain?", "Stage yang belum selesai tampil '-' atau dihitung sampai sekarang?"]

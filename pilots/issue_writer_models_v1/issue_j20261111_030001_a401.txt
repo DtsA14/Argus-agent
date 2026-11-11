@@ -1,0 +1,20 @@
+Show each stage's duration on the job page
+
+The job page (JobDetail in src/App.jsx) stage table has no duration. Add a duration for every stage, computed from started_at to ended_at, as a new last column "duration" after "share".
+
+Rules:
+1. readStage keeps started_at and ended_at (ISO text) from the API stage. A missing or non-text value is stored as null.
+2. The duration is ended_at minus started_at, in whole seconds, rounded down. Format: under 60 s as "45s"; from 60 s as "{m}m {s}s" with no leading zero, e.g. 134 s -> "2m 14s"; exactly 120 s -> "2m 0s"; 0 s -> "0s".
+3. If either value is null or ended_at is earlier than started_at, the cell shows "-".
+4. The duration cell is a td in the same row as the stage, after the share cell.
+5. The "sum" footer row gets an empty td in the duration column.
+
+Nothing else changes: the stage name, kind, status, cost, share, costliest class, sum and mismatch message, the "no stages" text and the mobile layout stay as they are. The clashes listed below are the only old tests that may fail; a human loosens them first.
+
+Tests: a stage with started_at "2024-05-01T10:00:00Z" and ended_at "2024-05-01T10:02:14Z" shows "2m 14s" in the last cell. A stage with ended_at 45 s after started_at shows "45s". Exactly 120 s shows "2m 0s". A stage with started_at null shows "-". A stage whose ended_at is before started_at shows "-". The sum row has 6 cells with an empty one in the last position.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-share.test.jsx line 109: shares() reads the last cell of every stage row as the share; the new duration cell becomes the last cell, so the share values read wrong and the test fails.
+- src/job-page-share.test.jsx line 107: Comment says the share is the last cell of every stage row, which is no longer true after the duration column is added.
+Environment: pwa_node22

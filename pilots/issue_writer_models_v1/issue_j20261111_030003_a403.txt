@@ -1,0 +1,29 @@
+Show each stage's duration on the job page, from started_at to ended_at
+
+Today the stages table on the job page (JobDetail in src/App.jsx, around line 1828) has the columns stage, kind, status, cost and share. readStage (src/App.jsx, around line 388) keeps only stage, kind, status, cost_nano and cost_usd, so started_at and ended_at are dropped. The human wants a duration column per stage, for example "2m 14s".
+
+Rules:
+1. readStage keeps started_at and ended_at as optional fields. If a stage has a string in started_at and ended_at, both are copied. If one or both are missing or null, they become null. A stage without them is still accepted, so no error is thrown.
+2. A new column header "duration" is added to the stages table, after "status" and before "cost". Its th has scope="col" and sits in the sr-only thead, like the other headers. The header list becomes ['stage', 'kind', 'status', 'duration', 'cost', 'share'].
+3. Each stage row has a td in that column with the duration text:
+   - started_at "2024-05-01T10:00:00Z", ended_at "2024-05-01T10:02:14Z" gives "2m 14s".
+   - started_at "2024-05-01T10:00:00Z", ended_at "2024-05-01T10:00:45Z" gives "45s".
+   - started_at and ended_at equal gives "0s".
+   - ended_at 3725 seconds after started_at gives "62m 5s" (minutes are not wrapped into hours).
+   - Fractions are dropped: 134.9 seconds gives "2m 14s".
+   - If started_at or ended_at is null or missing, the cell shows "-".
+   - If ended_at is earlier than started_at, the cell shows "-".
+4. The footer row keeps its existing cells; its duration cell is empty (no text).
+5. The costliest class, the share column and the sum row work exactly as before. The share stays the last cell of each row.
+
+Nothing else changes: the cost, share and costliest logic, the mismatch warning, the "no stages" text, and the decisions table stay as they are. The header list of the stages table changes, so the tests named in the clashes must be loosened by a human first.
+
+Tests: write tests in a new file src/job-page-stage-duration.test.jsx. Build a job with two stages, one with started_at "2024-05-01T10:00:00Z" and ended_at "2024-05-01T10:02:14Z" (expect "2m 14s"), and one with null times (expect "-"). Check the cells for the values 45s, 0s, 62m 5s, and the reversed-time case "-" as in rule 3. Check that the header "duration" exists after "status" and before "cost", and that readStage accepts a stage without the time fields.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-share.test.jsx line 132: Expects the exact header list ['stage','kind','status','cost','share']; the new 'duration' header breaks it.
+- src/job-page-share.test.jsx line 157: Same exact header list ['stage','kind','status','cost','share']; breaks with the new 'duration' header.
+- src/job-page-share.test.jsx line 224: Same exact header list ['stage','kind','status','cost','share']; breaks with the new 'duration' header.
+- src/job-page-stages-timeline.test.jsx line 184: Lists the stage table headers exactly, including 'share'; the new 'duration' column changes that list.
+Environment: pwa_node22

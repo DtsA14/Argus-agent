@@ -1,0 +1,5 @@
+Saya buat issue: tiap baris stage di halaman job dapat satu kolom baru "duration" sesudah kolom share, isinya lama stage dari started_at sampai ended_at, mis. "2m 14s", "45s", "1h 1m 5s". Kalau waktunya kosong atau tidak terbaca, tampil "-". Baris "sum" tetap, hanya dapat satu sel kosong di ujungnya.
+
+Catatan penting: tiga berkas tes lama mengunci jumlah kolom persis, jadi harus dilonggarkan dulu oleh manusia: src/job-page-stages-timeline.test.jsx (judul 5 kolom, isi sel tiap baris, isi baris sum), src/job-page-share.test.jsx (judul 5 kolom, dan kolom share dibaca sebagai sel terakhir), dan src/job-page-most-expensive-stage.test.jsx (sel baru tidak boleh punya kelas, kalau punya semua baris terlihat "ditandai").
+
+Tidak ada perubahan lain: nama stage, jenis, status, biaya, persen, penanda stage termahal, dan catatan selisih biaya tetap.

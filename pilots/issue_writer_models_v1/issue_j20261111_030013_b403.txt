@@ -1,0 +1,40 @@
+Add a duration column to the stages table of the job page
+
+Today each stage row of the job page shows the stage name, its kind, its status, its cost and its share of the job cost; nothing says how long the stage took. The human wants each stage to also show its duration, taken from `started_at` until `ended_at`, for example `2m 14s`.
+
+- A stage carries two new fields, `started_at` and `ended_at`: each is either a timestamp text (ISO 8601, as `created_at` is) or `null`. Both are optional in the api answer: a stage without them, or with `null`, still loads and shows `-`.
+- The stages table gets one more column after `share`, headed `duration`: the header row is now `stage`, `kind`, `status`, `cost`, `share`, `duration`. The head stays visually hidden exactly as today.
+- Each stage row gets one more cell at the end holding the duration text. A stage with `started_at: "2025-04-01T08:00:00Z"` and `ended_at: "2025-04-01T08:02:14Z"` shows `2m 14s`; the same instants written as `2025-04-01T15:00:00+07:00` and `2025-04-01T15:02:14+07:00` show `2m 14s` too.
+- The text of the duration, from the whole seconds between the two instants (a fraction of a second is dropped, never rounded up):
+  - under one minute, the seconds only: `0s` for the same instant twice, `1s`, `45s`, `59s`;
+  - from one minute up to one hour, minutes and seconds, both always shown: `1m 0s` for 60 seconds, `2m 14s` for 134 seconds, `59m 59s` for 3599 seconds;
+  - one hour and more, hours, minutes and seconds, all three always shown: `1h 0m 0s` for 3600 seconds, `1h 1m 5s` for 3665 seconds, `26h 3m 9s` for 93789 seconds.
+- `-` (a plain hyphen, no spaces) is shown instead when the duration is not known: `started_at` missing or `null`, `ended_at` missing or `null`, a timestamp that cannot be parsed, or an `ended_at` earlier than its `started_at`.
+- A timestamp that is present but is neither text nor `null` (for example a number) makes the page show `could not load: …` exactly as any other malformed stage does today.
+- The new cell carries no class, like every other cell of the stages table: the `costliest` class stays on the row alone, and the timeline classes of the body and the foot stay as they are.
+- The `sum` row in the foot gets one more, empty cell at the end, so it has six cells: `sum`, ``, ``, `$0.0800`, ``, `` for a job whose stages add up to `$0.0800`.
+- The duration costs no request and is stored nowhere: the page still fetches only `/api/jobs/<id>`, and `localStorage` and `sessionStorage` stay empty.
+- A stage name holding markup (`<img src=x onerror=alert(1)>`) is still its own text, and the page adds no `img` element.
+
+Nothing else changes: the job heading, the summary line, the `created …` line, the stage order, the texts of name, kind, status, cost and share, the `costliest` mark and its stylesheet rules, the `sum` money, the `stage costs do not match the job cost` line, the decisions table and the `no stages` text stay exactly as they are.
+
+Tests: in a new file `src/job-page-stage-duration.test.jsx`, with a job whose stages are given with their `started_at` and `ended_at`:
+- the column headers are `stage`, `kind`, `status`, `cost`, `share`, `duration` (by role `columnheader`);
+- one row per stage, in the api order, with six cells each: a stage from `08:00:00Z` to `08:02:14Z` shows `2m 14s` in its last cell and `$0.0100` and `13%` in the two cells before it, unchanged;
+- the edges, one stage each: same instant twice → `0s`; 45 seconds → `45s`; 59 seconds → `59s`; 60 seconds → `1m 0s`; 3599 seconds → `59m 59s`; 3600 seconds → `1h 0m 0s`; 3665 seconds → `1h 1m 5s`; 93789 seconds → `26h 3m 9s`; 134.9 seconds → `2m 14s`; `null` `ended_at` → `-`; `null` `started_at` → `-`; no `started_at` and no `ended_at` keys at all → `-`; `ended_at` one second before `started_at` → `-`; an unparsable `started_at` such as `not a time` → `-`;
+- the same instants written in `+07:00` show the same `2m 14s`;
+- the `sum` row of the foot has six cells, the last one empty, and still holds `$0.0800`;
+- the duration cell carries no class and the `costliest` class is still only on the costliest row;
+- a stage named `<img src=x onerror=alert(1)>` keeps its duration cell and adds no `img` element;
+- only `/api/jobs/j1` is fetched once and both storages stay empty.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-stages-timeline.test.jsx line 184: Asserts the stage header cells are exactly ['stage','kind','status','cost','share']; a sixth 'duration' column breaks it.
+- src/job-page-stages-timeline.test.jsx line 216: Asserts each stage row has exactly five cells with exact texts (also lines 217 and 218); a sixth duration cell breaks it.
+- src/job-page-stages-timeline.test.jsx line 243: Asserts the sum row cells are exactly ['sum','','','$0.0800','']; the extra empty duration cell breaks it.
+- src/job-page-share.test.jsx line 132: Asserts the headings are exactly ['stage','kind','status','cost','share']; the new 'duration' column breaks it (also lines 157 and 224).
+- src/job-page-share.test.jsx line 109: shares() reads the last cell of each row as the share; with duration last it reads the duration text instead.
+- src/job-page-share.test.jsx line 133: Expects the shares read that way to be ['33%','50%','1%','0%','0%']; once the last cell is the duration, this list no longer matches.
+- src/job-page-most-expensive-stage.test.jsx line 118: marksOf() collects the classes of the row and of its cells and expects only the costliest row marked; the new duration cell must carry no class, else every row looks marked.
+Environment: pwa_node22

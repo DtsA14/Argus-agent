@@ -1,0 +1,5 @@
+Pemeriksaan terakhir: daftar header tabel stage dikunci persis di tiga tempat tes lama, dan semuanya akan gagal kalau kolom "duration" ditambahkan. Yaitu src/job-page-share.test.jsx baris 132, 157 dan 224, serta src/job-page-stages-timeline.test.jsx baris 184 (daftar header yang memuat 'share'). Manusia harus melonggarkan tes-tes ini dulu sebelum issue dikerjakan. Tes lain tidak rusak.
+
+Perubahan: kolom "duration" per stage, misalnya "2m 14s", dari started_at sampai ended_at. Frontend sekarang belum membaca started_at dan ended_at, jadi API harus sudah mengirim keduanya.
+
+Tolong konfirmasi dua hal: apakah API sudah mengirim started_at dan ended_at per stage (ISO string)? Dan apakah format "2m 14s" sudah sesuai?
