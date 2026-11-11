@@ -1,0 +1,38 @@
+KILLED  touches not required: 1 failed, 130 passed in 19.45s
+KILLED  no limit on the number: 1 failed, 132 passed in 29.68s
+KILLED  touches checked on a reply only: 1 failed, 104 passed in 18.20s
+KILLED  touch length unchecked: 1 failed, 136 passed in 26.73s
+KILLED  short touch allowed: 1 failed, 135 passed in 23.04s
+KILLED  touch not stripped: 1 failed, 134 passed in 24.87s
+KILLED  missing touch allowed: 1 failed, 141 passed in 24.33s
+KILLED  missing refused when incomplete: 1 failed, 177 passed in 27.45s
+KILLED  code not needed: 1 failed, 142 passed in 31.34s
+KILLED  any code passes: 1 failed, 142 passed in 29.96s
+KILLED  incomplete needs no code: 1 failed, 177 passed in 28.29s
+KILLED  code over files only: 1 failed, 143 passed in 25.48s
+KILLED  code too short: 1 failed, 143 passed in 28.65s
+KILLED  non-test lines listed: 1 failed in 1.31s
+KILLED  test dirs not known: 1 failed, 145 passed in 29.71s
+KILLED  test dirs include the file name: 1 failed, 157 passed in 19.79s
+KILLED  test dirs case-sensitive: 1 failed, 161 passed in 19.33s
+KILLED  no spec or e2e dirs: 1 failed, 160 passed in 18.97s
+KILLED  CamelCase tests not known: 1 failed, 166 passed in 18.63s
+KILLED  _spec not known: 1 failed, 165 passed in 19.08s
+KILLED  lstat error crashes: 1 failed, 178 passed in 18.84s
+KILLED  test name matched as prefix: 1 failed, 172 passed in 19.12s
+KILLED  conftest not a test: 1 failed, 152 passed in 18.91s
+KILLED  .git searched: 1 failed, 174 passed in 18.73s
+KILLED  symlinked dirs followed: 1 failed, 174 passed in 18.91s
+KILLED  symlinked files read: 1 failed, 174 passed in 18.70s
+KILLED  large file read: 1 failed, 176 passed in 18.99s
+KILLED  incomplete not said: 1 failed, 176 passed in 18.90s
+KILLED  no cap per file: 1 failed, 175 passed in 18.94s
+KILLED  no cap in all: 1 failed, 175 passed in 19.27s
+KILLED  more not counted: 1 failed, 175 passed in 19.87s
+KILLED  code not in the rejection: 1 failed, 142 passed in 23.77s
+KILLED  touches not kept: 1 failed, 134 passed in 23.08s
+KILLED  hits not counted: 1 failed, 142 passed in 20.10s
+KILLED  version kept: 1 failed, 36 passed in 3.59s
+KILLED  prompt silent: 1 failed, 179 passed in 20.28s
+KILLED  three submits: 1 failed, 58 passed in 3.73s
+RESULT: 37/37 killed

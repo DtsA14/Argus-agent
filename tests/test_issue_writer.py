@@ -29,8 +29,12 @@ ISSUE = "\n".join(["The list page: the date under each job id", "", "Each job ca
 REPLY = "Di kartu job akan muncul tanggal dibuat, misalnya 9 Nov, 09:35 WIB."
 
 
-def submit_args(issue=ISSUE, reply=REPLY, clashes=(), questions=()):
-    return {"reply": reply, "issue": issue, "clashes": list(clashes), "questions": list(questions)}
+TOUCH = "export const"          # in the code of both repositories below, in no test: no clash_check is needed
+
+
+def submit_args(issue=ISSUE, reply=REPLY, clashes=(), questions=(), touches=(TOUCH,)):
+    return {"reply": reply, "issue": issue, "clashes": list(clashes), "questions": list(questions),
+            "touches": list(touches)}
 
 
 def call(name, args, id):
@@ -258,6 +262,7 @@ def test_the_turn_spends_through_its_ledger(tmp_path):
 def source(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.test.js").write_text("x\n")
+    (tmp_path / "src" / "a.js").write_text("export const x = 1\n")
     (tmp_path.parent / "outside.js").write_text("x\n")
     return tmp_path
 
@@ -333,7 +338,7 @@ def test_without_clashes_the_issue_is_stored_as_written_and_may_say_the_old_test
 
 def test_the_writer_is_told_to_name_the_tests_to_loosen():
     assert "never claim the old tests keep passing: the harness adds to the issue the list" in iw.SYSTEM
-    assert iw.VERSIONS["SubmitIssue"] == "4"
+    assert iw.VERSIONS["SubmitIssue"] == "5"
 
 
 @pytest.mark.parametrize("kw, why", [
@@ -371,7 +376,7 @@ def test_a_rejected_submit_is_told_why_and_the_next_one_counts(tmp_path):
     job = env.new()
     assert job.data["state"] == ri.AWAITING_HUMAN
     told = tool_answers(env.model.calls[1])
-    assert told[-1].startswith("Rejected (1 problem(s)); 2 submit(s) left") and "Environment: pwa_node22" in told[-1]
+    assert told[-1].startswith("Rejected (1 problem(s)); 3 submit(s) left") and "Environment: pwa_node22" in told[-1]
 
 
 def test_no_tool_that_writes_runs_or_reaches_the_network_is_offered(tmp_path):
@@ -870,3 +875,176 @@ def test_the_notes_of_a_turn_reach_the_next_turns_until_new_ones_replace_them(tm
 def test_the_writer_is_told_to_use_and_keep_its_notes():
     assert "use them and read a file again only for a detail they lack" in iw.SYSTEM
     assert int(iw.VERSIONS["SubmitIssue"]) >= 3
+
+
+# ---- amendment 4: the harness searches the old tests for what the issue touches ------------------------------------
+
+def touched_repo(tmp_path, tests=1):
+    root = tmp_path / "snap"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "page.js").write_text("const H = ['stage', 'share']\n")
+    (root / "src" / "page.test.js").write_text("".join(f"expect(h).toEqual(['stage', 'share']) // {i}\n"
+                                                        for i in range(tests)))
+    return root
+
+
+def touch_gate(root, **args):
+    return iw.issue_gate({**submit_args(touches=["'share'"]), **args}, source=root, environment=ENV)
+
+
+@pytest.mark.parametrize("touches", [None, [], "'share'", [TOUCH] * (iw.TOUCHES_MAX + 1)])
+def test_an_issue_must_name_what_it_touches(source, touches):
+    args = {**submit_args(), "touches": touches}
+    problems, r = iw.issue_gate(args, source=source, environment=ENV)
+    assert r is None and any(p.startswith(f"touches must list 1 to {iw.TOUCHES_MAX} texts") for p in problems)
+
+
+def test_a_reply_only_needs_no_touches_and_ignores_them(source):
+    for touches in (None, "junk", ["nowhere at all"]):
+        problems, r = iw.issue_gate({"reply": ANSWER, "touches": touches}, source=source, environment=ENV)
+        assert problems == [] and r["issue"] is None and r["touches"] == [] and r["test_hits"] == 0
+
+
+def test_eight_touches_at_the_length_limits_pass(tmp_path):
+    root = tmp_path / "snap"
+    root.mkdir()
+    long = "y" * iw.TOUCH_MAX
+    (root / "a.js").write_text(f"{long} ab cd ef gh ij kl mn\n")
+    touches = [long, "  ab ", "cd", "ef", "gh", "ij", "kl", "mn"]
+    problems, r = iw.issue_gate(submit_args(touches=touches), source=root, environment=ENV)
+    assert problems == [] and r["touches"] == [long, "ab", "cd", "ef", "gh", "ij", "kl", "mn"]
+
+
+@pytest.mark.parametrize("touch,why", [("a", "touch 1 has fewer than 2 characters"),
+                                       ("y" * (iw.TOUCH_MAX + 1), "more than 80"),
+                                       ("export\nconst", "one line"), ("   ", "touch 1 is empty"),
+                                       (7, "touch 1 is empty"), ("export​const", "U+200B")])
+def test_each_touch_is_one_short_line_of_text(source, touch, why):
+    problems, r = iw.issue_gate(submit_args(touches=[touch]), source=source, environment=ENV)
+    assert r is None and any(why in p for p in problems), problems
+
+
+def test_a_touch_the_code_does_not_have_is_refused(source):
+    problems, r = iw.issue_gate(submit_args(touches=[TOUCH, "duration"]), source=source, environment=ENV)
+    assert r is None and problems == ["touch 'duration' occurs in no file of the repository: name texts that exist, "
+                                      "exactly as the code has them"]
+
+
+def test_the_old_test_lines_holding_a_touch_come_back_with_a_code_and_the_code_lets_the_issue_pass(tmp_path):
+    root = touched_repo(tmp_path)
+    problems, r = touch_gate(root)
+    hits = [("src/page.test.js", 1, "expect(h).toEqual(['stage', 'share']) // 0")]
+    code = iw.hits_code(hits)
+    assert r is None and len(problems) == 1
+    assert f'submit again with clash_check "{code}"' in problems[0]
+    assert "  src/page.test.js:1: expect(h).toEqual(['stage', 'share']) // 0" in problems[0]
+    assert "src/page.js" not in problems[0]                    # the code itself is not a test
+    for wrong in ("", code.upper(), code[:-1], iw.hits_code(hits + hits)):
+        assert touch_gate(root, clash_check=wrong)[1] is None
+    problems, r = touch_gate(root, clash_check=code, clashes=[{"file": "src/page.test.js", "line": 1, "why": "list"}])
+    assert problems == [] and r["touches"] == ["'share'"] and r["test_hits"] == 1
+    assert "- src/page.test.js line 1: list" in r["issue"]
+
+
+def test_the_code_is_twelve_hex_of_the_lines_and_changes_with_them():
+    a = iw.hits_code([("t.test.js", 1, "x")])
+    assert len(a) == 12 and int(a, 16) >= 0
+    assert a != iw.hits_code([("t.test.js", 2, "x")]) != iw.hits_code([("t.test.js", 1, "y")])
+    assert a != iw.hits_code([("u.test.js", 1, "x")])
+
+
+def test_without_old_test_lines_no_code_is_needed(tmp_path):
+    root = touched_repo(tmp_path, tests=0)
+    problems, r = touch_gate(root)
+    assert problems == [] and r["test_hits"] == 0
+
+
+@pytest.mark.parametrize("rel,test", [("tests/x.py", True), ("src/__tests__/a.js", True), ("test/a.js", True),
+                                      ("test_a.py", True), ("pkg/a_test.go", True), ("src/a.test.jsx", True),
+                                      ("a.spec.ts", True), ("conftest.py", True), ("src/a.js", False),
+                                      ("src/testing.js", False), ("latest.js", False), ("contest.py", False),
+                                      ("tests", False), ("src/tests.js", False), ("x/test_/a.js", False),
+                                      ("spec/a.rb", True), ("Specs/a.cs", True), ("web/e2e/a.ts", True),
+                                      ("Tests/a.py", True), ("TEST/a.c", True), ("a_spec.rb", True),
+                                      ("src/FooTest.java", True), ("FooTests.kt", True), ("Contest.java", False),
+                                      ("src/spec.js", False), ("e2e.js", False), ("Testing/a.js", False),
+                                      ("src/a.test.js.map", False), ("conftest.py.orig", False)])
+def test_test_files_are_known_by_folder_or_name(rel, test):
+    assert iw.is_test(rel) is test
+
+
+def test_git_folders_and_symlinks_are_never_searched(tmp_path):
+    root = touched_repo(tmp_path, tests=0)
+    (root / ".git").mkdir()
+    (root / ".git" / "x.test.js").write_text("only_here\n")
+    (tmp_path / "outside.test.js").write_text("only_outside\n")
+    (root / "link.test.js").symlink_to(tmp_path / "outside.test.js")
+    (root / "tests").symlink_to(tmp_path, target_is_directory=True)
+    for t in ("only_here", "only_outside"):
+        problems, r = iw.issue_gate(submit_args(touches=[t]), source=root, environment=ENV)
+        assert r is None and problems == [f"touch {t!r} occurs in no file of the repository: name texts that exist, "
+                                          "exactly as the code has them"]
+
+
+def test_the_list_shows_at_most_eight_lines_a_file_and_forty_in_all(tmp_path):
+    root = touched_repo(tmp_path, tests=12)
+    report = touch_gate(root)[0][0]
+    assert report.count("\n  src/page.test.js:") == iw.HITS_PER_FILE
+    assert "found 12 line(s) in 1 file(s)" in report and "... 4 more line(s) in src/page.test.js" in report
+    for i in range(6):
+        (root / "src" / f"p{i}.test.js").write_text("'share'\n" * 8)
+    report = touch_gate(root)[0][0]
+    assert report.count("\n  src/") == iw.HITS_SHOWN and "found 60 line(s) in 7 file(s)" in report
+    assert "... 8 more line(s) in src/p5.test.js" in report and "... 12 more line(s) in src/page.test.js" in report
+
+
+def test_a_file_too_large_to_search_is_said(tmp_path, monkeypatch):
+    root = touched_repo(tmp_path)
+    (root / "src" / "big.test.js").write_text("'share'\n" * 10)
+    monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
+    report = touch_gate(root)[0][0]
+    assert "src/big.test.js" not in report and "too large or too many to search" in report
+
+
+def test_an_incomplete_search_wants_the_code_even_without_test_lines_and_refuses_no_touch_as_missing(tmp_path,
+                                                                                                    monkeypatch):
+    root = touched_repo(tmp_path, tests=0)
+    (root / "src" / "big.test.js").write_text("only_in_big\n" * 10)
+    monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
+    problems, r = touch_gate(root, touches=["only_in_big"])
+    code = iw.hits_code([])
+    assert r is None and len(problems) == 1 and "found 0 line(s) in 0 file(s)" in problems[0]
+    assert f'clash_check "{code}"' in problems[0] and "too large or too many to search" in problems[0]
+    problems, r = touch_gate(root, touches=["only_in_big"], clash_check=code)
+    assert problems == [] and r["touches"] == ["only_in_big"] and r["test_hits"] == 0
+
+
+def test_a_file_that_cannot_be_looked_at_makes_the_search_incomplete_not_a_crash(tmp_path, monkeypatch):
+    root = touched_repo(tmp_path)
+    real = os.lstat
+
+    def lstat(p, *a, **k):
+        if str(p).endswith("page.js"):
+            raise PermissionError(p)
+        return real(p, *a, **k)
+    monkeypatch.setattr(iw.os, "lstat", lstat)
+    found, hits, incomplete = iw.scan(root, ["'share'"])
+    assert incomplete and hits == [("src/page.test.js", 1, "expect(h).toEqual(['stage', 'share']) // 0")]
+
+
+def test_the_writer_is_asked_for_its_touches_and_gets_the_old_test_lines_back(tmp_path):
+    first = call("SubmitIssue", submit_args(touches=["'id'"]), "s1")
+    code = iw.hits_code([("src/list.test.js", 1, "test('id', () => {"),
+                         ("src/list.test.js", 2, "expect(cell).toBe('id')")])
+    again = call("SubmitIssue", {**submit_args(touches=["'id'"], clashes=[
+        {"file": "src/list.test.js", "line": 2, "why": "reads the cell"}]), "clash_check": code}, "s2")
+    env = Env(tmp_path, [first, again])
+    job = env.new()
+    assert job.data["state"] == ri.AWAITING_HUMAN
+    told = tool_answers(env.model.calls[1])[-1]
+    assert told.startswith("Rejected (1 problem(s)); 3 submit(s) left") and f'clash_check "{code}"' in told
+    assert "src/list.test.js:2: expect(cell).toBe('id')" in told
+    assert (job.dir / ri.ISSUE).read_text() == STORED
+    assert "`touches`" in iw.SYSTEM and "submit again with that code" in iw.SYSTEM
+    assert {"touches", "clash_check"} <= set(iw.SubmitIssue.model_json_schema()["properties"])
+    assert load_config()["issue_writer"]["turn"]["max_submits"] == 4

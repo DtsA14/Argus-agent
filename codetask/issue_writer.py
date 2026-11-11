@@ -6,9 +6,13 @@ The turn is a research/loop.py stage: every model call through LLMCaller within 
 ledger, every reply and tool result committed before the loop moves on, one guarded node, result.json. No tool writes,
 runs or reaches the network.
 """
+import hashlib
 import math
+import os
 import re
+import stat
 import unicodedata
+from collections import Counter
 from pathlib import Path
 from typing import List
 
@@ -18,11 +22,13 @@ from acceptance import contract as ct
 from harness.llm import check_long_context
 from models.registry import ModelRef
 from research.loop import run_stage, tool_loop, with_fallbacks
+from tools.fs import PathEscape, PathJail
 
-from .tools import ListFiles, ReadFile, SearchFiles, Toolbox
+from .tools import (SEARCH_MAX_BYTES, SEARCH_MAX_FILE, SEARCH_MAX_FILES, SEARCH_MAX_LINE, ListFiles, ReadFile,
+                    SearchFiles, Toolbox)
 
 WRITTEN, FAILED, BLOCKED, FAILED_BUDGET = "WRITTEN", "WRITE_FAILED", "BLOCKED", "FAILED_BUDGET"
-VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "4"}
+VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "5"}
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
 MAX_ISSUE = ct.MAX_ISSUE
 REPLY_MAX, TITLE_MAX, WHY_MAX, CLASHES_MAX, QUESTIONS_MAX = 1200, 120, 300, 10, 5
@@ -33,6 +39,11 @@ TARGET_MAX = 120
 # a claim that the old tests are untouched, in the "Nothing else changes" paragraph (amendment 3)
 UNCHANGED = re.compile(r"\b(?:keeps?|continues?\s+to|still)\s+pass(?:ing|es)?\s+(?:unchanged|as\s+before|"
                        r"without\s+(?:any\s+)?changes?)", re.IGNORECASE)
+# amendment 4: the harness searches the old tests for what the issue touches
+TOUCHES_MAX, TOUCH_MIN, TOUCH_MAX = 8, 2, 80
+HITS_SHOWN, HITS_PER_FILE = 40, 8
+TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "e2e"}         # compared in lower case
+TEST_NAME = re.compile(r"test_.*|.*_(test|spec)\.[^.]+|.*\.(test|spec)\.[^.]+|.*Tests?\.[^.]+|conftest\.py")
 LOOSEN = "A human loosens these existing tests first (the issue writer's clash check, added by the harness):"
 
 
@@ -90,6 +101,13 @@ class SubmitIssue(BaseModel):
     notes: str = Field(default="", description=f"Your notes on the repository for your later turns, at most {NOTES_MAX} "
                                                "characters: the files that matter, what they hold, the tests that "
                                                "touch them, exact classes and texts. Empty keeps your earlier notes.")
+    touches: List[str] = Field(default_factory=list,
+                               description=f"With an issue: 1 to {TOUCHES_MAX} texts that exist in the code today and "
+                                           "that the change alters or relies on (a column header, a CSS class, a "
+                                           "selector, an API key, a function name), exactly as the code has them. The "
+                                           "harness searches the old tests for them.")
+    clash_check: str = Field(default="", description="The code the harness gave you with its list of old test lines "
+                                                     "holding your touches; empty until then.")
 
 
 def unchanged_paragraph(issue):
@@ -114,6 +132,110 @@ def with_clashes(issue, clashes):
     block = [LOOSEN] + [f"- {c['file']}" + (f" line {c['line']}" if c["line"] else "") + f": {c['why']}"
                         for c in clashes]
     return "\n".join(lines[:-1] + [""] + block + [lines[-1]]) if len(lines) > 1 else issue
+
+
+def is_test(rel):
+    """A test file (amendment 4, T2): under a test, tests, __tests__, spec, specs or e2e folder (any case), or named
+    test_*, *_test.*, *_spec.*, *.test.*, *.spec.*, *Test.*, *Tests.* or conftest.py."""
+    parts = rel.split("/")
+    return any(p.lower() in TEST_DIRS for p in parts[:-1]) or bool(TEST_NAME.fullmatch(parts[-1]))
+
+
+def scan(source, terms):
+    """(found, hits, incomplete) for the snapshot at source: the terms that occur in some file; every (file, line, text)
+    of a test file holding one, in file and line order; whether a bound or an unreadable file left something unread.
+    Read through the path jail like the read tools: no symlink or special file, .git skipped, SearchFiles' bounds."""
+    jail = PathJail(source)
+    found, hits, files, read, incomplete = set(), [], 0, 0, False
+    for dirpath, dirnames, filenames in os.walk(jail.root, followlinks=False):
+        here = os.path.relpath(dirpath, jail.root)
+        dirnames[:] = sorted(d for d in dirnames if d != ".git" and not os.path.islink(os.path.join(dirpath, d)))
+        for name in sorted(filenames):
+            rel = name if here == "." else f"{here}/{name}".replace(os.sep, "/")
+            try:
+                st = os.lstat(os.path.join(dirpath, name))
+            except OSError:
+                incomplete = True
+                continue
+            if not stat.S_ISREG(st.st_mode):
+                continue                                           # symlink, FIFO, device: never read
+            if st.st_size > SEARCH_MAX_FILE or files >= SEARCH_MAX_FILES or read + st.st_size > SEARCH_MAX_BYTES:
+                incomplete = True
+                continue
+            files += 1
+            read += st.st_size
+            try:
+                text = jail.read_text(rel, max_bytes=SEARCH_MAX_FILE)
+            except (PathEscape, OSError):
+                incomplete = True
+                continue
+            if not any(t in text for t in terms):
+                continue
+            test = is_test(rel)
+            for n, line in enumerate(text.splitlines(), 1):
+                got = [t for t in terms if t in line]
+                if got:
+                    found.update(got)
+                    if test:
+                        hits.append((rel, n, line.strip()[:SEARCH_MAX_LINE]))
+    return found, hits, incomplete
+
+
+def hits_code(hits):
+    """The clash_check code of a list of test lines (amendment 4, T3)."""
+    return hashlib.sha256("\n".join(f"{f}:{n}:{t}" for f, n, t in hits).encode("utf-8")).hexdigest()[:12]
+
+
+def hits_report(hits, code, incomplete):
+    """The rejection that shows the writer the old test lines holding its touches, with the code to submit again."""
+    count = Counter(f for f, _, _ in hits)
+    files = sorted(count)
+    out = [f"the harness searched the existing tests for your touches and found {len(hits)} line(s) in {len(files)} "
+           "file(s); read the lines your change may break and put each in clashes (or change the issue so it does not "
+           f"clash), then submit again with clash_check \"{code}\":"]
+    shown, per = 0, {}
+    for f, n, t in hits:
+        if shown >= HITS_SHOWN or per.get(f, 0) >= HITS_PER_FILE:
+            continue
+        per[f] = per.get(f, 0) + 1
+        shown += 1
+        out.append(f"  {f}:{n}: {t}")
+    for f in files:
+        more = count[f] - per.get(f, 0)
+        if more:
+            out.append(f"  ... {more} more line(s) in {f}: SearchFiles or ReadFile to see them")
+    if incomplete:
+        out.append("  ... some files were too large or too many to search: SearchFiles the rest yourself")
+    return "\n".join(out)
+
+
+def touches_problems(args, source):
+    """(problems, touches, test_hits) of an issue's touches and clash_check (amendment 4)."""
+    touches = args.get("touches")
+    if not isinstance(touches, list) or not 1 <= len(touches) <= TOUCHES_MAX:
+        return [f"touches must list 1 to {TOUCHES_MAX} texts that exist in the code today and that the change alters "
+                "or relies on (a column header, a CSS class, a selector, an API key, a function name), exactly as the "
+                "code has them"], [], 0
+    problems, terms = [], []
+    for i, t in enumerate(touches, 1):
+        w = text_problem(t, f"touch {i}", TOUCH_MAX, newlines=False)
+        if not w and len(t.strip()) < TOUCH_MIN:
+            w = f"touch {i} has fewer than {TOUCH_MIN} characters"
+        if w:
+            problems.append(w)
+        else:
+            terms.append(t.strip())
+    if problems:
+        return problems, [], 0
+    found, hits, incomplete = scan(source, terms)
+    missing = [t for t in terms if t not in found]
+    if missing and not incomplete:          # an unread file may hold it: the list below says what was not searched
+        return [f"touch {t!r} occurs in no file of the repository: name texts that exist, exactly as the code has them"
+                for t in missing], [], 0
+    code = hits_code(hits)
+    if (hits or incomplete) and args.get("clash_check") != code:
+        return [hits_report(hits, code, incomplete)], terms, len(hits)
+    return [], terms, len(hits)
 
 
 def issue_gate(args, *, source, environment):
@@ -178,7 +300,10 @@ def issue_gate(args, *, source, environment):
         kept.append({"file": f, "line": line, "why": why})
     # amendment 3: an issue that clashes says so in its own text, so the drafter and the human read the same thing:
     # it may not claim the old tests are untouched, and the harness writes the clashes into it (with_clashes)
-    final = None
+    final, touches, test_hits = None, [], 0
+    if not only:
+        why, touches, test_hits = touches_problems(args, source)
+        problems += why
     if not only and isinstance(issue, str) and issue.strip():
         final = with_clashes(issue.strip(), kept)
         if kept and UNCHANGED.search(unchanged_paragraph(issue)):
@@ -199,7 +324,8 @@ def issue_gate(args, *, source, environment):
     if problems:
         return problems, None
     return [], {"reply": reply.strip(), "issue": None if only else final + "\n", "clashes": kept,
-                "questions": [q.strip() for q in questions], "notes": notes}
+                "questions": [q.strip() for q in questions], "notes": notes, "touches": touches,
+                "test_hits": test_hits}
 
 
 SYSTEM = "\n".join([
@@ -234,6 +360,9 @@ SYSTEM = "\n".join([
     "behaviour the change touches (SearchFiles over the test files). A change that would make an old test fail is a "
     "clash: put each one in `clashes` with its file and line, and say in the reply that a human must loosen that test "
     "first, or change the issue so it does not clash.",
+    "- Name in `touches` the existing texts, selectors, classes, keys and names the change alters or relies on. The "
+    "harness then shows you every line of the old tests that holds one, with a clash_check code: read the lines that "
+    "may break, add each to `clashes`, and submit again with that code.",
     "- Keep to what the human asked: do not add features. When the wish is unclear, write the most likely issue and "
     "ask in `questions`.",
     "- The reply is in plain Indonesian for a reader who does not read code: what will change on the screen or in the "
