@@ -263,7 +263,8 @@ def test_f5_ids_skip_the_drafters_own_and_nothing_is_added_when_all_are_named():
 
 def test_f5_new_tests_left_out_directories_and_other_files_are_not_old_tests():
     base = {"src/sum.test.js": "x", "src/clamp.test.js": "x", "node_modules/p/a.test.js": "x", "dist/b.test.js": "x",
-            "src/sum.js": "x", "src/a.spec.jsx": "x", "src/we ird.test.js": "x"}
+            "src/sum.js": "x", "src/a.spec.jsx": "x", "src/we ird.test.js": "x", "src/../up.test.js": "x",
+            "src//two.test.js": "x", "src/./dot.test.js": "x"}
     d, _ = cdr.draft_from_args(submit_args([TARGET_ARGS]), base="sums", policy=POLICY, base_files=base)
     assert ids_and_files(d) == [("target", ["src/clamp.test.js"]), ("old_tests_1", ["src/sum.test.js"])]
 

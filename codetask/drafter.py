@@ -354,13 +354,13 @@ def _profile_text(p):
 OLD_TESTS_ID, OLD_TESTS_PER = "old_tests_{}", 15
 
 
-def old_tests_validations(specs, new_tests, base_files, policy):
+def old_tests_validations(specs, base_files, policy):
     """SPEC_VITEST_FULL_REGRESSION amendment 1 (F5): the harness's own vitest validations `old_tests_<n>` for every
     existing test file of the intake no validation of the drafter names, at most OLD_TESTS_PER files each in path order,
     under ids no other validation uses; the whole old suite then runs whatever the drafter named."""
-    new = {t["path"] for t in new_tests or [] if isinstance(t, dict) and isinstance(t.get("path"), str)}
     named = {p for v in specs for p in v["args"][1:]}
-    rest = dr.unnamed_test_files(new, named, base_files)
+    # a new test is named by its own validation, and one that is an intake file is refused (static_problems)
+    rest = dr.unnamed_test_files(set(), named, base_files)
     used, n, out = {v["id"] for v in specs if isinstance(v["id"], str)}, 1, []   # a bad id: the contract refuses it
     for i in range(0, len(rest), OLD_TESTS_PER):
         while OLD_TESTS_ID.format(n) in used:
@@ -418,7 +418,7 @@ def draft_from_args(args, *, base, policy, base_files=None):
     if problems:
         return None, problems
     if vitest and base_files is not None:
-        specs += old_tests_validations(specs, args.get("new_tests"), base_files, policy)
+        specs += old_tests_validations(specs, base_files, policy)
     contract = {"scope": args.get("scope"), "validation": specs, "budget_profile": profile}
     if tools:
         contract["tools"] = list(tools)
