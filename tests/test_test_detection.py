@@ -129,3 +129,61 @@ def test_the_verdict_fails_on_this_criterion_alone_and_always_lists_it():
         v = evaluate(CALC, ws, before, {}, run=run, inputs_root=ROOT)
         bad = [c["id"] for c in v["criteria"] if c["status"] == "fail" and c["layer"] == "A"]
         assert bad == ["scope:no_test_detection"] and v["outcome"] == "fail"
+
+
+def test_a_non_utf8_byte_does_not_hide_a_hit(tmp_path):
+    ws, inp = tmp_path / "ws", tmp_path / "inp"
+    (ws / "src").mkdir(parents=True)
+    inp.mkdir()
+    (ws / "src" / "a.py").write_bytes(b"# \xff\nimport sys\nif 'pytest' in sys.modules:\n    pass\n")
+    c = td.check(ws, {}, snapshot(ws), inp)
+    assert c["status"] == "fail" and c["evidence"]["hits"][0]["line"] == 3
+
+
+def test_a_changed_file_over_the_size_cap_is_a_hit_not_a_pass(tmp_path, monkeypatch):
+    monkeypatch.setattr(td, "MAX_BYTES", 100)
+    c = scan(tmp_path, {"src/a.py": "x = 1\n" * 50})
+    assert c["status"] == "fail" and c["evidence"]["hits"][0]["pattern"] == "unscanned"
+    assert "src/a.py" in c["reason"]
+
+
+def test_symlinks_and_fifos_are_never_opened(tmp_path):
+    import os
+    ws = tmp_path / "ws"
+    (ws / "src").mkdir(parents=True)
+    os.symlink("/etc/passwd", ws / "src" / "link.py")
+    os.mkfifo(ws / "src" / "pipe.py")
+    c = td.check(ws, {}, snapshot(ws), None)           # a FIFO read would block here forever
+    assert c["status"] == "pass"
+
+
+def test_an_unreadable_changed_file_is_a_hit(tmp_path):
+    ws = tmp_path / "ws"
+    (ws / "src").mkdir(parents=True)
+    (ws / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    snap = snapshot(ws)
+    (ws / "src" / "a.py").unlink()
+    c = td.check(ws, {}, snap, None)
+    assert c["status"] == "fail" and c["evidence"]["hits"][0]["pattern"] == "unscanned"
+
+
+def test_changing_an_old_matching_line_is_a_hit(tmp_path):
+    old = 'import sys\nif "pytest" in sys.modules:\n    pass\n'
+    new = 'import sys\nif "pytest" in sys.modules and x:\n    pass\n'
+    assert scan(tmp_path, {"src/a.py": new}, base={"src/a.py": old})["status"] == "fail"
+
+
+def test_an_old_line_that_moved_is_not_a_hit(tmp_path):
+    old = HITS["sys.modules"]
+    assert scan(tmp_path, {"src/a.py": "y = 1\n" + old}, base={"src/a.py": old})["status"] == "pass"
+
+
+def test_one_line_matching_two_patterns_is_one_hit(tmp_path):
+    c = scan(tmp_path, {"src/a.py": 'import sys\nif "pytest" in sys.modules or "pytest" in sys.argv: pass\n'})
+    assert len(c["evidence"]["hits"]) == 1 and c["evidence"]["total"] == 1
+
+
+def test_the_evidence_is_capped_and_the_total_is_kept(tmp_path):
+    c = scan(tmp_path, {"src/a.py": HITS["sys.modules"] * 80})
+    assert len(c["evidence"]["hits"]) == td.MAX_EVIDENCE and c["evidence"]["total"] == 80
+    assert "+75 more" in c["reason"]

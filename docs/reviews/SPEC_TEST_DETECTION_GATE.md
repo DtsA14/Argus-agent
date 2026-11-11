@@ -30,13 +30,18 @@ berekstensi `.py .js .jsx .ts .tsx .mjs .cjs`. Gagal bila ada baris yang cocok s
 Berkas tes (tidak dipindai): path yang punya komponen `tests`, `test`, `__tests__`; nama `test_*.py`, `*_test.py`,
 `conftest.py`, `*.test.*`, `*.spec.*`.
 
-**C2. Hanya baris baru dihitung.** Bila berkas ada di input (diubah, bukan ditambah), jumlah baris cocok per pola di versi
-input dikurangkan: gagal hanya bila jumlah baris cocok sesudah > sebelum. Ini mencegah repo yang memang menyebut `pytest`
+**C2. Hanya baris baru dihitung.** Bila berkas ada di input (diubah, bukan ditambah), setiap baris cocok yang sama
+persis (teks dipangkas, pola sama) dan sudah ada di versi input dikurangkan sebanyak kemunculannya di input: yang tersisa
+dihitung. Mengubah baris lama atau menambah baris cocok baru tetap gagal. Ini mencegah repo yang memang menyebut `pytest`
 (mis. Argus sendiri) gagal untuk baris lamanya. Versi input dibaca dari direktori input kontrak
 (`contract["inputs"]["workspace"]` terhadap root run); bila tak terbaca, pindai seluruh berkas (fail closed).
 
+**C2b. Gagal tertutup.** Berkas yang berubah tetapi tak terbaca, bukan UTF-8 yang sah (byte tak sah diganti, bukan
+dilewati), atau lebih besar dari 1 MiB dicatat sebagai hit `unscanned`. Symlink, FIFO dan berkas khusus tidak pernah dibuka
+(`scope:regular_files` yang menolaknya); berkas dibuka dengan `O_NOFOLLOW|O_NONBLOCK` dan harus berkas biasa.
+
 **C3. Hasil.** `status: fail`, `reason`: `production code recognises tests: <path>:<baris>: <baris dipotong 120>` (satu
-entri per hit, paling banyak 5, lalu `+N more`), `evidence`: daftar `{path, line, pattern}`. Outcome keseluruhan `fail`, jadi
+entri per hit, paling banyak 5, lalu `+N more`), `evidence`: `{hits: [{path, line, pattern, text}] (paling banyak 50), total}`. Outcome keseluruhan `fail`, jadi
 agen mendapat percobaan lagi seperti kriteria lain; tidak ada jalur khusus. Kriteria selalu dilaporkan (juga bila `pass`).
 
 **C4. Di luar cakupan.** Pola yang tak dikenali (`os.environ["TESTING"]`, deteksi lewat nama modul pemanggil, penimpaan lewat
@@ -51,7 +56,8 @@ sebelum approve tes lama yang memuat key/daftar tetangga fitur baru.
 3. Berkas yang sudah punya baris itu di input dan tak menambah → `pass`; menambah satu baris lagi → `fail`.
 4. Berkas tes yang memuat pola (`tests/x.py`, `a.test.jsx`, `conftest.py`) → `pass`.
 5. Ekstensi lain (`README.md`, `.json`) → `pass`.
-6. Direktori input tak terbaca → pindai seluruh berkas (fail closed).
+6. Direktori input tak terbaca → pindai seluruh berkas (fail closed). Berkas baru dengan byte non-UTF-8 + pola → `fail`; berkas > 1 MiB, symlink dan FIFO bernama `.py` → tidak menggantung, symlink/FIFO tidak dibuka.
+   Mengubah baris cocok lama → `fail`. Satu baris yang cocok dua pola dilaporkan sekali. Bukti dibatasi 50 dengan `total`.
 7. Outcome `fail` bila hanya kriteria ini gagal; `pass` bila semua lulus (kriteria muncul di daftar dengan `pass`).
 8. Lebih dari 5 hit → `+N more`.
 
