@@ -414,10 +414,12 @@ def baseline_problems(contract, new_paths, ws, sandbox_cfg, validate=run_validat
         for n in spec.get("must_pass", []):
             got = must.get(n)
             if n in new and got != "FAIL":
-                why = "was not collected" if got is None else f"is {got!r}, not a failure by assertion"
+                why = ("was not collected" + (e.get("named_like") or {}).get(n, "") if got is None
+                       else f"is {got!r}, not a failure by assertion")
                 problems.append(f"new test {n} {why} on the baseline")
             if n not in new and got != "ok":
-                problems.append(f"existing test {n} must pass on the baseline, is {got!r}")
+                problems.append(f"existing test {n} must pass on the baseline, is {got!r}"
+                                + ((e.get("named_like") or {}).get(n, "") if got is None else ""))
         if e.get("errors") or e.get("failures") != len(new):
             extra = [n for n in e.get("failed_nodes") or [] if n not in new]      # W2b: name them, so a fix can be exact
             problems.append(f"validation {spec['id']}: {e.get('failures')} failures and {e.get('errors')} errors on the "
