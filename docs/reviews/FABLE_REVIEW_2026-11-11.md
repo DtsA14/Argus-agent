@@ -188,3 +188,22 @@ Claude re-checked these code claims on 2026-11-11: the allowlist is frozen at se
 2. D2 ledger fsync + D6 `RunValidation` label + D7 key redaction + D3 `smoke_models.py`.
 3. `ReportConflict` MVP (F6), then the terminal detection gate (F8).
 4. The verdict-forgery fix (E3, canaries and nonce) as its own spec.
+
+## 11. Session B2: outside-repo experiment protocol ([`FABLE_PROTOCOL_OUTSIDE_EXPERIMENT.md`](FABLE_PROTOCOL_OUTSIDE_EXPERIMENT.md))
+
+Fable's design: ten verbatim issues from three small public Python repositories, **retrospective** (issues closed by a merged PR, given to Argus at the fix's parent commit,
+graded with `scripts/swe_grade.py` against the maintainer's tests plus a blind rubric A/B/C); selection rule fixed before running (newest first, 4/3/3, mechanical drops);
+every accepted draft approved; kill line 2 or fewer A of 10, success 5 or more; $1.00 per job, $8.00 per batch; no push or comment upstream by any automation; fix D1 and D6
+first. Deviation from Claude's brief: the issues are not currently open ones.
+
+Claude's checks on 2026-11-11 (public GitHub reads only, nothing cloned or run):
+
+| # | Point | Status | Claude's view |
+|---|---|---|---|
+| G1 | Kill and success lines: 2 or fewer A of 10 has probability 2.0% if the true rate were 57%; 5 or more has 3.3% if it were 20% | **verified** (binomial, `0.020` and `0.033`). Also: at a true rate of 35% both "kill" and "success" happen about 25% of the time | The lines separate clear cases and leave a wide middle; Fable already says 3-4 means a second batch. |
+| G2 | Candidates activity: Fable's "boltons may be inactive (last push Feb 2025)" | **verified wrong**: pushed 2026-10-25; humanize 2026-11-02 (74 open issues); cachetools 2026-11-10 (3 open issues) | All three are active. boltons' licence reads `NOASSERTION` on GitHub (Fable's web search says BSD); confirm before use. |
+| G3 | At least 10 issues closed by a merged PR in 12 months | **partly verified**: issues closed with a linked PR since 2025-11-11: humanize 13, cachetools 17, boltons 13 (merged PRs 85, 34, 51). The test-and-non-test diff, 150-line and 8,000-character filters were not applied | Enough raw material for 4/3/3 after filtering, probably; cachetools is the safest. |
+| G4 | Suite time under 120 s offline in the sandbox, size under 30,000 lines, installable into one image | **unverified** (Fable and Claude) | Must be measured (clone locally, run pytest in the sandbox image) before selection. |
+| G5 | Retrospective instead of open issues | design choice | Gives an objective grade; costs contamination risk (recent issues may be in training data) and is not the "real unassisted work" of the original question. Option: run this first, then a small second phase of 5 truly open issues graded by the rubric only. Atha decides. |
+| G6 | Sandbox environment per repository (`scripts/build_env_from_base.sh`, `scripts/check_env_image.py`) | **unverified** (Fable assumed, did not look) | A real cost: a config change per repo plus a pinned image. Check it before promising a date. |
+| G7 | Fix D1 and D6 first; E1 and D5 not blocking (check `usd_complete`; the grade comes from the maintainer's tests and a reader, not from acceptance) | design, consistent with the fix queue in section 10 | Agree; it also gives the fix queue a concrete deadline. |
