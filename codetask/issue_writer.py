@@ -214,9 +214,10 @@ def hits_report(hits, code, unread):
     count = Counter(f for f, _, _ in hits)
     files = sorted(count)
     out = [f"the harness searched the existing tests for your touches and found {len(hits)} line(s) in {len(files)} "
-           "file(s); read the lines your change may break and put each in clashes (or change the issue so it does not "
-           f"clash), then submit again with clash_check \"{code}\" and the SAME touches (other touches give another "
-           "list and another code):"]
+           "file(s). They are not clashes by themselves: read them, and put in clashes only a test that WILL fail with "
+           "its own fixtures once the change is made (or change the issue so it does not clash); a line that keeps "
+           f"passing needs nothing. Then submit again with clash_check \"{code}\" and the SAME touches (other "
+           "touches give another list and another code):"]
     per = {}                                # at most HITS_SHOWN lines reach here (broad_report above that)
     for f, n, t in hits:
         if per.get(f, 0) >= HITS_PER_FILE:
@@ -396,9 +397,10 @@ SYSTEM = "\n".join([
     "",
     "Before you submit an issue:",
     "- Read the code the change touches and SEARCH THE EXISTING TESTS for every text, selector, class, element and "
-    "behaviour the change touches (SearchFiles over the test files). A change that would make an old test fail is a "
-    "clash: put each one in `clashes` with its file and line, and say in the reply that a human must loosen that test "
-    "first, or change the issue so it does not clash.",
+    "behaviour the change touches (SearchFiles over the test files). A change that WILL make an old test fail, with "
+    "that test's own fixtures and data, is a clash: put each one in `clashes` with its file and line, and say in the "
+    "reply that a human must loosen that test first, or change the issue so it does not clash. A test that only might "
+    "fail, or would fail only with data it does not have (e.g. a field its fixtures lack), is no clash: leave it out.",
     "- Name in `touches` the existing texts, selectors, classes, keys and names the change alters or relies on. The "
     "harness then shows you every line of the old tests that holds one, with a clash_check code: read the lines that "
     "may break, add each to `clashes`, and submit again with that code and exactly the same touches (changing the "
