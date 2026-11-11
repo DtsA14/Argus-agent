@@ -114,3 +114,31 @@ verified only as far as the four files delegate.
 - M4, M8, UI phase 4: dropped from the active list if Atha agrees with section 3.
 - UI phase 3 (approve button): on hold until the planted-draft test.
 - Redraft 3b: waits for `submits_exhausted` above ~10% of drafts.
+
+## 8. Session A: audit of the core guarantees ([`AUDIT_2026-11-11.md`](AUDIT_2026-11-11.md))
+
+Fable read `harness/{guard,steps,llm,events,memo,crash,errors}.py`, `codetask/tools.py`, `tools/{fs,sandbox,registry}.py`, `models/registry.py` and parts of
+`tools/web.py` and `acceptance/validation.py`. Claude re-checked the points marked **verified** with grep on 2026-11-11 (no tests run).
+
+| # | Finding (Fable) | Status | Claude's view | Action |
+|---|---|---|---|---|
+| D1 | **Run wedge (VIOLATED, reproduced by Fable):** `Toolbox.run` catches only `PathEscape` and `FileNotFoundError`; a model-chosen WriteFile onto an existing directory, a name over 255 bytes, or a lone surrogate raises uncaught. The model reply is already committed, so every resume replays the call and crashes again; a surrogate also fails `memo.put`, paid and lost, bought again | **verified** that the handler catches only those two (`codetask/tools.py:254-257`); the reproduction is Fable's | The most important finding: it breaks "resume works" for a model-chosen input, in the strict lane. | **Fix first**: catch `OSError`/`UnicodeError`, return "Refused"; escape surrogates before `memo.put`; tests that fail on the old code |
+| D2 | `EventLog.emit` never fsyncs, unlike the memo; power loss after a send loses `llm_call_started`; `parse_lines` skips any undecodable line, not only the last, so damage silently removes spend | **verified** (`harness/events.py` `emit` writes without flush/fsync) | Real but narrow: process crashes are fine, power loss is not. The ledger is the money record. | Fix: flush + fsync; an undecodable non-final line is an error |
+| D3 | "No `.invoke/.stream/.batch/build_chat_model` outside `harness/llm.py` and `models/registry.py`" is false by one script: `scripts/smoke_models.py` | **verified** (lines 39, 47, 55) | A manual script; still breaks the stated rule and costs money. | Route it through `LLMCaller`, or exempt it explicitly in the rule |
+| D4 | `get_num_tokens_from_messages` makes a provider request per call outside the ledger; `list_models` uses raw SDK clients | **unverified** | Check whether those requests cost money. | Check |
+| D5 | **Forgeable verdict:** the test result is parsed from the test process's own stdout; writable code in that process can print a consistent report and `os._exit(0)`; pytest has no nonce (the file admits it for unittest). "No small fix" | **unverified** (`validation.py:23-25` quoted by Fable) | Serious for any claim that acceptance proves behaviour. Idea to ask Fable: a harness-planted sentinel test that must fail; if it reports as passed, the report is forged. | Design a fix; until then, "never apply a DONE job unread" stays the rule |
+| D6 | The `RunValidation` tool returns raw JSON with `output_tail`, unlabelled as data, unlike auto-validation and ReadDocs | **verified** (`codetask/tools.py:425-432`) | Small, closes an injection surface. | Fix: same label as auto-validation |
+| D7 | No redaction exists; provider exception text goes to the ledger, the retry event and `LLMCallFailed` in full; a provider that echoes a key puts it in `events.jsonl` | **verified** that grep for `redact|mask|scrub` finds nothing in the code; the leak paths are Fable's | Real risk, low likelihood. | Replace configured key values in every error string before emit or raise |
+| D8 | Two processes on one job: only the router locks; `run_code_task.py --resume` twice at once spends the attempt reservation twice | **unverified** | Matters only if someone runs it by hand twice. | flock the run directory |
+| D9 | A config change on resume (a role model) misses every step key and restarts the attempt on a half-edited workspace | **unverified** | Could cost money; edge case. | Freeze the model in the contract or refuse the resume |
+| D10 | `delivery="unknown"` is written `usd_nano=0` when `failed_attempt_charge` is not `worst_case`; a gateway 429 is always written 0 | **partly** (`config.yaml:60` sets `worst_case`, `harness/llm.py:355` defaults to it; the 429 part is Fable's) | Only if the config changes; 429 costs nothing at the provider. | Low |
+| D11 | Money is float in cap and limit arithmetic; spend is integer | **unverified**, consistent with `harness/llm.py` | Known; keep comparisons in nano. | Low |
+| D12 | Key variables are in `os.environ` for the whole stage; docker CLI and git inherit them; web children and containers do not ("sandbox gets no key" HOLDS) | **partly**: set in a context manager and removed in `finally` (`router/job.py:449-456`, verified); inheritance by each process is Fable's reading | Closes B14 for the sandbox; git and docker CLI still see the keys. | Give git a minimal environment |
+| D13 | Path jail HOLDS (traversal, symlinks by descriptor with `O_NOFOLLOW`, special files); code never runs outside Docker; sandbox flags as designed (`--network none`, read-only, cap-drop ALL, no-new-privileges, 512m, 128 pids). Missing: file-size and open-file limits | **unverified**, positive | Good news to keep: the sandbox boundary itself held. | Consider `ulimit` file-size limits |
+| D14 | Positives: no unsandboxed `exec`/`eval`/`shell=True`; step memo keys, reservation from ledger, `durability="sync"` at all ten `graph.invoke` sites HOLD | **unverified**, positive | – | – |
+
+**Not covered by Fable** (listed in the audit): `harness/paid.py`, `budget.py`, `tools/web_fetch.py`, `deepseek_web.py`, `models/gateway.py`, `pricing.py`, the drafter, research,
+judge and issue-writer loops, `router/stage*.py`, `control*.py`, `acceptance/contract.py`, `draft.py`, `review.py`, LangChain internals (`max_retries`, `max_tokens`).
+
+**Order proposed:** D1 first (strict lane, small, high value), then D2, D6, D3 and D7 as one small batch, then D5 as a design problem. D1-D3 and D6-D7 are code the guarantees
+in `AGENTS.md` depend on, so each needs a test that fails on the old code and the usual process.
