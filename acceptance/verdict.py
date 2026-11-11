@@ -8,8 +8,10 @@
 Layer E (budget and time) is enforced by the run itself (LLMCaller, reservations, validation timeouts), not here.
 """
 import hashlib
+from pathlib import Path
 
 from . import claims as cl
+from . import testdetect
 from .contract import SUMMARY, claims_schema
 from .validation import run_validation
 from .workspace import diff, digest, scope_check, snapshot
@@ -22,9 +24,12 @@ def outcome(criteria):
     return "fail" if "fail" in statuses else "pass"
 
 
-def evaluate(contract, workspace, before, sandbox_cfg, log=None, run=run_validation):
+def evaluate(contract, workspace, before, sandbox_cfg, log=None, run=run_validation, inputs_root=None):
     after = snapshot(workspace)
     criteria = scope_check(contract, before, after)
+    # inputs_root: the directory the contract's input workspace is relative to; without it a changed file is scanned whole
+    criteria.append(testdetect.check(workspace, before, after,
+                                     None if inputs_root is None else Path(inputs_root) / contract["inputs"]["workspace"]))
 
     doc, problems = cl.read_summary(workspace, claims_schema(contract))
     art = {"path": SUMMARY, "sha256": after.get(SUMMARY)}

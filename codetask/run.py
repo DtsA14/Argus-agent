@@ -350,7 +350,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         except frozen.ContractChanged as e:
             return move(state, st.BLOCKED, reason=str(e), blocked="contract_changed")
         i = state["iteration"]
-        v = evaluate(contract, str(ws), state["before"], scfg, log,
+        v = evaluate(contract, str(ws), state["before"], scfg, log, inputs_root=root,
                      run=lambda spec, w, c, lg=None: validate(spec, w, c, lg and TaggedLog(lg, origin="acceptance")))
         path = run_dir / f"verdict_{i}.json"
         tmp = path.with_suffix(".tmp")

@@ -852,3 +852,46 @@ def test_a_task_run_with_its_approved_contract_runs_and_records_the_task(tmp_pat
     assert r["status"] == st.DONE
     p = json.loads((d / "result.json").read_text())["provenance"]["input"]["intake"]
     assert p["kind"] == "task" and p["added"] == added and p["contract_sha256"] == rec["contract_sha256"]
+
+
+# ---- SPEC_TEST_DETECTION_GATE: the gate is part of every run's verdict -----------------------------------------
+
+PEEK = 'import sys\nif "pytest" in sys.modules:\n    pass\n'
+
+
+def lenient(spec, workspace, sandbox_cfg, log=None):
+    """Passes every validation: the gate must fail the verdict by itself."""
+    return {"id": f"validation:{spec['id']}", "layer": "C", "status": "pass", "reason": "",
+            "evidence": {"must_pass": {t: "ok" for t in spec.get("must_pass", [])}, "tests_run": 7,
+                         "failures": 0, "output_tail": ""}}
+
+
+def test_production_code_that_recognises_tests_fails_the_verdict_even_when_the_validations_pass(tmp_path):
+    cheat = call("WriteFile", {"path": "src/calc.py", "content": FIXED + PEEK}, "w1")
+    r, model, d = run(tmp_path, [READ, cheat, CHECK, FINISH], validate=lenient)
+    v = json.loads((d / "verdict_0.json").read_text())
+    crit = {c["id"]: c for c in v["criteria"]}
+    assert v["outcome"] == "fail" and crit["scope:no_test_detection"]["status"] == "fail"
+    assert f"src/calc.py:{len(FIXED.splitlines()) + 2}:" in crit["scope:no_test_detection"]["reason"]
+    assert crit["validation:unit"]["status"] == "pass" and r["status"] != st.DONE
+
+
+def test_a_run_compares_with_the_input_file_so_an_old_line_does_not_fail_it(tmp_path):
+    repo = tmp_path / "fixtures" / "repos" / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "src" / "calc.py").write_text(CALC + PEEK, encoding="utf-8")
+    (repo / "tests" / "test_calc.py").write_text(TEST, encoding="utf-8")
+    contract = copy.deepcopy(CONTRACT)
+    contract["inputs"]["workspace"] = "fixtures/repos/repo"
+    path = tmp_path / "contract.json"
+    path.write_text(json.dumps(contract), encoding="utf-8")
+    write = call("WriteFile", {"path": "src/calc.py", "content": FIXED + PEEK}, "w1")
+
+    r = run_code_task(contract_path=path, run_id="t", runs_dir=tmp_path / "runs", cfg=cfg(),
+                      models={"coder": StrictScriptedChatModel(script=[READ, write, CHECK, FINISH])},
+                      validate=lenient, preflight=lambda: (True, "ok"), root=tmp_path)
+    assert r["status"] == st.DONE, r
+    v = json.loads((tmp_path / "runs" / "t" / "verdict_0.json").read_text())
+    assert {c["id"]: c["status"] for c in v["criteria"]}["scope:no_test_detection"] == "pass"
+    assert r["status"] == st.DONE
