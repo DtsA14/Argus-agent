@@ -1,6 +1,6 @@
 # Deploy argus-ledger Stage 16 (issue 018: judul job di GET /jobs dan GET /jobs/<id>) ke staging
 
-**Menunggu "go live" Atha.** Claude menjalankan langkah berurutan dari `~/pilot3a_live` (`main`), **satu langkah = satu
+**"Go live" Atha 2026-11-11 ("Go live").** Claude menjalankan langkah berurutan dari `~/pilot3a_live` (`main`), **satu langkah = satu
 perintah**, mencatat output di folder ini, dan berhenti di langkah pertama yang tidak sesuai harapan, tanpa menambah atau
 mengulang langkah. Hanya staging; tanpa model; port 8000 tidak disentuh; unit proxy tidak diubah dan tidak di-restart.
 
