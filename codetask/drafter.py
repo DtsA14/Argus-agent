@@ -283,7 +283,9 @@ SYSTEM_VITEST = "\n".join([
     "`src/**/*.test.jsx` or `src/list.jsx`, not `src`; every protected glob must match a file.",
     "- Name validations only for the new tests and the existing test files close to the change. Every other existing "
     "test file runs in the harness's own validations (old_tests_1, old_tests_2, ...): the whole old suite must keep "
-    "passing, and you need not list it. A validation names at most 15 files.",
+    "passing, and you need not list it. A validation names at most 15 files. When an old_tests_* validation fails on "
+    "the code as it is now, name the failing file in a validation of yours (it then leaves old_tests_*) and, when it "
+    "cannot pass in the sandbox, start unverifiable with `EXISTING TEST CONFLICT: <file>::<test name>`.",
     "- The sandbox has only the repository, Node and the environment's fixed packages: no npm install, no git, no "
     "network. An existing test that needs any of these fails there and no draft can pass: start unverifiable with "
     "`EXISTING TEST CONFLICT: <file>::<test name>` for it too.",
@@ -359,7 +361,7 @@ def old_tests_validations(specs, new_tests, base_files, policy):
     new = {t["path"] for t in new_tests or [] if isinstance(t, dict) and isinstance(t.get("path"), str)}
     named = {p for v in specs for p in v["args"][1:]}
     rest = dr.unnamed_test_files(new, named, base_files)
-    used, n, out = {v["id"] for v in specs}, 1, []
+    used, n, out = {v["id"] for v in specs if isinstance(v["id"], str)}, 1, []   # a bad id: the contract refuses it
     for i in range(0, len(rest), OLD_TESTS_PER):
         while OLD_TESTS_ID.format(n) in used:
             n += 1

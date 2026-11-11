@@ -119,7 +119,15 @@ semua berkas). F1b tidak berubah. Python tidak berubah (F4).
 **F5b. Prompt.** Baris "Name every existing test file (*.test.*) in a validation: the harness refuses a draft that leaves
 one out ..." diganti: drafter hanya menyebut validasi untuk tes baru dan tes lama yang dekat dengan perubahan; berkas tes
 lama lain dijalankan harness dalam validasi `old_tests_*` miliknya, dan seluruh suite lama tetap wajib hijau. Baris
-`EXISTING TEST CONFLICT` tetap.
+`EXISTING TEST CONFLICT` tetap. Ditambah: bila validasi `old_tests_*` gagal pada kode sekarang, sebut berkas yang gagal di
+validasi drafter sendiri (berkas itu keluar dari `old_tests_*`) dan, bila tidak bisa lolos di sandbox, mulai `unverifiable`
+dengan `EXISTING TEST CONFLICT`.
+
+**Code review (2026-11-11).** Diperbaiki: id validasi yang bukan teks tidak lagi membuat submit crash (kontrak yang
+menolaknya); prompt menjelaskan validasi `old_tests_*` yang gagal. Tidak diubah: daftar berkas dari
+`fixtures/repos/<intake>` (sama dengan yang dipakai `check` untuk F1; intake dibekukan dan dicek `intake.check`);
+berkas tes symlink (F1 sudah mewajibkannya sebelum amandemen ini, dan intake menolak symlink); hash ganda per submit
+(repo viewer kecil).
 
 **Tidak dikerjakan di 3a-1:** `ReviseDraft` per `id` (F5 sudah menutup kerugiannya: validasi yang hilang karena revisi
 berarti berkasnya kembali ke `old_tests_*`; ganti per id juga membuat validasi dengan id salah tidak bisa dibuang). Perbaikan

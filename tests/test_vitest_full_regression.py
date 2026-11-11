@@ -317,3 +317,15 @@ def test_f5_the_drafters_tool_version_changed():
     import inspect
     src = inspect.getsource(cdr.build_graph)
     assert '"SubmitDraft": f"4:' in src and '"ReviseDraft": f"4:' in src
+
+
+def test_f5_an_id_that_is_no_text_is_refused_by_the_contract_not_a_crash():
+    bad = {**TARGET_ARGS, "id": ["a"]}
+    d, problems = cdr.draft_from_args(submit_args([bad]), base="sums", policy=POLICY, base_files={"src/sum.test.js": "x"})
+    # no crash: the bad id stays for the check's contract validation to refuse ("id must be a lower-case name")
+    assert problems == [] and [v["id"] for v in d["contract"]["validation"]] == [["a"], "old_tests_1"]
+
+
+def test_f5b_the_prompt_says_what_to_do_when_a_harness_validation_fails():
+    assert "When an old_tests_* validation fails on the code as it is now, name the failing file in a validation of " \
+           "yours" in cdr.SYSTEM_VITEST
