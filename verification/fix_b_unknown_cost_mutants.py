@@ -2,13 +2,6 @@
 import subprocess
 L="harness/llm.py"
 MUT=[
- (L,'            if nano is None and self.price is not None:','            if False:',"E1 removed"),
- (L,'            if nano is None and self.price is not None:','            if nano is None:',"E1 also for unpriced models"),
- (L,'"worst_case_unknown_cost"','"actual"',"E1 label"),
- (L,'        return max(worst_nano, to_nano(usd))','        return worst_nano',"E1 ignores real usage"),
- (L,'        return max(worst_nano, to_nano(usd))','        return to_nano(usd)',"E1 ignores worst case"),
- (L,'rate = max(p["input"], p.get("cache_write_5m") or 0, p.get("cache_write_1h") or 0)','rate = p["input"]',"E1 write rate = input"),
- (L,'* max(mult, self._worst_mult())','* mult',"E1 multiplier"),
  (L,'        if key not in price:\n            raise ConfigError(f"{what} uses {ref}, whose price has no','        if False:\n            raise ConfigError(f"{what} uses {ref}, whose price has no',"missing key allowed"),
  (L,'ok = (not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v)\n                  and (v >= 1 if key == "peak_multiplier" else v > 0))','ok = True',"multiplier unchecked"),
  (L,'(v >= 1 if key == "peak_multiplier" else v > 0)','(v >= 0 if key == "peak_multiplier" else v > 0)',"multiplier floor 0"),

@@ -423,18 +423,6 @@ class LLMCaller:
                        cache_write_tokens=write_5m, cache_write_1h_tokens=write_1h, window=None)
         return None if usd is None else usd * mult      # an unknown cost stays None, never a guess
 
-    def _unknown_cost_charge(self, tin, tout, cached, cu, mult, worst_nano):
-        """SPEC_FIX_B E1: the nano-dollars charged for a call whose cost cannot be computed: the larger of the call's worst
-        case (from the pre-send estimate, which a heuristic count or a provider that ignores max_tokens can exceed) and
-        its real usage priced with every write token at the highest rate the price has, at the worst multiplier."""
-        p = self.price
-        w5, w1 = cu["write_5m"], cu["write_1h"]
-        rate = max(p["input"], p.get("cache_write_5m") or 0, p.get("cache_write_1h") or 0)
-        fresh = max(tin - cached - w5 - w1, 0)
-        usd = (fresh * p["input"] + cached * p.get("cache_read", p["input"]) + tout * p["output"]
-               + (w5 + w1) * rate) / 1_000_000 * max(mult, self._worst_mult())
-        return max(worst_nano, to_nano(usd))
-
     def _worst_mult(self):
         """SPEC_PEAK_EDGES P1: before sending, a provider with a peak window is always priced at its peak, whatever the
         hour, so a call that runs into the window (or is billed by its start) never costs more than its worst case."""
@@ -605,11 +593,6 @@ class LLMCaller:
                 served_ok = gateway.served_ok(self.gateway["upstream"], served)
                 gw = {"usd_computed_nano": computed, "usd_reported_nano": rep_nano, "upstream_served": served,
                       "free": self.gateway["free"]}
-            if nano is None and self.price is not None:
-                # SPEC_FIX_B E1: a priced model whose reply reports usage the price cannot cost (a cache write without a
-                # write rate). Unknown is never free to the cap: charge the call's worst case, as for a reply without usage,
-                # and say so. (An unpriced model has no price: a finite budget refused it at construction.)
-                nano, charged = self._unknown_cost_charge(tin, tout, cached, cu, mult, worst_nano), "worst_case_unknown_cost"
             truncated = is_truncated(msg)
             try:
                 emit("llm_call", call_id=call_id, status="ok", attempt=attempt, est_input=est_in, max_tokens=cap,
