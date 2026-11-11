@@ -107,7 +107,8 @@ class SubmitIssue(BaseModel):
                                            "selector, an API key, a function name), exactly as the code has them. The "
                                            "harness searches the old tests for them.")
     clash_check: str = Field(default="", description="The code the harness gave you with its list of old test lines "
-                                                     "holding your touches; empty until then.")
+                                                     "holding your touches; empty until then. Send it with exactly "
+                                                     "the touches that list was made from.")
 
 
 def unchanged_paragraph(issue):
@@ -214,7 +215,8 @@ def hits_report(hits, code, unread):
     files = sorted(count)
     out = [f"the harness searched the existing tests for your touches and found {len(hits)} line(s) in {len(files)} "
            "file(s); read the lines your change may break and put each in clashes (or change the issue so it does not "
-           f"clash), then submit again with clash_check \"{code}\":"]
+           f"clash), then submit again with clash_check \"{code}\" and the SAME touches (other touches give another "
+           "list and another code):"]
     per = {}                                # at most HITS_SHOWN lines reach here (broad_report above that)
     for f, n, t in hits:
         if per.get(f, 0) >= HITS_PER_FILE:
@@ -399,7 +401,8 @@ SYSTEM = "\n".join([
     "first, or change the issue so it does not clash.",
     "- Name in `touches` the existing texts, selectors, classes, keys and names the change alters or relies on. The "
     "harness then shows you every line of the old tests that holds one, with a clash_check code: read the lines that "
-    "may break, add each to `clashes`, and submit again with that code.",
+    "may break, add each to `clashes`, and submit again with that code and exactly the same touches (changing the "
+    "touches changes the list and its code).",
     "- Keep to what the human asked: do not add features. When the wish is unclear, write the most likely issue and "
     "ask in `questions`.",
     "- The reply is in plain Indonesian for a reader who does not read code: what will change on the screen or in the "
