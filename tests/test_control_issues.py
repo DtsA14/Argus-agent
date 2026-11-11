@@ -230,6 +230,7 @@ def test_new_without_the_key_file_variable_is_refused(tmp_path):
         s.control.issues.environ = {}
         status, _, text = s.post("/issues/new", f)
         assert status == 409 and f"{ci.WRITER_KEY_ENV} (or {ci.KEY_ENV}) is not set" in text and s.spawner.calls == []
+        assert s.audit_lines()[-1]["why"] == f"{ci.WRITER_KEY_ENV} (or {ci.KEY_ENV}) is not set for the service"
     finally:
         s.stop()
 
@@ -564,6 +565,7 @@ def test_with_only_the_writer_key_file_the_writer_runs_and_start_is_neither_offe
     svc.control.issues.environ = {ci.WRITER_KEY_ENV: WRITER_KEY}
     status, _, text = svc.post(f"/issues/{JOB}/start", {"token": token, "sha": sha})
     assert status == 409 and ci.KEY_ENV in text and len(svc.spawner.calls) == 1
+    assert svc.audit_lines()[-1]["why"] == f"{ci.KEY_ENV} is not set for the service"
 
 
 def test_an_empty_writer_key_variable_falls_back_to_the_key_file(svc):
