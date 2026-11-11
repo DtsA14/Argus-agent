@@ -14,7 +14,7 @@ Status: **done** (merged, with the evidence named) · **in PR** (written, not ye
 condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
 in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 
-**Counts (rows below):** done 10 · in PR 16 · open 21 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2). E1 waits for a decision; the experiment waits for Atha (variant, go live). C7, C9 and C10 stay open; the remaining code fixes wait for their phase.
+**Counts (rows below):** done 10 · in PR 17 · open 20 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2), the PREFLIGHT draft. E1 waits for a decision; the experiment waits for Atha (variant, go live). C9 and C10 stay open; the remaining code fixes wait for their phase.
 
 ### A. Stale or unsupported documentation (section 2)
 | Id | What | Status | Evidence or next step |
@@ -25,7 +25,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | C4 | "Judge 10/10" overstated | in PR | Reworded in `PENDING.md`; the 10/10 breakdown itself is still not in the sources (open: find it in `SPEC_JUDGE.md` section 6 or drop the number) |
 | C5 | No mutant logs for #436, #437 | in PR | `verification/test_detection_gate_mutants.log` and `old_test_leaks_mutants.log` (scripts alongside), rebuilt on current code |
 | C6 | `no_test_detection` presented as an ADR-006 gate | in PR | Reconciliation row now says six regexes, a fence not a proof |
-| C7 | M3 "judge calibration PASS" has no source in `M3_CLOSING.md` | open | Claim flagged in Reconciliation; still needs a source or removal |
+| C7 | M3 "judge calibration PASS" has no source in `M3_CLOSING.md` | in PR | The calibration evidence exists, just not in `M3_CLOSING.md`: `GOOD5_DECISION.md` section 6 (baseline #2, PASS, one run), `REVIEW_3D.md`, `verification/calibration-3d-*`; Reconciliation row now points there and names the open gap (stability across runs) |
 | C8 | "All issues written by Claude" vs chatbox since 11-07 | in PR | Reconciliation L92 fixed |
 | C9 | "Atha's minutes not yet asked" | open | Waits are measured (upper bound, scoreboard); real attention minutes and Claude's tokens are still unmeasured (weekly record, DOC) |
 | C10 | Research eval graded by Claude only; no independent fact check | open | Held under "freeze the research line until the phase 2 verdict" |
@@ -91,7 +91,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | ADV | Advisory lane in `AGENTS.md` | in PR | This PR (Atha: yes, 2026-11-11) |
 | WEEKLY | One weekly line: Atha hours and Claude usage | open | Phase 1; Atha fills it, the scoreboard cites it |
 | FIX-A | D1 + D6 (+ tests for attacks A8, A7) | done | Merged #446 (`ef64710`) |
-| ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done; addendum: `more-itertools` (771 tests, 36.7 s, no option) replaces humanize; v0 can use boltons + more-itertools with no harness change; the src-layout handling (cachetools) is deferred |
+| ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done; variant 1 (boltons + more-itertools) needs **no new environment**: `ledger_py312_up2` is already configured and checked, and ran both suites with Argus's own command; only full clones in `~/outside/` at run time; cachetools and the `src`-layout handling are deferred |
 | GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
 | PRE | `PREFLIGHT.md`: ten issues by the fixed rule | in PR | Draft prepared from metadata only (`pilots/outside_v0/PREFLIGHT_DRAFT.md`, two variants); final only after Atha picks the variant and it is committed before the first job. Rule amended: one issue per fix PR |
 | EXP | The retrospective outside experiment (kill at 2 or fewer A of 10, success at 5 or more) | open | Phase 2; Atha's "go live" and verdict |

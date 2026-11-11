@@ -41,3 +41,7 @@ Neither `more-itertools` nor `boltons` has an AI-contribution notice in its docs
 **Recommendation for v0:** use the two repositories that run with Argus's own command and no harness change, `boltons` (13 qualifying issues) and `more-itertools` (50), five issues from each; keep `cachetools` for a later batch,
 after the `src`-layout question (`-o pythonpath=src`) is settled. This keeps the protocol's rules (ten issues, a fixed selection rule) and removes the only strict-lane work from phase 1. A third repository is optional.
 The deviation (two repositories, five issues each, instead of three with 4/3/3) is for Atha to accept; it lowers diversity, not the integrity of the selection rule.
+
+**Correction to the "what this means for ENV" list above (2026-11-11, later):** for variant 1 no environment work is needed at all. `ledger_py312_up2` is already in `config.yaml`, was checked by `scripts/check_env_image.py`, and
+ran both the `boltons` and `more-itertools` suites with Argus's own pytest command in this spike (image id `3e48cd98c8de`; the packages it carries beyond pytest are irrelevant to these repositories). A run needs a full clone of the
+repository (the spike used shallow clones) so that each job's parent commit can be checked out; the `--commit` flag names it. `cachetools` still needs the `src`-layout handling.
