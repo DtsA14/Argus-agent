@@ -967,7 +967,8 @@ def test_without_old_test_lines_no_code_is_needed(tmp_path):
                                       ("spec/a.rb", True), ("Specs/a.cs", True), ("web/e2e/a.ts", True),
                                       ("Tests/a.py", True), ("TEST/a.c", True), ("a_spec.rb", True),
                                       ("src/FooTest.java", True), ("FooTests.kt", True), ("Contest.java", False),
-                                      ("src/spec.js", False), ("e2e.js", False), ("Testing/a.js", False)])
+                                      ("src/spec.js", False), ("e2e.js", False), ("Testing/a.js", False),
+                                      ("src/a.test.js.map", False), ("conftest.py.orig", False)])
 def test_test_files_are_known_by_folder_or_name(rel, test):
     assert iw.is_test(rel) is test
 
