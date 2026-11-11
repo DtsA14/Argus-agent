@@ -1053,6 +1053,9 @@ def test_the_writer_is_asked_for_its_touches_and_gets_the_old_test_lines_back(tm
     assert (job.dir / ri.ISSUE).read_text() == STORED
     assert "`touches`" in iw.SYSTEM and "submit again with that code and exactly the same touches" in iw.SYSTEM
     assert f'clash_check "{code}" and the SAME touches' in told              # 2026-11-11: a writer that changed them ran out
+    # 2026-11-11 (viewer title issue): a writer took every line shown for a clash; only a test that WILL fail is one
+    assert "They are not clashes by themselves" in told and "a line that keeps passing needs nothing" in told
+    assert "A test that only might fail, or would fail only with data it does not have" in iw.SYSTEM
     assert "exactly the touches that list was made from" in iw.SubmitIssue.model_json_schema()["properties"]["clash_check"]["description"]
     assert {"touches", "clash_check"} <= set(iw.SubmitIssue.model_json_schema()["properties"])
     assert load_config()["issue_writer"]["turn"]["max_submits"] == 6
