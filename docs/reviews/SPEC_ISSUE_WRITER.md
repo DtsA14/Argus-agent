@@ -209,3 +209,38 @@ adanya. (Code review: mengawasi kalimat model dengan regex rapuh; daftar dari ha
 
 **Tes wajib (mutants).** Klaim ditolak dengan clash (enam ejaan); klaim di luar paragraf itu tidak ditolak; daftar ditulis
 harness tepat sebelum baris Environment; batas panjang dengan daftar; tanpa clash disimpan apa adanya; prompt, versi alat.
+
+## Amandemen 4 (2026-11-11): harness mencari tes lama yang disentuh
+
+Status: **Atha 2026-11-11 "Ok 1"** (pilihan 1 dari `pilots/issue_writer_models_v0/RESULT.md`: Haiku sebagai penulis,
+dengan pencarian bentrok yang dipaksa harness).
+
+**Masalah dan ukuran.** Replay p4 (#416): Haiku 5.5 satu-satunya yang menandai data API yang belum pasti dan paling cepat
+(20,6 dtk), tapi hanya membaca 8 langkah dan menemukan 2 dari 6 clash (terlewat daftar judul kolom
+`job-page-share.test.jsx` 132/157/224 dan baris sum). Pencarian bentrok bergantung pada ketelitian model. Ukuran: clash
+yang ditemukan pada replay p4 w2 (target 6), detik giliran issue, n = 3 per model.
+
+**T1.** `SubmitIssue` (versi alat "5") mendapat `touches`: daftar 1-8 teks yang **sudah ada di kode** dan diubah atau
+diandalkan perubahan (judul kolom, kelas CSS, selector, kunci API, nama fungsi), persis seperti di kode, masing-masing
+2-80 karakter satu baris (aturan karakter bagian 6, dipotong spasi tepinya). Wajib untuk issue; untuk balasan saja
+diabaikan. Teks yang tidak ada di file mana pun di snapshot ditolak ("sebut teks yang ada, persis").
+
+**T2.** Harness sendiri membaca semua file tes di snapshot (path dengan folder `test`, `tests` atau `__tests__`, atau nama
+`test_*`, `*_test.*`, `*.test.*`, `*.spec.*`, `conftest.py`) lewat path jail yang sama dengan alat baca (tanpa symlink,
+tanpa file khusus, `.git` dilewati, batas file/byte SearchFiles) dan mengumpulkan setiap baris yang memuat salah satu
+`touches`, urut file lalu baris.
+
+**T3.** Bila ada baris itu, issue diterima hanya bila `clash_check` sama dengan kode harness: 12 hex pertama sha256 dari
+daftar baris (`file:baris:teks`). Tanpa kode yang cocok, submit ditolak dengan daftar baris (paling banyak 40, 8 per file,
+sisanya dihitung) dan kodenya: model membaca baris yang bisa rusak, menaruhnya di `clashes` (atau mengubah issue), lalu
+submit lagi dengan kode itu. Kode hanya didapat dari penolakan itu, jadi issue yang diterima pasti sudah melihat daftarnya;
+`touches` lain → daftar lain → kode lain. Tanpa baris tes yang cocok, `clash_check` tidak diperlukan. Gerbang deterministik
+atas argumen dan snapshot beku (aman dijalankan ulang). `max_submits` giliran 3 → 4 (satu penolakan kini diharapkan).
+
+**T4.** Hasil giliran menyimpan `touches` dan jumlah baris tes (`test_hits`) di `result.json`; issue, balasan dan clash
+tidak berubah bentuk. Gate amandemen 3 tetap.
+
+**Tes wajib (mutants).** touches wajib untuk issue, diabaikan untuk balasan saja, batas jumlah/panjang/karakter, teks yang
+tidak ada ditolak; hanya file tes yang dicari (file non-tes tidak masuk daftar), `.git` dan symlink dilewati; kode salah
+atau kosong ditolak dengan daftar dan kode, kode benar diterima; daftar dipotong 40/8; tanpa baris tes tidak perlu kode;
+prompt, versi alat, config max_submits.
