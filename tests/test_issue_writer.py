@@ -376,7 +376,7 @@ def test_a_rejected_submit_is_told_why_and_the_next_one_counts(tmp_path):
     job = env.new()
     assert job.data["state"] == ri.AWAITING_HUMAN
     told = tool_answers(env.model.calls[1])
-    assert told[-1].startswith("Rejected (1 problem(s)); 3 submit(s) left") and "Environment: pwa_node22" in told[-1]
+    assert told[-1].startswith("Rejected (1 problem(s)); 5 submit(s) left") and "Environment: pwa_node22" in told[-1]
 
 
 def test_no_tool_that_writes_runs_or_reaches_the_network_is_offered(tmp_path):
@@ -747,7 +747,7 @@ def test_the_configured_turn_runs_haiku_within_its_gateway_bound():
     lim = iw.settings(rj.stage_config(c, c["issue_writer"]["turn"]["cap_usd"]))
     assert c["roles"]["issue_writer"]["model"] == "openrouter:anthropic/claude-haiku-5.5"
     assert "params" not in c["roles"]["issue_writer"]                # DeepSeek's thinking switch is not sent to it
-    assert lim["max_input_tokens"] == 40000 and lim["max_submits"] == 4
+    assert lim["max_input_tokens"] == 40000 and lim["max_submits"] == 6
     assert lim["attempt_tokens"] >= 4 * lim["max_input_tokens"] and lim["attempt_usd"] <= 0.10
     c["issue_writer"]["turn"]["max_input_tokens"] = 40001
     with pytest.raises(Exception, match="set max_input_tokens to 40,000 or less"):
@@ -1048,12 +1048,14 @@ def test_the_writer_is_asked_for_its_touches_and_gets_the_old_test_lines_back(tm
     job = env.new()
     assert job.data["state"] == ri.AWAITING_HUMAN
     told = tool_answers(env.model.calls[1])[-1]
-    assert told.startswith("Rejected (1 problem(s)); 3 submit(s) left") and f'clash_check "{code}"' in told
+    assert told.startswith("Rejected (1 problem(s)); 5 submit(s) left") and f'clash_check "{code}"' in told
     assert "src/list.test.js:2: expect(cell).toBe('id')" in told
     assert (job.dir / ri.ISSUE).read_text() == STORED
-    assert "`touches`" in iw.SYSTEM and "submit again with that code" in iw.SYSTEM
+    assert "`touches`" in iw.SYSTEM and "submit again with that code and exactly the same touches" in iw.SYSTEM
+    assert f'clash_check "{code}" and the SAME touches' in told              # 2026-11-11: a writer that changed them ran out
+    assert "exactly the touches that list was made from" in iw.SubmitIssue.model_json_schema()["properties"]["clash_check"]["description"]
     assert {"touches", "clash_check"} <= set(iw.SubmitIssue.model_json_schema()["properties"])
-    assert load_config()["issue_writer"]["turn"]["max_submits"] == 4
+    assert load_config()["issue_writer"]["turn"]["max_submits"] == 6
 
 
 # ---- amendment 5: touches too broad to read, Haiku as the writer, the writer's own key -----------------------------

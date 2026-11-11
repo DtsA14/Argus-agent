@@ -1,0 +1,5 @@
+KILLED  rejection silent on touches: 1 failed, 179 passed in 19.72s
+KILLED  prompt silent on touches: 1 failed, 179 passed in 25.47s
+KILLED  schema silent on touches: 1 failed, 179 passed in 24.57s
+KILLED  four submits: 1 failed, 58 passed in 5.94s
+RESULT: 4/4 killed
