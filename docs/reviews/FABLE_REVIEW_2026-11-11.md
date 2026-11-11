@@ -8,6 +8,104 @@ finding, whether Claude checked it against the repository on 2026-11-11, what Cl
 Status key: **verified** (Claude checked it) · **partly** · **unverified** (Claude did not check; line references into `router/job.py` etc. are
 Fable's) · **by design** (true, and a documented decision).
 
+## 0. Status board: what is fixed and what is not (kept current; update it in every PR that changes a row)
+
+Status: **done** (merged, with the evidence named) · **in PR** (written, not yet merged) · **open** (planned, in the phase named) · **dropped** (decided not to do, with the reason) · **held** (waits for a named
+condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
+in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
+
+**Counts (rows below):** done 4 · in PR 12 · open 31 · held 9 · dropped 9 · by design 3 · info 6 (total 74). The scoreboard is done; most documentation corrections (section A) are in the PR that adds this board, while C7, C9 and C10 stay open. No code fix has been made yet: D1, D6, E1, E2 and the rest wait for their phase.
+
+### A. Stale or unsupported documentation (section 2)
+| Id | What | Status | Evidence or next step |
+|---|---|---|---|
+| C1 | Viewer row in Reconciliation described issues 001-002 | in PR | Rewritten from `verification/scoreboard-2026-11-11.json` (viewer 43 applied of 56 jobs, $0,060 each) |
+| C2 | "J9 used in batch 4-5"; chain probe has no judge result | in PR | Reconciliation L17 corrected; `chain_probe_v0/RESULT.md` now says the judge was not run |
+| C3 | Cost per feature excluded failed jobs | in PR | Figures now from the scoreboard, failed jobs included ($0,058 ledger, $0,060 viewer) |
+| C4 | "Judge 10/10" overstated | in PR | Reworded in `PENDING.md`; the 10/10 breakdown itself is still not in the sources (open: find it in `SPEC_JUDGE.md` section 6 or drop the number) |
+| C5 | No mutant logs for #436, #437 | in PR | `verification/test_detection_gate_mutants.log` and `old_test_leaks_mutants.log` (scripts alongside), rebuilt on current code |
+| C6 | `no_test_detection` presented as an ADR-006 gate | in PR | Reconciliation row now says six regexes, a fence not a proof |
+| C7 | M3 "judge calibration PASS" has no source in `M3_CLOSING.md` | open | Claim flagged in Reconciliation; still needs a source or removal |
+| C8 | "All issues written by Claude" vs chatbox since 11-07 | in PR | Reconciliation L92 fixed |
+| C9 | "Atha's minutes not yet asked" | open | Waits are measured (upper bound, scoreboard); real attention minutes and Claude's tokens are still unmeasured (weekly record, DOC) |
+| C10 | Research eval graded by Claude only; no independent fact check | open | Held under "freeze the research line until the phase 2 verdict" |
+| C11 | Prompt injection "not measured" vs "v0 clean" | in PR | Reconciliation row rewritten (v0 = 4 variants, n = 1) |
+| C12 | "Basis main after #266", stale gap items | in PR | Header, gap items 2-3 updated |
+
+### B. Code findings from the four-file reading (section 5)
+| Id | What | Status | Evidence or next step |
+|---|---|---|---|
+| B1 | Memo keys and reservation-from-ledger upheld | info | – |
+| B2 | Estimate overrun handled after the money is spent (`run.py:442-455`) | by design | Heuristic counts; `AGENTS.md` already forbids calling it an absolute cap |
+| B3 | Tool versions hand-bumped; "safe to repeat" is a docstring; float money at the edges | open | Check when touching `tools.py` (FIX-A) |
+| B4 | `by` is `$USER` | held | Matters with a second approver |
+| B5 | No way to say "I am stuck" | open | RC, phase 3 |
+| B6 | Detection-gate hits are fed back to the agent | open | GATE, phase 3 (after RC) |
+| B7 | `applied` ignores the judge verdict | dropped | Plan: the judge ran on 8% of code jobs |
+| B8 | Atha's time recoverable from timestamps | done | `scripts/scoreboard.py` (#444): upper bound, median 2 min per stage |
+| B9 | `ReportConflict` design | open | RC, phase 3 (spec v2 is a draft) |
+| B10 | Chain operator breaks three rules | held | Wait for a second cross-repo chain |
+| B11 | Detection gate skips `conftest.py`, `test/`, `*.spec.*` | by design | Noted; low |
+| B12 | `leaks` cannot tell "none" from "crashed" or "not Python" | open | ADV follow-up (advisory lane) |
+| B13 | `applied` accepts any commit (records `as_is`) | held | Low; staging deploy refuses `as_is` false |
+| B14 | Keys in `os.environ` during a stage | info | Scoped to the stage and removed in `finally`; git and docker CLI still inherit (see D12) |
+| B15 | Patch read from a recorded absolute path; `recursion_limit` literal 40 | dropped | Low |
+
+### C. Audit of the core guarantees (sections 8 and 9)
+| Id | What | Status | Evidence or next step |
+|---|---|---|---|
+| D1 | **Run wedge**: `Toolbox.run` catches only two exception types; a model-chosen input wedges the run on every resume | open | FIX-A, phase 1 (gates the experiment) |
+| D2 | `EventLog.emit` never fsyncs; a damaged non-final line is skipped silently | open | FIX-C, phase 3 |
+| D3 | `scripts/smoke_models.py` calls a model outside `LLMCaller` | in PR | Exception written into `AGENTS.md` ("by decision"); no code change |
+| D4 | `get_num_tokens_from_messages` / `list_models` outside the ledger | open | Check whether they cost money (unverified) |
+| D5 | **Forgeable verdict** (tests share a process with the agent's code) | open | VF, phase 3 (spec from the canary-and-nonce sketch); until then "never apply a DONE job unread" |
+| D6 | `RunValidation` result unlabelled as data | open | FIX-A, phase 1 |
+| D7 | No key redaction in error text | open | FIX-C, phase 3 |
+| D8 | Two processes on one job spend the reservation twice | dropped | Plan: does not move a measured number |
+| D9 | A config change on resume restarts the attempt | dropped | Same |
+| D10 | `delivery="unknown"` written as 0 when `failed_attempt_charge` is not `worst_case` | dropped | Config sets `worst_case` |
+| D11 | Float arithmetic in caps | dropped | Known; keep comparisons in nano |
+| D12 | Git and docker CLI inherit key variables | open | Fold into FIX-C if cheap |
+| D13 | Path jail, sandbox flags, no unsandboxed exec hold | info | Good news |
+| D14 | Memo keys, reservation, `durability="sync"` hold | info | Good news |
+| E1 | **Unknown cost charged as zero** to the reservation | open | FIX-B, phase 2 |
+| E2 | Zero and negative prices not rejected | open | FIX-B, phase 2 |
+| E3 | Verdict-forgery fix (canaries, nonce, frozen node set) | open | = VF |
+| E4 | Zero written on a billing assumption (paid web) | dropped | Check with E1 only if cheap |
+| E5 | Gateway provider pin is a prefix test | dropped | Low |
+| E6 | Web tools hold (SSRF, redirects, sizes) | info | – |
+| E7 | Staging runs no commit content outside a container; `package.json` read follows a link | dropped | The link read is low; not scheduled |
+
+### D. Direction, experiment, scoreboard, attacks, plan (sections 1, 3, 4, 10-14)
+| Id | What | Status | Evidence or next step |
+|---|---|---|---|
+| A1 | Outside evidence before more fences | open | EXP, phase 2 |
+| M4, M8, planner | Drop from the active roadmap | held | Reopen conditions in the plan, section 4 |
+| M7 | Record the approver's identity | held | With a second approver |
+| Production | Redefine: first production is a PR on someone else's repo | held | Atha decides after the experiment |
+| UI phase 3 / 4 | Approve button premature / staging buttons drop | held | Phase 3 reopens if Atha rejects 4 of 5 planted bad drafts from the phone summary |
+| 3b | Auto-redraft | held | Waits for `submits_exhausted` above about 10% of drafts |
+| Chain operator | `argus chain` | held | Second chain with the same glue |
+| SB | Scoreboard script and baseline | done | #444, `verification/scoreboard-2026-11-11.json` |
+| DOC | Documentation corrections and mutant logs | in PR | This PR |
+| ADV | Advisory lane in `AGENTS.md` | in PR | This PR (Atha: yes, 2026-11-11) |
+| WEEKLY | One weekly line: Atha hours and Claude usage | open | Phase 1; Atha fills it, the scoreboard cites it |
+| FIX-A | D1 + D6 (+ tests for attacks A8, A7) | open | Phase 1; gates the experiment |
+| ENV | One-repository spike (`cachetools`), then three sandbox environments | open | Phase 1 |
+| GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
+| PRE | `PREFLIGHT.md`: ten issues by the fixed rule | open | Phase 1, after ENV |
+| EXP | The retrospective outside experiment (kill at 2 or fewer A of 10, success at 5 or more) | open | Phase 2; Atha's "go live" and verdict |
+| FIX-B | E1 + E2 | open | Phase 2, alongside EXP |
+| RC / GATE / VF / FIX-C | `ReportConflict` MVP; terminal gate; verdict forgery; ledger fsync and key redaction | open | Phase 3, only on a success verdict |
+| G4, G6 | Candidate suites measured; environments built | open | = ENV |
+| G5 | Retrospective version first | done | Decided by Atha 2026-11-11 |
+| H1 | CSV half of A15 not exploitable (the CSV has no title) | done | Checked, section 13 |
+| H2 | Attacks A8, A9, A7, A10 become regression tests of the fixes | open | With FIX-A, FIX-C, VF |
+| H3 | A13 as a guard, not an experiment | open | = GUARD |
+| H4, H5 | A10 forger fixtures, A11 false-conflict test | open | With VF and RC |
+| H6 | A1 succeeds by design | by design | Human reads the issue before `issue start --sha` |
+| Plan risks | ENV cost, conflicts scored as failures, narrow FIX-A, memorised fixes, the middle outcome | info | First signals in the plan, section 6 |
+
 ## 1. Verdict (Fable)
 
 Right core, wrong label, mis-sequenced. The harness guarantees are real and tested. "General-purpose agent, starting with deep research" is
@@ -250,3 +348,37 @@ with no model); A9 costs nothing and runs alongside. Predicted to succeed today:
 
 **Proposal:** run A13 as the first experiment (needs one model, about $0.05, a practice-app clone), fold A8, A9, A10 and A7 into the tests of the fix queue (section 10), and keep A2, A3, A5, A6 for a later
 small batch of five or fewer runs. Nothing from this list is run yet.
+
+## 14. Planning session: backlog and order ([`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md))
+
+Fable merged the findings into a backlog (SB, DOC, FIX-A, ENV, PRE, EXP, FIX-B, RC, GATE, VF, FIX-C, GUARD, ADV), three phases with checkable exits, decision points for Atha, a cut list, and a schedule for 6 and
+2 hours of Atha per week. **Proposal, not adopted.** Claude's assessment:
+
+**Agree**
+- Order: scoreboard (SB) and doc corrections (DOC) first; FIX-A (D1 run wedge + D6 `RunValidation` label) and the environment work (ENV) next, in parallel; the outside experiment (EXP) before `ReportConflict`,
+  the terminal gate and the verdict fix, since the experiment supplies their evidence and they are wasted on a "kill".
+- FIX-A as one PR: D1 (`codetask/tools.py:254-257`) and D6 (`codetask/tools.py:425-432`) are in the same file (verified). E1 and E2 (money) as a separate, later PR (FIX-B) so a money review cannot hold the experiment.
+- D3 (`smoke_models.py`) is a sentence in `AGENTS.md`, not a code change. Skip running attack A13; do GUARD instead. Drop the `applied` judge warning (the judge ran on 10 of 119 code jobs).
+- The rule: a number in a status document is copied from a generated file under `verification/` and cites it; `PENDING.md` holds open items only, by backlog id.
+- The kill line and what each outcome changes (2 or fewer A: stop hardening after FIX-B; 5 or more: phase 3; 3-4: a second batch, budgeted now).
+
+**Adjust (Claude proposes)**
+1. **Measure the dominant cost.** The reviews say Claude's token cost and Atha's real hours are the main costs and recorded nowhere, yet the plan never schedules recording them. Add a tiny item to SB: one weekly line
+   (Atha hours, Claude usage from the usage page) in a file under `verification/`, entered by Atha; the scoreboard cites it. Without it "cost per applied change" excludes the expensive part.
+2. **ENV starts with one repository.** Run a one-repo spike (`cachetools`, smallest and cleanest) end to end (environment, check, one issue) before committing to three. This is the plan's own fallback, taken first,
+   because ENV is the largest unverified cost.
+3. **FIX-A implementation notes:** bump the `RunValidation` tool version when the label is added (memo keys carry the tool version; a resume of an older run must keep replaying its committed results); the D1 handler
+   must also cover a lone surrogate before `memo.put`.
+4. **GUARD needs a data check:** confirm what the ledger's draft endpoint (Stage 14) returns (new test names, changed files, `for_human`) before promising the viewer change; if a field is missing it becomes a ledger change first.
+5. **EXP effort "M" is optimistic:** ten jobs through draft, approve, agent and judge, plus blind grading and per-repo environments; plan for two or three sessions of waiting, not one.
+6. **The 2 hours per week capacity** reaches the verdict only at week 8; say so to Atha before starting, so the schedule is a choice.
+
+**Decisions needed from Atha**
+- ADV: an advisory lane in `AGENTS.md` (advisory output such as leak warnings needs a short spec and tests, not 25 mutants and a full `verify_at`), yes or no. No: B12 (`leaks` "not checked" versus "none") is dropped.
+- Approve the order above (phase 1: SB, DOC, FIX-A, ENV spike, GUARD, PRE), and which weekly capacity to plan for.
+- Whether the plan replaces the order in `PENDING.md` (DOC would reorder it and add the backlog ids).
+
+**Decisions (Atha, 2026-11-11):** (1) **Advisory lane: yes**, with the checklist in `AGENTS.md` (section "Advisory lane"); `leaks` "not checked" versus "none" (B12) stays in the backlog under it.
+(2) **Capacity: 4 hours of Atha per week**, so the plan's reachable points are between its 6-hour and 2-hour columns: phase 1 exit around week 3, the experiment verdict around week 6.
+(3) Claude proceeds with phase 1 in the plan's order (SB done in #444, DOC, FIX-A, a one-repository ENV spike, GUARD, PRE). Claude's adjustments in this section (weekly record of Atha hours and Claude usage,
+ENV spike first, FIX-A notes, GUARD data check, EXP effort) are adopted unless Atha objects.

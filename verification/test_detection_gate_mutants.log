@@ -1,0 +1,26 @@
+# #436 scope:no_test_detection, rebuilt 2026-11-11 on b9fac3a (original run 2026-11-11, 24/24 killed)
+KILLED   drop PYTEST_CURRENT_TEST
+KILLED   drop sys.modules
+KILLED   drop sys.argv
+KILLED   drop VITEST
+KILLED   drop import.meta.vitest
+KILLED   drop NODE_ENV
+KILLED   sys.modules needs wrong second regex
+KILLED   no old-line subtraction
+KILLED   subtraction never matches
+KILLED   scan test files
+KILLED   scan all extensions
+KILLED   open special files
+KILLED   follow symlinks, block on fifo
+KILLED   strict decode
+KILLED   no size cap
+KILLED   uncapped evidence
+KILLED   always pass
+KILLED   layer B
+KILLED   unreadable passes
+KILLED   line reported per pattern
+KILLED   splitlines
+KILLED   criterion not added
+KILLED   verdict ignores inputs_root
+KILLED   run does not pass inputs_root
+survivors: []

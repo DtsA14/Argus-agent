@@ -1,0 +1,27 @@
+# #437 old-test leaks, rebuilt 2026-11-11 on b9fac3a (original run 2026-11-11, 25/25 killed)
+KILLED   issue word not required
+KILLED   word not whole-token
+KILLED   subset not strict
+KILLED   added limit
+KILLED   min elements
+KILLED   changed file flagged
+KILLED   non-test scanned
+KILLED   special not skipped
+KILLED   follow/block
+KILLED   find may raise
+KILLED   no sets cap
+KILLED   not source order
+KILLED   no found cap
+KILLED   no size cap
+KILLED   non-str elements
+KILLED   mixed lists
+KILLED   no review section
+KILLED   no-finding sentence
+KILLED   instruction sentence
+KILLED   report has no leaks
+KILLED   check ignores find
+KILLED   approve screen without line
+KILLED   status without line
+KILLED   leak_lines ignores issue
+KILLED   leak_lines wrong dir
+survivors: []
