@@ -243,9 +243,14 @@ def check_scope_against(c, files):
         if not any(glob_regex(g).match(f) for f in files):
             # a directory name matches no file (globs match files): say so, never widen it (W2b-3 run 2)
             folder = any(f.startswith(g.rstrip("/") + "/") for f in files)
-            errors.append(f"protected glob {g!r} matches no input file"
-                          + (f" (it names a directory; globs match files: use {g.rstrip('/') + '/**'!r})" if folder
-                             else ""))
+            # '**/' needs a subfolder: 'src/**/*.x' misses 'src/a.x'; say which glob would match
+            flat = g.replace("**/", "")
+            hint = ""
+            if folder:
+                hint = f" (it names a directory; globs match files: use {g.rstrip('/') + '/**'!r})"
+            elif "**/" in g and any(glob_regex(flat).match(f) for f in files):
+                hint = f" ('**/' needs a subfolder; files directly there match {flat!r})"
+            errors.append(f"protected glob {g!r} matches no input file" + hint)
     return errors
 
 
