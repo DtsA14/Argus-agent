@@ -162,14 +162,14 @@ def test_the_same_draft_again_is_accepted_without_a_second_check(root, tmp_path,
     assert [e.get("held") for e in td.events(d) if e["event"] == "draft_submitted"] == [None, True]
 
 
-def test_the_submit_tools_are_version_3_in_the_step_memo_keys(root, tmp_path):  # noqa: F811
+def test_the_submit_tools_are_version_4_in_the_step_memo_keys(root, tmp_path):  # noqa: F811
     import sqlite3
     r, model, d = td.run(root, tmp_path, [td.READ, td.SUBMIT])
     keys = [json.loads(k) for (k,) in sqlite3.connect(d / "memo.sqlite").execute("select key from memo")]
     versions = sorted({k[-1] for k in keys if k[0] == "tool"})
-    # SubmitDraft "3:<sandbox>" (for_human, SPEC_CONTROL_UI amendment 2), ReadFile "3" (outlines of large files, after
-    # argus-ledger 010b)
-    assert len(versions) == 2 and versions[0] == "3" and versions[1].startswith("3:")
+    # SubmitDraft "4:<sandbox>" (old_tests_*, SPEC_VITEST_FULL_REGRESSION amendment 1; 3 was for_human), ReadFile "3"
+    # (outlines of large files, after argus-ledger 010b)
+    assert len(versions) == 2 and versions[0] == "3" and versions[1].startswith("4:")
 
 
 def test_a_question_on_the_last_reading_step_is_answered_in_a_submit_step(root, tmp_path):  # noqa: F811
