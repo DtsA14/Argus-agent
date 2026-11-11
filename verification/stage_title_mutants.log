@@ -1,0 +1,18 @@
+KILLED  no title: 1 failed in 0.76s
+KILLED  issue job titled: 1 failed, 57 passed in 2.86s
+KILLED  research from its issue: 1 failed, 55 passed in 2.84s
+KILLED  only \n breaks a line: 1 failed, 58 passed in 3.55s
+KILLED  first line even if empty: 1 failed, 54 passed in 3.25s
+KILLED  control kept: 1 failed, 58 passed in 2.57s
+KILLED  spaces kept: 1 failed, 35 passed in 1.40s
+KILLED  no cut: 1 failed, 61 passed in 2.79s
+KILLED  cut off by one: 1 failed, 61 passed in 3.31s
+KILLED  cut without mark: 1 failed, 61 passed in 3.30s
+KILLED  space before the mark: 1 failed, 74 passed in 2.55s
+KILLED  key checked only after the cut: 1 failed, 65 passed in 2.50s
+KILLED  key only as published: 1 failed, 66 passed in 2.75s
+KILLED  source title read: 1 failed, 67 passed in 2.78s
+KILLED  published title not read: 1 failed in 0.87s
+KILLED  validate in source mode: 1 failed in 0.91s
+KILLED  not a string accepted: 1 failed, 63 passed in 3.03s
+RESULT: 17/17 killed

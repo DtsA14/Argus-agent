@@ -39,7 +39,7 @@ def make_job(root, job_id, *, job=None, events=None, extra_events=()):
     d = root / job_id
     (d / "runs" / f"{job_id}-a1").mkdir(parents=True)
     body = {"job": job_id, "kind": "code", "state": "APPLIED", "created_at": T, "max_usd": 0.5,
-            "inputs": {"repo": "/home/ubuntu/secret-repo", "issue": "the issue text"},
+            "inputs": {"repo": "/home/ubuntu/secret-repo", "issue": "The issue title\n\nthe issue text"},
             "approval": {"by": "atha"}, "intake": {"commit": "abc"}, "environment_image": "sha256:" + "1" * 64,
             "stages": {"a1": {"kind": "agent", "run_id": f"{job_id}-a1", "status": "DONE", "started_at": T,
                               "ended_at": T, "usd": 0.0000004, "cap_usd": 0.5, "draft_sha256": "f" * 64,
@@ -75,7 +75,8 @@ def test_only_allowlisted_fields_are_published(tmp_path, source):
     man = sd.refresh(source, data)
     assert man["jobs"] == ["jone", "jtwo"] and man["excluded"] == [] and man["cost_nano"] == 800
     job = json.loads((sd.pub(data) / "jobs" / "jone" / "job.json").read_text())
-    assert set(job) == {"job", "kind", "state", "created_at", "max_usd", "stages", "log"}
+    assert set(job) == {"job", "kind", "state", "created_at", "max_usd", "title", "stages", "log"}
+    assert job["title"] == "The issue title"                      # amendment 9: the issue's first line, no more
     assert set(job["stages"]["a1"]) == {"kind", "run_id", "status", "started_at", "ended_at", "usd"}
     assert job["log"] == [{"at": T, "what": "state", "old": "NEW", "new": "DRAFTING", "stage": "a1"}]
     events = [json.loads(x) for x in (sd.pub(data) / "jobs" / "jtwo" / "runs" / "jtwo-a1" / "events.jsonl").read_text()
@@ -535,3 +536,55 @@ def test_the_report_talks_only_to_the_releases_container(live):
     st.container_pid = lambda release: None
     with pytest.raises(sd.Refused, match="not running"):
         sd.report(st, lambda sock, host, url, peer=None: pytest.fail("no request without the container"))
+
+
+# ---- amendment 9: the job's title ----------------------------------------------------------------------------------
+
+def title_of(tmp_path, source, **job):
+    make_job(source, "jtitle", job=job)
+    data = tmp_path / "data"
+    man = sd.refresh(source, data)
+    assert "jtitle" in man["jobs"]                                 # a title never excludes its job
+    return json.loads((sd.pub(data) / "jobs" / "jtitle" / "job.json").read_text()).get("title")
+
+
+@pytest.mark.parametrize("job, title", [
+    ({"inputs": {"issue": "\n  \nShow the title\nRules: secret body"}}, "Show the title"),
+    ({"kind": "research", "inputs": {"question": "Which agent harness?\nmore"}}, "Which agent harness?"),
+    ({"kind": "research", "inputs": {"issue": "not a question"}}, None),
+    ({"kind": "issue", "inputs": {"issue": "an issue job has none", "question": "x"}}, None),
+    ({"inputs": {"issue": "a\x07b\u202ec \t  d\u200b\x85e"}}, "abc d"),             # \x85 breaks the line
+    ({"inputs": {"issue": "\u200b\x07\nreal title"}}, "real title"),
+    ({"inputs": {"issue": "x" * 120}}, "x" * 120),
+    ({"inputs": {"issue": "y" * 121}}, "y" * 119 + "…"),
+    ({"inputs": {"issue": "   "}}, None),
+    ({"inputs": {"issue": 7}}, None),
+    ({"inputs": "not an object"}, None),
+    ({"inputs": {"issue": "sk-ant-api03-abcdefghijkl leaked"}}, None),
+    ({"inputs": {"issue": 'set token = "abc"'}}, None),
+    ({"inputs": None, "title": "a source job's own title"}, None),          # read only from a published job
+    ({"inputs": {}, "title": "an inputs without the issue"}, None),
+    ({"inputs": {"issue": "Fix login\rRules: internal body"}}, "Fix login"),
+    ({"inputs": {"issue": "Fix login\x85body"}}, "Fix login"),
+    ({"inputs": {"issue": "Fix login\u2028body"}}, "Fix login"),
+    ({"inputs": {"issue": "Fix login\x0bbody\x0cmore"}}, "Fix login"),
+    ({"inputs": {"issue": "w" * 100 + " sk-proj-" + "A" * 40}}, None),     # a key across the cut: nothing of it
+    ({"inputs": {"issue": "v" * 118 + " tail words"}}, "v" * 118 + "…"),     # no space before the mark
+])
+def test_a_job_publishes_the_first_line_of_its_issue_or_question_as_its_title(tmp_path, source, job, title):
+    assert title_of(tmp_path, source, **job) == title
+
+
+def test_only_the_title_of_the_inputs_is_published(tmp_path, source):
+    assert title_of(tmp_path, source, inputs={"issue": "Title\nbody words", "repo": "/home/ubuntu/r",
+                                              "commit": "c0ffee1234"}) == "Title"
+    published = snapshot_bytes(tmp_path / "data")
+    for secret in (b"body words", b"/home/ubuntu", b"c0ffee1234", b"the issue text"):
+        assert secret not in published
+
+
+def test_a_published_title_projects_to_itself_and_is_cleaned_again():
+    pub = {"job": "jp", "kind": "code", "title": "Show the title", "stages": {}}
+    assert sd.project_job(pub, "jp", published=True) == pub
+    assert sd.project_job({**pub, "title": "pub\x07lished\nsecond"}, "jp", published=True)["title"] == "published"
+    assert "title" not in sd.project_job({**pub, "title": 'token = "x'}, "jp", published=True)

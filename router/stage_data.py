@@ -118,13 +118,45 @@ def _pick(raw, fields, where):
     return out
 
 
-def project_job(raw, job_id):
+TITLE_MAX = 120
+TITLE_FROM = {"code": "issue", "research": "question"}
+
+
+def _keyish(text):
+    return KEY.search(text.encode()) or KEY.search(json.dumps(text).encode())       # as typed, and as published
+
+
+def job_title(raw, published=False):
+    """The job's title (amendment 9, T1): the first non-empty line (any line break) of a code job's issue or a research
+    job's question, without control or invisible format characters, spaces folded, at most TITLE_MAX characters; None
+    when there is none or it looks like a key (checked on the whole line, before the cut). published: a published job
+    projected again by validate (A2), whose title is its only source; a source job's own `title` is never read."""
+    if published:
+        text = raw.get("title")
+    else:
+        inputs = raw.get("inputs")
+        text = inputs.get(TITLE_FROM.get(raw.get("kind"))) if isinstance(inputs, dict) else None
+    if not isinstance(text, str):
+        return None
+    lines = (" ".join(CONTROL.sub("", ln).split()) for ln in text.splitlines())
+    line = next((c for c in lines if c), "")
+    if not line or _keyish(line):
+        return None
+    if len(line) > TITLE_MAX:
+        line = line[:TITLE_MAX - 1].rstrip() + "…"
+    return line                          # a prefix of a line no key pattern matches matches none either
+
+
+def project_job(raw, job_id, published=False):
     """The published form of one job.json: only the allowlisted fields, every value checked (A1)."""
     if not isinstance(raw, dict):
         raise Excluded("job.json is not an object")
     out = _pick(raw, JOB_FIELDS, "job")
     if out.get("job", job_id) != job_id:
         raise Excluded("job.job is not its directory")
+    title = job_title(raw, published)
+    if title is not None:
+        out["title"] = title
     stages = raw.get("stages", {})
     if not isinstance(stages, dict):
         raise Excluded("job.stages is not an object")
@@ -632,7 +664,7 @@ def validate(tmp, man):
     for job_id, nano in man["per_job"].items():
         try:
             job = json.loads((root / job_id / "job.json").read_text(encoding="utf-8"))
-            if project_job(job, job_id) != job:
+            if project_job(job, job_id, published=True) != job:
                 problems.append(f"{job_id}/job.json does not project to itself")
             got = 0
             for log in sorted((root / job_id / "runs").glob("*/events.jsonl")):
