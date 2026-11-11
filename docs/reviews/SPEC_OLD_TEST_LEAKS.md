@@ -26,6 +26,8 @@ terflag per draf (kebanyakan `started_at/ended_at`); dengan syarat issue, tepat 
 (`test_title_in_jobs.py`, `test_api.py`) dan **nol** untuk draf yang benar. Sampel kecil; karena itu penasihat.
 
 Berkas tes lama = berkas yang `is_test_file` (acceptance/testdetect) di intake; berkas > 1 MiB dilewati; paling banyak 20 temuan.
+**Aman:** `find` tidak pernah melempar (apa pun yang salah → tanpa temuan), tidak membuka symlink/FIFO/berkas khusus
+(`O_NOFOLLOW|O_NONBLOCK`, harus berkas biasa), berkas diambil paling banyak 2000 himpunan, urut menurut baris sumber.
 Hasil per berkas (satu entri, himpunan pertama yang cocok): `{path, line, kind: list|dict, added: [...]}`, urut path.
 
 **L2. Tempat tampil.** (a) `check()` menyimpan `report["leaks"]` (selalu ada, mungkin kosong); (b) `DRAFT_REVIEW.md`: bagian
@@ -51,7 +53,7 @@ Penolakan di cek draf menjadi umpan balik drafter; false positive yang tak bisa 
 1. tes baru berisi daftar key `N`, tes lama punya `O = N − {k}` dengan `k` di issue → temuan (list dan dict, masing-masing).
 2. `k` tidak ada di issue → tidak ada temuan; `|N − O| = 3` → tidak ada; `|O| < 4` → tidak ada; `O = N` → tidak ada.
 3. berkas lama yang diubah draf (`changed_tests`) tidak dicurigai; berkas bukan tes (`src/x.py`) tidak dipindai.
-4. berkas lama tak bisa di-parse atau > 1 MiB → dilewati, tanpa error.
+4. berkas lama tak bisa di-parse atau > 1 MiB → dilewati, tanpa error; snapshot/`_sets` yang melempar, issue bukan teks, draf berbentuk salah → `[]`; FIFO/symlink bernama tes tidak dibaca; baris yang dilaporkan = himpunan pertama menurut sumber; batas 2000 himpunan.
 5. `check()` memuat `report["leaks"]`; `review_text` menampilkan bagian dan kalimatnya, dan baris "No old test looks affected".
 6. layar approve dan `status` memuat baris, dihitung dari intake (draf di disk diubah → baris ikut berubah).
 Mutants: syarat issue, `⊂`, batas `|N−O|`, ≥ 4, pengecualian `changed_tests`, filter berkas tes, batas ukuran, bagian review, baris approve.
