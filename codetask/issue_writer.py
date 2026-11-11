@@ -12,6 +12,7 @@ import os
 import re
 import stat
 import unicodedata
+from collections import Counter
 from pathlib import Path
 from typing import List
 
@@ -41,8 +42,8 @@ UNCHANGED = re.compile(r"\b(?:keeps?|continues?\s+to|still)\s+pass(?:ing|es)?\s+
 # amendment 4: the harness searches the old tests for what the issue touches
 TOUCHES_MAX, TOUCH_MIN, TOUCH_MAX = 8, 2, 80
 HITS_SHOWN, HITS_PER_FILE = 40, 8
-TEST_DIRS = {"test", "tests", "__tests__"}
-TEST_NAME = re.compile(r"test_.*|.*_test\.[^.]+|.*\.(test|spec)\.[^.]+|conftest\.py")
+TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "e2e"}         # compared in lower case
+TEST_NAME = re.compile(r"test_.*|.*_(test|spec)\.[^.]+|.*\.(test|spec)\.[^.]+|.*Tests?\.[^.]+|conftest\.py")
 LOOSEN = "A human loosens these existing tests first (the issue writer's clash check, added by the harness):"
 
 
@@ -134,10 +135,10 @@ def with_clashes(issue, clashes):
 
 
 def is_test(rel):
-    """A test file (amendment 4, T2): under a test, tests or __tests__ folder, or named test_*, *_test.*, *.test.*,
-    *.spec.* or conftest.py."""
+    """A test file (amendment 4, T2): under a test, tests, __tests__, spec, specs or e2e folder (any case), or named
+    test_*, *_test.*, *_spec.*, *.test.*, *.spec.*, *Test.*, *Tests.* or conftest.py."""
     parts = rel.split("/")
-    return any(p in TEST_DIRS for p in parts[:-1]) or bool(TEST_NAME.fullmatch(parts[-1]))
+    return any(p.lower() in TEST_DIRS for p in parts[:-1]) or bool(TEST_NAME.fullmatch(parts[-1]))
 
 
 def scan(source, terms):
@@ -151,7 +152,11 @@ def scan(source, terms):
         dirnames[:] = sorted(d for d in dirnames if d != ".git" and not os.path.islink(os.path.join(dirpath, d)))
         for name in sorted(filenames):
             rel = name if here == "." else f"{here}/{name}".replace(os.sep, "/")
-            st = os.lstat(os.path.join(dirpath, name))
+            try:
+                st = os.lstat(os.path.join(dirpath, name))
+            except OSError:
+                incomplete = True
+                continue
             if not stat.S_ISREG(st.st_mode):
                 continue                                           # symlink, FIFO, device: never read
             if st.st_size > SEARCH_MAX_FILE or files >= SEARCH_MAX_FILES or read + st.st_size > SEARCH_MAX_BYTES:
@@ -163,6 +168,8 @@ def scan(source, terms):
                 text = jail.read_text(rel, max_bytes=SEARCH_MAX_FILE)
             except (PathEscape, OSError):
                 incomplete = True
+                continue
+            if not any(t in text for t in terms):
                 continue
             test = is_test(rel)
             for n, line in enumerate(text.splitlines(), 1):
@@ -181,7 +188,8 @@ def hits_code(hits):
 
 def hits_report(hits, code, incomplete):
     """The rejection that shows the writer the old test lines holding its touches, with the code to submit again."""
-    files = sorted({f for f, _, _ in hits})
+    count = Counter(f for f, _, _ in hits)
+    files = sorted(count)
     out = [f"the harness searched the existing tests for your touches and found {len(hits)} line(s) in {len(files)} "
            "file(s); read the lines your change may break and put each in clashes (or change the issue so it does not "
            f"clash), then submit again with clash_check \"{code}\":"]
@@ -193,7 +201,7 @@ def hits_report(hits, code, incomplete):
         shown += 1
         out.append(f"  {f}:{n}: {t}")
     for f in files:
-        more = sum(1 for g, _, _ in hits if g == f) - per.get(f, 0)
+        more = count[f] - per.get(f, 0)
         if more:
             out.append(f"  ... {more} more line(s) in {f}: SearchFiles or ReadFile to see them")
     if incomplete:
@@ -221,11 +229,11 @@ def touches_problems(args, source):
         return problems, [], 0
     found, hits, incomplete = scan(source, terms)
     missing = [t for t in terms if t not in found]
-    if missing:
+    if missing and not incomplete:          # an unread file may hold it: the list below says what was not searched
         return [f"touch {t!r} occurs in no file of the repository: name texts that exist, exactly as the code has them"
                 for t in missing], [], 0
     code = hits_code(hits)
-    if hits and args.get("clash_check") != code:
+    if (hits or incomplete) and args.get("clash_check") != code:
         return [hits_report(hits, code, incomplete)], terms, len(hits)
     return [], terms, len(hits)
 

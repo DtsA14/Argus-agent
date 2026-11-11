@@ -963,7 +963,11 @@ def test_without_old_test_lines_no_code_is_needed(tmp_path):
                                       ("test_a.py", True), ("pkg/a_test.go", True), ("src/a.test.jsx", True),
                                       ("a.spec.ts", True), ("conftest.py", True), ("src/a.js", False),
                                       ("src/testing.js", False), ("latest.js", False), ("contest.py", False),
-                                      ("tests", False), ("src/tests.js", False), ("x/test_/a.js", False)])
+                                      ("tests", False), ("src/tests.js", False), ("x/test_/a.js", False),
+                                      ("spec/a.rb", True), ("Specs/a.cs", True), ("web/e2e/a.ts", True),
+                                      ("Tests/a.py", True), ("TEST/a.c", True), ("a_spec.rb", True),
+                                      ("src/FooTest.java", True), ("FooTests.kt", True), ("Contest.java", False),
+                                      ("src/spec.js", False), ("e2e.js", False), ("Testing/a.js", False)])
 def test_test_files_are_known_by_folder_or_name(rel, test):
     assert iw.is_test(rel) is test
 
@@ -999,6 +1003,32 @@ def test_a_file_too_large_to_search_is_said(tmp_path, monkeypatch):
     monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
     report = touch_gate(root)[0][0]
     assert "src/big.test.js" not in report and "too large or too many to search" in report
+
+
+def test_an_incomplete_search_wants_the_code_even_without_test_lines_and_refuses_no_touch_as_missing(tmp_path,
+                                                                                                    monkeypatch):
+    root = touched_repo(tmp_path, tests=0)
+    (root / "src" / "big.test.js").write_text("only_in_big\n" * 10)
+    monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
+    problems, r = touch_gate(root, touches=["only_in_big"])
+    code = iw.hits_code([])
+    assert r is None and len(problems) == 1 and "found 0 line(s) in 0 file(s)" in problems[0]
+    assert f'clash_check "{code}"' in problems[0] and "too large or too many to search" in problems[0]
+    problems, r = touch_gate(root, touches=["only_in_big"], clash_check=code)
+    assert problems == [] and r["touches"] == ["only_in_big"] and r["test_hits"] == 0
+
+
+def test_a_file_that_cannot_be_looked_at_makes_the_search_incomplete_not_a_crash(tmp_path, monkeypatch):
+    root = touched_repo(tmp_path)
+    real = os.lstat
+
+    def lstat(p, *a, **k):
+        if str(p).endswith("page.js"):
+            raise PermissionError(p)
+        return real(p, *a, **k)
+    monkeypatch.setattr(iw.os, "lstat", lstat)
+    found, hits, incomplete = iw.scan(root, ["'share'"])
+    assert incomplete and hits == [("src/page.test.js", 1, "expect(h).toEqual(['stage', 'share']) // 0")]
 
 
 def test_the_writer_is_asked_for_its_touches_and_gets_the_old_test_lines_back(tmp_path):

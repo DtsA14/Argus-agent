@@ -225,8 +225,9 @@ diandalkan perubahan (judul kolom, kelas CSS, selector, kunci API, nama fungsi),
 2-80 karakter satu baris (aturan karakter bagian 6, dipotong spasi tepinya). Wajib untuk issue; untuk balasan saja
 diabaikan. Teks yang tidak ada di file mana pun di snapshot ditolak ("sebut teks yang ada, persis").
 
-**T2.** Harness sendiri membaca semua file tes di snapshot (path dengan folder `test`, `tests` atau `__tests__`, atau nama
-`test_*`, `*_test.*`, `*.test.*`, `*.spec.*`, `conftest.py`) lewat path jail yang sama dengan alat baca (tanpa symlink,
+**T2.** Harness sendiri membaca semua file tes di snapshot (path dengan folder `test`, `tests`, `__tests__`, `spec`,
+`specs` atau `e2e`, huruf besar/kecil sama, atau nama `test_*`, `*_test.*`, `*_spec.*`, `*.test.*`, `*.spec.*`, `*Test.*`,
+`*Tests.*`, `conftest.py`) lewat path jail yang sama dengan alat baca (tanpa symlink,
 tanpa file khusus, `.git` dilewati, batas file/byte SearchFiles) dan mengumpulkan setiap baris yang memuat salah satu
 `touches`, urut file lalu baris.
 
@@ -234,8 +235,16 @@ tanpa file khusus, `.git` dilewati, batas file/byte SearchFiles) dan mengumpulka
 daftar baris (`file:baris:teks`). Tanpa kode yang cocok, submit ditolak dengan daftar baris (paling banyak 40, 8 per file,
 sisanya dihitung) dan kodenya: model membaca baris yang bisa rusak, menaruhnya di `clashes` (atau mengubah issue), lalu
 submit lagi dengan kode itu. Kode hanya didapat dari penolakan itu, jadi issue yang diterima pasti sudah melihat daftarnya;
-`touches` lain → daftar lain → kode lain. Tanpa baris tes yang cocok, `clash_check` tidak diperlukan. Gerbang deterministik
+`touches` lain → daftar lain → kode lain. Tanpa baris tes yang cocok, `clash_check` tidak diperlukan, kecuali pencarian
+tidak lengkap (file terlalu besar, batas file/byte, file tak terbaca): maka kode tetap diminta dan penolakannya menyebut
+bahwa sebagian file tidak dicari, dan touch yang tidak ketemu tidak ditolak sebagai "tidak ada" (mungkin ada di file yang
+tidak terbaca). Gerbang deterministik
 atas argumen dan snapshot beku (aman dijalankan ulang). `max_submits` giliran 3 → 4 (satu penolakan kini diharapkan).
+
+**Batas yang disadari (code review).** Gerbang membuktikan daftar baris *ditunjukkan*, bukan bahwa tiap baris
+ditindaklanjuti: baris yang memuat touch belum tentu rusak, jadi menilai mana yang clash tetap tugas model (dan human
+membaca issue sebelum Start). `touches` hanya sejujur model: touch yang hanya ada di kode non-tes tidak memunculkan daftar.
+Ukurannya replay n = 3, bukan gerbang ini sendiri.
 
 **T4.** Hasil giliran menyimpan `touches` dan jumlah baris tes (`test_hits`) di `result.json`; issue, balasan dan clash
 tidak berubah bentuk. Gate amandemen 3 tetap.
