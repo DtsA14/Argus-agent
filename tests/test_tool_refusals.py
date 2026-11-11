@@ -149,3 +149,37 @@ def test_an_oserror_from_the_sandbox_or_the_network_is_not_frozen_into_a_refusal
     b.allowed.add("read_docs")
     with pytest.raises(ConnectionError):
         b.run({"name": "ReadDocs", "args": {"url": "https://x", "part": 1}, "id": "c"}, step_key="k")
+
+
+# ---- mutants the first round left alive -------------------------------------------------------------------------
+
+def test_finish_that_fails_to_write_is_refused_not_raised(tmp_path, monkeypatch):
+    b, _ = box(tmp_path)
+    b.contract = {**CONTRACT, "artifacts": [{"path": "SUMMARY.json", "type": "json", "schema": "claims_v2"}]}
+    monkeypatch.setattr(b.jail, "write_text", lambda *a, **k: (_ for _ in ()).throw(OSError(28, "no space")))
+    out = run(b, "Finish", claims=[], summary="x")
+    assert out == {"content": "Refused: Finish could not be done (OSError).", "finished": False}
+
+
+def test_every_reply_is_scrubbed_whatever_a_tool_returns(tmp_path, monkeypatch):
+    b, _ = box(tmp_path)
+    monkeypatch.setattr(Toolbox, "listfiles", lambda self, args: "found: x" + BAD + "y")
+    out = run(b, "ListFiles", path="src")
+    assert out["content"] == "found: x\\ud800y"
+    out["content"].encode("utf-8")
+
+
+def test_the_escaped_memo_payload_is_the_sorted_ascii_form(tmp_path):
+    import sqlite3
+    Memo(tmp_path / "m.sqlite").put("k", {"b": BAD, "a": 1})
+    row = sqlite3.connect(tmp_path / "m.sqlite").execute("SELECT value FROM memo WHERE key='k'").fetchone()[0]
+    assert row == '{"a": 1, "b": "\\ud800"}'
+
+
+def test_the_runvalidation_tool_version_in_the_memo_key_is_never_bumped_by_this_change():
+    # The memo key of a tool step carries the tool version and the next LLM step's key carries the messages: a run that is
+    # resumed must replay its stored (old) text. A bumped version would run the tool again, change the text and re-buy the
+    # model's reply (SPEC_FIX_A_RUN_WEDGE 2.4). So the version stays "1:<image>" in both places in run.py.
+    text = (Path(__file__).resolve().parent.parent / "codetask" / "run.py").read_text(encoding="utf-8")
+    assert text.count('"RunValidation": f"1:{tool_version(scfg)}"') == 1
+    assert text.count('versions["RunValidation"] = f"1:{tool_version(scfg, ct.environments(contract))}"') == 1
