@@ -15,7 +15,7 @@ share Claude's blind spots. You are the independent reader. The question is **di
    or is something in `docs/FUTURE_ARCHITECTURE.md` / `docs/Reconciliation.md` / `PENDING.md` pointing the wrong way?
 2. Which claims in `docs/Reconciliation.md` are **not supported by evidence** in the repo (`verification/`, `pilots/`, `docs/reviews/`)
    or are stale? Check at least 10, with file and line, prefer the ones that drive decisions.
-3. Which decisions are **overdue or premature**: M4 (multi-agent), M7 (registry/policy), production deployment, the hierarchical
+3. Which decisions are **overdue or premature**: M4 (multi-agent), M7 (registry/policy), M8 (tool discovery, procedural memory), production deployment, the hierarchical
    planner, the UI-control phases 3-4, redraft automation (3b)? Say what evidence would change each.
 4. What is the **single most likely way this goes wrong** in the next 3 months, and the smallest experiment that would reveal it early?
 5. Where does effort go that does not move the product (process, mutation testing of every strict-lane PR, many specs), and where is
