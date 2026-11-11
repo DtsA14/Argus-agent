@@ -18,6 +18,7 @@ ledger (the run cap is min(budget.max_usd, the run's --max-usd)), every reply an
 loop moves on (a SubmitDraft whose result was committed never runs its sandbox check again), checkpoints use
 durability="sync", and every node result is committed by harness.guard.
 """
+import copy
 import json
 import math
 import os
@@ -352,6 +353,58 @@ def _profile_text(p):
 
 
 OLD_TESTS_ID, OLD_TESTS_PER = "old_tests_{}", 15
+NORMALIZED = "The harness changed your draft (ReviseDraft starts from the changed one): "
+
+
+def _fixed_id(vid, used):
+    """P1: a validation id the contract would refuse, written as one it takes, or None (taken, or still not one)."""
+    new = re.sub(r"[^a-z0-9_]", "_", vid.lower())
+    new = (new if re.match(r"[a-z]", new) else "v_" + new)[:32]
+    return new if ct.ID.match(new) and new not in used else None
+
+
+def _protects(g, files):
+    """Whether protected glob g matches an input file, or names a directory of one (kept: the contract's message then
+    says how to write it); a glob the contract cannot read is kept for the contract to refuse."""
+    try:
+        return any(ct.glob_regex(g).match(f) for f in files) or any(f.startswith(g.rstrip("/") + "/") for f in files)
+    except Exception:                                              # noqa: BLE001
+        return True
+
+
+def normalize_args(args, base_files):
+    """SPEC_DRAFTER_FORM_FIXES: (args, changes) with the form slips the check would refuse corrected before the draft is
+    built: P1 validation ids the contract refuses, P2 new tests not protected, P3 protected globs that match no input
+    file (the intake's files and the new tests). args is not changed; anything of another shape is left for the
+    checks to refuse."""
+    if not isinstance(args, dict):
+        return args, []
+    out, changes = copy.deepcopy(args), []
+    vals = out.get("validation")
+    if isinstance(vals, list):
+        used = {v.get("id") for v in vals if isinstance(v, dict) and isinstance(v.get("id"), str)}
+        for v in vals:
+            if isinstance(v, dict) and isinstance(v.get("id"), str) and not ct.ID.match(v["id"]):
+                new = _fixed_id(v["id"], used)
+                if new:
+                    changes.append(f"validation id {v['id']!r} is now {new!r}")
+                    used.add(new)
+                    v["id"] = new
+    scope, tests = out.get("scope"), out.get("new_tests")
+    news = [t["path"] for t in tests if isinstance(t, dict) and isinstance(t.get("path"), str)] \
+        if isinstance(tests, list) else []
+    prot = scope.get("protected") if isinstance(scope, dict) else None
+    if isinstance(prot, list) and all(isinstance(g, str) for g in prot):
+        for p in news:
+            if not ct.matches(p, prot):
+                prot.append(p)
+                changes.append(f"new test {p} is now protected")
+        files = set(base_files) | set(news)
+        dropped = [g for g in prot if not _protects(g, files)]
+        if dropped:
+            scope["protected"] = [g for g in prot if g not in dropped]
+            changes += [f"protected glob {g!r} matched no file and was dropped" for g in dropped]
+    return out, changes
 
 
 def old_tests_validations(specs, base_files, policy):
@@ -647,14 +700,18 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
             given = {k: v for k, v in args.items() if v is not None} if isinstance(args, dict) else {}
             # Unknown fields are not merged: the draft is built from them alone, so they are refused by name.
             args = given if set(given) - SUBMIT_KEYS else {**last, **given}
+        intake_dir = Path(root) / "fixtures" / "repos" / inputs["intake"]
+        base_files = snapshot(intake_dir, skip_cache=True)
+        args, changes = normalize_args(args, base_files)
+        said = [NORMALIZED + "; ".join(changes) + "."] if changes else []
+        if changes:
+            log.emit("draft_normalized", submit=n, changes=changes[:20])
         if held and args == held["args"]:       # the answer "keep it": the draft already checked, not checked again
             log.emit("draft_submitted", submit=n, ok=True, problems=0, revise=revise, held=True)
             return {"content": ACCEPTED, "finished": True, "draft": held["draft"], "report": held["report"],
                     "args": args}
-        intake_dir = Path(root) / "fixtures" / "repos" / inputs["intake"]
         draft, problems = draft_from_args(args, base=inputs["intake"], policy=policy,
-                                          base_files=snapshot(intake_dir, skip_cache=True)
-                                          if policy.get("runner") == "vitest" else None)
+                                          base_files=base_files if policy.get("runner") == "vitest" else None)
         if not problems:                       # before the sandbox: a contract the agent cannot meet is not checked
             problems = rewrite_problems(draft, policy, source)
         report = None
@@ -673,12 +730,14 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
         if (outside or reds) and ask and n < policy["max_submits"]:
             log.emit("draft_submitted", submit=n, ok=True, problems=0, revise=revise,
                      **({"scope_question": outside} if outside else {}), **({"red_question": len(reds)} if reds else {}))
-            return {"content": question(outside, reds), "finished": False, "args": args,
+            return {"content": "\n".join([*said, question(outside, reds)]), "finished": False, "args": args,
                     "asked": True, "draft": draft, "report": report}
         log.emit("draft_submitted", submit=n, ok=not problems, problems=len(problems), revise=revise)
         if not problems:
-            return {"content": ACCEPTED, "finished": True, "draft": draft, "report": report, "args": args}
-        lines = [f"Draft rejected (submit {n} of {policy['max_submits']}). Problems:", *[f"- {p}" for p in problems]]
+            return {"content": "\n".join([ACCEPTED, *said]), "finished": True, "draft": draft, "report": report,
+                    "args": args}
+        lines = [f"Draft rejected (submit {n} of {policy['max_submits']}). Problems:", *[f"- {p}" for p in problems],
+                 *said]
         if any(PASSING_NEW in p for p in problems):
             lines.append(PASSING_HINT)
         if report and report.get("baseline"):
@@ -1024,7 +1083,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
     versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3",
                 # 3: SPEC_CONTROL_UI amendment 2 (for_human taken and checked); a memo of a 2 is never reused
                 # 4: SPEC_VITEST_FULL_REGRESSION amendment 1 (the harness's old_tests_* validations)
-                "SubmitDraft": f"4:{tool_version(scfg, [env])}", "ReviseDraft": f"4:{tool_version(scfg, [env])}"}
+                # 5: SPEC_DRAFTER_FORM_FIXES (ids, new tests protected, globs that protect nothing)
+                "SubmitDraft": f"5:{tool_version(scfg, [env])}", "ReviseDraft": f"5:{tool_version(scfg, [env])}"}
     common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
     task_id = f"draft:{inputs['intake']}"
 

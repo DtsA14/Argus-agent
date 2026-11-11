@@ -317,7 +317,7 @@ def json_of(x):
 def test_f5_the_drafters_tool_version_changed():
     import inspect
     src = inspect.getsource(cdr.build_graph)
-    assert '"SubmitDraft": f"4:' in src and '"ReviseDraft": f"4:' in src
+    assert '"SubmitDraft": f"5:' in src and '"ReviseDraft": f"5:' in src
 
 
 def test_f5_an_id_that_is_no_text_is_refused_by_the_contract_not_a_crash():

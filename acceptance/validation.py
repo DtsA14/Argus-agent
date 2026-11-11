@@ -297,6 +297,15 @@ def criteria_problems(spec, parsed, must, skipped):
     return problems
 
 
+def _named_like_evidence(evidence, must, parsed):
+    """SPEC_DRAFTER_FORM_FIXES P4: for each required test that did not run, the hint named_like gives (when any), so a
+    draft check names the full id too."""
+    hints = {t: named_like(t, parsed["tests"]) for t, st in must.items() if st is None}
+    hints = {t: h for t, h in hints.items() if h}
+    if hints:
+        evidence["named_like"] = hints
+
+
 def named_like(t, tests):
     """For a required test that did not run: the tests that ran in its file under a longer name ending with its
     title (a vitest test inside describe() is `<describe> > <title>`, a pytest one in a class `Class::name`), so the
@@ -329,6 +338,7 @@ def judge_result(spec, r, nonce=None):
                 "tests_run": parsed["tests_run"], "outcome": parsed["outcome"], "skipped": parsed["skipped"],
                 "failures": parsed["failures"], "errors": parsed["errors"], "must_pass": must,
                 "output_tail": ((r.get("stdout") or "") if pytest else (r.get("stderr") or ""))[-2000:]}
+    _named_like_evidence(evidence, must, parsed)
     if pytest and parsed["tests_run"] is None and (r.get("stderr") or "").strip():
         # No pytest summary: the reason (e.g. an ImportError while loading a conftest, pytest exit code 4) is on stderr,
         # which the agent and the drafter otherwise never see (sympy-24562 dev run: two attempts on a broken import)
@@ -382,6 +392,7 @@ def judge_vitest(spec, r, nonce):
                 "consistent": parsed["consistent"], "output_tail": vitest_tail(parsed),
                 "stderr_tail": (r.get("stderr") or "")[-500:],
                 "failed_nodes": sorted(n for n, s in parsed["tests"].items() if s == "FAIL")[:MAX_NODES]}
+    _named_like_evidence(evidence, must, parsed)
     if parsed["record"] is None and (r.get("stderr") or "").strip():
         evidence["output_tail"] = ("no vitest record; stderr:\n" + r["stderr"])[-TAIL:]
     if spec.get("environment"):
