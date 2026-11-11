@@ -141,3 +141,22 @@ def test_a_price_without_an_input_or_output_rate_is_refused(missing):
     conf["prices"]["deepseek:deepseek-flash"] = price
     with pytest.raises(ConfigError, match=f"no '{missing}'"):
         check_priced(conf, ModelRef.parse("deepseek:deepseek-flash"), "t")
+
+
+def test_the_unknown_cost_charge_uses_the_peak_multiplier_even_when_the_call_ended_off_peak(tmp_path):
+    from datetime import datetime, timezone
+    from models.fake import ScriptedChatModel
+    off_peak = datetime(2026, 10, 17, 2, tzinfo=timezone.utc)                 # a Saturday: no peak window
+    conf = cfg(cache=False)
+    conf["roles"]["coder"]["model"] = "deepseek:deepseek-flash"               # priced with peak_multiplier 2, no write rate
+    model = ScriptedChatModel(script=[with_usage(total_in=200_000, out=10, creation=150_000)])
+    from harness.events import EventLog
+    from harness.llm import LLMCaller
+    log = EventLog(tmp_path / "e.jsonl")
+    c = LLMCaller(conf, "coder", log, model=model, counter=lambda m, t: 10, now=off_peak)
+    c.call(MSGS, Reservation(tokens=10_000_000, usd=10.0))
+    (done,) = ledger(log)
+    price = conf["prices"]["deepseek:deepseek-flash"]
+    assert price["peak_multiplier"] == 2 and done["charged"] == "worst_case_unknown_cost" and done["peak"] is False
+    real_at_peak = (50_000 * price["input"] + 150_000 * price["input"] + 10 * price["output"]) / 1e6 * 2
+    assert done["usd_nano"] >= round(real_at_peak * 1e9)
