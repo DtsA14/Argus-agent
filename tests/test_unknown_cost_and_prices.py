@@ -100,3 +100,44 @@ def test_an_unset_input_or_output_rate_is_refused_but_an_unset_cache_rate_means_
         check_priced(conf, ref, "t")
     conf["prices"]["deepseek:deepseek-flash"] = {"input": 0.15, "output": 0.60, "cache_read": None}
     check_priced(conf, ref, "t")
+
+
+def test_when_the_estimate_missed_the_charge_is_the_real_usage_at_the_highest_write_rate(tmp_path):
+    from models.fake import ScriptedChatModel
+    conf = cfg(cache=False)
+    conf["prices"]["fake:scripted"] = {"input": 1.00, "output": 5.00, "cache_read": 0.10, "cache_write_1h": 2.00}
+    model = ScriptedChatModel(script=[with_usage(total_in=60_000, out=10, creation=50_000)])   # a 5-minute write: no rate
+    c, log = caller(conf, model, counter=lambda m, t: 10, tmp=tmp_path)                        # the estimate was 10 tokens
+    res = Reservation(tokens=1_000_000, usd=10.0)
+    c.call(MSGS, res)
+    (started,) = ledger(log, "llm_call_started")
+    (done,) = ledger(log)
+    real = (10_000 * 1.00 + 50_000 * 2.00 + 10 * 5.00) / 1e6
+    assert done["charged"] == "worst_case_unknown_cost" and done["usd_nano"] >= round(real * 1e9) > started["worst_usd_nano"]
+    assert res.used_nano == done["usd_nano"]
+
+
+@pytest.mark.parametrize("bad", [0, 0.5, -1, math.nan, math.inf, True, "2"])
+def test_a_peak_multiplier_below_one_or_not_a_number_is_refused(bad):
+    conf = load_config()
+    conf["prices"]["deepseek:deepseek-flash"] = {"input": 0.15, "output": 0.60, "peak_multiplier": bad}
+    with pytest.raises(ConfigError, match="peak multiplier"):
+        check_priced(conf, ModelRef.parse("deepseek:deepseek-flash"), "t")
+
+
+@pytest.mark.parametrize("bad", [0, -1, math.nan, True, "100000"])
+def test_a_long_context_threshold_must_be_a_positive_number(bad):
+    conf = load_config()
+    conf["prices"]["deepseek:deepseek-flash"] = {"input": 0.15, "output": 0.60, "long_context_above": bad}
+    with pytest.raises(ConfigError, match="long-context threshold"):
+        check_priced(conf, ModelRef.parse("deepseek:deepseek-flash"), "t")
+
+
+@pytest.mark.parametrize("missing", ["input", "output"])
+def test_a_price_without_an_input_or_output_rate_is_refused(missing):
+    conf = load_config()
+    price = {"input": 0.15, "output": 0.60}
+    price.pop(missing)
+    conf["prices"]["deepseek:deepseek-flash"] = price
+    with pytest.raises(ConfigError, match=f"no '{missing}'"):
+        check_priced(conf, ModelRef.parse("deepseek:deepseek-flash"), "t")

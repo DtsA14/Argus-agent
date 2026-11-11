@@ -21,6 +21,12 @@ yang menjaga ini (`gateway.entry`).
    bool, atau negatif **selalu ditolak** (tarif cache yang `null` berarti "tidak diketahui" dan boleh); `input` atau `output` bernilai 0 pada penyedia langsung dengan `budget.max_usd`
    terbatas **ditolak** ("model itu tak membebani cap"); model gateway tetap diperiksa `gateway.entry` (`free: true`); `max_usd: null` mengizinkan nol.
 
+**Perubahan sesudah review (Sonnet):**
+3. E1 menagih **yang lebih besar** dari kasus terburuk pra-kirim dan pemakaian nyata yang dihargai dengan setiap token tulis pada tarif tertinggi yang dimiliki harga itu (`input`, `cache_write_5m`,
+   `cache_write_1h`), dengan pengali terburuk. Alasan: `worst_nano` berasal dari estimasi, yang bisa meleset (hitungan heuristik, atau penyedia yang mengabaikan `max_tokens`).
+4. `check_price_values` juga menolak harga tanpa kunci `input` atau `output`, `peak_multiplier` yang bukan bilangan hingga bernilai paling sedikit 1 (pengali di bawah 1, nol, negatif, NaN atau string menekan
+   biaya tercatat), dan `long_context_above` yang bukan bilangan positif.
+
 ## 3. Tes (gagal di kode lama)
 
 1. Panggilan dengan cache-write tanpa tarif tulis: ledger `charged = worst_case_unknown_cost`, `usd_nano = worst_usd_nano`, reservasi sama, dan `reconcile_ledger` sama dengan reservasi.

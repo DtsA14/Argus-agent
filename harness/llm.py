@@ -124,6 +124,18 @@ def check_price_values(cfg, ref, price, what):
     """SPEC_FIX_B: a price must be a usable number. A rate that is not a number, is not finite or is negative is always
     refused (a negative price lowers the recorded spend). A zero input or output rate makes a finite cap vacuous, so it is
     refused for a direct provider while the budget is finite; a gateway model is checked by gateway.entry (free: true)."""
+    for key in ("input", "output"):
+        if key not in price:
+            raise ConfigError(f"{what} uses {ref}, whose price has no {key!r}: a price needs an input and an output rate")
+    for key in ("peak_multiplier", "long_context_above"):
+        if key in price:
+            v = price[key]
+            ok = (not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v)
+                  and (v >= 1 if key == "peak_multiplier" else v > 0))
+            if not ok:
+                raise ConfigError(f"{what} uses {ref}, whose price {key} is {v!r}: "
+                                  + ("a peak multiplier must be a finite number of at least 1" if key == "peak_multiplier"
+                                     else "a long-context threshold must be a positive number"))
     for key in RATE_KEYS:
         if key not in price:
             continue
@@ -411,6 +423,18 @@ class LLMCaller:
                        cache_write_tokens=write_5m, cache_write_1h_tokens=write_1h, window=None)
         return None if usd is None else usd * mult      # an unknown cost stays None, never a guess
 
+    def _unknown_cost_charge(self, tin, tout, cached, cu, mult, worst_nano):
+        """SPEC_FIX_B E1: the nano-dollars charged for a call whose cost cannot be computed: the larger of the call's worst
+        case (from the pre-send estimate, which a heuristic count or a provider that ignores max_tokens can exceed) and
+        its real usage priced with every write token at the highest rate the price has, at the worst multiplier."""
+        p = self.price
+        w5, w1 = cu["write_5m"], cu["write_1h"]
+        rate = max(p["input"], p.get("cache_write_5m") or 0, p.get("cache_write_1h") or 0)
+        fresh = max(tin - cached - w5 - w1, 0)
+        usd = (fresh * p["input"] + cached * p.get("cache_read", p["input"]) + tout * p["output"]
+               + (w5 + w1) * rate) / 1_000_000 * max(mult, self._worst_mult())
+        return max(worst_nano, to_nano(usd))
+
     def _worst_mult(self):
         """SPEC_PEAK_EDGES P1: before sending, a provider with a peak window is always priced at its peak, whatever the
         hour, so a call that runs into the window (or is billed by its start) never costs more than its worst case."""
@@ -585,7 +609,7 @@ class LLMCaller:
                 # SPEC_FIX_B E1: a priced model whose reply reports usage the price cannot cost (a cache write without a
                 # write rate). Unknown is never free to the cap: charge the call's worst case, as for a reply without usage,
                 # and say so. (An unpriced model has no price: a finite budget refused it at construction.)
-                nano, charged = worst_nano, "worst_case_unknown_cost"
+                nano, charged = self._unknown_cost_charge(tin, tout, cached, cu, mult, worst_nano), "worst_case_unknown_cost"
             truncated = is_truncated(msg)
             try:
                 emit("llm_call", call_id=call_id, status="ok", attempt=attempt, est_input=est_in, max_tokens=cap,
