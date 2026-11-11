@@ -161,14 +161,15 @@ sementara saja (dibersihkan refresh berikutnya).
 Status: **Atha 2026-11-11 "Ok bro"** (judul job di kartu viewer; bagian 1 dari 3: Argus, lalu issue ledger dan viewer).
 Penulis issue di 8711 menolak menulis issue viewer karena data job tidak punya judul (`pilots/control_ui/p5/RESULT.md`).
 
-**T1.** Proyeksi `job.json` (A1) mendapat `title` (string) bila ada: job `code` → baris pertama yang tidak kosong dari
-`inputs.issue` (judul issue, gaya Argus); job `research` → baris pertama yang tidak kosong dari `inputs.question`; jenis
+**T1.** Proyeksi `job.json` (A1) mendapat `title` (string) bila ada: job `code` → baris pertama yang tidak kosong (pemisah baris apa
+pun: `\n`, `\r`, `\u2028`, ...) dari `inputs.issue` (judul issue, gaya Argus); job `research` → baris pertama yang tidak kosong dari `inputs.question`; jenis
 lain (mis. `issue`) → tanpa `title`. Teksnya: karakter kontrol dan format tak terlihat dibuang (`CONTROL`, sama dengan
-D1), spasi berderet jadi satu, tepi dipotong, paling panjang 120 karakter (lebih panjang: 119 karakter + `…`). Kosong,
-bukan string, atau cocok dengan pola key (`KEY`) → tanpa `title` (job tetap terbit; issue/pertanyaan lain tidak ikut).
-Hanya judul yang terbit: sisa `inputs` (issue utuh, path repo, commit) tetap tidak. Job tanpa `inputs` (bentuk yang sudah terbit,
-diproyeksikan lagi oleh validasi A2) mengambil judulnya dari `title` lewat aturan yang sama, jadi proyeksi tetap
-memetakan dirinya sendiri.
+D1), spasi berderet jadi satu, tepi dipotong, paling panjang 120 karakter (lebih panjang: 119 karakter, spasi ujung dibuang, + `…`). Kosong,
+bukan string, atau cocok dengan pola key (`KEY`, diperiksa sebelum **dan** sesudah dipotong, jadi key yang terpotong di
+batas tidak terbit sebagian) → tanpa `title` (job tetap terbit; issue/pertanyaan lain tidak ikut).
+Hanya judul yang terbit: sisa `inputs` (issue utuh, path repo, commit) tetap tidak. Validasi A2 memproyeksikan job yang sudah terbit
+dengan mode terbit: judulnya hanya dari `title` lewat aturan yang sama (proyeksi memetakan dirinya sendiri); `title` milik
+`job.json` sumber tidak pernah dibaca (code review).
 
 **T2.** Ledger dan viewer tidak berubah oleh amandemen ini (ledger mengabaikan kunci yang tidak dikenalnya); mereka
 memakainya lewat issue masing-masing. Terbit pada refresh berikutnya sesudah `~/pilot3a_live` di-pull (timer 15 menit).

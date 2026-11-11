@@ -553,7 +553,7 @@ def title_of(tmp_path, source, **job):
     ({"kind": "research", "inputs": {"question": "Which agent harness?\nmore"}}, "Which agent harness?"),
     ({"kind": "research", "inputs": {"issue": "not a question"}}, None),
     ({"kind": "issue", "inputs": {"issue": "an issue job has none", "question": "x"}}, None),
-    ({"inputs": {"issue": "a\x07b\u202ec \t  d\u200b\x85e"}}, "abc de"),
+    ({"inputs": {"issue": "a\x07b\u202ec \t  d\u200b\x85e"}}, "abc d"),             # \x85 breaks the line
     ({"inputs": {"issue": "\u200b\x07\nreal title"}}, "real title"),
     ({"inputs": {"issue": "x" * 120}}, "x" * 120),
     ({"inputs": {"issue": "y" * 121}}, "y" * 119 + "…"),
@@ -562,8 +562,14 @@ def title_of(tmp_path, source, **job):
     ({"inputs": "not an object"}, None),
     ({"inputs": {"issue": "sk-ant-api03-abcdefghijkl leaked"}}, None),
     ({"inputs": {"issue": 'set token = "abc"'}}, None),
-    ({"inputs": None, "title": "pub\x07lished  title\nsecond"}, "published title"),   # a published job (A2)
-    ({"kind": "issue", "inputs": None, "title": "kept"}, "kept"),
+    ({"inputs": None, "title": "a source job's own title"}, None),          # read only from a published job
+    ({"inputs": {}, "title": "an inputs without the issue"}, None),
+    ({"inputs": {"issue": "Fix login\rRules: internal body"}}, "Fix login"),
+    ({"inputs": {"issue": "Fix login\x85body"}}, "Fix login"),
+    ({"inputs": {"issue": "Fix login\u2028body"}}, "Fix login"),
+    ({"inputs": {"issue": "Fix login\x0bbody\x0cmore"}}, "Fix login"),
+    ({"inputs": {"issue": "w" * 100 + " sk-proj-" + "A" * 40}}, None),     # a key across the cut: nothing of it
+    ({"inputs": {"issue": "v" * 118 + " tail words"}}, "v" * 118 + "…"),     # no space before the mark
 ])
 def test_a_job_publishes_the_first_line_of_its_issue_or_question_as_its_title(tmp_path, source, job, title):
     assert title_of(tmp_path, source, **job) == title
@@ -575,3 +581,10 @@ def test_only_the_title_of_the_inputs_is_published(tmp_path, source):
     published = snapshot_bytes(tmp_path / "data")
     for secret in (b"body words", b"/home/ubuntu", b"c0ffee1234", b"the issue text"):
         assert secret not in published
+
+
+def test_a_published_title_projects_to_itself_and_is_cleaned_again():
+    pub = {"job": "jp", "kind": "code", "title": "Show the title", "stages": {}}
+    assert sd.project_job(pub, "jp", published=True) == pub
+    assert sd.project_job({**pub, "title": "pub\x07lished\nsecond"}, "jp", published=True)["title"] == "published"
+    assert "title" not in sd.project_job({**pub, "title": 'token = "x'}, "jp", published=True)
