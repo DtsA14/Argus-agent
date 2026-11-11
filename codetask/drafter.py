@@ -281,9 +281,9 @@ SYSTEM_VITEST = "\n".join([
     "- Writable: only what a fix needs. Protected: every test file (new and old) and everything else the agent must "
     "not change. A new test must be protected and not writable. Globs match files, never directories: write "
     "`src/**/*.test.jsx` or `src/list.jsx`, not `src`; every protected glob must match a file.",
-    "- Name every existing test file (*.test.*) in a validation: the harness refuses a draft that leaves one out, "
-    "and the whole old suite must keep passing. A validation names at most 15 files; split them over several "
-    "validations when there are more.",
+    "- Name validations only for the new tests and the existing test files close to the change. Every other existing "
+    "test file runs in the harness's own validations (old_tests_1, old_tests_2, ...): the whole old suite must keep "
+    "passing, and you need not list it. A validation names at most 15 files.",
     "- The sandbox has only the repository, Node and the environment's fixed packages: no npm install, no git, no "
     "network. An existing test that needs any of these fails there and no draft can pass: start unverifiable with "
     "`EXISTING TEST CONFLICT: <file>::<test name>` for it too.",
@@ -349,8 +349,31 @@ def _profile_text(p):
     return ", ".join(out)
 
 
-def draft_from_args(args, *, base, policy):
-    """SubmitDraft arguments -> (a W2a draft, problems). Only what the drafter may set comes from the arguments."""
+OLD_TESTS_ID, OLD_TESTS_PER = "old_tests_{}", 15
+
+
+def old_tests_validations(specs, new_tests, base_files, policy):
+    """SPEC_VITEST_FULL_REGRESSION amendment 1 (F5): the harness's own vitest validations `old_tests_<n>` for every
+    existing test file of the intake no validation of the drafter names, at most OLD_TESTS_PER files each in path order,
+    under ids no other validation uses; the whole old suite then runs whatever the drafter named."""
+    new = {t["path"] for t in new_tests or [] if isinstance(t, dict) and isinstance(t.get("path"), str)}
+    named = {p for v in specs for p in v["args"][1:]}
+    rest = dr.unnamed_test_files(new, named, base_files)
+    used, n, out = {v["id"] for v in specs}, 1, []
+    for i in range(0, len(rest), OLD_TESTS_PER):
+        while OLD_TESTS_ID.format(n) in used:
+            n += 1
+        files = rest[i:i + OLD_TESTS_PER]
+        out.append({"id": OLD_TESTS_ID.format(n), "executable": "vitest", "args": ["run", *files],
+                    "timeout_s": policy["validation_timeout_s"], "min_tests": len(files), "max_skipped": 0,
+                    "must_pass": [], "environment": policy["environment"]})
+        used.add(OLD_TESTS_ID.format(n))
+    return out
+
+
+def draft_from_args(args, *, base, policy, base_files=None):
+    """SubmitDraft arguments -> (a W2a draft, problems). Only what the drafter may set comes from the arguments.
+    base_files: the intake's files (a vitest draft gets the harness's old_tests_* validations from them, F5)."""
     if not isinstance(args, dict):
         return None, ["the arguments must be an object"]
     problems = [f"unknown argument {k!r}" for k in sorted(set(args) - SUBMIT_KEYS)]
@@ -392,6 +415,8 @@ def draft_from_args(args, *, base, policy):
         problems.append(f"tools must be a list of distinct names from {sorted(ct.CONTRACT_TOOLS)}")
     if problems:
         return None, problems
+    if vitest and base_files is not None:
+        specs += old_tests_validations(specs, args.get("new_tests"), base_files, policy)
     contract = {"scope": args.get("scope"), "validation": specs, "budget_profile": profile}
     if tools:
         contract["tools"] = list(tools)
@@ -624,7 +649,10 @@ def make_submit(*, inputs, policy, scfg, root, log, validate, source, collect=co
             log.emit("draft_submitted", submit=n, ok=True, problems=0, revise=revise, held=True)
             return {"content": ACCEPTED, "finished": True, "draft": held["draft"], "report": held["report"],
                     "args": args}
-        draft, problems = draft_from_args(args, base=inputs["intake"], policy=policy)
+        intake_dir = Path(root) / "fixtures" / "repos" / inputs["intake"]
+        draft, problems = draft_from_args(args, base=inputs["intake"], policy=policy,
+                                          base_files=snapshot(intake_dir, skip_cache=True)
+                                          if policy.get("runner") == "vitest" else None)
         if not problems:                       # before the sandbox: a contract the agent cannot meet is not checked
             problems = rewrite_problems(draft, policy, source)
         report = None
@@ -993,7 +1021,8 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
     env = cfg["drafter"]["environment"]
     versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3",
                 # 3: SPEC_CONTROL_UI amendment 2 (for_human taken and checked); a memo of a 2 is never reused
-                "SubmitDraft": f"3:{tool_version(scfg, [env])}", "ReviseDraft": f"3:{tool_version(scfg, [env])}"}
+                # 4: SPEC_VITEST_FULL_REGRESSION amendment 1 (the harness's old_tests_* validations)
+                "SubmitDraft": f"4:{tool_version(scfg, [env])}", "ReviseDraft": f"4:{tool_version(scfg, [env])}"}
     common = dict(log=log, retry=cfg["retry"], memo=memo, crash_at=crash_at, crash_marker=str(run_dir / ".crashed"))
     task_id = f"draft:{inputs['intake']}"
 

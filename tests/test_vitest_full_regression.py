@@ -135,13 +135,14 @@ def test_g7_harness_unrunnable_tests_are_refused_and_vitest_excluded_directories
         "it in the repository"]
 
 
-def test_f3_the_vitest_prompt_asks_for_every_old_file_and_the_python_one_does_not():
-    rule = "Name every existing test file (*.test.*) in a validation"
+def test_f3_the_vitest_prompt_leaves_the_old_files_to_the_harness_and_the_python_one_says_nothing_of_it():
+    rule = "Every other existing test file runs in the harness's own validations (old_tests_1, old_tests_2, ...)"
     assert rule in cdr.SYSTEM_VITEST and rule not in cdr.SYSTEM
+    assert "Name every existing test file (*.test.*) in a validation" not in cdr.SYSTEM_VITEST     # amendment 1, F5b
     assert "leave that file out of the validations" not in cdr.SYSTEM_VITEST
     assert ("changes behaviour that an existing test checks, still name that file, and start unverifiable with "
             "`EXISTING TEST CONFLICT: <file>::<test name>`") in cdr.SYSTEM_VITEST
-    assert "A validation names at most 15 files; split them over several validations" in cdr.SYSTEM_VITEST
+    assert "A validation names at most 15 files." in cdr.SYSTEM_VITEST
     assert "An existing test that needs any of these fails there" in cdr.SYSTEM_VITEST
 
 
@@ -210,3 +211,109 @@ def test_g5_g6_control_a_good_draft_passes(tmp_path, scfg):
                     {"src/sum.js": CLAMPED})
     r = check(root, draft([TARGET, ONLY_ADDS]), ref, scfg)
     assert r["ok"], r["problems"]
+
+
+# ---- amendment 1 (F5): the harness names the old test files the drafter left out -----------------------------------
+
+POLICY = {"environment": "pwa_node22", "runner": "vitest", "validation_timeout_s": 120, "profiles": ["default"],
+          "max_submits": 5}
+
+
+def submit_args(validation, new="src/clamp.test.js"):
+    return {"plan": {"files": ["src/sum.js"], "steps": ["floor the sum at 0"], "risks": ["none"]},
+            "scope": {"writable": ["src/sum.js"], "protected": ["src/*.test.js"]}, "validation": validation,
+            "new_tests": [{"path": new, "content": NEW_CLAMP}], "unverifiable": [], "budget_profile": "default",
+            "tools": ["edit_file"]}
+
+
+TARGET_ARGS = {"id": "target", "paths": ["src/clamp.test.js"], "must_pass": ["src/clamp.test.js::floors at 0"],
+               "min_tests": 1}
+
+
+def ids_and_files(d):
+    return [(v["id"], v["args"][1:]) for v in d["contract"]["validation"]]
+
+
+def test_f5_the_old_files_no_validation_names_run_in_the_harness_validations():
+    base = {**{f"src/t{i:02}.test.js": "x" for i in range(17)}, "src/sum.js": "x", "src/sum.test.js": "x"}
+    named = {"id": "near", "paths": ["src/sum.test.js"], "must_pass": [], "min_tests": 1}
+    d, problems = cdr.draft_from_args(submit_args([TARGET_ARGS, named]), base="sums", policy=POLICY, base_files=base)
+    assert problems == []
+    assert ids_and_files(d) == [("target", ["src/clamp.test.js"]), ("near", ["src/sum.test.js"]),
+                                ("old_tests_1", [f"src/t{i:02}.test.js" for i in range(15)]),
+                                ("old_tests_2", ["src/t15.test.js", "src/t16.test.js"])]
+    one, two = d["contract"]["validation"][2:]
+    assert one == {"id": "old_tests_1", "executable": "vitest", "args": one["args"], "timeout_s": 120, "min_tests": 15,
+                   "max_skipped": 0, "must_pass": [], "environment": "pwa_node22"}
+    assert two["min_tests"] == 2 and two["must_pass"] == []
+    assert dr.full_regression_problems(d, d["contract"], base) == []
+
+
+def test_f5_ids_skip_the_drafters_own_and_nothing_is_added_when_all_are_named():
+    base = {"src/sum.test.js": "x", "src/neg.test.js": "x"}
+    mine = {"id": "old_tests_1", "paths": ["src/clamp.test.js"], "must_pass": ["src/clamp.test.js::floors at 0"],
+            "min_tests": 1}
+    d, _ = cdr.draft_from_args(submit_args([mine]), base="sums", policy=POLICY, base_files=base)
+    assert ids_and_files(d) == [("old_tests_1", ["src/clamp.test.js"]),
+                                ("old_tests_2", ["src/neg.test.js", "src/sum.test.js"])]
+    every = {"id": "all", "paths": ["src/sum.test.js", "src/neg.test.js"], "must_pass": [], "min_tests": 2}
+    d, _ = cdr.draft_from_args(submit_args([TARGET_ARGS, every]), base="sums", policy=POLICY, base_files=base)
+    assert [v["id"] for v in d["contract"]["validation"]] == ["target", "all"]
+
+
+def test_f5_new_tests_left_out_directories_and_other_files_are_not_old_tests():
+    base = {"src/sum.test.js": "x", "src/clamp.test.js": "x", "node_modules/p/a.test.js": "x", "dist/b.test.js": "x",
+            "src/sum.js": "x", "src/a.spec.jsx": "x", "src/we ird.test.js": "x"}
+    d, _ = cdr.draft_from_args(submit_args([TARGET_ARGS]), base="sums", policy=POLICY, base_files=base)
+    assert ids_and_files(d) == [("target", ["src/clamp.test.js"]), ("old_tests_1", ["src/sum.test.js"])]
+
+
+def test_f5_a_python_draft_and_a_draft_without_the_intakes_files_get_nothing():
+    base = {"src/sum.test.js": "x"}
+    d, _ = cdr.draft_from_args(submit_args([TARGET_ARGS]), base="sums", policy=POLICY, base_files=None)
+    assert [v["id"] for v in d["contract"]["validation"]] == ["target"]
+    py = {"id": "target", "paths": ["tests/test_a.py"], "must_pass": ["tests/test_a.py::test_a"], "min_tests": 1}
+    d, _ = cdr.draft_from_args(submit_args([py]), base="sums", policy={**POLICY, "runner": "pytest"},
+                               base_files={"tests/test_b.py": "x", **base})
+    assert [v["id"] for v in d["contract"]["validation"]] == ["target"]
+
+
+class Log:
+    def __init__(self):
+        self.events = []
+
+    def emit(self, event, **kw):
+        self.events.append((event, kw))
+
+
+def test_f5_the_draft_a_submit_and_a_one_validation_revision_check_holds_every_old_file(tmp_path, monkeypatch):
+    intake_dir = tmp_path / "fixtures" / "repos" / "sums"
+    for p, text in {**BASE, "src/__pycache__/x.test.js": "x"}.items():
+        (intake_dir / p).parent.mkdir(parents=True, exist_ok=True)
+        (intake_dir / p).write_text(text)
+    checked = []
+
+    def check(draft, **kw):
+        checked.append(copy.deepcopy(draft))
+        return {"problems": ["stop here"], "baseline": None}
+    monkeypatch.setattr(cdr.dr, "check", check)
+    submit = cdr.make_submit(inputs={"intake": "sums", "issue": "i"}, policy=POLICY, scfg={}, root=tmp_path,
+                             log=Log(), validate=None, source=intake_dir)
+    first = submit(submit_args([TARGET_ARGS, {"id": "near", "paths": ["src/sum.test.js"], "must_pass": [],
+                                              "min_tests": 1}]), 1)
+    again = submit({"validation": [TARGET_ARGS]}, 2, last=first["args"], revise=True)
+    assert "old_tests" not in json_of(first["args"]) and "old_tests" not in json_of(again["args"])
+    assert [ids_and_files(d) for d in checked] == [
+        [("target", ["src/clamp.test.js"]), ("near", ["src/sum.test.js"]), ("old_tests_1", ["src/neg.test.js"])],
+        [("target", ["src/clamp.test.js"]), ("old_tests_1", ["src/neg.test.js", "src/sum.test.js"])]]
+
+
+def json_of(x):
+    import json
+    return json.dumps(x)
+
+
+def test_f5_the_drafters_tool_version_changed():
+    import inspect
+    src = inspect.getsource(cdr.build_graph)
+    assert '"SubmitDraft": f"4:' in src and '"ReviseDraft": f"4:' in src
