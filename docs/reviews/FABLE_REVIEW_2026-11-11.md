@@ -142,3 +142,23 @@ judge and issue-writer loops, `router/stage*.py`, `control*.py`, `acceptance/con
 
 **Order proposed:** D1 first (strict lane, small, high value), then D2, D6, D3 and D7 as one small batch, then D5 as a design problem. D1-D3 and D6-D7 are code the guarantees
 in `AGENTS.md` depend on, so each needs a test that fails on the old code and the usual process.
+
+## 9. Session A follow-up: forgeable verdict and the remaining files ([`AUDIT2_2026-11-11.md`](AUDIT2_2026-11-11.md))
+
+Fable read `harness/paid.py`, `budget.py`, `models/pricing.py`, `models/gateway.py`, `tools/web_fetch.py`, `tools/deepseek_web.py` in full; `router/stage.py`,
+`router/stage_viewer.py`, `acceptance/contract.py`, `acceptance/draft.py` only at the cited sections (so "staging: none found" is not a line-by-line result).
+The verdict-fix sketch was not built or run.
+
+| # | Finding (Fable) | Status | Claude's view | Action |
+|---|---|---|---|---|
+| E1 | **Unknown cost is charged as nothing (VIOLATED):** `cost_usd` returns `None` for a cache write without a write price; the ledger gets null but `Reservation.charge` adds 0 and `reconcile_ledger` skips it, so such calls are free to the cap | **verified** (`models/pricing.py:66-68` returns `None`; `harness/llm.py` `charge`: `self.used_nano += nano or 0`) | Narrow (needs a provider that reports cache-write tokens for a model priced without a write rate), but it contradicts "unknown cost is null, never 0" for the budget. | Fix first with D1: charge the worst case when cost is unknown and the budget is finite |
+| E2 | Zero and negative prices are not rejected: `check_priced` tests only for a missing entry; `{input: 0, output: 0}` on a direct provider makes a finite cap vacuous; a negative price lowers recorded spend; only the gateway guards this | **verified** that `check_priced` checks presence only (`harness/llm.py:119-131`); the gateway part is Fable's | Cheap to fix. | Refuse non-positive prices unless the model is marked free |
+| E3 | Forgeable verdict: no option makes it unforgeable. Recommended: must-fail canaries (pass, assertion-fail, error) written by the harness, a per-run nonce, and a node set frozen at approve; turns "print a clean report and exit 0" into a failure; targeted tampering (the chain-probe cheat) still passes, so "never apply a DONE job unread" stays. Sketch of 27 lines | design, **unverified** (not built) | A good, bounded answer; it also fits Atha's "reading the patch is still necessary" position. Build with the forger fixtures Fable lists as mutants (clean-report-and-exit-0, no-op `pytest_pyfunc_call`, dropped required node). | Spec (strict lane) after D1/E1/E2 |
+| E4 | Zero written on a billing assumption: an error with DeepSeek's own body or an empty 200 is recorded as 0, not null (`paid.py:98-103`, `117-120`) | **unverified** | Plausible; same class as E1. | Check with E1 |
+| E5 | Gateway provider pin is a prefix test and a reply that names no provider passes (`gateway.py:119-122`) | **unverified** | Pins protect price and data policy; check. | Low-medium |
+| E6 | Web tools hold as read (SSRF, redirects, size limits; paid search/fetch with key on stdin and an empty environment); `materialize` writes model-chosen paths without the jail but is safe via the lexical `_plain` and the intake refusing symlinks | **unverified**, positive | Good news, with the second item "by convention". | – |
+| E7 | Staging: no commit content runs outside a container (`git archive | tar -x`, modes changed without following links; containers with no network, read-only root, no capabilities; proxy `O_NOFOLLOW` with a peer-pid check). One host read follows a link (`package.json`, `stage_viewer.py:411`); `stage check` is forgeable by a conftest in the commit (the file says so) | **unverified**, partly a sampled reading | Positive; the `package.json` read is low. | Open it with `O_NOFOLLOW` |
+
+**Combined fix list from sessions A (sections 8-9), by risk:** D1 run wedge; E1 unknown cost charged as zero; E2 non-positive prices; D2 ledger durability; D6 unlabelled
+`RunValidation` output; D7 key redaction in error text; D3 `smoke_models.py` rule; then E3 (design) and the low items. D1, E1, E2, D2 are strict-lane code that the money and
+crash-resume guarantees in `AGENTS.md` depend on: each needs a test that fails on the old code, review, mutants and `verify_at`.
