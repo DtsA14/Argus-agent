@@ -91,13 +91,13 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | ADV | Advisory lane in `AGENTS.md` | in PR | This PR (Atha: yes, 2026-11-11) |
 | WEEKLY | One weekly line: Atha hours and Claude usage | open | Phase 1; Atha fills it, the scoreboard cites it |
 | FIX-A | D1 + D6 (+ tests for attacks A8, A7) | in PR | PR `fix-a-run-wedge`; spec `SPEC_FIX_A_RUN_WEDGE.md`; waits for `verify_at`, then merge |
-| ENV | One-repository spike (`cachetools`), then three sandbox environments | open | Phase 1 |
+| ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done (`pilots/outside_v0/ENV_SPIKE.md`): cachetools 416 tests in 0.6 s (needs `-o pythonpath=src`), boltons 621 in 3.7 s (BSD-3 confirmed, 25,874 lines), humanize unusable; the environment entries and the src-layout handling are not started (strict, deferred) |
 | GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
 | PRE | `PREFLIGHT.md`: ten issues by the fixed rule | open | Phase 1, after ENV |
 | EXP | The retrospective outside experiment (kill at 2 or fewer A of 10, success at 5 or more) | open | Phase 2; Atha's "go live" and verdict |
 | FIX-B | E1 + E2 | open | Phase 2, alongside EXP |
 | RC / GATE / VF / FIX-C | `ReportConflict` MVP; terminal gate; verdict forgery; ledger fsync and key redaction | open | Phase 3, only on a success verdict |
-| G4, G6 | Candidate suites measured; environments built | open | = ENV |
+| G4, G6 | Candidate suites measured; environments built | in PR | Measured for the sandbox (see ENV_SPIKE); building the environment entries still open |
 | G5 | Retrospective version first | done | Decided by Atha 2026-11-11 |
 | H1 | CSV half of A15 not exploitable (the CSV has no title) | done | Checked, section 13 |
 | H2 | Attacks A8, A9, A7, A10 become regression tests of the fixes | open | With FIX-A, FIX-C, VF |
