@@ -26,7 +26,7 @@ Belum diukur: perekat S dan T2 (bentuk field dari patch T1 ke issue viewer), men
 
 - S: `pilots/staging_stage17/` (7 langkah, semua sesuai harapan, tanpa model). Terukur: 149 dari 149 job nyata punya `max_usd`; kasus tanpa `max_usd` hanya teruji di tes.
 - T2 (`j20261111_131116_b7a9`): issue 044 ditulis Claude dari bentuk `max_usd` di patch T1 yang ter-apply (key sesudah `cost_usd`, angka, hilang bila tak ada). Draf pertama lolos ($0,0115; harness menjaga 46 tes lama lewat `old_tests_*`), agen 11 langkah ($0,0052), total $0,0167; patch bersih, tanpa penolakan, tanpa retry.
-- Biaya rantai: T1 tiga job ($0,0757 + $0,0770 + job ketiga) + T2 $0,0167; semuanya di bawah $0,30 (cek angka job ketiga di ledger sebelum menyimpulkan).
+- Biaya rantai: T1 tiga job ($0,0757 + $0,0770 + $0,0293) + T2 $0,0167 = **$0,1987**, di bawah $0,30; dua job T1 pertama ($0,1527) tidak menghasilkan patch yang dipakai.
 
 ## Perekat tambahan (S dan T2)
 
