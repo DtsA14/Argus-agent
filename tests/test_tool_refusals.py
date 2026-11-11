@@ -163,6 +163,7 @@ def test_finish_that_fails_to_write_is_refused_not_raised(tmp_path, monkeypatch)
 
 def test_every_reply_is_scrubbed_whatever_a_tool_returns(tmp_path, monkeypatch):
     b, _ = box(tmp_path)
+    b.allowed.add("list_files")
     monkeypatch.setattr(Toolbox, "listfiles", lambda self, args: "found: x" + BAD + "y")
     out = run(b, "ListFiles", path="src")
     assert out["content"] == "found: x\\ud800y"
