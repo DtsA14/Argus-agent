@@ -44,6 +44,7 @@ from acceptance import changed as ch
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
+from acceptance import leaks
 from harness.events import parse_lines
 from harness.llm import reconcile_ledger, to_nano
 from tools.web import problem as web_problem
@@ -794,6 +795,14 @@ def changed_lines(job, draft):
             "warning(s): read the diff in DRAFT_REVIEW.md"]
 
 
+def leak_lines(job, draft):
+    """SPEC_OLD_TEST_LEAKS: old tests the draft leaves alone that look like they will break (computed here from the
+    intake and the issue, not read from the drafter's report)."""
+    found = leaks.find(job.root / "fixtures" / "repos" / draft["base"], draft, job_issue(job))
+    return [f"old tests that may break (not changed by the draft): {', '.join(h['path'] for h in found)}: "
+            "read DRAFT_REVIEW.md"] if found else []
+
+
 def call_path_lines(draft_path, draft):
     """SPEC_DRAFT_CALL_PATH 2.3: the approve screen says when the draft's failing baseline runs through files that are
     not writable (from the drafter's check report next to the draft)."""
@@ -847,6 +856,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                  *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}; required: "
                    + (", ".join(v.get("must_pass") or []) or "none") for v in c["validation"]],
                  *changed_lines(job, draft),
+                 *leak_lines(job, draft),
                  *call_path_lines(path, draft),
                  f"tools added: {c.get('tools') or 'none'}; profile {profile}; one attempt ${need:.2f}",
                  *([f"network: ReadDocs on {len(cfg['web']['hosts'])} allowlisted hosts "
@@ -1476,6 +1486,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                 "writable: " + ", ".join(c["scope"]["writable"]),
                 *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
                 *changed_lines(job, draft),
+                *leak_lines(job, draft),
                 *call_path_lines(path, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     if d["state"] in (AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE):

@@ -990,3 +990,14 @@ def test_a_draft_may_carry_one_line_for_the_human_of_up_to_400_characters():
     assert dr.validate_draft(copy.deepcopy(DRAFT)) == []
     for text in ["Di halaman job muncul jam dibuat dalam WIB.", "x" * 400]:
         assert dr.validate_draft({**copy.deepcopy(DRAFT), "for_human": text}) == []
+
+
+def test_the_check_report_carries_the_old_tests_that_may_break(tmp_path, scfg, monkeypatch, good_report):
+    # SPEC_OLD_TEST_LEAKS L2a: the report always has `leaks` (here none), and takes what leaks.find answers for the
+    # intake, the draft and the issue it was given
+    assert good_report["leaks"] == []
+    seen = []
+    hit = [{"path": "tests/test_old.py", "line": 3, "kind": "list", "added": ["max_usd"]}]
+    monkeypatch.setattr(dr.leaks, "find", lambda base_dir, draft, issue: seen.append((base_dir, issue)) or hit)
+    report = run_check(make_root(tmp_path), patch(tmp_path, {"src/shop.py": FIXED}), scfg)
+    assert report["leaks"] == hit and seen[0][0].name == "shop" and seen[0][1] == "the total can go negative"

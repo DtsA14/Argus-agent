@@ -46,6 +46,7 @@ from pathlib import Path
 from . import changed as ch
 from . import contract as ct
 from . import intake
+from . import leaks
 from .validation import (MAX_NODES, VITEST_EXCLUDED_DIRS, VITEST_FILE, VITEST_LIKE, collect_nodes, kind, red_check,
                          run_validation)
 from .workspace import diff, digest, snapshot
@@ -495,6 +496,7 @@ def check(draft, *, task, issue, max_usd, max_iterations, reference_patch, sandb
     if problems:
         return {**report, "problems": problems}
     new_paths = red_paths(draft)
+    report["leaks"] = leaks.find(base_dir, draft, issue)
     if draft.get("changed_tests"):
         report["changed"] = changed_record(base_files, draft)
         report["warnings"] = [w for t in draft["changed_tests"]

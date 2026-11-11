@@ -1020,6 +1020,7 @@ def review_text(run_id, inputs, state, cost, source=None):
                             fence(ex, "text")]
             out += ["", "The file:", "", fence(t["content"], "python")]
         out += _changed_text(draft, report, source)
+        out += _leaks_text(report)
         notes = draft["unverifiable"]
         out += ["", "## Not verified automatically", ""] + ([f"- {cell(n, 500)}" for n in notes] or ["Nothing."])
     else:
@@ -1039,6 +1040,22 @@ def review_text(run_id, inputs, state, cost, source=None):
                       f"--issue-file runs/{run_id}/issue.txt --max-usd <cap> --max-iterations <n> --no-reference",
                       "bash")]
     return "\n".join(out) + "\n"
+
+
+def _leaks_text(report):
+    """SPEC_OLD_TEST_LEAKS: old tests the draft leaves alone that look like they will break with the new behaviour."""
+    leaks = report.get("leaks")
+    if leaks is None:
+        return []
+    if not leaks:
+        return ["", "No old test looks affected (a heuristic: Python key lists and dicts only)."]
+    out = ["", "## Old tests that may break", "",
+           "The new tests expect a key list or dict that an old test still expects without the keys named below. The "
+           "draft does not change these files, and the agent cannot (they are protected): add them to changed_tests, "
+           "or the agent will fail on them (a heuristic; it may be wrong).", ""]
+    out += [f"- `{cell(h['path'])}` line {h['line']} ({h['kind']}): the new tests expect it plus "
+            + ", ".join(f"`{cell(a)}`" for a in h["added"]) for h in leaks]
+    return out
 
 
 def _changed_text(draft, report, source):
