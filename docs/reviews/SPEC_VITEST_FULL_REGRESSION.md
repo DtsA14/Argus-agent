@@ -94,3 +94,47 @@ Run tambahan per validasi: viewer seluruh suite ±3 detik. Drafter yang lupa sat
 - **K2.** Python tidak ikut (sympy terlalu besar). Usul: ya. **Lanjutan (tidak sekarang):** suite `argus-ledger` kecil, cakupan
   Python untuk repo kecil dicatat di `PENDING.md`.
 - **K3.** Draf lama yang belum di-approve diperiksa dengan aturan baru. Usul: ya (saat ini tidak ada).
+
+## 6. Amandemen 1 (2026-11-11): harness menyebut sendiri berkas tes lama yang tidak disebut drafter
+
+Status: **Atha 2026-11-11 "Ok setuju breakdown nya"** (PENDING 3a, bagian 3a-1).
+
+**Masalah.** Job viewer judul (`j20261111_073447_cc5a` d1) NO_DRAFT: 5 submit habis untuk kesalahan formulir, yang
+terakhir `ReviseDraft` dengan satu validasi saja (field `validation` mengganti seluruh daftar), sehingga 46 berkas tes lama
+"is in no validation". Ketiga kali di viewer (030, 031). Drafter juga memakai langkah membaca node id tes lama untuk
+`must_pass` yang tidak diperlukan F1 (berkas yang disebut sudah wajib hijau seluruhnya, F2).
+
+**F5.** Untuk draf vitest, harness sendiri menambahkan ke kontrak validasi `old_tests_<n>` (n = 1, 2, ...; nomor
+berikutnya yang belum dipakai id lain) untuk setiap berkas tes lama (definisi F1a, termasuk pengecualian direktori F1)
+yang tidak disebut validasi mana pun dari drafter: paling banyak 15 berkas per validasi, urut path, `must_pass` kosong,
+`min_tests` = jumlah berkasnya (setiap berkas `*.test.*` punya setidaknya satu tes; `max_skipped` 0 seperti validasi lain),
+batas waktu dan environment dari policy. Draf dibangun dengan validasi itu **sebelum** dicek (`dr.check`), jadi laporan,
+record, sha draf yang di-approve manusia, paket review dan run agen memakai kontrak yang sama; tidak ada yang diubah
+sesudah check atau approve. Ini membalik "Tidak dikerjakan: harness menyuntikkan validasi suite" di §2: kekhawatiran itu
+(kontrak dan sha berubah sesudah diikat) tidak terjadi karena penyuntikan terjadi saat draf dibuat.
+
+**F5a.** F1 tetap ada sebagai jaring pengaman (draf buatan tangan / `argus draft` tanpa drafter tetap harus menyebut
+semua berkas). F1b tidak berubah. Python tidak berubah (F4).
+
+**F5b. Prompt.** Baris "Name every existing test file (*.test.*) in a validation: the harness refuses a draft that leaves
+one out ..." diganti: drafter hanya menyebut validasi untuk tes baru dan tes lama yang dekat dengan perubahan; berkas tes
+lama lain dijalankan harness dalam validasi `old_tests_*` miliknya, dan seluruh suite lama tetap wajib hijau. Baris
+`EXISTING TEST CONFLICT` tetap. Ditambah: bila validasi `old_tests_*` gagal pada kode sekarang, sebut berkas yang gagal di
+validasi drafter sendiri (berkas itu keluar dari `old_tests_*`) dan, bila tidak bisa lolos di sandbox, mulai `unverifiable`
+dengan `EXISTING TEST CONFLICT`.
+
+**Code review (2026-11-11).** Diperbaiki: id validasi yang bukan teks tidak lagi membuat submit crash (kontrak yang
+menolaknya); prompt menjelaskan validasi `old_tests_*` yang gagal. Tidak diubah: daftar berkas dari
+`fixtures/repos/<intake>` (sama dengan yang dipakai `check` untuk F1; intake dibekukan dan dicek `intake.check`);
+berkas tes symlink (F1 sudah mewajibkannya sebelum amandemen ini, dan intake menolak symlink); hash ganda per submit
+(repo viewer kecil).
+
+**Tidak dikerjakan di 3a-1:** `ReviseDraft` per `id` (F5 sudah menutup kerugiannya: validasi yang hilang karena revisi
+berarti berkasnya kembali ke `old_tests_*`; ganti per id juga membuat validasi dengan id salah tidak bisa dibuang). Perbaikan
+formulir lain (id huruf kecil, tes baru otomatis protected, glob protected yang tidak cocok, petunjuk node id lengkap)
+adalah 3a-2.
+
+**Tes wajib (mutants).** Berkas yang tidak disebut masuk `old_tests_*`, yang disebut tidak; potong 15 dan urutan path;
+nomor id melompati id drafter yang sama; `min_tests`, `must_pass` kosong, policy; tes baru dan direktori yang dikecualikan
+tidak masuk; draf Python tanpa validasi tambahan; draf yang dibangun = draf yang dicek dan di-record (sha); revisi dengan
+satu validasi tetap lolos F1; prompt.

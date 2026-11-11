@@ -246,6 +246,13 @@ def repo_protected_problems(draft, contract, base_files, protected):
     return problems
 
 
+def unnamed_test_files(new_paths, named, base_files):
+    """The existing test files of the intake (F1a, the directories F1 leaves out skipped) that no vitest validation
+    names: those F1 refuses, and those the drafter's harness adds in its own validations (amendment 1, F5)."""
+    return [f for f in sorted(base_files) if f not in new_paths and f not in named
+            and not VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]) and VITEST_FILE.match(f) and intake._plain(f)]
+
+
 def full_regression_problems(draft, contract, base_files):
     """SPEC_VITEST_FULL_REGRESSION F1: a vitest draft names every existing test file of the intake (base_files: the job
     commit's snapshot; the draft's new tests are not existing ones) in a vitest validation, so the whole old suite must
@@ -257,15 +264,14 @@ def full_regression_problems(draft, contract, base_files):
         return []
     new = {t["path"] for t in draft["new_tests"]}
     named = {f for v in contract["validation"] if kind(v) == "vitest" for f in v["args"][1:]}
-    problems = []
+    problems = [f"existing test file {f} is in no validation (a vitest draft runs every existing test file)"
+                for f in unnamed_test_files(new, named, base_files)]
     for f in sorted(base_files):
         if f in new or VITEST_EXCLUDED_DIRS.intersection(f.split("/")[:-1]):
             continue
         if VITEST_FILE.match(f) and intake._plain(f):
-            if f not in named:
-                problems.append(f"existing test file {f} is in no validation (a vitest draft runs every existing "
-                                "test file)")
-        elif VITEST_LIKE.search(f.rsplit("/", 1)[-1]):
+            continue
+        if VITEST_LIKE.search(f.rsplit("/", 1)[-1]):
             problems.append(f"test file {f} cannot be run by the harness (only *.test.js|jsx|ts|tsx with plain "
                             "names): rename it in the repository")
     return problems
