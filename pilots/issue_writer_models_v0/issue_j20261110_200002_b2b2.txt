@@ -1,0 +1,21 @@
+Show how long each stage took on the job page
+
+Today the stage table on the job page has the columns stage, kind, status, cost and share, and no time information. The human wants a duration per stage, such as "2m 14s", computed from the stage's started_at to its ended_at, shown as a new column after share.
+
+Rules:
+1. Each stage row gets a sixth cell after the share cell, holding the duration text. The header row gets a matching sixth th with text "duration" (inside the sr-only thead).
+2. The duration is ended_at minus started_at, in whole seconds (fractions dropped). Examples: started_at 10:00:00, ended_at 10:02:14 shows "2m 14s"; 10:00:00 to 10:00:45 shows "45s"; 10:00:00 to 11:01:01 shows "1h 1m 1s"; 10:00:00 to 10:00:00 shows "0s".
+3. Under one hour: "Nm Ss" when minutes are at least 1, otherwise "Ns". At one hour or more: "Hh Mm Ss". Seconds and minutes are never padded with zero.
+4. A stage with no started_at or no ended_at (for example a stage still running) shows "-" in its duration cell.
+5. The sum row gets an empty sixth cell, as the other sum cells are empty.
+6. The costliest-row class, the share, the cost and the mismatch warning do not change.
+
+Nothing else changes: the stage order, the cost and share texts, the "no stages" text, the decisions table and the timeline classes stay as they are.
+
+Tests: build a job whose stages_detail has three stages with started_at and ended_at as in rule 2 and one stage with ended_at null. Check the duration cell texts are "2m 14s", "45s", "1h 1m 1s" and "-", the header has "duration", and the sum row's sixth cell is empty. Check the existing cell texts for the first five cells are unchanged.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-stages-timeline.test.jsx line 216: cellsOfRow compares every row's cells with an exact list of five texts; a sixth duration cell makes these toEqual checks fail (lines 216-218).
+- src/job-page-share.test.jsx line 109: takes the last cell of each row as the share (cells.length > 4); with a duration cell after share, the last cell is no longer the share.
+Environment: pwa_node22

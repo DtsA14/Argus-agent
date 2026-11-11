@@ -1,0 +1,22 @@
+Show each stage’s elapsed duration on the job page
+
+The job page currently shows each stage’s name, kind, status, cost, and share, but not how long it ran. Add a duration column calculated from each stage’s `started_at` and `ended_at` timestamps.
+
+1. Add a column headed `duration` after the existing `share` column in the stages table. For a stage with `started_at: "2025-04-01T08:00:00Z"` and `ended_at: "2025-04-01T08:02:14Z"`, show `2m 14s` in that stage’s duration cell. Keep the existing columns and their order unchanged.
+2. Format elapsed whole seconds compactly: omit zero hour/minute units, but always show seconds if the duration is under a minute; when hours are present, show hours, minutes, and seconds. Examples: 0 seconds → `0s`; 59 seconds → `59s`; 60 seconds → `1m`; 61 seconds → `1m 1s`; 3,723 seconds → `1h 2m 3s`. Discard fractional seconds (for example, 1.9 seconds → `1s`).
+3. Show `-` if either timestamp is absent, `null`, invalid, or if `ended_at` is earlier than `started_at`. For example, a stage with `started_at: null` and `ended_at: "2025-04-01T08:02:14Z"` shows `-`; a stage with invalid `started_at: "not-a-date"` also shows `-`. Stages without timestamp fields must continue to render, with `-` for duration.
+4. Keep the stages’ existing order and values, the costliest-stage mark, and the cost sum row. The sum row gets an empty duration cell; for example, its existing `sum` and `$0.0800` cells remain unchanged and its duration cell is empty. A job with no stages continues to show `no stages` and no stages table.
+
+Nothing else changes: keep the other job details, stage columns, stage ordering, cost/share calculations, costliest-stage marking, sum and mismatch message, and decisions display as they are. Existing tests that assert the old exact number of columns or full cell arrays must be adjusted for the added duration column; they cannot pass unchanged.
+
+Tests: Cover a 2m 14s duration from `2025-04-01T08:00:00Z` to `2025-04-01T08:02:14Z`; zero, 59, 60, 61, and 3,723 seconds (expect `0s`, `59s`, `1m`, `1m 1s`, and `1h 2m 3s`); fractional seconds truncating to `1s`; missing, null, and invalid timestamps and reversed timestamps showing `-`; and a sum-row duration cell that is empty. Confirm the new `duration` heading follows `share`, and that a job with no stages still shows `no stages`.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-stages-timeline.test.jsx line 184: The test expects exactly five stage headings; the requested duration heading makes six.
+- src/job-page-stages-timeline.test.jsx line 216: The test expects an exact five-cell stage row; the duration value adds a sixth cell.
+- src/job-page-stages-timeline.test.jsx line 243: The test expects exactly five sum-row cells; the added duration column requires an empty sixth cell.
+- src/job-page-share.test.jsx line 132: This test expects exactly the old five headings; the duration heading adds a sixth.
+- src/job-page-share.test.jsx line 157: This test expects exactly the old five headings; the duration heading adds a sixth.
+- src/job-page-share.test.jsx line 224: This test expects exactly the old five headings; the duration heading adds a sixth.
+Environment: pwa_node22
