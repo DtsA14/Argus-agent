@@ -90,7 +90,13 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
       `scope:no_test_detection` (#436, kode produksi yang mengenali pytest/vitest gagal di acceptance), (3) peringatan sebelum approve
       (#437, penasihat: `report["leaks"]`, bagian DRAFT_REVIEW, baris approve/status; Python saja). Belum:
       - [ ] (2) pesan "terjepit tes lama" saat `FAILED_ACCEPTANCE` karena tes lama terkunci (retry tak menolong; abandon + issue yang menyebut tes itu)
-      - [ ] ukur false positive `leaks` di job ledger nyata berikutnya (sampel awal: 3 draf issue 019, 2 benar dan 0 positif palsu); bila tepat, usul menolak draf dengan jalan keluar (spek baru)
+      - [ ] **Dari review Fable 2026-11-11** (`docs/reviews/FABLE_REVIEW_2026-11-11.md`, audit `AUDIT_2026-11-11.md` dan `AUDIT2_2026-11-11.md`; semuanya jalur ketat, urut risiko, tiap butir: tes yang gagal di kode lama, review, mutan, satu `verify_at`, "merge"):
+      - [ ] D1 run macet permanen: `Toolbox.run` hanya menangkap `PathEscape`/`FileNotFoundError`; WriteFile ke direktori yang ada, nama > 255 byte, atau surrogate membuat setiap resume crash lagi (`codetask/tools.py:254-257`); E1 biaya tidak diketahui dihitung nol ke cap (`models/pricing.py:66-68`, `Reservation.charge`); E2 harga nol/negatif tidak ditolak (`check_priced`)
+      - [ ] D2 `EventLog.emit` tanpa fsync, baris rusak non-final dilewati diam-diam; D6 hasil `RunValidation` tanpa label data (`codetask/tools.py:425-432`); D7 tidak ada redaksi key di teks error; D3 `scripts/smoke_models.py` memanggil model langsung (aturan `AGENTS.md`)
+      - [ ] `ReportConflict` MVP (draf `FABLE_SPEC_REPORT_CONFLICT_v2.md`, belum disetujui): tool + verifikasi harness + `BLOCKED/test_conflict`, tanpa state `CONFLICT`/`--from-conflict`; lalu gerbang deteksi tes jadi terminal
+      - [ ] Verdict bisa dipalsukan oleh kode di proses tes (D5/E3): tes kenari + nonce + node set dibekukan saat approve (spek baru, sketsa di `AUDIT2`); sampai ada, "jangan apply job DONE tanpa dibaca"
+      - [ ] Papan skor dari `job.json` (tingkat sukses, biaya per PR termasuk job gagal, menit manusia batas atas), eksperimen sepuluh issue repo luar, dan rancangan serangan injeksi: belum dikerjakan (sesi Fable B2-B4 menunggu)
+    - [ ] ukur false positive `leaks` di job ledger nyata berikutnya (sampel awal: 3 draf issue 019, 2 benar dan 0 positif palsu); bila tepat, usul menolak draf dengan jalan keluar (spek baru)
       - [ ] `leaks` untuk JS/vitest (viewer): belum ada AST; pola kunci/array di `*.test.jsx`
       - [ ] pola deteksi tes yang belum dikenal gerbang (`os.environ["TESTING"]`, nama modul pemanggil); false positive bernama `NODE_ENV: 'test'` di config
     - [~] Celah: ~~drafter tidak mendeteksi tes lama yang akan bocor oleh fitur baru~~ (peringatan #437, lihat butir di atas); tersisa: tes
