@@ -142,7 +142,7 @@ def test_without_the_key_file_variable_the_writer_is_not_offered(tmp_path):
     s = Svc(tmp_path, key=None)
     try:
         _, _, text = s.request("GET", "/issues/new")
-        assert ci.KEY_ENV in text and "<form" not in text
+        assert f"{ci.WRITER_KEY_ENV} (or {ci.KEY_ENV}) is not set" in text and "<form" not in text
         s.new_job()
         _, _, page = s.request("GET", f"/issues/{JOB}")
         assert "Start job" not in page and "Your reply" not in page and "Discard" in page
@@ -229,7 +229,7 @@ def test_new_without_the_key_file_variable_is_refused(tmp_path):
         f = new_fields(s)
         s.control.issues.environ = {}
         status, _, text = s.post("/issues/new", f)
-        assert status == 409 and ci.KEY_ENV in text and s.spawner.calls == []
+        assert status == 409 and f"{ci.WRITER_KEY_ENV} (or {ci.KEY_ENV}) is not set" in text and s.spawner.calls == []
     finally:
         s.stop()
 

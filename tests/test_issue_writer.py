@@ -1008,7 +1008,8 @@ def test_a_file_too_large_to_search_is_said(tmp_path, monkeypatch):
     (root / "src" / "big.test.js").write_text("'share'\n" * 10)
     monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
     report = touch_gate(root)[0][0]
-    assert "src/big.test.js" not in report and "too large or too many to search" in report
+    assert "src/big.test.js:" not in report and "1 test file(s) too large or too many to search" in report
+    assert "SearchFiles them yourself: src/big.test.js" in report
 
 
 def test_an_incomplete_search_wants_the_code_even_without_test_lines_and_refuses_no_touch_as_missing(tmp_path,
@@ -1077,3 +1078,25 @@ def test_forty_old_test_lines_are_still_shown_with_their_code(tmp_path):
     root = touched_repo(tmp_path, tests=iw.HITS_SHOWN)
     problems, r = touch_gate(root)
     assert r is None and "found 40 line(s) in 1 file(s)" in problems[0] and "clash_check" in problems[0]
+
+
+def test_a_large_file_that_is_no_test_neither_wants_a_code_nor_hides_a_missing_touch_from_the_tests(tmp_path,
+                                                                                                  monkeypatch):
+    root = touched_repo(tmp_path, tests=0)
+    (root / "package-lock.json").write_text("x" * 100)
+    monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 50)
+    problems, r = touch_gate(root)
+    assert problems == [] and r["test_hits"] == 0                  # no clash_check round for the lock file
+    assert iw.scan(root, ["'share'"])[2] == ["package-lock.json"]
+
+
+def test_an_issue_given_back_with_its_clash_list_is_stored_with_one_list(source):
+    clash = [{"file": "src/a.test.js", "line": 1, "why": "reads x"}]
+    stored = gate(source, clashes=clash)[1]["issue"]
+    assert stored.count(iw.LOOSEN) == 1
+    for clashes in (clash, [{"file": "src/a.test.js", "line": 2, "why": "reads y"}]):
+        again = gate(source, issue=stored, clashes=clashes)[1]["issue"]
+        assert again == iw.with_clashes(ISSUE, clashes) + "\n" and again.count(iw.LOOSEN) == 1
+    assert gate(source, issue=stored)[1]["issue"] == ISSUE + "\n"   # no clash now: the old list goes too
+    assert iw.without_clash_list("a\n- b\n\nc") == "a\n- b\n\nc"      # a list of the writer's own stays
+

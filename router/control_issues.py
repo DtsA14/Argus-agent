@@ -213,7 +213,8 @@ class IssuePages:
     def new_page(self, message=None, bad=False, text="", repo=""):
         if self.key_file(writer=True) is None:
             return self._page("New issue", '<p><a href="/issues">Issues</a></p><h1>New issue</h1>'
-                              f'<p class="bad">{E(KEY_ENV)} is not set for the service: the writer cannot run.</p>')
+                              f'<p class="bad">{E(WRITER_KEY_ENV)} (or {E(KEY_ENV)}) is not set for the service: '
+                              'the writer cannot run.</p>')
         token = self.control.tokens.issue("issue-new", "", "")
         options = "".join(f'<option value="{E(r)}"{" selected" if r == repo else ""}>{E(r)}</option>'
                           for r in self.repos())
@@ -287,7 +288,8 @@ class IssuePages:
                      f'${float(d.get("max_usd") or 0):.2f}</p>')
         if not busy:
             if self.key_file(writer=True) is None and state in ri.REPLYABLE:
-                parts.append(f'<p class="bad">{E(KEY_ENV)} is not set for the service: the writer cannot run.</p>')
+                parts.append(f'<p class="bad">{E(WRITER_KEY_ENV)} (or {E(KEY_ENV)}) is not set for the service: '
+                             'the writer cannot run.</p>')
             elif state in ri.REPLYABLE:
                 hi = int(self.cfg["issue_writer"]["reply_max"])
                 parts.append(self._form(job, "reply", sha, f'<label>Your reply<textarea name="message" rows="3" '
@@ -400,7 +402,8 @@ class IssuePages:
                 (409, self.job_page(fresh, f"refused: {strip_refused(line) or 'the command failed'}", bad=True))
         key = self.key_file(writer=action in ("new", "reply"))
         if key is None:
-            return refuse(409, "key", f"{KEY_ENV} is not set for the service", job, text, repo)
+            return refuse(409, "key", (f"{WRITER_KEY_ENV} (or {KEY_ENV})" if action in ("new", "reply") else KEY_ENV)
+                          + " is not set for the service", job, text, repo)
         new_id = rj.new_job_id() if action == "new" else job.id
         if self.spawner.busy(new_id):
             return refuse(409, "busy", "the writer is still working on this job", job, text)
