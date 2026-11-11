@@ -117,9 +117,46 @@ def with_cache_markers(messages):
     return out
 
 
+RATE_KEYS = ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h")
+
+
+def check_price_values(cfg, ref, price, what):
+    """SPEC_FIX_B: a price must be a usable number. A rate that is not a number, is not finite or is negative is always
+    refused (a negative price lowers the recorded spend). A zero input or output rate makes a finite cap vacuous, so it is
+    refused for a direct provider while the budget is finite; a gateway model is checked by gateway.entry (free: true)."""
+    for key in ("input", "output"):
+        if key not in price:
+            raise ConfigError(f"{what} uses {ref}, whose price has no {key!r}: a price needs an input and an output rate")
+    for key in ("peak_multiplier", "long_context_above"):
+        if key in price:
+            v = price[key]
+            ok = (not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v)
+                  and (v >= 1 if key == "peak_multiplier" else v > 0))
+            if not ok:
+                raise ConfigError(f"{what} uses {ref}, whose price {key} is {v!r}: "
+                                  + ("a peak multiplier must be a finite number of at least 1" if key == "peak_multiplier"
+                                     else "a long-context threshold must be a positive number"))
+    for key in RATE_KEYS:
+        if key not in price:
+            continue
+        v = price[key]
+        if v is None and key not in ("input", "output"):
+            continue                      # an unset cache rate means "unknown", which cost_usd already treats as no price
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0:
+            raise ConfigError(f"{what} uses {ref}, whose price {key} is {v!r}: a price must be a finite number, "
+                              "zero or more")
+    if (not gateway.is_gateway(cfg, ref) and math.isfinite(usd_limit(cfg))
+            and (price.get("input") == 0 or price.get("output") == 0)):
+        raise ConfigError(f"{what} uses {ref}, whose input or output price is 0: with a finite budget.max_usd that "
+                          "model would cost nothing to the cap. Give it its real price (a free model goes through the "
+                          "gateway with free: true), or set max_usd: null")
+
+
 def check_priced(cfg, ref, what):
-    """Unpriced models are refused whenever a finite USD budget must be enforced."""
-    if price_for(cfg, ref) is not None:
+    """Unpriced models are refused whenever a finite USD budget must be enforced; a price must be usable numbers."""
+    price = price_for(cfg, ref)
+    if price is not None:
+        check_price_values(cfg, ref, price, what)
         return
     budget = cfg.get("budget") or {}
     if math.isfinite(usd_limit(cfg)):

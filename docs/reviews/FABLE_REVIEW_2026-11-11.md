@@ -14,7 +14,7 @@ Status: **done** (merged, with the evidence named) · **in PR** (written, not ye
 condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
 in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 
-**Counts (rows below):** done 4 · in PR 16 · open 27 · held 9 · dropped 9 · by design 3 · info 6 (total 74). The scoreboard is done; most documentation corrections (section A) and FIX-A (D1, D6) are in PRs, while C7, C9 and C10 stay open. Every other code fix waits for its phase.
+**Counts (rows below):** done 4 · in PR 21 · open 22 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Scoreboard, FIX-A and the ENV spike are merged (see their rows); FIX-B (E1, E2) is in a PR. C7, C9 and C10 stay open; every other code fix waits for its phase.
 
 ### A. Stale or unsupported documentation (section 2)
 | Id | What | Status | Evidence or next step |
@@ -37,7 +37,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 |---|---|---|---|
 | B1 | Memo keys and reservation-from-ledger upheld | info | – |
 | B2 | Estimate overrun handled after the money is spent (`run.py:442-455`) | by design | Heuristic counts; `AGENTS.md` already forbids calling it an absolute cap |
-| B3 | Tool versions hand-bumped; "safe to repeat" is a docstring; float money at the edges | in PR | Tool versions: the `RunValidation` version stays (see section 14 correction); the other two points stay open |
+| B3 | Tool versions hand-bumped; "safe to repeat" is a docstring; float money at the edges | done | Merged #446: the `RunValidation` version stays (section 14 correction); the other two points stay open |
 | B4 | `by` is `$USER` | held | Matters with a second approver |
 | B5 | No way to say "I am stuck" | open | RC, phase 3 |
 | B6 | Detection-gate hits are fed back to the agent | open | GATE, phase 3 (after RC) |
@@ -54,12 +54,12 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 ### C. Audit of the core guarantees (sections 8 and 9)
 | Id | What | Status | Evidence or next step |
 |---|---|---|---|
-| D1 | **Run wedge**: `Toolbox.run` catches only two exception types; a model-chosen input wedges the run on every resume | in PR | FIX-A: `Toolbox.run` refuses OSError/ValueError from the file-system tools and from `Finish`; paths and args shape checked; replies scrubbed; `memo.put` survives a lone surrogate (tests, 17 mutants killed, `verification/fix_a_run_wedge_mutants.log`) |
+| D1 | **Run wedge**: `Toolbox.run` catches only two exception types; a model-chosen input wedges the run on every resume | done | Merged #446 (`ef64710`): `Toolbox.run` refuses OSError/ValueError from the file-system tools and from `Finish`; paths and args shape checked; replies scrubbed; `memo.put` survives a lone surrogate; verify_at 3652 passed |
 | D2 | `EventLog.emit` never fsyncs; a damaged non-final line is skipped silently | open | FIX-C, phase 3 |
 | D3 | `scripts/smoke_models.py` calls a model outside `LLMCaller` | in PR | Exception written into `AGENTS.md` ("by decision"); no code change |
 | D4 | `get_num_tokens_from_messages` / `list_models` outside the ledger | open | Check whether they cost money (unverified) |
 | D5 | **Forgeable verdict** (tests share a process with the agent's code) | open | VF, phase 3 (spec from the canary-and-nonce sketch); until then "never apply a DONE job unread" |
-| D6 | `RunValidation` result unlabelled as data | in PR | FIX-A: `RUN_LABEL` line before the JSON; the tool version is deliberately not bumped |
+| D6 | `RunValidation` result unlabelled as data | done | Merged #446: `RUN_LABEL` line before the JSON; the tool version is deliberately not bumped |
 | D7 | No key redaction in error text | open | FIX-C, phase 3 |
 | D8 | Two processes on one job spend the reservation twice | dropped | Plan: does not move a measured number |
 | D9 | A config change on resume restarts the attempt | dropped | Same |
@@ -68,8 +68,8 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | D12 | Git and docker CLI inherit key variables | open | Fold into FIX-C if cheap |
 | D13 | Path jail, sandbox flags, no unsandboxed exec hold | info | Good news |
 | D14 | Memo keys, reservation, `durability="sync"` hold | info | Good news |
-| E1 | **Unknown cost charged as zero** to the reservation | open | FIX-B, phase 2 |
-| E2 | Zero and negative prices not rejected | open | FIX-B, phase 2 |
+| E1 | **Unknown cost charged as zero** to the reservation | in PR | FIX-B: a call whose cost cannot be computed is charged the larger of its worst case and its real usage at the highest write rate (`charged = worst_case_unknown_cost`); tests, 22 mutants killed (`verification/fix_b_unknown_cost_mutants.log`) |
+| E2 | Zero and negative prices not rejected | in PR | FIX-B: rates must be finite numbers of at least 0; zero input/output refused on a direct provider with a finite budget; peak multiplier at least 1; missing input/output refused |
 | E3 | Verdict-forgery fix (canaries, nonce, frozen node set) | open | = VF |
 | E4 | Zero written on a billing assumption (paid web) | dropped | Check with E1 only if cheap |
 | E5 | Gateway provider pin is a prefix test | dropped | Low |
@@ -90,12 +90,12 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | DOC | Documentation corrections and mutant logs | in PR | This PR |
 | ADV | Advisory lane in `AGENTS.md` | in PR | This PR (Atha: yes, 2026-11-11) |
 | WEEKLY | One weekly line: Atha hours and Claude usage | open | Phase 1; Atha fills it, the scoreboard cites it |
-| FIX-A | D1 + D6 (+ tests for attacks A8, A7) | in PR | PR `fix-a-run-wedge`; spec `SPEC_FIX_A_RUN_WEDGE.md`; waits for `verify_at`, then merge |
+| FIX-A | D1 + D6 (+ tests for attacks A8, A7) | done | Merged #446 (`ef64710`) |
 | ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done (`pilots/outside_v0/ENV_SPIKE.md`): cachetools 416 tests in 0.6 s (needs `-o pythonpath=src`), boltons 621 in 3.7 s (BSD-3 confirmed, 25,874 lines), humanize unusable; the environment entries and the src-layout handling are not started (strict, deferred) |
 | GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
 | PRE | `PREFLIGHT.md`: ten issues by the fixed rule | open | Phase 1, after ENV |
 | EXP | The retrospective outside experiment (kill at 2 or fewer A of 10, success at 5 or more) | open | Phase 2; Atha's "go live" and verdict |
-| FIX-B | E1 + E2 | open | Phase 2, alongside EXP |
+| FIX-B | E1 + E2 | in PR | PR `fix-b-unknown-cost`; spec `SPEC_FIX_B_UNKNOWN_COST.md`; waits for `verify_at`, then merge (phase 2 item done early: it needs no model) |
 | RC / GATE / VF / FIX-C | `ReportConflict` MVP; terminal gate; verdict forgery; ledger fsync and key redaction | open | Phase 3, only on a success verdict |
 | G4, G6 | Candidate suites measured; environments built | in PR | Measured for the sandbox (see ENV_SPIKE); building the environment entries still open |
 | G5 | Retrospective version first | done | Decided by Atha 2026-11-11 |

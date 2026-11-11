@@ -1,0 +1,16 @@
+KILLED   missing key allowed
+KILLED   multiplier unchecked
+KILLED   multiplier floor 0
+KILLED   threshold may be 0
+KILLED   cache None refused
+KILLED   input None allowed
+KILLED   bool allowed
+KILLED   nan/inf allowed
+KILLED   negative allowed
+KILLED   zero cache rate refused
+KILLED   gateway not exempt
+KILLED   zero refused with no budget
+KILLED   zero output allowed
+KILLED   zero input allowed
+KILLED   check_price_values not called
+survivors: []
