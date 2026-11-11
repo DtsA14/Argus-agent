@@ -14,7 +14,7 @@ Status: **done** (merged, with the evidence named) · **in PR** (written, not ye
 condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
 in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 
-**Counts (rows below):** done 10 · in PR 15 · open 22 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2). E1 waits for a decision. C7, C9 and C10 stay open; the remaining code fixes wait for their phase.
+**Counts (rows below):** done 10 · in PR 16 · open 21 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2). E1 waits for a decision; the experiment waits for Atha (variant, go live). C7, C9 and C10 stay open; the remaining code fixes wait for their phase.
 
 ### A. Stale or unsupported documentation (section 2)
 | Id | What | Status | Evidence or next step |
@@ -93,7 +93,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | FIX-A | D1 + D6 (+ tests for attacks A8, A7) | done | Merged #446 (`ef64710`) |
 | ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done; addendum: `more-itertools` (771 tests, 36.7 s, no option) replaces humanize; v0 can use boltons + more-itertools with no harness change; the src-layout handling (cachetools) is deferred |
 | GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
-| PRE | `PREFLIGHT.md`: ten issues by the fixed rule | open | Phase 1, after ENV |
+| PRE | `PREFLIGHT.md`: ten issues by the fixed rule | in PR | Draft prepared from metadata only (`pilots/outside_v0/PREFLIGHT_DRAFT.md`, two variants); final only after Atha picks the variant and it is committed before the first job. Rule amended: one issue per fix PR |
 | EXP | The retrospective outside experiment (kill at 2 or fewer A of 10, success at 5 or more) | open | Phase 2; Atha's "go live" and verdict |
 | FIX-B | E1 + E2 | done | E2 merged (#448); E1 held for Atha's decision (see row E1) |
 | RC / GATE / VF / FIX-C | `ReportConflict` MVP; terminal gate; verdict forgery; ledger fsync and key redaction | open | Phase 3, only on a success verdict |
