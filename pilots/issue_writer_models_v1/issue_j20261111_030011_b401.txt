@@ -1,0 +1,41 @@
+Add each stage's duration to the job page
+
+The job page's stages table shows stage, kind, status, cost and share, but nothing about how long a stage took. The human wants each stage row to also show its duration, read from the stage's `started_at` and `ended_at`, written like "2m 14s".
+
+Rules:
+- The stages table gets one more column, after the existing `share` column. Its header cell is a `th` with `scope="col"` and the text `duration`. The head stays `sr-only`, so the visible row is unchanged otherwise.
+- Every stage row gets one more cell, as the last cell of the row, holding the stage's duration. The other five cells keep their order and their texts: stage name, kind, status, `$` money, share.
+- The duration is `ended_at` minus `started_at`, taken as whole seconds (a fraction of a second is dropped, never rounded up).
+- Format: seconds only while under a minute; minutes and seconds while under an hour; hours, minutes and seconds from an hour on. Hours and minutes carry no padding.
+  - `started_at` `2025-04-01T08:00:00Z`, `ended_at` `2025-04-01T08:02:14Z` gives `2m 14s`
+  - `08:00:00Z` to `08:00:45Z` gives `45s`
+  - `08:00:00Z` to `08:00:00Z` gives `0s`
+  - `08:00:00Z` to `08:01:00Z` gives `1m 0s`
+  - `08:00:00Z` to `09:00:00Z` gives `1h 0m 0s`
+  - `08:00:00Z` to `09:01:01Z` gives `1h 1m 1s`
+  - `08:00:00Z` to `08:00:59.999Z` gives `59s`
+- A stage whose `started_at` or `ended_at` is absent or `null` shows `-` in that cell, and so does a stage whose `ended_at` is earlier than its `started_at`. Such a stage keeps its other five cells as they are.
+- `readStage` accepts `started_at` and `ended_at` as text or `null` or missing, and keeps the value it was given; any other type for them is still a body of the wrong shape and keeps showing the load error.
+- The `sum` row in the foot gets one more empty cell at its end, so the row has six cells; its texts stay `sum`, empty, empty, the total money, empty, empty.
+- Nothing is stored in the browser and no extra request is made: the durations come from the job body already fetched, and Refresh recomputes them from the new answer.
+- A stage name holding markup stays text: a stage named `<img src=x onerror=alert(1)>` adds no `img` element to the page, with or without a duration.
+
+Nothing else changes: the stages table is still `table.stages.block` with the same timeline classes on its body and foot, the `costliest` mark stays on the row of the stage that cost the most, the share column stays the fifth, the money of each stage is still shown from `cost_usd` and the sum still comes from `cost_nano`, `no stages` and `stage costs do not match the job cost` keep their texts, and the decisions table is untouched.
+
+Tests: in a new file `src/job-page-stage-duration.test.jsx`, with a job whose stages are `s-a` (`08:00:00Z` to `08:02:14Z`), `s-b` (`08:00:00Z` to `08:00:45Z`), `s-c` (`08:00:00Z` to `08:00:00Z`):
+- the head of the stages table holds `stage`, `kind`, `status`, `cost`, `share`, `duration`, and the last cell of the three stage rows is `2m 14s`, `45s`, `0s`;
+- the other cells of those rows keep `$` money and share as before;
+- the durations `1m 0s`, `1h 0m 0s`, `1h 1m 1s` and `59s` for the matching pairs above;
+- a stage with `started_at` `null`, a stage with `ended_at` missing and a stage whose `ended_at` is earlier than its `started_at` each show `-`, and the page still shows no `could not load`;
+- the `sum` row has six cells, its fourth cell is the total money and its last cell is empty;
+- Refresh after the answer changes `ended_at` of `s-a` to `08:05:00Z` shows `5m 0s` there, with two fetches of `/api/jobs/j1` and nothing in `localStorage` or `sessionStorage`;
+- a stage named `<img src=x onerror=alert(1)>` with a duration still leaves `document.querySelector('img')` null and its name as the first cell's text.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-stages-timeline.test.jsx line 184: Asserts the head holds exactly the five columns stage, kind, status, cost, share; the new duration column makes six.
+- src/job-page-stages-timeline.test.jsx line 216: cellsOfRow expects exactly five cells per stage row (['c-a','draft','DRAFTED','$0.0100','13%']); the duration cell adds a sixth.
+- src/job-page-stages-timeline.test.jsx line 243: The sum row's cells are asserted as exactly ['sum','','','$0.0800','']; the extra empty duration cell makes six.
+- src/job-page-share.test.jsx line 132: headings(table) must equal ['stage','kind','status','cost','share']; the new duration column breaks that list.
+- src/job-page-share.test.jsx line 108: shares() reads the last cell of a stage row as the share; with duration last it would read the duration instead.
+Environment: pwa_node22

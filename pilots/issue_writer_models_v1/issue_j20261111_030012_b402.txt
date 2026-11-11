@@ -1,0 +1,34 @@
+Show each stage's duration on the job page
+
+Today a stage row on the job page shows the name, the kind, the status, the cost and the share of the job cost, and the api's `started_at` and `ended_at` are not read at all. The human wants each stage to show how long it took, from `started_at` to `ended_at`, for example "2m 14s".
+
+- Every stage row gets one more cell, its duration, placed right after the cost cell and before the share cell. A stage `c-a` with cost `$0.0100`, a duration of 134 seconds and a share of `13%` shows the cells `c-a`, `draft`, `DRAFTED`, `$0.0100`, `2m 14s`, `13%`; the share cell stays the last cell of the row.
+- The head of the stages table gains a `duration` column header between `cost` and `share`, so the header cells read `stage`, `kind`, `status`, `cost`, `duration`, `share`. Like the other headers it stays hidden on the phone and the head keeps its `sr-only` class.
+- `readStage` reads `started_at` and `ended_at` from the stage. A stage that has no `started_at` or no `ended_at` (the field is absent or `null`, as for a stage still running) shows `-` in its duration cell and keeps all its other cells as they are. A field that is present but is neither `null` nor text makes the page say `could not load: a stage has an unexpected shape`, like the other bad stage shapes.
+- The duration is the whole number of seconds between `started_at` and `ended_at`, fractions dropped: a stage from `2025-04-01T08:00:00Z` to `2025-04-01T08:02:14Z` shows `2m 14s`, one from `2025-04-01T08:00:00Z` to `2025-04-01T08:02:14.900Z` shows `2m 14s` too.
+- It is written as `0s` under a minute, as `<m>m <s>s` under an hour, and as `<h>h <m>m <s>s` from an hour up, with the smaller units always written once the larger one is shown: 0 seconds shows `0s`, 45 seconds shows `45s`, 59 seconds shows `59s`, 60 seconds shows `1m 0s`, 134 seconds shows `2m 14s`, 3599 seconds shows `59m 59s`, 3600 seconds shows `1h 0m 0s`, 3661 seconds shows `1h 1m 1s`, 90061 seconds shows `25h 1m 1s`.
+- A stage whose `ended_at` is earlier than its `started_at`, or whose two times are text that is not a valid date, shows `-` in its duration cell and keeps its other cells; it is not a load error.
+- The `sum` row of the foot gains one empty cell for the duration, so its cells read `sum`, ``, ``, the summed cost, ``, `` — the duration cell of the sum row is empty, never `0s`.
+- The duration cell carries no class of its own; the timeline classes on the tbody and the tfoot, the `costliest` class on the dearest row and the hidden head stay exactly as they are.
+
+Nothing else changes: the stage rows stay in the order the api answers them, the money, kind, status and share cells keep their texts, the costliest stage keeps its `costliest` class, the `sum` row keeps its total taken from `cost_nano`, the line `stage costs do not match the job cost`, the `no stages` text and the decisions table are untouched, and reading the durations costs no extra request and stores nothing in the browser. The tests that pin five header cells, five cells of a stage row and five cells of the sum row are loosened by a human before this is built.
+
+Tests: write these in a new file src/job-page-stages-duration.test.jsx.
+
+- A job whose stage `c-a` runs from `2025-04-01T08:00:00Z` to `2025-04-01T08:02:14Z`: the header cells read `stage`, `kind`, `status`, `cost`, `duration`, `share` and the row's cells read `c-a`, `draft`, `DRAFTED`, `$0.0100`, `2m 14s`, `13%`, with the share still the last cell.
+- Durations of 0, 45, 60, 134, 3599, 3600 and 3661 seconds show `0s`, `45s`, `1m 0s`, `2m 14s`, `59m 59s`, `1h 0m 0s` and `1h 1m 1s`, and one of 90061 seconds shows `25h 1m 1s`.
+- A stage from `2025-04-01T08:00:00Z` to `2025-04-01T08:02:14.900Z` shows `2m 14s`.
+- A stage whose `ended_at` is `null` and a stage whose `started_at` is `null` each show `-` in the duration cell and keep `$0.0500` in the cost cell and `63%` in the share cell.
+- A stage from `2025-04-01T08:02:00Z` to `2025-04-01T08:00:00Z` shows `-`, and so does a stage whose `ended_at` is `soon`.
+- The `sum` row of a job with three stages shows the cells `sum`, ``, ``, `$0.0800`, ``, ``.
+- The duration cells carry no class, the tbody and tfoot keep their timeline classes, the header keeps `sr-only`, and the page makes only the one request to `/api/jobs/j1` and stores nothing in `localStorage` or `sessionStorage`.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- src/job-page-stages-timeline.test.jsx line 177: Pins the header cells to exactly ['stage','kind','status','cost','share']; the new 'duration' header makes six.
+- src/job-page-stages-timeline.test.jsx line 216: Pins each stage row to exactly five cells ('c-a','draft','DRAFTED','$0.0100','13%'); the duration cell makes six.
+- src/job-page-stages-timeline.test.jsx line 243: Pins the sum row to exactly five cells ['sum','','','$0.0800','']; the empty duration cell makes six.
+- src/job-page-share.test.jsx line 132: headings(table) equals ['stage','kind','status','cost','share']; the duration header makes six.
+- src/job-page-share.test.jsx line 157: Same exact five headings expectation; a duration header between cost and share breaks it.
+- src/job-page-share.test.jsx line 224: Same exact five headings expectation; a duration header between cost and share breaks it.
+Environment: pwa_node22

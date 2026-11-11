@@ -1,0 +1,3 @@
+Sudah saya tulis issue-nya: tiap baris stage di halaman job dapat kolom durasi ("2m 14s") dari started_at sampai ended_at, diletakkan tepat setelah biaya dan sebelum share. Kalau stage belum selesai (ended_at kosong) tampil "-", durasi 0 tampil "0s", satu jam ke atas tampil mis. "1h 0m 0s". Baris "sum" dapat satu sel durasi kosong.
+
+Masalahnya: beberapa test lama mengunci jumlah kolom dan isi sel persis (5 kolom), jadi harus dilonggarkan dulu oleh manusia sebelum dibangun — rinciannya ada di daftar benturan.
