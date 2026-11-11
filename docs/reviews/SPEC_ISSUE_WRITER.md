@@ -253,3 +253,30 @@ tidak berubah bentuk. Gate amandemen 3 tetap.
 tidak ada ditolak; hanya file tes yang dicari (file non-tes tidak masuk daftar), `.git` dan symlink dilewati; kode salah
 atau kosong ditolak dengan daftar dan kode, kode benar diterima; daftar dipotong 40/8; tanpa baris tes tidak perlu kode;
 prompt, versi alat, config max_submits.
+
+## Amandemen 5 (2026-11-11): touches terlalu umum, Haiku sebagai penulis, key penulis sendiri
+
+Status: **Atha 2026-11-11 "Ok dua-duanya"** (usul `pilots/issue_writer_models_v1/RESULT.md`, #418).
+
+**Masalah.** Replay n = 3 (#418): touches umum (`share`, `stages`) memberi 176-698 baris tes di 44 file; daftar 40 baris
+yang ditunjukkan hampir tidak berguna, dan model yang mempersempit touches ke teks persis (a403: daftar judul kolom)
+justru menemukan clash yang terlewat. Haiku menandai data API yang belum pasti 3/3 (DeepSeek 1017 0/3), 5× lebih cepat
+dan 3× lebih murah; clash yang terlewat masih tertangkap sebelum Start (Claude membaca issue) dan oleh tes lama di job
+code, data API yang salah tidak.
+
+**B1.** Bila baris tes yang memuat touches lebih dari 40 (`HITS_SHOWN`), submit ditolak tanpa kode `clash_check`:
+"touches terlalu umum" dengan jumlah baris dan file per touch, dan permintaan mengganti touch umum dengan teks persis yang
+dicek tes (daftar judul kolom, selector, kelas, kalimat) atau membuangnya. Daftar ≤ 40 baris tetap seperti amandemen 4
+(8 per file).
+
+**B2.** Role `issue_writer` = `openrouter:anthropic/claude-haiku-5.5` (K4 sebelumnya DeepSeek V4.1 Flash), tanpa
+param thinking DeepSeek; `issue_writer.turn.max_input_tokens` 150000 → 40000 (batas gateway Haiku #415, dicek
+`settings()`).
+
+**B3.** Service kontrol: giliran penulis (new, reply) memakai `ARGUS_CONTROL_WRITER_KEY_FILE` bila diisi, selain itu
+`ARGUS_CONTROL_KEY_FILE`; Start (job code) tetap `ARGUS_CONTROL_KEY_FILE`. Aturan key file (satu provider per file,
+tidak ada key lebih) tidak berubah. Atha menulis variabel itu di drop-in unit; Claude tidak membacanya.
+
+**Tes wajib (mutants).** > 40 baris ditolak tanpa kode dengan jumlah per touch; tepat 40 tetap ditunjukkan dengan kode;
+model, tanpa params, batas 40000; key penulis untuk new/reply, key lama untuk start, kosong → key lama, hanya key
+penulis → Start tidak ditawarkan dan ditolak.
