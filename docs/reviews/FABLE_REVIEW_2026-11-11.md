@@ -14,7 +14,7 @@ Status: **done** (merged, with the evidence named) · **in PR** (written, not ye
 condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
 in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 
-**Counts (rows below):** done 4 · in PR 12 · open 31 · held 9 · dropped 9 · by design 3 · info 6 (total 74). The scoreboard is done; most documentation corrections (section A) are in the PR that adds this board, while C7, C9 and C10 stay open. No code fix has been made yet: D1, D6, E1, E2 and the rest wait for their phase.
+**Counts (rows below):** done 4 · in PR 16 · open 27 · held 9 · dropped 9 · by design 3 · info 6 (total 74). The scoreboard is done; most documentation corrections (section A) and FIX-A (D1, D6) are in PRs, while C7, C9 and C10 stay open. Every other code fix waits for its phase.
 
 ### A. Stale or unsupported documentation (section 2)
 | Id | What | Status | Evidence or next step |
@@ -37,7 +37,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 |---|---|---|---|
 | B1 | Memo keys and reservation-from-ledger upheld | info | – |
 | B2 | Estimate overrun handled after the money is spent (`run.py:442-455`) | by design | Heuristic counts; `AGENTS.md` already forbids calling it an absolute cap |
-| B3 | Tool versions hand-bumped; "safe to repeat" is a docstring; float money at the edges | open | Check when touching `tools.py` (FIX-A) |
+| B3 | Tool versions hand-bumped; "safe to repeat" is a docstring; float money at the edges | in PR | Tool versions: the `RunValidation` version stays (see section 14 correction); the other two points stay open |
 | B4 | `by` is `$USER` | held | Matters with a second approver |
 | B5 | No way to say "I am stuck" | open | RC, phase 3 |
 | B6 | Detection-gate hits are fed back to the agent | open | GATE, phase 3 (after RC) |
@@ -54,12 +54,12 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 ### C. Audit of the core guarantees (sections 8 and 9)
 | Id | What | Status | Evidence or next step |
 |---|---|---|---|
-| D1 | **Run wedge**: `Toolbox.run` catches only two exception types; a model-chosen input wedges the run on every resume | open | FIX-A, phase 1 (gates the experiment) |
+| D1 | **Run wedge**: `Toolbox.run` catches only two exception types; a model-chosen input wedges the run on every resume | in PR | FIX-A: `Toolbox.run` refuses OSError/ValueError from the file-system tools and from `Finish`; paths and args shape checked; replies scrubbed; `memo.put` survives a lone surrogate (tests, 17 mutants killed, `verification/fix_a_run_wedge_mutants.log`) |
 | D2 | `EventLog.emit` never fsyncs; a damaged non-final line is skipped silently | open | FIX-C, phase 3 |
 | D3 | `scripts/smoke_models.py` calls a model outside `LLMCaller` | in PR | Exception written into `AGENTS.md` ("by decision"); no code change |
 | D4 | `get_num_tokens_from_messages` / `list_models` outside the ledger | open | Check whether they cost money (unverified) |
 | D5 | **Forgeable verdict** (tests share a process with the agent's code) | open | VF, phase 3 (spec from the canary-and-nonce sketch); until then "never apply a DONE job unread" |
-| D6 | `RunValidation` result unlabelled as data | open | FIX-A, phase 1 |
+| D6 | `RunValidation` result unlabelled as data | in PR | FIX-A: `RUN_LABEL` line before the JSON; the tool version is deliberately not bumped |
 | D7 | No key redaction in error text | open | FIX-C, phase 3 |
 | D8 | Two processes on one job spend the reservation twice | dropped | Plan: does not move a measured number |
 | D9 | A config change on resume restarts the attempt | dropped | Same |
@@ -90,7 +90,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | DOC | Documentation corrections and mutant logs | in PR | This PR |
 | ADV | Advisory lane in `AGENTS.md` | in PR | This PR (Atha: yes, 2026-11-11) |
 | WEEKLY | One weekly line: Atha hours and Claude usage | open | Phase 1; Atha fills it, the scoreboard cites it |
-| FIX-A | D1 + D6 (+ tests for attacks A8, A7) | open | Phase 1; gates the experiment |
+| FIX-A | D1 + D6 (+ tests for attacks A8, A7) | in PR | PR `fix-a-run-wedge`; spec `SPEC_FIX_A_RUN_WEDGE.md`; waits for `verify_at`, then merge |
 | ENV | One-repository spike (`cachetools`), then three sandbox environments | open | Phase 1 |
 | GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
 | PRE | `PREFLIGHT.md`: ten issues by the fixed rule | open | Phase 1, after ENV |
@@ -367,8 +367,7 @@ Fable merged the findings into a backlog (SB, DOC, FIX-A, ENV, PRE, EXP, FIX-B, 
    (Atha hours, Claude usage from the usage page) in a file under `verification/`, entered by Atha; the scoreboard cites it. Without it "cost per applied change" excludes the expensive part.
 2. **ENV starts with one repository.** Run a one-repo spike (`cachetools`, smallest and cleanest) end to end (environment, check, one issue) before committing to three. This is the plan's own fallback, taken first,
    because ENV is the largest unverified cost.
-3. **FIX-A implementation notes:** bump the `RunValidation` tool version when the label is added (memo keys carry the tool version; a resume of an older run must keep replaying its committed results); the D1 handler
-   must also cover a lone surrogate before `memo.put`.
+3. **FIX-A implementation notes:** ~~bump the `RunValidation` tool version when the label is added~~ **corrected 2026-11-11 (Claude's own error): do not bump it.** Memo keys carry the tool version and the next LLM step's key carries the messages, so a bumped version re-runs the tool on resume, changes its text and re-buys the model's reply; a run in flight must replay its stored text. A test now guards that the version stays. The D1 handler must also cover a lone surrogate before `memo.put` (done).
 4. **GUARD needs a data check:** confirm what the ledger's draft endpoint (Stage 14) returns (new test names, changed files, `for_human`) before promising the viewer change; if a field is missing it becomes a ledger change first.
 5. **EXP effort "M" is optimistic:** ten jobs through draft, approve, agent and judge, plus blind grading and per-repo environments; plan for two or three sessions of waiting, not one.
 6. **The 2 hours per week capacity** reaches the verdict only at week 8; say so to Atha before starting, so the schedule is a choice.

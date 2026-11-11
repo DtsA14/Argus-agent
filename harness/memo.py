@@ -38,6 +38,10 @@ class Memo:
     def put(self, key, value):
         """Commit durably. Returns only after the row is on disk."""
         payload = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        try:
+            payload.encode("utf-8")
+        except UnicodeEncodeError:     # a lone surrogate (a model's text): sqlite refuses it; escaped it is stored losslessly
+            payload = json.dumps(value, ensure_ascii=True, sort_keys=True)
         with self._lock:
             db = self._connect()
             try:

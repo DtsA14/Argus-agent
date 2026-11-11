@@ -895,3 +895,14 @@ def test_a_run_compares_with_the_input_file_so_an_old_line_does_not_fail_it(tmp_
     v = json.loads((tmp_path / "runs" / "t" / "verdict_0.json").read_text())
     assert {c["id"]: c["status"] for c in v["criteria"]}["scope:no_test_detection"] == "pass"
     assert r["status"] == st.DONE
+
+
+# ---- SPEC_FIX_A_RUN_WEDGE: a tool input the model chose never wedges a run ------------------------------------
+
+def test_a_write_onto_an_existing_directory_is_refused_and_the_run_goes_on_to_done(tmp_path):
+    mkpkg = call("WriteFile", {"path": "src/pkg/a.py", "content": "x = 1\n"}, "w0")
+    onto_dir = call("WriteFile", {"path": "src/pkg", "content": "x = 2\n"}, "w1")
+    r, model, d = run(tmp_path, [READ, mkpkg, onto_dir, WRITE, CHECK, FINISH])
+    assert r["status"] == st.DONE and (d / "workspace" / "src" / "calc.py").read_text() == FIXED
+    errors = [e for e in events(d) if e.get("event") == "tool_error"]
+    assert errors and errors[0]["tool"] == "write_file" and errors[0]["error"] == "IsADirectoryError"
