@@ -142,11 +142,13 @@ def is_test(rel):
 
 
 def scan(source, terms):
-    """(found, hits, incomplete) for the snapshot at source: the terms that occur in some file; every (file, line, text)
-    of a test file holding one, in file and line order; whether a bound or an unreadable file left something unread.
+    """(found, hits, incomplete, per) for the snapshot at source: the terms that occur in some file; every (file, line,
+    text) of a test file holding one, in file and line order; whether a bound or an unreadable file left something
+    unread; {term: (test lines, test files)} holding it.
     Read through the path jail like the read tools: no symlink or special file, .git skipped, SearchFiles' bounds."""
     jail = PathJail(source)
     found, hits, files, read, incomplete = set(), [], 0, 0, False
+    per = {t: [0, set()] for t in terms}
     for dirpath, dirnames, filenames in os.walk(jail.root, followlinks=False):
         here = os.path.relpath(dirpath, jail.root)
         dirnames[:] = sorted(d for d in dirnames if d != ".git" and not os.path.islink(os.path.join(dirpath, d)))
@@ -178,7 +180,10 @@ def scan(source, terms):
                     found.update(got)
                     if test:
                         hits.append((rel, n, line.strip()[:SEARCH_MAX_LINE]))
-    return found, hits, incomplete
+                        for t in got:
+                            per[t][0] += 1
+                            per[t][1].add(rel)
+    return found, hits, incomplete, {t: (n, len(f)) for t, (n, f) in per.items()}
 
 
 def hits_code(hits):
@@ -209,6 +214,18 @@ def hits_report(hits, code, incomplete):
     return "\n".join(out)
 
 
+def broad_report(hits, per):
+    """The rejection of touches whose old test lines are too many to read (amendment 5): the count per touch, so the
+    writer can replace the broad ones with the exact texts the tests assert on."""
+    files = len({f for f, _, _ in hits})
+    out = [f"your touches are too broad: the existing tests hold them in {len(hits)} line(s) in {files} file(s), more "
+           f"than the {HITS_SHOWN} the harness can show. Replace each broad touch with the exact text the tests assert "
+           "on (a whole list of column headers, a selector, a class, a sentence), or drop it; then submit again. Lines "
+           "per touch:"]
+    out += [f"  {t!r}: {n} line(s) in {k} file(s)" for t, (n, k) in per.items()]
+    return "\n".join(out)
+
+
 def touches_problems(args, source):
     """(problems, touches, test_hits) of an issue's touches and clash_check (amendment 4)."""
     touches = args.get("touches")
@@ -227,11 +244,13 @@ def touches_problems(args, source):
             terms.append(t.strip())
     if problems:
         return problems, [], 0
-    found, hits, incomplete = scan(source, terms)
+    found, hits, incomplete, per = scan(source, terms)
     missing = [t for t in terms if t not in found]
     if missing and not incomplete:          # an unread file may hold it: the list below says what was not searched
         return [f"touch {t!r} occurs in no file of the repository: name texts that exist, exactly as the code has them"
                 for t in missing], [], 0
+    if len(hits) > HITS_SHOWN:              # amendment 5: a list too long to read is no check; no code for it
+        return [broad_report(hits, per)], terms, len(hits)
     code = hits_code(hits)
     if (hits or incomplete) and args.get("clash_check") != code:
         return [hits_report(hits, code, incomplete)], terms, len(hits)

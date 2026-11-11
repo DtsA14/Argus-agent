@@ -33,6 +33,7 @@ from router import job as rj
 from router.control import strip_refused
 
 KEY_ENV = "ARGUS_CONTROL_KEY_FILE"
+WRITER_KEY_ENV = "ARGUS_CONTROL_WRITER_KEY_FILE"   # amendment 5: the writer's turns, when its provider differs
 STATE = Path.home() / ".local" / "state" / "argus-control"
 REFRESH_S = 3
 STEPS_SHOWN = 12                # the last writer steps a page shows while a turn runs (amendment 1, A2)
@@ -186,8 +187,9 @@ class IssuePages:
         v = (self.cfg.get("control") or {}).get("message_body_max")
         return v if isinstance(v, int) and not isinstance(v, bool) and v > BODY_MAX else BODY_MAX
 
-    def key_file(self):
-        k = self.environ.get(KEY_ENV)
+    def key_file(self, writer=False):
+        """The key file the CLI is given: for a writer's turn (new, reply) WRITER_KEY_ENV when set, else KEY_ENV."""
+        k = (self.environ.get(WRITER_KEY_ENV) if writer else None) or self.environ.get(KEY_ENV)
         return k if k else None
 
     def repos(self):
@@ -209,7 +211,7 @@ class IssuePages:
                           f'<div class="card">{listing}</div>')
 
     def new_page(self, message=None, bad=False, text="", repo=""):
-        if self.key_file() is None:
+        if self.key_file(writer=True) is None:
             return self._page("New issue", '<p><a href="/issues">Issues</a></p><h1>New issue</h1>'
                               f'<p class="bad">{E(KEY_ENV)} is not set for the service: the writer cannot run.</p>')
         token = self.control.tokens.issue("issue-new", "", "")
@@ -284,7 +286,7 @@ class IssuePages:
         parts.append(f'<p class="muted mono">spent ${rj.spent_nano(job) / 1e9:.4f} of '
                      f'${float(d.get("max_usd") or 0):.2f}</p>')
         if not busy:
-            if self.key_file() is None and state in ri.REPLYABLE:
+            if self.key_file(writer=True) is None and state in ri.REPLYABLE:
                 parts.append(f'<p class="bad">{E(KEY_ENV)} is not set for the service: the writer cannot run.</p>')
             elif state in ri.REPLYABLE:
                 hi = int(self.cfg["issue_writer"]["reply_max"])
@@ -396,7 +398,7 @@ class IssuePages:
             fresh = self.issue_job(job.id) or job
             return (200, self.job_page(fresh, "discarded")) if code == 0 else \
                 (409, self.job_page(fresh, f"refused: {strip_refused(line) or 'the command failed'}", bad=True))
-        key = self.key_file()
+        key = self.key_file(writer=action in ("new", "reply"))
         if key is None:
             return refuse(409, "key", f"{KEY_ENV} is not set for the service", job, text, repo)
         new_id = rj.new_job_id() if action == "new" else job.id

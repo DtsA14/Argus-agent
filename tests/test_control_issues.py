@@ -534,3 +534,40 @@ def test_the_chat_shows_the_human_as_bubbles_and_the_issue_card_holds_start(svc)
     card = text[text.index('<section class="card issue">'):]
     card = card[:card.index("</section>")]
     assert tiw.ISSUE.splitlines()[0] in card and f'action="/issues/{JOB}/start"' in card
+
+
+# ---- amendment 5: the writer's own key file ----------------------------------------------------------------------
+
+WRITER_KEY = "/nowhere/writer-key-file-path"
+
+
+def test_the_writer_turns_take_the_writer_key_file_and_start_the_code_job_one(svc):
+    svc.control.issues.environ = {ci.KEY_ENV: KEY, ci.WRITER_KEY_ENV: WRITER_KEY}
+    assert svc.post("/issues/new", new_fields(svc))[0] == 200
+    svc.new_job()
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/reply")
+    assert svc.post(f"/issues/{JOB}/reply", {"token": token, "sha": sha, "message": "Pakai jam"})[0] == 200
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/start")
+    assert svc.post(f"/issues/{JOB}/start", {"token": token, "sha": sha})[0] == 200
+    keys = [argv[argv.index("--key-file") + 1] for _, argv, _ in svc.spawner.calls]
+    assert keys == [WRITER_KEY, WRITER_KEY, KEY]
+
+
+def test_with_only_the_writer_key_file_the_writer_runs_and_start_is_neither_offered_nor_taken(svc):
+    svc.control.issues.environ = {ci.WRITER_KEY_ENV: WRITER_KEY}
+    assert svc.post("/issues/new", new_fields(svc))[0] == 200
+    svc.new_job()
+    text = svc.request("GET", f"/issues/{JOB}")[2]
+    assert f'action="/issues/{JOB}/reply"' in text and f'action="/issues/{JOB}/start"' not in text
+    svc.control.issues.environ = {ci.KEY_ENV: KEY, ci.WRITER_KEY_ENV: WRITER_KEY}
+    token, sha = svc.form(f"/issues/{JOB}", f"/issues/{JOB}/start")
+    svc.control.issues.environ = {ci.WRITER_KEY_ENV: WRITER_KEY}
+    status, _, text = svc.post(f"/issues/{JOB}/start", {"token": token, "sha": sha})
+    assert status == 409 and ci.KEY_ENV in text and len(svc.spawner.calls) == 1
+
+
+def test_an_empty_writer_key_variable_falls_back_to_the_key_file(svc):
+    svc.control.issues.environ = {ci.KEY_ENV: KEY, ci.WRITER_KEY_ENV: ""}
+    assert svc.post("/issues/new", new_fields(svc))[0] == 200
+    (_, argv, _), = svc.spawner.calls
+    assert argv[argv.index("--key-file") + 1] == KEY
