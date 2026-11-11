@@ -118,6 +118,27 @@ def _pick(raw, fields, where):
     return out
 
 
+TITLE_MAX = 120
+TITLE_FROM = {"code": "issue", "research": "question"}
+
+
+def job_title(raw):
+    """The job's title (amendment 9, T1): the first non-empty line of a code job's issue or a research job's question,
+    without control or invisible format characters, spaces folded, at most TITLE_MAX characters; None when there is
+    none or it looks like a key."""
+    inputs = raw.get("inputs")
+    text = inputs.get(TITLE_FROM.get(raw.get("kind"))) if isinstance(inputs, dict) else raw.get("title")
+    if not isinstance(text, str):        # raw.get("title"): a published job, projected again by validate (A2)
+        return None
+    line = next((ln for ln in text.split("\n") if CONTROL.sub("", ln).strip()), "")
+    line = " ".join(CONTROL.sub("", line).split())
+    if len(line) > TITLE_MAX:
+        line = line[:TITLE_MAX - 1] + "…"
+    if not line or KEY.search(line.encode()) or KEY.search(json.dumps(line).encode()):   # as typed, and as published
+        return None
+    return line
+
+
 def project_job(raw, job_id):
     """The published form of one job.json: only the allowlisted fields, every value checked (A1)."""
     if not isinstance(raw, dict):
@@ -125,6 +146,9 @@ def project_job(raw, job_id):
     out = _pick(raw, JOB_FIELDS, "job")
     if out.get("job", job_id) != job_id:
         raise Excluded("job.job is not its directory")
+    title = job_title(raw)
+    if title is not None:
+        out["title"] = title
     stages = raw.get("stages", {})
     if not isinstance(stages, dict):
         raise Excluded("job.stages is not an object")
