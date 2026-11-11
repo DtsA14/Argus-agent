@@ -1,0 +1,14 @@
+KILLED  no old_tests: 1 failed, 6 passed, 3 skipped in 0.77s
+KILLED  python drafts get them: 1 failed, 9 passed, 3 skipped in 0.75s
+KILLED  no cut at 15: 1 failed, 6 passed, 3 skipped in 0.91s
+KILLED  ids collide: 1 failed, 6 passed, 3 skipped in 0.75s
+KILLED  min_tests one: 1 failed, 6 passed, 3 skipped in 0.73s
+KILLED  old must_pass kept empty broken: 1 failed, 6 passed, 3 skipped in 0.75s
+KILLED  named counted unnamed: 1 failed, 6 passed, 3 skipped in 0.76s
+KILLED  bad id crashes: 1 failed, 12 passed, 3 skipped in 0.79s
+KILLED  intake files not given: 1 failed, 10 passed, 3 skipped in 0.74s
+KILLED  excluded dirs taken: 1 failed, 4 passed in 0.70s
+KILLED  unplain taken: 1 failed, 8 passed, 3 skipped in 0.73s
+KILLED  version kept: 1 failed, 11 passed, 3 skipped in 0.77s
+KILLED  prompt still asks for every file: 1 failed, 5 passed in 0.70s
+RESULT: 13/13 killed
