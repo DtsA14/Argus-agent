@@ -1,0 +1,2218 @@
+{
+  "applied": 62,
+  "applied_share_of_code_jobs": 0.521,
+  "applied_untouched_share": 0.9839,
+  "by_repo": {
+    "argus-ledger": {
+      "abandoned": 1,
+      "applied_untouched": 19,
+      "open": 1,
+      "rejected": 4
+    },
+    "argus-viewer": {
+      "abandoned": 7,
+      "applied_changed": 1,
+      "applied_untouched": 42,
+      "rejected": 6
+    },
+    "pilot3a_live": {
+      "abandoned": 2,
+      "failed": 2,
+      "open": 4
+    },
+    "sympy": {
+      "abandoned": 3,
+      "failed": 4,
+      "open": 15,
+      "rejected": 8
+    }
+  },
+  "caveat": "applied_untouched means the applied commit equals the reviewed patch (as_is); it is not a success rate and not 'mergeable untouched' (that needs grading by someone outside the loop). The denominator of applied_share_of_code_jobs counts every code job, including open ones.",
+  "code_jobs": 119,
+  "decisions_per_code_job": 1.916,
+  "generated_at": "2026-11-11T18:49:16Z",
+  "human_wait_s_upper_bound": {
+    "median": 117.5,
+    "n": 184,
+    "total": 1398073.0
+  },
+  "jobs_by_kind": {
+    "code": 119,
+    "issue": 5,
+    "research": 26
+  },
+  "jobs_dir": "/home/ubuntu/pilot3a_live/jobs",
+  "judge": {
+    "BLOCK": 1,
+    "PASS": 9,
+    "no judge": 109
+  },
+  "judge_coverage": 0.084,
+  "ledger_vs_stage_usd": {
+    "job_json": 6.624945884,
+    "ledger": 7.098973624
+  },
+  "not_known": [
+    "re-issues of one issue (jobs per applied change are by repo only)",
+    "who decided (by is $USER)",
+    "minutes of attention (waits include idle time)",
+    "Claude's token cost (outside the harness)",
+    "spend of stages cut off before their ledger was written (the ledger figure is used where it exists)"
+  ],
+  "outcomes": {
+    "abandoned": 13,
+    "applied_changed": 1,
+    "applied_untouched": 61,
+    "failed": 6,
+    "open": 20,
+    "rejected": 18
+  },
+  "rows": [
+    {
+      "created_at": "2026-10-22T19:34:03Z",
+      "decisions": 1,
+      "detail": "DRAFTING",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261022_193403_3beb",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0,
+      "state": "ABANDONED",
+      "usd_nano": 393710600,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-22T19:35:31Z",
+      "decisions": 2,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261022_193531_259d",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0.2612404,
+      "state": "ABANDONED",
+      "usd_nano": 261240400,
+      "wait_s": {
+        "draft": 438.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-23T03:12:05Z",
+      "decisions": 4,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261023_031205_d0f8",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0.079194288,
+      "state": "REVIEW_READY",
+      "usd_nano": 79194288,
+      "wait_s": {
+        "draft": 6480.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-23T06:21:22Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261023_062122_c7a4",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0.069648348,
+      "state": "REVIEW_READY",
+      "usd_nano": 69648348,
+      "wait_s": {
+        "draft": 258.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-23T10:45:29Z",
+      "decisions": 1,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261023_104529_ca7d",
+      "judge": "no judge",
+      "outcome": "failed",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0.03554676,
+      "state": "AGENT_FAILED",
+      "usd_nano": 35546760,
+      "wait_s": {
+        "draft": 229.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-23T12:56:59Z",
+      "decisions": 1,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261023_125659_6528",
+      "judge": "no judge",
+      "outcome": "failed",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0.015607512,
+      "state": "AGENT_FAILED",
+      "usd_nano": 15607512,
+      "wait_s": {
+        "draft": 430.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-23T16:41:14Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261023_164114_cfcb",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0.021590292,
+      "state": "REVIEW_READY",
+      "usd_nano": 21590292,
+      "wait_s": {
+        "draft": 1070.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T03:14:49Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_031449_052d",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "pilot3a_live",
+      "stage_usd_sum": 0.034938162,
+      "state": "REVIEW_READY",
+      "usd_nano": 34938162,
+      "wait_s": {
+        "draft": 2326.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T14:09:54Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_140954_dfb0",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.020234988,
+      "state": "REVIEW_READY",
+      "usd_nano": 20234988,
+      "wait_s": {
+        "draft": 205.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T17:42:23Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_174223_9b1c",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.02304723,
+      "state": "REVIEW_READY",
+      "usd_nano": 23047230,
+      "wait_s": {
+        "draft": 119.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T17:43:50Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_174350_0c81",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.037184052,
+      "state": "REVIEW_READY",
+      "usd_nano": 37184052,
+      "wait_s": {
+        "draft": 156.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T17:47:41Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_174741_e451",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.038767512,
+      "state": "REVIEW_READY",
+      "usd_nano": 38767512,
+      "wait_s": {
+        "draft": 95.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T17:50:33Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_175033_872b",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.01566033,
+      "state": "REVIEW_READY",
+      "usd_nano": 15660330,
+      "wait_s": {
+        "draft": 175.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T17:51:59Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_175159_6482",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.023113104,
+      "state": "REVIEW_READY",
+      "usd_nano": 23113104,
+      "wait_s": {
+        "draft": 144.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-24T18:14:55Z",
+      "decisions": 3,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261024_181455_d71c",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.060627588,
+      "state": "REVIEW_READY",
+      "usd_nano": 60627588,
+      "wait_s": {
+        "draft": 135.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-27T15:11:26Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261027_151126_f6bf",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.025930032,
+      "state": "REVIEW_READY",
+      "usd_nano": 25930032,
+      "wait_s": {
+        "draft": 365.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-27T15:13:20Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261027_151320_1514",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.08807265,
+      "state": "REVIEW_READY",
+      "usd_nano": 88072650,
+      "wait_s": {
+        "draft": 581.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-27T15:15:52Z",
+      "decisions": 2,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261027_151552_7cdd",
+      "judge": "no judge",
+      "outcome": "failed",
+      "repo": "sympy",
+      "stage_usd_sum": 0.063818604,
+      "state": "AGENT_FAILED",
+      "usd_nano": 63818604,
+      "wait_s": {
+        "draft": 615.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-27T15:19:22Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261027_151922_fcff",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.034859556,
+      "state": "REVIEW_READY",
+      "usd_nano": 34859556,
+      "wait_s": {
+        "draft": 465.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-27T17:56:10Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261027_175610_34ba",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.051481506,
+      "state": "REJECTED",
+      "usd_nano": 51481506,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-27T18:59:15Z",
+      "decisions": 5,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261027_185915_f13b",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.277281798,
+      "state": "REVIEW_READY",
+      "usd_nano": 277281798,
+      "wait_s": {
+        "draft": 500.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T03:01:46Z",
+      "decisions": 2,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_030146_c6ca",
+      "judge": "no judge",
+      "outcome": "failed",
+      "repo": "sympy",
+      "stage_usd_sum": 0.119727936,
+      "state": "AGENT_FAILED",
+      "usd_nano": 119727936,
+      "wait_s": {
+        "draft": 874.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T03:05:54Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_030554_244f",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.055225848,
+      "state": "REVIEW_READY",
+      "usd_nano": 55225848,
+      "wait_s": {
+        "draft": 791.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T03:09:12Z",
+      "decisions": 0,
+      "detail": "DRAFT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_030912_cae2",
+      "judge": "no judge",
+      "outcome": "failed",
+      "repo": "sympy",
+      "stage_usd_sum": 0,
+      "state": "DRAFT_FAILED",
+      "usd_nano": 0,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T03:09:15Z",
+      "decisions": 3,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_030915_ef15",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.186139056,
+      "state": "REVIEW_READY",
+      "usd_nano": 186139056,
+      "wait_s": {
+        "draft": 1285.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T03:13:52Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_031352_c162",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.0649338,
+      "state": "REVIEW_READY",
+      "usd_nano": 64933800,
+      "wait_s": {
+        "draft": 428.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T05:12:32Z",
+      "decisions": 2,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_051232_d2e8",
+      "judge": "no judge",
+      "outcome": "failed",
+      "repo": "sympy",
+      "stage_usd_sum": 0.161005962,
+      "state": "AGENT_FAILED",
+      "usd_nano": 161005962,
+      "wait_s": {
+        "draft": 978.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T05:14:33Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_051433_c363",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "sympy",
+      "stage_usd_sum": 0.013293264,
+      "state": "REVIEW_READY",
+      "usd_nano": 13293264,
+      "wait_s": {
+        "draft": 1300.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T05:16:13Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_051613_1861",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.039906078,
+      "state": "REJECTED",
+      "usd_nano": 39906078,
+      "wait_s": {
+        "draft": 1049.0,
+        "review": 1051852.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T06:58:12Z",
+      "decisions": 3,
+      "detail": "AGENT_RUNNING",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_065812_5cb1",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "sympy",
+      "stage_usd_sum": 0.20230254,
+      "state": "ABANDONED",
+      "usd_nano": 282619680,
+      "wait_s": {
+        "draft": 43.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-28T08:29:55Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_082955_aea9",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.031725912,
+      "state": "APPLIED",
+      "usd_nano": 31725912,
+      "wait_s": {
+        "draft": 474.0,
+        "review": 35277.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T09:14:19Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_091419_915f",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.052915044,
+      "state": "APPLIED",
+      "usd_nano": 52915044,
+      "wait_s": {
+        "draft": 2949.0,
+        "review": 29990.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T10:34:52Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_103452_6a83",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.02888355,
+      "state": "APPLIED",
+      "usd_nano": 28883550,
+      "wait_s": {
+        "draft": 626.0,
+        "review": 27562.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T10:56:08Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_105608_9d7a",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.048115398,
+      "state": "APPLIED",
+      "usd_nano": 48115398,
+      "wait_s": {
+        "draft": 247.0,
+        "review": 26508.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T11:18:34Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_111834_0ac4",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.041848788,
+      "state": "APPLIED",
+      "usd_nano": 41848788,
+      "wait_s": {
+        "draft": 101.0,
+        "review": 25342.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T11:39:09Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_113909_2235",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.062019858,
+      "state": "APPLIED",
+      "usd_nano": 62019858,
+      "wait_s": {
+        "draft": 293.0,
+        "review": 22932.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T12:13:36Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_121336_0231",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.034424142,
+      "state": "APPLIED",
+      "usd_nano": 34424142,
+      "wait_s": {
+        "draft": 1360.0,
+        "review": 20823.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T14:38:50Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_143850_e07b",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.047264208,
+      "state": "APPLIED",
+      "usd_nano": 47264208,
+      "wait_s": {
+        "draft": 39.0,
+        "review": 13354.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T14:55:20Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_145520_0b94",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.0337527,
+      "state": "APPLIED",
+      "usd_nano": 33752700,
+      "wait_s": {
+        "draft": 40.0,
+        "review": 12401.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T15:03:42Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_150342_8c2b",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.057499566,
+      "state": "REJECTED",
+      "usd_nano": 57499566,
+      "wait_s": {
+        "draft": 64.0,
+        "review": 11477.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T15:26:04Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_152604_5fde",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.08099808,
+      "state": "APPLIED",
+      "usd_nano": 80998080,
+      "wait_s": {
+        "draft": 63.0,
+        "review": 9522.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T17:30:15Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_173015_9964",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.027233166,
+      "state": "APPLIED",
+      "usd_nano": 27233166,
+      "wait_s": {
+        "draft": 62.0,
+        "review": 2890.0
+      }
+    },
+    {
+      "created_at": "2026-10-28T17:41:10Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261028_174110_fe5c",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.041063388,
+      "state": "REJECTED",
+      "usd_nano": 41063388,
+      "wait_s": {
+        "draft": 19.0,
+        "review": 2477.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T00:23:59Z",
+      "decisions": 3,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_002359_b9a1",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "sympy",
+      "stage_usd_sum": 0.332815842,
+      "state": "ABANDONED",
+      "usd_nano": 332815842,
+      "wait_s": {
+        "draft": 2821.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-29T00:26:08Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_002608_ad53",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.06628191,
+      "state": "REJECTED",
+      "usd_nano": 66281910,
+      "wait_s": {
+        "draft": 3298.0,
+        "review": 1995.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T00:29:51Z",
+      "decisions": 3,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_002951_8b7e",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "sympy",
+      "stage_usd_sum": 0.397307052,
+      "state": "ABANDONED",
+      "usd_nano": 397307052,
+      "wait_s": {
+        "draft": 3378.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-29T00:33:05Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_003305_8bb4",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.017191536,
+      "state": "REJECTED",
+      "usd_nano": 17191536,
+      "wait_s": {
+        "draft": 4134.0,
+        "review": 1048.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T00:35:13Z",
+      "decisions": 3,
+      "detail": "REVIEW_READY",
+      "human_steered": true,
+      "issue_usd_nano": 0,
+      "job": "j20261029_003513_dc49",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.061026858,
+      "state": "REJECTED",
+      "usd_nano": 61026858,
+      "wait_s": {
+        "draft": 1034.0,
+        "review": 1339.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T04:10:16Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_041016_4c7f",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.018843876,
+      "state": "REJECTED",
+      "usd_nano": 18843876,
+      "wait_s": {
+        "draft": 534.0,
+        "review": 299.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T04:13:20Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_041320_0c02",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.029781924,
+      "state": "REJECTED",
+      "usd_nano": 29781924,
+      "wait_s": {
+        "draft": 349.0,
+        "review": 181.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T04:17:48Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_041748_2f14",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "sympy",
+      "stage_usd_sum": 0.012868362,
+      "state": "REJECTED",
+      "usd_nano": 12868362,
+      "wait_s": {
+        "draft": 352.0,
+        "review": 98.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T05:43:25Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_054325_6606",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.032161908,
+      "state": "APPLIED",
+      "usd_nano": 32161908,
+      "wait_s": {
+        "draft": 39.0,
+        "review": 231.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T11:57:42Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_115742_bffd",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.017887866,
+      "state": "APPLIED",
+      "usd_nano": 17887866,
+      "wait_s": {
+        "draft": 30.0,
+        "review": 201.0
+      }
+    },
+    {
+      "created_at": "2026-10-29T12:01:23Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261029_120123_9cf3",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.008531154,
+      "state": "REJECTED",
+      "usd_nano": 8531154,
+      "wait_s": {
+        "draft": 32.0,
+        "review": 67.0
+      }
+    },
+    {
+      "created_at": "2026-10-30T06:09:39Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261030_060939_8433",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.079951428,
+      "state": "APPLIED",
+      "usd_nano": 79951428,
+      "wait_s": {
+        "draft": 45.0,
+        "review": 73.0
+      }
+    },
+    {
+      "created_at": "2026-10-30T16:41:46Z",
+      "decisions": 1,
+      "detail": "NEW",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261030_164146_9b3d",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0,
+      "state": "ABANDONED",
+      "usd_nano": 0,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-30T16:42:14Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261030_164214_d603",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.01975074,
+      "state": "APPLIED",
+      "usd_nano": 19750740,
+      "wait_s": {
+        "draft": 37.0,
+        "review": 29.0
+      }
+    },
+    {
+      "created_at": "2026-10-30T17:32:55Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261030_173255_6793",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.024316086,
+      "state": "APPLIED",
+      "usd_nano": 24316086,
+      "wait_s": {
+        "draft": 57.0,
+        "review": 25.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T04:58:27Z",
+      "decisions": 1,
+      "detail": "BLOCKED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_045827_c6c6",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0,
+      "state": "ABANDONED",
+      "usd_nano": 0,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-31T05:03:22Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_050322_097d",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.03959361,
+      "state": "REJECTED",
+      "usd_nano": 39593610,
+      "wait_s": {
+        "draft": 21.0,
+        "review": 504.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T05:18:27Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_051827_0e27",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.025777338,
+      "state": "REJECTED",
+      "usd_nano": 25777338,
+      "wait_s": {
+        "draft": 16.0,
+        "review": 5380.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T08:22:26Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_082226_ca50",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.02143272,
+      "state": "APPLIED",
+      "usd_nano": 21432720,
+      "wait_s": {
+        "draft": 12.0,
+        "review": 44.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T08:26:47Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_082647_d97e",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.024483264,
+      "state": "APPLIED",
+      "usd_nano": 24483264,
+      "wait_s": {
+        "draft": 14.0,
+        "review": 36.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T08:31:21Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_083121_1808",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.038219508,
+      "state": "REJECTED",
+      "usd_nano": 38219508,
+      "wait_s": {
+        "draft": 19.0,
+        "review": 1617.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T09:05:25Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_090525_837b",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.029959116,
+      "state": "APPLIED",
+      "usd_nano": 29959116,
+      "wait_s": {
+        "draft": 17.0,
+        "review": 37.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T09:10:57Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_091057_9a77",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.033532116,
+      "state": "APPLIED",
+      "usd_nano": 33532116,
+      "wait_s": {
+        "draft": 18.0,
+        "review": 60.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T09:18:20Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_091820_a4ec",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.02300514,
+      "state": "APPLIED",
+      "usd_nano": 23005140,
+      "wait_s": {
+        "draft": 21.0,
+        "review": 43.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T09:23:20Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_092320_4e83",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.037416894,
+      "state": "APPLIED",
+      "usd_nano": 37416894,
+      "wait_s": {
+        "draft": 22.0,
+        "review": 42.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T09:30:43Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_093043_3f45",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.024463026,
+      "state": "ABANDONED",
+      "usd_nano": 24463026,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-10-31T09:36:39Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_093639_81ed",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.027434616,
+      "state": "APPLIED",
+      "usd_nano": 27434616,
+      "wait_s": {
+        "draft": 26.0,
+        "review": 52.0
+      }
+    },
+    {
+      "created_at": "2026-10-31T09:42:29Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261031_094229_2180",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.019210422,
+      "state": "APPLIED",
+      "usd_nano": 19210422,
+      "wait_s": {
+        "draft": 27.0,
+        "review": 48.0
+      }
+    },
+    {
+      "created_at": "2026-11-04T15:10:07Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261104_151007_0f5f",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.038385168,
+      "state": "REJECTED",
+      "usd_nano": 38385168,
+      "wait_s": {
+        "draft": 25.0,
+        "review": 787.0
+      }
+    },
+    {
+      "created_at": "2026-11-04T15:25:12Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261104_152512_b93a",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.019728756,
+      "state": "APPLIED",
+      "usd_nano": 19728756,
+      "wait_s": {
+        "draft": 26.0,
+        "review": 71.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T02:29:55Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_022955_1b3c",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.03939912,
+      "state": "ABANDONED",
+      "usd_nano": 39399120,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-06T03:58:56Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_035856_d92c",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.035777448,
+      "state": "APPLIED",
+      "usd_nano": 35777448,
+      "wait_s": {
+        "draft": 31.0,
+        "review": 87.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T04:04:43Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_040443_6be7",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.030254082,
+      "state": "APPLIED",
+      "usd_nano": 30254082,
+      "wait_s": {
+        "draft": 29.0,
+        "review": 104.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T04:10:41Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_041041_3698",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.028552824,
+      "state": "ABANDONED",
+      "usd_nano": 28552824,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-06T04:23:06Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_042306_b482",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.042219534,
+      "state": "APPLIED",
+      "usd_nano": 42219534,
+      "wait_s": {
+        "draft": 30.0,
+        "review": 139.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T04:30:47Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_043047_b160",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.035079168,
+      "state": "APPLIED",
+      "usd_nano": 35079168,
+      "wait_s": {
+        "draft": 31.0,
+        "review": 149.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T04:38:44Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_043844_e88d",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.03084729,
+      "state": "ABANDONED",
+      "usd_nano": 30847290,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-06T08:09:49Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_080949_90a2",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.121736124,
+      "state": "APPLIED",
+      "usd_nano": 121736124,
+      "wait_s": {
+        "draft": 33.0,
+        "review": 122.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T08:26:54Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_082654_10b2",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.064013908,
+      "state": "APPLIED",
+      "usd_nano": 64013908,
+      "wait_s": {
+        "draft": 36.0,
+        "review": 191.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T08:36:19Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_083619_b85c",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.08496364,
+      "state": "APPLIED",
+      "usd_nano": 84963640,
+      "wait_s": {
+        "draft": 38.0,
+        "review": 101.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T08:44:16Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_084416_f544",
+      "judge": "PASS",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.062484956,
+      "state": "APPLIED",
+      "usd_nano": 62484956,
+      "wait_s": {
+        "draft": 39.0,
+        "review": 287.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T08:54:25Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_085425_46a7",
+      "judge": "BLOCK",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.05737386,
+      "state": "APPLIED",
+      "usd_nano": 57373860,
+      "wait_s": {
+        "draft": 42.0,
+        "review": 204.0
+      }
+    },
+    {
+      "created_at": "2026-11-06T15:18:40Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261106_151840_e81c",
+      "judge": "PASS",
+      "outcome": "applied_changed",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.091791756,
+      "state": "APPLIED",
+      "usd_nano": 91791756,
+      "wait_s": {
+        "draft": 65.0,
+        "review": 869.0
+      }
+    },
+    {
+      "created_at": "2026-11-07T17:12:14Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261107_171214_be81",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.028743378,
+      "state": "APPLIED",
+      "usd_nano": 28743378,
+      "wait_s": {
+        "draft": 801.0,
+        "review": 668.0
+      }
+    },
+    {
+      "created_at": "2026-11-07T17:15:38Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261107_171538_9b55",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.045269316,
+      "state": "APPLIED",
+      "usd_nano": 45269316,
+      "wait_s": {
+        "draft": 564.0,
+        "review": 372.0
+      }
+    },
+    {
+      "created_at": "2026-11-07T17:41:58Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261107_174158_514e",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.042195648,
+      "state": "ABANDONED",
+      "usd_nano": 42195648,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-07T17:48:55Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261107_174855_60fa",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.037555734,
+      "state": "APPLIED",
+      "usd_nano": 37555734,
+      "wait_s": {
+        "draft": 22307.0,
+        "review": 2722.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T03:10:13Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_031013_808b",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.032138862,
+      "state": "APPLIED",
+      "usd_nano": 32138862,
+      "wait_s": {
+        "draft": 270.0,
+        "review": 229.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T06:44:29Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_064429_31e1",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.03497358,
+      "state": "APPLIED",
+      "usd_nano": 34973580,
+      "wait_s": {
+        "draft": 2443.0,
+        "review": 188.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T10:37:05Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_103705_ffce",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.041260494,
+      "state": "APPLIED",
+      "usd_nano": 41260494,
+      "wait_s": {
+        "draft": 1091.0,
+        "review": 7443.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T16:25:04Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_162504_124b",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.021337506,
+      "state": "APPLIED",
+      "usd_nano": 21337506,
+      "wait_s": {
+        "draft": 382.0,
+        "review": 93.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T16:50:11Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_165011_d3c5",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.055119978,
+      "state": "APPLIED",
+      "usd_nano": 55119978,
+      "wait_s": {
+        "draft": 79.0,
+        "review": 108.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T17:08:46Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_170846_c722",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.038330916,
+      "state": "APPLIED",
+      "usd_nano": 38330916,
+      "wait_s": {
+        "draft": 77.0,
+        "review": 104.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T17:53:54Z",
+      "decisions": 2,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_175354_be44",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.116805678,
+      "state": "REJECTED",
+      "usd_nano": 116805678,
+      "wait_s": {
+        "draft": 78.0,
+        "review": 754.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T18:36:58Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_183658_0644",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.079087908,
+      "state": "APPLIED",
+      "usd_nano": 79087908,
+      "wait_s": {
+        "draft": 91.0,
+        "review": 111.0
+      }
+    },
+    {
+      "created_at": "2026-11-08T18:58:02Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261108_185802_6db8",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.07814427,
+      "state": "APPLIED",
+      "usd_nano": 78144270,
+      "wait_s": {
+        "draft": 89.0,
+        "review": 118.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T02:16:56Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_021656_55e9",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.057665172,
+      "state": "APPLIED",
+      "usd_nano": 57665172,
+      "wait_s": {
+        "draft": 95.0,
+        "review": 117.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T02:30:42Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_023042_52a3",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.050561988,
+      "state": "REJECTED",
+      "usd_nano": 50561988,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-09T02:35:12Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": true,
+      "issue_usd_nano": 0,
+      "job": "j20261109_023512_7b70",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.114593964,
+      "state": "APPLIED",
+      "usd_nano": 114593964,
+      "wait_s": {
+        "draft": 94.0,
+        "review": 106.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T03:18:21Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_031821_e1e1",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.08992632,
+      "state": "APPLIED",
+      "usd_nano": 89926320,
+      "wait_s": {
+        "draft": 92.0,
+        "review": 112.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T03:35:01Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_033501_cafd",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.068844708,
+      "state": "APPLIED",
+      "usd_nano": 68844708,
+      "wait_s": {
+        "draft": 92.0,
+        "review": 119.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T03:47:12Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_034712_4409",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.060936744,
+      "state": "APPLIED",
+      "usd_nano": 60936744,
+      "wait_s": {
+        "draft": 94.0,
+        "review": 112.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T04:06:37Z",
+      "decisions": 1,
+      "detail": "AWAITING_APPROVAL",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_040637_b7ab",
+      "judge": "no judge",
+      "outcome": "rejected",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.036647094,
+      "state": "REJECTED",
+      "usd_nano": 36647094,
+      "wait_s": {
+        "draft": null,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-09T04:11:09Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_041109_a714",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.030213822,
+      "state": "APPLIED",
+      "usd_nano": 30213822,
+      "wait_s": {
+        "draft": 97.0,
+        "review": 114.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T05:46:36Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_054636_f8c5",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.029648094,
+      "state": "APPLIED",
+      "usd_nano": 29648094,
+      "wait_s": {
+        "draft": 96.0,
+        "review": 116.0
+      }
+    },
+    {
+      "created_at": "2026-11-09T07:08:07Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261109_070807_8b33",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.053267208,
+      "state": "APPLIED",
+      "usd_nano": 53267208,
+      "wait_s": {
+        "draft": 104.0,
+        "review": 122.0
+      }
+    },
+    {
+      "created_at": "2026-11-10T05:13:46Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 22806690,
+      "job": "j20261110_051346_9f15",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.0382488,
+      "state": "APPLIED",
+      "usd_nano": 38248800,
+      "wait_s": {
+        "draft": 172.0,
+        "review": 126.0
+      }
+    },
+    {
+      "created_at": "2026-11-10T17:08:37Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261110_170837_da17",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.035839722,
+      "state": "APPLIED",
+      "usd_nano": 35839722,
+      "wait_s": {
+        "draft": 24.0,
+        "review": 18.0
+      }
+    },
+    {
+      "created_at": "2026-11-10T17:38:06Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 12907884,
+      "job": "j20261110_173806_dd3b",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.026065782,
+      "state": "APPLIED",
+      "usd_nano": 26065782,
+      "wait_s": {
+        "draft": 117.0,
+        "review": 117.0
+      }
+    },
+    {
+      "created_at": "2026-11-11T07:15:10Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 30585000,
+      "job": "j20261111_071510_9c2c",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.037723656,
+      "state": "APPLIED",
+      "usd_nano": 37723656,
+      "wait_s": {
+        "draft": 54.0,
+        "review": 35.0
+      }
+    },
+    {
+      "created_at": "2026-11-11T07:34:47Z",
+      "decisions": 3,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 24280300,
+      "job": "j20261111_073447_cc5a",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.08305182,
+      "state": "APPLIED",
+      "usd_nano": 83051820,
+      "wait_s": {
+        "draft": 128.0,
+        "review": 113.0
+      }
+    },
+    {
+      "created_at": "2026-11-11T10:02:54Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 11307600,
+      "job": "j20261111_100254_d941",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.008161716,
+      "state": "APPLIED",
+      "usd_nano": 8161716,
+      "wait_s": {
+        "draft": 167.0,
+        "review": 116.0
+      }
+    },
+    {
+      "created_at": "2026-11-11T11:22:52Z",
+      "decisions": 1,
+      "detail": "REVIEW_READY",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261111_112252_11b3",
+      "judge": "no judge",
+      "outcome": "open",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.075703848,
+      "state": "REVIEW_READY",
+      "usd_nano": 75703848,
+      "wait_s": {
+        "draft": 44.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-11T11:37:23Z",
+      "decisions": 2,
+      "detail": "AGENT_FAILED",
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261111_113723_c4be",
+      "judge": "no judge",
+      "outcome": "abandoned",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.076969956,
+      "state": "ABANDONED",
+      "usd_nano": 76969956,
+      "wait_s": {
+        "draft": 44.0,
+        "review": null
+      }
+    },
+    {
+      "created_at": "2026-11-11T11:49:30Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261111_114930_18a2",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-ledger",
+      "stage_usd_sum": 0.029263476,
+      "state": "APPLIED",
+      "usd_nano": 29263476,
+      "wait_s": {
+        "draft": 36.0,
+        "review": 66.0
+      }
+    },
+    {
+      "created_at": "2026-11-11T13:11:16Z",
+      "decisions": 2,
+      "detail": null,
+      "human_steered": false,
+      "issue_usd_nano": 0,
+      "job": "j20261111_131116_b7a9",
+      "judge": "no judge",
+      "outcome": "applied_untouched",
+      "repo": "argus-viewer",
+      "stage_usd_sum": 0.016673784,
+      "state": "APPLIED",
+      "usd_nano": 16673784,
+      "wait_s": {
+        "draft": 109.0,
+        "review": 107.0
+      }
+    }
+  ],
+  "usd_code_jobs": 7.200861098,
+  "usd_issue_jobs_unattached": 0.0,
+  "usd_per_applied_change": 0.1161,
+  "usd_research_jobs": 0.738600097
+}
