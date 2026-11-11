@@ -250,3 +250,32 @@ with no model); A9 costs nothing and runs alongside. Predicted to succeed today:
 
 **Proposal:** run A13 as the first experiment (needs one model, about $0.05, a practice-app clone), fold A8, A9, A10 and A7 into the tests of the fix queue (section 10), and keep A2, A3, A5, A6 for a later
 small batch of five or fewer runs. Nothing from this list is run yet.
+
+## 14. Planning session: backlog and order ([`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md))
+
+Fable merged the findings into a backlog (SB, DOC, FIX-A, ENV, PRE, EXP, FIX-B, RC, GATE, VF, FIX-C, GUARD, ADV), three phases with checkable exits, decision points for Atha, a cut list, and a schedule for 6 and
+2 hours of Atha per week. **Proposal, not adopted.** Claude's assessment:
+
+**Agree**
+- Order: scoreboard (SB) and doc corrections (DOC) first; FIX-A (D1 run wedge + D6 `RunValidation` label) and the environment work (ENV) next, in parallel; the outside experiment (EXP) before `ReportConflict`,
+  the terminal gate and the verdict fix, since the experiment supplies their evidence and they are wasted on a "kill".
+- FIX-A as one PR: D1 (`codetask/tools.py:254-257`) and D6 (`codetask/tools.py:425-432`) are in the same file (verified). E1 and E2 (money) as a separate, later PR (FIX-B) so a money review cannot hold the experiment.
+- D3 (`smoke_models.py`) is a sentence in `AGENTS.md`, not a code change. Skip running attack A13; do GUARD instead. Drop the `applied` judge warning (the judge ran on 10 of 119 code jobs).
+- The rule: a number in a status document is copied from a generated file under `verification/` and cites it; `PENDING.md` holds open items only, by backlog id.
+- The kill line and what each outcome changes (2 or fewer A: stop hardening after FIX-B; 5 or more: phase 3; 3-4: a second batch, budgeted now).
+
+**Adjust (Claude proposes)**
+1. **Measure the dominant cost.** The reviews say Claude's token cost and Atha's real hours are the main costs and recorded nowhere, yet the plan never schedules recording them. Add a tiny item to SB: one weekly line
+   (Atha hours, Claude usage from the usage page) in a file under `verification/`, entered by Atha; the scoreboard cites it. Without it "cost per applied change" excludes the expensive part.
+2. **ENV starts with one repository.** Run a one-repo spike (`cachetools`, smallest and cleanest) end to end (environment, check, one issue) before committing to three. This is the plan's own fallback, taken first,
+   because ENV is the largest unverified cost.
+3. **FIX-A implementation notes:** bump the `RunValidation` tool version when the label is added (memo keys carry the tool version; a resume of an older run must keep replaying its committed results); the D1 handler
+   must also cover a lone surrogate before `memo.put`.
+4. **GUARD needs a data check:** confirm what the ledger's draft endpoint (Stage 14) returns (new test names, changed files, `for_human`) before promising the viewer change; if a field is missing it becomes a ledger change first.
+5. **EXP effort "M" is optimistic:** ten jobs through draft, approve, agent and judge, plus blind grading and per-repo environments; plan for two or three sessions of waiting, not one.
+6. **The 2 hours per week capacity** reaches the verdict only at week 8; say so to Atha before starting, so the schedule is a choice.
+
+**Decisions needed from Atha**
+- ADV: an advisory lane in `AGENTS.md` (advisory output such as leak warnings needs a short spec and tests, not 25 mutants and a full `verify_at`), yes or no. No: B12 (`leaks` "not checked" versus "none") is dropped.
+- Approve the order above (phase 1: SB, DOC, FIX-A, ENV spike, GUARD, PRE), and which weekly capacity to plan for.
+- Whether the plan replaces the order in `PENDING.md` (DOC would reorder it and add the backlog ids).
