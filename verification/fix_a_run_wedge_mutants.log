@@ -1,10 +1,10 @@
 KILLED   no OSError/ValueError catch
 KILLED   catch all tools (freezes sandbox/network errors)
 KILLED   never refuse
-SURVIVED Finish unguarded
+KILLED   Finish unguarded
 KILLED   Finish surrogate fallback removed
 KILLED   claims shape unchecked
-SURVIVED reply not scrubbed
+KILLED   reply not scrubbed
 KILLED   args shape unchecked
 KILLED   surrogate path not refused
 KILLED   unhashable id
@@ -13,6 +13,6 @@ KILLED   no tool_error event
 KILLED   RunValidation unlabelled
 KILLED   label without the data rule
 KILLED   memo fallback removed
-SURVIVED memo fallback unordered (harmless?)
-SURVIVED RunValidation version bumped
-survivors: ['Finish unguarded', 'reply not scrubbed', 'memo fallback unordered (harmless?)', 'RunValidation version bumped']
+KILLED   memo fallback unordered
+KILLED   RunValidation version bumped
+survivors: []
