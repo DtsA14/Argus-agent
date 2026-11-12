@@ -245,6 +245,8 @@ class Upstream:
                 return 400, b"Invalid host header"
             if path == "/summary":
                 return 200, json.dumps(summary).encode()
+            if path == "/scoreboard":
+                return 200, json.dumps({"jobs": len(man["jobs"]), "kinds": {}, "cost_per_applied": {"nano": None, "usd": None}}).encode()
             if path == "/jobs":
                 return 200, json.dumps([{"job": j} for j in man["jobs"]]).encode()
             if path.startswith("/jobs/") and path[6:] in man["jobs"]:
@@ -1029,3 +1031,28 @@ def test_the_proxy_asks_docker_for_the_ledger_pid_once_and_again_after_a_restart
     assert request(proxy, "GET", "/api/summary")[0] == 200    # docker asked again: the real pid
     assert request(proxy, "GET", "/api/jobs")[0] == 200       # cached
     assert len(asked) == 2
+
+
+# ---- SPEC_PROXY_SCOREBOARD: the one added path -------------------------------------------------------------------
+
+def test_the_scoreboard_path_reaches_the_live_ledger_without_being_cached(proxy, ledger):
+    got, headers, body = request(proxy, "GET", "/api/scoreboard")
+    assert got == 200 and headers["cache-control"] == "no-store" and headers["content-type"].startswith("application/json")
+    assert json.loads(body)["cost_per_applied"] == {"nano": None, "usd": None}
+    assert ledger.upstream.requests[-1][:2] == ("GET", "/scoreboard")
+    got, _, _ = request(proxy, "HEAD", "/api/scoreboard")
+    assert got == 200
+    sent = len(ledger.upstream.requests)
+    got, _, _ = request(proxy, "POST", "/api/scoreboard", body=b"x")
+    assert got == 405 and len(ledger.upstream.requests) == sent
+
+
+@pytest.mark.parametrize("path", [
+    "/api/scoreboard/", "/api/scoreboard/x", "/api/scoreboard?x=1", "/api/scoreboards", "/api/Scoreboard",
+    "/api/scoreboard%00", "/api//scoreboard", "/api/scoreboard.json", "/api/jobs/scoreboard", "/api/scoreboard/summary",
+    "/api/scoreboard%2f", "/api/%73coreboard",
+])
+def test_any_other_form_of_the_scoreboard_path_is_404_and_never_forwarded(proxy, ledger, path):
+    got, _, _ = request(proxy, "GET", path)
+    assert got == 404, (path, got)
+    assert ledger.upstream.requests == []

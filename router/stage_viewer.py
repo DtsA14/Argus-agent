@@ -16,8 +16,8 @@ a viewer command never starts or stops a container):
   state.json                   {"live", "history"}, as argus-ledger's
   .build-*                     a build in progress (the archive and /out); removed whatever happens
 
-The proxy (S2) listens on 127.0.0.1:8710 only and answers GET/HEAD for Host localhost:8710 or 127.0.0.1:8710. Four API
-paths (/api/summary, /api/jobs, /api/jobs/<id> and, SPEC_CONTROL_UI D3, /api/jobs/<id>/draft) go to the live argus-ledger
+The proxy (S2) listens on 127.0.0.1:8710 only and answers GET/HEAD for Host localhost:8710 or 127.0.0.1:8710. Five API
+paths (/api/summary, /api/scoreboard (SPEC_PROXY_SCOREBOARD), /api/jobs, /api/jobs/<id> and, SPEC_CONTROL_UI D3, /api/jobs/<id>/draft) go to the live argus-ledger
 release's socket (its container's pid, SO_PEERCRED) in a request of its own (A1, A2);
 any other path is a file of the published release, opened without following links. It writes nothing.
 """
@@ -73,7 +73,7 @@ STORAGE = re.compile(rb"localStorage|sessionStorage|indexedDB|caches\.|CacheStor
 DEP_KINDS = ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
 
 # S2, A1: the proxy.
-API = re.compile(r"^/api/(summary|jobs|jobs/(" + sd.JOB_ID.pattern.strip("^$") + r")(/draft)?)$")   # /draft: SPEC_CONTROL_UI D3
+API = re.compile(r"^/api/(summary|scoreboard|jobs|jobs/(" + sd.JOB_ID.pattern.strip("^$") + r")(/draft)?)$")   # /draft: SPEC_CONTROL_UI D3
 SECURITY = {"Content-Security-Policy": "default-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; "
                                        "base-uri 'none'; frame-ancestors 'none'",
             "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
