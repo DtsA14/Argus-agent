@@ -102,7 +102,7 @@ def test_a_stored_result_is_read_back_only_for_the_same_issue_and_base(tmp_path)
     res = [{"index": 0, "status": "ok", "exit_code": 0, "stdout": "1", "stderr_last_line": "", "reason": ""}]
     rp.store(p, "the issue", "snap1", res)
     assert rp.load(p, "the issue", "snap1") == res
-    assert rp.load(p, "another issue", "snap1") is None and rp.load(p, "the issue", "snap2") is None
+    assert rp.load(p, "another issue", "snap1") is False and rp.load(p, "the issue", "snap2") is False
     p.write_text("not json")
     assert rp.load(p, "the issue", "snap1") is None
     rp.store(p, "the issue", "snap1", None)                      # "not run" is stored as such
@@ -157,7 +157,7 @@ def test_what_the_example_does_never_changes_the_draft(tmp_path, monkeypatch):
 def test_a_result_for_another_issue_is_not_shown_as_this_ones(tmp_path, monkeypatch):
     env, job = code_with(tmp_path, monkeypatch, Box(OK))
     job.data["inputs"]["issue"] = "an issue the example was not made for"
-    assert rj.repro_lines(job) == ["issue example at base: not run"]
+    assert rj.repro_lines(job) == ["issue example at base: not run (the issue or the base changed since it was run)"]
 
 
 def test_a_job_made_before_this_has_no_file_and_no_line(tmp_path, monkeypatch):
@@ -259,3 +259,50 @@ def test_unicode_marks_that_reorder_or_hide_text_are_replaced(mark):
     box = Box({"exit_code": 1, "stdout": f"a{mark}b", "stderr": f"ValueError: x{mark}y", "timed_out": False})
     (r,) = rp.run(Path("."), issue("raise ValueError"), {}, runner=box)
     assert mark not in r["stdout"] and mark not in r["stderr_last_line"] and mark not in rp.line([r])
+
+
+def test_a_future_import_stays_first_and_the_prelude_follows():
+    code = "# a comment\nfrom __future__ import annotations\nx = 1\n   from __future__ import division\nprint(x)\n"
+    prog = rp.program(code)
+    assert prog.startswith("from __future__ import annotations\nfrom __future__ import division\n" + rp.PRELUDE)
+    compile(prog, "x", "exec")                                   # a future import after another statement would not
+    box = Box(OK)
+    rp.run(Path("."), issue("from __future__ import annotations\nprint(1)"), {}, runner=box)
+    compile(box.calls[0]["code"], "x", "exec")
+    assert rp.program("print(1)\n") == rp.PRELUDE + "print(1)\n"
+
+
+@pytest.mark.parametrize("info", ["python-repl", "py:foo", "pythonista", "python2x"])
+def test_a_label_that_only_starts_with_python_is_not_python(info):
+    assert rp.blocks(f"```{info}\nx = 1\n```") == []
+
+
+@pytest.mark.parametrize("mark", ["\u00ad", "\u180e", "\u2800", "\U000e0041", "\U000e007f"])
+def test_invisible_format_characters_are_replaced_too(mark):
+    box = Box({"exit_code": 0, "stdout": f"a{mark}b", "stderr": "", "timed_out": False})
+    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=box)
+    assert mark not in r["stdout"] and mark not in rp.line([r])
+
+
+def test_text_read_back_from_the_file_is_cleaned_again(tmp_path):
+    p = tmp_path / "repro.json"
+    evil = [{"index": 0, "status": "raised", "exit_code": 1, "stdout": "o\x1b[2J", "stderr_last_line": "E\x1b[1A\u202e",
+             "reason": "r\x07"}]
+    rp.store(p, "i", "s", evil)
+    (r,) = rp.load(p, "i", "s")
+    assert r["stdout"] == "o?[2J" and r["stderr_last_line"] == "E?[1A?" and r["reason"] == "r?"
+    assert not rp.CONTROL.search(rp.line([r]))
+
+
+def test_a_failing_event_note_never_replaces_the_stored_result(tmp_path, monkeypatch):
+    orig = rj.Job.note
+
+    def note(self, deps, what, **detail):
+        if what == "repro":
+            raise OSError("disk")
+        return orig(self, deps, what, **detail)
+    monkeypatch.setattr(rj.Job, "note", note)
+    env, job = code_with(tmp_path, monkeypatch, Box(OK))
+    assert job.data["state"] == rj.AWAITING_APPROVAL
+    assert json.loads((job.dir / rj.REPRO).read_text())["results"][0]["status"] == "ok"
+    assert "issue example at base: ran clean" in rj.status("jtest", jobs_dir=env.jobs)

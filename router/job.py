@@ -576,13 +576,17 @@ def _repro(job, cfg, deps):
         issue = job.data["inputs"]["issue"]
         found = repro.run(job.root / "fixtures" / "repos" / BASE, issue, scfg)
         repro.store(job.dir / REPRO, issue, job.data["intake"]["snapshot_sha256"], found)
-        job.note(deps, "repro", blocks=None if found is None else len(found),
-                 statuses=None if found is None else [r["status"] for r in found])    # None: it could not run
     except Exception:
+        found = None
         try:
             repro.store(job.dir / REPRO, job.data["inputs"]["issue"], job.data["intake"]["snapshot_sha256"], None)
         except Exception:
             pass
+    try:                                    # the event is separate: a failure here never replaces a stored result
+        job.note(deps, "repro", blocks=None if found is None else len(found),
+                 statuses=None if found is None else [r["status"] for r in found])    # None: it could not run
+    except Exception:
+        pass
 
 
 def repro_lines(job):

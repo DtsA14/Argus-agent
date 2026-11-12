@@ -21,7 +21,7 @@ OUT_SHOWN = 60       # characters of the last output line shown on the approve l
 TIMEOUT_S = 20
 PRELUDE = "import sys; sys.path.insert(0, '/workspace')\n"      # the sandbox runs python -I: the project is not importable otherwise
 # the info string may carry more than the language (```python title=x, ```{.python}, ```python {1,2})
-FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*\{?\.?(python3?|py)\b[^\n]*\n(.*?)^[ \t]*\1[ \t]*$", re.M | re.S | re.I)
+FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*\{?\.?(python3?|py)(?=[ \t}]|$)[^\n]*\n(.*?)^[ \t]*\1[ \t]*$", re.M | re.S | re.I)
 KEEP = ("index", "status", "exit_code", "stdout", "stderr_last_line", "reason")
 
 
@@ -47,6 +47,14 @@ def skip_reason(code):
     return None
 
 
+def program(code):
+    """The code with the prelude in front; `from __future__` lines must come first in a file, so they go before it."""
+    lines = code.splitlines(keepends=True)
+    future = [ln for ln in lines if re.match(r"\s*from\s+__future__\s+import\b", ln)]
+    rest = [ln for ln in lines if ln not in future]
+    return "".join(ln.lstrip() for ln in future) + PRELUDE + "".join(rest)
+
+
 def key(issue, snapshot_sha256):
     """What a stored result is bound to: this issue text at this base."""
     return hashlib.sha256(f"{snapshot_sha256}\n{issue}".encode("utf-8")).hexdigest()
@@ -54,7 +62,7 @@ def key(issue, snapshot_sha256):
 
 # C0/C1 controls (a newline and a tab stay), and the Unicode marks that reorder or hide text (bidi, zero width, line and
 # paragraph separators): none of them is shown to the human
-CONTROL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]")
+CONTROL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff\u00ad\u180e\u2800\U000e0000-\U000e007f]")
 
 
 def _cut(text, limit):
@@ -101,7 +109,7 @@ def run(base_dir, issue, sandbox_cfg, runner=None):
                 work, data = Path(tmp) / f"w{index}", Path(tmp) / f"d{index}"
                 data.mkdir()
                 shutil.copytree(base_dir, work, symlinks=True)
-                out.append(_result(index, code, runner(PRELUDE + code, workdir=work, data_dir=data, cfg=cfg)))
+                out.append(_result(index, code, runner(program(code), workdir=work, data_dir=data, cfg=cfg)))
         return out
     except Exception:  # advisory: no result, never an error into the job
         return None
@@ -115,18 +123,25 @@ def store(path, issue, snapshot_sha256, results):
 
 
 def load(path, issue, snapshot_sha256):
-    """The stored results when they belong to this issue at this base, else None (not run, or changed since)."""
+    """The stored results when they belong to this issue at this base; None when it could not run (or the file is bad);
+    False when the result is for another issue or base."""
     try:
         rec = json.loads(Path(path).read_text(encoding="utf-8"))
-        if rec.get("key") != key(issue, snapshot_sha256) or not isinstance(rec.get("results"), list):  # None: not run
+        if rec.get("key") != key(issue, snapshot_sha256):
+            return False                                        # a result for another issue or base: stale
+        if not isinstance(rec.get("results"), list):            # None: it could not run
             return None
-        return [{k: r.get(k) for k in KEEP} for r in rec["results"] if isinstance(r, dict)]
+        clean = ("stdout", "stderr_last_line", "reason")        # the file can be edited: shown text is cleaned again
+        return [{k: (_cut(r.get(k), MAX_OUT) if k in clean else r.get(k)) for k in KEEP}
+                for r in rec["results"] if isinstance(r, dict)]
     except Exception:
         return None
 
 
 def line(results):
     """The one line for the approve screen and status; None when nothing was run (the caller says so)."""
+    if results is False:
+        return "issue example at base: not run (the issue or the base changed since it was run)"
     if results is None:
         return "issue example at base: not run"
     if not results:
