@@ -6,4 +6,4 @@ percentage of the limit; write which). A guess is better than a blank; write `?`
 
 | Week of (Monday) | Atha hours | Claude usage (unit) | Notes |
 |---|---|---|---|
-| 2026-11-09 | ? | ? | review day with Fable; FIX-A, FIX-B(E2), scoreboard, ENV spike merged |
+| 2026-11-09 | ? | ? | Atha 2026-11-12: jam dan pemakaian tidak diketahui (`?`); review day with Fable; FIX-A, FIX-B(E2), scoreboard, ENV spike merged; GUARD: izin tetap untuk job viewer kecil |
