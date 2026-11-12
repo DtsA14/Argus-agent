@@ -367,6 +367,7 @@ def test_a_required_test_that_is_neither_red_nor_ok_does_not_confirm(tmp_path):
 def test_a_run_that_changed_nothing_does_not_confirm(tmp_path):
     def change(c):
         (c.ws / "src" / "app.py").write_text(FILES["src/app.py"])
+        (c.ws / "SUMMARY.json").write_text('{"claims": []}')            # the agent always writes it: it is not a change
         c.verdict = (lambda orig: lambda: dict(orig()))(c.verdict)
     # with the old text restored the old test is not red, so also add the red node by hand to isolate the diff check
     breaks(tmp_path, lambda c: (change(c), setattr(c, "evidence", {"failed_nodes": [OLD_NODE], "failures": 1})), "changed no file")
@@ -657,3 +658,31 @@ def test_a_red_validation_that_is_not_in_the_contract_says_so_instead_of_failing
         c.contract["validation"][0]["id"] = "other"
     out = breaks(tmp_path, change, "is not a validation of the contract")
     assert not any("TypeError" in x for x in out["unconfirmed"])
+
+
+def test_a_report_beside_another_call_is_rejected_in_the_loop_and_nothing_runs(tmp_path):
+    both = reply(tool_calls=[{"name": "ReportConflict", "args": {"files": ["tests/test_old.py"]}, "id": "b1"},
+                             {"name": "WriteFile", "args": {"path": "src/app.py", "content": "BEHAVIOUR = 'x'\n"}, "id": "b2"}],
+                 input_tokens=500, output_tokens=60)
+    r, model, d, red = run(tmp_path, [both, WRITE_NEW, REPORT])
+    assert "ReportConflict must be the only tool call in its reply" in tool_answer(model, "b1")
+    assert (d / "workspace" / "src" / "app.py").read_text() != "BEHAVIOUR = 'x'\n" and r["blocked_reason"] == "test_conflict"
+
+
+def test_red_check_ex_tells_a_missing_sandbox_from_an_unreadable_run(tmp_path, monkeypatch):
+    from acceptance import validation as va
+    kw = {"timeout_s": 5}
+
+    def gone(*a, **k):
+        raise va.sb.SandboxUnavailable("no docker")
+    monkeypatch.setattr(va.sb, "run_command", gone)
+    got, why, unavailable = va.red_check_ex([OLD_NODE], tmp_path, {}, **kw)
+    assert got is None and unavailable is True and "no docker" in why
+    for r in ({"timed_out": True}, {"output_limit_exceeded": True}, {"truncated": True}, {"stdout": "no record", "exit_code": 1}):
+        monkeypatch.setattr(va.sb, "run_command", lambda *a, _r=r, **k: dict({"stdout": "", "exit_code": 0}, **_r))
+        got, why, unavailable = va.red_check_ex([OLD_NODE], tmp_path, {}, **kw)
+        assert got is None and unavailable is False and why
+    assert va.red_check([OLD_NODE], tmp_path, {}, **kw) == (None, why)            # the old shape is unchanged
+    nonce_run = lambda argv, **k: {"stdout": "x\n" + argv[5] + json.dumps({OLD_NODE: {"outcome": "passed"}}) + "\n", "exit_code": 0}
+    monkeypatch.setattr(va.sb, "run_command", nonce_run)
+    assert va.red_check_ex([OLD_NODE], tmp_path, {}, **kw) == ({OLD_NODE: {"outcome": "passed"}}, None, False)
