@@ -129,6 +129,8 @@ def test_the_tool_takes_files_and_nothing_else_and_is_gated():
     assert "ReportConflict" not in {t.__name__ for t in tl.offered({"read_file"})}
     assert "report_conflict" in load_config()["tools"]["coder"]
     assert "ReportConflict" in system_prompt(tl.offered({"report_conflict"}))
+    assert "call ReportConflict alone in its reply" in system_prompt(tl.offered({"report_conflict"}))     # the rule
+    assert "call ReportConflict alone" not in system_prompt(tl.offered({"read_file"}))
     assert "ReportConflict" not in system_prompt(tl.offered({"read_file"}))
 
 
@@ -239,6 +241,7 @@ def test_an_unconfirmed_report_on_the_last_iteration_is_a_failed_acceptance(tmp_
     r, model, d, red = run(tmp_path, [WRITE_NEW, REPORT_WRONG], max_iterations=1)
     assert r["status"] == st.FAILED_ACCEPTANCE and r["stop_reason"] == "max_iterations"
     assert verdict(d)["conflict"]["state"] == "unconfirmed" and r["verdict"]["conflict"]["state"] == "unconfirmed"
+    assert r["conflict"]["files"] == ["tests/test_new.py"] and r["conflict"]["unconfirmed"]      # the state the run ended with
 
 
 def test_a_report_when_every_criterion_passes_is_done_with_a_note_in_the_verdict(tmp_path):
@@ -345,6 +348,7 @@ def test_every_non_validation_criterion_must_pass(tmp_path):
 
 
 @pytest.mark.parametrize("evidence,word", [({"timed_out": True}, "did not finish cleanly"), ({"truncated": True}, "cleanly"),
+                                           ({"output_limit_exceeded": True}, "cleanly"), ({"killed": True}, "cleanly"),
                                            ({"consistent": False}, "cleanly"), ({"tests_run": None}, "cleanly"),
                                            ({"runner": "unittest"}, "no per-test records"),
                                            ({"failures": 60}, "too many red tests to enumerate")])
@@ -686,3 +690,59 @@ def test_red_check_ex_tells_a_missing_sandbox_from_an_unreadable_run(tmp_path, m
     nonce_run = lambda argv, **k: {"stdout": "x\n" + argv[5] + json.dumps({OLD_NODE: {"outcome": "passed"}}) + "\n", "exit_code": 0}
     monkeypatch.setattr(va.sb, "run_command", nonce_run)
     assert va.red_check_ex([OLD_NODE], tmp_path, {}, **kw) == ({OLD_NODE: {"outcome": "passed"}}, None, False)
+
+
+def test_no_validation_in_the_verdict_says_so(tmp_path):
+    c = Case(tmp_path)
+    base = c.verdict
+    c.verdict = lambda: {**base(), "criteria": [x for x in base()["criteria"] if x["layer"] != "C"]}
+    out = c.verify()
+    assert out["state"] == "unconfirmed" and any("the contract has no validation" in x for x in out["unconfirmed"])
+
+
+def test_a_failure_in_a_file_the_input_never_had_or_with_no_file_at_all_does_not_confirm(tmp_path):
+    def new_file(c):
+        (c.ws / "tests" / "added_later.py").write_text("X = 1\n")        # protected by the glob, but the agent made it
+        base = c.red
+
+        def red(nodes, workdir, scfg, **kw):
+            out, why, un = base(nodes, workdir, scfg, **kw)
+            return {n: dict(r, path="tests/added_later.py" if r["path"] else None) for n, r in out.items()}, why, un
+        c.red = red
+    breaks(tmp_path / "a", new_file, "tests/added_later.py is not a file of the input")
+
+    def no_file(c):
+        base = c.red
+
+        def red(nodes, workdir, scfg, **kw):
+            out, why, un = base(nodes, workdir, scfg, **kw)
+            return {n: dict(r, path=None) for n, r in out.items()}, why, un
+        c.red = red
+    breaks(tmp_path / "b", no_file, "no file of the repository in the failure")
+
+
+def test_the_red_nodes_own_file_must_be_untouched_even_when_the_failure_points_elsewhere(tmp_path):
+    def change(c):
+        (c.input_dir / "tests" / "helpers.py").write_text("X = 1\n")
+        (c.ws / "tests" / "helpers.py").write_text("X = 1\n")
+        c.before = snapshot(c.input_dir)
+        (c.ws / "tests" / "test_old.py").write_text("# touched by the agent\n")
+        base = c.red
+
+        def red(nodes, workdir, scfg, **kw):
+            out, why, un = base(nodes, workdir, scfg, **kw)
+            return {n: dict(r, path="tests/helpers.py" if r["path"] else None) for n, r in out.items()}, why, un
+        c.red = red
+    breaks(tmp_path, change, "tests/test_old.py was changed by the agent")
+
+
+def test_a_workspace_run_that_cannot_be_read_does_not_confirm_and_says_so(tmp_path):
+    def change(c):
+        base = c.red
+
+        def red(nodes, workdir, scfg, **kw):
+            if Path(workdir).name == "ws":
+                return None, "the run timed out or its output was cut", False
+            return base(nodes, workdir, scfg, **kw)
+        c.red = red
+    breaks(tmp_path, change, "the run on the workspace could not be read")
