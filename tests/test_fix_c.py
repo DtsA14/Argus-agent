@@ -148,7 +148,7 @@ def test_a_registered_value_equal_to_json_syntax_or_a_field_name_cannot_damage_a
     log.emit("llm_call_started", worker_id=7, call_id="c1")
     (rec,) = [json.loads(l) for l in (tmp_path / "e.jsonl").read_text(encoding="utf-8").splitlines()]
     assert rec["worker_id"] == 7 and rec["call_id"] == "c1" and set(rec) == {"ts", "event", "worker_id", "call_id"}
-    assert rec["event"] == redact.MARK            # only a VALUE equal to a registered one is replaced
+    assert rec["event"] == "llm_call_started"     # the event name is the harness's own: reconcile_ledger reads it
 
 
 def test_scrub_value_walks_dicts_lists_and_tuples_and_leaves_other_types():
