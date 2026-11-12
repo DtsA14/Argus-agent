@@ -1435,7 +1435,7 @@ def _agent_result(job):
         return "agent result: unreadable"
 
 
-def conflict_lines(job):
+def report_conflict_lines(job):
     """SPEC_REPORT_CONFLICT v2 B3 and v3 C6: what the agent reported and what the harness found. Facts of the harness only
     (the report's own text is never kept); "conflict" is not stated as a fact, only the shape that was checked."""
     blocked, c = _last_conflict(job)
@@ -1599,7 +1599,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
         out.append(f"why: {why.get('reason') or 'not recorded'}" + (f" (by {why['by']})" if why.get("by") else ""))
         if d["state"] == AGENT_FAILED:
             out.append(_agent_result(job))
-            out += conflict_lines(job)
+            out += report_conflict_lines(job)
         blocked, _c = _last_conflict(job) if d["state"] == AGENT_FAILED else (None, None)
         nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
                AGENT_FAILED: ([f'argus abandon {job.id} "<why>" and a new job that names the file(s)',

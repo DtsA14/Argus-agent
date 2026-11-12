@@ -135,8 +135,8 @@ def test_c_offers_every_tool_but_search_and_refuses_a_search_call(tmp_path):
                                             call("ReadFile", {"path": BUG}, "r1"), nothing, nothing])
     r = run_code_task(contract_path=path, run_id="c", runs_dir=tmp_path / "runs", cfg=cfg, models={"coder": model},
                       validate=validate, preflight=lambda: (True, "ok"))
-    assert r["tools"] == cfg["tools"]["coder"] == ["list_files", "read_file", "write_file", "run_validation"]
-    assert sorted(t.__name__ for t in model.bound_tools) == ["Finish", "ListFiles", "ReadFile", "RunValidation",
+    assert r["tools"] == cfg["tools"]["coder"] == ["list_files", "read_file", "write_file", "run_validation", "report_conflict"]
+    assert sorted(t.__name__ for t in model.bound_tools) == ["Finish", "ListFiles", "ReadFile", "ReportConflict", "RunValidation",
                                                              "WriteFile"]
     answers = {m.tool_call_id: m.content for c in model.calls for m in c["messages"] if hasattr(m, "tool_call_id")}
     assert answers["s1"].startswith("Denied") and "def resolve_terms" in answers["r1"]
