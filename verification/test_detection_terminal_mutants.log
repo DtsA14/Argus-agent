@@ -1,0 +1,14 @@
+KILLED  gate: a hit is not terminal: ['FAILED tests/test_detection_terminal.py::test_a_hit_ends_the_run_in_one_attempt_even_when_every_validation_passes']
+KILLED  gate: another criterion id: ['FAILED tests/test_detection_terminal.py::test_a_hit_ends_the_run_in_one_attempt_even_when_every_validation_passes']
+KILLED  gate: a passing criterion counts: ['FAILED tests/test_detection_terminal.py::test_the_agent_is_never_told_a_hit_even_in_a_later_attempt']
+KILLED  gate: another stop reason: ['FAILED tests/test_detection_terminal.py::test_a_hit_ends_the_run_in_one_attempt_even_when_every_validation_passes']
+KILLED  gate: the summary lacks the total: ['FAILED tests/test_detection_terminal.py::test_the_summary_names_the_hits_without_the_text_of_the_line']
+KILLED  gate: no limit of five hits: ['FAILED tests/test_detection_terminal.py::test_more_than_five_hits_are_listed_five_with_the_total']
+KILLED  gate: the text of the line is kept: ['FAILED tests/test_detection_terminal.py::test_the_summary_names_the_hits_without_the_text_of_the_line']
+SURVIVED gate: the conflict state is dropped: 74 passed in 9.24s
+KILLED  gate: the human is not shown the hits: ['FAILED tests/test_detection_terminal.py::test_status_shows_the_human_the_hits_and_never_the_line']
+KILLED  gate: the extra hits are not counted: ['FAILED tests/test_detection_terminal.py::test_a_detection_summary_without_a_list_of_hits_is_still_shown_with_its_total']
+KILLED  gate: no list of hits crashes the line: ['FAILED tests/test_detection_terminal.py::test_a_detection_summary_without_a_list_of_hits_is_still_shown_with_its_total']
+KILLED  rc: a human-judged run is told it reported: ['FAILED tests/test_report_conflict.py::test_retry_not_a_conflict_runs_the_agent_told_so_and_it_cannot_report_again']
+KILLED  rc: the next prompt shows the raw token: ['FAILED tests/test_report_conflict.py::test_the_next_prompt_explains_a_conflict_report_that_ended_an_attempt']
+RESULT: 12/13 killed

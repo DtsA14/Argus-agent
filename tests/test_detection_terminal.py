@@ -83,6 +83,7 @@ def test_a_hit_cannot_hide_behind_a_report_of_a_conflict(tmp_path):
     assert r["status"] == st.FAILED_ACCEPTANCE and r["stop_reason"].startswith("test_detection")
     assert r["blocked_reason"] is None and r["verdict"]["conflict"]["state"] == "unconfirmed"
     assert any("scope:no_test_detection" in x for x in r["verdict"]["conflict"]["unconfirmed"])
+    assert r["conflict"]["files"] == ["tests/test_old.py"]                                  # the state the run ended with is kept
     assert red.calls == []                                                                  # nothing was confirmed in the sandbox
 
 
