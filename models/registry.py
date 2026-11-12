@@ -3,6 +3,7 @@ import copy
 import os
 from dataclasses import dataclass
 
+from harness import redact
 from .pricing import cost_usd
 
 
@@ -108,6 +109,7 @@ def _api_key(ref, pcfg):
     key = os.environ.get(env) if env else None
     if not key:
         raise MissingApiKey(f"{ref.provider}: environment variable {env} is not set")
+    redact.register(key)                       # FIX-C D7: this value is hidden in the event log and in error texts
     return key
 
 

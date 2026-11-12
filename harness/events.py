@@ -1,7 +1,10 @@
 import json
+import os
 import threading
 import time
 from pathlib import Path
+
+from .redact import scrub, scrub_value
 
 
 def parse_lines(text):
@@ -52,13 +55,20 @@ class EventLog:
                     f.write("\n")
 
     def emit(self, event, **fields):
-        rec = {"ts": round(time.time(), 3), "event": event, **fields}
+        # FIX-C D7: a registered key value is replaced in every value of the record (nested ones too) before it is
+        # serialised; the field names are the caller's own. FIX-C D2: the record is on disk before emit returns (flush +
+        # fsync, like the memo): `llm_call_started` must survive a power cut right after the request is sent, or the spend
+        # of that call is lost to reconcile_ledger.
+        rec = {"ts": round(time.time(), 3), "event": event, **{k: scrub_value(v) for k, v in fields.items()}}
+        line = json.dumps(rec, ensure_ascii=False) + "\n"
         with self._lock:
             with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                f.write(line)
+                f.flush()
+                os.fsync(f.fileno())
             if self.echo:
                 detail = " ".join(f"{k}={v}" for k, v in fields.items())
-                print(f"[{event}] {detail}", flush=True)
+                print(scrub(f"[{event}] {detail}"), flush=True)
 
     def read(self):
         """All complete records so far (consistent with concurrent writers in this process)."""
