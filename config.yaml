@@ -279,7 +279,7 @@ tools:
   orchestrator: [write_file]
   worker: [read_data, run_python]
   evaluator: []
-  coder: [list_files, read_file, write_file, run_validation]   # code tasks (codetask/); Finish is not gated
+  coder: [list_files, read_file, write_file, run_validation, report_conflict]   # code tasks (codetask/); Finish is not gated; report_conflict: SPEC_REPORT_CONFLICT
   drafter: [list_files, search_files, read_file]   # W2b; read-only. SubmitDraft is not gated (it ends the run, as Finish)
   researcher: [list_files, search_files, read_file, read_docs]   # SPEC_RESEARCH_STAGE r1: never a tool that writes or runs
   issue_writer: [list_files, search_files, read_file]   # SPEC_ISSUE_WRITER: read-only, on a copy of a frozen commit

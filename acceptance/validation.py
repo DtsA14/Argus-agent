@@ -641,34 +641,43 @@ def red_argv(nonce, nodes):
     return ["python3", "-I", "-B", "-c", RED_CHECK, nonce, json.dumps(RED_LIMITS, sort_keys=True), *nodes]
 
 
-def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None, runner="pytest"):
-    """({node id: {outcome, type, assertion, path}}, None) for the given pytest (or vitest) node ids, or (None, why)
-    when the run or its JSON could not be read."""
+def red_check_ex(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None, runner="pytest"):
+    """(records, why, unavailable): like red_check, but says apart a sandbox that is not there (unavailable True) from a run
+    that could not be read (a timeout, cut output, no record: the code under test may be the cause). SPEC_REPORT_CONFLICT v3
+    C4: the caller must not have to match the text of `why`."""
     vitest = runner == "vitest"
     nonce = vitest_nonce() if vitest else "ARGUS-RED-" + secrets.token_hex(16) + ":"
     cfg = {**(sandbox_cfg or {}), "timeout_s": timeout_s}
     if environment:
         cfg["environment"] = environment
     if vitest and vitest_workspace_problems(workdir):
-        return None, "; ".join(vitest_workspace_problems(workdir))
+        return None, "; ".join(vitest_workspace_problems(workdir)), False
     command = vitest_argv(nonce, vitest_files(nodes)) if vitest else red_argv(nonce, nodes)
     try:
         r = sb.run_command(command, workdir=workdir, cfg=cfg, log=log, meta={"red_check": len(nodes)})
     except sb.SandboxUnavailable as e:
-        return None, f"sandbox unavailable: {e}"
+        return None, f"sandbox unavailable: {e}", True
     if r.get("timed_out") or r.get("output_limit_exceeded") or r.get("truncated"):
-        return None, "the run timed out or its output was cut"
+        return None, "the run timed out or its output was cut", False
     if vitest:
         got, why = red_records(r.get("stdout"), nonce, nodes)
-        return (got, None) if got is not None else (None, f"{why} (exit code {r.get('exit_code')})")
+        return (got, None, False) if got is not None else (None, f"{why} (exit code {r.get('exit_code')})", False)
     lines = [line[len(nonce):] for line in (r.get("stdout") or "").splitlines() if line.startswith(nonce)]
     try:
         got = json.loads(lines[-1]) if len(lines) == 1 else None
     except ValueError:
         got = None
     if not isinstance(got, dict):
-        return None, "no record of the run (exit code " + str(r.get("exit_code")) + ")"
-    return got, None
+        return None, "no record of the run (exit code " + str(r.get("exit_code")) + ")", False
+    return got, None, False
+
+
+def red_check(nodes, workdir, sandbox_cfg, *, timeout_s, environment=None, log=None, runner="pytest"):
+    """({node id: {outcome, type, assertion, path}}, None) for the given pytest (or vitest) node ids, or (None, why)
+    when the run or its JSON could not be read."""
+    got, why, _ = red_check_ex(nodes, workdir, sandbox_cfg, timeout_s=timeout_s, environment=environment, log=log,
+                               runner=runner)
+    return got, why
 
 
 # Vitest (docs/reviews/SPEC_PWA_VIEWER.md V, section 9): one script of the harness, for validations and the red check

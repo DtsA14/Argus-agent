@@ -5,8 +5,9 @@
   FAILED_ACCEPTANCE  the run finished its work but the contract is not met: the last verdict failed and no further
                      attempt is allowed (max_iterations, the same failures again, or no budget for another attempt)
   BLOCKED            the run cannot continue without a human: the contract is invalid or changed, the sandbox is
-                     unavailable, or the model provider failed. Recoverable or not, it is never a pass, and it is
-                     terminal for this run (fix the cause and start a new run)
+                     unavailable, the model provider failed, or the agent reported a conflict with the old tests and the
+                     harness confirmed it. Recoverable or not, it is never a pass, and it is terminal for this run (fix
+                     the cause and start a new run)
   FAILED_BUDGET      no attempt could be funded at all, or a model call overspent its reservation (budget_violation)
 
 Every status except RUNNING is terminal. A terminal status never changes, also not on resume.
@@ -26,7 +27,9 @@ LEGAL = {(None, RUNNING), (None, BLOCKED), (None, FAILED_BUDGET), (RUNNING, RUNN
 # Why a run is BLOCKED; each needs a human, none is a pass.
 # invalid_contract also covers a checkpoint without the tool allowlist frozen at setup: the run's frozen contract
 # state is incomplete, so what the agent was allowed cannot be known (a dedicated reason is not worth it yet).
-BLOCKED_REASONS = {"invalid_contract", "contract_changed", "sandbox_unavailable", "provider_failed"}
+# test_conflict (SPEC_REPORT_CONFLICT v1-v3): the agent reported that old protected tests contradict its change and the
+# harness confirmed the shape of it; which side is wrong is the human's call.
+BLOCKED_REASONS = {"invalid_contract", "contract_changed", "sandbox_unavailable", "provider_failed", "test_conflict"}
 
 
 class IllegalTransition(Exception):
