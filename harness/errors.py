@@ -1,3 +1,6 @@
+from .redact import scrub
+
+
 class TransientError(Exception):
     """Retryable failure (network blip, rate limit)."""
 
@@ -17,7 +20,11 @@ class InputLimitExceeded(ReservationExhausted):
 
 
 class LLMCallFailed(Exception):
-    """A model call failed permanently, or kept failing after the allowed retries."""
+    """A model call failed permanently, or kept failing after the allowed retries. The message carries the provider's
+    error text, so a registered key value is hidden in it (FIX-C D7)."""
+
+    def __init__(self, message="", *args):
+        super().__init__(scrub(message), *args)
 
 
 class EstimateExceeded(Exception):
