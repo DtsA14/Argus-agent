@@ -109,7 +109,11 @@ def test_a_detection_summary_without_a_list_of_hits_is_still_shown_with_its_tota
     r = json.loads(rj_path.read_text())
     r["verdict"]["detected"] = {"total": 7}
     rj_path.write_text(json.dumps(r))
-    assert any(x.startswith("test detection") for x in rj.detection_lines(env.job()))
+    (line,) = rj.detection_lines(env.job())
+    assert line.startswith("test detection (shown to you, never to the agent):") and line.endswith("(+7 more)")
     r["verdict"]["detected"] = {"total": 7, "hits": None}
     rj_path.write_text(json.dumps(r))
-    assert rj.detection_lines(env.job())
+    assert rj.detection_lines(env.job())[0].endswith("(+7 more)")
+    r["verdict"]["detected"] = {"total": 1, "hits": [{"path": "a.py", "line": 3, "pattern": "p"}]}
+    rj_path.write_text(json.dumps(r))
+    assert rj.detection_lines(env.job()) == ["test detection (shown to you, never to the agent): a.py:3 p"]
