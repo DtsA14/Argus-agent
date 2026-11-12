@@ -4,6 +4,8 @@ import time
 from .errors import BudgetExceeded, EstimateExceeded, TransientError
 from .memo import node_key
 
+CRASH_GRACE_S = 0.2     # simulated crash only: time for sibling workers to write an event they already owe
+
 
 def _meta(state):
     meta = {}
@@ -48,6 +50,11 @@ def guard(name, fn, *, log, retry, admit=None, estimate=None, usd_estimate=None,
             if crash_at == point and crash_marker and not os.path.exists(crash_marker):
                 open(crash_marker, "w").close()
                 log.emit("crash_simulated", node=name, point=point, **meta)
+                # A real crash does not wait, but this one fires at one exact point of one node. A sibling worker that has
+                # already put its result in the memo may still be queued to write its own `result_committed` (every emit
+                # is fsynced, FIX-C D2, so that wait is milliseconds): let it finish, or the log loses an event for a result
+                # that is durable. The memo, not the event, is what resume reads.
+                time.sleep(CRASH_GRACE_S)
                 os._exit(42)
 
         maybe_crash(name)

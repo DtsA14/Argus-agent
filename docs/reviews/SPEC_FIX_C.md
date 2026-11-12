@@ -32,3 +32,12 @@ tidak disaring; jalur utamanya (alasan berhenti dari `LLMCallFailed`) sudah ters
 fsync dipanggil satu kali per rekam dan rekam sudah terbaca saat fsync jalan; galat fsync keluar; scrub (semua kemunculan, terpanjang dulu, bukan-string utuh, nilai
 pendek tidak didaftarkan); rekam bersarang dan `echo`; pesan `LLMCallFailed`; `_api_key` mendaftarkan; A9: galat permanen dan galat sementara yang gagal sesudah retry tidak
 membawa key ke `events.jsonl` maupun ke pengecualian, sementara sisa teks error tetap ada. Mutants: `verification/fix_c_mutants.py`.
+
+## Efek samping yang ketemu di `verify_at` (dan perbaikannya)
+
+Dengan fsync, `verify_at` pertama (`verification/verify-20261112T135411Z-aarch64.log`) gagal di dua tes `test_crash_after_commit_is_answered_from_memo[worker-0/3]`
+(11 dari 12 `result_committed`). Penyebab: di `harness/guard.py` sebuah node menulis memo (`memo.put`) lalu event `result_committed`; simulasi crash worker A (`os._exit`)
+bisa jatuh saat worker B sudah di memo tetapi event-nya masih antre menunggu kunci log. Sebelum fsync jendela itu mikrodetik; sekarang tiap emit makan sekitar 1,4 ms
+(diukur, 500 emit). Memo tetap benar (resume membaca memo, tidak ada kerja diulang, tidak ada uang hilang), hanya event itu yang hilang di tes yang menghitungnya.
+**Perbaikan:** simulasi crash menunggu `CRASH_GRACE_S = 0.2` detik sebelum `os._exit`. Hanya jalur simulasi (`maybe_crash`); crash sungguhan tidak berubah.
+Diukur dengan `CRASH_REPEATS=30` (verify memakai 5): tanpa jeda 15 gagal dari 251, dengan jeda 0,2 s 251 lulus.
