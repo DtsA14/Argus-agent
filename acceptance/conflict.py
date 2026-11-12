@@ -79,6 +79,14 @@ def verify(contract, verdict, files, *, ws, before, input_dir, scfg, repo_protec
         return _final(out)
 
 
+def _blocked(out, why):
+    """The sandbox is not there: not a miss and not a confirmation; the run is BLOCKED/sandbox_unavailable (v3 C4)."""
+    out["state"] = "blocked"
+    out["unconfirmed"] = []
+    out["reason"] = why
+    return out
+
+
 def _final(out):
     out["unconfirmed"] = out["unconfirmed"][:MAX_REASONS]
     out["reason"] = "; ".join(out["unconfirmed"]) if out["state"] != "confirmed" else ""
@@ -140,52 +148,59 @@ def _verify(contract, verdict, files, ws, before, input_dir, scfg, repo_protecte
     if out["unconfirmed"]:
         return _final(out)
 
-    # 7 and 8  the harness's own runs
-    spec = next((specs[c["id"]] for c in validations if c["id"] in specs), None)
-    kw = {"timeout_s": spec["timeout_s"], "environment": spec.get("environment"), "log": log,
-          "runner": "vitest" if kind(spec) == "vitest" else "pytest"}
-    nodes = sorted(red_nodes)
-    base, why, unavailable = red(nodes, input_dir, scfg, **kw)
-    if unavailable:
-        out["state"] = "blocked"
-        out["unconfirmed"] = []
-        out["reason"] = why
-        return out
-    if base is None:
-        no("baseline", f"the run on the untouched input could not be read ({why})")
-        return _final(out)
-    for n in nodes:
-        if (base.get(n) or {}).get("outcome") != "passed":
-            no("baseline", f"{n} does not pass on the untouched input")
+    # 7 and 8  the harness's own runs, per validation: its own runner, timeout and environment (a contract may mix them)
+    groups = []
+    for c in validations:
+        listed = sorted(set((c.get("evidence") or {}).get("failed_nodes") or []))
+        if not listed:
+            continue
+        spec = specs.get(c["id"])
+        if spec is None:
+            no("validations", f"{c['id']} is not a validation of the contract")
+            continue
+        groups.append((listed, {"timeout_s": spec["timeout_s"], "environment": spec.get("environment"), "log": log,
+                                "runner": "vitest" if kind(spec) == "vitest" else "pytest"}))
     if out["unconfirmed"]:
         return _final(out)
-    runs = []
-    for _ in range(2):
-        got, why, unavailable = red(nodes, ws, scfg, **kw)
+    stable = {}
+    for nodes, kw in groups:
+        base, why, unavailable = red(nodes, input_dir, scfg, **kw)
         if unavailable:
-            out["state"] = "blocked"
-            out["unconfirmed"] = []
-            out["reason"] = why
-            return out
-        if got is None:
-            no("red", f"the run on the workspace could not be read ({why})")
+            return _blocked(out, why)
+        if base is None:
+            no("baseline", f"the run on the untouched input could not be read ({why})")
             return _final(out)
-        runs.append(got)
-    for n in nodes:
-        a, b = (r.get(n) or {} for r in runs)
-        if a.get("outcome") != "failed":
-            no("red", f"{n} does not fail when the harness runs it")
-            continue
-        if (a.get("outcome"), a.get("type"), a.get("path")) != (b.get("outcome"), b.get("type"), b.get("path")):
-            no("red", f"{n} is not stable between two runs")
-            continue
-        why = _untouched_old(a.get("path"), before, after, protected, draft_files)
-        if why:
-            no("red", f"{n}: {why}")
+        for n in nodes:
+            if (base.get(n) or {}).get("outcome") != "passed":
+                no("baseline", f"{n} does not pass on the untouched input")
+    if out["unconfirmed"]:
+        return _final(out)
+    for nodes, kw in groups:
+        runs = []
+        for _ in range(2):
+            got, why, unavailable = red(nodes, ws, scfg, **kw)
+            if unavailable:
+                return _blocked(out, why)
+            if got is None:
+                no("red", f"the run on the workspace could not be read ({why})")
+                return _final(out)
+            runs.append(got)
+        for n in nodes:
+            a, b = (r.get(n) or {} for r in runs)
+            if a.get("outcome") != "failed":
+                no("red", f"{n} does not fail when the harness runs it")
+                continue
+            if (a.get("outcome"), a.get("type"), a.get("path")) != (b.get("outcome"), b.get("type"), b.get("path")):
+                no("red", f"{n} is not stable between two runs")
+                continue
+            why = _untouched_old(a.get("path"), before, after, protected, draft_files)
+            if why:
+                no("red", f"{n}: {why}")
+            stable[n] = a
     if out["unconfirmed"]:
         return _final(out)
     out["state"] = "confirmed"
-    out["nodes"] = [{"file": file_of(n), "node": n, "type": (runs[0][n] or {}).get("type"),
-                     "path": (runs[0][n] or {}).get("path")} for n in nodes]
+    out["nodes"] = [{"file": file_of(n), "node": n, "type": stable[n].get("type"), "path": stable[n].get("path")}
+                    for n in sorted(stable)]
     out["checks"] = {k: "pass" for k in ("criteria", "validations", "red", "must_pass", "diff", "old_tests", "baseline")}
     return _final(out)

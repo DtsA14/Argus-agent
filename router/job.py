@@ -975,8 +975,8 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
     r = ctrun.run_code_task(contract_path=contract_path, run_id=st["run_id"], runs_dir=job.runs, cfg=acfg,
                             resume=again, models=deps.models, validate=deps.validate, preflight=deps.preflight,
                             env_preflight=deps.env_preflight, root=job.root, initial_feedback=stage_feedback(ap, st),
-                            initial_conflict={"files": list(nc.get("files") or []), "unconfirmed": [NOT_A_CONFLICT]}
-                            if nc else None, red=deps.conflict_red)
+                            initial_conflict={"files": list(nc.get("files") or []), "unconfirmed": [NOT_A_CONFLICT],
+                                              "by_human": True} if nc else None, red=deps.conflict_red)
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"], profile=profile)
     deps.echo(f"agent finished: {r['status']} (${r['usd_billed']:.4f})")
     if r["status"] != "DONE":
@@ -1220,8 +1220,8 @@ def _last_conflict(job):
         _, st = last_agent(job)
         r = json.loads((job.runs / st["run_id"] / "result.json").read_text(encoding="utf-8"))
         c = (r.get("verdict") or {}).get("conflict")
-        if c is None and isinstance(r.get("conflict"), dict):      # an earlier attempt's report that was not confirmed
-            c = {"state": "unconfirmed", **r["conflict"]}
+        if c is None and isinstance(r.get("conflict"), dict) and not r["conflict"].get("by_human"):
+            c = {"state": "unconfirmed", **r["conflict"]}      # an earlier attempt's report that was not confirmed
         return r.get("blocked_reason"), c
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         return None, None
@@ -1257,6 +1257,9 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS, n
             raise Refused(f"job {job.id}: --not-a-conflict is only for a job whose last run ended BLOCKED/test_conflict")
         sid = f"a{int(prev[1:]) + 1}"
         carry = carry_from(job, prev)
+        before_nc = (job.data["stages"][prev].get("carry") or {}).get("not_a_conflict")
+        if before_nc and not not_a_conflict:     # the human's judgement holds for the job: a later plain retry keeps it
+            carry["not_a_conflict"] = before_nc
         if not_a_conflict:       # facts of the harness's check only (node and type); nothing the agent wrote
             carry["not_a_conflict"] = {"files": list((conf or {}).get("files") or []),
                                        "nodes": [{"node": n.get("node"), "type": n.get("type")}
@@ -1435,10 +1438,10 @@ def _agent_result(job):
         return "agent result: unreadable"
 
 
-def report_conflict_lines(job):
+def report_conflict_lines(job, last=None):
     """SPEC_REPORT_CONFLICT v2 B3 and v3 C6: what the agent reported and what the harness found. Facts of the harness only
     (the report's own text is never kept); "conflict" is not stated as a fact, only the shape that was checked."""
-    blocked, c = _last_conflict(job)
+    blocked, c = last if last is not None else _last_conflict(job)
     if not isinstance(c, dict):
         return []
     files = ", ".join(map(str, c.get("files") or []))
@@ -1599,8 +1602,9 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
         out.append(f"why: {why.get('reason') or 'not recorded'}" + (f" (by {why['by']})" if why.get("by") else ""))
         if d["state"] == AGENT_FAILED:
             out.append(_agent_result(job))
-            out += report_conflict_lines(job)
-        blocked, _c = _last_conflict(job) if d["state"] == AGENT_FAILED else (None, None)
+            last = _last_conflict(job)
+            out += report_conflict_lines(job, last)
+        blocked = last[0] if d["state"] == AGENT_FAILED else None
         nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
                AGENT_FAILED: ([f'argus abandon {job.id} "<why>" and a new job that names the file(s)',
                                f"argus retry {job.id} --not-a-conflict"] if blocked == "test_conflict"

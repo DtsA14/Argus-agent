@@ -586,3 +586,74 @@ def test_the_report_tool_memo_key_depends_on_the_runs_conflict_state(tmp_path):
     assert set(versions) == {"rw", "rw2"}                                       # the two ReportConflict steps
     assert versions["rw"] == "1:" + hashlib.sha256(b"null").hexdigest()[:12]      # no state yet
     assert versions["rw2"] != versions["rw"]                                    # the state set after the first miss
+
+
+# ---- review fixes ---------------------------------------------------------------------------------------------------------
+
+def test_status_does_not_call_a_humans_not_a_conflict_a_report_of_the_agent(tmp_path):
+    bad_finish = call("Finish", {"claims": [], "summary": "x"}, "fx")
+    env = conflicted_job(tmp_path, [BROKE_WRITE, ROUTER_REPORT, bad_finish, bad_finish])
+    rj.retry("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs, not_a_conflict=True)
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert env.job().data["state"] == rj.AGENT_FAILED
+    assert "agent reported a conflict" not in text and "old tests fail with the agent's change" not in text
+    assert "argus retry jtest" in text and "--not-a-conflict" not in text
+
+
+def test_the_humans_judgement_holds_for_a_later_plain_retry_of_the_same_job(tmp_path):
+    bad_finish = call("Finish", {"claims": [], "summary": "x"}, "fx")
+    again = call("ReportConflict", {"files": ["tests/test_old.py"]}, "rc9")
+    env = conflicted_job(tmp_path, [BROKE_WRITE, ROUTER_REPORT, bad_finish, bad_finish, again, ROUTER_WRITE, ROUTER_FINISH])
+    rj.retry("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs, not_a_conflict=True)       # a2 fails
+    rj.retry("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)                             # a3, a plain retry
+    job = env.job()
+    assert job.data["stages"]["a3"]["carry"]["not_a_conflict"]["files"] == ["tests/test_old.py"]
+    answer = next(m.content for c in reversed(env.coder.calls) for m in c["messages"]
+                  if getattr(m, "tool_call_id", None) == "rc9")
+    assert answer.startswith("Refused: ReportConflict was already used") and job.data["state"] == rj.REVIEW_READY
+
+
+def test_each_validation_is_checked_with_its_own_runner_timeout_and_environment(tmp_path):
+    c = Case(tmp_path)
+    c.contract["validation"] = [dict(c.contract["validation"][0], id="unit", environment="envA", timeout_s=11),
+                                {"id": "ui", "executable": "vitest", "args": ["run", "src/a.test.js"], "timeout_s": 22,
+                                 "min_tests": 1, "max_skipped": 0, "environment": "envB"}]
+    ui_node = "src/a.test.js::renders"
+    (c.input_dir / "src").mkdir(exist_ok=True)
+    (c.input_dir / "src" / "a.test.js").write_text("//\n")
+    (c.ws / "src").mkdir(exist_ok=True)
+    (c.ws / "src" / "a.test.js").write_text("//\n")
+    c.before = snapshot(c.input_dir)
+    c.contract["scope"]["protected"] = ["tests/**", "conftest.py", "src/*.test.js"]
+    c.files = ["tests/test_old.py", "src/a.test.js"]
+    base = c.verdict
+
+    def verdict():
+        v = base()
+        ui = {"id": "validation:ui", "layer": "C", "status": "fail", "reason": "x",
+              "evidence": {"runner": "vitest", "consistent": True, "tests_run": 1, "failures": 1, "errors": 0,
+                           "must_pass": {}, "failed_nodes": [ui_node]}}
+        v["criteria"].insert(3, ui)
+        return v
+    c.verdict = verdict
+    seen = []
+
+    def red(nodes, workdir, scfg, **kw):
+        seen.append((tuple(nodes), kw["runner"], kw["timeout_s"], kw["environment"], Path(workdir).name))
+        failing = Path(workdir).name == "ws"
+        return {n: {"outcome": "failed" if failing else "passed", "type": "Error" if failing else None,
+                    "assertion": failing, "path": n.split("::")[0] if failing else None} for n in nodes}, None, False
+    c.red = red
+    out = c.verify()
+    assert out["state"] == "confirmed", out
+    assert {(s[0], s[1], s[2], s[3]) for s in seen} == {((OLD_NODE,), "pytest", 11, "envA"), ((ui_node,), "vitest", 22, "envB")}
+    assert len(seen) == 6 and {n["node"] for n in out["nodes"]} == {OLD_NODE, ui_node}
+
+
+def test_a_red_validation_that_is_not_in_the_contract_says_so_instead_of_failing_silently(tmp_path):
+    def change(c):
+        v = c.verdict()                                       # built with the contract as it is, then the contract differs
+        c.verdict = lambda: v
+        c.contract["validation"][0]["id"] = "other"
+    out = breaks(tmp_path, change, "is not a validation of the contract")
+    assert not any("TypeError" in x for x in out["unconfirmed"])
