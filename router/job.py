@@ -1219,7 +1219,10 @@ def _last_conflict(job):
     try:
         _, st = last_agent(job)
         r = json.loads((job.runs / st["run_id"] / "result.json").read_text(encoding="utf-8"))
-        return r.get("blocked_reason"), (r.get("verdict") or {}).get("conflict")
+        c = (r.get("verdict") or {}).get("conflict")
+        if c is None and isinstance(r.get("conflict"), dict):      # an earlier attempt's report that was not confirmed
+            c = {"state": "unconfirmed", **r["conflict"]}
+        return r.get("blocked_reason"), c
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         return None, None
 

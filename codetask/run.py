@@ -498,7 +498,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
-                                        "attempt", "tools", "provenance", "budget_profile", "loop_policy")}
+                                        "attempt", "tools", "provenance", "budget_profile", "loop_policy", "conflict")}
     result["cache"] = cache_totals(log.read(), cfg)
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
