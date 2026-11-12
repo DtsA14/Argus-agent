@@ -34,6 +34,20 @@ def scrub(text):
     return text
 
 
+def scrub_value(obj):
+    """obj with every string in it scrubbed (dict keys and values, lists and tuples, at any depth); other values are
+    returned as they are. This is what the event log uses: the values are cleaned before they are serialised, so a key
+    that json would escape (a quote or a backslash in it) is still found, and a value that happens to equal a piece of
+    JSON syntax cannot damage the record."""
+    if isinstance(obj, str):
+        return scrub(obj)
+    if isinstance(obj, dict):
+        return {scrub_value(k): scrub_value(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [scrub_value(v) for v in obj]
+    return obj
+
+
 def clear():
     """Forget every registered value (tests)."""
     with _lock:

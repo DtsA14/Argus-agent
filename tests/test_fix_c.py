@@ -128,3 +128,30 @@ def test_a9_a_transient_error_retried_then_failed_hides_the_key_in_every_event(t
     with pytest.raises(LLMCallFailed) as e:
         c.call([HumanMessage("hi")], Reservation(tokens=100_000, usd=1.0))
     assert CANARY not in str(e.value) and CANARY not in log.read_text(encoding="utf-8")
+
+
+def test_a_key_that_json_would_escape_is_still_hidden(tmp_path):
+    odd = 'sk-odd"key\\with-escapes-123'
+    redact.register(odd)
+    log = EventLog(tmp_path / "e.jsonl")
+    log.emit("llm_call", error=f"echo {odd} end", nested={odd: [odd]})
+    raw = (tmp_path / "e.jsonl").read_text(encoding="utf-8")
+    assert odd not in raw and json.dumps(odd)[1:-1] not in raw         # neither as written nor as json escapes it
+    rec = json.loads(raw)
+    assert rec["error"] == f"echo {redact.MARK} end" and rec["nested"] == {redact.MARK: [redact.MARK]}
+
+
+def test_a_registered_value_equal_to_json_syntax_or_a_field_name_cannot_damage_a_record(tmp_path):
+    for weak in ("worker_id", "llm_call_started", '"event": '):
+        redact.register(weak)
+    log = EventLog(tmp_path / "e.jsonl")
+    log.emit("llm_call_started", worker_id=7, call_id="c1")
+    (rec,) = [json.loads(l) for l in (tmp_path / "e.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rec["worker_id"] == 7 and rec["call_id"] == "c1" and set(rec) == {"ts", "event", "worker_id", "call_id"}
+    assert rec["event"] == redact.MARK            # only a VALUE equal to a registered one is replaced
+
+
+def test_scrub_value_walks_dicts_lists_and_tuples_and_leaves_other_types():
+    redact.register(CANARY)
+    out = redact.scrub_value({"a": (CANARY, 1, None, 2.5, True), f"k{CANARY}": {"b": [CANARY]}})
+    assert out == {"a": [redact.MARK, 1, None, 2.5, True], f"k{redact.MARK}": {"b": [redact.MARK]}}
