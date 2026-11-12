@@ -61,3 +61,9 @@ Protocol: `docs/reviews/FABLE_PROTOCOL_OUTSIDE_EXPERIMENT.md` section 3. Data an
 - **Full SHAs** and issue bodies are fetched at the moment of the run; each job records them. Full clones go in `~/outside/<repo>` (one worktree per issue at the parent commit).
 - **Environment:** `ledger_py312_up2` (registered, passes `check_env_image.py`, runs both suites with Argus's command; `ENV_SPIKE.md`). No new environment entry.
 - Not applied: the "issues written by users" criterion (a judgement, not a mechanical filter).
+
+## Two batches (Atha, 2026-11-12; written after batch 1 = boltons had run, before any more-itertools job)
+
+Batch 1 (boltons, 5 issues, cap $4.00) was run first, with the protocol's rules unchanged: at most one `redraft` after `DRAFT_FAILED`, every accepted draft approved, judge on every job, harness frozen. Result, as run: five `REVIEW_READY`, judge PASS 2, NOT_JUDGED 3, about $1.02; not graded yet.
+Batch 2 (more-itertools, 5 issues, cap $4.00) runs the same way, harness still frozen (no change between batches). Final verdict is on the 10 issues together with the protocol's lines; per-repository grades are reported only as a note.
+Blind grading happens once, at the end, by one fresh Claude session for all ten. Total stays at most $8.00. Note: batch 2 runs with Atha's second "go live" (2026-11-12); the batch 1 order (boltons first) was chosen because its issues are harder.
