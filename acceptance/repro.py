@@ -51,9 +51,14 @@ def key(issue, snapshot_sha256):
     return hashlib.sha256(f"{snapshot_sha256}\n{issue}".encode("utf-8")).hexdigest()
 
 
+CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
 def _cut(text, limit):
-    """At most `limit` bytes of utf-8, never half a character."""
-    return (text or "").encode("utf-8")[:limit].decode("utf-8", "ignore")
+    """At most `limit` bytes of utf-8, never half a character, and no control character: the code is the issue
+    author's, and what it prints reaches the human's terminal on the approve screen (an escape sequence could hide or
+    redraw the lines next to it). A newline and a tab stay."""
+    return CONTROL.sub("?", (text or "")).encode("utf-8")[:limit].decode("utf-8", "ignore")
 
 
 def _last_line(text):

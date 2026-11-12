@@ -209,3 +209,12 @@ def test_even_a_failure_inside_the_job_step_leaves_a_not_run_line_and_the_job_go
 
 def test_repro_lines_never_raise_on_a_broken_job():
     assert rj.repro_lines(object()) == [] and rj.repro_lines(None) == []
+
+
+def test_control_characters_in_what_the_code_prints_never_reach_the_screen():
+    evil = "ValueError: \x1b[2K\r\x1b[1Ahidden\x07\x9b31m ok\n"
+    box = Box({"exit_code": 1, "stdout": "a\x1b[2Jb\tc\nd", "stderr": evil, "timed_out": False})
+    (r,) = rp.run(Path("."), issue("raise ValueError"), {}, runner=box)
+    for text in (r["stdout"], r["stderr_last_line"], rp.line([r])):
+        assert not rp.CONTROL.search(text) and "\x1b" not in text and "\r" not in text
+    assert r["stdout"] == "a?[2Jb\tc\nd" and r["stderr_last_line"] == "?[1Ahidden??31m ok"
