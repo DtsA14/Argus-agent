@@ -11,6 +11,7 @@ import json
 import re
 import shutil
 import tempfile
+import textwrap
 from pathlib import Path
 
 MAX_BLOCKS = 3
@@ -18,7 +19,8 @@ MAX_CODE_BYTES = 4000
 MAX_OUT = 2000
 TIMEOUT_S = 20
 PRELUDE = "import sys; sys.path.insert(0, '/workspace')\n"      # the sandbox runs python -I: the project is not importable otherwise
-FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*(python3?|py)[ \t]*\n(.*?)^[ \t]*\1[ \t]*$", re.M | re.S | re.I)
+# the info string may carry more than the language (```python title=x, ```{.python}, ```python {1,2})
+FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*\{?\.?(python3?|py)\b[^\n]*\n(.*?)^[ \t]*\1[ \t]*$", re.M | re.S | re.I)
 KEEP = ("index", "status", "exit_code", "stdout", "stderr_last_line", "reason")
 
 
@@ -26,7 +28,7 @@ def blocks(issue):
     """[(index, code)] of the issue's python fences, in order, at most MAX_BLOCKS."""
     if not isinstance(issue, str):
         return []
-    return [(i, m.group(3)) for i, m in enumerate(FENCE.finditer(issue))][:MAX_BLOCKS]
+    return [(i, textwrap.dedent(m.group(3))) for i, m in enumerate(FENCE.finditer(issue))][:MAX_BLOCKS]
 
 
 def skip_reason(code):
@@ -49,18 +51,23 @@ def key(issue, snapshot_sha256):
     return hashlib.sha256(f"{snapshot_sha256}\n{issue}".encode("utf-8")).hexdigest()
 
 
+def _cut(text, limit):
+    """At most `limit` bytes of utf-8, never half a character."""
+    return (text or "").encode("utf-8")[:limit].decode("utf-8", "ignore")
+
+
 def _last_line(text):
     lines = [ln for ln in (text or "").strip().splitlines() if ln.strip()]
-    return lines[-1][:300] if lines else ""
+    return _cut(lines[-1], 300) if lines else ""
 
 
 def _result(index, code, r):
     if r.get("timed_out"):
-        return {"index": index, "status": "timeout", "exit_code": None, "stdout": (r.get("stdout") or "")[:MAX_OUT],
+        return {"index": index, "status": "timeout", "exit_code": None, "stdout": _cut(r.get("stdout"), MAX_OUT),
                 "stderr_last_line": "", "reason": f"no end within {TIMEOUT_S} s"}
     ok = r.get("exit_code") == 0
     return {"index": index, "status": "ok" if ok else "raised", "exit_code": r.get("exit_code"),
-            "stdout": (r.get("stdout") or "")[:MAX_OUT], "stderr_last_line": "" if ok else _last_line(r.get("stderr")),
+            "stdout": _cut(r.get("stdout"), MAX_OUT), "stderr_last_line": "" if ok else _last_line(r.get("stderr")),
             "reason": ""}
 
 

@@ -556,7 +556,7 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
         job.data["intake"] = {k: rec[k] for k in ("commit", "tree", "files", "snapshot_sha256")}
         job.data["protected_repo"] = rec.get("protected")           # SPEC_PROTECTED_FILES P2: the list, frozen
         job.note(deps, "intaken", files=rec["files"])
-        _repro(job, cfg)
+        _repro(job, cfg, deps)
         if research:
             _research(job, cfg, deps)
         else:
@@ -567,7 +567,7 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
 REPRO = "repro.json"
 
 
-def _repro(job, cfg):
+def _repro(job, cfg, deps):
     """SPEC_REPRO_V0 R1: the issue's python examples run on a copy of the base tree and the result is kept with the job.
     Display only: nothing here can refuse, block or change the job, and any error leaves no file."""
     try:
@@ -576,8 +576,13 @@ def _repro(job, cfg):
         issue = job.data["inputs"]["issue"]
         found = repro.run(job.root / "fixtures" / "repos" / BASE, issue, scfg)
         repro.store(job.dir / REPRO, issue, job.data["intake"]["snapshot_sha256"], found)
+        job.note(deps, "repro", blocks=None if found is None else len(found),
+                 statuses=None if found is None else [r["status"] for r in found])    # None: it could not run
     except Exception:
-        pass
+        try:
+            repro.store(job.dir / REPRO, job.data["inputs"]["issue"], job.data["intake"]["snapshot_sha256"], None)
+        except Exception:
+            pass
 
 
 def repro_lines(job):

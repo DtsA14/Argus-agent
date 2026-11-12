@@ -51,3 +51,13 @@ Mutants: batas 3 blok dan 4.000 byte, batas waktu, `[]` pada galat, penolakan ta
 
 Di 10 job berikutnya (atau pada 10 issue eksperimen, dijalankan ulang tanpa model): berapa blok jalan, berapa `raised`, berapa `ok`; dari yang `ok`, berapa memang sudah beres. Baru
 dari angka itu R2 diputuskan.
+
+## 7. Como foi feito (R1 implementado, 2026-11-12): diferenças deliberadas em relação aos §2 e §5
+
+Corrigido depois do review (`/code-review medium`); onde o texto acima diz outra coisa, vale esta seção.
+- **Onde fica o resultado:** `repro.json` na pasta do job (não `check_report.json`), ligado a `sha256(snapshot do intake + texto da issue)`. Na tela de approve e no `status` o resultado é **lido** desse arquivo e só mostrado se a chave ainda bate com a issue e o intake do job; se não bate, a linha diz `not run`. Não é recalculado (rodar o sandbox de novo no approve custaria até 60 s).
+- **Job anterior a isto:** sem `repro.json` e sem linha. Job em que o passo falhou: arquivo com `results: null` e linha `issue example at base: not run`; o job registra um evento `repro` (blocos e status, ou `null`).
+- **`DRAFT_REVIEW.md`:** a seção `## Issue example run at the base commit` **não** entrou nesta versão (R1b: depende de passar o resultado ao escritor do review no drafter e ao viewer). Os testes 4 do §5 sobre esse arquivo ficam para R1b; o resto do §5 está em `tests/test_repro.py`.
+- **Execução:** o código roda com um prelúdio `sys.path.insert(0, '/workspace')`, porque o sandbox usa `python -I` (sem ele, todo exemplo falhava com `ModuleNotFoundError`; achado no teste real). O bloco é `dedent`ado (item de lista) e o fence aceita texto depois da linguagem (`python title=x`, `{.python}`). Saída cortada em bytes.
+- **Trava do job:** o passo roda dentro da trava do job (até 60 s no pior caso: 3 blocos de 20 s), como o drafter, que a segura por minutos; não piora o que já existe.
+- **Medido nas 10 issues do experimento (sandbox real, 2026-11-12):** #480 `ran clean` (saída `0o600`, a issue diz `0o644`: já resolvida); #1344, #1304, #1293, #1275 `raised` (reproduzem); #1308 e #439 `ran clean` apesar de o bug existir (o exemplo só imprime); #261 e #343 sessão `>>>` ou blocos parciais (pulados ou `IndentationError` antes do dedent); #383 sem exemplo.

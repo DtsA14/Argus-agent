@@ -164,3 +164,48 @@ def test_a_job_made_before_this_has_no_file_and_no_line(tmp_path, monkeypatch):
     env, job = code_with(tmp_path, monkeypatch, Box(OK))
     (job.dir / rj.REPRO).unlink()
     assert rj.repro_lines(job) == []
+
+
+# ---- review fixes -------------------------------------------------------------------------------------------------
+
+def test_a_block_inside_a_list_item_is_dedented_so_it_does_not_raise_an_indentation_error():
+    text = "1. Run this:\n   ```python\n   import x\n   print(x.f())\n   ```\n"
+    ((_, code),) = rp.blocks(text)
+    assert code == "import x\nprint(x.f())\n"
+
+
+@pytest.mark.parametrize("info", ["python title=x", "{.python}", "python {1,2}", "Python3", "py"])
+def test_a_fence_info_string_with_more_than_the_language_is_still_python(info):
+    assert len(rp.blocks(f"```{info}\nx = 1\n```")) == 1
+    assert rp.blocks("```pythonista\nx = 1\n```") == [] and rp.blocks("```json\n{}\n```") == []
+
+
+def test_output_is_cut_in_bytes_not_characters_and_never_in_half_a_character():
+    big = {"exit_code": 0, "stdout": "é" * 3000, "stderr": "", "timed_out": False}   # 6000 bytes
+    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=Box(big))
+    assert len(r["stdout"].encode("utf-8")) <= rp.MAX_OUT and r["stdout"] == "é" * (rp.MAX_OUT // 2)
+    bad = {"exit_code": 1, "stdout": "", "stderr": "ValueError: " + "é" * 400, "timed_out": False}
+    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=Box(bad))
+    assert len(r["stderr_last_line"].encode("utf-8")) <= 300
+
+
+def test_the_job_notes_what_was_run_or_that_it_could_not_run(tmp_path, monkeypatch):
+    env, job = code_with(tmp_path / "a", monkeypatch, Box(OK, BAD), text=td.ISSUE + "\n\n" + issue("a = 1", "b = 2"))
+    (n,) = [e for e in job.data["log"] if e["what"] == "repro"]
+    assert n["blocks"] == 2 and n["statuses"] == ["ok", "raised"]
+    env, job = code_with(tmp_path / "b", monkeypatch, Box(RuntimeError("down")))
+    (n,) = [e for e in job.data["log"] if e["what"] == "repro"]
+    assert n["blocks"] is None and n["statuses"] is None
+
+
+def test_even_a_failure_inside_the_job_step_leaves_a_not_run_line_and_the_job_goes_on(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("anything")
+    monkeypatch.setattr(rp, "run", boom)
+    env, job = code_with(tmp_path, monkeypatch, Box())
+    assert job.data["state"] == rj.AWAITING_APPROVAL
+    assert "issue example at base: not run" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_repro_lines_never_raise_on_a_broken_job():
+    assert rj.repro_lines(object()) == [] and rj.repro_lines(None) == []

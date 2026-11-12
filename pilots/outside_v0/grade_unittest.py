@@ -23,7 +23,7 @@ def run(root, files):
     res = {c + "::" + n: ("FAILED" if (n, c) in failed else "PASSED") for n, c in allt | failed}
     return res, txt[-400:]
 out = {"id": ident, "test_files": tests}
-work = tempfile.mkdtemp(prefix="grade_", dir=os.path.dirname(os.path.abspath(__file__)))
+work = tempfile.mkdtemp(prefix="grade_")
 def variant(name, base_rev, patch_file=None, overlay=True):
     d = f"{work}/{name}"; tree(base_rev, d)
     if patch_file:
