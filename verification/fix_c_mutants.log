@@ -1,0 +1,28 @@
+KILLED  D2: no fsync: ['FAILED tests/test_fix_c.py::test_every_record_is_flushed_and_fsynced_before_emit_returns']
+KILLED  D2: no flush before fsync: ['FAILED tests/test_fix_c.py::test_every_record_is_flushed_and_fsynced_before_emit_returns']
+KILLED  D2: fsync before the write: ['FAILED tests/test_fix_c.py::test_every_record_is_flushed_and_fsynced_before_emit_returns']
+KILLED  D2: fsync error swallowed: ['FAILED tests/test_fix_c.py::test_a_failing_fsync_is_not_swallowed - Failed: D...']
+SURVIVED D2: fsync outside the lock: 1 error in 0.26s
+KILLED  D7: events not scrubbed: ['FAILED tests/test_fix_c.py::test_the_event_log_hides_a_key_anywhere_in_a_record_and_on_the_echo']
+KILLED  D7: only strings at the top level: ['FAILED tests/test_fix_c.py::test_the_event_log_hides_a_key_anywhere_in_a_record_and_on_the_echo']
+KILLED  D7: echo not scrubbed: ['FAILED tests/test_fix_c.py::test_the_event_log_hides_a_key_anywhere_in_a_record_and_on_the_echo']
+KILLED  D7: field names scrubbed: ['FAILED tests/test_fix_c.py::test_a_registered_value_equal_to_json_syntax_or_a_field_name_cannot_damage_a_record']
+KILLED  D7: the event name scrubbed: ['FAILED tests/test_fix_c.py::test_a_registered_value_equal_to_json_syntax_or_a_field_name_cannot_damage_a_record']
+KILLED  D7: the line scrubbed instead of the values: ['FAILED tests/test_fix_c.py::test_a_registered_value_equal_to_json_syntax_or_a_field_name_cannot_damage_a_record']
+KILLED  D7: LLMCallFailed message not scrubbed: ['FAILED tests/test_fix_c.py::test_a_failed_model_call_message_hides_a_key - As...']
+KILLED  D7: registry does not register: ['FAILED tests/test_fix_c.py::test_building_a_client_registers_the_key_it_reads']
+KILLED  D7: register ignores the length floor: ['FAILED tests/test_fix_c.py::test_a_value_too_short_or_not_a_string_is_never_registered[unused]']
+KILLED  D7: register accepts non-strings: ['FAILED tests/test_fix_c.py::test_a_value_too_short_or_not_a_string_is_never_registered[12345678]']
+SURVIVED D7: register keeps the whitespace: 20 passed in 0.57s
+KILLED  D7: MIN_LEN too small: ['FAILED tests/test_fix_c.py::test_a_value_too_short_or_not_a_string_is_never_registered[unused]']
+KILLED  D7: shortest first: ['FAILED tests/test_fix_c.py::test_the_longer_value_is_hidden_whole_when_one_contains_the_other']
+KILLED  D7: only the first occurrence: ['FAILED tests/test_fix_c.py::test_a_registered_value_is_replaced_everywhere_in_a_text']
+SURVIVED D7: no marker: 20 passed in 0.61s
+KILLED  D7: a non-string is turned into one: ['FAILED tests/test_fix_c.py::test_a_registered_value_is_replaced_everywhere_in_a_text']
+KILLED  D7: dict keys not scrubbed: ['FAILED tests/test_fix_c.py::test_a_key_that_json_would_escape_is_still_hidden']
+KILLED  D7: tuples not walked: ['FAILED tests/test_fix_c.py::test_scrub_value_walks_dicts_lists_and_tuples_and_leaves_other_types']
+KILLED  D7: lists not walked: ['FAILED tests/test_fix_c.py::test_the_event_log_hides_a_key_anywhere_in_a_record_and_on_the_echo']
+KILLED  D7: dict values not walked: ['FAILED tests/test_fix_c.py::test_the_event_log_hides_a_key_anywhere_in_a_record_and_on_the_echo']
+KILLED  D7: nothing scrubbed: ['FAILED tests/test_fix_c.py::test_a_registered_value_is_replaced_everywhere_in_a_text']
+SURVIVED D7: clear does not clear: 20 passed in 0.58s
+RESULT: 23/27 killed

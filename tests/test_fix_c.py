@@ -34,6 +34,7 @@ def test_every_record_is_flushed_and_fsynced_before_emit_returns(tmp_path, monke
     seen = []
 
     def fake_fsync(fd):
+        assert os.fstat(fd).st_ino == path.stat().st_ino        # the descriptor of the log file itself
         seen.append(Path(path).read_text(encoding="utf-8"))   # what a reader sees at the moment of the fsync
     monkeypatch.setattr(os, "fsync", fake_fsync)
     log.emit("llm_call_started", call_id="c1")
@@ -155,3 +156,20 @@ def test_scrub_value_walks_dicts_lists_and_tuples_and_leaves_other_types():
     redact.register(CANARY)
     out = redact.scrub_value({"a": (CANARY, 1, None, 2.5, True), f"k{CANARY}": {"b": [CANARY]}})
     assert out == {"a": [redact.MARK, 1, None, 2.5, True], f"k{redact.MARK}": {"b": [redact.MARK]}}
+
+
+def test_a_key_registered_with_surrounding_whitespace_is_hidden_without_it():
+    redact.register("  sk-whitespace-key-123456  \n")
+    assert redact.scrub("x sk-whitespace-key-123456 y") == f"x {redact.MARK} y"
+
+
+def test_the_marker_is_a_visible_fixed_word():
+    assert redact.MARK == "[redacted]"
+    redact.register(CANARY)
+    assert redact.scrub(CANARY) == "[redacted]"
+
+
+def test_clear_forgets_every_value():
+    redact.register(CANARY)
+    redact.clear()
+    assert redact.scrub(f"still {CANARY}") == f"still {CANARY}"
