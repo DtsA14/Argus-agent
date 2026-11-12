@@ -193,7 +193,8 @@ READ_MAX = 20
 def _ended(s):
     """How an attempt ended, from its committed summary (docs/reviews/SPEC_AGENT_CONTEXT_RETRY.md 2.1)."""
     wrote = s.get("wrote")
-    return (f"{s.get('end')} after {s.get('steps')} steps"
+    end = {"conflict_reported": "with a report of a conflict that the harness did not confirm"}.get(s.get("end"), s.get("end"))
+    return (f"{end} after {s.get('steps')} steps"
             + ("; it changed no file" if wrote is False else "; it changed files" if wrote else ""))
 
 

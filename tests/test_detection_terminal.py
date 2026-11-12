@@ -97,3 +97,19 @@ def test_status_shows_the_human_the_hits_and_never_the_line(tmp_path):
     assert "test detection (shown to you, never to the agent): src/shop.py:" in text and "PYTEST_CURRENT_TEST" in text   # the pattern name
     assert "os.environ.get" not in text                                                    # not the text of the line
     assert "why: test_detection" in text
+
+
+def test_a_detection_summary_without_a_list_of_hits_is_still_shown_with_its_total(tmp_path):
+    cheat = call("WriteFile", {"path": "src/shop.py", "content": td.FIXED + "import os\nos.environ.get('PYTEST_CURRENT_TEST')\n"}, "wy")
+    from test_router import FINISH as ROUTER_FINISH
+    env = Env(tmp_path, agent=[cheat, ROUTER_FINISH])
+    env.code()
+    env.approve()
+    rj_path = env.job().runs / "jtest-a1" / "result.json"
+    r = json.loads(rj_path.read_text())
+    r["verdict"]["detected"] = {"total": 7}
+    rj_path.write_text(json.dumps(r))
+    assert any(x.startswith("test detection") for x in rj.detection_lines(env.job()))
+    r["verdict"]["detected"] = {"total": 7, "hits": None}
+    rj_path.write_text(json.dumps(r))
+    assert rj.detection_lines(env.job())

@@ -557,7 +557,7 @@ def test_retry_not_a_conflict_runs_the_agent_told_so_and_it_cannot_report_again(
     assert f"{td.OLD_NODE} (builtins.AssertionError)" in first and "ReportConflict is not available in this run" in first
     answer = next(m.content for c in reversed(env.coder.calls) for m in c["messages"]
                   if getattr(m, "tool_call_id", None) == "rc2")
-    assert answer.startswith("Refused: ReportConflict was already used") and rj.NOT_A_CONFLICT in answer
+    assert answer.startswith("Refused: ReportConflict is not available in this run") and "judged the old tests right" in answer
     assert [e for e in job.data["log"] if e["what"] == "retry"][-1]["not_a_conflict"] is True
 
 
@@ -615,7 +615,7 @@ def test_the_humans_judgement_holds_for_a_later_plain_retry_of_the_same_job(tmp_
     assert job.data["stages"]["a3"]["carry"]["not_a_conflict"]["files"] == ["tests/test_old.py"]
     answer = next(m.content for c in reversed(env.coder.calls) for m in c["messages"]
                   if getattr(m, "tool_call_id", None) == "rc9")
-    assert answer.startswith("Refused: ReportConflict was already used") and job.data["state"] == rj.REVIEW_READY
+    assert answer.startswith("Refused: ReportConflict is not available in this run") and job.data["state"] == rj.REVIEW_READY
 
 
 def test_each_validation_is_checked_with_its_own_runner_timeout_and_environment(tmp_path):
@@ -746,3 +746,18 @@ def test_a_workspace_run_that_cannot_be_read_does_not_confirm_and_says_so(tmp_pa
             return base(nodes, workdir, scfg, **kw)
         c.red = red
     breaks(tmp_path, change, "the run on the workspace could not be read")
+
+
+def test_a_human_judged_run_is_not_told_that_it_already_reported(tmp_path):
+    (tmp_path / "ws").mkdir()
+    state = {"files": ["tests/test_old.py"], "unconfirmed": ["a human judged this is not a conflict"], "by_human": True}
+    box = tl.Toolbox(str(tmp_path / "ws"), CONTRACT, {}, {"report_conflict"}, _Log(), conflict=state)
+    out = box.run({"name": "ReportConflict", "args": {"files": ["tests/test_old.py"]}})
+    assert out["finished"] is False and "judged the old tests right" in out["content"] and "already used" not in out["content"]
+
+
+def test_the_next_prompt_explains_a_conflict_report_that_ended_an_attempt():
+    from codetask.agent import _ended
+    text = _ended({"end": "conflict_reported", "steps": 4, "wrote": True})
+    assert "conflict_reported" not in text and "did not confirm" in text and "4 steps" in text
+    assert _ended({"end": "finished", "steps": 2, "wrote": False}) == "finished after 2 steps; it changed no file"

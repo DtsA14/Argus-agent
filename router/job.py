@@ -1447,8 +1447,9 @@ def detection_lines(job):
         d = (r.get("verdict") or {}).get("detected")
         if not isinstance(d, dict):
             return []
-        hits = ", ".join(f"{h.get('path')}:{h.get('line')} {h.get('pattern')}" for h in (d.get("hits") or []))
-        more = f" (+{d['total'] - len(d['hits'])} more)" if isinstance(d.get("total"), int) and d["total"] > len(d.get("hits") or []) else ""
+        listed = d.get("hits") or []
+        hits = ", ".join(f"{h.get('path')}:{h.get('line')} {h.get('pattern')}" for h in listed)
+        more = f" (+{d['total'] - len(listed)} more)" if isinstance(d.get("total"), int) and d["total"] > len(listed) else ""
         return [f"test detection (shown to you, never to the agent): {hits}{more}"]
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         return []

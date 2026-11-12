@@ -518,6 +518,9 @@ class Toolbox:
         if self.conflict is not None:
             items = self.conflict.get("unconfirmed") or []
             why = "; ".join(str(x)[:160] for x in items[:3]) or "no reason recorded"
+            if self.conflict.get("by_human"):          # nothing was reported in this run: a human decided before it started
+                return {"content": "Refused: ReportConflict is not available in this run: a human looked at an earlier report "
+                                   "and judged the old tests right. Make them pass, or call Finish.", "finished": False}
             return {"content": "Refused: ReportConflict was already used in this run and was not confirmed "
                                f"({why}); fix the code or call Finish.", "finished": False}
         doc = {"claims": [], "summary": REPORT_SUMMARY}
