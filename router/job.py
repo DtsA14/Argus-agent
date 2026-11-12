@@ -44,7 +44,7 @@ from acceptance import changed as ch
 from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
-from acceptance import leaks
+from acceptance import leaks, repro
 from harness.events import parse_lines
 from harness.llm import reconcile_ledger, to_nano
 from tools.web import problem as web_problem
@@ -556,11 +556,40 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
         job.data["intake"] = {k: rec[k] for k in ("commit", "tree", "files", "snapshot_sha256")}
         job.data["protected_repo"] = rec.get("protected")           # SPEC_PROTECTED_FILES P2: the list, frozen
         job.note(deps, "intaken", files=rec["files"])
+        _repro(job, cfg)
         if research:
             _research(job, cfg, deps)
         else:
             _draft(job, cfg, deps, 1)
     return job
+
+
+REPRO = "repro.json"
+
+
+def _repro(job, cfg):
+    """SPEC_REPRO_V0 R1: the issue's python examples run on a copy of the base tree and the result is kept with the job.
+    Display only: nothing here can refuse, block or change the job, and any error leaves no file."""
+    try:
+        name = job.data["inputs"].get("environment")
+        scfg = {**(cfg.get("sandbox") or {}), **({"environment": name} if name else {})}
+        issue = job.data["inputs"]["issue"]
+        found = repro.run(job.root / "fixtures" / "repos" / BASE, issue, scfg)
+        repro.store(job.dir / REPRO, issue, job.data["intake"]["snapshot_sha256"], found)
+    except Exception:
+        pass
+
+
+def repro_lines(job):
+    """The approve/status line for the stored example run, checked against the issue and base it was made for (a job from
+    before this existed has no file and no line)."""
+    try:
+        if not (job.dir / REPRO).exists():
+            return []
+        found = repro.load(job.dir / REPRO, job.data["inputs"]["issue"], job.data["intake"]["snapshot_sha256"])
+        return [repro.line(found)]
+    except Exception:
+        return []
 
 
 RESEARCH_CONTEXT = "research_context.txt"
@@ -857,6 +886,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                    + (", ".join(v.get("must_pass") or []) or "none") for v in c["validation"]],
                  *changed_lines(job, draft),
                  *leak_lines(job, draft),
+                 *repro_lines(job),
                  *call_path_lines(path, draft),
                  f"tools added: {c.get('tools') or 'none'}; profile {profile}; one attempt ${need:.2f}",
                  *([f"network: ReadDocs on {len(cfg['web']['hosts'])} allowlisted hosts "
@@ -1487,6 +1517,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                 *[f"validation {v['id']}{_env(v)}: {' '.join([v['executable'], *v['args']])}" for v in c["validation"]],
                 *changed_lines(job, draft),
                 *leak_lines(job, draft),
+                *repro_lines(job),
                 *call_path_lines(path, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     if d["state"] in (AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE):
