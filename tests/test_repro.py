@@ -218,3 +218,23 @@ def test_control_characters_in_what_the_code_prints_never_reach_the_screen():
     for text in (r["stdout"], r["stderr_last_line"], rp.line([r])):
         assert not rp.CONTROL.search(text) and "\x1b" not in text and "\r" not in text
     assert r["stdout"] == "a?[2Jb\tc\nd" and r["stderr_last_line"] == "?[1Ahidden??31m ok"
+
+
+def test_a_clean_run_keeps_no_error_line_and_a_long_error_is_cut_in_the_line():
+    noisy = {"exit_code": 0, "stdout": "x", "stderr": "DeprecationWarning: old\n", "timed_out": False}
+    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=Box(noisy))
+    assert r["status"] == "ok" and r["stderr_last_line"] == ""
+    long = rp.line([{"status": "raised", "stderr_last_line": "E" * 500}])
+    assert long == "issue example at base: raised " + "E" * 80
+
+
+def test_the_jobs_sandbox_environment_reaches_the_run(tmp_path, monkeypatch):
+    env, job = code_with(tmp_path, monkeypatch, Box(OK))
+    seen = []
+    monkeypatch.setattr(rp, "run", lambda base, text, scfg, runner=None: seen.append(scfg) or [])
+    job.data["inputs"]["environment"] = "py312"
+    rj._repro(job, {"sandbox": {"kind": "docker", "image": "i"}}, env.deps)
+    assert seen == [{"kind": "docker", "image": "i", "environment": "py312"}]
+    job.data["inputs"].pop("environment")
+    rj._repro(job, {"sandbox": {"kind": "docker"}}, env.deps)
+    assert seen[1] == {"kind": "docker"}
