@@ -238,3 +238,24 @@ def test_the_jobs_sandbox_environment_reaches_the_run(tmp_path, monkeypatch):
     job.data["inputs"].pop("environment")
     rj._repro(job, {"sandbox": {"kind": "docker"}}, env.deps)
     assert seen[1] == {"kind": "docker"}
+
+
+def test_the_line_shows_the_last_line_of_what_a_clean_run_printed():
+    r = {"status": "ok", "stdout": "FilePerms(user='rw')\n0o600\n0o600\n\n"}
+    assert rp.line([r]).startswith('issue example at base: ran clean, last output "0o600": a clean run does not')
+    assert rp.line([{"status": "ok", "stdout": ""}]).startswith("issue example at base: ran clean: a clean run")
+    long = rp.line([{"status": "ok", "stdout": "o" * 500}])
+    assert 'last output "' + "o" * rp.OUT_SHOWN + '"' in long and "o" * (rp.OUT_SHOWN + 1) not in long
+
+
+def test_the_output_shown_on_the_line_comes_from_the_cleaned_run(tmp_path):
+    box = Box({"exit_code": 0, "stdout": "fine\n\x1b[2Jgone", "stderr": "", "timed_out": False})
+    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=box)
+    assert "\x1b" not in rp.line([r]) and 'last output "?[2Jgone"' in rp.line([r])
+
+
+@pytest.mark.parametrize("mark", ["\u202e", "\u202a", "\u2066", "\u200f", "\u200b", "\u2028", "\u2029", "\u061c", "\ufeff"])
+def test_unicode_marks_that_reorder_or_hide_text_are_replaced(mark):
+    box = Box({"exit_code": 1, "stdout": f"a{mark}b", "stderr": f"ValueError: x{mark}y", "timed_out": False})
+    (r,) = rp.run(Path("."), issue("raise ValueError"), {}, runner=box)
+    assert mark not in r["stdout"] and mark not in r["stderr_last_line"] and mark not in rp.line([r])

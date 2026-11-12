@@ -2,7 +2,7 @@
 
 An issue that is already fixed at the base gives the drafter nothing to reproduce; it drafts something else, and the draft can
 look fine. This runs the Python code blocks of the issue in the sandbox on a copy of the base tree and shows what they do, so
-a human sees "ran clean, printed 0o600" next to an issue that says 0o644. Display only: it never refuses, never changes a
+a human sees `ran clean, last output "0o600"` next to an issue that says 0o644. Display only: it never refuses, never changes a
 draft, and any error (sandbox down, odd issue text) gives no result. A clean run does not prove the bug is gone, and a crash
 does not prove it is there: the human reads the output against the issue.
 """
@@ -17,6 +17,7 @@ from pathlib import Path
 MAX_BLOCKS = 3
 MAX_CODE_BYTES = 4000
 MAX_OUT = 2000
+OUT_SHOWN = 60       # characters of the last output line shown on the approve line
 TIMEOUT_S = 20
 PRELUDE = "import sys; sys.path.insert(0, '/workspace')\n"      # the sandbox runs python -I: the project is not importable otherwise
 # the info string may carry more than the language (```python title=x, ```{.python}, ```python {1,2})
@@ -51,7 +52,9 @@ def key(issue, snapshot_sha256):
     return hashlib.sha256(f"{snapshot_sha256}\n{issue}".encode("utf-8")).hexdigest()
 
 
-CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+# C0/C1 controls (a newline and a tab stay), and the Unicode marks that reorder or hide text (bidi, zero width, line and
+# paragraph separators): none of them is shown to the human
+CONTROL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]")
 
 
 def _cut(text, limit):
@@ -134,7 +137,8 @@ def line(results):
     parts = []
     for r in ran:
         if r["status"] == "ok":
-            parts.append("ran clean")
+            last = _last_line(r.get("stdout"))[:OUT_SHOWN]
+            parts.append(f'ran clean, last output "{last}"' if last else "ran clean")
         elif r["status"] == "raised":
             parts.append("raised " + (r.get("stderr_last_line") or "an error")[:80])
         else:
