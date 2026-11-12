@@ -39,6 +39,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["code_task"]["context_notice_at"]         # SPEC_AGENT_CONTEXT_RETRY (absent means off, as they ran)
     del base["code_task"]["max_input_tokens_by_model"]  # (only for profiles with max_input_tokens; these arms had none)
     del base["code_task"]["max_output_tokens_by_model"]  # SPEC_AGENT_OUTPUT_BUDGET (only USD profiles; these arms had none)
+    base["tools"]["coder"] = [t for t in base["tools"]["coder"] if t != "report_conflict"]   # SPEC_REPORT_CONFLICT (the arms ran before it)
     del base["drafter"], base["roles"]["drafter"], base["tools"]["drafter"]   # W2b (a role and section they never used)
     del base["router"]                                                      # router v0 (never used by these arms)
     del base["gateway_models"], base["gateway"], base["providers"]["openrouter"]   # SPEC_GATEWAY_PROVIDER (never used)

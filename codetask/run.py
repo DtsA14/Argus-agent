@@ -15,6 +15,7 @@ So resuming can never give back money that was spent, and the run cannot exceed 
 Every node runs under harness.guard: its result is committed to the memo before it is handed to LangGraph, and a
 committed result is never recomputed. Checkpoints use durability="sync".
 """
+import hashlib
 import json
 import math
 import operator
@@ -27,9 +28,10 @@ from typing import Annotated, TypedDict
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
+from acceptance import conflict as conflict_mod
 from acceptance import contract as ct
 from acceptance import intake
-from acceptance.validation import run_validation
+from acceptance.validation import red_check_ex, run_validation
 from acceptance.verdict import evaluate
 from acceptance.workspace import digest, prepare
 from harness.crash import Crasher
@@ -83,6 +85,8 @@ class State(TypedDict, total=False):
     loop_policy: dict            # D3, frozen at setup: auto_validate, auto_validate_max (absent: a run from before D3)
     web: dict                    # SPEC_WEB_TOOLS, frozen at setup when ReadDocs is granted: {hosts, limits}
     repo_protected: list         # SPEC_PROTECTED_FILES, frozen at setup from the intake record: the repository's globs
+    conflict: dict               # SPEC_REPORT_CONFLICT: {files, unconfirmed}; set once a report was not confirmed (or by a
+                                 # human's retry): ReportConflict is refused in the tool reply while it is set
     tokens_used: Annotated[int, operator.add]
     usd_used: Annotated[float, operator.add]
     elapsed_s: Annotated[float, operator.add]
@@ -184,12 +188,15 @@ def admission(log, lim):
 
 
 def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, validate=None, preflight=None,
-                env_preflight=None, root=None, initial_feedback=None, web_spawn=None):
+                env_preflight=None, root=None, initial_feedback=None, web_spawn=None, red=None, initial_conflict=None):
     """validate / preflight / env_preflight: injected by tests to run without Docker (default: the real sandbox).
     web_spawn: injected by tests for ReadDocs's downloader (default: tools.web.spawn, a child process).
     initial_feedback: what attempt 0 is told about a previous run of the same task (a router retry); frozen at setup.
     root: where the contract's input repository and its intake record live (a router job has its own); None is this
-    checkout (ROOT, read when called)."""
+    checkout (ROOT, read when called).
+    red: the red check of SPEC_REPORT_CONFLICT's verification, injected by tests (default acceptance.validation.red_check_ex).
+    initial_conflict: a human's "this is not a conflict" (router retry --not-a-conflict): the run starts with the `conflict`
+    state set, so ReportConflict is refused in the tool reply for the whole run."""
     run_dir, root = Path(run_dir), Path(ROOT if root is None else root)
     ws = run_dir / WORKSPACE
     memo = Memo(run_dir / "memo.sqlite")
@@ -206,7 +213,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
     caller = LLMCaller(cfg, cfg["code_task"]["role"], log, model=(models or {}).get(cfg["code_task"]["role"]))
     from tools.sandbox import tool_version
     versions = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "WriteFile": "2", "EditFile": "2", "ReadDocs": "1", "Finish": "1",
-                "RunValidation": f"1:{tool_version(scfg)}"}
+                "RunValidation": f"1:{tool_version(scfg)}", "ReportConflict": "1:"}
     attempt_fn = make_attempt(caller, memo, log, tokens=lim0["attempt_tokens"], usd=lim0["attempt_usd"],
                               max_steps=lim0["max_steps"], tool_versions=versions, crasher=crasher,
                               max_input=lim0["max_input_tokens"])
@@ -307,7 +314,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                     feedback=initial_feedback or [],
                     tools=effective_tools(contract), provenance=provenance, budget_profile=budget, loop_policy=policy,
                     **({"web": frozen_web} if frozen_web else {}),
-                    **({"repo_protected": repo_protected} if repo_protected else {}))
+                    **({"repo_protected": repo_protected} if repo_protected else {}),
+                    **({"conflict": initial_conflict} if initial_conflict else {}))
 
     def agent(state):
         try:
@@ -329,6 +337,10 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         # RunValidation results are memo-keyed by the images that ran them, environments included (a contract
         # without environments keeps the key it always had).
         versions["RunValidation"] = f"1:{tool_version(scfg, ct.environments(contract))}"
+        # The reply of ReportConflict depends on the run's `conflict` state (SPEC_REPORT_CONFLICT v3 C7), so the state is in
+        # the memo key of the tool step: the same input as before gives the same key, a different state a different one.
+        versions["ReportConflict"] = "1:" + hashlib.sha256(
+            json.dumps(state.get("conflict"), sort_keys=True).encode("utf-8")).hexdigest()[:12]
         docs = None
         if "read_docs" in tools:              # the hosts and limits frozen at setup, never this process's config
             if not state.get("web"):
@@ -336,12 +348,14 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                             blocked="invalid_contract")
             docs = web.DocsReader(state["web"], run_dir, state["iteration"], log, spawn=web_spawn or web.spawn)
         box = Toolbox(str(ws), contract, scfg, tools, log, validate=validate, journal=run_dir / "tool_journal.jsonl",
-                      crasher=crasher, docs=docs, repo_protected=state.get("repo_protected") or ())
+                      crasher=crasher, docs=docs, repo_protected=state.get("repo_protected") or (),
+                      conflict=state.get("conflict"))
         # The policy frozen at setup, not this process's config: a resume must decide every step as the run did.
         a = attempt_fn(contract, box, state["iteration"], state.get("feedback") or None,
                        policy=state.get("loop_policy"))
         return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"],
-                            "wrote": a["wrote"], "read": a["read"]},
+                            "wrote": a["wrote"], "read": a["read"],
+                            **({"conflict": a["conflict"]} if a.get("conflict") else {})},
                 "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}
 
     def acceptance(state):
@@ -352,6 +366,21 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         i = state["iteration"]
         v = evaluate(contract, str(ws), state["before"], scfg, log, inputs_root=root,
                      run=lambda spec, w, c, lg=None: validate(spec, w, c, lg and TaggedLog(lg, origin="acceptance")))
+        # SPEC_REPORT_CONFLICT v3 C2: the files come from the agent node's committed result, never from SUMMARY.json (the
+        # sandbox mounts the workspace writable, so code that ran there could have rewritten it).
+        reported = (state.get("attempt") or {}).get("conflict") if (state.get("attempt") or {}).get("end") == "conflict_reported" else None
+        if reported:
+            if v["outcome"] == "fail":
+                record = intake.record_for(contract["inputs"]["workspace"], root)
+                v["conflict"] = conflict_mod.verify(
+                    contract, v, reported["files"], ws=str(ws), before=state["before"],
+                    input_dir=root / contract["inputs"]["workspace"], scfg=scfg,
+                    repo_protected=state.get("repo_protected") or (),
+                    draft_files=set(intake.approved_tests(record)) if record else (),
+                    red=red or red_check_ex, log=TaggedLog(log, origin="conflict"))
+            elif v["outcome"] == "pass":      # nothing is red: there is nothing to confirm (the run is DONE, as always)
+                v["conflict"] = {"state": "unconfirmed", "files": list(reported["files"]), "nodes": [],
+                                 "unconfirmed": ["red: nothing is red"], "checks": {}, "reason": "red: nothing is red"}
         path = run_dir / f"verdict_{i}.json"
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(v, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
@@ -360,8 +389,10 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         log.emit("acceptance_verdict", iteration=i, outcome=v["outcome"], failing=failing,
                  workspace_digest=v["workspace_digest"])
         crasher.point("acceptance@after_verdict", iteration=i)
+        conf = v.get("conflict")
         summary = {"iteration": i, "outcome": v["outcome"], "failing": failing,
-                   "workspace_digest": v["workspace_digest"]}
+                   "workspace_digest": v["workspace_digest"],
+                   **({"conflict": {k: conf.get(k) for k in ("state", "files", "nodes", "unconfirmed")}} if conf else {})}
         history = list(state.get("failures") or []) + [failing]
         if v["outcome"] == "pass":
             return move(state, st.DONE, reason="all criteria passed", verdict=summary, failures=history)
@@ -372,6 +403,16 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if (state.get("attempt") or {}).get("end") == "llm_failed":
             return move(state, st.BLOCKED, reason="the model provider failed during the attempt",
                         blocked="provider_failed", verdict=summary, failures=history)
+        new_conflict = {}
+        if conf:      # C3 4: the harness's check of the report decides before max_iterations, stagnation and admission
+            if conf["state"] == "blocked":
+                return move(state, st.BLOCKED, reason=f"sandbox unavailable: {conf.get('reason')}",
+                            blocked="sandbox_unavailable", verdict=summary, failures=history)
+            if conf["state"] == "confirmed":
+                return move(state, st.BLOCKED, blocked="test_conflict", verdict=summary, failures=history,
+                            reason="the agent reported a conflict with old tests and the harness confirmed its shape: "
+                                   + ", ".join(conf["files"]))
+            new_conflict = {"conflict": {"files": list(conf["files"]), "unconfirmed": list(conf["unconfirmed"])}}
         lim = settings(cfg, contract)
         n = lim["stagnation_rounds"]
         if i + 1 >= lim["max_iterations"]:
@@ -381,8 +422,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         else:
             stop = admission(log, lim)
         if stop:
-            return move(state, st.FAILED_ACCEPTANCE, reason=stop, verdict=summary, failures=history)
-        return move(state, st.RUNNING, iteration=i + 1, verdict=summary, failures=history,
+            return move(state, st.FAILED_ACCEPTANCE, reason=stop, verdict=summary, failures=history, **new_conflict)
+        return move(state, st.RUNNING, iteration=i + 1, verdict=summary, failures=history, **new_conflict,
                     feedback=feedback_from(v, excerpts=bool(cfg["code_task"].get("feedback_error_excerpt", True)),
                                            attempt=state.get("attempt")))
 
@@ -402,7 +443,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
 
 def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_at=None, models=None,
                   validate=None, preflight=None, env_preflight=None, echo=False, root=None, initial_feedback=None,
-                  web_spawn=None):
+                  web_spawn=None, red=None, initial_conflict=None):
     run_dir = Path(runs_dir) / run_id
     if not resume and (run_dir / "checkpoints.sqlite").exists():
         raise RunExists(f"run '{run_id}' already exists in {runs_dir}; resume it or pick a new run id")
@@ -422,7 +463,8 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
     with SqliteSaver.from_conn_string(str(run_dir / "checkpoints.sqlite")) as cp:
         graph = build_graph(cfg, run_dir, log, cp, crash_at=crash_at, models=models, validate=validate,
                             preflight=preflight, env_preflight=env_preflight, root=root,
-                            initial_feedback=initial_feedback, web_spawn=web_spawn)
+                            initial_feedback=initial_feedback, web_spawn=web_spawn, red=red,
+                            initial_conflict=initial_conflict)
         try:
             if resume:
                 log.emit("resume", run_id=run_id)
@@ -456,7 +498,7 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
 
     _, totals = reconcile_ledger(log.read())
     result = {k: final.get(k) for k in ("status", "stop_reason", "blocked_reason", "contract_sha", "verdict",
-                                        "attempt", "tools", "provenance", "budget_profile", "loop_policy")}
+                                        "attempt", "tools", "provenance", "budget_profile", "loop_policy", "conflict")}
     result["cache"] = cache_totals(log.read(), cfg)
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],

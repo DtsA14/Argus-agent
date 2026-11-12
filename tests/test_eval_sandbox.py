@@ -138,7 +138,7 @@ def test_search_value_references_pass_with_search_only_where_the_contract_adds_i
     assert r.returncode == 0 and report["benchmark_valid"], (r.stdout[-2000:], r.stderr[-2000:])
     assert [t["id"] for t in report["tasks"]] == ["ledger_terms_a", "ledger_terms_b", "ledger_terms_c"]
     assert all(t["eval_pass"] and t["status"] == "DONE" for t in report["tasks"])
-    base = ["list_files", "read_file", "write_file", "run_validation"]
+    base = ["list_files", "read_file", "write_file", "run_validation", "report_conflict"]
     for k, tools in (("a", base + ["search_files"]), ("b", base + ["search_files"]), ("c", base)):
         run = tmp_path / "reference" / f"reference_ledger_terms_{k}"
         assert json.loads((run / "result.json").read_text())["tools"] == tools, k

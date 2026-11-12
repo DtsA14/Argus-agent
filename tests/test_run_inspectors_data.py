@@ -4,8 +4,8 @@ were before the change, for each synthetic run (GOLDEN), and the audit of a run 
 import json
 import sqlite3
 
-GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
+GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'report_conflict']\n"
+                 'effective system prompt sha256 0b65e7d0ce307cc59e057341523194b548959fd2112bc24d572712afc2f47cc3\n'
                  'llm_call_started 4, llm_call 4 (ok 4, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> ReadFile {"path": "src/calc.py"}\n'
@@ -26,7 +26,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  "'blocked_reason': None}\n"
                  "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
                  "1, 'usd_billed': 0.0032, 'llm_calls': 4, 'llm_calls_unknown': 0, 'tools': ['list_files', "
-                 "'read_file', 'write_file', 'run_validation']}\n",
+                 "'read_file', 'write_file', 'run_validation', 'report_conflict']}\n",
         'trace': '##### f1\n'
                  '  it0 s0 ok      in   500 | ReadFile(src/calc.py)\n'
                  '        text: ok\n'
@@ -36,8 +36,8 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  '        text: ok\n'
                  '  it0 s3 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
- 'f2': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
+ 'f2': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'report_conflict']\n"
+                 'effective system prompt sha256 0b65e7d0ce307cc59e057341523194b548959fd2112bc24d572712afc2f47cc3\n'
                  'llm_call_started 3, llm_call 3 (ok 3, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
@@ -60,7 +60,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  "'blocked_reason': None}\n"
                  "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
                  "2, 'usd_billed': 0.0024, 'llm_calls': 3, 'llm_calls_unknown': 0, 'tools': ['list_files', "
-                 "'read_file', 'write_file', 'run_validation']}\n",
+                 "'read_file', 'write_file', 'run_validation', 'report_conflict']}\n",
         'trace': '##### f2\n'
                  '  it0 s0 ok      in   500 | Finish()\n'
                  '        text: ok\n'
@@ -68,8 +68,8 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  '        text: ok\n'
                  '  it1 s1 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
- 'f3': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
+ 'f3': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'report_conflict']\n"
+                 'effective system prompt sha256 0b65e7d0ce307cc59e057341523194b548959fd2112bc24d572712afc2f47cc3\n'
                  'llm_call_started 2, llm_call 2 (ok 2, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> Finish {"claims": [{"claim": "tests_pass", "evidence": "validation:unit"}, {"claim": '
@@ -88,14 +88,14 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  "criteria failed 2 attempts in a row', 'blocked_reason': None}\n"
                  "result {'status': 'FAILED_ACCEPTANCE', 'stop_reason': 'stagnant: the same criteria failed 2 attempts "
                  "in a row', 'blocked_reason': None, 'attempts': 2, 'usd_billed': 0.0016, 'llm_calls': 2, "
-                 "'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation']}\n",
+                 "'llm_calls_unknown': 0, 'tools': ['list_files', 'read_file', 'write_file', 'run_validation', 'report_conflict']}\n",
         'trace': '##### f3\n'
                  '  it0 s0 ok      in   500 | Finish()\n'
                  '        text: ok\n'
                  '  it1 s0 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
- 'f5': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
+ 'f5': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'report_conflict']\n"
+                 'effective system prompt sha256 0b65e7d0ce307cc59e057341523194b548959fd2112bc24d572712afc2f47cc3\n'
                  'llm_call_started 3, llm_call 2 (ok 2, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> WriteFile {"content": "\\"\\"\\"Small arithmetic helpers.\\"\\"\\"\\n\\n\\ndef add(a, '
@@ -111,15 +111,15 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  "  {'event': 'status', 'old': 'RUNNING', 'new': 'DONE', 'reason': 'all criteria passed', "
                  "'blocked_reason': None}\n"
                  "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
-                 "1, 'usd_billed': 0.023721, 'llm_calls': 3, 'llm_calls_unknown': 1, 'tools': ['list_files', "
-                 "'read_file', 'write_file', 'run_validation']}\n",
+                 "1, 'usd_billed': 0.024076, 'llm_calls': 3, 'llm_calls_unknown': 1, 'tools': ['list_files', "
+                 "'read_file', 'write_file', 'run_validation', 'report_conflict']}\n",
         'trace': '##### f5\n'
                  '  it0 s0 ok      in   500 | WriteFile(src/calc.py)\n'
                  '        text: ok\n'
                  '  it0 s1 ok      in   500 | Finish()\n'
                  '        text: ok\n'},
- 'f8': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation']\n"
-                 'effective system prompt sha256 fbc2af7c09fe4eed64f3a907146d795d75a9b923cdcbfe09428831e05dd5e57b\n'
+ 'f8': {'audit': "effective tools ['list_files', 'read_file', 'write_file', 'run_validation', 'report_conflict']\n"
+                 'effective system prompt sha256 0b65e7d0ce307cc59e057341523194b548959fd2112bc24d572712afc2f47cc3\n'
                  'llm_call_started 3, llm_call 3 (ok 3, refused 0)\n'
                  '  it 0 step  0 ok       hash ok in 500 out 60 usd 0.0008 \n'
                  '      -> ReadFile {"path": "src/ddddddddddddddddddddddddddddddddddddddddddddd0.py"}\n'
@@ -140,7 +140,7 @@ GOLDEN = {'f1': {'audit': "effective tools ['list_files', 'read_file', 'write_fi
                  "'blocked_reason': None}\n"
                  "result {'status': 'DONE', 'stop_reason': 'all criteria passed', 'blocked_reason': None, 'attempts': "
                  "1, 'usd_billed': 0.0024, 'llm_calls': 3, 'llm_calls_unknown': 0, 'tools': ['list_files', "
-                 "'read_file', 'write_file', 'run_validation']}\n",
+                 "'read_file', 'write_file', 'run_validation', 'report_conflict']}\n",
         'trace': '##### f8\n'
                  '  it0 s0 ok      in   500 | ReadFile(src/ddddddddddddddddddddddddddddddddddddddddddddd0.py) '
                  'ReadFile(src/ddddddddddddddddddddddddddddddddddddddddddddd1.py) ReadFile(src/ddddddddd\n'

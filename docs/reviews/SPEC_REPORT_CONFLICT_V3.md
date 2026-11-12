@@ -1,7 +1,7 @@
 # Spek v3: `ReportConflict`, amandemen atas v2
 
-Status: **draf Claude 2026-11-12, belum disetujui sebagai teks.** Atha menyetujui arahnya di sesi 2026-11-12 (lima lubang
-di bawah, dan `retry` dengan flag eksplisit). Jalur ketat (AGENTS.md): tes yang gagal di kode lama → kode → review → mutan →
+Status: **disetujui Atha 2026-11-12** ("Gw udah setuju", sesudah membaca ringkasan Fable dan PR #471; lima lubang
+di bawah dan `retry` dengan flag eksplisit); **dikerjakan Claude 2026-11-12** sebagai PR (a): tool, verifikasi, state, `retry --not-a-conflict`. Jalur ketat (AGENTS.md): tes yang gagal di kode lama → kode → review → mutan →
 `verify_at` → "merge". Tanpa model, tanpa uang.
 
 Dasar: [`FABLE_SPEC_REPORT_CONFLICT_v1.md`](FABLE_SPEC_REPORT_CONFLICT_v1.md) dan
@@ -139,3 +139,16 @@ ada di berkas writable (kasus yang sengaja ditolak di C1). Per laporan terkonfir
 ## 6. Urutan
 
 Sesudah REPRO R1 (#468) di-merge. GATE (gerbang deteksi jadi terminal) tetap sesudah RC, PR tersendiri.
+
+## 7. Catatan pelaksanaan (2026-11-12)
+
+Dikerjakan: `acceptance/conflict.py` (verifikasi), `ReportConflict(files)` di `codetask/tools.py`, state `conflict` di `codetask/run.py`, urutan C3 di node acceptance,
+`red_check_ex` di `acceptance/validation.py` (C4: gangguan sandbox dibedakan dari run yang tak terbaca lewat nilai kembali, bukan teks), `retry --not-a-conflict`
+dan baris `status` di `router/job.py` dan `scripts/argus.py`. Keputusan kecil yang tidak ada di teks v3:
+- Semua kriteria selain validasi (lapisan A, B, D) harus lulus; satu saja gagal membuat laporan tak terkonfirmasi.
+- Syarat C1 (a)(b)(c) dikenakan pada **dua hal**: berkas node merah dan `path` dari record `red_check` (keduanya harus berkas input yang tak disentuh, terlindungi, dan bukan tes draf).
+- Berkas tes draf diambil dari `intake.approved_tests(record)` (tambahan dan perubahan yang disetujui).
+- `result.json` kini membawa state `conflict` (laporan tak terkonfirmasi dari attempt lebih awal), supaya baris B3 di `status` tetap muncul bila attempt terakhir tidak melapor.
+- Versi tool: `versions["ReportConflict"] = "1:" + sha256(json.dumps(state, sort_keys=True))[:12]`; run tanpa state memakai hash dari `null`.
+- Prompt sistem berubah (alat baru ditawarkan): hash yang dikunci di `tests/test_codetask.py`, golden `test_run_inspectors_data.py`, dan beberapa daftar tool di tes diperbarui; prompt tugas tidak berubah.
+- Tidak dikerjakan (di luar MVP, seperti v2): state job `CONFLICT`, `redraft --from-conflict`, gerbang approve, catatan untuk penulis issue.

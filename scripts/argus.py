@@ -8,7 +8,7 @@
   python scripts/argus.py applied <job> --commit <sha>   # the review package was applied in that commit of the repo
   python scripts/argus.py redraft <job>
   python scripts/argus.py resume <job>
-  python scripts/argus.py retry <job> [--max-usd X]      # after AGENT_FAILED: the agent again, as a new stage
+  python scripts/argus.py retry <job> [--max-usd X] [--not-a-conflict]   # after AGENT_FAILED: the agent again, as a new stage
   python scripts/argus.py abandon <job> "why"            # close a job that will not be continued
 
 Every live stage shows its limits, asks [y/N], then asks for the API key (not shown; never an argument, never written).
@@ -122,6 +122,9 @@ def main(argv=None, deps=None):
     t = sub.add_parser("retry")
     t.add_argument("job")
     t.add_argument("--max-usd", type=float)
+    t.add_argument("--not-a-conflict", action="store_true",
+                   help="after BLOCKED/test_conflict: you judge the old tests right; the agent runs again told so, and "
+                        "cannot report a conflict in that run")
     p = sub.add_parser("applied")
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
@@ -328,7 +331,7 @@ def main(argv=None, deps=None):
                                 web=o.web)
         elif o.cmd == "retry":
             job, _ = rj.retry(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
-                              jobs_dir=o.jobs_dir)
+                              jobs_dir=o.jobs_dir, not_a_conflict=o.not_a_conflict)
         elif o.cmd == "redraft":
             job, _ = rj.redraft(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, note=o.note)
         else:

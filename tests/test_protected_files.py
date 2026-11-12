@@ -233,8 +233,9 @@ def test_8_every_tool_method_that_writes_the_workspace_asks_writable_first():
         if any(call in src for call in ("self.jail.write", "os.remove(", "os.unlink(", "os.rename(", "os.replace(",
                                          "os.symlink(", "os.link(", "shutil.")):
             writers.append(name)
-            assert "_writable(" in src or name == "finish", f"{name} writes without _writable"
-    assert set(writers) == {"writefile", "editfile", "finish"}        # finish writes only SUMMARY, never a listed path
+            assert "_writable(" in src or name in ("finish", "reportconflict"), f"{name} writes without _writable"
+    # finish and reportconflict write only SUMMARY (the one artifact), never a path the agent names
+    assert set(writers) == {"writefile", "editfile", "finish", "reportconflict"}
     assert not {"DeleteFile", "RenameFile", "MoveFile", "Symlink"} & set(ctools.GATED)
 
 
