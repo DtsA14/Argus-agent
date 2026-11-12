@@ -14,7 +14,7 @@ Status: **done** (merged, with the evidence named) · **in PR** (written, not ye
 condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
 in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 
-**Counts (rows below):** done 10 · in PR 16 · open 20 · held 9 · dropped 9 · by design 4 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2), the PREFLIGHT draft; E1 accepted as a known limit (option C). The experiment waits for Atha (variant, go live). C9 and C10 stay open; the remaining code fixes wait for their phase.
+**Counts (rows below):** done 12 · in PR 16 · open 18 · held 9 · dropped 9 · by design 4 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2), the PREFLIGHT draft, GUARD (live); E1 accepted as a known limit. The experiment waits for Atha (variant, go live). C9 and C10 stay open; the remaining code fixes wait for their phase.
 
 ### A. Stale or unsupported documentation (section 2)
 | Id | What | Status | Evidence or next step |
@@ -92,7 +92,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | WEEKLY | One weekly line: Atha hours and Claude usage | open | Phase 1; Atha fills it, the scoreboard cites it |
 | FIX-A | D1 + D6 (+ tests for attacks A8, A7) | done | Merged #446 (`ef64710`) |
 | ENV | One-repository spike (`cachetools`), then three sandbox environments | in PR | Spike done; variant 1 (boltons + more-itertools) needs **no new environment**: `ledger_py312_up2` is already configured and checked, and ran both suites with Argus's own command; only full clones in `~/outside/` at run time; cachetools and the `src`-layout handling are deferred |
-| GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | open | Phase 1; check the ledger draft endpoint first |
+| GUARD | Phone page shows `for_human` beside new test names and changed files (attack A13) | done | Live 2026-11-12: viewer issue 045 (`argus-viewer` `bc558cc`, release `j20261112_041307_9ea8-bc558cc57b71`): block "Cek sendiri" under the Ringkasan box lists the plan's files and the failing new tests (8 max, cut at 120, always shown with a summary). Three runs, about $0.17: the first agent invented a rule that hid the block when the summary had warnings (rejected), the second was stopped by the old-test conflict gate (resolved by human commit `ae97c72`), the third was applied as reviewed |
 | PRE | `PREFLIGHT.md`: ten issues by the fixed rule | in PR | Draft prepared from metadata only (`pilots/outside_v0/PREFLIGHT_DRAFT.md`, two variants); final only after Atha picks the variant and it is committed before the first job. Rule amended: one issue per fix PR |
 | EXP | The retrospective outside experiment (kill at 2 or fewer A of 10, success at 5 or more) | open | Phase 2; Atha's "go live" and verdict |
 | FIX-B | E1 + E2 | done | E2 merged (#448); E1 held for Atha's decision (see row E1) |
@@ -101,7 +101,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | G5 | Retrospective version first | done | Decided by Atha 2026-11-11 |
 | H1 | CSV half of A15 not exploitable (the CSV has no title) | done | Checked, section 13 |
 | H2 | Attacks A8, A9, A7, A10 become regression tests of the fixes | open | With FIX-A, FIX-C, VF |
-| H3 | A13 as a guard, not an experiment | open | = GUARD |
+| H3 | A13 as a guard, not an experiment | done | A13 handled as a guard (GUARD), not run as an experiment |
 | H4, H5 | A10 forger fixtures, A11 false-conflict test | open | With VF and RC |
 | H6 | A1 succeeds by design | by design | Human reads the issue before `issue start --sha` |
 | Plan risks | ENV cost, conflicts scored as failures, narrow FIX-A, memorised fixes, the middle outcome | info | First signals in the plan, section 6 |
