@@ -28,6 +28,10 @@ the status of milestones and ADRs in `docs/Reconciliation.md`, review briefs in 
   reservation must be charged even when writing the ledger fails. Money is integer nano-dollars.
 - Unpriced models must stay refused while `budget.max_usd` is finite. Unknown cost is `null`, never `0`.
 - Do not describe heuristic token counts (non-Anthropic) as an absolute financial cap.
+- **Known limit (E1, accepted by Atha 2026-11-11):** a call on a priced model whose reply reports usage the price cannot cost (a cache write without a write rate) is recorded
+  with `usd_nano: null` and counts as 0 to the reservation and to `reconcile_ledger`. No configured model can reach it today (Anthropic must have a write rate, gateway models use the
+  gateway's reported cost, DeepSeek direct reports cache hits only), and such a run is marked `usd_complete = false`. Reopen if a direct provider that reports cache-write tokens is
+  added, or if `usd_complete = false` ever shows in a real job (`SPEC_FIX_B_UNKNOWN_COST.md`, branch `fix-b-e1-draft`).
 
 ### Crash-resume
 - A node result committed to the memo (`result_committed`) must never be recomputed or re-bought.
