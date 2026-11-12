@@ -17,3 +17,8 @@ Satu baris per tindakan manusia atau Claude di antara irisan, dengan menit (bila
 
 Hasil sementara (2026-11-12): S1, S3, S4 lolos pada draf pertama dan percobaan agen pertama atau kedua; tidak ada konflik tes lama di ketiganya; biaya model total $0,1645 (S1 $0,0375, S3 $0,0741, S4 $0,0529).
 Perekat yang tersisa sebelum fitur terlihat di HP: S2 (Stage 18) dan rilis viewer, keduanya menunggu "go live".
+| S2 | **Ketergantungan tersembunyi 2:** proxy viewer (Argus, `router/stage_viewer.py:76`) hanya meneruskan empat jalur API tetap; `/api/scoreboard` mengembalikan 404 walau ledger Stage 18 sehat. Ditemukan saat cek data nyata (langkah 5 Stage 18); PRD tidak menyebutnya | Claude | **tidak** untuk menemukannya sebelum jalan (tahap PRD tidak melihat daftar jalur proxy); ya untuk perbaikannya (satu regex, tapi jalur ketat dan perlu restart proxy) |
+| S2 | Menjalankan Stage 18 dan mencatat langkah | Claude | ya (templat sama dengan Stage 17) |
+
+Hasil probe sejauh ini: dua ketergantungan tersembunyi di sisi **Argus** (snapshot tidak memuat nama repo dan `as_is`, ditemukan saat menulis PRD; proxy tidak meneruskan jalur baru, ditemukan saat staging). Keduanya jalur ketat dan tidak bisa dikerjakan Argus sendiri.
+Pelajaran untuk tahap PRD: sebelum membekukan kontrak, periksa **jalur data yang melewati Argus** (snapshot yang diterbitkan, daftar jalur proxy), bukan hanya kode aplikasi.
