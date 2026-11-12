@@ -1,0 +1,11 @@
+KILLED   scoreboard removed from the regex
+KILLED   trailing slash allowed
+KILLED   plural allowed
+KILLED   any suffix allowed
+KILLED   case-insensitive
+SURVIVED unanchored at the start
+KILLED   always asks the summary
+KILLED   adds a query to the upstream
+survivors: ['unanchored at the start']
+
+Note: "unanchored at the start" is an equivalent mutant: API.match() always anchors at the start of the string, so dropping the leading ^ changes nothing. The other 7 are killed.
