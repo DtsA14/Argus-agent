@@ -14,7 +14,7 @@ Status: **done** (merged, with the evidence named) · **in PR** (written, not ye
 condition) · **by design** (true, a documented decision) · **info** (a positive finding or a note, nothing to fix). Phases and ids are those of [`FABLE_PLAN_2026-11-11.md`](FABLE_PLAN_2026-11-11.md); the order is
 in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 
-**Counts (rows below):** done 10 · in PR 17 · open 20 · held 9 · dropped 9 · by design 3 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2), the PREFLIGHT draft. E1 waits for a decision; the experiment waits for Atha (variant, go live). C9 and C10 stay open; the remaining code fixes wait for their phase.
+**Counts (rows below):** done 10 · in PR 16 · open 20 · held 9 · dropped 9 · by design 4 · info 6 (total 74). Merged: scoreboard, FIX-A, the ENV spike, FIX-B (E2), the PREFLIGHT draft; E1 accepted as a known limit (option C). The experiment waits for Atha (variant, go live). C9 and C10 stay open; the remaining code fixes wait for their phase.
 
 ### A. Stale or unsupported documentation (section 2)
 | Id | What | Status | Evidence or next step |
@@ -68,7 +68,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | D12 | Git and docker CLI inherit key variables | open | Fold into FIX-C if cheap |
 | D13 | Path jail, sandbox flags, no unsandboxed exec hold | info | Good news |
 | D14 | Memo keys, reservation, `durability="sync"` hold | info | Good news |
-| E1 | **Unknown cost charged as zero** to the reservation | in PR | FIX-B: a call whose cost cannot be computed is charged the larger of its worst case and its real usage at the highest write rate (`charged = worst_case_unknown_cost`); tests, 22 mutants killed (`verification/fix_b_unknown_cost_mutants.log`) |
+| E1 | **Unknown cost charged as zero** to the reservation | by design | Atha chose C on 2026-11-11: accepted as a known limit (`AGENTS.md`); no configured model can reach it and the run is marked `usd_complete = false`; reopen triggers in `SPEC_FIX_B_UNKNOWN_COST.md` section 3; fix ready on branch `fix-b-e1-draft` |
 | E2 | Zero and negative prices not rejected | done | Merged #448 (`91d2572`): rates must be finite numbers of at least 0; zero input/output refused on a direct provider with a finite budget; peak multiplier at least 1; missing input/output refused; 15/15 mutants; verify_at 3689 passed |
 | E3 | Verdict-forgery fix (canaries, nonce, frozen node set) | open | = VF |
 | E4 | Zero written on a billing assumption (paid web) | dropped | Check with E1 only if cheap |
