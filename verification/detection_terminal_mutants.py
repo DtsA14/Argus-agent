@@ -1,6 +1,6 @@
 """Mutants for SPEC_TEST_DETECTION_TERMINAL (GATE) and the two small RC fixes made with it (codetask/run.py, router/job.py,
 codetask/tools.py, codetask/agent.py): each applied alone in a worktree; killed = a test failed (an error or a skip is not a kill).
-Usage: test_detection_terminal_mutants.py <worktree> <python>"""
+Usage: detection_terminal_mutants.py <worktree> <python>"""
 import subprocess
 import sys
 from pathlib import Path

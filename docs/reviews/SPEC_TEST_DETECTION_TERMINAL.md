@@ -28,4 +28,4 @@ Mengubah pola, ambang, atau cara pemindaian. Menolak `retry` biasa (retry tetap 
 
 hit saat validasi lulus semua → `FAILED_ACCEPTANCE/test_detection`, satu attempt, model tidak dipanggil lagi; hit bersama kegagalan lain → tetap terminal; hit bersama
 laporan konflik → terminal (tak terkonfirmasi); umpan balik tidak pernah memuat alasan deteksi; ringkasan membawa `detected` tanpa teks baris; `status` menampilkannya;
-verdict tanpa hit tidak berubah (stagnasi dan `max_iterations` seperti biasa). Mutants: `verification/test_detection_terminal_mutants.py`.
+verdict tanpa hit tidak berubah (stagnasi dan `max_iterations` seperti biasa). Mutants: `verification/detection_terminal_mutants.py`.
