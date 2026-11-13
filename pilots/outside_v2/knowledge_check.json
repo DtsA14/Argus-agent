@@ -1,0 +1,167 @@
+{
+ "model": "deepseek:deepseek-flash",
+ "self_reported_cutoff": "I’m unsure of my exact training-data cutoff (year and month).",
+ "usd": 0.0008697,
+ "rows": [
+  {
+   "label": "bo-322",
+   "repo": "mahmoud/boltons",
+   "issue": 322,
+   "title": "Function to format a list with commas and a final 'and'/'or'",
+   "truth_closed": "2025-12",
+   "truth_pr": 388,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "bo-393",
+   "repo": "mahmoud/boltons",
+   "issue": 393,
+   "title": "Bug: `research` fails to traverse identical small tuples.",
+   "truth_closed": "2026-01",
+   "truth_pr": 394,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "bo-383c",
+   "repo": "mahmoud/boltons",
+   "issue": 383,
+   "title": "Supporting more PathLike in path-related methods",
+   "truth_closed": "2026-07",
+   "truth_pr": 416,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "mi-1257",
+   "repo": "more-itertools/more-itertools",
+   "issue": 1257,
+   "title": "combination_with_replacement_index mistakes None values for exhaustion",
+   "truth_closed": "2026-09",
+   "truth_pr": 1261,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "mi-1277",
+   "repo": "more-itertools/more-itertools",
+   "issue": 1277,
+   "title": "zip_broadcast opens input iterables twice",
+   "truth_closed": "2026-09",
+   "truth_pr": 1278,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "mi-1284",
+   "repo": "more-itertools/more-itertools",
+   "issue": 1284,
+   "title": "bucket: a failed lookup or `in` test adds a phantom key to the keys returned by iteration",
+   "truth_closed": "2026-09",
+   "truth_pr": 1285,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "mi-1304c",
+   "repo": "more-itertools/more-itertools",
+   "issue": 1304,
+   "title": "ichunked(..., 0) raises islice's ValueError on a nonempty iterable",
+   "truth_closed": "2026-09",
+   "truth_pr": 1305,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "mi-1344c",
+   "repo": "more-itertools/more-itertools",
+   "issue": 1344,
+   "title": "numeric_range equality and hashing overflow for lengths above sys.maxsize",
+   "truth_closed": "2026-11",
+   "truth_pr": 1345,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "old-bo-297",
+   "repo": "mahmoud/boltons",
+   "issue": 297,
+   "title": "daterange(start, stop, inclusive=True) returns an infinite iterator when start and stop are identical",
+   "truth_closed": "2022-12",
+   "truth_pr": 302,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": false,
+   "pr_right": false
+  },
+  {
+   "label": "none-bo-99999",
+   "repo": "mahmoud/boltons",
+   "issue": 99999,
+   "title": "Add a frobnicate() helper to boltons.iterutils",
+   "truth_closed": null,
+   "truth_pr": null,
+   "answer": {
+    "remember": "no",
+    "closed_year_month": null,
+    "fixing_pr_number": null,
+    "fix": ""
+   },
+   "month_right": null,
+   "pr_right": null
+  }
+ ]
+}
