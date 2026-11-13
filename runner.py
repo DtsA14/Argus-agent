@@ -8,6 +8,7 @@ from graph import build_graph
 from harness.errors import BudgetExceeded, EstimateExceeded
 from harness.events import EventLog, parse_lines
 from harness.llm import reconcile_ledger
+from harness.redact import scrub_value
 from models.registry import role_warnings
 
 ROOT = Path(__file__).parent
@@ -135,6 +136,6 @@ def run_task(*, goal="", scenario="pass", run_id, runs_dir, cfg,
     # Lines of the log that could not be decoded (0 for an intact log). tokens_spent and budget_violations are counted
     # from the lines that could be, so when this is not 0 they may be short; the money is not (see read_event_log).
     result["events_skipped"] = skipped
-    (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    (run_dir / "result.json").write_text(json.dumps(scrub_value(result), ensure_ascii=False, indent=2), encoding="utf-8")
     log.emit("run_end", **result)
     return result

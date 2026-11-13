@@ -41,3 +41,14 @@ bisa jatuh saat worker B sudah di memo tetapi event-nya masih antre menunggu kun
 (diukur, 500 emit). Memo tetap benar (resume membaca memo, tidak ada kerja diulang, tidak ada uang hilang), hanya event itu yang hilang di tes yang menghitungnya.
 **Perbaikan:** simulasi crash menunggu `CRASH_GRACE_S = 0.2` detik sebelum `os._exit`. Hanya jalur simulasi (`maybe_crash`); crash sungguhan tidak berubah.
 Diukur dengan `CRASH_REPEATS=30` (verify memakai 5): tanpa jeda 15 gagal dari 251, dengan jeda 0,2 s 251 lulus.
+
+## FIX-C2 (2026-11-13): kebocoran yang ditemukan Fable pada `e892d5a`
+
+Jalur ketat (menyentuh key): berlaku AGENTS.md, **merge dari Atha**. Tanpa model, tanpa uang. Tes: `tests/test_fix_c_leaks.py`; mutants: `verification/fix_c2_mutants.py`.
+
+1. **`runner.py` `result.json`** (jalur `main.py`) ditulis tanpa `scrub_value`. Sekarang disaring, seperti `codetask/run.py`.
+2. **`verdict_N.json`** (`codetask/run.py`) ditulis tanpa `scrub_value`. Sekarang disaring. (Isinya keluaran validasi di sandbox, tempat key tidak pernah masuk; disaring karena murah dan satu pola dengan `result.json`.)
+3. **Filter terminal hanya dipasang di `scripts/argus.py`.** Sekarang `redact.install()` ada di blok `__main__` setiap entry script yang bisa memegang key: `main.py` dan `scripts/{approve_draft,calibrate_judge,check_deepseek_thinking,draft_task,measure_context,run_code_task,run_eval,smoke_live,smoke_models}.py`. Satu tes (AST) menelusuri `main.py` dan `scripts/*.py`: yang punya `__main__` dan mengimpor `models`, `runner`, `codetask` atau `router` harus memanggil `install()`, kecuali empat skrip tampilan (`pin_status`, `scoreboard`, `swe_grade`, `build_review`) yang tidak membangun klien sehingga tidak ada key terdaftar di prosesnya. Skrip baru yang lupa memasangnya membuat tes gagal.
+4. **Base64 `user:key` (HTTP Basic).** `register` kini juga mendaftarkan bagian base64 dari `<apa pun>key<apa pun>` yang tidak bergantung pada sekitarnya, untuk tiga keselarasan key di dalam grup 3 byte (hanya grup yang seluruhnya ada di dalam key). Bagian yang kurang dari 8 karakter dibuang. Diuji untuk key 8 sampai 51 karakter, user 0 sampai 11 karakter, dengan dan tanpa ekor.
+
+**Tidak ditutup, dicatat:** `checkpoints.sqlite` (isi graf agen: balasan model dan hasil tool; key tidak masuk sandbox dan teks error sudah bersih di sumbernya), data staging (`router/stage*.py`: snapshot yang dihasilkan dari job yang sudah tersaring), `acceptance/repro.py` (keluaran kode sandbox), dan teks yang dipotong penyedia atau diubah bentuknya (batas 3 di bagian D7).
