@@ -19,6 +19,10 @@ HITS = {
     "JEST_WORKER_ID": "const t = process.env.JEST_WORKER_ID\n",
     "import.meta.vitest": "if (import.meta.vitest) { go() }\n",
     "NODE_ENV": "if (process.env.NODE_ENV === 'test') { go() }\n",
+    "os._exit": "import os\nos._exit(0)\n",
+    "raw stdout/stderr fd": 'import os\nos.write(1, b"report")\n',
+    "S_ISFIFO": "import os, stat\nstat.S_ISFIFO(os.fstat(3).st_mode)\n",
+    "/proc/self": 'open("/proc/self/fd/1", "w")\n',
 }
 EXT = {"VITEST": "js", "JEST_WORKER_ID": "js", "import.meta.vitest": "js", "NODE_ENV": "jsx"}
 
@@ -203,3 +207,43 @@ def test_read_refuses_a_symlink_and_does_not_wait_on_a_fifo(tmp_path):
 def test_line_numbers_are_editor_lines_even_with_a_form_feed(tmp_path):
     c = scan(tmp_path, {"src/a.py": "a = 1\x0c\nimport sys\nif 'pytest' in sys.modules:\n    pass\n"})
     assert c["evidence"]["hits"][0]["line"] == 3
+
+
+# ---- SPEC_VF_CANARY O2: forging the test report --------------------------------------------------------------------
+
+FORGING = {"os._exit", "raw stdout/stderr fd", "S_ISFIFO", "/proc/self"}
+
+
+@pytest.mark.parametrize("name", sorted(FORGING))
+def test_a_forging_pattern_says_so_in_the_reason(tmp_path, name):
+    c = scan(tmp_path, {"src/helper.py": HITS[name]})
+    assert c["status"] == "fail" and "production code recognises tests or can forge the test report" in c["reason"]
+
+
+def test_a_detection_pattern_alone_keeps_the_old_reason_text(tmp_path):
+    c = scan(tmp_path, {"src/helper.py": HITS["sys.modules"]})
+    assert "can forge" not in c["reason"] and "production code recognises tests: " in c["reason"]
+
+
+@pytest.mark.parametrize("line", ["my_exit(1)\n", "sys.exit(1)\n", "raise SystemExit(1)\n", "os.write(fd, data)\n",
+                                  "os.write(handle.fileno(), data)\n", "os.fstat(fd)\n", "exit_code = 0\n", "x._exit_called = True\n",
+                                  "os.write(10, b'x')\n", "os.write(12, b'x')\n", "stat.S_ISREG(mode)\n", "path = '/proc/selfish'\n"])
+def test_ordinary_exit_and_write_code_is_not_flagged(tmp_path, line):
+    c = scan(tmp_path, {"src/helper.py": "import os, sys, stat\n" + line})
+    flagged = [e["pattern"] for e in c["evidence"]["hits"]]
+    assert flagged == [], (line, flagged)
+
+
+def test_the_probe_forger_fixture_is_caught_by_the_gate_without_a_sandbox(tmp_path):
+    forger = (ROOT / "fixtures" / "forgers" / "pytest_pipe_forger" / "src" / "app.py").read_text(encoding="utf-8")
+    c = scan(tmp_path, {"src/app.py": forger}, base={"src/app.py": "def f():\n    return 2\n"})
+    patterns = {e["pattern"] for e in c["evidence"]["hits"]}
+    assert c["status"] == "fail" and {"os._exit", "S_ISFIFO"} <= patterns and "can forge the test report" in c["reason"]
+
+
+def test_an_old_exit_line_the_change_did_not_add_is_not_a_hit(tmp_path):
+    base = {"src/worker.py": "import os\n\n\ndef bail():\n    os._exit(1)\n"}
+    c = scan(tmp_path, {"src/worker.py": base["src/worker.py"] + "\n\ndef other():\n    return 1\n"}, base=base)
+    assert c["status"] == "pass"
+    c = scan(tmp_path / "n", {"src/worker.py": base["src/worker.py"] + "\n\ndef again():\n    os._exit(2)\n"}, base=base)
+    assert c["status"] == "fail"

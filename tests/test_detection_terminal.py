@@ -118,3 +118,14 @@ def test_a_detection_summary_without_a_list_of_hits_is_still_shown_with_its_tota
     r["verdict"]["detected"] = {"total": 1, "hits": [{"path": "a.py", "line": 3, "pattern": "p"}]}
     rj_path.write_text(json.dumps(r))
     assert rj.detection_lines(env.job()) == ["test detection (shown to you, never to the agent): a.py:3 p"]
+
+
+def test_the_probe_forger_ends_a_run_even_though_its_validation_passes(tmp_path):
+    """SPEC_VF_CANARY O2 with GATE: the forger the probe used (a forged report, then an exit) is caught by the verdict, not by the
+    validation, which the forger fools; the run ends test_detection and a human sees the patterns."""
+    root = Path(__file__).resolve().parent.parent
+    forger = (root / "fixtures" / "forgers" / "pytest_pipe_forger" / "src" / "app.py").read_text(encoding="utf-8")
+    write = call("WriteFile", {"path": "src/calc.py", "content": FIXED + forger}, "wf")
+    r, model, d = run(tmp_path, [READ, write, CHECK, FINISH, FINISH], validate=lenient)       # the validation "passes"
+    assert r["status"] == st.FAILED_ACCEPTANCE and r["stop_reason"].startswith("test_detection") and len(model.calls) == 4
+    assert {h["pattern"] for h in r["verdict"]["detected"]["hits"]} >= {"os._exit", "S_ISFIFO"}
