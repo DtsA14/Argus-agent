@@ -31,6 +31,8 @@ nomor baris bisa bergeser), awal span `ast` tidak jatuh di awal string, atau gal
 
 **Batas yang sudah ada sebelum O2 (tidak diubah di sini):** `_hits` melewati seluruh baris yang diawali `#` atau `//`, jadi `# c\ros._exit(0)` (komentar yang diakhiri `\r` tunggal lalu kode, pada baris yang diawali `#`) tidak kena. Itu pagar per baris, di luar cakupan O2.
 
+**Biaya (ditemukan 2026-11-13 setelah #488):** `tokenize` dan pengosongan kuadratik terhadap panjang satu baris (literal data 320 KB di satu baris: 28 detik; `tokenize` saja pada 80 KB satu baris: lebih dari 3 GB memori). Baris terpanjang > `MAX_VIEW_LINE` (20.000 karakter) tidak dipersempit: pemindaian lama yang linear. Arahnya aman (lebih banyak hit, bukan lebih sedikit). Data yang sama dipecah per baris tetap dipersempit.
+
 **Pengukuran dan tinjauan:** pola gerbang O2 diukur di empat repo nyata (`argus-viewer`, `argus-ledger` dan dua lainnya): nol kecocokan, jadi kekhawatiran false positive belum pernah terjadi. Mutants 11/11 terbunuh. Reviewer sudut penyerang (sekitar 75 input: pernyataan sesudah string, senyawa satu baris, non-ASCII, CRLF, BOM, f-string Python 3.12) tidak menemukan false negative.
 
 ## Tes (gagal di kode lama)

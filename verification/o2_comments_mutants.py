@@ -18,6 +18,7 @@ M = [
     ("whole line blanked from a comment", [("spans.append((tok.start[0] - 1, tok.start[1], tok.end[0] - 1, tok.end[1]))", "spans.append((tok.start[0] - 1, 0, tok.end[0] - 1, tok.end[1]))")]),
     ("pattern detection narrowed too", [("target = view[n - 1] if name in FORGERS else line", "target = view[n - 1]")]),
     ("javascript narrowed too", [("        py = PurePosixPath(path).suffix == \".py\"\n", "        py = True\n")]),
+    ("no cutoff for a very long line", [("        if len(max(text.split(\"\\n\"), key=len)) > MAX_VIEW_LINE:", "        if False:")]),
     ("baseline scanned wide", [("for _, name, line in _hits(old, py))", "for _, name, line in _hits(old))")]),
 ]
 
