@@ -13,7 +13,7 @@ M = [
     ("a session block is skipped again", [(GATE, "    if _session(code):\n        return \"an interactive session\"\n        try:")]),
     ("the expected output is run as code", [("return [ex.source for ex in", "return [ex.source + ex.want for ex in")]),
     ("exec mode instead of single", [("'<doctest>', 'single'", "'<doctest>', 'exec'")]),
-    ("+SKIP ignored", [("if not ex.options.get(doctest.SKIP)]", "if True]")]),
+    ("+SKIP ignored", [("if not ex.options.get(doctest.SKIP) and", "if True and")]),
     ("a fresh namespace per example", [("'single'), globals())", "'single'), {{}})")]),
     ("source joined as text, not repr", [("compile({src!r},", "compile({src},")]),
     ("a bare ... line skips a session block too", [(GATE, "    if any(ln.strip() == \"...\" for ln in lines):\n        return \"bare\"\n" + GATE)]),
@@ -22,7 +22,7 @@ M = [
     ("the size limit is dropped", [("    if len(code.encode(\"utf-8\")) > MAX_CODE_BYTES:", "    if False:")]),
     ("a parser refusal is not caught", [("        except ValueError:\n            return \"doctest examples do not parse\"", "        except KeyError:\n            return \"doctest examples do not parse\"")]),
     ("no runnable example is not skipped", [("return None if _examples(code) else \"no runnable doctest example\"", "return None")]),
-    ("an empty example is kept", [("if not ex.options.get(doctest.SKIP) and ex.source.strip()]", "if not ex.options.get(doctest.SKIP)]")]),
+    ("an empty example is kept", [("and ex.source.strip()]", "]")]),
     ("the prelude is missing from a session program", [("        return PRELUDE + \"\".join(f\"exec(", "        return \"\".join(f\"exec(")]),
 ]
 
