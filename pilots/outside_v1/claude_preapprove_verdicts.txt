@@ -1,0 +1,8 @@
+mi-1284 d1 1d1c6a6047ca: pre-approve = on-target (plain dict, no insertion on read); R1 line: not run, >>> sessions, reason repeated 3x
+mi-1277 d1 4133aada1bb7: pre-approve = on-target (reuse the iterator of the scalar check); R1: raised RuntimeError: input already opened (useful, reproduces)
+mi-1257 d1 09861e17ba08: pre-approve = on-target (count matched positions, not y is None); R1: ran clean, last output 1 (= the bug: expected ValueError; the line helps only if the reader knows)
+bo-393 d1 c27c95ac890b: pre-approve = on-target (research must fire for every occurrence); R1: ran clean (uninformative: the example only defines a test function)
+bo-322 d1 a40d91580527: pre-approve = on-target (human_list(items, conjunction, oxford) as in the issue); R1: not run, >>> session
+mi-1304 CONTROL d1 4bf5f4efa772: pre-approve = on-target (same as batch 1: n==0 empty, negative ValueError); R1: raised ValueError
+mi-1344 CONTROL d1 7c01835b93ae: pre-approve = on-target plan (_len in __eq__/__hash__), same as batch 1 (where the final patch was wrong); R1: raised OverflowError (useful)
+bo-383 CONTROL d1 ca62f87807ab: pre-approve = on-target (os.fspath in AtomicSaver, same as batch 1); R1: no runnable example in the issue

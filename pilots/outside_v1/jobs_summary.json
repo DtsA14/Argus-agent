@@ -1,0 +1,146 @@
+[
+ {
+  "job": "mi-1284",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [
+   "skipped",
+   "skipped",
+   "skipped"
+  ],
+  "judge": "NOT_JUDGED",
+  "spent": 0.1692,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.007903044
+ },
+ {
+  "job": "mi-1277",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [
+   "raised"
+  ],
+  "judge": "JUDGED",
+  "spent": 0.0437,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.003453444
+ },
+ {
+  "job": "mi-1257",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [
+   "ok"
+  ],
+  "judge": "JUDGED",
+  "spent": 0.15,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.007214148
+ },
+ {
+  "job": "bo-393",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [
+   "ok"
+  ],
+  "judge": "JUDGED",
+  "spent": 0.1623,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.019381008
+ },
+ {
+  "job": "bo-322",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [
+   "skipped"
+  ],
+  "judge": "JUDGED",
+  "spent": 0.0548,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.0035226
+ },
+ {
+  "job": "mi-1304c",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [
+   "raised"
+  ],
+  "judge": "JUDGED",
+  "spent": 0.0986,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.0055449
+ },
+ {
+  "job": "mi-1344c",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [
+   "raised"
+  ],
+  "judge": "NOT_JUDGED",
+  "spent": 0.1794,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.00438828
+ },
+ {
+  "job": "bo-383c",
+  "state": "REVIEW_READY",
+  "drafts": 1,
+  "agent_stages": 1,
+  "attempts": 1,
+  "agent_end": [
+   "finished"
+  ],
+  "r1": [],
+  "judge": "JUDGED",
+  "spent": 0.0997,
+  "conflict_reports": 0,
+  "detect_stop": false,
+  "usd_agent": 0.011626512
+ }
+]
