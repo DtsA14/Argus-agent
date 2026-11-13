@@ -42,7 +42,7 @@ M = [
     ("redact: the cached order is shortest first", R, "_ordered = tuple(sorted(_secrets, key=len, reverse=True))", "_ordered = tuple(sorted(_secrets, key=len))"),
     ("redact: clear keeps the cached order", R, "        _secrets.clear()\n        _ordered = ()", "        _secrets.clear()"),
     ("conflict: a missing record reads as a failure", C, "            if base.get(n) is None:", "            if False:"),
-    ("stream: nothing scrubbed", R, "        return self._stream.write(scrub(text) if isinstance(text, str) else text)", "        return self._stream.write(text)"),
+    ("stream: nothing scrubbed", R, "        self._stream.write(scrub(text))\n        return len(text)", "        self._stream.write(text)\n        return len(text)"),
     ("stream: install does nothing", R, "            setattr(sys, name, _Scrubbing(stream))", "            pass"),
     ("stream: uninstall does nothing", R, "            setattr(sys, name, stream._stream)", "            pass"),
     ("stream: install wraps twice", R, "        if not isinstance(stream, _Scrubbing):\n            setattr(sys, name, _Scrubbing(stream))", "        setattr(sys, name, _Scrubbing(stream))"),

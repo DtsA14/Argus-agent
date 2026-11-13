@@ -1,7 +1,7 @@
 KILLED  support: not checked: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[conftest.py]']
 KILLED  support: test files not counted: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[tests/helpers.py]']
 KILLED  support: names not counted: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[pytest.ini]']
-SURVIVED support: conftest not a support name: 203 passed in 12.69s
+SURVIVED support: conftest not a support name: 212 passed in 12.75s
 KILLED  support: pytest.ini not a support name: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[pytest.ini]']
 KILLED  support: package.json not a support name: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[package.json]']
 KILLED  support: vitest config not a support name: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[vitest.config.ts]']
@@ -11,24 +11,24 @@ KILLED  O2: any _exit method: ['FAILED tests/test_test_detection.py::test_ordina
 KILLED  O2: the import of _exit not flagged: ['FAILED tests/test_test_detection.py::test_a_comment_cannot_forge_but_the_import_of__exit_and_a_call_can']
 KILLED  O2: os.exec not flagged: ['FAILED tests/test_test_detection.py::test_each_recognition_pattern_in_a_new_production_file_fails[os.exec]']
 KILLED  O2: process.exit not flagged: ['FAILED tests/test_test_detection.py::test_each_recognition_pattern_in_a_new_production_file_fails[process.exit]']
-SURVIVED O2: only process.exit: 203 passed in 13.00s
+KILLED  O2: only process.exit: ['FAILED tests/test_test_detection.py::test_every_node_way_out_of_the_process_is_a_forging_hit[process.abort()\\n]']
 KILLED  O2: fs.writeSync not flagged: ['FAILED tests/test_test_detection.py::test_each_recognition_pattern_in_a_new_production_file_fails[fs.writeSync stdout/stderr]']
 KILLED  O2: comments count for forgers: ['FAILED tests/test_test_detection.py::test_ordinary_exit_and_write_code_is_not_flagged[# os._exit(0) is how the child ends\\n]']
 KILLED  O2: comments are not read for anything: ['FAILED tests/test_test_detection.py::test_a_comment_cannot_forge_but_the_import_of__exit_and_a_call_can']
-SURVIVED O2: a commented line is flagged as forging: 203 passed in 12.99s
+KILLED  O2: a commented line is flagged as forging: ['FAILED tests/test_test_detection.py::test_a_commented_line_that_also_names_a_detection_pattern_is_not_called_forging']
+KILLED  O2: a leading * counts as a comment: ['FAILED tests/test_test_detection.py::test_a_line_that_starts_like_a_block_comment_but_holds_code_is_still_a_hit[*/ process.exit(0)\\n-process.exit]']
+KILLED  O2: a leading /* counts as a comment: ['FAILED tests/test_test_detection.py::test_a_line_that_starts_like_a_block_comment_but_holds_code_is_still_a_hit[/* c */ process.exit(0)\\n-process.exit]']
 KILLED  O2: // is not a comment: ['FAILED tests/test_test_detection.py::test_ordinary_exit_and_write_code_is_not_flagged[// process.exit(1)\\n]']
 KILLED  redact: no base64 form: ['FAILED tests/test_fix_c.py::test_the_base64_and_url_encoded_forms_of_a_key_are_hidden_too']
 KILLED  redact: no url form: ['FAILED tests/test_fix_c.py::test_the_base64_and_url_encoded_forms_of_a_key_are_hidden_too']
-SURVIVED redact: short forms registered: 203 passed in 12.72s
-KILLED  stream: nothing scrubbed: ['FAILED tests/test_fix_c.py::test_the_terminal_filter_hides_a_key_in_a_printed_traceback_of_a_chained_exception']
-KILLED  stream: install does nothing: ['FAILED tests/test_fix_c.py::test_the_terminal_filter_hides_a_key_in_a_printed_traceback_of_a_chained_exception']
-KILLED  stream: uninstall does nothing: ['FAILED tests/test_fix_c.py::test_the_filter_is_installed_once_removed_cleanly_and_passes_other_attributes']
-KILLED  stream: install wraps twice: ['FAILED tests/test_fix_c.py::test_the_filter_is_installed_once_removed_cleanly_and_passes_other_attributes']
-KILLED  stream: attributes are not passed on: ['FAILED tests/test_fix_c.py::test_the_filter_is_installed_once_removed_cleanly_and_passes_other_attributes']
-KILLED  job file: not scrubbed: ['FAILED tests/test_fix_c.py::test_a_job_file_never_holds_a_registered_key - as...']
-KILLED  result file: not scrubbed: ['FAILED tests/test_fix_c.py::test_a_result_file_never_holds_a_registered_key']
-KILLED  llm: a failed count is cut before the scrub: ['FAILED tests/test_fix_c.py::test_a_failed_token_count_is_scrubbed_before_its_cut_too']
-KILLED  llm: a failed call is cut before the scrub: ['FAILED tests/test_fix_c.py::test_an_error_text_is_scrubbed_before_it_is_cut_so_no_prefix_of_a_key_is_left']
-KILLED  live: a typed key is not registered: ['FAILED tests/test_fix_c.py::test_a_key_typed_for_a_live_stage_is_registered_from_then_on']
-RESULT: 28/32 killed
-NOTE: of the 4 survivors of this run, two were closed by tests afterwards (O2: only process.exit; O2: a commented line flagged as forging: both killed on rerun) and two are equivalent: "support: conftest not a support name" (conftest.py is also a test file by acceptance/testdetect.is_test_file) and "redact: short forms registered" (every encoded form of a key of at least 8 characters is at least 8 characters). Combined: 30/32 killed, 2 equivalent.
+SURVIVED redact: short forms registered: 212 passed in 13.21s
+KILLED  stream: write reports the scrubbed length: ['FAILED tests/test_fix_c.py::test_the_terminal_filter_reports_the_length_it_was_given_even_when_a_key_was_replaced']
+KILLED  redact: the cached order is not rebuilt: ['FAILED tests/test_fix_c.py::test_a_registered_value_is_replaced_everywhere_in_a_text']
+KILLED  redact: the cached order is shortest first: ['FAILED tests/test_fix_c.py::test_the_longer_value_is_hidden_whole_when_one_contains_the_other']
+KILLED  redact: clear keeps the cached order: ['FAILED tests/test_fix_c.py::test_clear_forgets_every_value - AssertionError: ...']
+KILLED  conflict: a missing record reads as a failure: ['FAILED tests/test_report_conflict.py::test_a_missing_record_for_a_node_does_not_confirm_and_says_it_is_missing']
+Traceback (most recent call last):
+  File "/home/ubuntu/Argus-agent/verification/hardening_mutants.py", line 64, in <module>
+    assert orig.count(old) == 1, (name, orig.count(old))
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('stream: nothing scrubbed', 0)
