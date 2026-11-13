@@ -68,4 +68,4 @@ One repository; eight jobs (counts of what fired are data points, not rates); th
 
 ## Go live
 
-Not given. (Atha adds the line `FROZEN: go live <date>` here and commits it; the first job starts after that commit.)
+FROZEN: go live 2026-11-13 (Atha, in chat: "Ok bereskan docker dan go live"). Harness commit for the whole batch: `7ba6d2fee09169eda9e0b4159f817fb8492dbeda` (pilots/ files only change after it). Docker was cleaned first: 788 unreferenced dangling images removed, 10 kept because a pin or a job needs them, all 20 pins checked present; disk 91% -> 59%.
