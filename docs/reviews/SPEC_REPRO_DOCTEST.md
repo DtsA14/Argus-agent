@@ -16,7 +16,7 @@ Sebuah blok python yang punya baris `>>>` dibaca dengan `doctest.DocTestParser()
 (itu yang dibandingkan R1b: status, tipe exception, baris keluaran terakhir). Sumber dimasukkan lewat `repr()`, tidak pernah disambung sebagai teks program.
 
 - Keluaran yang diharapkan (baris di bawah `>>>`, termasuk komentar di ujungnya) **tidak dijalankan dan tidak dibandingkan**; membandingkan adalah R2.
-- Contoh dengan `# doctest: +SKIP` dilewati. Opsi `doctest` lain diabaikan.
+- Contoh dengan `# doctest: +SKIP` dilewati, dan juga contoh yang sumbernya kosong atau hanya spasi (prompt `>>>` sendirian, termasuk sebelum CRLF atau form feed; ditemukan reviewer). Opsi `doctest` lain diabaikan.
 - Exception menghentikan blok (status `raised`), seperti skrip biasa; tidak ada toleransi "Traceback yang diharapkan".
 - Blok doctest yang tidak punya contoh yang bisa dijalankan: `skipped`, alasan "no runnable doctest example". Parser menolak blok (`ValueError`, mis. `...x` tanpa spasi): `skipped`, alasan "doctest examples do not parse".
 - Batas lama tetap: paling banyak 3 blok, sumber blok ≤ 4.000 byte (diukur pada teks blok), 20 s, keluaran 2.000 byte. Baris `$ ` tetap membuat blok dilewati. Baris `...` sendirian tetap membuat blok

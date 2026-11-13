@@ -143,3 +143,17 @@ def test_label_and_line_treat_a_session_result_like_a_script_result():
     base = [{"index": 0, "status": "raised", "stdout": "", "stderr_last_line": "KeyError: 'c'", "reason": "", "exit_code": 1}]
     patched = [{"index": 0, "status": "ok", "stdout": "[]\n", "stderr_last_line": "", "reason": "", "exit_code": 0}]
     assert rp.label(base, patched) == ["changed"] and rp.label(base, base) == ["unchanged"]
+
+
+# ---- a prompt with nothing after it (found by review: CRLF issue bodies, form feed) ---------------------------------------------
+
+@pytest.mark.parametrize("code", ["   >>> \r\n", "   >>> \n", ">>>\n", "  >>> \x0c\n"])
+def test_a_bare_prompt_is_not_an_example(code):
+    assert "no runnable doctest example" in rp.skip_reason(code)
+
+
+def test_a_bare_prompt_does_not_stop_the_examples_after_it(tmp_path):
+    rc, out, _ = execute("  >>> \x0c\n>>> print(3)\n3\n", tmp_path)
+    assert (rc, out) == (0, "3\n")
+    rc, out, _ = execute(">>> print(1)\r\n1\r\n>>> \r\n>>> print(2)\r\n2\r\n", tmp_path)
+    assert (rc, out) == (0, "1\n2\n")

@@ -43,7 +43,8 @@ def _session(code):
 def _examples(code):
     """[source] of the examples of a session block that run, in order (`# doctest: +SKIP` ones left out); ValueError when
     doctest's parser refuses the block. The expected output is not kept: comparing it is R2."""
-    return [ex.source for ex in doctest.DocTestParser().get_examples(code) if not ex.options.get(doctest.SKIP)]
+    return [ex.source for ex in doctest.DocTestParser().get_examples(code)
+            if not ex.options.get(doctest.SKIP) and ex.source.strip()]       # a bare prompt (or one before CRLF) has no code
 
 
 def skip_reason(code):
