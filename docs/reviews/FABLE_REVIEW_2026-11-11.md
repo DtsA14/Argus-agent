@@ -58,7 +58,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | D2 | `EventLog.emit` never fsyncs; a damaged non-final line is skipped silently | fsync done 2026-11-12 (#472); the damaged-line error is NOT done, by reason (`SPEC_FIX_C.md`) | reopen if the runner's count of undecodable lines is ever non-zero on a real job |
 | D3 | `scripts/smoke_models.py` calls a model outside `LLMCaller` | in PR | Exception written into `AGENTS.md` ("by decision"); no code change |
 | D4 | `get_num_tokens_from_messages` / `list_models` outside the ledger | open | Check whether they cost money (unverified) |
-| D5 | **Forgeable verdict** (tests share a process with the agent's code) | **CONFIRMED 2026-11-12** (probe A10, #475: a raw-fd forger passes the pytest validation); fix waits for Atha (O2 forger patterns in the detection gate first, O1 canary later; `SPEC_VF_CANARY.md`) | until then "never apply a DONE job unread" |
+| D5 | **Forgeable verdict** (tests share a process with the agent's code) | **CONFIRMED 2026-11-12** (probe A10, #475: a raw-fd forger passes the pytest validation); O2 (forger patterns in the detection gate, terminal via GATE) merged 2026-11-13 (#477); the validation itself still passes the forger until O1 (canary and nonce, own spec; `SPEC_VF_CANARY.md`) | until then "never apply a DONE job unread" |
 | D6 | `RunValidation` result unlabelled as data | done | Merged #446: `RUN_LABEL` line before the JSON; the tool version is deliberately not bumped |
 | D7 | No key redaction in error text | done 2026-11-12 | FIX-C merged (#472): `harness/redact.py`, event values and `LLMCallFailed`; limits listed in `SPEC_FIX_C.md` |
 | D8 | Two processes on one job spend the reservation twice | dropped | Plan: does not move a measured number |
