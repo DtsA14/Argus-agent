@@ -6,19 +6,28 @@ log and a failed model call's message, replace every registered value with a mar
 registered (a placeholder like "unused" would blank ordinary words). This is a net under the code, not a reason to put a
 key in a string: the keys stay in environment variables and key files.
 """
+import base64
+import sys
 import threading
+import urllib.parse
 
 MIN_LEN = 8
 MARK = "[redacted]"
 _lock = threading.Lock()
 _secrets = set()
+_ordered = ()                  # the registered values, longest first, rebuilt when one is added (scrub runs for every string of every event)
 
 
 def register(secret):
-    """Remember a key value so that scrub() hides it. Anything that is not a long enough string is ignored."""
+    """Remember a key value so that scrub() hides it, and its base64 and URL-encoded forms (a header or a URL may carry those).
+    Anything that is not a long enough string is ignored."""
     if isinstance(secret, str) and len(secret.strip()) >= MIN_LEN:
+        key = secret.strip()
+        forms = {key, base64.b64encode(key.encode("utf-8")).decode("ascii"), urllib.parse.quote(key, safe="")}
+        global _ordered
         with _lock:
-            _secrets.add(secret.strip())
+            _secrets.update(f for f in forms if len(f) >= MIN_LEN)
+            _ordered = tuple(sorted(_secrets, key=len, reverse=True))
 
 
 def scrub(text):
@@ -26,9 +35,7 @@ def scrub(text):
     whole); anything that is not a string comes back unchanged."""
     if not isinstance(text, str) or not text:
         return text
-    with _lock:
-        secrets = sorted(_secrets, key=len, reverse=True)
-    for s in secrets:
+    for s in _ordered:
         if s in text:
             text = text.replace(s, MARK)
     return text
@@ -48,7 +55,45 @@ def scrub_value(obj):
     return obj
 
 
+class _Scrubbing:
+    """A text stream that hides registered key values from what is written to it: the traceback of a chained exception (the provider's
+    text sits in `__cause__`) and every print of an error go through it. A value split across two writes is not seen; a line is one write."""
+
+    def __init__(self, stream):
+        self._stream = stream
+
+    def write(self, text):
+        if not isinstance(text, str):
+            return self._stream.write(text)
+        self._stream.write(scrub(text))
+        return len(text)                  # what the caller handed over: a replaced key must not look like a short write
+
+    def writelines(self, lines):
+        for line in lines:
+            self.write(line)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def install():
+    """Wrap sys.stdout and sys.stderr (once) so that nothing registered is printed. Called by the command line, not by tests."""
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name)
+        if not isinstance(stream, _Scrubbing):
+            setattr(sys, name, _Scrubbing(stream))
+
+
+def uninstall():
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name)
+        if isinstance(stream, _Scrubbing):
+            setattr(sys, name, stream._stream)
+
+
 def clear():
     """Forget every registered value (tests)."""
+    global _ordered
     with _lock:
         _secrets.clear()
+        _ordered = ()

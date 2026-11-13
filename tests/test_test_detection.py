@@ -24,6 +24,9 @@ HITS = {
     "S_ISFIFO": "import os, stat\nstat.S_ISFIFO(os.fstat(3).st_mode)\n",
     "/proc/self": 'open("/proc/self/fd/1", "w")\n',
     "abrupt exit": "import os\nos.abort()\n",
+    "os.exec": "import os\nos.execv('/bin/true', ['true'])\n",
+    "process.exit": "if (done) { process.exit(0) }\n",
+    "fs.writeSync stdout/stderr": "const fs = require('fs')\nfs.writeSync(1, 'report')\n",
     "self-kill": "import os, signal\nos.kill(os.getpid(), signal.SIGKILL)\n",
 }
 EXT = {"VITEST": "js", "JEST_WORKER_ID": "js", "import.meta.vitest": "js", "NODE_ENV": "jsx"}
@@ -227,7 +230,9 @@ def test_a_detection_pattern_alone_keeps_the_old_reason_text(tmp_path):
     assert "can forge" not in c["reason"] and "production code recognises tests: " in c["reason"]
 
 
-@pytest.mark.parametrize("line", ["my_exit(1)\n", "sys.exit(1)\n", "raise SystemExit(1)\n", "os.write(fd, data)\n",
+@pytest.mark.parametrize("line", ["def _exit(self):\n    pass\n", "self._exit()\n", "obj._exit(1)\n", "# os._exit(0) is how the child ends\n", "    # os.execv(x)\n",
+                                  "// process.exit(1)\n", "from os import path, sep\n", "x = 'process_exit'\n",
+                                  "my_exit(1)\n", "sys.exit(1)\n", "raise SystemExit(1)\n", "os.write(fd, data)\n",
                                   "os.write(handle.fileno(), data)\n", "os.fstat(fd)\n", "exit_code = 0\n", "x._exit_called = True\n",
                                   "os.write(10, b'x')\n", "os.write(12, b'x')\n", "stat.S_ISREG(mode)\n", "path = '/proc/selfish'\n"])
 def test_ordinary_exit_and_write_code_is_not_flagged(tmp_path, line):
@@ -270,3 +275,33 @@ def test_the_stdout_descriptor_by_way_of_sys_stdout_is_a_hit(tmp_path):
     for text in ('import os, sys\nos.write(sys.stdout.fileno(), b"x")\n', 'import os, sys\nos.write(sys.__stderr__.fileno(), b"x")\n'):
         c = scan(tmp_path / str(hash(text)), {"src/helper.py": text})
         assert [e["pattern"] for e in c["evidence"]["hits"]] == ["raw stdout/stderr fd"], text
+
+
+def test_a_comment_cannot_forge_but_the_import_of__exit_and_a_call_can(tmp_path):
+    c = scan(tmp_path, {"src/a.py": "from os import _exit\n"})
+    assert [e["pattern"] for e in c["evidence"]["hits"]] == ["os._exit"]
+    c = scan(tmp_path / "b", {"src/b.py": "import os\nos._exit(0)  # leave\n"})
+    assert [e["pattern"] for e in c["evidence"]["hits"]] == ["os._exit"]
+    c = scan(tmp_path / "c", {"src/c.py": "# os._exit(0)\n"})
+    assert c["status"] == "pass"
+    c = scan(tmp_path / "d", {"src/d.py": "# PYTEST_CURRENT_TEST is not read here\n"})
+    assert c["status"] == "fail"                                      # a detection pattern in a comment still counts, as before
+
+
+@pytest.mark.parametrize("line", ["process.abort()\n", "process.kill(process.pid)\n", "process.exit(1)\n"])
+def test_every_node_way_out_of_the_process_is_a_forging_hit(tmp_path, line):
+    c = scan(tmp_path, {"src/a.js": "const x = 1\n" + line})
+    assert [e["pattern"] for e in c["evidence"]["hits"]] == ["process.exit"] and "can forge the test report" in c["reason"]
+
+
+def test_a_commented_line_that_also_names_a_detection_pattern_is_not_called_forging(tmp_path):
+    c = scan(tmp_path, {"src/a.py": "# PYTEST_CURRENT_TEST and os._exit(0): a note\n"})
+    (hit,) = c["evidence"]["hits"]
+    assert hit["pattern"] == "PYTEST_CURRENT_TEST" and "forging" not in hit and "can forge" not in c["reason"]
+
+
+@pytest.mark.parametrize("line,pattern", [("*/ process.exit(0)\n", "process.exit"), ("*_, x = f(); os._exit(0)\n", "os._exit"),
+                                          ("/* c */ process.exit(0)\n", "process.exit"), (" * fs.writeSync(1, x)\n", "fs.writeSync stdout/stderr")])
+def test_a_line_that_starts_like_a_block_comment_but_holds_code_is_still_a_hit(tmp_path, line, pattern):
+    c = scan(tmp_path, {"src/a.py": "import os\n" + line})
+    assert [e["pattern"] for e in c["evidence"]["hits"]] == [pattern]

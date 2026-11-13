@@ -33,7 +33,10 @@ PATTERNS = {
 # (probe A10: a forged, consistent report written to the real stdout pipe, then an exit before any test runs). Kept apart so
 # that the reason can say so; a line that matches both kinds is labelled with the first it matches and flagged as forging.
 FORGERS = {
-    "os._exit": (re.compile(r"\b_exit\s*\("),),
+    "os._exit": (re.compile(r"\bos\._exit\s*\(|\bfrom\s+os\s+import\b[^#\n]*\b_exit\b"),),
+    "os.exec": (re.compile(r"\bos\.exec(?:l|le|lp|lpe|v|ve|vp|vpe)\s*\("),),
+    "process.exit": (re.compile(r"\bprocess\.(?:exit|abort|kill)\s*\("),),
+    "fs.writeSync stdout/stderr": (re.compile(r"\bfs\.writeSync\(\s*[12]\s*,"),),
     "abrupt exit": (re.compile(r"\bos\.abort\s*\("),),
     "self-kill": (re.compile(r"\bos\.kill\(\s*os\.getpid\(\)"),),
     "raw stdout/stderr fd": (re.compile(r"\bos\.write\(\s*(?:[12]|sys\.\w*(?:stdout|stderr)\w*\.fileno\(\))\s*,"),),
@@ -52,14 +55,20 @@ def is_test_file(path):
 
 
 def _forging(line):
-    return any(all(r.search(line) for r in regexes) for regexes in FORGERS.values())
+    return not line.lstrip().startswith(COMMENT) and any(all(r.search(line) for r in regexes) for regexes in FORGERS.values())
+
+
+COMMENT = ("#", "//")      # a line that begins as a comment is a comment to its end; "*" and "/*" can start code (`*_, x = f()`, `*/ exit()`)
 
 
 def _hits(text):
     """[(line number, pattern name, line)] of one file's text; a line is reported once, for its first pattern."""
     out = []
     for n, line in enumerate(text.split("\n"), 1):
+        comment = line.lstrip().startswith(COMMENT)
         for name, regexes in PATTERNS.items():
+            if comment and name in FORGERS:
+                continue
             if all(r.search(line) for r in regexes):
                 out.append((n, name, line))
                 break

@@ -21,6 +21,7 @@ from codetask.run import RunExists
 from harness.crash import Crasher
 from harness.errors import EstimateExceeded, InputLimitExceeded, LLMCallFailed, ReservationExhausted
 from harness.events import EventLog
+from harness.redact import scrub_value
 from harness.guard import guard
 from harness.llm import LLMCaller, http_status, is_truncated, reconcile_ledger
 from harness.memo import Memo
@@ -207,6 +208,6 @@ def run_stage(*, run_id, runs_dir, inputs, resume, kind, work, estimate, usd_est
     _, totals = reconcile_ledger(log.read())
     result = {**out, "run_id": run_id, "kind": kind, "usd_billed": totals["usd"], "usd_complete": totals["usd_complete"],
               "calls": totals["calls"], "calls_unknown": totals["unknown_after_crash"]}
-    _write(run_dir / "result.json", json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    _write(run_dir / "result.json", json.dumps(scrub_value(result), ensure_ascii=False, indent=2) + "\n")
     log.emit("run_end", **{k: v for k, v in result.items() if k not in ("plan", "findings")})
     return result
