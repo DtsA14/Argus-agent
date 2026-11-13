@@ -39,11 +39,11 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | B2 | Estimate overrun handled after the money is spent (`run.py:442-455`) | by design | Heuristic counts; `AGENTS.md` already forbids calling it an absolute cap |
 | B3 | Tool versions hand-bumped; "safe to repeat" is a docstring; float money at the edges | done | Merged #446: the `RunValidation` version stays (section 14 correction); the other two points stay open |
 | B4 | `by` is `$USER` | held | Matters with a second approver |
-| B5 | No way to say "I am stuck" | open | RC, phase 3 |
-| B6 | Detection-gate hits are fed back to the agent | open | GATE, phase 3 (after RC) |
+| B5 | No way to say "I am stuck" | done 2026-11-12 | RC merged (#473, `SPEC_REPORT_CONFLICT_V3.md`): the agent names old test files, the harness checks the shape; confirmed -> BLOCKED/test_conflict |
+| B6 | Detection-gate hits are fed back to the agent | done 2026-11-12 | GATE merged (#474, `SPEC_TEST_DETECTION_TERMINAL.md`): a hit ends the run, shown to the human only |
 | B7 | `applied` ignores the judge verdict | dropped | Plan: the judge ran on 8% of code jobs |
 | B8 | Atha's time recoverable from timestamps | done | `scripts/scoreboard.py` (#444): upper bound, median 2 min per stage |
-| B9 | `ReportConflict` design | open | RC, phase 3 (spec v2 is a draft) |
+| B9 | `ReportConflict` design | done 2026-11-12 | RC merged (#473): spec v3 approved by Atha amends v2; MVP only (no CONFLICT job state, no `--from-conflict`) |
 | B10 | Chain operator breaks three rules | held | Wait for a second cross-repo chain |
 | B11 | Detection gate skips `conftest.py`, `test/`, `*.spec.*` | by design | Noted; low |
 | B12 | `leaks` cannot tell "none" from "crashed" or "not Python" | open | ADV follow-up (advisory lane) |
@@ -55,12 +55,12 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | Id | What | Status | Evidence or next step |
 |---|---|---|---|
 | D1 | **Run wedge**: `Toolbox.run` catches only two exception types; a model-chosen input wedges the run on every resume | done | Merged #446 (`ef64710`): `Toolbox.run` refuses OSError/ValueError from the file-system tools and from `Finish`; paths and args shape checked; replies scrubbed; `memo.put` survives a lone surrogate; verify_at 3652 passed |
-| D2 | `EventLog.emit` never fsyncs; a damaged non-final line is skipped silently | open | FIX-C, phase 3 |
+| D2 | `EventLog.emit` never fsyncs; a damaged non-final line is skipped silently | fsync done 2026-11-12 (#472); the damaged-line error is NOT done, by reason (`SPEC_FIX_C.md`) | reopen if the runner's count of undecodable lines is ever non-zero on a real job |
 | D3 | `scripts/smoke_models.py` calls a model outside `LLMCaller` | in PR | Exception written into `AGENTS.md` ("by decision"); no code change |
 | D4 | `get_num_tokens_from_messages` / `list_models` outside the ledger | open | Check whether they cost money (unverified) |
-| D5 | **Forgeable verdict** (tests share a process with the agent's code) | open | VF, phase 3 (spec from the canary-and-nonce sketch); until then "never apply a DONE job unread" |
+| D5 | **Forgeable verdict** (tests share a process with the agent's code) | **CONFIRMED 2026-11-12** (probe A10, #475: a raw-fd forger passes the pytest validation); fix waits for Atha (O2 forger patterns in the detection gate first, O1 canary later; `SPEC_VF_CANARY.md`) | until then "never apply a DONE job unread" |
 | D6 | `RunValidation` result unlabelled as data | done | Merged #446: `RUN_LABEL` line before the JSON; the tool version is deliberately not bumped |
-| D7 | No key redaction in error text | open | FIX-C, phase 3 |
+| D7 | No key redaction in error text | done 2026-11-12 | FIX-C merged (#472): `harness/redact.py`, event values and `LLMCallFailed`; limits listed in `SPEC_FIX_C.md` |
 | D8 | Two processes on one job spend the reservation twice | dropped | Plan: does not move a measured number |
 | D9 | A config change on resume restarts the attempt | dropped | Same |
 | D10 | `delivery="unknown"` written as 0 when `failed_attempt_charge` is not `worst_case` | dropped | Config sets `worst_case` |
@@ -100,7 +100,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | G4, G6 | Candidate suites measured; environments built | in PR | Measured (see ENV_SPIKE and its addendum); building the environment entries still open |
 | G5 | Retrospective version first | done | Decided by Atha 2026-11-11 |
 | H1 | CSV half of A15 not exploitable (the CSV has no title) | done | Checked, section 13 |
-| H2 | Attacks A8, A9, A7, A10 become regression tests of the fixes | open | With FIX-A, FIX-C, VF |
+| H2 | Attacks A8, A9, A7, A10 become regression tests of the fixes | A8, A7 (FIX-A), A9 (FIX-C) done; A10 is the xfail(strict) test `tests/test_vf_forger.py` until VF | open for A10 |
 | H3 | A13 as a guard, not an experiment | done | A13 handled as a guard (GUARD), not run as an experiment |
 | H4, H5 | A10 forger fixtures, A11 false-conflict test | open | With VF and RC |
 | H6 | A1 succeeds by design | by design | Human reads the issue before `issue start --sha` |
