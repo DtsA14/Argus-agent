@@ -369,6 +369,64 @@ def test_the_schema_and_the_prompt_tell_the_drafter_about_append():
     assert "append" in drafter.SYSTEM and "new_tests" in drafter.SYSTEM
 
 
+# ---- the drafter's submit: the whole file reaches the check, the arguments keep append -----------------------------------
+
+class Log:
+    def __init__(self):
+        self.events = []
+
+    def emit(self, event, **kw):
+        self.events.append((event, kw))
+
+
+def submit_for(tmp_path, monkeypatch, text=OLD):
+    intake_dir = tmp_path / "fixtures" / "repos" / "shop"
+    (intake_dir / "tests").mkdir(parents=True)
+    (intake_dir / PATH).write_text(text)
+    checked = []
+
+    def check(draft, **kw):
+        checked.append(copy.deepcopy(draft))
+        return {"problems": ["stop here"], "baseline": None}
+    monkeypatch.setattr(drafter.dr, "check", check)
+    submit = drafter.make_submit(inputs={"intake": "shop", "issue": "i"}, policy={**td.POLICY, "max_submits": 5},
+                                 scfg={}, root=tmp_path, log=Log(), validate=None, source=intake_dir)
+    return submit, checked
+
+
+def test_submit_checks_the_draft_with_the_whole_file_and_keeps_append_in_the_arguments(tmp_path, monkeypatch):
+    submit, checked = submit_for(tmp_path, monkeypatch)
+    r = submit(args_for(append=BLOCK), 1)
+    assert checked[0]["changed_tests"] == [{"path": PATH, "content": JOINED}] and checked[0]["new_tests"] == []
+    assert r["args"]["changed_tests"] == [{"path": PATH, "append": BLOCK}]       # ReviseDraft starts from what was written
+
+
+def test_revise_draft_can_change_an_append_and_is_built_again_from_the_intake(tmp_path, monkeypatch):
+    submit, checked = submit_for(tmp_path, monkeypatch)
+    first = submit(args_for(append=BLOCK), 1)
+    other = BLOCK.replace("1, 2", "1, 3")
+    submit({"changed_tests": [{"path": PATH, "append": other}]}, 2, last=first["args"], revise=True)
+    assert checked[1]["changed_tests"][0]["content"] == OLD.rstrip("\n") + "\n\n\n" + other.strip("\n") + "\n"
+
+
+def test_an_append_problem_stops_the_submit_before_the_sandbox(tmp_path, monkeypatch):
+    submit, checked = submit_for(tmp_path, monkeypatch, text=OLD + "\n\nif __name__ == '__main__':\n    pass\n")
+    r = submit(args_for(append=BLOCK), 1)
+    assert checked == [] and "__main__" in r["content"] and r["content"].startswith("Draft rejected")
+
+
+def test_new_tests_may_be_left_out_altogether_when_a_test_is_appended(tmp_path):
+    a = args_for(append=BLOCK)
+    del a["new_tests"]
+    draft, problems = drafter.draft_from_args(a, base="shop", policy=td.POLICY, intake_dir=intake_dir_of(tmp_path))
+    assert problems == [] and draft["new_tests"] == []
+
+
+def test_a_content_entry_of_a_model_dump_loses_only_its_none_append():
+    out, problems = build([entry(content=JOINED, append=None, removed=[], modified=[])])
+    assert problems == [] and out == [{"path": PATH, "content": JOINED, "removed": [], "modified": []}]
+
+
 # ---- end to end, in the sandbox (skipped without an image, like tests/test_draft.py) -----------------------------------
 
 import test_draft as tdr  # noqa: E402
