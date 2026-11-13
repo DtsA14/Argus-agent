@@ -488,7 +488,8 @@ def test_the_draft_review_shows_an_appended_test_as_a_new_test(tmp_path):
     assert f"  - new: `{NEW_NODE}`" in text and "existing: `" not in text
     assert f"### `{PATH}` (added at the end of the existing file)" in text
     assert "The code added at the end of the file:" in text and "def test_new(self):" in text
-    assert "class T(unittest.TestCase)" not in text.split("## New tests", 1)[1].split("## ", 1)[0]    # only the block, not the file
+    section = text.split("\n## New tests\n", 1)[1].split("\n## ", 1)[0]
+    assert "def test_new(self):" in section and "class T(unittest.TestCase)" not in section   # only the block, not the file
 
 
 def test_the_draft_review_of_a_new_test_file_is_what_it_was(tmp_path):
