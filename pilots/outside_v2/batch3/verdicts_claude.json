@@ -1,0 +1,50 @@
+{
+ "mi-1252": {
+  "verdict": "reject",
+  "reason": "cuma perapian: fix benar di tiga fungsi (guard `if buf`), tapi 18 tes di berkas baru test_split_empty_maxsplit.py, bukan test_more.py",
+  "read": "final patch",
+  "human_minutes": 0
+ },
+ "mi-1250": {
+  "verdict": "reject",
+  "reason": "cuma perapian: fix minimal dan benar (iter() di try, yield from di else), tapi 83 baris tes di berkas baru test_value_chain_lazy_errors.py, gaya assert polos",
+  "read": "final patch",
+  "human_minutes": 0
+ },
+ "mi-1247": {
+  "verdict": "reject",
+  "reason": "bukan cuma perapian: menulis ulang contains/index/len (helper baru, pencarian biner, len() jatuh ke hitung O(n) saat tidak cocok) untuk satu issue, jauh melebihi kebutuhan; plus tes di berkas baru",
+  "read": "final patch",
+  "human_minutes": 0
+ },
+ "mi-1192": {
+  "verdict": "reject",
+  "reason": "cuma perapian: fix benar (3 baris, `if not dims: return`), tapi tes di berkas baru test_interleave_evenly_empty.py",
+  "read": "final patch",
+  "human_minutes": 0
+ },
+ "mi-849": {
+  "verdict": "reject",
+  "reason": "cuma perapian: __class_getitem__ via GenericAlias benar dan docstring bagus, tapi 67 baris tes di berkas baru test_peekable_subscript.py",
+  "read": "final patch",
+  "human_minutes": 0
+ },
+ "mi-1152": {
+  "verdict": "reject",
+  "reason": "cuma perapian: fix 2 baris benar, tapi 59 baris tes di berkas baru test_numeric_range_reversed.py",
+  "read": "final patch",
+  "human_minutes": 0
+ },
+ "mi-813": {
+  "verdict": "reject",
+  "reason": "cuma perapian: penulisan ulang replace setara untuk jalur normal dan default_arg sesuai permintaan, pyi ikut; tes di berkas baru test_issue_replace_default_arg.py (nama memuat 'issue')",
+  "read": "final patch",
+  "human_minutes": 0
+ },
+ "mi-1098": {
+  "verdict": "reject",
+  "reason": "cuma perapian: synchronized sesuai draf di issue, __all__, docs dan pyi ikut; tes di berkas baru test_synchronized.py",
+  "read": "final patch",
+  "human_minutes": 0
+ }
+}
