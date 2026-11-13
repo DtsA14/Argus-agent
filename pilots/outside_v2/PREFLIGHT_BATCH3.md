@@ -9,7 +9,7 @@ how often those pieces fire, and whether the numbers of batch 2 hold. Eight jobs
 
 ## What is run
 
-Eight jobs, one per issue, each `argus code` with the issue's title and body byte for byte, `--environment ledger_py312_up2`, `--max-usd 0.50`, the rules of batch 2: at most one plain
+Eight jobs, one per issue, each `argus code` with the issue's title and body byte for byte, `--environment ledger_py312_up2`, `--max-usd 1.00` (the job cap must cover the drafter plus one agent attempt, $0.70 reserved; 0.50 was refused before any call, see Correction), the rules of batch 2: at most one plain
 `redraft` after `DRAFT_FAILED`, one `retry` after `AGENT_FAILED`, every draft the harness accepts is approved, harness frozen for the whole batch, nothing is applied (`applied` is never used),
 after `BLOCKED/test_conflict` nobody uses `--not-a-conflict` unless Atha decides it, a `test_detection` stop is final for the job. **Changes from batch 2:** the judge is off (not run; no
 `NOT_JUDGED` to count), and the verdict is on the final patch (`PROTOCOL_FINAL_PATCH.md`: Claude's verdicts are written and sealed first, then Atha chooses the nonce and reads the blind sample).
@@ -57,7 +57,7 @@ at the listed base (the old `~/outside/wt` worktrees were removed 2026-11-13 and
 
 ## Caps and stops
 
-`--max-usd 0.50` per job; the batch stops at **$2.00** real spend, or when one job passes $0.50, or on any run that ends outside the states above. Batch 2 cost $0.96 with the judge, about 77% of it the
+`--max-usd 1.00` per job (a reservation ceiling: batch 2 spent $0.04 to $0.17 per job before the judge); the batch stops at **$2.00** real spend, or when one job's real spend passes $0.50, or on any run that ends outside the states above. Batch 2 cost $0.96 with the judge, about 77% of it the
 judge; the estimate without it is $0.25 to $0.40 for eight. The deepseek key is used through `--key-file` (Atha's file; Claude never reads it), after Atha's "go live". Disk had 4.2 GB free (91%) on 2026-11-13: check
 `df` before the first job and between jobs; a failed run from a full disk is not a result.
 
@@ -69,3 +69,7 @@ One repository; eight jobs (counts of what fired are data points, not rates); th
 ## Go live
 
 FROZEN: go live 2026-11-13 (Atha, in chat: "Ok bereskan docker dan go live"). Harness commit for the whole batch: `7ba6d2fee09169eda9e0b4159f817fb8492dbeda` (pilots/ files only change after it). Docker was cleaned first: 788 unreferenced dangling images removed, 10 kept because a pin or a job needs them, all 20 pins checked present; disk 91% -> 59%.
+
+## Correction (2026-11-13, before any job spent money)
+
+The draft said `--max-usd 0.50`. The first `argus code` (more-itertools#1252, job j20261113_132406_bf0b) was refused at admission, spent $0.0000 and was abandoned: "$0.5000 left for the drafter, one attempt needs $0.70". Batch 2's `1.00` is restored. The real spending limits that Atha approved are unchanged: the $2.00 batch stop and the $0.50 real-spend stop per job.
