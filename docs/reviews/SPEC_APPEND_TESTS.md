@@ -28,7 +28,7 @@ bekerja pada isi lengkap itu, seperti sekarang.
 1. **Tepat satu** dari `content` atau `append` per entri (selain itu ditolak). `removed` dan `modified` tetap hanya berlaku untuk `content` (dengan `append`, tidak ada tes lama yang berubah, jadi keduanya harus kosong).
 2. **Urutan dan batas ukuran.** (a) Bentuk dan ukuran **blok `append`**: paling banyak `MAX_TEST_BYTES` (50.000 byte, `draft.py:60`), sama seperti `content` dan `new_tests` sekarang. (b) **Penyusunan deterministik**, sekali:
    `content = teks_intake.rstrip("\n") + "\n\n\n" + append.strip("\n") + "\n"` (dua baris kosong, PEP 8). `teks_intake` dibaca dari intake (bukan dari model). (c) Batas untuk **`content` hasil gabungan** bukan 50.000: paling banyak
-   `len(teks_intake) + MAX_TEST_BYTES` dan tidak lebih dari 1 MiB (seperti `leaks.py`). Alasannya terukur: `tests/test_more.py` berukuran 259.039 byte; batas 50.000 pada isi gabungan akan menolak berkas itu selamanya, tepat pada kasus
+   `len(teks_intake.encode("utf-8")) + MAX_TEST_BYTES` byte dan tidak lebih dari 1 MiB (1.048.576 byte); semua batas ukuran dihitung dalam **byte UTF-8**, bukan karakter (seperti `leaks.py`). Alasannya terukur: `tests/test_more.py` berukuran 259.039 byte; batas 50.000 pada isi gabungan akan menolak berkas itu selamanya, tepat pada kasus
    yang mau diperbaiki. `content` yang diberikan drafter sendiri (tanpa `append`) tetap dibatasi 50.000 seperti sekarang. (d) Baru sesudah itu semua pemeriksaan lain. Draf yang tersimpan,
    kontrak, sha persetujuan, dan patch semuanya memakai `content` lengkap; `append` disimpan juga supaya manusia melihat **hanya blok yang ditambahkan** sebagai diff (`unified()` tidak berubah: diff antara intake dan `content`
    memang hanya blok itu).
@@ -43,7 +43,7 @@ bekerja pada isi lengkap itu, seperti sekarang.
 6. **Pelonggaran `draft.py:143`:** draf valid bila `new_tests` tidak kosong **atau** ada entri `changed_tests` dengan `append` yang punya simpul wajib. Draf lama (tanpa `append`) divalidasi persis seperti sekarang.
 7. **Prompt drafter** (`codetask/drafter.py`, aturan tentang tes): "Tambahkan tes ke berkas tes yang sudah menguji modul itu dengan `append`, mengikuti gaya berkasnya (unittest atau pytest), dan tulis sendiri
    impor yang dibutuhkannya di blok itu. Berkas baru (`new_tests`) hanya bila tidak ada berkas tes yang cocok."
-8. **Tidak berubah:** agen (tes tetap protected), acceptance, baseline merah, vitest (drafter vitest tetap `new_tests` saja), batas `MAX_FILES`, batas ukuran.
+8. **Tidak berubah:** agen (tes tetap protected), acceptance, baseline merah, vitest (drafter vitest tetap `new_tests` saja), batas `MAX_FILES`, dan batas ukuran untuk `content` dan `new_tests` dari drafter (batas isi gabungan di aturan 2(c) hanya untuk entri `append`).
 
 ### Yang sengaja tidak disentuh
 
@@ -55,7 +55,7 @@ bekerja pada isi lengkap itu, seperti sekarang.
 
 | Risiko | Penanganan |
 |---|---|
-| Blok `append` memakai nama atau impor yang tidak ada di berkas | blok menulis impornya sendiri (aturan 6); red check dan validasi penuh di sandbox menangkap `NameError`/`ImportError` sebagai kegagalan non-assert (sudah ditolak oleh W2a red-by-assertion) |
+| Blok `append` memakai nama atau impor yang tidak ada di berkas | blok menulis impornya sendiri (aturan 7); red check dan validasi penuh di sandbox menangkap `NameError`/`ImportError` sebagai kegagalan non-assert (sudah ditolak oleh W2a red-by-assertion) |
 | Kelas atau fungsi baru menimpa yang lama | K1 (tes lama hilang) menolak |
 | Gaya campur (pytest di berkas unittest) | tidak dicek secara mekanis; manusia melihat diff yang hanya blok tambahan |
 | Berkas intake sangat besar | batas terpisah untuk blok (50.000) dan isi gabungan (intake + 50.000, paling banyak 1 MiB), aturan 2; ada tes untuk berkas intake di atas 50.000 byte |
@@ -67,6 +67,8 @@ bekerja pada isi lengkap itu, seperti sekarang.
 1. Tes yang gagal dulu: bentuk entri (`content` xor `append`), **berkas intake lebih besar dari 50.000 byte diterima** (dan blok `append` lebih besar dari 50.000 ditolak; isi gabungan di atas batas atasnya ditolak), **berkas dengan `__main__` ditolak**, penyusunan tepat, `append` + `removed`/`modified` ditolak, simpul wajib tua ditolak (lewat koleksi yang sama dengan K1), K1 menolak penimpaan, draf tanpa `new_tests` tapi dengan
    `append` valid, draf lama tidak berubah, vitest tidak berubah, sha/kontrak memakai `content` lengkap.
 2. Kode: `acceptance/changed.py` (bentuk dan penyusunan), `acceptance/draft.py` (pelonggaran), `codetask/drafter.py` (skema dan prompt).
+   Tambahan atas catatan review: **sha**. `materialize` (`draft.py:316`) menulis `t["content"]`, jadi penyusunan dari `append` terjadi **sebelum** draf masuk ke `materialize` dan ke perhitungan sha; ada tes bahwa
+   draf `append` dan draf `content` dengan isi gabungan yang setara menghasilkan **sha draf dan sha kontrak yang sama**.
 3. Review, mutan (`verification/append_tests_mutants.py`), `verify_at`, lalu menunggu "merge" Atha.
 
 ## 4. Pengukuran sesudahnya (butuh persetujuan uang Atha)
