@@ -31,3 +31,14 @@ Each variant is validated first: the maintainer's fix must pass all its tests, o
 2. **Judge: PASS on a wrong patch (#480), BLOCK on a wrong patch (#1344), NOT_JUDGED 4 of 10** (about $0.15 each). Do not use the judge as a gate (Fable, Claude).
 3. **Setup lessons:** base from the first commit of the fix, not from the merge commit (rebase merges); run the issue's repro at the base before spending money; pytest can hide `subTest` failures.
 4. Claude's own reading before approve agreed with the blind grade on 9 of 10 patches; it missed #343 (a public-method regression) and read the draft plan, not the final patch, for #1344.
+
+## Addendum 2026-11-13: two numbers, because of the file-mode defect
+
+After the blind grading of batch 2 it turned out that every more-itertools patch (batch 1 and batch 2) carried `old mode 100755 / new mode 100644` for `more_itertools/more.py`, a defect of the file tool (`PathJail.write_text` dropped the executable bit; fixed in #482). Batch 1's grader ignored it as an artefact; batch 2's grader counted it as a flaw (B). Fable's rule for the rubric: **count it as a flaw** (whoever applies the patch sees it). Reported both ways:
+
+| | As graded (artefact ignored) | Artefact counted |
+|---|---|---|
+| Batch 1, 7 valid issues | 6 A, 1 C | **2 A** (boltons#383, #439), 4 B (more-itertools #1308, #1304, #1293, #1275), 1 C (#1344): exactly the kill line (2 or fewer A of 10) |
+| Batch 2, 8 jobs (`pilots/outside_v1/REPORT_FOR_FABLE.md` section 10) | A 6, B 1, C 1 if the artefact is removed (unverified by rereading) | A 1, B 6, C 1 (Opus 5.5 as graded) |
+
+The 6-of-7 reading therefore holds only if the defect is not a flaw; the defect is fixed, so patches of later runs carry no such change.
