@@ -21,7 +21,7 @@ Di batch 1 dan 2 pembacaan Claude "sebelum approve" hanya atas **rencana draf**.
 
 ## Batas yang diketahui
 
-- Atha tahu kodenya bukan dari model yang lain: ini kalibrasi Claude terhadap Atha, bukan penilai independen. Nilai buta A/B/C (dua model) tetap yang menentukan vonis.
+- Ini kalibrasi pembacaan Claude terhadap pembacaan Atha, bukan penilai ketiga yang independen. Nilai buta A/B/C (dua model, dengan Atha menilai 3 sampai 4 sebagai jangkar) tetap yang menentukan vonis.
 - Benih bisa dihitung siapa pun yang punya patch; urutan dijaga oleh segel yang di-commit dulu (cap waktu git), bukan oleh kerahasiaan benih.
 - Sampel 3 dari 8: nol pembalikan hanya membuktikan "berfungsi" (batas atas kasar 3/n); satu pembalikan sudah informatif.
 - Patch tanpa paket valid (`REVIEW_INVALID`) tidak punya patch akhir untuk dibaca: dicatat `no final patch`, bukan verdict, dan tidak ikut sampel.
