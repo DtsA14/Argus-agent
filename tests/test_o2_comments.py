@@ -96,3 +96,19 @@ def test_a_code_line_already_at_the_base_is_not_new(tmp_path):
     base = {"src/app.py": "import os\nos._exit(0)\n"}
     c = scan(tmp_path, {"src/app.py": '"""os._exit(0) is documented here"""\nimport os\nos._exit(0)\n'}, base=base)
     assert c["status"] == "pass"
+
+
+# ---- holes the mutants found --------------------------------------------------------------------------------------------
+
+def test_a_comment_in_a_file_with_a_bare_carriage_return_keeps_the_old_scan(tmp_path):
+    # the line count of the parser and of split("\\n") disagree, so nothing is narrowed (spec: when the lines are uncertain)
+    assert hits(tmp_path, "y = 2 ; # c  os._exit(0)\r") == [(1, "os._exit")]
+
+
+def test_a_string_statement_after_non_ascii_on_the_same_line_is_cut_at_the_right_column(tmp_path):
+    assert hits(tmp_path, 'é = 1; "os._exit(0)"\n') == []                              # ast columns are bytes, the line is characters
+    assert "os._exit" in names(tmp_path / "b", 'é = 1; "x"; import os; os._exit(0)\n')
+
+
+def test_javascript_that_happens_to_parse_as_python_is_still_scanned_wide(tmp_path):
+    assert names(tmp_path, '"process.exit(0)";\n', "js") == {"process.exit"}
