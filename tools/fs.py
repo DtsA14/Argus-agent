@@ -101,6 +101,19 @@ class PathJail:
         if stat.S_ISLNK(st.st_mode):
             raise PathEscape(f"refusing to replace a symlink: {rel!r}")
 
+    @staticmethod
+    def _existing_mode(name, dfd):
+        """The permission bits (rwx for user, group, other; never setuid, setgid or sticky) of the regular file `name` that a
+        write is about to replace, or None when there is none. The replacement keeps them (set on the temp file before the
+        rename, so the target is never visible with another mode): an edited executable stays executable, a file that was
+        0o600 stays 0o600, and a review patch built from the workspace shows no mode change the agent never made. The umask
+        is not applied again: the file's own bits are what it had."""
+        try:
+            st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        return stat.S_IMODE(st.st_mode) & 0o777 if stat.S_ISREG(st.st_mode) else None
+
     # -- operations ---------------------------------------------------------------------------------
     def write_text(self, rel, text):
         parts = self.parts(rel)
@@ -110,11 +123,14 @@ class PathJail:
         tmp = f".{name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp"
         try:
             self._race("after_walk", rel)
+            mode = self._existing_mode(name, dfd)
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=dfd)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(text)
                     f.flush()
+                    if mode is not None:
+                        os.fchmod(f.fileno(), mode)
                     os.fsync(f.fileno())
                 self._refuse_symlink(name, dfd, rel)
                 self._race("before_replace", rel)

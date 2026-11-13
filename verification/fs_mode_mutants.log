@@ -1,0 +1,9 @@
+KILLED  the mode is never taken: ['FAILED tests/test_fs_mode.py::test_a_rewritten_file_keeps_its_permission_bits[493]']
+KILLED  the mode is never applied: ['FAILED tests/test_fs_mode.py::test_a_rewritten_file_keeps_its_permission_bits[493]']
+KILLED  the mode is applied after the replace, by path: ['FAILED tests/test_fs_mode.py::test_a_rewritten_file_keeps_its_permission_bits[493]']
+KILLED  special bits are carried over: ['FAILED tests/test_fs_mode.py::test_setuid_setgid_and_sticky_are_never_carried_over[2541]']
+KILLED  a new file gets another default: ['FAILED tests/test_fs_mode.py::test_a_new_file_gets_the_default_mode_and_a_new_file_in_a_new_directory_too']
+KILLED  every existing path counts as a file: ['FAILED tests/test_fs_mode.py::test_a_target_that_is_not_a_regular_file_does_not_lend_its_mode']
+KILLED  the mode of an executable is forced: ['FAILED tests/test_fs_mode.py::test_a_rewritten_file_keeps_its_permission_bits[448]']
+KILLED  the mode is read from the wrong place: ['FAILED tests/test_fs_mode.py::test_a_rewritten_file_keeps_its_permission_bits[493]']
+RESULT: 8/8 killed
