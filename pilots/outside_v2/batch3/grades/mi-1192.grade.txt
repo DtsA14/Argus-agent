@@ -1,0 +1,6 @@
+mi-1192 test files: ['tests/test_more.py'] | work: /tmp/grade_aei19lg7
+fix: 586/586 pass (non-pass: [])
+FAIL_TO_PASS (added) 1, PASS_TO_PASS 585; changed old tests failing at base: 0
+argus F2P failing 0/1: []
+argus P2P failing 0/585: []
+RESOLVED

@@ -1,0 +1,29 @@
+interleave_evenly([]) raises IndexError
+
+### Description
+
+`interleave_evenly` raises `IndexError` when called with no iterables.
+
+### Reproduction
+
+```python
+from more_itertools import interleave_evenly
+
+list(interleave_evenly([]))
+```
+
+Actual result on current `master`:
+
+```text
+IndexError: list index out of range
+```
+
+The same happens when lengths are supplied explicitly:
+
+```python
+list(interleave_evenly([], lengths=[]))
+```
+
+### Expected result
+
+The result should be an empty list, matching the behavior of `interleave([])`, `interleave_longest([])`, and `roundrobin()` for empty input.
