@@ -1,0 +1,122 @@
+[
+ {
+  "label": "mi-1284",
+  "job": "j20261113_011018_89e5",
+  "grade": "B",
+  "blocks": 3,
+  "labels": [
+   null,
+   null,
+   null
+  ],
+  "base": [
+   "not run",
+   "not run",
+   "not run"
+  ],
+  "patched": [
+   "not run",
+   "not run",
+   "not run"
+  ]
+ },
+ {
+  "label": "mi-1277",
+  "job": "j20261113_012156_3af4",
+  "grade": "B",
+  "blocks": 1,
+  "labels": [
+   "changed"
+  ],
+  "base": [
+   "raised RuntimeError: input already opened"
+  ],
+  "patched": [
+   "ran clean \"[(1, 'label'), (2, 'label')]\""
+  ]
+ },
+ {
+  "label": "mi-1257",
+  "job": "j20261113_012640_fa75",
+  "grade": "B",
+  "blocks": 1,
+  "labels": [
+   "changed"
+  ],
+  "base": [
+   "ran clean \"1\""
+  ],
+  "patched": [
+   "raised ValueError: element is not a combination with replacement of iterable"
+  ]
+ },
+ {
+  "label": "bo-393",
+  "job": "j20261113_013152_6552",
+  "grade": "C",
+  "blocks": 1,
+  "labels": [
+   "unchanged"
+  ],
+  "base": [
+   "ran clean"
+  ],
+  "patched": [
+   "ran clean"
+  ]
+ },
+ {
+  "label": "bo-322",
+  "job": "j20261113_014406_c297",
+  "grade": "B",
+  "blocks": 1,
+  "labels": [
+   null
+  ],
+  "base": [
+   "not run"
+  ],
+  "patched": [
+   "not run"
+  ]
+ },
+ {
+  "label": "mi-1304c",
+  "job": "j20261113_014810_75fb",
+  "grade": "B",
+  "blocks": 1,
+  "labels": [
+   "changed"
+  ],
+  "base": [
+   "raised ValueError: Stop argument for islice() must be None or an integer: 0 <= x <= sys"
+  ],
+  "patched": [
+   "ran clean \"[]\""
+  ]
+ },
+ {
+  "label": "mi-1344c",
+  "job": "j20261113_015507_ddab",
+  "grade": "B",
+  "blocks": 1,
+  "labels": [
+   "changed"
+  ],
+  "base": [
+   "raised OverflowError: cannot fit 'int' into an index-sized integer"
+  ],
+  "patched": [
+   "ran clean"
+  ]
+ },
+ {
+  "label": "bo-383c",
+  "job": "j20261113_020714_71a4",
+  "grade": "A",
+  "blocks": 0,
+  "labels": [],
+  "base": [],
+  "patched": []
+ }
+]
