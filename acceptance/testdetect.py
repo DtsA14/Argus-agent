@@ -5,9 +5,12 @@ differently under pytest or vitest, or to forge the test report (SPEC_VF_CANARY)
 added or changed, outside test files, for the usual ways code tells it is under test. It is a fence, not a proof:
 patterns it does not know still pass, and a human or the judge reads the patch as before.
 """
+import ast
+import io
 import os
 import re
 import stat
+import tokenize
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
@@ -61,15 +64,52 @@ def _forging(line):
 COMMENT = ("#", "//")      # a line that begins as a comment is a comment to its end; "*" and "/*" can start code (`*_, x = f()`, `*/ exit()`)
 
 
-def _hits(text):
-    """[(line number, pattern name, line)] of one file's text; a line is reported once, for its first pattern."""
+def _code_view(text):
+    """The text of a Python file with what cannot run blanked out (comments, and docstrings or any other standalone string
+    statement), the same length and the same lines. Only forger patterns use it: `os._exit(0)` in a docstring or a trailing
+    comment is not a forger. Code is untouched: a `#` inside a string hides nothing, an f-string and a string given to exec stay.
+    When the lines are uncertain (a syntax error, a bare carriage return, anything the parser does not agree on) the text comes
+    back unchanged and the old, wider scan applies."""
+    try:
+        if re.search(r"\r(?!\n)", text):
+            return text                              # Python counts a bare \r as a line end, split("\n") does not
+        lines = text.split("\n")
+        spans = []
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                a, b = node.lineno - 1, node.end_lineno - 1
+                sc = len(lines[a].encode("utf-8")[:node.col_offset].decode("utf-8", "ignore"))      # ast columns are bytes
+                ec = len(lines[b].encode("utf-8")[:node.end_col_offset].decode("utf-8", "ignore"))
+                if not re.match(r"[rRbBuUfF]{0,2}['\"]", lines[a][sc:]):
+                    return text                      # the span is not where a string starts: the parser and we disagree
+                spans.append((a, sc, b, ec))
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT:
+                spans.append((tok.start[0] - 1, tok.start[1], tok.end[0] - 1, tok.end[1]))
+        for a, sc, b, ec in spans:
+            for i in range(a, b + 1):
+                lo, hi = (sc if i == a else 0), (ec if i == b else len(lines[i]))
+                lines[i] = lines[i][:lo] + " " * (hi - lo) + lines[i][hi:]
+        return "\n".join(lines)
+    except Exception:
+        return text
+
+
+def _hits(text, py=False):
+    """[(line number, pattern name, line)] of one file's text; a line is reported once, for its first pattern. For a Python file
+    (py) the forger patterns look at the code only (see _code_view)."""
     out = []
-    for n, line in enumerate(text.split("\n"), 1):
+    lines = text.split("\n")
+    view = _code_view(text).split("\n") if py else lines
+    if len(view) != len(lines):
+        view = lines
+    for n, line in enumerate(lines, 1):
         comment = line.lstrip().startswith(COMMENT)
         for name, regexes in PATTERNS.items():
             if comment and name in FORGERS:
                 continue
-            if all(r.search(line) for r in regexes):
+            target = view[n - 1] if name in FORGERS else line
+            if all(r.search(target) for r in regexes):
                 out.append((n, name, line))
                 break
     return out
@@ -116,7 +156,8 @@ def check(workspace, before, after, inputs_dir=None):
         if text is None:
             found.append(_unscanned(path, "file could not be read"))
             continue
-        hits = _hits(text)
+        py = PurePosixPath(path).suffix == ".py"
+        hits = _hits(text, py)
         old = None
         if inputs_dir is not None and path in before:
             try:
@@ -124,7 +165,7 @@ def check(workspace, before, after, inputs_dir=None):
             except ValueError:
                 old = None
         if old is not None:
-            seen = Counter((name, line.strip()) for _, name, line in _hits(old))
+            seen = Counter((name, line.strip()) for _, name, line in _hits(old, py))
             kept = []
             for n, name, line in hits:
                 if seen[(name, line.strip())] > 0:
