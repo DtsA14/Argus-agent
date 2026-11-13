@@ -250,6 +250,43 @@ def test_a_changed_file_may_add_at_most_the_block_limit_plus_the_overhead_whatev
     assert any("larger than" in p for p in statics(draft_of(adding(big, allowed + 1)), big))
 
 
+# ---- an addition keeps every old definition ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("block, name", [
+    ("class T(unittest.TestCase):\n    def test_old(self):\n        pass\n\n\n" + BLOCK, "T"),    # the class of an old test, weakened
+    ("def helper():\n    return 2\n\n\n" + BLOCK, "helper"),
+    ("test_plain = lambda: None\n\n\n" + BLOCK, "test_plain"),
+    ("LIMIT = 2\n\n\n" + BLOCK, "LIMIT"),
+    ("LIMIT += 1\n\n\n" + BLOCK, "LIMIT"),
+    ("a, (helper, b) = 1, (2, 3)\n\n\n" + BLOCK, "helper"),
+])
+def test_an_addition_that_redefines_a_top_level_name_of_the_intake_is_refused(block, name):
+    old = OLD + "\n\ndef helper():\n    return 1\n\n\nLIMIT = 1\n\n\ndef test_plain():\n    assert True\n"
+    content = old.rstrip("\n") + "\n\n\n" + block.strip("\n") + "\n"
+    assert ch.pure_addition(old, content)
+    problems = [p for p in statics(draft_of(content), old) if "redefines" in p]
+    assert problems and name in problems[0], problems
+
+
+def test_an_addition_that_binds_new_names_or_repeats_an_import_is_fine():
+    old = OLD + "\n\ndef helper():\n    return 1\n"
+    block = "import unittest\nfrom os import path\n\n\ndef other():\n    return 3\n\n\n" + BLOCK
+    content = old.rstrip("\n") + "\n\n\n" + block.strip("\n") + "\n"
+    assert not [p for p in statics(draft_of(content), old) if "redefines" in p or "parse" in p]
+
+
+def test_the_added_code_must_parse_on_its_own():
+    content = OLD.rstrip("\n") + "\n\n\n    indented = 1\n"
+    assert any("does not parse on its own" in p for p in statics(draft_of(content), OLD))
+
+
+def test_the_same_check_holds_for_an_append_that_reaches_the_draft(tmp_path):
+    block = "class T(unittest.TestCase):\n    def test_old(self):\n        pass\n\n\n" + BLOCK
+    draft, problems = drafter.draft_from_args(args_for(append=block), base="shop", policy=td.POLICY,
+                                              intake_dir=intake_dir_of(tmp_path))
+    assert problems == [] and any("redefines T" in p for p in statics(draft, OLD))
+
+
 # ---- K1: the collection of the intake and of the new version ---------------------------------------------------------
 
 def collected(intake_nodes, new_nodes):
@@ -279,7 +316,7 @@ def test_a_required_node_the_intake_already_collects_is_refused_for_a_pure_addit
 
 def test_a_parametrised_required_node_is_compared_by_its_function(tmp_path):
     d = draft_of(JOINED, must=(f"{PATH}::T::test_old[a]",))
-    problems = k1(tmp_path, d, OLD, {f"{PATH}::T::test_old[a]", f"{PATH}::T::test_old[b]"},
+    problems = k1(tmp_path, d, OLD, {f"{PATH}::T::test_old[b]"},                  # another parameter of the same test
                   {f"{PATH}::T::test_old[a]", f"{PATH}::T::test_old[b]", NEW_NODE})
     assert any("already" in p for p in problems), problems
 
@@ -332,6 +369,14 @@ def test_a_draft_from_append_and_one_from_the_equal_content_have_the_same_sha(tm
     assert sha(other) != sha(a)
 
 
+def test_the_same_file_gives_the_same_draft_sha_even_when_a_route_writes_empty_removed_and_modified(tmp_path):
+    sha = lambda d: hashlib.sha256(ct.canonical(d).encode()).hexdigest()    # noqa: E731
+    a, _ = drafter.draft_from_args(args_for(append=BLOCK), base="shop", policy=td.POLICY, intake_dir=intake_dir_of(tmp_path))
+    b, _ = drafter.draft_from_args(args_for(content=JOINED, removed=[], modified=[]), base="shop", policy=td.POLICY,
+                                   intake_dir=intake_dir_of(tmp_path))
+    assert a == b and sha(a) == sha(b)
+
+
 def test_model_dump_style_arguments_with_none_and_empty_fields_work(tmp_path):
     draft, problems = drafter.draft_from_args(
         args_for(content=None, append=BLOCK, removed=[], modified=[]), base="shop", policy=td.POLICY,
@@ -366,7 +411,8 @@ def test_the_schema_and_the_prompt_tell_the_drafter_about_append():
     assert drafter.ChangedTest(path=PATH, append=BLOCK).append == BLOCK
     assert drafter.ChangedTest(path=PATH, content=JOINED).content == JOINED
     assert "append" in drafter.SubmitDraft.model_json_schema()["$defs"]["ChangedTest"]["properties"]
-    assert "append" in drafter.SYSTEM and "new_tests" in drafter.SYSTEM
+    assert "a changed_tests entry with path and append" in drafter.SYSTEM and "new_tests" in drafter.SYSTEM
+    assert "new_tests" not in drafter.SubmitDraft.model_json_schema()["required"]            # an append-only draft sends none
 
 
 # ---- the drafter's submit: the whole file reaches the check, the arguments keep append -----------------------------------
@@ -422,9 +468,40 @@ def test_new_tests_may_be_left_out_altogether_when_a_test_is_appended(tmp_path):
     assert problems == [] and draft["new_tests"] == []
 
 
-def test_a_content_entry_of_a_model_dump_loses_only_its_none_append():
+def test_a_content_entry_of_a_model_dump_loses_its_none_append_and_its_empty_lists():
     out, problems = build([entry(content=JOINED, append=None, removed=[], modified=[])])
-    assert problems == [] and out == [{"path": PATH, "content": JOINED, "removed": [], "modified": []}]
+    assert problems == [] and out == [{"path": PATH, "content": JOINED}]
+
+
+# ---- what the human reads --------------------------------------------------------------------------------------------
+
+def test_the_draft_review_shows_an_appended_test_as_a_new_test(tmp_path):
+    d = draft_of(JOINED)
+    d["contract"]["budget_profile"] = "default"
+    (tmp_path / "intake").mkdir()
+    intake_dir = intake_dir_of(tmp_path / "intake")
+    baseline = {"target": {"must_pass": {NEW_NODE: "FAIL"}, "output_tail": "", "red_check": None}}
+    text = drafter.review_text("run1", {"intake": "shop", "issue": "the issue"},
+                               {"status": "DRAFTED", "draft": d, "report": {"baseline": baseline}},
+                               {"usd": 0.0, "usd_complete": True, "calls": 0}, source=intake_dir)
+    assert "required new tests: 1, required existing tests: 0" in text
+    assert f"  - new: `{NEW_NODE}`" in text and "existing: `" not in text
+    assert f"### `{PATH}` (added at the end of the existing file)" in text
+    assert "The code added at the end of the file:" in text and "def test_new(self):" in text
+    assert "class T(unittest.TestCase)" not in text.split("## New tests", 1)[1].split("## ", 1)[0]    # only the block, not the file
+
+
+def test_the_draft_review_of_a_new_test_file_is_what_it_was(tmp_path):
+    edited = JOINED.replace("pass\n", "pass  # edited\n", 1)                 # an old test changes: not an addition
+    d = draft_of(edited, must=(OLD_NODE,), new_tests=[{"path": "tests/test_new.py", "content": "def test_x():\n    assert 1 == 2\n"}])
+    d["contract"]["validation"].append(spec("tests/test_new.py", ["tests/test_new.py::test_x"], id="new"))
+    d["contract"]["budget_profile"] = "default"
+    (tmp_path / "intake").mkdir()
+    text = drafter.review_text("run1", {"intake": "shop", "issue": "the issue"},
+                               {"status": "DRAFTED", "draft": d, "report": {}},
+                               {"usd": 0.0, "usd_complete": True, "calls": 0}, source=intake_dir_of(tmp_path / "intake"))
+    assert "### `tests/test_new.py`\n" in text and "The file:" in text
+    assert "added at the end" not in text and "required existing tests: 1" in text
 
 
 # ---- end to end, in the sandbox (skipped without an image, like tests/test_draft.py) -----------------------------------

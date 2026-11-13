@@ -54,6 +54,22 @@ M = [
     ("an empty changed_tests lets new_tests be empty", [(D, "(not tests and not (isinstance(changes, list) and changes))", "(not tests and not isinstance(changes, list))")]),
     ("the draft cap is fifty thousand again", [(D, "ch.shape_problems(d[\"changed_tests\"], new_paths, intake._plain, ch.MAX_CHANGED_BYTES)", "ch.shape_problems(d[\"changed_tests\"], new_paths, intake._plain, MAX_TEST_BYTES)")]),
     ("the draft cap is gone", [(D, "ch.shape_problems(d[\"changed_tests\"], new_paths, intake._plain, ch.MAX_CHANGED_BYTES)", "ch.shape_problems(d[\"changed_tests\"], new_paths, intake._plain, 1 << 40)")]),
+    # an addition keeps every old definition
+    ("a redefinition is accepted", [(C, "            problems += redefined_problems(p, old_tests[p], t[\"content\"])", "            pass")]),
+    ("classes are not top-level names", [(C, "if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):\n            names.add(n.name)", "if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):\n            names.add(n.name)")]),
+    ("functions are not top-level names", [(C, "if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):\n            names.add(n.name)", "if isinstance(n, ast.ClassDef):\n            names.add(n.name)")]),
+    ("assignments are not top-level names", [(C, "        elif isinstance(n, ast.Assign):\n            for t in n.targets:", "        elif False:\n            for t in n.targets:")]),
+    ("a tuple target binds nothing", [(C, "for x in ast.walk(t) if isinstance(x, ast.Name)", "for x in [t] if isinstance(x, ast.Name)")]),
+    ("an augmented assignment binds nothing", [(C, "elif isinstance(n, (ast.AnnAssign, ast.AugAssign)) and", "elif isinstance(n, ast.AnnAssign) and")]),
+    ("the whole new file is read as the addition", [(C, 'before, added = ast.parse(old), ast.parse(new[len(old.rstrip("\\n")):])', "before, added = ast.parse(old), ast.parse(new)")]),
+    ("the added code is not parsed", [(C, 'before, added = ast.parse(old), ast.parse(new[len(old.rstrip("\\n")):])', "before, added = ast.parse(old), ast.parse('')")]),
+    ("empty removed and modified are kept", [(C, 'and not (k in ("removed", "modified") and v == [])', "and True")]),
+    ("new_tests is required of the model again", [(R, "new_tests: List[NewTest] = Field(default_factory=list, description", "new_tests: List[NewTest] = Field(description")]),
+    # what the human reads
+    ("the review ignores appended tests for the split", [(R, 'new_paths = {t["path"] for t in draft["new_tests"]} | {a["path"] for a in appended}', 'new_paths = {t["path"] for t in draft["new_tests"]}')]),
+    ("the review lists no appended section", [(R, 'for t in [*draft["new_tests"], *appended]:', 'for t in draft["new_tests"]:')]),
+    ("the review shows the whole file as the appended code", [(R, '"content": t["content"][len(old.rstrip("\\n")):].lstrip("\\n"), "appended": True}', '"content": t["content"], "appended": True}')]),
+    ("an edited file counts as appended", [(R, "if old is not None and ch.pure_addition(old, t[\"content\"]):\n            out.append", "if old is not None:\n            out.append")]),
     # the drafter
     ("append is not built", [(R, 'if isinstance(args.get("changed_tests"), list):', "if False:")]),
     ("the intake is not given to the build", [(R, "lambda p: _intake_text(intake_dir, p), intake._plain,", "lambda p: _intake_text(None, p), intake._plain,")]),

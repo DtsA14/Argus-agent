@@ -145,14 +145,17 @@ class SubmitDraft(BaseModel):
     plan: PlanArgs
     scope: ScopeArgs
     validation: List[ValidationArgs] = Field(description="Every validation the agent's fix must pass")
-    new_tests: List[NewTest] = Field(description="At least one new test file that shows the issue")
+    new_tests: List[NewTest] = Field(default_factory=list, description="New test files that show the issue; may be "
+                                      "empty only when every new test is added to an existing test file with "
+                                      "changed_tests and append")
     unverifiable: List[str] = Field(description="What the issue asks that no test can check (for the reviewer); "
                                                 "may be empty")
     budget_profile: str = Field(description="The agent's budget profile, one of those listed in the task: large "
                                             "enough for one attempt to read what the fix needs and write it")
     tools: Optional[List[str]] = Field(default=None, description="Tools added to the agent's (edit_file, search_files)")
-    changed_tests: Optional[List[ChangedTest]] = Field(default=None, description="Existing test files whose "
-                                                                                 "expectations the issue changes")
+    changed_tests: Optional[List[ChangedTest]] = Field(default=None, description="Existing test files: tests added "
+                                                       "to them (append), or whose expectations the issue changes "
+                                                       "(content)")
     for_human: Optional[str] = Field(default=None, description=FOR_HUMAN_DESC)
 
 
@@ -991,6 +994,17 @@ def call_path_warning(draft, report):
             f"{', '.join(outside)}") if outside else None
 
 
+def _appended(draft, source):
+    """[{path, content: the code added, appended}] of the changed files that only add tests at their end: shown with the
+    new tests, whose required nodes they are (the intake copy `source` gives the old text)."""
+    out = []
+    for t in draft.get("changed_tests") or []:
+        old = dr._intake_text(source, t["path"]) if source else None
+        if old is not None and ch.pure_addition(old, t["content"]):
+            out.append({"path": t["path"], "content": t["content"][len(old.rstrip("\n")):].lstrip("\n"), "appended": True})
+    return out
+
+
 def review_text(run_id, inputs, state, cost, source=None):
     """DRAFT_REVIEW.md: what the human reads before approving, written by the harness (no model writes it). source:
     the intake copy the changed tests are diffed against."""
@@ -1007,7 +1021,8 @@ def review_text(run_id, inputs, state, cost, source=None):
     draft, report = state.get("draft"), state.get("report") or {}
     if draft:
         p, c = draft["plan"], draft["contract"]
-        new_paths = {t["path"] for t in draft["new_tests"]}
+        appended = _appended(draft, source)             # SPEC_APPEND_TESTS: tests added at the end of an existing file
+        new_paths = {t["path"] for t in draft["new_tests"]} | {a["path"] for a in appended}
         if draft.get("for_human"):              # SPEC_CONTROL_UI amendment 2: written by the drafter, not checked
             out += ["", "## For the human (written by the drafter, not checked by a test)", "",
                     fence(draft["for_human"], "text")]
@@ -1030,8 +1045,8 @@ def review_text(run_id, inputs, state, cost, source=None):
         out += ["", "Tools added for the agent: " + (", ".join(f"`{t}`" for t in c["tools"]) if c.get("tools")
                                                      else "none (it rewrites whole files with WriteFile)")]
         out += ["", "## New tests"]
-        for t in draft["new_tests"]:
-            out += ["", f"### `{t['path']}`", ""]
+        for t in [*draft["new_tests"], *appended]:
+            out += ["", f"### `{t['path']}`" + (" (added at the end of the existing file)" if t.get("appended") else ""), ""]
             for v in c["validation"]:
                 mine = [n for n in v.get("must_pass", []) if n.split("::", 1)[0] == t["path"]]
                 b = (report.get("baseline") or {}).get(v["id"]) or {}
@@ -1048,7 +1063,8 @@ def review_text(run_id, inputs, state, cost, source=None):
                 elif ex:                    # no red check recorded (a report from before it): the output, as before
                     out += ["", "Why they fail now (test output; check that this is the behaviour to fix):", "",
                             fence(ex, "text")]
-            out += ["", "The file:", "", fence(t["content"], "python")]
+            out += ["", "The code added at the end of the file:" if t.get("appended") else "The file:", "",
+                    fence(t["content"], "python")]
         out += _changed_text(draft, report, source)
         out += _leaks_text(report)
         notes = draft["unverifiable"]

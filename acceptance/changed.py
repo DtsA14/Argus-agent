@@ -63,7 +63,8 @@ def _main_guard(tree):
 def from_append(entries, read, plain, limit=MAX_BLOCK_BYTES):
     """(entries, problems): the drafter's changed_tests with every `append` entry turned into a `content` entry made from
     the intake text (`read(path)` -> text or None): old.rstrip("\n") + "\n\n\n" + block.strip("\n") + "\n". None-valued
-    content/append keys (a model dump) are dropped; entries without append are passed through; an entry with problems is
+    content/append keys and empty removed/modified lists (a model dump) are dropped, so that the same file gives the same
+    draft, and the same sha, by either route; entries without append are passed through; an entry with problems is
     left out of the result. The input is not changed."""
     if not isinstance(entries, list):
         return entries, []
@@ -72,7 +73,8 @@ def from_append(entries, read, plain, limit=MAX_BLOCK_BYTES):
         if not isinstance(e, dict):
             out.append(e)
             continue
-        e = {k: v for k, v in e.items() if not (k in ("content", "append") and v is None)}
+        e = {k: v for k, v in e.items()
+             if not (k in ("content", "append") and v is None) and not (k in ("removed", "modified") and v == [])}
         if "append" not in e:
             out.append(e)
             continue
@@ -115,6 +117,32 @@ def from_append(entries, read, plain, limit=MAX_BLOCK_BYTES):
             continue
         out.append({"path": path, "content": content})
     return out, problems
+
+
+def _top_names(tree):
+    """The names a module binds at its top level by def, class or assignment (imports are left out: a block writes its own)."""
+    names = set()
+    for n in tree.body:
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(n.name)
+        elif isinstance(n, ast.Assign):
+            for t in n.targets:
+                names |= {x.id for x in ast.walk(t) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Store)}
+        elif isinstance(n, (ast.AnnAssign, ast.AugAssign)) and isinstance(n.target, ast.Name):
+            names.add(n.target.id)
+    return names
+
+
+def redefined_problems(path, old, new):
+    """For a pure addition: the added code must parse on its own and bind no top-level name the intake version binds. A
+    redefined class or function would silently replace an old test (K1 only sees a node id vanish, not a weaker body)."""
+    try:
+        before, added = ast.parse(old), ast.parse(new[len(old.rstrip("\n")):])
+    except (SyntaxError, ValueError) as e:
+        return [f"changed test {path}: the code added at its end does not parse on its own: {e}"]
+    clash = sorted(_top_names(before) & _top_names(added))
+    return [f"changed test {path}: the added code redefines {', '.join(clash[:10])} of the intake version, which would "
+            "replace an old test or helper (an addition keeps every old definition as it is)"] if clash else []
 
 
 def appended_required_problems(path, before, required):
@@ -291,6 +319,8 @@ def static_problems(draft, contract, base_files, old_tests, sha):
         if sha(t["content"]) == base_files[p]:
             problems.append(f"changed test {p} is the same as in the intake")
         pure = pure_addition(old_tests[p], t["content"])
+        if pure:
+            problems += redefined_problems(p, old_tests[p], t["content"])
         if (added_bytes(old_tests[p], t["content"]) > MAX_BLOCK_BYTES + APPEND_OVERHEAD) if pure \
                 else (len(t["content"].encode("utf-8")) > MAX_BLOCK_BYTES):
             problems.append(f"changed test {p} is larger than {MAX_BLOCK_BYTES} bytes (a file that only adds tests at its "

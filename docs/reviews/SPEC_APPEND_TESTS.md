@@ -104,4 +104,18 @@ Dua hal dari kode yang tidak terlihat saat spek ditulis. Keduanya mengubah **di 
    Ada tes di sandbox sungguhan (draf yang lolos sampai `approve`, dan draf yang ditolak K1).
 4. **Yang tidak berubah:** tes lama selain satu baris di atas, vitest, jalur `content` untuk tes yang berubah ekspektasinya.
 
-Tes: `tests/test_append_tests.py` (64, dua di antaranya memakai sandbox).
+### Temuan review (reviewer independen, semuanya diverifikasi dengan skrip) dan penanganannya
+
+1. **Sebuah penambahan bisa diam-diam melemahkan tes lama.** Blok yang mendefinisikan ulang kelas `T` (yang sudah ada) dengan badan yang lemah, atau `test_plain = lambda: None`, lolos: `functions()` hanya melihat kelas
+   berawalan `Test`, dan K1 hanya melihat id simpul yang *hilang*. Perbaikan: untuk setiap penambahan murni, kode yang ditambahkan harus bisa di-parse sendiri dan **tidak boleh mengikat nama level atas yang sudah diikat versi
+   intake** (def, class, assignment termasuk tuple dan `+=`; impor tidak dihitung, blok menulis impornya sendiri). Dijaga di `static_problems`, jadi berlaku untuk jalur `append` maupun `content` yang berbentuk penambahan.
+2. **`DRAFT_REVIEW.md` memberi label salah pada tes yang ditempel** ("required new tests: 0", dan bagian "New tests" kosong sehingga alasan merahnya tidak terlihat oleh manusia). Perbaikan: `review_text` mengenali berkas penambahan
+   murni, menghitung simpul wajibnya sebagai tes baru, dan menampilkan **hanya blok yang ditambahkan** beserta alasan merahnya, dengan judul "(added at the end of the existing file)".
+3. **Berkas yang sama bisa memberi dua sha draf** bila jalur `content` menulis `removed: []`/`modified: []` eksplisit. Perbaikan: `from_append` membuang daftar kosong itu (dan `content`/`append` bernilai `None`) pada semua entri, jadi
+   satu bentuk kanonik. Ada tes dengan dan tanpa kunci kosong.
+4. **Skema:** `SubmitDraft.new_tests` masih wajib dan berbunyi "At least one new test file". Sekarang bawaannya daftar kosong dan deskripsinya menyebut append; ada tes bahwa ia tidak lagi `required`.
+
+**Batas yang diketahui dari review (tidak diubah):** blok `if __name__ == "__main__"` hanya dikenali di level atas; guard di dalam `try` atau `elif` diterima (tes tetap ikut di pytest, hanya tidak jalan bila berkas dijalankan sebagai
+skrip). Berkas ber-BOM ditolak, sama seperti jalur `content`.
+
+Tes: `tests/test_append_tests.py`. Mutan: `verification/append_tests_mutants.py`.
