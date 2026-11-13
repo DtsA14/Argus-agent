@@ -277,6 +277,8 @@ Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke ars
 - [ ] Router: cek bentuk kunci DeepSeek (hanya Anthropic yang dicek prefiksnya)
 - [ ] Router: `argus apply` (K6 v0); sekarang perintah apply dicetak `status` dan dijalankan Claude
 
+- [ ] **Verifikasi: yang sengaja belum dikerjakan dari SPEC_VERIFY_HARDENING** (2026-11-13, Fable + Claude, "berhenti kalau ragu"). (a) **Pecah grup sandbox** jadi dua (hemat sekitar 6 sampai 8 menit dari 18,7): `docs/Reconciliation.md` mencatat exit 137 karena CPU berebut, jadi butuh tiga run penuh yang bersih; jalankan sesudah ada angka total per grup dari log baru (`durations by group ...`). (b) **Pangkas run kontainer di `tests/test_draft.py`** (322 detik; sekitar 1 sampai 3 menit, menyentuh tes jaminan). (c) **Penjaga untuk pemakaian `docker` langsung tanpa fixture bersama** (autouse yang gagal bila item tak berkelompok memanggil `docker_args`): pengelompokan lewat fixture tidak melihatnya. (d) Tes sandbox yang memeriksa seluruh mesin sekarang dibatasi per token, tapi `test_stage.py` dan `test_stage_viewer.py` belum diperiksa untuk pola yang sama.
+
 ### Ditunda sampai ada bukti kebutuhan
 
 - [ ] Alur A: bug yang jawabannya tidak ada di ingatan model; task agen dua lengan untuk upgrade yang butuh API baru
