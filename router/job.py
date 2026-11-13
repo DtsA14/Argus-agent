@@ -1438,6 +1438,23 @@ def _agent_result(job):
         return "agent result: unreadable"
 
 
+def detection_lines(job):
+    """SPEC_TEST_DETECTION_TERMINAL: the hits of the test-detection gate that ended the last agent run (path, line, pattern; never
+    the text of a line), for the human. The agent is never told them."""
+    try:
+        _, st = last_agent(job)
+        r = json.loads((job.runs / st["run_id"] / "result.json").read_text(encoding="utf-8"))
+        d = (r.get("verdict") or {}).get("detected")
+        if not isinstance(d, dict):
+            return []
+        listed = d.get("hits") or []
+        hits = ", ".join(f"{h.get('path')}:{h.get('line')} {h.get('pattern')}" for h in listed)
+        more = f" (+{d['total'] - len(listed)} more)" if isinstance(d.get("total"), int) and d["total"] > len(listed) else ""
+        return [f"test detection (shown to you, never to the agent): {hits}{more}"]
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return []
+
+
 def report_conflict_lines(job, last=None):
     """SPEC_REPORT_CONFLICT v2 B3 and v3 C6: what the agent reported and what the harness found. Facts of the harness only
     (the report's own text is never kept); "conflict" is not stated as a fact, only the shape that was checked."""
@@ -1604,6 +1621,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
             out.append(_agent_result(job))
             last = _last_conflict(job)
             out += report_conflict_lines(job, last)
+            out += detection_lines(job)
         blocked = last[0] if d["state"] == AGENT_FAILED else None
         nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
                AGENT_FAILED: ([f'argus abandon {job.id} "<why>" and a new job that names the file(s)',

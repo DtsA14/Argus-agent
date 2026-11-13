@@ -31,6 +31,7 @@ from langgraph.graph import END, START, StateGraph
 from acceptance import conflict as conflict_mod
 from acceptance import contract as ct
 from acceptance import intake
+from acceptance import testdetect
 from acceptance.validation import red_check_ex, run_validation
 from acceptance.verdict import evaluate
 from acceptance.workspace import digest, prepare
@@ -403,6 +404,9 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if (state.get("attempt") or {}).get("end") == "llm_failed":
             return move(state, st.BLOCKED, reason="the model provider failed during the attempt",
                         blocked="provider_failed", verdict=summary, failures=history)
+        # SPEC_TEST_DETECTION_TERMINAL: a hit of the test-detection gate ends the run. Told to the agent, it would learn which
+        # pattern is caught; the human sees it (the summary's `detected`, then `status`), the agent never does.
+        hit = next((c for c in v["criteria"] if c["id"] == testdetect.ID and c["status"] == "fail"), None)
         new_conflict = {}
         if conf:      # C3 4: the harness's check of the report decides before max_iterations, stagnation and admission
             if conf["state"] == "blocked":
@@ -413,6 +417,12 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                             reason="the agent reported a conflict with old tests and the harness confirmed its shape: "
                                    + ", ".join(conf["files"]))
             new_conflict = {"conflict": {"files": list(conf["files"]), "unconfirmed": list(conf["unconfirmed"])}}
+        if hit:
+            ev = hit.get("evidence") or {}
+            summary["detected"] = {"total": ev.get("total"), "hits": [{k: h.get(k) for k in ("path", "line", "pattern")}
+                                                                      for h in (ev.get("hits") or [])[:5]]}
+            return move(state, st.FAILED_ACCEPTANCE, verdict=summary, failures=history, **new_conflict,
+                        reason="test_detection: production code recognises tests (shown to a human, never fed back to the agent)")
         lim = settings(cfg, contract)
         n = lim["stagnation_rounds"]
         if i + 1 >= lim["max_iterations"]:
