@@ -231,7 +231,7 @@ def test_a_detection_pattern_alone_keeps_the_old_reason_text(tmp_path):
 
 
 @pytest.mark.parametrize("line", ["def _exit(self):\n    pass\n", "self._exit()\n", "obj._exit(1)\n", "# os._exit(0) is how the child ends\n", "    # os.execv(x)\n",
-                                  "// process.exit(1)\n", " * fs.writeSync(1, x)\n", "from os import path, sep\n", "x = 'process_exit'\n",
+                                  "// process.exit(1)\n", "from os import path, sep\n", "x = 'process_exit'\n",
                                   "my_exit(1)\n", "sys.exit(1)\n", "raise SystemExit(1)\n", "os.write(fd, data)\n",
                                   "os.write(handle.fileno(), data)\n", "os.fstat(fd)\n", "exit_code = 0\n", "x._exit_called = True\n",
                                   "os.write(10, b'x')\n", "os.write(12, b'x')\n", "stat.S_ISREG(mode)\n", "path = '/proc/selfish'\n"])
@@ -298,3 +298,10 @@ def test_a_commented_line_that_also_names_a_detection_pattern_is_not_called_forg
     c = scan(tmp_path, {"src/a.py": "# PYTEST_CURRENT_TEST and os._exit(0): a note\n"})
     (hit,) = c["evidence"]["hits"]
     assert hit["pattern"] == "PYTEST_CURRENT_TEST" and "forging" not in hit and "can forge" not in c["reason"]
+
+
+@pytest.mark.parametrize("line,pattern", [("*/ process.exit(0)\n", "process.exit"), ("*_, x = f(); os._exit(0)\n", "os._exit"),
+                                          ("/* c */ process.exit(0)\n", "process.exit"), (" * fs.writeSync(1, x)\n", "fs.writeSync stdout/stderr")])
+def test_a_line_that_starts_like_a_block_comment_but_holds_code_is_still_a_hit(tmp_path, line, pattern):
+    c = scan(tmp_path, {"src/a.py": "import os\n" + line})
+    assert [e["pattern"] for e in c["evidence"]["hits"]] == [pattern]

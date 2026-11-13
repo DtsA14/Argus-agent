@@ -58,7 +58,7 @@ def _forging(line):
     return not line.lstrip().startswith(COMMENT) and any(all(r.search(line) for r in regexes) for regexes in FORGERS.values())
 
 
-COMMENT = ("#", "//", "/*", "*")      # a line that only comments cannot forge anything (the detection patterns still count it)
+COMMENT = ("#", "//")      # a line that begins as a comment is a comment to its end; "*" and "/*" can start code (`*_, x = f()`, `*/ exit()`)
 
 
 def _hits(text):

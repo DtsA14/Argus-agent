@@ -15,6 +15,7 @@ MIN_LEN = 8
 MARK = "[redacted]"
 _lock = threading.Lock()
 _secrets = set()
+_ordered = ()                  # the registered values, longest first, rebuilt when one is added (scrub runs for every string of every event)
 
 
 def register(secret):
@@ -23,8 +24,10 @@ def register(secret):
     if isinstance(secret, str) and len(secret.strip()) >= MIN_LEN:
         key = secret.strip()
         forms = {key, base64.b64encode(key.encode("utf-8")).decode("ascii"), urllib.parse.quote(key, safe="")}
+        global _ordered
         with _lock:
             _secrets.update(f for f in forms if len(f) >= MIN_LEN)
+            _ordered = tuple(sorted(_secrets, key=len, reverse=True))
 
 
 def scrub(text):
@@ -32,9 +35,7 @@ def scrub(text):
     whole); anything that is not a string comes back unchanged."""
     if not isinstance(text, str) or not text:
         return text
-    with _lock:
-        secrets = sorted(_secrets, key=len, reverse=True)
-    for s in secrets:
+    for s in _ordered:
         if s in text:
             text = text.replace(s, MARK)
     return text
@@ -62,7 +63,10 @@ class _Scrubbing:
         self._stream = stream
 
     def write(self, text):
-        return self._stream.write(scrub(text) if isinstance(text, str) else text)
+        if not isinstance(text, str):
+            return self._stream.write(text)
+        self._stream.write(scrub(text))
+        return len(text)                  # what the caller handed over: a replaced key must not look like a short write
 
     def writelines(self, lines):
         for line in lines:
@@ -89,5 +93,7 @@ def uninstall():
 
 def clear():
     """Forget every registered value (tests)."""
+    global _ordered
     with _lock:
         _secrets.clear()
+        _ordered = ()

@@ -454,10 +454,13 @@ def test_a_failure_whose_deepest_frame_is_in_production_code_does_not_confirm_bu
     assert c.verify()["state"] == "confirmed"
 
 
-def test_a_missing_record_for_a_node_does_not_confirm(tmp_path):
+def test_a_missing_record_for_a_node_does_not_confirm_and_says_it_is_missing(tmp_path):
     def change(c):
         c.red = lambda nodes, workdir, scfg, **kw: ({}, None, False)
-    breaks(tmp_path, change, "does not pass on the untouched input")
+    breaks(tmp_path, change, "the harness run on the untouched input has no record of")
+    out = breaks(tmp_path / "s", lambda c: setattr(c, "red", lambda nodes, workdir, scfg, **kw: (
+        {n: {"outcome": "skipped"} for n in nodes}, None, False)), "does not pass on the untouched input")
+    assert not any("no record" in x for x in out["unconfirmed"])
 
 
 def test_the_file_list_is_checked_for_shape_by_the_harness_too(tmp_path):

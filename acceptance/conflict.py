@@ -189,7 +189,9 @@ def _verify(contract, verdict, files, ws, before, input_dir, scfg, repo_protecte
             no("baseline", f"the run on the untouched input could not be read ({why})")
             return _final(out)
         for n in nodes:
-            if (base.get(n) or {}).get("outcome") != "passed":
+            if base.get(n) is None:
+                no("baseline", f"the harness run on the untouched input has no record of {n}")
+            elif base[n].get("outcome") != "passed":
                 no("baseline", f"{n} does not pass on the untouched input")
     if out["unconfirmed"]:
         return _final(out)

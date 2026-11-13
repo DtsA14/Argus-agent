@@ -285,3 +285,19 @@ def test_a_failed_token_count_is_scrubbed_before_its_cut_too(tmp_path):
         c.call([HumanMessage("hi")], Reservation(tokens=100_000, usd=1.0))
     raw = (tmp_path / "e.jsonl").read_text(encoding="utf-8")
     assert CANARY not in raw and "sk-CA" not in raw and CANARY not in str(e.value) and "yyyy" in raw
+
+
+def test_the_terminal_filter_reports_the_length_it_was_given_even_when_a_key_was_replaced():
+    redact.register(CANARY)
+    sink = io.StringIO()
+    stream = redact._Scrubbing(sink)
+    text = f"error: {CANARY}\n"
+    assert stream.write(text) == len(text) and sink.getvalue() == "error: [redacted]\n"
+
+
+def test_a_key_registered_later_is_found_by_the_cached_order_and_clear_empties_it():
+    redact.register("sk-short-key-aaa")
+    redact.register("sk-short-key-aaa-and-longer")
+    assert redact.scrub("sk-short-key-aaa-and-longer|sk-short-key-aaa") == f"{redact.MARK}|{redact.MARK}"
+    redact.clear()
+    assert redact.scrub("sk-short-key-aaa") == "sk-short-key-aaa" and redact._ordered == ()
