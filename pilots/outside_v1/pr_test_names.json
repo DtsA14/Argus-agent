@@ -1,0 +1,25 @@
+{
+ "more-itertools#1285": [
+  "test_getitem_miss_does_not_add_key",
+  "test_in_does_not_add_key",
+  "test_in_does_not_add_key_with_validator",
+  "test_keys_are_only_those_seen"
+ ],
+ "more-itertools#1278": [
+  "test_single_use_iterable",
+  "test_zip"
+ ],
+ "more-itertools#1261": [
+  "test_invalid_none_values",
+  "test_none_values",
+  "test_r_less_than_n"
+ ],
+ "boltons#394": [
+  "test_research_custom_enter"
+ ],
+ "boltons#388": [
+  "test_human_readable_list",
+  "test_human_readable_list_type_annotations",
+  "test_roundzip"
+ ]
+}

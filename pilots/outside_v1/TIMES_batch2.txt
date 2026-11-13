@@ -1,0 +1,11 @@
+job                          draft    wait   agent    judge  machine     wall  stages
+mi-1284                      1m00s   0m17s   0m46s    9m17s    1m46s   11m26s  d1,a1,j1
+mi-1277                      1m06s   0m32s   0m52s    1m41s    1m58s    4m35s  d1,a1,j1
+mi-1257                      1m24s   0m15s   0m35s    2m42s    1m59s    5m03s  d1,a1,j1
+bo-393                       1m26s   0m14s   1m30s    8m49s    2m56s   12m05s  d1,a1,j1
+bo-322                       1m49s   0m13s   0m15s    1m28s    2m04s    3m50s  d1,a1,j1
+mi-1304c                     1m02s   0m14s   0m28s    4m55s    1m30s    6m47s  d1,a1,j1
+mi-1344c                     1m45s   0m15s   0m26s    9m20s    2m11s   11m53s  d1,a1,j1
+bo-383c                      1m29s   0m14s   0m58s    4m26s    2m27s    7m13s  d1,a1,j1
+TOTAL                       11m01s   2m14s   5m50s   42m38s   16m51s   62m52s
+MEAN per job                 1m23s   0m17s   0m44s    5m20s    2m06s    7m52s
