@@ -104,8 +104,10 @@ class PathJail:
     @staticmethod
     def _existing_mode(name, dfd):
         """The permission bits (rwx for user, group, other; never setuid, setgid or sticky) of the regular file `name` that a
-        write is about to replace, or None when there is none. The replacement keeps them: an edited executable stays
-        executable, and a review patch built from the workspace shows no mode change the agent never made."""
+        write is about to replace, or None when there is none. The replacement keeps them (set on the temp file before the
+        rename, so the target is never visible with another mode): an edited executable stays executable, a file that was
+        0o600 stays 0o600, and a review patch built from the workspace shows no mode change the agent never made. The umask
+        is not applied again: the file's own bits are what it had."""
         try:
             st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
         except FileNotFoundError:
