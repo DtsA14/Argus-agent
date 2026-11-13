@@ -29,6 +29,10 @@ nomor baris bisa bergeser), awal span `ast` tidak jatuh di awal string, atau gal
 
 **Batas yang diterima:** kode yang dijalankan dari docstring (`exec(f.__doc__)`) tidak terlihat lagi oleh pola forger; patch seperti itu harus mengutip docstring itu ke `exec`, dan `exec` sendiri bukan pola.
 
+**Batas yang sudah ada sebelum O2 (tidak diubah di sini):** `_hits` melewati seluruh baris yang diawali `#` atau `//`, jadi `# c\ros._exit(0)` (komentar yang diakhiri `\r` tunggal lalu kode, pada baris yang diawali `#`) tidak kena. Itu pagar per baris, di luar cakupan O2.
+
+**Pengukuran dan tinjauan:** pola gerbang O2 diukur di empat repo nyata (`argus-viewer`, `argus-ledger` dan dua lainnya): nol kecocokan, jadi kekhawatiran false positive belum pernah terjadi. Mutants 11/11 terbunuh. Reviewer sudut penyerang (sekitar 75 input: pernyataan sesudah string, senyawa satu baris, non-ASCII, CRLF, BOM, f-string Python 3.12) tidak menemukan false negative.
+
 ## Tes (gagal di kode lama)
 
 `tests/test_o2_comments.py`: teks yang tidak bisa jalan tidak kena (docstring modul, fungsi, kelas; komentar di ujung baris; pernyataan string berdiri sendiri); kode tetap kena (kode sebelum komentar, `#` di
