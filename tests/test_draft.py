@@ -484,7 +484,8 @@ def five_changes(d):
                                             modified=[{"node": "test_total_zero", "reason": "y"}]), "listed twice"),
     (lambda d: d["changed_tests"].append(dict(d["changed_tests"][0])), "duplicate paths"),
     (lambda d: d["changed_tests"][0].update(path="tests/test_new.py"), "is also a new test"),
-    (lambda d: d["changed_tests"][0].update(content="x" * 60_000), "larger than"),
+    (lambda d: d["changed_tests"][0].update(content="x" * ((1 << 20) + 1)), "larger than"),   # SPEC_APPEND_TESTS: the draft cap is
+    # a mebibyte; 50,000 holds in static_problems (tests/test_append_tests.py)
     (lambda d: d["changed_tests"][0].update(extra=1), "must be {path, content"),
     (lambda d: d["contract"]["validation"][0].update(no_skip={"paths": ["tests/test_lock.py"], "allowed": []}),
      "no_skip is set by the harness"),

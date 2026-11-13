@@ -1,6 +1,6 @@
 # Spec APPEND-TESTS: tes baru boleh ditambahkan ke berkas tes yang sudah ada
 
-Status: **usulan, menunggu persetujuan Atha (strict lane).** Ditulis Claude 2026-11-13.
+Status: **dibangun di branch ini (tes dan kode), menunggu review, mutan, `verify_at` dan "merge" Atha (strict lane).** Disetujui "go" oleh Atha 2026-11-13 dengan tiga catatan kecil (sudah dibetulkan). Ditulis Claude 2026-11-13.
 Dasar: `acceptance/changed.py` (W2a-ext, `SPEC_W2A_EXT_CHANGED_TESTS.md`), `acceptance/draft.py`, `codetask/drafter.py`.
 
 ## 0. Masalah (terukur)
@@ -84,3 +84,24 @@ membaca patch sesudah agen jalan (satu batch kecil, dengan persetujuan uang terp
 - **`append` lebih baik daripada berkas baru, tapi belum tentu "letak yang benar".** Menambah method ke kelas yang sudah ada (`insert_into: {class}`) adalah langkah berikutnya yang lebih dekat ke konvensi, dan lebih rumit (penyisipan ke tengah
   berkas, K1 dan AST pada kelas yang berubah); **sengaja tidak di spek ini**, dan baru layak dipertimbangkan bila pembacaan patch sesudah `append` masih menandainya.
 - Spek ini menyelesaikan "letak tes", bukan "gaya tes" (pembungkus, jumlah tes) atau cacat perilaku seperti `len()` O(n) di #1247, yang hanya ketahuan lewat membaca.
+
+## 6. Penyimpangan dari spek saat dibangun (dicatat karena menyentuh janji di atas)
+
+Dua hal dari kode yang tidak terlihat saat spek ditulis. Keduanya mengubah **di mana** sebuah aturan dijaga, bukan **apa** yang dijaga.
+
+1. **Draf yang tersimpan hanya memuat `content`, tidak ada penanda "ini berasal dari append".** Alasannya catatan review tentang sha: draf `append` dan draf `content` yang setara menghasilkan **byte yang sama**, jadi sha draf dan sha
+   kontrak identik (ada tesnya). Konsekuensinya, `append` hidup hanya di argumen drafter (`submit` menyimpannya untuk `ReviseDraft`), dan pemeriksaan yang tadinya bergantung pada "entri ini append" kini bergantung pada **struktur**:
+   sebuah berkas yang diubah adalah *penambahan murni* (`pure_addition`: teks intake tanpa newline akhirnya tetap menjadi awal berkas baru dan ada tambahan sesudahnya). Berkas yang kebetulan berbentuk begitu lewat jalur `content` juga
+   diperlakukan sama; itu konsisten dan tidak melonggarkan apa pun.
+2. **Aturan ukuran dan aturan "tanpa `new_tests`" pindah dari `validate_draft` ke `static_problems`**, karena yang pertama tidak punya teks intake dan yang kedua punya.
+   - Bentuk draf (`validate_draft`): batas untuk isi berkas yang diubah menjadi **1 MiB** (`MAX_CHANGED_BYTES`), bukan 50.000. Tes lama `test_draft.py` yang memeriksa 60.000 byte di tingkat ini diubah ke 1 MiB + 1.
+   - `static_problems`: isi berkas yang **bukan** penambahan murni tetap dibatasi 50.000 byte (jaminan lama, kini di sini); penambahan murni boleh menambah paling banyak `MAX_BLOCK_BYTES + APPEND_OVERHEAD` = 50.004 byte
+     (`added_bytes`: byte UTF-8 dari bagian setelah teks intake tanpa newline akhir), berapa pun ukuran totalnya. `APPEND_OVERHEAD = 4` adalah pemisah `"\n\n\n"` dan newline penutup, supaya blok yang tepat 50.000 byte lolos.
+   - Draf tanpa `new_tests` lolos bentuk bila `changed_tests` tidak kosong; `static_problems` lalu menuntut sebuah penambahan murni dengan simpul wajib yang **bukan** tes di versi intake. Di tingkat ini "bukan tes di intake" dihitung dengan AST
+     yang mengenali semua kelas (`_defined_tests`; `functions()` yang lama hanya mengenali kelas berawalan `Test`, sedangkan pytest juga mengoleksi `unittest.TestCase` dengan nama apa pun, seperti di more-itertools). Otoritasnya tetap
+     **koleksi K1** (aturan 4), yang berjalan di sandbox sesudahnya.
+3. **Aturan 4 (K1)** dijalankan di `collection_problems` untuk setiap berkas yang penambahan murni: simpul wajib yang sudah dikoleksi dari versi intake ditolak, dibandingkan per fungsinya (id berparameter dihitung sebagai tesnya).
+   Ada tes di sandbox sungguhan (draf yang lolos sampai `approve`, dan draf yang ditolak K1).
+4. **Yang tidak berubah:** tes lama selain satu baris di atas, vitest, jalur `content` untuk tes yang berubah ekspektasinya.
+
+Tes: `tests/test_append_tests.py` (64, dua di antaranya memakai sandbox).

@@ -26,10 +26,104 @@ from .validation import kind
 
 MAX_FILES = 5
 ENTRY_KEYS = {"path", "content", "removed", "modified"}
+# SPEC_APPEND_TESTS: an entry of the drafter's arguments may carry `append` (test code added at the end of the intake file)
+# instead of `content`; from_append builds the whole file, so a draft only ever holds `content`.
+MAX_BLOCK_BYTES = 50_000          # an appended block, and the content a drafter writes out whole (the added region of a pure addition)
+MAX_CHANGED_BYTES = 1 << 20       # the whole content of a changed test file, in a draft (tests/test_more.py is 259 KB)
+APPEND_OVERHEAD = 4               # the separator "\n\n\n" and the final "\n" are not counted against a block's limit
 # A node of the file, without its path: test_x, TestC::test_x; `removed` may also name one parametrized id test_x[a]
 FUNC = re.compile(r"^[A-Za-z_]\w{0,99}(::[A-Za-z_]\w{0,99})?$")
 NODE = re.compile(r"^[A-Za-z_]\w{0,99}(::[A-Za-z_]\w{0,99})?(\[[^\]\s]{1,100}\])?$")
 SKIP_MARKS = {"skip", "skipif", "xfail"}
+
+
+def added_bytes(old, new):
+    """The bytes `new` adds to `old` without its final newlines (UTF-8): what an append of a block costs."""
+    return len(new.encode("utf-8")) - len(old.rstrip("\n").encode("utf-8"))
+
+
+def pure_addition(old, new):
+    """`new` keeps the intake text `old` (without its final newlines) as its beginning and adds something after it."""
+    base = old.rstrip("\n")
+    return new.startswith(base + "\n") and new[len(base):].strip() != ""
+
+
+def _main_guard(tree):
+    """A top-level `if __name__ == "__main__":` (either order of the comparison)."""
+    for n in tree.body:
+        if isinstance(n, ast.If) and isinstance(n.test, ast.Compare) and len(n.test.ops) == 1 \
+                and isinstance(n.test.ops[0], ast.Eq):
+            sides = [n.test.left, *n.test.comparators]
+            if any(isinstance(x, ast.Name) and x.id == "__name__" for x in sides) \
+                    and any(isinstance(x, ast.Constant) and x.value == "__main__" for x in sides):
+                return True
+    return False
+
+
+def from_append(entries, read, plain, limit=MAX_BLOCK_BYTES):
+    """(entries, problems): the drafter's changed_tests with every `append` entry turned into a `content` entry made from
+    the intake text (`read(path)` -> text or None): old.rstrip("\n") + "\n\n\n" + block.strip("\n") + "\n". None-valued
+    content/append keys (a model dump) are dropped; entries without append are passed through; an entry with problems is
+    left out of the result. The input is not changed."""
+    if not isinstance(entries, list):
+        return entries, []
+    out, problems = [], []
+    for i, e in enumerate(entries):
+        if not isinstance(e, dict):
+            out.append(e)
+            continue
+        e = {k: v for k, v in e.items() if not (k in ("content", "append") and v is None)}
+        if "append" not in e:
+            out.append(e)
+            continue
+        where = f"changed_tests[{i}]"
+        if "content" in e:
+            problems.append(f"{where}: give exactly one of content or append")
+            continue
+        if set(e) - {"path", "append", "removed", "modified"} or not isinstance(e.get("path"), str):
+            problems.append(f"{where} must be {{path, append}} (removed and modified are for content)")
+            continue
+        if e.get("removed") or e.get("modified"):
+            problems.append(f"{where}: removed and modified go with content; an append changes no old test")
+            continue
+        block, path = e["append"], e["path"]
+        if not isinstance(block, str) or not block.strip():
+            problems.append(f"{where}: append must be a non-empty string of test code")
+            continue
+        if len(block.encode("utf-8")) > limit:
+            problems.append(f"{where}: append is larger than {limit} bytes")
+            continue
+        if not plain(path):
+            problems.append(f"{where}.path must be a plain relative path to an existing test_*.py file")
+            continue
+        old = read(path)
+        if old is None:
+            problems.append(f"changed test {path} does not exist in the intake (a new file goes in new_tests)")
+            continue
+        try:
+            tree = ast.parse(old)
+        except (SyntaxError, ValueError) as ex:
+            problems.append(f"changed test {path} does not parse in the intake, nothing can be appended: {ex}")
+            continue
+        if _main_guard(tree):
+            problems.append(f"changed test {path} has an `if __name__ == \"__main__\"` block: tests appended after it "
+                            "would not run when the file runs as a script, so it takes no append (use content)")
+            continue
+        content = old.rstrip("\n") + "\n\n\n" + block.strip("\n") + "\n"
+        if len(content.encode("utf-8")) > MAX_CHANGED_BYTES:
+            problems.append(f"{where}: the file with the block would be larger than {MAX_CHANGED_BYTES} bytes")
+            continue
+        out.append({"path": path, "content": content})
+    return out, problems
+
+
+def appended_required_problems(path, before, required):
+    """K1 for a pure addition: a required node must not be a test the intake version already collects (compared by its
+    function, so a parametrised id counts as the test it belongs to). before: {node ids} of the intake version."""
+    old = {func_key(b) for b in before if b.split("::", 1)[0] == path}
+    return [f"required {n} is already a test of {path} in the intake: an appended file adds new tests (a changed "
+            "expectation needs the whole file as content)"
+            for n in required if n in before or func_key(n) in old]
 
 
 def _notes(v, pattern):
@@ -196,6 +290,11 @@ def static_problems(draft, contract, base_files, old_tests, sha):
                             "edit it)")
         if sha(t["content"]) == base_files[p]:
             problems.append(f"changed test {p} is the same as in the intake")
+        pure = pure_addition(old_tests[p], t["content"])
+        if (added_bytes(old_tests[p], t["content"]) > MAX_BLOCK_BYTES + APPEND_OVERHEAD) if pure \
+                else (len(t["content"].encode("utf-8")) > MAX_BLOCK_BYTES):
+            problems.append(f"changed test {p} is larger than {MAX_BLOCK_BYTES} bytes (a file that only adds tests at its "
+                            f"end may add at most that much to the intake version)")
         if not any(runs_whole(v, p) for v in contract["validation"]):
             problems.append(f"changed test {p} is not run whole by any pytest validation (a target that is the file "
                             "or a directory above it, without -k)")
@@ -206,7 +305,41 @@ def static_problems(draft, contract, base_files, old_tests, sha):
         for r in t.get("removed", []):
             if func_key(f"{p}::{r['node']}") in required:
                 problems.append(f"removed {p}::{r['node']} is also required")
+    if not draft["new_tests"] and not _adds_a_test(draft, contract, old_tests):
+        problems.append("a draft without new_tests needs a changed test file that only adds tests at its end and has a "
+                        "required node (must_pass) that is a test the intake version does not have")
     return problems
+
+
+def _defined_tests(tree):
+    """{Class::test_x or test_x} defined in a module: module-level test functions and the test methods of every
+    module-level class (pytest also collects a unittest.TestCase named anything, which `functions` leaves out)."""
+    out = set()
+    for n in tree.body:
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name.startswith("test"):
+            out.add(n.name)
+        elif isinstance(n, ast.ClassDef):
+            out |= {f"{n.name}::{m.name}" for m in n.body
+                    if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and m.name.startswith("test")}
+    return out
+
+
+def _adds_a_test(draft, contract, old_tests):
+    """Some changed file keeps the intake text and adds after it, with a required node that is not a test function of the
+    intake version (a function that is, by its AST: K1's collection makes the same demand on the node ids)."""
+    for t in draft.get("changed_tests") or []:
+        old = old_tests.get(t["path"])
+        if old is None or not pure_addition(old, t["content"]):
+            continue
+        try:
+            have = _defined_tests(ast.parse(old))
+        except (SyntaxError, ValueError):
+            continue
+        required = {func_key(n) for v in contract["validation"] for n in v.get("must_pass", [])
+                    if n.split("::", 1)[0] == t["path"]}
+        if required - have:
+            return True
+    return False
 
 
 def _covered(node_id, path, removed):
