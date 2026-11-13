@@ -447,6 +447,8 @@ def shop():
 
 
 if __name__ == "__main__":
+    from harness import redact as _redact
+    _redact.install()                     # no registered key value reaches the terminal (FIX-C D7), chained tracebacks included
     if sys.argv[1] == "shop":
         shop()
     elif sys.argv[1] == "searchvalue":

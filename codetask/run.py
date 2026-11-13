@@ -385,7 +385,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                                  "unconfirmed": ["red: nothing is red"], "checks": {}, "reason": "red: nothing is red"}
         path = run_dir / f"verdict_{i}.json"
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(v, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        tmp.write_text(json.dumps(scrub_value(v), ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         os.replace(tmp, path)
         failing = sorted(c["id"] for c in v["criteria"] if c["status"] != "pass")
         log.emit("acceptance_verdict", iteration=i, outcome=v["outcome"], failing=failing,

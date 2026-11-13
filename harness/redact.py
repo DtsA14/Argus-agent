@@ -18,12 +18,25 @@ _secrets = set()
 _ordered = ()                  # the registered values, longest first, rebuilt when one is added (scrub runs for every string of every event)
 
 
+def _base64_forms(key):
+    """The base64 of the key alone, and the part of the base64 of `<anything>key<anything>` that does not depend on what
+    surrounds it (HTTP Basic carries user:key; the three alignments of the key inside the 3-byte groups give three texts).
+    A part shorter than MIN_LEN is dropped, so a key under about 12 characters is only hidden alone."""
+    raw = key.encode("utf-8")
+    out = {base64.b64encode(raw).decode("ascii")}
+    for pad in (0, 1, 2):
+        enc = base64.b64encode(b"\0" * pad + raw).decode("ascii").rstrip("=")
+        groups = (pad + len(raw)) // 3                 # the groups fully inside filler + key; the first has filler in it
+        out.add(enc[(4 if pad else 0):4 * groups])
+    return {f for f in out if len(f) >= MIN_LEN}
+
+
 def register(secret):
     """Remember a key value so that scrub() hides it, and its base64 and URL-encoded forms (a header or a URL may carry those).
     Anything that is not a long enough string is ignored."""
     if isinstance(secret, str) and len(secret.strip()) >= MIN_LEN:
         key = secret.strip()
-        forms = {key, base64.b64encode(key.encode("utf-8")).decode("ascii"), urllib.parse.quote(key, safe="")}
+        forms = {key, urllib.parse.quote(key, safe="")} | _base64_forms(key)
         global _ordered
         with _lock:
             _secrets.update(f for f in forms if len(f) >= MIN_LEN)
