@@ -5,19 +5,19 @@
   "grade": "B",
   "blocks": 3,
   "labels": [
-   null,
-   null,
-   null
+   "unchanged",
+   "unchanged",
+   "unchanged"
   ],
   "base": [
-   "not run",
-   "not run",
-   "not run"
+   "ran clean \"[]\"",
+   "raised NameError: name 'bucket' is not defined",
+   "raised NameError: name 'bucket' is not defined"
   ],
   "patched": [
-   "not run",
-   "not run",
-   "not run"
+   "ran clean \"[]\"",
+   "raised NameError: name 'bucket' is not defined",
+   "raised NameError: name 'bucket' is not defined"
   ]
  },
  {
@@ -71,13 +71,13 @@
   "grade": "B",
   "blocks": 1,
   "labels": [
-   null
+   "unchanged"
   ],
   "base": [
-   "not run"
+   "raised NameError: name 'human_list' is not defined"
   ],
   "patched": [
-   "not run"
+   "raised NameError: name 'human_list' is not defined"
   ]
  },
  {
