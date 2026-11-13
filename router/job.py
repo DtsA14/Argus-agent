@@ -605,6 +605,50 @@ def repro_lines(job):
         return []
 
 
+def repro_patched_file(job, sid):
+    return job.dir / f"repro_patched_{sid}.json"
+
+
+def _repro_patched(job, sid, out, cfg, deps):
+    """SPEC_REPRO_PATCHED: the issue's python examples run again on the base tree with the review package's patch applied.
+    Display only, like _repro: nothing here can refuse, block or change the job, and any error leaves "not run"."""
+    try:
+        issue = job.data["inputs"]["issue"]
+        path = repro_patched_file(job, sid)
+        patch = Path(out["dir"]) / "changes.patch"
+        sha = repro.patch_sha(patch)
+        if not out["valid"]:
+            repro.store_patched(path, issue, sha, skipped="review package invalid")
+            return
+        repro.store_patched(path, issue, sha)                    # the marker: a run cut off reads "not run (error)"
+        name = job.data["inputs"].get("environment")
+        scfg = {**(cfg.get("sandbox") or {}), **({"environment": name} if name else {})}
+        found = repro.run_patched(job.root / "fixtures" / "repos" / BASE, patch, issue, scfg)
+        repro.store_patched(path, issue, sha, results=found)
+    except Exception:
+        found = None
+    try:
+        job.note(deps, "repro_patched", sid=sid, statuses=None if found is None else [r["status"] for r in found])
+    except Exception:
+        pass
+
+
+def repro_patched_lines(job):
+    """The status line for the stage under review, checked against the issue and the patch on disk now."""
+    try:
+        sid, st = last_agent(job)
+        rv = (st or {}).get("review")
+        if not rv:
+            return []
+        issue = job.data["inputs"]["issue"]
+        state = repro.load_patched(repro_patched_file(job, sid), issue, repro.patch_sha(Path(rv["dir"]) / "changes.patch"))
+        base = repro.load(job.dir / REPRO, issue, job.data["intake"]["snapshot_sha256"])
+        line = repro.patched_line(base, state)
+        return [line] if line else []
+    except Exception:
+        return []
+
+
 RESEARCH_CONTEXT = "research_context.txt"
 
 
@@ -990,6 +1034,7 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
                        sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root, **kw)
     st["review"] = {"valid": out["valid"], "problems": out["problems"], "dir": str(out["dir"])}
     job.move(REVIEW_READY if out["valid"] else REVIEW_INVALID, deps, stage=sid)
+    _repro_patched(job, sid, out, cfg, deps)      # after the state is saved: nothing here can hold the job
     return r
 
 
@@ -1610,6 +1655,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     out += _estimate_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
         out += _review_lines(job, last_agent(job)[1]["review"])
+        out += repro_patched_lines(job)
     out += judge_lines(job)
     if d["state"] == APPLIED:
         why = _why(job)

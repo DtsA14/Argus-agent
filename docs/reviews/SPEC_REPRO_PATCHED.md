@@ -71,3 +71,12 @@ benar). Dari angka itu baru R2 diputuskan.
 Skrip kecil di `pilots/outside_v1/` (bukan bagian harness; tanpa model, tanpa uang) menjalankan `repro.run` pada dasar dan pada pohon hasil `review.apply_patch` untuk 18 patch batch 1
 dan 2 yang sudah punya nilai buta, dan menulis tabel (job, dasar, sesudah patch, label, nilai buta). Dikerjakan **setelah** kode R1b ter-merge, supaya memakai fungsi yang sama.
 Hasilnya menentukan apakah sinyal layak dan memajukan keputusan R2 tanpa menunggu delapan job lagi.
+
+## 7. Implementado (2026-11-13): diferenças deliberadas em relação ao §2
+
+- **Pohon yang dijalankan:** salinan pohon intake job (`fixtures/repos/BASE`, yang juga dipakai R1) dengan `git apply --whitespace=nowarn changes.patch`, bukan `review.apply_patch`
+  (yang membangun ulang dasar dari rekaman intake). Pohonnya sama; menghindari membuka rekaman intake lagi. Patch tidak bisa diterapkan -> "not run (error)".
+- **Penanda sebelum run:** `repro_patched_<sid>.json` ditulis dulu tanpa hasil (membaca "not run (error)"), lalu diganti atomik (`os.replace`) dengan hasilnya. Proses yang mati di
+  tengah run meninggalkan penanda itu, bukan berkas setengah jadi. Job lama tanpa berkas: tanpa baris.
+- **Label per blok** (`changed`/`unchanged`) dari (status, tipe exception, baris keluaran terakhir); kode di `acceptance/repro.py` (`label`, `patched_line`), pemasangan di `router/job.py`
+  (`_repro_patched`, `repro_patched_lines`). Tes: `tests/test_repro_patched.py`.
