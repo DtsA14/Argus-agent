@@ -6,6 +6,7 @@ a human sees `ran clean, last output "0o600"` next to an issue that says 0o644. 
 draft, and any error (sandbox down, odd issue text) gives no result. A clean run does not prove the bug is gone, and a crash
 does not prove it is there: the human reads the output against the issue.
 """
+import doctest
 import hashlib
 import json
 import os
@@ -34,23 +35,41 @@ def blocks(issue):
     return [(i, textwrap.dedent(m.group(3))) for i, m in enumerate(FENCE.finditer(issue))][:MAX_BLOCKS]
 
 
+def _session(code):
+    """True for a block written as an interactive session: some line starts with the prompt `>>>`."""
+    return any(ln.lstrip().startswith(">>>") for ln in code.splitlines())
+
+
+def _examples(code):
+    """[source] of the examples of a session block that run, in order (`# doctest: +SKIP` ones left out); ValueError when
+    doctest's parser refuses the block. The expected output is not kept: comparing it is R2."""
+    return [ex.source for ex in doctest.DocTestParser().get_examples(code) if not ex.options.get(doctest.SKIP)]
+
+
 def skip_reason(code):
     if len(code.encode("utf-8")) > MAX_CODE_BYTES:
         return f"longer than {MAX_CODE_BYTES} bytes"
     lines = [ln for ln in code.splitlines() if ln.strip()]
     if not lines:
         return "empty"
-    if any(ln.lstrip().startswith(">>>") for ln in lines):
-        return "an interactive session (>>>), not a script"
-    if any(ln.strip() == "..." for ln in lines):
-        return "contains a bare ... line, not a script"
     if any(ln.startswith("$ ") for ln in lines):
         return "a shell session, not a script"
+    if _session(code):
+        try:
+            return None if _examples(code) else "no runnable doctest example"
+        except ValueError:
+            return "doctest examples do not parse"
+    if any(ln.strip() == "..." for ln in lines):
+        return "contains a bare ... line, not a script"
     return None
 
 
 def program(code):
-    """The code with the prelude in front; `from __future__` lines must come first in a file, so they go before it."""
+    """The code with the prelude in front; `from __future__` lines must come first in a file, so they go before it. A session
+    block (`>>>`) becomes one `exec(compile(source, "<doctest>", "single"), globals())` per example, in one namespace: `single`
+    prints the repr of an expression like the interactive prompt, and the source goes in through repr(), never as program text."""
+    if _session(code):
+        return PRELUDE + "".join(f"exec(compile({src!r}, '<doctest>', 'single'), globals())\n" for src in _examples(code))
     lines = code.splitlines(keepends=True)
     future = [ln for ln in lines if re.match(r"\s*from\s+__future__\s+import\b", ln)]
     rest = [ln for ln in lines if ln not in future]

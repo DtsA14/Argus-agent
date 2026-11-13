@@ -43,7 +43,7 @@ def test_only_python_fences_are_taken_in_order_and_at_most_three():
     assert rp.blocks(issue("x", lang="js")) == [] and rp.blocks(None) == [] and rp.blocks(7) == []
 
 
-@pytest.mark.parametrize("code,word", [(">>> a = 1\n>>> a", "interactive"), ("x = 1\n...\ny = 2", "bare"),
+@pytest.mark.parametrize("code,word", [(">>> a = 1  # doctest: +SKIP\n", "no runnable"), ("x = 1\n...\ny = 2", "bare"),
                                        ("$ pip install x\nimport x", "shell"), ("x = 1\n" * 3000, "bytes"),
                                        ("\n\n", "empty")])
 def test_a_block_that_is_not_a_script_is_skipped_with_the_reason(code, word):
