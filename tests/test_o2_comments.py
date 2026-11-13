@@ -82,3 +82,17 @@ def test_the_detection_patterns_are_not_narrowed(tmp_path):
 def test_a_change_whose_only_mention_is_a_docstring_passes_and_real_code_fails(tmp_path):
     assert scan(tmp_path, {"src/app.py": '"""Never call os._exit here."""\nVALUE = 1\n'})["status"] == "pass"
     assert scan(tmp_path / "b", {"src/app.py": '"""doc"""\nimport os\nos._exit(0)\n'})["status"] == "fail"
+
+
+# ---- the baseline is read the same way ---------------------------------------------------------------------------------
+
+def test_a_line_that_was_only_a_docstring_at_the_base_and_is_code_now_fails(tmp_path):
+    base = {"src/app.py": '"""doc\nos._exit(0)\n"""\nimport os\n'}
+    c = scan(tmp_path, {"src/app.py": "import os\nos._exit(0)\n"}, base=base)
+    assert c["status"] == "fail"
+
+
+def test_a_code_line_already_at_the_base_is_not_new(tmp_path):
+    base = {"src/app.py": "import os\nos._exit(0)\n"}
+    c = scan(tmp_path, {"src/app.py": '"""os._exit(0) is documented here"""\nimport os\nos._exit(0)\n'}, base=base)
+    assert c["status"] == "pass"
