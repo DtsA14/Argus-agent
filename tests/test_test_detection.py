@@ -286,3 +286,15 @@ def test_a_comment_cannot_forge_but_the_import_of__exit_and_a_call_can(tmp_path)
     assert c["status"] == "pass"
     c = scan(tmp_path / "d", {"src/d.py": "# PYTEST_CURRENT_TEST is not read here\n"})
     assert c["status"] == "fail"                                      # a detection pattern in a comment still counts, as before
+
+
+@pytest.mark.parametrize("line", ["process.abort()\n", "process.kill(process.pid)\n", "process.exit(1)\n"])
+def test_every_node_way_out_of_the_process_is_a_forging_hit(tmp_path, line):
+    c = scan(tmp_path, {"src/a.js": "const x = 1\n" + line})
+    assert [e["pattern"] for e in c["evidence"]["hits"]] == ["process.exit"] and "can forge the test report" in c["reason"]
+
+
+def test_a_commented_line_that_also_names_a_detection_pattern_is_not_called_forging(tmp_path):
+    c = scan(tmp_path, {"src/a.py": "# PYTEST_CURRENT_TEST and os._exit(0): a note\n"})
+    (hit,) = c["evidence"]["hits"]
+    assert hit["pattern"] == "PYTEST_CURRENT_TEST" and "forging" not in hit and "can forge" not in c["reason"]
