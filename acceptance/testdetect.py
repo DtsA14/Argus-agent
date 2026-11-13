@@ -61,6 +61,9 @@ def _forging(line):
     return not line.lstrip().startswith(COMMENT) and any(all(r.search(line) for r in regexes) for regexes in FORGERS.values())
 
 
+MAX_VIEW_LINE = 20_000      # a longer line is not narrowed (see _code_view)
+
+
 COMMENT = ("#", "//")      # a line that begins as a comment is a comment to its end; "*" and "/*" can start code (`*_, x = f()`, `*/ exit()`)
 
 
@@ -71,6 +74,8 @@ def _code_view(text):
     When the lines are uncertain (a syntax error, a bare carriage return, anything the parser does not agree on) the text comes
     back unchanged and the old, wider scan applies."""
     try:
+        if len(max(text.split("\n"), key=len)) > MAX_VIEW_LINE:
+            return text                              # tokenize and the blanking loop are quadratic in the length of one line: keep the linear old scan
         if re.search(r"\r(?!\n)", text):
             return text                              # Python counts a bare \r as a line end, split("\n") does not
         lines = text.split("\n")

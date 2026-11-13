@@ -112,3 +112,15 @@ def test_a_string_statement_after_non_ascii_on_the_same_line_is_cut_at_the_right
 
 def test_javascript_that_happens_to_parse_as_python_is_still_scanned_wide(tmp_path):
     assert names(tmp_path, '"process.exit(0)";\n', "js") == {"process.exit"}
+
+
+# ---- a very long line is not narrowed (cost) ----------------------------------------------------------------------------
+
+def test_a_very_long_line_is_scanned_wide_and_fast(tmp_path):
+    import time
+    text = "DATA = [" + "1," * 150_000 + "]  # os._exit(0)\n"               # 300 KB on one line: the narrowing alone took about 20 s
+    t = time.time()
+    got = hits(tmp_path, text)
+    assert got == [(1, "os._exit")]                                          # wide: the comment is not blanked, as before O2
+    assert time.time() - t < 5
+    assert hits(tmp_path / "b", "DATA = [\n" + "    1,\n" * 1000 + "]  # os._exit(0)\n") == []       # the same data over many lines is narrowed
