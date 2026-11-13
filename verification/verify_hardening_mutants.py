@@ -54,6 +54,7 @@ M = [
     ("untracked non-ascii paths are quoted", [(PC, "git -c core.quotePath=false ls-files", "git ls-files")]),
     ("the tests are split on spaces", [(PC, 'exec "$PY" -m pytest "${ARGS[@]}" "${tests[@]}"', 'exec "$PY" -m pytest "${ARGS[@]}" ${tests[*]}')]),
     ("an empty selection runs on", [(PC, 'if [ "${#tests[@]}" -eq 0 ] || [ -z "${tests[0]}" ]; then', "if false; then")]),
+    ("the test child inherits an ignored SIGINT", [("tests/test_verify_at.py", "    signal.signal(signal.SIGINT, signal.SIG_DFL)\n", "    pass\n")]),
     # the scope helper
     ("the scope filter is dropped", [(SC, '"--filter", "label=argus.sandbox=1",\n                        "--filter", f"label=argus.test={token}"]', '"--filter", "label=argus.sandbox=1"]')]),
     ("removing a token's containers does nothing", [(SC, 'subprocess.run(["docker", "rm", "-f", *found], capture_output=True)', "pass")]),

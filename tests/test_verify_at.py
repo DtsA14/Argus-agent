@@ -116,6 +116,13 @@ def test_verify_sh_judges_by_its_last_result_line(tmp_path, lines, ok):
     assert (r.returncode == 0) == ok
 
 
+def default_sigint():
+    """A run started in the background (`nohup ... &`) has SIGINT ignored, and so do its children: bash cannot trap a signal that
+    was ignored when it started, so the script under test would never see the INT. The script is started with the default."""
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
 def alive(pid):
     try:
         os.kill(pid, 0)
@@ -131,7 +138,7 @@ def test_a_process_that_left_the_process_group_is_killed_through_the_tree(repo, 
     base.mkdir()
     pidfile, ready = tmp_path / "escaped.pid", tmp_path / "ready"
     p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, preexec_fn=default_sigint,
                          env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", "STUB_ESCAPE": "1", "STUB_PIDFILE": str(pidfile),
                               "STUB_READY": str(ready)})
     try:
@@ -149,7 +156,7 @@ def test_a_process_that_left_the_process_group_is_killed_through_the_tree(repo, 
         assert not alive(child), "a process outside the group survived the signal"
     finally:
         if pidfile.exists() and alive(int(pidfile.read_text())):
-            os.kill(int(pidfile.read_text()), signal.SIGKILL)
+            os.killpg(os.getpgid(int(pidfile.read_text())), signal.SIGKILL)
         if p.poll() is None:
             os.killpg(p.pid, signal.SIGKILL)
 
@@ -161,7 +168,7 @@ def test_a_step_started_after_a_child_was_killed_does_not_survive_the_signal(rep
     base.mkdir()
     pidfile, ready = tmp_path / "next.pid", tmp_path / "ready"
     p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, preexec_fn=default_sigint,
                          env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", "STUB_RACE": "1", "STUB_PIDFILE": str(pidfile),
                               "STUB_READY": str(ready)})
     try:
@@ -194,8 +201,9 @@ def test_a_signal_kills_the_whole_verify_tree_before_the_worktree_goes(repo, tmp
     base = tmp_path / "wts"
     base.mkdir()
     pidfile, ready = tmp_path / "child.pid", tmp_path / "ready"
+    outer = signal.signal(signal.SIGINT, signal.SIG_IGN)          # as in a run started with `nohup ... &`: the child must still get INT
     p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, preexec_fn=default_sigint,
                          env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", "STUB_HANG": "1", "STUB_PIDFILE": str(pidfile),
                               "STUB_READY": str(ready)})
     try:
@@ -215,5 +223,8 @@ def test_a_signal_kills_the_whole_verify_tree_before_the_worktree_goes(repo, tmp
         assert list(base.iterdir()) == []                         # and the worktree is gone
         assert len(git(repo, "worktree", "list").splitlines()) == 1
     finally:
+        signal.signal(signal.SIGINT, outer)
+        if pidfile.exists() and alive(int(pidfile.read_text())):          # never leave a sleep behind, whatever failed
+            os.killpg(os.getpgid(int(pidfile.read_text())), signal.SIGKILL)
         if p.poll() is None:
             os.killpg(p.pid, signal.SIGKILL)
