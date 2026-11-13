@@ -49,3 +49,40 @@ What this does and does not show:
   a cheaper fix (check `count +/- 1`).
 - **Things the reader found that Claude's reading did not list:** a `getattr` helper in the #1098 tests and a `try/except AssertionError` wrapper in the #1152 tests, both "tidying" items. Claude's reasons named only the test location. They do not change a verdict (already reject) but show the reading was less complete.
 - Model against model, same family possibly: not an independent human anchor. Reported as such (`PROTOCOL_FINAL_PATCH.md`, delegated reader).
+
+## Blind A/B/C grades by two other models (2026-11-13)
+
+Two models graded all eight final patches blind: **Opus** and **Fable**, each a fresh subagent, independent of the other, from packages that hold only the issue and the final patch (shuffled codes G01 to G08,
+leak-scanned: no job id, label, verdict, cost; key kept apart). Rubric as in `PREFLIGHT_BATCH3.md`. **Added by Claude, outside the frozen rubric:** a separate `behaviour_correct` (yes/no/unsure, ignoring tidiness)
+and a `tidy_items` list, because every patch would otherwise get B for the same habit. Data: `blind/blind_grades_batch3.json` (grades, reasons, key).
+
+| Label | Opus | Fable | Maintainers' tests |
+|---|---|---|---|
+| mi-1252 | B, correct, 1 tidy item | B, correct, 3 | resolved |
+| mi-1250 | B, correct, 2 | B, correct, 3 | resolved |
+| mi-1247 | B, correct, 3 | B, correct, 5 | resolved |
+| mi-1192 | B, correct, 2 | B, correct, 2 | resolved |
+| mi-849 | B, correct, 4 | B, correct, 4 | own test passes (shared-base artefact) |
+| mi-1152 | B, correct, 2 | B, correct, 2 | resolved |
+| mi-813 | B, correct, 3 | B, **unsure**, 6 | rubric_only |
+| mi-1098 | B, correct, 2 | B, correct, 4 | rubric_only |
+
+**Counts: A 0, B 8, C 0 by both graders; `behaviour_correct`: 15 of 16 yes, 1 unsure (Fable on #813), 0 no.** Both graders agree on all eight grades and on 7 of 8 `behaviour_correct`.
+
+How to read it (not a verdict on Argus; the lines "kill at 2 or fewer A, success at 5 or more" are not applied to eight jobs):
+- **The grade does not discriminate.** Every patch put its tests in a new file, which the rubric counts as B, so "B for all, by both" is that one habit read twice, the same thing as Claude's eight rejects. The agreement
+  between the graders is real but nearly empty because there was nothing to disagree about. Batch 2's A1/B6/C1 is not comparable: that B was partly the file-mode artefact, this one is test placement.
+- **What carries information:** behaviour is judged right on 15 of 16 readings and the maintainers' tests resolve 6 of 6 (each by its own PR's tests). The one open behaviour question is the rewrite of `replace` (#813): Fable cannot
+  confirm the claimed speed-up from the text, and it has no test grade.
+- **#1247 is the one real finding, and four readings agree:** Claude, the delegated reader, Opus and Fable all flag the O(n) `sum(1 for _ in self)` fallback in `__len__` as a performance hazard the issue did not allow;
+  the maintainers' tests do not see it. Tests pass, review says it should not be applied as is.
+- **Two grader claims were wrong when checked:** Fable's worry that `Callable` is not imported in `more.pyi` (#1098; it is, at line 22) and Opus's worry that `types.GenericAlias` may not be allowed (#849; the library requires
+  Python 3.10 or later). Neither changed a grade. Reading a patch without the repository costs this kind of false doubt. Fable's remark about a README listing was not checked.
+- **No human anchor in this batch:** Atha did not grade 3 or 4 (the delegated model read 3 of 8). The grades are model against model.
+- Cost of the grading: two subagent runs (about 61,000 and 64,000 tokens), not on the Argus ledger.
+
+## Batch 3 in one paragraph
+
+Eight more-itertools issues, $0.1041, judge off, no redraft or retry, no conflict report, no GATE stop; maintainers' tests resolve 6 of 6 (own tests); two blind model graders give B on all eight and call the behaviour right on 15 of
+16 readings; Claude's sealed verdicts are 8 of 8 reject (test location, plus the O(n) fallback in #1247) and the delegated reader agreed 3 of 3. The common defect is the **test placement**: the drafter's validation target names a new test file,
+so every patch carries one. Open: knowledge contamination (the check could not answer), one repository, no human grader, RC/GATE still without synthetic negative cases.
