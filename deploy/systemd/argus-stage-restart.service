@@ -1,0 +1,21 @@
+# Staging ledger after a VM restart (2026-11-13: the VM restarted, the container is `restart=no` and stayed down; the monitor
+# alerted "FAIL 3x in a row" and the viewer answered 503 because it reads through the ledger container).
+# Runs once at boot: waits for docker, and if no argus-staging-ledger-* container is running starts the live release again on its
+# recorded image with `argus stage restart --yes` (same command, same smoke test, state.json unchanged; "--yes" = Atha approved
+# this unit in chat 2026-11-13). If the container is already up the run is skipped (ExecCondition), nothing is touched.
+# Install: ln -s this file into ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload && systemctl --user enable argus-stage-restart.service
+[Unit]
+Description=Argus staging: start the live ledger release again after a restart of the VM
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/pilot3a_live
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 45); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
+ExecCondition=/bin/sh -c '! docker ps --filter name=argus-staging-ledger- --filter status=running -q | grep -q .'
+ExecStart=%h/pilot3a_live/.venv-verify/bin/python scripts/argus.py stage restart --yes
+TimeoutStartSec=300
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
