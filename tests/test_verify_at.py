@@ -12,6 +12,16 @@ GIT_ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT
 STUB = """#!/usr/bin/env bash
 set -e
 mkdir -p verification
+if [ "${STUB_ESCAPE2:-0}" = 1 ]; then       # a GRANDchild that left the group: only the walk down the whole tree finds it
+  bash -c 'setsid sleep 604 & echo $! > "$STUB_PIDFILE"; wait' &
+  echo ready > "$STUB_READY"
+  wait
+fi
+if [ "${STUB_SPAWNER:-0}" = 1 ]; then       # keeps starting children for a while: the ones that come after the script took its list
+  echo ready > "$STUB_READY"
+  for _ in 1 2 3 4 5 6; do sleep 607 & echo $! >> "$STUB_PIDFILE"; sleep 0.3; done
+  wait
+fi
 if [ "${STUB_ESCAPE:-0}" = 1 ]; then        # a process that left the process group of verify.sh (its own session): only the tree reaches it
   setsid sleep 603 & echo $! > "$STUB_PIDFILE"
   echo ready > "$STUB_READY"
@@ -131,7 +141,8 @@ def alive(pid):
     return True
 
 
-def test_a_process_that_left_the_process_group_is_killed_through_the_tree(repo, tmp_path):
+@pytest.mark.parametrize("mode", ["STUB_ESCAPE", "STUB_ESCAPE2"])
+def test_a_process_that_left_the_process_group_is_killed_through_the_tree(repo, tmp_path, mode):
     import signal
     import time
     base = tmp_path / "wts"
@@ -139,7 +150,7 @@ def test_a_process_that_left_the_process_group_is_killed_through_the_tree(repo, 
     pidfile, ready = tmp_path / "escaped.pid", tmp_path / "ready"
     p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, preexec_fn=default_sigint,
-                         env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", "STUB_ESCAPE": "1", "STUB_PIDFILE": str(pidfile),
+                         env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", mode: "1", "STUB_PIDFILE": str(pidfile),
                               "STUB_READY": str(ready)})
     try:
         deadline = time.monotonic() + 30
@@ -157,6 +168,43 @@ def test_a_process_that_left_the_process_group_is_killed_through_the_tree(repo, 
     finally:
         if pidfile.exists() and alive(int(pidfile.read_text())):
             os.killpg(os.getpgid(int(pidfile.read_text())), signal.SIGKILL)
+        if p.poll() is None:
+            os.killpg(p.pid, signal.SIGKILL)
+
+
+def test_children_started_after_the_script_listed_the_tree_are_killed_with_the_group(repo, tmp_path):
+    """The script lists the descendants first, then kills: a child started in between is in no list. A slow pgrep (a shim on the
+    PATH) makes that window a second long; only the kill of the whole process group reaches the late children."""
+    import shutil
+    import signal
+    import time
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "pgrep").write_text(f'#!/usr/bin/env bash\nout="$({shutil.which("pgrep")} "$@")"\nsleep 0.5\nprintf "%s\\n" "$out"\n')
+    (shim / "pgrep").chmod(0o755)
+    base = tmp_path / "wts"
+    base.mkdir()
+    pidfile, ready = tmp_path / "spawned.pid", tmp_path / "ready"
+    p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, preexec_fn=default_sigint,
+                         env={**GIT_ENV, "PATH": f"{shim}:{os.environ['PATH']}", "STUB_RESULT": "RESULT: PASS", "STUB_SPAWNER": "1",
+                              "STUB_PIDFILE": str(pidfile), "STUB_READY": str(ready)})
+    pids = []
+    try:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and not (ready.exists() and pidfile.exists() and len(pidfile.read_text().split()) >= 2):
+            time.sleep(0.05)
+        assert ready.exists() and pidfile.exists(), "the stub did not start"
+        os.kill(p.pid, signal.SIGTERM)
+        p.wait(timeout=60)
+        time.sleep(1.0)
+        pids = [int(x) for x in pidfile.read_text().split()]
+        assert len(pids) >= 5, pids                                   # some of them came after the list was taken
+        assert [x for x in pids if alive(x)] == [], "children started after the list was taken survived the signal"
+    finally:
+        for x in pids:
+            if alive(x):
+                os.kill(x, signal.SIGKILL)
         if p.poll() is None:
             os.killpg(p.pid, signal.SIGKILL)
 

@@ -93,10 +93,14 @@ def test_the_precheck_prints_what_it_would_run_for_the_changes_since_a_base(tmp_
 
 def test_a_path_with_a_space_or_a_non_ascii_name_is_one_test_file_and_is_not_lost(tmp_path):
     r = repo_with_precheck(tmp_path)
-    for name in ("tests/test_sp ace.py", "tests/test_\u00e9.py"):
+    (r / "tests" / "test_tracked_\u00fc.py").write_text("def test_x():\n    pass\n")           # tracked, then changed: git diff lists it
+    subprocess.run(["git", "-C", str(r), "add", "-A"], check=True, env=GIT_ENV)
+    subprocess.run(["git", "-C", str(r), "commit", "-qm", "more"], check=True, env=GIT_ENV, capture_output=True)
+    (r / "tests" / "test_tracked_\u00fc.py").write_text("def test_x():\n    assert True\n")
+    for name in ("tests/test_sp ace.py", "tests/test_\u00e9.py"):                            # untracked: ls-files lists them
         (r / name).write_text("def test_x():\n    pass\n")
     tests = printed(r)["tests"].split(", ")
-    assert "tests/test_sp ace.py" in tests and "tests/test_\u00e9.py" in tests
+    assert "tests/test_sp ace.py" in tests and "tests/test_\u00e9.py" in tests and "tests/test_tracked_\u00fc.py" in tests
 
 
 def test_the_precheck_really_runs_what_it_selected_with_the_scheduling_of_verify_sh_even_for_a_name_with_a_space(tmp_path):
