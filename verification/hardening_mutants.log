@@ -31,3 +31,4 @@ KILLED  llm: a failed count is cut before the scrub: ['FAILED tests/test_fix_c.p
 KILLED  llm: a failed call is cut before the scrub: ['FAILED tests/test_fix_c.py::test_an_error_text_is_scrubbed_before_it_is_cut_so_no_prefix_of_a_key_is_left']
 KILLED  live: a typed key is not registered: ['FAILED tests/test_fix_c.py::test_a_key_typed_for_a_live_stage_is_registered_from_then_on']
 RESULT: 28/32 killed
+NOTE: of the 4 survivors of this run, two were closed by tests afterwards (O2: only process.exit; O2: a commented line flagged as forging: both killed on rerun) and two are equivalent: "support: conftest not a support name" (conftest.py is also a test file by acceptance/testdetect.is_test_file) and "redact: short forms registered" (every encoded form of a key of at least 8 characters is at least 8 characters). Combined: 30/32 killed, 2 equivalent.
