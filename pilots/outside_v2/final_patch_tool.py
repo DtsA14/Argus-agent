@@ -134,14 +134,16 @@ def compare(batch):
     if not sealed_ok(batch):
         raise SystemExit("refused: verdicts_claude.json is not sealed, or changed after the seal")
     mine, key, theirs = load(batch, "verdicts_claude.json"), load(batch, "packet_key.json")["codes"], load(batch, "atha_verdicts.json")
+    reader = theirs.pop("_reader", "Atha (human)")    # who read the packets: a delegated model reader says so here, and the result is reported as such
     if set(theirs) != set(key):
         raise SystemExit(f"atha_verdicts.json must answer exactly {sorted(key)}")
     flipped = [(c, key[c], mine[key[c]]["verdict"], theirs[c]) for c in sorted(key) if mine[key[c]]["verdict"] != theirs[c]]
     for c, label, m, a in flipped:
         print(f"FLIPPED {c} ({label}): Claude {m}, Atha {a}")
     with_patch = sum(1 for x in mine.values() if x["verdict"] != NO_PATCH)
-    print(f"Atha read {len(key)} of {with_patch} final patches blind ({len(mine) - with_patch} jobs had no final patch); {len(flipped)} flipped. "
-          f"Per job, human cost: 0 human minutes, approved by the model (Atha's reading of the {len(key)} is the check, counted apart).")
+    print(f"Reader: {reader}.")
+    print(f"{reader} read {len(key)} of {with_patch} final patches blind ({len(mine) - with_patch} jobs had no final patch); {len(flipped)} flipped. "
+          f"Per job, human cost: 0 human minutes, approved by the model (the reading of the {len(key)} is the check, counted apart).")
 
 
 if __name__ == "__main__":

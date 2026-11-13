@@ -33,3 +33,9 @@ Di batch 1 dan 2 pembacaan Claude "sebelum approve" hanya atas **rencana draf**.
 Dry run kedua 2026-11-13 (job palsu, 8 job, satu `REVIEW_INVALID`, di repo git sementara): `seal` menolak verdict `approve` untuk job invalid; `pick` menolak sebelum commit, dengan nonce kosong, dengan nonce kedua, dan sesudah verdict diubah; dua nonce berbeda memberi sampel berbeda, nonce yang sama memberi sampel yang sama; job invalid tidak pernah terpilih; `compare` melaporkan 3 dari 7 dibaca, 1 tanpa patch akhir.
 
 Dry run 2026-11-13 pada delapan patch batch 2 (verdict palsu): `pick` menolak sebelum disegel dan setelah berkas diubah; sesudah segel memilih 3 dari 8; `compare` menghitung pembalikan.
+
+## Pembaca yang didelegasikan (2026-11-13)
+
+Atha boleh mendelegasikan pembacaan sampel buta ke sesi Claude lain (batch 3: Atha tidak membaca kode). Jawabannya ditulis di `atha_verdicts.json` dengan satu kunci tambahan
+`"_reader": "model (delegated by Atha)"`; `compare` mencetaknya dan hasilnya dilaporkan sebagai **pembacaan model atas delegasi Atha, bukan jangkar manusia** (model lawan model: bias
+yang sama mungkin ada di keduanya). Pembaca hanya membuka `packet/`; ia tidak membuka `verdicts_claude.json`, `SEALED.json`, `RESULTS.md`, `grades/` atau `packet_key.json`. Tanpa `_reader`, pembacanya dianggap Atha.
