@@ -274,6 +274,12 @@ Diputuskan 2026-11-07 s.d. 2026-11-11 (Atha):
   staging, uang atau key. Satu "go live" per batch untuk job `argus code` di batch SWE; approve/retry tetap per draf.
 - **Urutan verifikasi** (2026-11-11): review (satu subagen Sonnet untuk kode dan keamanan) → mutan + tes yang tersentuh → **satu**
   `verify_at` sendirian (tanpa suite non-sandbox terpisah; CPU berebut membuat exit 137) → merge. Log pilot ikut PR fiturnya.
+  **Pra-cek tes sandbox** (2026-11-13; ditemukan setelah dua `verify_at` gagal pada kerja APPEND-TESTS): bila sebuah perubahan menambah tes yang memakai
+  sandbox Docker, (1) taruh di modul yang sumbernya memuat `SANDBOX NOT AVAILABLE` (lewat fixture `scfg` yang di-skip dengan teks itu di modul yang sama; mengimpor
+  fixture dari modul lain tidak cukup), karena `conftest.py` mengelompokkan modul sandbox ke satu grup serial dari **sumber modulnya**; (2) sebelum `verify_at`, jalankan modul
+  yang tersentuh **bersama** `tests/test_acceptance_sandbox.py` dengan `-n 4 --dist loadgroup` (sekitar 1 sampai 2 menit, dengan pin image terpasang), karena satu tes di sana
+  menuntut bahwa tidak ada kontainer sandbox yang tersisa di seluruh mesin, dan sebuah tes sandbox yang lepas dari grup membuatnya gagal hanya di rangkaian penuh. Pra-cek
+  ini tidak menggantikan `verify_at` dan tidak dijalankan berbarengan dengannya (CPU).
 - **UI kontrol** (`SPEC_CONTROL_UI`, 8711): fase 1-2 live (baca, reject/abandon, chatbox penulis issue); sisa: fase 3 (approve)
   dan 4 (staging), prioritas rendah.
 - **Penulis issue** (`SPEC_ISSUE_WRITER`): Haiku 5.5 lewat OpenRouter; harness yang mencari bentrok (`touches`, `clash_check`);
