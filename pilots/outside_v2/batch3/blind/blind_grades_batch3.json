@@ -1,0 +1,176 @@
+{
+ "key": {
+  "G01": "mi-1250",
+  "G02": "mi-1192",
+  "G03": "mi-813",
+  "G04": "mi-1252",
+  "G05": "mi-849",
+  "G06": "mi-1098",
+  "G07": "mi-1247",
+  "G08": "mi-1152"
+ },
+ "opus": {
+  "G01": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "regression tests go in a new file tests/test_value_chain_lazy_errors.py; they belong in the existing value_chain tests in tests/test_more.py",
+    "the tests use a try/except/raise AssertionError pattern where the suite would use assertRaises / pytest.raises"
+   ],
+   "reason": "The source change is exactly the fix the issue suggests: classify with iter(), then consume outside the guard. A TypeError raised during iteration now propagates, and objects that cannot be iterated are still emitted. Only the placement and style of the tests stop it being applied as is."
+  },
+  "G02": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "tests are in a new file tests/test_interleave_evenly_empty.py instead of the existing interleave_evenly tests in tests/test_more.py",
+    "the tests wrap the call in an exception-to-AssertionError wrapper that isn't needed"
+   ],
+   "reason": "Returning early from the generator when dims == 0 gives an empty result for both interleave_evenly([]) and interleave_evenly([], lengths=[]). The test placement and wrapper need tidying."
+  },
+  "G03": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "tests are in a new file tests/test_issue_replace_default_arg.py instead of tests/test_more.py",
+    "test_replace_does_not_use_windowed monkeypatches windowed, which ties the test to the implementation",
+    "the tests use an exception-to-AssertionError wrapper"
+   ],
+   "reason": "The deque-based sliding window keeps the old semantics as far as I can trace them: padding never reaches the output, and a match restarts the window after the replaced items. It also adds default_arg to the function, the stub and the docstring as the issue asks. The tests need moving and cleaning up."
+  },
+  "G04": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "tests are in a new file tests/test_split_empty_maxsplit.py instead of the existing split_before/split_after/split_when tests in tests/test_more.py"
+   ],
+   "reason": "Guarding the maxsplit == 0 fast path with `if buf` makes all three functions return [] for empty input at every maxsplit, and split_at is left alone, as the issue asks. Only the test location needs to change."
+  },
+  "G05": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "tests are in a new file tests/test_peekable_subscript.py instead of tests/test_more.py",
+    "types.GenericAlias requires Python 3.9 or later; I can't confirm from the text that the library's minimum version allows it",
+    "the new import is out of order in the import block; `__class_getitem__ = classmethod(GenericAlias)` would be the idiomatic one-liner",
+    "the tests use a TypeError-to-AssertionError wrapper"
+   ],
+   "reason": "With __class_getitem__ returning GenericAlias, peekable[str] works at runtime and in unquoted annotations, and the alias can still be called. The test file, the style and a possible Python-version concern need tidying."
+  },
+  "G06": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "tests are in a new file tests/test_synchronized.py instead of tests/test_more.py",
+    "the test helper _synchronized() uses getattr with an assert-callable guard that isn't needed; it should simply use mi.synchronized"
+   ],
+   "reason": "It implements the draft synchronized decorator faithfully and wires it into __all__, the .pyi stub and docs/api.rst. Only the test placement and style need work."
+  },
+  "G07": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "when the division guess is wrong, the _len fallback `sum(1 for _ in self)` counts every item, which is O(n) and is computed at construction time. A large float range whose guess is off by one could take a very long time to build. It should adjust the guess by +/-1 instead, and the issue itself promised to keep current performance",
+    "tests are in a new file tests/test_numeric_range_float_consistency.py instead of tests/test_more.py",
+    "the tests use exception-to-AssertionError wrappers"
+   ],
+   "reason": "len, `in`, index and count are all now decided against the items start + n*step that iteration actually produces: a checked fast path, then a binary search. Exact types keep their exact answers. However, the full-iteration fallback in _len is a real performance flaw that has to be fixed before applying."
+  },
+  "G08": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "tests are in a new file tests/test_numeric_range_reversed.py instead of the existing numeric_range tests in tests/test_more.py",
+    "the tests use an exception-to-AssertionError wrapper"
+   ],
+   "reason": "Returning iter(()) when _len is 0 makes reversed() of an empty numeric_range yield nothing, matching range. Only the test file and its style need tidying."
+  }
+ },
+ "fable": {
+  "G01": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_value_chain_lazy_errors.py into the existing value_chain tests in tests/test_more.py",
+    "Replace the try/except/raise AssertionError wrappers with assertRaises in the library's unittest style",
+    "Trim the five tests and three helper classes to a couple of focused regression cases"
+   ],
+   "reason": "The source change is exactly the classify-with-iter()-then-consume fix the issue asks for, and non-iterables are still emitted as-is. The tests sit in a new standalone file with hand-rolled exception wrappers, so it cannot be applied as it is."
+  },
+  "G02": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_interleave_evenly_empty.py into the existing interleave_evenly tests in tests/test_more.py",
+    "Drop the 'except Exception ... raise AssertionError' wrappers and use a plain assertEqual"
+   ],
+   "reason": "The early return when dims is zero comes after the length-mismatch validation and before the lengths_desc[0] index, so both reproductions yield an empty list (assuming, as I recall but cannot see in the diff, that the function is a generator). The tests are in a new file with needless exception wrappers."
+  },
+  "G03": {
+   "grade": "B",
+   "behaviour_correct": "unsure",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_issue_replace_default_arg.py into the existing replace tests in tests/test_more.py",
+    "Remove the 'except Exception ... raise AssertionError' wrappers",
+    "Drop the test that monkeypatches windowed: it needs the pytest monkeypatch fixture and pins an implementation detail rather than behaviour",
+    "Fix the retained comment about zapping (0, 1) and (1, 2), which describes the old consume-overlapping-windows mechanism",
+    "Reconsider the docstring line that tells users not to rely on the default sentinel, since the issue keeps _marker for backward compatibility",
+    "Supply benchmark numbers for the claimed speed-up"
+   ],
+   "reason": "Tracing the deque-based window shows the same semantics as the old windowed version (padding, count limit, skip after a match, empty input), and default_arg is added with _marker as default plus a stub entry. The speed-up, which is the point of the issue, cannot be confirmed from the text, and the tests are in a new, pytest-dependent file with wrappers."
+  },
+  "G04": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_split_empty_maxsplit.py into the existing split_before/split_after/split_when test classes in tests/test_more.py",
+    "Cut the 17 near-duplicate test functions to one or two cases per function",
+    "Drop the split_at tests, which cover code the patch does not touch"
+   ],
+   "reason": "Guarding the maxsplit=0 fast path with 'if buf' in the three functions, and leaving split_at alone, is exactly what the issue proposes. The test file is new, oversized and wider than the change."
+  },
+  "G05": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_peekable_subscript.py into the existing peekable tests in tests/test_more.py",
+    "Remove the try/except TypeError to AssertionError wrappers",
+    "Put 'from types import GenericAlias' in sorted import order (after threading, not between time and threading)",
+    "Simplify to '__class_getitem__ = classmethod(GenericAlias)' and drop or fix the docstring example, which builds peekable[int] over strings"
+   ],
+   "reason": "Returning types.GenericAlias from __class_getitem__ makes peekable[str] work at runtime for unquoted hints. It needs the tests relocated and unwrapped, the import reordered and the docstring example cleaned up."
+  },
+  "G06": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_synchronized.py into tests/test_more.py beside the serialize tests",
+    "Remove the _synchronized() getattr/assert helper and call mi.synchronized directly",
+    "Confirm that wraps (more.py) and Callable (more.pyi) are already imported, since the diff adds neither import",
+    "Add the function to the README listing if the library keeps one alongside docs/api.rst"
+   ],
+   "reason": "The implementation matches the issue's draft and is wired into __all__, the stub and the API docs. The tests live in a new file with an odd existence-check helper, and the imports it relies on are not visible in the diff."
+  },
+  "G07": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_numeric_range_float_consistency.py into the existing NumericRangeTests in tests/test_more.py",
+    "Remove the _getitem/_index exception-to-AssertionError wrappers",
+    "Replace the O(n) 'sum(1 for _ in self)' length fallback with a bounded adjustment of the guessed count, since a large float range would now iterate fully just to compute len()",
+    "Reduce the four new private helpers (_between_bounds, _item, _item_in_bounds, _precedes) to fewer",
+    "Note that non-members of exact-type ranges now cost an O(log n) binary search instead of O(1)"
+   ],
+   "reason": "len() is checked against the items actually produced, and membership/index use an exact fast path followed by a binary search over start + n*step; tracing the issue's examples gives 2, 9 and index 3. The length fallback is a performance hazard, the change is heavier than it needs to be, and the tests are in a new file with wrappers."
+  },
+  "G08": {
+   "grade": "B",
+   "behaviour_correct": "yes",
+   "tidy_items": [
+    "Move the tests out of the new file tests/test_numeric_range_reversed.py into the existing NumericRangeTests in tests/test_more.py",
+    "Remove the 'except Exception ... raise AssertionError' wrappers and use assertEqual"
+   ],
+   "reason": "Returning an empty iterator when the range's length is zero is the minimal correct fix and avoids the _get_by_index(-1) IndexError. The regression tests are in a new standalone file with exception wrappers."
+  }
+ }
+}
