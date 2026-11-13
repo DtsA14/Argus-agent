@@ -43,9 +43,9 @@ M = [
     ("only the direct fixtures are looked at", [(C, 'for name in getattr(item, "fixturenames", ()):', 'for name in getattr(getattr(item, "_fixtureinfo", None), "argnames", ()):')]),
     ("the conftest file counts as a sandbox file", [(C, 'SANDBOX_TEXT = "SANDBOX NOT " "AVAILABLE"', 'SANDBOX_TEXT = "SANDBOX_TEXT"')]),
     # a signal and the worktree
-    ("a signal does not kill the children", [(VA, 'for c in $(pgrep -P "$1" 2>/dev/null || true); do kill_tree "$c"; done', ":")]),
+    ("a signal does not kill the grandchildren", [(VA, 'do echo "$c"; descendants "$c"; done', 'do echo "$c"; done')]),
     ("only the term signal is handled", [(VA, "trap on_signal INT TERM", "trap on_signal TERM")]),
-    ("the tree is not killed at all", [(VA, '[ -z "$vpid" ] || kill_tree "$vpid"', ":")]),
+    ("the listed descendants are not killed", [(VA, '    kill $all 2>/dev/null || true\n', "    :\n")]),
     # the review's findings
     ("the group is not killed", [(VA, 'kill -TERM -- "-$vpid" 2>/dev/null || true', "true")]),
     ("verify.sh does not run in its own group", [(VA, "exec setsid -w bash scripts/verify.sh", "exec bash scripts/verify.sh")]),

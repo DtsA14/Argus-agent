@@ -30,19 +30,22 @@ declare -A before=()
 for f in "$wt"/verification/verify-*.log; do before["$f"]=1; done
 # A signal (the user stops the run) kills verify.sh's whole process tree (pytest, its workers, their children) before the
 # worktree goes: workers left behind kept writing into a removed tree and printed a burst of failures that were not real.
-kill_tree() {
+descendants() {
   local c
-  for c in $(pgrep -P "$1" 2>/dev/null || true); do kill_tree "$c"; done
-  kill "$1" 2>/dev/null || true
+  for c in $(pgrep -P "$1" 2>/dev/null || true); do echo "$c"; descendants "$c"; done
 }
 vpid=""
 on_signal() {
   if [ -n "$vpid" ]; then
-    # The whole process group at once (verify.sh runs in its own, see below): a step the script starts after one of its children
-    # died is in the group too, which a kill of the children one by one (parent last) lets through. Then the tree, for a process
-    # that left the group.
+    # The descendants are listed FIRST: once the group is killed their parents are gone and they are reparented to init, out of
+    # reach of a walk down from verify.sh. Then the whole process group at once (verify.sh runs in its own, see below): a step the
+    # script starts after one of its children died is in the group too, which a kill of the children one by one (parent last) lets
+    # through. Then the listed processes, for those that left the group.
+    local all
+    all="$vpid $(descendants "$vpid")"
     kill -TERM -- "-$vpid" 2>/dev/null || true
-    kill_tree "$vpid"
+    # shellcheck disable=SC2086
+    kill $all 2>/dev/null || true
     wait "$vpid" 2>/dev/null || true
   fi
   exit 143

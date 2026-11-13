@@ -12,6 +12,11 @@ GIT_ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT
 STUB = """#!/usr/bin/env bash
 set -e
 mkdir -p verification
+if [ "${STUB_ESCAPE:-0}" = 1 ]; then        # a process that left the process group of verify.sh (its own session): only the tree reaches it
+  setsid sleep 603 & echo $! > "$STUB_PIDFILE"
+  echo ready > "$STUB_READY"
+  wait
+fi
 if [ "${STUB_RACE:-0}" = 1 ]; then          # a step that fails under the signal, then the script goes on and starts the next one
   set +e
   echo ready > "$STUB_READY"
@@ -117,6 +122,36 @@ def alive(pid):
     except ProcessLookupError:
         return False
     return True
+
+
+def test_a_process_that_left_the_process_group_is_killed_through_the_tree(repo, tmp_path):
+    import signal
+    import time
+    base = tmp_path / "wts"
+    base.mkdir()
+    pidfile, ready = tmp_path / "escaped.pid", tmp_path / "ready"
+    p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+                         env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", "STUB_ESCAPE": "1", "STUB_PIDFILE": str(pidfile),
+                              "STUB_READY": str(ready)})
+    try:
+        deadline = time.monotonic() + 30
+        while not (ready.exists() and pidfile.exists()) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert ready.exists() and pidfile.exists(), "the stub did not start"
+        child = int(pidfile.read_text())
+        assert alive(child) and os.getpgid(child) != os.getpgid(p.pid)
+        os.kill(p.pid, signal.SIGTERM)
+        p.wait(timeout=30)
+        deadline = time.monotonic() + 10
+        while alive(child) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not alive(child), "a process outside the group survived the signal"
+    finally:
+        if pidfile.exists() and alive(int(pidfile.read_text())):
+            os.kill(int(pidfile.read_text()), signal.SIGKILL)
+        if p.poll() is None:
+            os.killpg(p.pid, signal.SIGKILL)
 
 
 def test_a_step_started_after_a_child_was_killed_does_not_survive_the_signal(repo, tmp_path):
