@@ -34,3 +34,18 @@ Total **$0.1041** for eight jobs (batch 2: $0.96 with the judge). Every job: one
   the patch is not applied and a correct patch reads as failing. The copy used for batch 2 ran from the scratchpad and was not affected; the batch 3 script (`grade_unittest_v2.py`) uses a directory outside any repository.
 
 Files: `jobs.json`, `verdicts_claude.json`, `SEALED.json`, `grades/` (script output), `logs/` (issue texts as sent, reading notes).
+
+## Blind sample (2026-11-13): read by a model on Atha's delegation
+
+Nonce `AH 28` (typed by Atha after the sealed verdicts were committed, #500); seed `412ed6013a54`; sample 3 of 8: R01 = mi-1098, R02 = mi-1247, R03 = mi-1152 (`packet_key.json`, #503).
+Reader: **another Claude session, delegated by Atha; not a human.** It opened only the three packets on branch `b3-packet`, wrote `atha_verdicts.json` (`_reader` says so) and `atha_reasons.json`.
+`compare`: **0 of 3 flipped** (reader: reject, reject, reject; Claude: reject, reject, reject).
+
+What this does and does not show:
+- **It cannot discriminate.** All eight of Claude's verdicts are reject, so the only way to flip is for the reader to approve. A reader who rejects everything agrees 3 of 3 by construction. Zero flips shows
+  that the tool and the procedure work and that the reader applied rule 0 the same way; it says nothing about whether the verdicts separate good patches from bad ones (the tests resolve 6 of 6).
+- **Same reasons, not just the same word.** R01 and R03: tests in a new file (the reader checked the repo's convention from the packets' own regression targets: `tests/test_more.py::TestSerialize`, `::NumericRangeTests`).
+  R02 (#1247): the O(n) `len()` fallback, the same reason Claude wrote; the reader added a simulation (20,000 random float ranges chosen near the boundary, 3,450 took the O(n) path; not a real-world rate) and
+  a cheaper fix (check `count +/- 1`).
+- **Things the reader found that Claude's reading did not list:** a `getattr` helper in the #1098 tests and a `try/except AssertionError` wrapper in the #1152 tests, both "tidying" items. Claude's reasons named only the test location. They do not change a verdict (already reject) but show the reading was less complete.
+- Model against model, same family possibly: not an independent human anchor. Reported as such (`PROTOCOL_FINAL_PATCH.md`, delegated reader).
