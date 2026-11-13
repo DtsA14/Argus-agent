@@ -120,7 +120,7 @@ def pick(batch, nonce):
         job = jobs[label]
         rd = final_review_dir(job)
         data = json.loads((JOBS / job / "job.json").read_text(encoding="utf-8"))
-        parts = [f"# {code}\n\nIs this final patch one you would apply? Read the issue, then the patch, then the tests; answer approve or reject.\n",
+        parts = [f"# {code}\n\nWould you apply this final patch exactly as it is, without changing a single line? Read the issue, then the patch, then the tests; answer approve or reject. A patch that only needs tidying (file mode, test location, an exception wrapper) is reject.\n",
                  "## Issue\n\n" + data["inputs"]["issue"], "## Final patch (changes.patch)\n\n```diff\n" + (rd / "changes.patch").read_text(encoding="utf-8") + "\n```"]
         if (rd / "tests.md").exists():
             parts.append("## tests.md\n\n" + (rd / "tests.md").read_text(encoding="utf-8"))

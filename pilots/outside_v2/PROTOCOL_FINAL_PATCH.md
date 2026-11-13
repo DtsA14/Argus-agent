@@ -9,6 +9,7 @@ Di batch 1 dan 2 pembacaan Claude "sebelum approve" hanya atas **rencana draf**.
 
 ## Aturan
 
+0. **Arti approve (Atha 2026-11-13):** approve = patch akhir di-apply **apa adanya**, tanpa satu baris pun diubah manusia; yang masih butuh perapian (nilai B: mode, letak tes, pembungkus exception) adalah reject, dengan `reason` diawali `cuma perapian:` agar bisa dihitung terpisah. Berlaku sama untuk verdict Claude dan jawaban Atha.
 1. **Draf:** seperti sekarang, setiap draf yang diterima harness di-approve (aturan batch 1 dan 2). Claude tidak lagi menulis "on-target" atas rencana sebagai verdict; itu catatan, bukan keputusan.
 2. **Verdict Claude jatuh pada patch akhir** (stage agen terakhir, paket review yang valid): Claude membaca issue, `changes.patch` seluruhnya, `tests.md`, dan baris R1/R1b (`stage status`) lalu menulis per job satu baris di `verdicts_claude.json`:
    `{"verdict": "approve"|"reject", "reason": "<satu baris>", "read": "final patch", "human_minutes": 0}`; job tanpa paket review yang valid (`REVIEW_INVALID`) ditulis `{"verdict": "no final patch"}`. Sebelum menulis, Claude memeriksa: tes yang ditambah ikut diubah?, tanda tangan publik berubah?, perubahan di luar berkas yang
