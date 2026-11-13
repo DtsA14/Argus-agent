@@ -8,8 +8,10 @@ does not prove it is there: the human reads the output against the issue.
 """
 import hashlib
 import json
+import os
 import re
 import shutil
+import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
@@ -161,3 +163,122 @@ def line(results):
     return ("issue example at base: " + ", ".join(parts)
             + (": a clean run does not prove the bug is gone, read repro.json against the issue"
                if any(r["status"] == "ok" for r in ran) else ""))
+
+
+# ---- the same example on the patched tree (SPEC_REPRO_PATCHED): shown next to the base run, never decisive -----------
+
+PATCHED_SENTENCE = "the example runs agent-written code; compare both outputs against the issue"
+PREFIX = "issue example, base -> patched: "
+
+
+def run_patched(base_dir, patch_file, issue, sandbox_cfg, runner=None):
+    """[result] like run(), on a copy of base_dir with the patch applied by `git apply` (what a human would apply); None
+    (not run) when anything goes wrong, the patch not applying included."""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp) / "tree"
+            shutil.copytree(base_dir, tree, symlinks=True)
+            subprocess.run(["git", "-C", str(tree), "apply", "--whitespace=nowarn", str(Path(patch_file).resolve())],
+                           check=True, capture_output=True, timeout=60)
+            return run(tree, issue, sandbox_cfg, runner)
+    except Exception:
+        return None
+
+
+def patch_sha(patch_file):
+    """The sha256 of the patch as it is on disk now; "none" when there is none (an invalid package has no patch)."""
+    try:
+        return hashlib.sha256(Path(patch_file).read_bytes()).hexdigest()
+    except OSError:
+        return "none"
+
+
+def pkey(issue, patch_sha256):
+    return hashlib.sha256(f"patched\n{patch_sha256}\n{issue}".encode("utf-8")).hexdigest()
+
+
+def store_patched(path, issue, patch_sha256, *, results=None, skipped=None):
+    """Written atomically: a process that dies leaves the earlier file (the pending marker) and never half of a new one.
+    results None and no skipped reason means "could not run" (also what a pending marker reads as)."""
+    try:
+        path = Path(path)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps({"key": pkey(issue, patch_sha256), "skipped": skipped, "results": results}),
+                       encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def load_patched(path, issue, patch_sha256):
+    """None: no file (a job from before this). ("results", [..]), ("skipped", reason), ("error", None) it could not run
+    (or the file is bad), ("stale", None) the file is for another issue or another patch."""
+    try:
+        if not Path(path).exists():
+            return None
+        rec = json.loads(Path(path).read_text(encoding="utf-8"))
+        if rec.get("key") != pkey(issue, patch_sha256):
+            return ("stale", None)
+        if rec.get("skipped"):
+            return ("skipped", _cut(str(rec["skipped"]), 200))
+        if not isinstance(rec.get("results"), list):
+            return ("error", None)
+        clean = ("stdout", "stderr_last_line", "reason")
+        return ("results", [{k: (_cut(r.get(k), MAX_OUT) if k in clean else r.get(k)) for k in KEEP}
+                            for r in rec["results"] if isinstance(r, dict)])
+    except Exception:
+        return ("error", None)
+
+
+def _kind(r):
+    """(status, exception type, last output line) of a block that ran; None for one that did not."""
+    if not isinstance(r, dict) or r.get("status") not in ("ok", "raised", "timeout"):
+        return None
+    exc = (r.get("stderr_last_line") or "").split(":", 1)[0].strip() if r["status"] == "raised" else ""
+    return (r["status"], exc, _last_line(r.get("stdout")))
+
+
+def label(base, patched):
+    """Per block: "changed" when status, exception type or last output differ, "unchanged" when none does, None when a
+    side did not run. No direction is better: ran clean -> raised is as changed as raised -> ran clean."""
+    b = {r.get("index"): r for r in (base or []) if isinstance(r, dict)} if isinstance(base, list) else {}
+    p = {r.get("index"): r for r in (patched or []) if isinstance(r, dict)} if isinstance(patched, list) else {}
+    out = []
+    for i in range(max(len(base) if isinstance(base, list) else 0, len(patched) if isinstance(patched, list) else 0)):
+        kb, kp = _kind(b.get(i)), _kind(p.get(i))
+        out.append(None if kb is None or kp is None else ("unchanged" if kb == kp else "changed"))
+    return out
+
+
+def _desc(r):
+    k = _kind(r)
+    if k is None:
+        return "not run"
+    if k[0] == "ok":
+        return f'ran clean "{k[2][:OUT_SHOWN]}"' if k[2] else "ran clean"
+    if k[0] == "raised":
+        return "raised " + (r.get("stderr_last_line") or "an error")[:80]
+    return "timed out"
+
+
+def patched_line(base, state):
+    """The one line for status; None when there is nothing to say (no file, or neither run had a block)."""
+    if state is None:
+        return None
+    kind, val = state
+    if kind == "skipped":
+        return PREFIX + f"not run ({val})"
+    if kind == "stale":
+        return PREFIX + "not run (the patch changed since it was run)"
+    if kind != "results":
+        return PREFIX + "not run (error)"
+    base = base if isinstance(base, list) else None
+    labels = label(base, val)
+    if not any(_kind(r) for r in val) and not any(_kind(r) for r in base or []):
+        return None                                           # nothing ran on either side: nothing to compare
+    bmap = {r.get("index"): r for r in (base or []) if isinstance(r, dict)}
+    pmap = {r.get("index"): r for r in val if isinstance(r, dict)}
+    parts = []
+    for i, lab in enumerate(labels):
+        parts.append(f"{_desc(bmap.get(i))} -> {_desc(pmap.get(i))}" + (f" [{lab}]" if lab else ""))
+    return PREFIX + "; ".join(parts) + ": " + PATCHED_SENTENCE
