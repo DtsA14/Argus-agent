@@ -23,7 +23,7 @@ in `PENDING.md`. Last updated 2026-11-11 (PR "docs-corrections").
 | C2 | "J9 used in batch 4-5"; chain probe has no judge result | in PR | Reconciliation L17 corrected; `chain_probe_v0/RESULT.md` now says the judge was not run |
 | C3 | Cost per feature excluded failed jobs | in PR | Figures now from the scoreboard, failed jobs included ($0,058 ledger, $0,060 viewer) |
 | C4 | "Judge 10/10" overstated | in PR | Reworded in `PENDING.md`; the 10/10 breakdown itself is still not in the sources (open: find it in `SPEC_JUDGE.md` section 6 or drop the number) |
-| C5 | No mutant logs for #436, #437 | in PR | `verification/test_detection_gate_mutants.log` and `old_test_leaks_mutants.log` (scripts alongside), rebuilt on current code |
+| C5 | No mutant logs for #436, #437 | in PR | `verification/detection_gate_mutants.log` and `old_test_leaks_mutants.log` (scripts alongside), rebuilt on current code |
 | C6 | `no_test_detection` presented as an ADR-006 gate | in PR | Reconciliation row now says six regexes, a fence not a proof |
 | C7 | M3 "judge calibration PASS" has no source in `M3_CLOSING.md` | in PR | The calibration evidence exists, just not in `M3_CLOSING.md`: `GOOD5_DECISION.md` section 6 (baseline #2, PASS, one run), `REVIEW_3D.md`, `verification/calibration-3d-*`; Reconciliation row now points there and names the open gap (stability across runs) |
 | C8 | "All issues written by Claude" vs chatbox since 11-07 | in PR | Reconciliation L92 fixed |

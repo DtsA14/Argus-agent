@@ -1,3 +1,5 @@
+"""Mutants for the detection gate (#436, #437). Edits files in the working tree while it runs: run it by hand in a
+worktree (python verification/detection_gate_mutants.py), never from pytest (its name must not start with test_)."""
 import subprocess, sys, shutil, re
 T="acceptance/testdetect.py"; V="acceptance/verdict.py"; R="codetask/run.py"
 M=[
@@ -26,19 +28,20 @@ M=[
  (V,'None if inputs_root is None else Path(inputs_root) / contract["inputs"]["workspace"]','None',"verdict ignores inputs_root"),
  (R,'inputs_root=root,','',"run does not pass inputs_root"),
 ]
-tests=["tests/test_test_detection.py","tests/test_codetask.py","tests/test_acceptance.py"]
-bad=[]
-for f,old,new,name in M:
-    s=open(f).read()
-    if old not in s: print("NOT FOUND",name); bad.append(name); continue
-    open(f,"w").write(s.replace(old,new,1))
-    try:
-        r=subprocess.run([".venv-verify/bin/python","-m","pytest","-q","-x","-p","no:cacheprovider",*tests],capture_output=True,text=True,timeout=120)
-        killed=r.returncode!=0
-    except subprocess.TimeoutExpired:
-        killed=True
-    finally:
-        open(f,"w").write(s)
-    print(("KILLED  " if killed else "SURVIVED"),name,flush=True)
-    if not killed: bad.append(name)
-print("survivors:",bad)
+if __name__ == "__main__":
+    tests=["tests/test_test_detection.py","tests/test_codetask.py","tests/test_acceptance.py"]
+    bad=[]
+    for f,old,new,name in M:
+        s=open(f).read()
+        if old not in s: print("NOT FOUND",name); bad.append(name); continue
+        open(f,"w").write(s.replace(old,new,1))
+        try:
+            r=subprocess.run([".venv-verify/bin/python","-m","pytest","-q","-x","-p","no:cacheprovider",*tests],capture_output=True,text=True,timeout=120)
+            killed=r.returncode!=0
+        except subprocess.TimeoutExpired:
+            killed=True
+        finally:
+            open(f,"w").write(s)
+        print(("KILLED  " if killed else "SURVIVED"),name,flush=True)
+        if not killed: bad.append(name)
+    print("survivors:",bad)
