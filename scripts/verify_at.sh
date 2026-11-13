@@ -28,9 +28,26 @@ echo "verify_at: $commit in $wt (${#pins[@]} image pin file(s) copied)"
 # newest", and no `ls | head`, whose early close kills the script under pipefail).
 declare -A before=()
 for f in "$wt"/verification/verify-*.log; do before["$f"]=1; done
+# A signal (the user stops the run) kills verify.sh's whole process tree (pytest, its workers, their children) before the
+# worktree goes: workers left behind kept writing into a removed tree and printed a burst of failures that were not real.
+kill_tree() {
+  local c
+  for c in $(pgrep -P "$1" 2>/dev/null || true); do kill_tree "$c"; done
+  kill "$1" 2>/dev/null || true
+}
+vpid=""
+on_signal() {
+  [ -z "$vpid" ] || kill_tree "$vpid"
+  [ -z "$vpid" ] || wait "$vpid" 2>/dev/null || true
+  exit 143
+}
+trap on_signal INT TERM
 set +e
-(cd "$wt" && bash scripts/verify.sh)
+(cd "$wt" && exec bash scripts/verify.sh) &
+vpid=$!
+wait "$vpid"
 set -e
+vpid=""
 logs=()
 for f in "$wt"/verification/verify-*.log; do
   [ -n "${before[$f]:-}" ] || logs+=("$f")

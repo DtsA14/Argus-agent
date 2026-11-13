@@ -4,11 +4,14 @@ are skipped with "SANDBOX NOT AVAILABLE", which scripts/verify.sh does not count
 import copy
 import json
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import sandbox_scope as scope  # noqa: E402
 from acceptance import validation as va
 from acceptance.verdict import evaluate
 from acceptance.workspace import prepare, snapshot
@@ -118,15 +121,14 @@ def test_a_validation_that_hangs_is_killed_at_its_timeout(cfg, ws):
     root, before = ws
     write(root, "src/calc.py", "while True:\n    pass\n")
     spec = {**CONTRACT["validation"][0], "timeout_s": 3}
+    token = scope.new_token()                                # this run's own containers, not the machine's
     t0 = time.monotonic()
-    v = va.run_validation(spec, root, {**cfg, "cleanup_timeout_s": 15})
+    v = va.run_validation(spec, root, {**cfg, "cleanup_timeout_s": 15, "labels": scope.labels(token)})
     took = time.monotonic() - t0
     assert v["status"] == "fail" and "timed out after 3s" in v["reason"], v
     assert v["evidence"]["timed_out"] is True and v["evidence"]["cleanup_failed"] is False
     assert took < 3 + 15 + 5
-    left = subprocess.run(["docker", "ps", "-q", "--filter", "label=argus.sandbox=1"],
-                          capture_output=True, text=True).stdout.split()
-    assert left == []                                       # the container is gone, not just abandoned
+    assert scope.ids(token, all_states=True) == []          # the container is gone, not just abandoned
 
 
 def test_validation_runs_without_a_shell(cfg, ws):

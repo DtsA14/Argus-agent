@@ -14,6 +14,9 @@ from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import sandbox_scope as scope  # noqa: E402
+
 from dataset import CSV_PATH
 from harness.events import EventLog
 from tools import sandbox as sb
@@ -188,8 +191,9 @@ def test_cleanup_is_bounded_and_reported_when_the_daemon_hangs(cfg, tmp_path):
     fake.write_text(HUNG_DOCKER)
     fake.chmod(0o755)
     t = time.monotonic()
+    token = scope.new_token()
     r = run(cfg, "import time\nprint('start', flush=True)\ntime.sleep(300)", tmp_path,
-            docker=str(fake), timeout_s=2, cleanup_timeout_s=3)
+            docker=str(fake), timeout_s=2, cleanup_timeout_s=3, labels=scope.labels(token))
     elapsed = time.monotonic() - t
     events = [json.loads(l) for l in (tmp_path / "e.jsonl").read_text().splitlines()]
     failed = [e for e in events if e["event"] == "sandbox_cleanup_failed"]
@@ -199,9 +203,7 @@ def test_cleanup_is_bounded_and_reported_when_the_daemon_hangs(cfg, tmp_path):
         assert failed and failed[0]["container"].startswith("argus-")
         assert events[-1]["cleanup_failed"] is True    # also on the sandbox_run event
     finally:
-        subprocess.run(["docker", "rm", "-f", *subprocess.run(
-            ["docker", "ps", "-aq", "--filter", "label=argus.sandbox=1"],
-            capture_output=True, text=True).stdout.split()], capture_output=True)
+        scope.remove(token)                          # this test's own container only: never another run's
 
 
 def test_output_is_capped(cfg, tmp_path):
@@ -287,13 +289,13 @@ def test_container_output_is_not_logged_to_the_host_disk(cfg, tmp_path):
     # the disk during a mutation run). Check the running container's real log config.
     import threading
     box = {}
+    token = scope.new_token()
     t = threading.Thread(target=lambda: box.update(r=run(cfg, "import time\nprint('hi', flush=True)\n"
-                                                              "time.sleep(4)", tmp_path)))
+                                                              "time.sleep(4)", tmp_path, labels=scope.labels(token))))
     t.start()
     ids = ""
     for _ in range(60):
-        ids = subprocess.run(["docker", "ps", "-q", "--filter", "label=argus.sandbox=1"],
-                             capture_output=True, text=True).stdout.split()
+        ids = scope.ids(token)
         if ids:
             break
         time.sleep(0.1)
@@ -429,3 +431,26 @@ def test_python_only_worker_reads_the_data_only_through_the_sandbox(cfg, tmp_pat
     evs = log.read()
     assert [e["tool"] for e in evs if e["event"] == "tool_call"] == ["run_python"]
     assert [e["exit_code"] for e in evs if e["event"] == "sandbox_run"] == [0]
+
+
+# ---- a check of this run's containers must not see, or remove, those of another run (SPEC_VERIFY_HARDENING) -------------
+
+def test_the_scope_helpers_see_only_the_containers_of_their_own_token(cfg, tmp_path):
+    import threading
+    import sandbox_scope as scope
+    mine, other = scope.new_token(), scope.new_token()
+    box = {}
+    t = threading.Thread(target=lambda: box.update(r=run(cfg, "import time\nprint('hi', flush=True)\ntime.sleep(6)", tmp_path,
+                                                         labels=scope.labels(other))))
+    t.start()
+    try:
+        for _ in range(100):
+            if scope.ids(other):
+                break
+            time.sleep(0.1)
+        assert len(scope.ids(other)) == 1 and scope.ids(mine) == []        # a container of another run is not mine
+        assert scope.remove(mine) == [] and len(scope.ids(other)) == 1     # removing mine leaves the other one running
+        assert len(scope.remove(other)) == 1 and scope.ids(other) == []
+    finally:
+        t.join()
+    assert scope.ids(other, all_states=True) == []

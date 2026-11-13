@@ -12,6 +12,11 @@ GIT_ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT
 STUB = """#!/usr/bin/env bash
 set -e
 mkdir -p verification
+if [ "${STUB_HANG:-0}" = 1 ]; then          # a pytest controller with workers: children that outlive their parent unless killed
+  bash -c 'sleep 600 & echo $! > "$STUB_PIDFILE"; wait' &
+  echo ready > "$STUB_READY"
+  wait
+fi
 log=verification/verify-20990101T000000Z-test.log
 {
   echo "RESULT: PASS"                        # a step before pytest prints its own, as check_env_image.py does
@@ -97,3 +102,43 @@ def test_verify_sh_judges_by_its_last_result_line(tmp_path, lines, ok):
     log.write_text("\n".join(["== pytest", *lines, "evidence"]) + "\n")
     r = subprocess.run(["bash", "-c", last], env={**os.environ, "LOG": str(log)}, capture_output=True)
     assert (r.returncode == 0) == ok
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+@pytest.mark.parametrize("sig", ["TERM", "INT"])
+def test_a_signal_kills_the_whole_verify_tree_before_the_worktree_goes(repo, tmp_path, sig):
+    import signal
+    import time
+    base = tmp_path / "wts"
+    base.mkdir()
+    pidfile, ready = tmp_path / "child.pid", tmp_path / "ready"
+    p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+                         env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", "STUB_HANG": "1", "STUB_PIDFILE": str(pidfile),
+                              "STUB_READY": str(ready)})
+    try:
+        deadline = time.monotonic() + 30
+        while not (ready.exists() and pidfile.exists()) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert ready.exists() and pidfile.exists(), "the stub did not start"
+        child = int(pidfile.read_text())
+        assert alive(child)
+        os.kill(p.pid, getattr(signal, "SIG" + sig))
+        p.wait(timeout=30)
+        assert p.returncode != 0
+        deadline = time.monotonic() + 10
+        while alive(child) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not alive(child), "a child of verify.sh survived the signal"
+        assert list(base.iterdir()) == []                         # and the worktree is gone
+        assert len(git(repo, "worktree", "list").splitlines()) == 1
+    finally:
+        if p.poll() is None:
+            os.killpg(p.pid, signal.SIGKILL)

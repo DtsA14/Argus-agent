@@ -66,7 +66,12 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
   echo "== pytest"
   set +e
   echo "workers: $WORKERS (--dist loadgroup; sandbox tests serial in one group)"
-  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider --durations=25 -n "$WORKERS" --dist loadgroup 2>&1 \
+  PYTEST_EXTRA=()
+  if [ -n "${VERIFY_MAXFAIL:-}" ]; then
+    PYTEST_EXTRA=(--maxfail="$VERIFY_MAXFAIL")
+    echo "maxfail: $VERIFY_MAXFAIL (a failing run stops early: not a full run)"
+  fi
+  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider --durations=0 --durations-min=1.0 -n "$WORKERS" --dist loadgroup "${PYTEST_EXTRA[@]}" 2>&1 \
     | tee /dev/stderr > .verify-pytest.out
   rc=${PIPESTATUS[0]}
   set -e
