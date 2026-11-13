@@ -1,7 +1,7 @@
 KILLED  support: not checked: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[conftest.py]']
 KILLED  support: test files not counted: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[tests/helpers.py]']
 KILLED  support: names not counted: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[pytest.ini]']
-SURVIVED support: conftest not a support name: 212 passed in 12.75s
+SURVIVED support: conftest not a support name: 212 passed in 13.03s
 KILLED  support: pytest.ini not a support name: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[pytest.ini]']
 KILLED  support: package.json not a support name: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[package.json]']
 KILLED  support: vitest config not a support name: ['FAILED tests/test_report_conflict.py::test_a_changed_test_support_file_does_not_confirm[vitest.config.ts]']
@@ -21,14 +21,21 @@ KILLED  O2: a leading /* counts as a comment: ['FAILED tests/test_test_detection
 KILLED  O2: // is not a comment: ['FAILED tests/test_test_detection.py::test_ordinary_exit_and_write_code_is_not_flagged[// process.exit(1)\\n]']
 KILLED  redact: no base64 form: ['FAILED tests/test_fix_c.py::test_the_base64_and_url_encoded_forms_of_a_key_are_hidden_too']
 KILLED  redact: no url form: ['FAILED tests/test_fix_c.py::test_the_base64_and_url_encoded_forms_of_a_key_are_hidden_too']
-SURVIVED redact: short forms registered: 212 passed in 13.21s
+SURVIVED redact: short forms registered: 212 passed in 12.82s
 KILLED  stream: write reports the scrubbed length: ['FAILED tests/test_fix_c.py::test_the_terminal_filter_reports_the_length_it_was_given_even_when_a_key_was_replaced']
 KILLED  redact: the cached order is not rebuilt: ['FAILED tests/test_fix_c.py::test_a_registered_value_is_replaced_everywhere_in_a_text']
 KILLED  redact: the cached order is shortest first: ['FAILED tests/test_fix_c.py::test_the_longer_value_is_hidden_whole_when_one_contains_the_other']
 KILLED  redact: clear keeps the cached order: ['FAILED tests/test_fix_c.py::test_clear_forgets_every_value - AssertionError: ...']
 KILLED  conflict: a missing record reads as a failure: ['FAILED tests/test_report_conflict.py::test_a_missing_record_for_a_node_does_not_confirm_and_says_it_is_missing']
-Traceback (most recent call last):
-  File "/home/ubuntu/Argus-agent/verification/hardening_mutants.py", line 64, in <module>
-    assert orig.count(old) == 1, (name, orig.count(old))
-           ^^^^^^^^^^^^^^^^^^^^
-AssertionError: ('stream: nothing scrubbed', 0)
+KILLED  stream: nothing scrubbed: ['FAILED tests/test_fix_c.py::test_the_terminal_filter_hides_a_key_in_a_printed_traceback_of_a_chained_exception']
+KILLED  stream: install does nothing: ['FAILED tests/test_fix_c.py::test_the_terminal_filter_hides_a_key_in_a_printed_traceback_of_a_chained_exception']
+KILLED  stream: uninstall does nothing: ['FAILED tests/test_fix_c.py::test_the_filter_is_installed_once_removed_cleanly_and_passes_other_attributes']
+KILLED  stream: install wraps twice: ['FAILED tests/test_fix_c.py::test_the_filter_is_installed_once_removed_cleanly_and_passes_other_attributes']
+KILLED  stream: attributes are not passed on: ['FAILED tests/test_fix_c.py::test_the_filter_is_installed_once_removed_cleanly_and_passes_other_attributes']
+KILLED  job file: not scrubbed: ['FAILED tests/test_fix_c.py::test_a_job_file_never_holds_a_registered_key - as...']
+KILLED  result file: not scrubbed: ['FAILED tests/test_fix_c.py::test_a_result_file_never_holds_a_registered_key']
+KILLED  llm: a failed count is cut before the scrub: ['FAILED tests/test_fix_c.py::test_a_failed_token_count_is_scrubbed_before_its_cut_too']
+KILLED  llm: a failed call is cut before the scrub: ['FAILED tests/test_fix_c.py::test_an_error_text_is_scrubbed_before_it_is_cut_so_no_prefix_of_a_key_is_left']
+KILLED  live: a typed key is not registered: ['FAILED tests/test_fix_c.py::test_a_key_typed_for_a_live_stage_is_registered_from_then_on']
+RESULT: 37/39 killed
+NOTE: the 2 survivors are equivalent: "support: conftest not a support name" (conftest.py is also a test file by acceptance/testdetect.is_test_file) and "redact: short forms registered" (every encoded form of a key of at least 8 characters is at least 8 characters). 37/39 killed, 2 equivalent.
