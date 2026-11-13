@@ -12,8 +12,9 @@ failed attempt does), or `blocked` when the sandbox is not there:
   3  the red tests are in exactly the files the agent named (every red node in a named file, every named file red);
   4  each such file is an input file the agent did not touch, is protected (contract or repository), and is not a test the
      approved draft added or changed;
-  5  every required test that is not red passes (so the new behaviour is there);
-  6  the agent changed something besides SUMMARY.json;
+  5  every required test that is not red passes, and at least one required test passes (so the new behaviour is shown);
+  6  the agent changed something besides SUMMARY.json, and no test file, conftest or test configuration (a changed helper of the tests
+     could make the old tests red by itself);
   7  on the untouched input, those red tests pass (baseline: they were fine before);
   8  on the workspace, twice, they fail, each fails in a file that satisfies 4 (the deepest frame inside the repository, not
      an import or collection error), and the two runs agree (a flaky test does not confirm).
@@ -21,10 +22,20 @@ The red set comes from the validations' evidence in the verdict, never from SUMM
 """
 from . import workspace as ws_mod
 from .contract import SUMMARY, matches
+from .testdetect import is_test_file
 from .validation import kind
 
 MAX_FILES = 5
 MAX_REASONS = 12
+# Files that decide what a test run does besides the test files themselves: if the agent changed one, the old tests may be red because
+# of that change and not because of the behaviour (a conftest hook, a fixture file, a pytest or vitest configuration).
+SUPPORT_NAMES = {"conftest.py", "pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml", "noxfile.py", ".coveragerc", "package.json",
+                 "vitest.config.js", "vitest.config.ts", "vitest.config.mjs", "vite.config.js", "vite.config.ts", "vite.config.mjs"}
+
+
+def support_file(path):
+    """A test file, a test configuration or hook file: nothing the agent changes may make an old test red and still be called a conflict."""
+    return is_test_file(path) or path.rsplit("/", 1)[-1] in SUPPORT_NAMES
 
 
 def file_of(node):
@@ -107,7 +118,7 @@ def _verify(contract, verdict, files, ws, before, input_dir, scfg, repo_protecte
     if not validations:
         no("validations", "the contract has no validation")
     # 2  clean runs with a complete list of red nodes
-    red_nodes = set()
+    red_nodes, required_ok = set(), 0
     for c in validations:
         ev = c.get("evidence") or {}
         if ev.get("runner") not in ("pytest", "vitest"):
@@ -122,8 +133,12 @@ def _verify(contract, verdict, files, ws, before, input_dir, scfg, repo_protecte
             no("validations", f"{c['id']}: too many red tests to enumerate")
         red_nodes |= set(listed)
         for t, s in (ev.get("must_pass") or {}).items():          # 5  a required test that is not red passes
-            if s != "ok" and t not in listed:
+            if s == "ok":
+                required_ok += 1
+            elif t not in listed:
                 no("must_pass", f"required test {t} did not pass")
+    if not required_ok:                                            # 5  the new behaviour must be shown by at least one required test
+        no("must_pass", "no required test passes, so the new behaviour is not shown")
     # 3  the red tests are in exactly the named files
     if not red_nodes:
         no("red", "nothing is red")
@@ -137,8 +152,11 @@ def _verify(contract, verdict, files, ws, before, input_dir, scfg, repo_protecte
     # 6  the agent changed something
     after = ws_mod.snapshot(ws)
     d = ws_mod.diff(before, after)
-    if not [p for p in d["added"] + d["removed"] + d["modified"] if p != SUMMARY]:
+    changed = [p for p in d["added"] + d["removed"] + d["modified"] if p != SUMMARY]
+    if not changed:
         no("diff", "the agent changed no file")
+    for p in sorted(p for p in changed if support_file(p))[:3]:   # 6b  nothing that steers a test run
+        no("support", f"the agent changed a test support file: {p}")
     # 4  the files of the red tests
     protected = list(contract["scope"]["protected"]) + list(repo_protected)
     for f in sorted({file_of(n) for n in red_nodes}):

@@ -41,6 +41,7 @@ from harness.events import EventLog, TaggedLog
 from harness.guard import guard
 from harness.llm import LLMCaller, check_long_context, reconcile_ledger, to_nano
 from harness.memo import Memo
+from harness.redact import scrub_value
 from models.registry import ModelRef, price_for
 from tools import web
 
@@ -513,6 +514,6 @@ def run_code_task(*, contract_path, run_id, runs_dir, cfg, resume=False, crash_a
     result.update(run_id=run_id, attempts=len(final.get("failures") or []),
                   usd_billed=totals["usd"], usd_complete=totals["usd_complete"], llm_calls=totals["calls"],
                   llm_calls_unknown=totals["unknown_after_crash"])
-    (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    (run_dir / "result.json").write_text(json.dumps(scrub_value(result), ensure_ascii=False, indent=2), encoding="utf-8")
     log.emit("run_end", **{k: v for k, v in result.items() if k not in ("verdict", "attempt")})
     return result

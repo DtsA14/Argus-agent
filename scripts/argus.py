@@ -355,4 +355,6 @@ def main(argv=None, deps=None):
 
 
 if __name__ == "__main__":
+    from harness import redact as _redact
+    _redact.install()                     # no registered key value reaches the terminal, tracebacks of chained exceptions included
     sys.exit(main())

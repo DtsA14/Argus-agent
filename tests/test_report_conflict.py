@@ -702,14 +702,16 @@ def test_no_validation_in_the_verdict_says_so(tmp_path):
 
 def test_a_failure_in_a_file_the_input_never_had_or_with_no_file_at_all_does_not_confirm(tmp_path):
     def new_file(c):
-        (c.ws / "tests" / "added_later.py").write_text("X = 1\n")        # protected by the glob, but the agent made it
+        (c.ws / "extra").mkdir()
+        (c.ws / "extra" / "added_later.py").write_text("X = 1\n")        # protected by the glob, but the agent made it
+        c.contract["scope"]["protected"] = ["tests/**", "conftest.py", "extra/**"]
         base = c.red
 
         def red(nodes, workdir, scfg, **kw):
             out, why, un = base(nodes, workdir, scfg, **kw)
-            return {n: dict(r, path="tests/added_later.py" if r["path"] else None) for n, r in out.items()}, why, un
+            return {n: dict(r, path="extra/added_later.py" if r["path"] else None) for n, r in out.items()}, why, un
         c.red = red
-    breaks(tmp_path / "a", new_file, "tests/added_later.py is not a file of the input")
+    breaks(tmp_path / "a", new_file, "extra/added_later.py is not a file of the input")
 
     def no_file(c):
         base = c.red
@@ -761,3 +763,29 @@ def test_the_next_prompt_explains_a_conflict_report_that_ended_an_attempt():
     text = _ended({"end": "conflict_reported", "steps": 4, "wrote": True})
     assert "conflict_reported" not in text and "did not confirm" in text and "4 steps" in text
     assert _ended({"end": "finished", "steps": 2, "wrote": False}) == "finished after 2 steps; it changed no file"
+
+
+# ---- after Fable's reading: support files and the required test --------------------------------------------------------------
+
+@pytest.mark.parametrize("path", ["conftest.py", "tests/helpers.py", "tests/data/fixture.json", "pytest.ini", "tox.ini", "setup.cfg",
+                                  "pyproject.toml", "sub/conftest.py", "vitest.config.ts", "package.json", "tests/test_other.py"])
+def test_a_changed_test_support_file_does_not_confirm(tmp_path, path):
+    def change(c):
+        f = c.ws / path
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("# changed by the agent\n")
+    out = breaks(tmp_path, change, f"the agent changed a test support file: {path}")
+    assert out["state"] == "unconfirmed"
+
+
+def test_an_ordinary_production_change_is_not_a_support_file_change(tmp_path):
+    assert cf.support_file("src/app.py") is False and cf.support_file("pkg/conftest_helper.py") is False
+    assert cf.support_file("conftest.py") and cf.support_file("a/b/pytest.ini") and cf.support_file("tests/x.py")
+    assert Case(tmp_path).verify()["state"] == "confirmed"
+
+
+def test_a_conflict_with_no_required_test_that_passes_does_not_confirm(tmp_path):
+    for i, must in enumerate(({}, {NEW_NODE: "FAIL"}, {NEW_NODE: "skipped"}, {NEW_NODE: None})):
+        def change(c, must=must):
+            c.evidence = {"must_pass": must}
+        breaks(tmp_path / str(i), change, "no required test passes, so the new behaviour is not shown")

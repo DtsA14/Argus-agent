@@ -48,6 +48,7 @@ from models.registry import (ConfigError, ModelRef, build_chat_model, cache_usag
                              window_for)
 
 from .errors import InputLimitExceeded, LLMCallFailed, ReservationExhausted, TransientError
+from .redact import scrub
 
 TRANSIENT_STATUS = {408, 409, 425, 429}
 # Context a node may attach to ledger events. Anything else is rejected, so meta can never
@@ -508,7 +509,7 @@ class LLMCaller:
             except Exception as exc:  # the provider's counting API failed: nothing was sent, nothing is charged
                 transient = is_transient(exc)
                 emit("llm_count_failed", attempt=attempt, transient=transient, http_status=http_status(exc),
-                     error=f"{type(exc).__name__}: {str(exc)[:200]}")
+                     error=f"{type(exc).__name__}: {scrub(str(exc))[:200]}")
                 if not transient:
                     raise LLMCallFailed(f"{self.role}: counting the input failed: {type(exc).__name__}: {exc}") from exc
                 wait = self._next_wait(exc, seen)
@@ -563,7 +564,7 @@ class LLMCaller:
                          # received: the provider answered with an HTTP status, so it saw the request.
                          # unknown: timeout or connection error; it may or may not have processed it.
                          delivery="received" if status_code else "unknown", http_status=status_code,
-                         latency_s=latency, error=f"{type(exc).__name__}: {str(exc)[:200]}")
+                         latency_s=latency, error=f"{type(exc).__name__}: {scrub(str(exc))[:200]}")
                 finally:
                     reservation.charge(tok, nano)
                 if not transient:

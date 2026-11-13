@@ -45,6 +45,8 @@ from acceptance import contract as ct
 from acceptance import draft as dr
 from acceptance import intake
 from acceptance import leaks, repro
+from harness import redact
+from harness.redact import scrub_value
 from harness.events import parse_lines
 from harness.llm import reconcile_ledger, to_nano
 from tools.web import problem as web_problem
@@ -135,7 +137,7 @@ class Job:
 
     def save(self):
         tmp = self.file.with_name(".job.json.part")
-        tmp.write_text(json.dumps(self.data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        tmp.write_text(json.dumps(scrub_value(self.data), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")   # no key value on disk
         os.replace(tmp, self.file)
 
     def move(self, new, deps, **why):
@@ -437,6 +439,7 @@ def live(deps, cfg, roles, text, job=None, providers=()):
                 raise Refused("the key is empty; nothing was started")
             if re.search(r"\s", key):
                 raise Refused("the key contains whitespace (pasted twice?); nothing was started")
+            redact.register(key)              # from here on no key value is written to a log, a job file or the terminal
             if shape and (not key.startswith(shape) or key[len(shape):].find(shape) != -1):
                 raise Refused(f"the key does not look like one {name} key; nothing was started")
             # a key that looks like another provider's (files swapped, keys typed in the wrong order) never goes out
