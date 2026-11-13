@@ -1,0 +1,14 @@
+KILLED  runner result.json not scrubbed: ['FAILED tests/test_fix_c_leaks.py::test_the_result_file_of_the_graph_runner_never_holds_a_registered_key']
+KILLED  verdict file not scrubbed: ['FAILED tests/test_fix_c_leaks.py::test_a_verdict_file_never_holds_a_registered_key']
+KILLED  base64: only the aligned form: ['FAILED tests/test_fix_c_leaks.py::test_the_base64_of_user_and_key_is_hidden_at_every_alignment[8]']
+KILLED  base64: aligned form dropped: ['FAILED tests/test_fix_c_leaks.py::test_the_base64_of_user_and_key_is_hidden_at_every_alignment[8]']
+KILLED  base64: shifted forms keep the filler group: ['FAILED tests/test_fix_c_leaks.py::test_the_base64_of_user_and_key_is_hidden_at_every_alignment[8]']
+KILLED  base64: one group too many (the unstable one): ['FAILED tests/test_fix_c_leaks.py::test_the_base64_of_user_and_key_is_hidden_at_every_alignment[8]']
+KILLED  base64: forms not registered: ['FAILED tests/test_fix_c_leaks.py::test_the_base64_of_user_and_key_is_hidden_at_every_alignment[8]']
+KILLED  main.py without the filter: ['FAILED tests/test_fix_c_leaks.py::test_every_entry_script_that_can_hold_a_key_installs_the_terminal_filter']
+KILLED  run_code_task.py without the filter: ['FAILED tests/test_fix_c_leaks.py::test_every_entry_script_that_can_hold_a_key_installs_the_terminal_filter']
+KILLED  draft_task.py without the filter: ['FAILED tests/test_fix_c_leaks.py::test_every_entry_script_that_can_hold_a_key_installs_the_terminal_filter']
+KILLED  smoke_live.py without the filter: ['FAILED tests/test_fix_c_leaks.py::test_every_entry_script_that_can_hold_a_key_installs_the_terminal_filter']
+KILLED  filter named but never called: ['FAILED tests/test_fix_c_leaks.py::test_every_entry_script_that_can_hold_a_key_installs_the_terminal_filter']
+RESULT: 12/12 killed
+NOTE: the 'len(f) >= MIN_LEN' filter in _base64_forms is unreachable for keys of 8+ characters (every form is then at least 8 characters), so it has no mutant (equivalent).
