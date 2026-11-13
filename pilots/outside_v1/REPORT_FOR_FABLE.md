@@ -1,6 +1,6 @@
 # Laporan 2026-11-12 sampai 13 untuk Fable: eksperimen repo luar, fase 3, dan batch kedua
 
-Ditulis oleh Claude (Sonnet 5.5) untuk dibaca Fable, atas permintaan Atha. Isinya fakta dengan sumbernya, apa yang salah selama pengerjaan, dan **pertanyaan terbuka di bagian 8** yang butuh penilaian Fable. Semua angka disalin dari berkas di `pilots/outside_v0/`, `pilots/outside_v1/`, `verification/` dan dari `job.json` tiap job; yang tidak ada sumbernya ditandai sebagai dugaan. Yang **belum** ada: penilaian buta batch kedua (paketnya sudah siap, bagian 7).
+Ditulis oleh Claude (Sonnet 5.5) untuk dibaca Fable, atas permintaan Atha. Isinya fakta dengan sumbernya, apa yang salah selama pengerjaan, dan **pertanyaan terbuka di bagian 8** yang butuh penilaian Fable. Semua angka disalin dari berkas di `pilots/outside_v0/`, `pilots/outside_v1/`, `verification/` dan dari `job.json` tiap job; yang tidak ada sumbernya ditandai sebagai dugaan. Penilaian buta batch kedua **sudah masuk** (Opus 5.5, bagian 10).
 
 ## 0. Ringkasan dalam delapan baris
 
@@ -77,7 +77,7 @@ Waktu dari `job.json` (resolusi detik; `mesin` = draft + agen; `dinding` = job d
 
 Total: biaya **$0,958**, waktu mesin 16m51s, dinding 62m52s. Rata-rata per job: draft 1m23s, agen 0m44s, judge 5m20s, mesin 2m06s, dinding 7m52s (batch 1: mesin 6m53s, dinding 16m48s; rata-rata batch 1 ditarik satu job, #1344, dengan 29m45s mesin karena dua stage agen). Rincian biaya (dari catatan tiap stage): drafter sekitar $0,15 total (sekitar 2,4 kali biaya agen; $0,01 sampai $0,03 per job), agen sekitar $0,06 total ($0,003 sampai $0,02 per job), **judge sekitar $0,74 (77%)**. Judge: PASS 6, NOT_JUDGED 2 (batch 1: PASS 4, NOT_JUDGED 5, BLOCK 1).
 
-Pembacaan Claude **sebelum approve** (hanya rencana drafnya, bukan patch akhir): kedelapan on-target. Catatan: pada batch 1 pembacaan rencana tidak cukup untuk #1344. **Penilaian buta batch 2 belum ada**; paket: `BLIND_PACKAGE_2.md` (8 patch Q01-Q08, kunci terpisah).
+Pembacaan Claude **sebelum approve** (hanya rencana drafnya, bukan patch akhir): kedelapan on-target. Catatan: pada batch 1 pembacaan rencana tidak cukup untuk #1344. Nilai buta batch 2: bagian 10.
 
 **Pemakaian fitur baru pada 8 job:** `ReportConflict` 0, penghentian GATE 0, `--not-a-conflict` 0, redraft 0, retry 0, `NO_DRAFT` 0. R1: `raised` 3 (#1277, #1304, #1344), `ran clean` 2 (#1257, #393), `not run` karena `>>>` 2 (#1284, #322), tanpa contoh 1 (#383). Kegunaan R1 saat approve **belum dinilai Atha** (gue yang meng-approve; menit Atha di batch ini hanya keputusan "go live" dan pesan-pesannya).
 
@@ -93,7 +93,7 @@ Pembacaan Claude **sebelum approve** (hanya rencana drafnya, bukan patch akhir):
 
 ## 7. Yang belum dikerjakan
 
-* **Penilaian buta batch 2** (butuh sesi model lain; `BLIND_PACKAGE_2.md`). Sampai itu masuk, "6 dari 8 resolved" adalah angka tes, bukan nilai A/B/C.
+* ~~Penilaian buta batch 2~~: sudah masuk (bagian 10).
 * Pembacaan Claude atas patch akhir batch 2 (hanya rencana yang dibaca).
 * R2 `ReportNoRepro` (butuh data R1; sekarang ada 8 baris R1 pertama), RC bagian (b) (`redraft --from-conflict`, state `CONFLICT`, gerbang approve), VF O1.
 * Menit Atha per job; "go live" menunggu Atha tiap batch.
@@ -117,6 +117,29 @@ Pembacaan Claude **sebelum approve** (hanya rencana drafnya, bukan patch akhir):
 **P8. Kontaminasi data latih.** Semua issue ditutup Des 2025 sampai Okt 2026. Model DeepSeek (drafter dan agen) mungkin pernah melihat sebagian. Apakah layak menyaring issue yang ditutup **sesudah** batas pengetahuan model yang dipakai (batas DeepSeek yang dipakai belum gue periksa; ini dugaan yang perlu diverifikasi), atau mengganti sebagian dengan issue yang ditulis sesudah batch ini dijalankan, supaya hasil tidak bisa karena hafalan?
 
 **Hal yang gue minta Fable periksa langsung (bukan pertanyaan terbuka):** (a) apakah verifikasi `acceptance/conflict.py` memuat satu lubang yang gue tidak lihat (khususnya agen yang membuat tes lama merah hanya di bawah invokasi red check milik harness; gue mencatatnya sebagai batas yang diterima); (b) apakah pola O2 punya false positive yang terlewat pada repo yang kita tangani (boltons, more-itertools, ledger, viewer); (c) apakah redaksi FIX-C melewatkan jalur teks error yang tidak lewat `EventLog` atau `LLMCallFailed` (mis. `job.json` stop_reason dari pengecualian lain).
+
+## 10. Penilaian buta batch 2 (Opus 5.5, sesi baru, paket acak Q01-Q08, sebelum kunci dibuka) dan temuan cacat harness
+
+| Patch | Job | Nilai buta | Alasan penilai (ringkas) | Tes pemelihara |
+|---|---|---|---|---|
+| Q01 | boltons#322 (`human_list`, fitur) | **B** | nama dan signature sesuai issue; tes di root repo dan pembungkus yang mengubah exception jadi AssertionError, perlu dirapikan | tidak bisa dinilai (nama API fix beda) |
+| Q02 | boltons#393 (`research`) | **C** | menulis ulang `research` jadi traversal manual (±50 baris) tanpa `remap`: deteksi loop lewat ancestors, objek bersama bisa ditelusuri berkali-kali (dapat meledak eksponensial), `new_parent` dari `enter` diabaikan; perubahan besar dan menyentuh logika | tidak ada sinyal (tes PR lulus di dasar) |
+| Q03 | more-itertools#1304 (kontrol) | B | perbaikan benar; perubahan mode `more.py` yang tak terkait; tes di berkas baru, bukan di `IchunkedTests` | resolved 2/2 |
+| Q04 | more-itertools#1344 (kontrol, dulu C) | B | `_len` di `__eq__` dan `__hash__` persis usulan issue; `len()` langsung tetap `OverflowError`; satu-satunya cacat: perubahan mode | resolved 2/2 |
+| Q05 | boltons#383 (kontrol) | **A** | `os.fspath` di `AtomicSaver`, `iter_find_files`, `copy_tree`, `rotate_file`; terbatas pada PathLike; catatan kecil (satu baris docstring panjang, dua fungsi tak dites) | resolved 2/2 |
+| Q06 | more-itertools#1277 | B | iterator pengecekan skalar disimpan dan dipakai ulang; hanya perubahan mode | resolved 1/1 |
+| Q07 | more-itertools#1284 | B | `_cache` jadi `dict` biasa, kunci didaftar hanya bila item terlihat; perubahan mode | resolved 4/4 |
+| Q08 | more-itertools#1257 | B | `y is None` diganti `len(indexes) == l` seperti usul issue; perubahan minimal; hanya perubahan mode | resolved 2/2 |
+
+Hitungan mentah: **A 1, B 6, C 1**. Patch pertama dan batch 1 untuk kontrol yang sama: #1304 dulu A, #1344 dulu C, boltons#383 dulu A.
+
+**Temuan cacat harness (diverifikasi, belum diperbaiki): editan agen menghilangkan bit eksekusi.** Lima dari lima patch more-itertools (kedua batch) membawa `old mode 100755 / new mode 100644` untuk `more_itertools/more.py`; ketiga patch boltons tidak (di upstream `boltons/*.py` mode 100644, `more.py` 100755). Sebabnya: `tools/fs.py` `PathJail.write_text` menulis berkas sementara dengan mode `0o644` lalu `os.replace`, jadi mode berkas yang diedit hilang. Akibat: patch menyertakan perubahan mode yang tak terkait bila diterapkan ke repo, dan penilai yang teliti mengurangi nilainya (Opus: B untuk lima patch, alasan utamanya hanya ini; Fable di batch 1 menganggapnya artefak dan mengabaikannya). Bila artefak ini diabaikan: Q03 sampai Q08 yang memenuhi A (Q03 tertahan hanya soal letak tes), dan hitungan menjadi **A 6, B 1 (Q01), C 1 (Q02)**. Claim ini adalah **dugaan yang perlu diverifikasi oleh orang yang membaca patch lagi**: gue hanya mengambil alasan penilai, bukan membaca ulang kelima patch.
+
+Catatan interpretasi: (1) kedua patch yang bukan A/B-karena-mode ada di boltons: Q01 (fitur, API cocok issue, tes gagal impor di sisi pemelihara) dan Q02 (C: perubahan logika besar); (2) pada batch 2 pembacaan rencana oleh gue ("semua on-target") tidak menangkap Q02: rencana drafnya masuk akal, patch akhirnya menulis ulang traversal. Ini kasus kedua (setelah #1344 batch 1) di mana membaca rencana tidak cukup; (3) judge memberi PASS pada Q02 (boltons#393).
+
+### Pertanyaan tambahan
+
+**P9. Apakah artefak yang jelas dari harness (mode berkas) dihitung dalam nilai buta?** Penilai batch 1 mengabaikannya, penilai batch 2 menghitungnya; hasilnya A 1 versus A 6 dari patch yang sama. Aturan apa yang harus ditulis di rubrik supaya konsisten (misalnya: patch dibersihkan dari artefak harness dulu, atau artefak dihitung sebagai cacat Argus karena manusia yang menerapkan patch akan melihatnya)? Sementara itu cacat sumbernya (`write_text` menimpa mode) layak diperbaiki lebih dulu supaya pertanyaannya hilang di batch berikutnya.
 
 ## 9. Berkas
 
