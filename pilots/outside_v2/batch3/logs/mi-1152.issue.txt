@@ -1,0 +1,5 @@
+Minor bug in numeric_range()
+
+The code for `__reversed__` needs a special case for empty ranges.
+
+An empty regular range, `list(reversed(range(0)))`, returns an empty list.  In contrast, an empty numeric range, `list(reversed(numeric_range(0)))` raises an `IndexError`.

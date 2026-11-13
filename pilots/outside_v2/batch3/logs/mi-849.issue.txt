@@ -1,0 +1,14 @@
+TypeError: type 'peekable' is not subscriptable
+
+It would be great if we could hint the type e.g. like:
+
+```py
+def f(it: peekable[str]):
+    pass
+```
+
+Currently this works as workaround:
+```py
+def f(it: 'peekable[str]'):
+    pass
+```

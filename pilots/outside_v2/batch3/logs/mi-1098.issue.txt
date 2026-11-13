@@ -1,0 +1,43 @@
+Decorator version of serialize()
+
+**Proposal and rationale:**
+
+The `serialize` tool wraps a single iterator instance and is used inline with instance creation: `serialize(itertools.count(100, 5))`.
+
+If every instance needs to be serialized, it is more convenient to wrap the function that creates the iterator: `atomic_counter = synchonized(itertools.count)`.  Later, serialized instances can be created directly: `atomic_counter(100, 5)`.
+
+The wrapper can also be used as a decorator around a generator definition.
+
+**Draft implmentation:**
+
+```python
+def synchronized(func):
+    """Wrap an function that produces iterators to serialized all instances.
+
+    Existing itertools and more-itertools can be wrapped so that their
+    instances are serialized.
+
+    For example, ``itertools.count`` does not make thread-safe instances
+    but that is easily fixed with::
+
+        atomic_counter = synchronized(itertools.count)
+
+    Can also be used as a decorator for generator functions definitions
+    so that the generator instances are serialized::
+
+        @synchronized
+        def enumerate_and_timestamp(iterable):
+            for count, value in enumerate(iterable):
+                yield count, time_ns(), value                
+
+    """
+    @functools.wraps(func)
+    def inner(*args, **kwargs):
+        iterator = func(*args, **kwargs)
+        return serialize(iterator)
+    return inner
+```
+
+**Notes:**
+
+The name "synchronized" came from Java.

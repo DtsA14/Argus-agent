@@ -1,0 +1,106 @@
+diff --git a/more_itertools/more.py b/more_itertools/more.py
+index 2229563304deae3fbb26044e4c6a7beffba38cb4..eec094fbe0bb663ac26675ce6f3c0b66bac577f3 100755
+--- a/more_itertools/more.py
++++ b/more_itertools/more.py
+@@ -4414,9 +4414,11 @@ def value_chain(*args):
+             yield value
+             continue
+         try:
+-            yield from value
++            it = iter(value)
+         except TypeError:
+             yield value
++        else:
++            yield from it
+ 
+ 
+ def product_index(element, *iterables, repeat=1):
+diff --git a/tests/test_value_chain_lazy_errors.py b/tests/test_value_chain_lazy_errors.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..73813d91734f1b3ff51809f722c83967de327e73
+--- /dev/null
++++ b/tests/test_value_chain_lazy_errors.py
+@@ -0,0 +1,83 @@
++"""Tests that value_chain does not treat a TypeError raised *while consuming*
++an argument as evidence that the argument is not iterable.
++"""
++
++import more_itertools as mi
++
++
++class _TypeErrorOnNext:
++    def __iter__(self):
++        return self
++
++    def __next__(self):
++        raise TypeError('boom in __next__')
++
++
++class _TypeErrorOnGetItem:
++    def __getitem__(self, index):
++        raise TypeError('boom in __getitem__')
++
++
++class _NotIterable:
++    def __iter__(self):
++        raise TypeError('object is not iterable')
++
++
++def test_type_error_while_iterating_map_propagates():
++    try:
++        result = list(mi.value_chain(map(len, ['ab', 'cde', 5])))
++    except TypeError:
++        return
++    raise AssertionError(
++        'value_chain swallowed the TypeError raised while iterating the map '
++        f'and returned {result!r}'
++    )
++
++
++def test_type_error_from_generator_propagates():
++    def gen():
++        yield 1
++        yield 2
++        raise TypeError('boom while iterating')
++
++    it = iter(mi.value_chain(gen()))
++    assert next(it) == 1
++    assert next(it) == 2
++    try:
++        next(it)
++    except TypeError:
++        return
++    raise AssertionError(
++        'value_chain swallowed the TypeError raised by the generator instead '
++        'of propagating it'
++    )
++
++
++def test_type_error_from_next_propagates():
++    try:
++        result = list(mi.value_chain(_TypeErrorOnNext()))
++    except TypeError:
++        return
++    raise AssertionError(
++        'value_chain swallowed the TypeError raised in __next__ and returned '
++        f'{result!r}'
++    )
++
++
++def test_type_error_from_getitem_propagates():
++    try:
++        result = list(mi.value_chain(_TypeErrorOnGetItem()))
++    except TypeError:
++        return
++    raise AssertionError(
++        'value_chain swallowed the TypeError raised in __getitem__ and '
++        f'returned {result!r}'
++    )
++
++
++def test_non_iterable_objects_are_still_emitted_as_is():
++    obj = _NotIterable()
++    assert list(mi.value_chain(1, obj, [2, 3])) == [1, obj, 2, 3]
++    assert list(mi.value_chain('ab', b'cd', 5)) == ['ab', b'cd', 5]
++    assert list(mi.value_chain(map(len, ['ab', 'cde']))) == [2, 3]
++    assert list(mi.value_chain()) == []
