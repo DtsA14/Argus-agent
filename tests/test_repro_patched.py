@@ -260,3 +260,12 @@ def test_the_final_write_is_a_replace_so_a_death_in_it_keeps_the_marker(tmp_path
 def test_when_nothing_ran_on_either_side_there_is_no_comparison_line(tmp_path, monkeypatch):
     skipped = {"index": 0, "status": "skipped", "exit_code": None, "stdout": "", "stderr_last_line": "", "reason": "x"}
     assert rp.patched_line([skipped], ("results", [skipped])) is None
+
+
+def test_an_error_line_edited_in_the_file_is_cleaned_when_read_back(tmp_path, monkeypatch):
+    env, job, box, _ = run_to_review(tmp_path, monkeypatch, OK, RAISED_VALUE)
+    rec = json.loads(pfile(job).read_text())
+    rec["results"][0]["stderr_last_line"] = "ValueError: \x1b[2Jhidden‮evil"
+    pfile(job).write_text(json.dumps(rec))
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    assert "base -> patched" in text and "\x1b" not in text and "‮" not in text
