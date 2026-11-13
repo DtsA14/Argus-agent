@@ -1,0 +1,6 @@
+{
+ "R01": "cuma perapian: kodenya benar (synchronized membungkus serialize, ada di __all__, .pyi dan api.rst), tapi tesnya ada di berkas baru tests/test_synchronized.py, padahal TestSerialize dan TestConcurrentTee ada di tests/test_more.py; helper getattr _synchronized() juga perlu dibuang.",
+ "R02": "fallback len() memakai sum(1 for _ in self) saat konstruksi, jadi range float besar yang tebakannya meleset bisa O(n) atau macet; issue berjanji performanya tetap (selain itu tesnya juga di berkas baru). Bukan cuma perapian. Simulasi pembaca: 20.000 range float acak (1 sampai 10 juta item, stop dekat kelipatan langkah), 3.450 jatuh ke jalur O(n); angka itu bukan frekuensi nyata (sengaja dekat batas), tapi jalurnya ada. Perbaikan wajar: periksa count +/- 1. Bagian __contains__ dan index() dengan pencarian biner benar.",
+ "R03": "cuma perapian: perbaikannya (return iter(()) kalau _len kosong) benar dan minimal, tapi tesnya ada di berkas baru tests/test_numeric_range_reversed.py, padahal NumericRangeTests::test_reversed ada di tests/test_more.py; pembungkus try/except AssertionError di tes juga perlu dibuang.",
+ "_note": "konvensi letak tes dicek dari paketnya: validasi regression menjalankan tests/test_more.py::TestSerialize dan ::NumericRangeTests. Pembaca hanya membuka tiga berkas di origin/b3-packet."
+}
