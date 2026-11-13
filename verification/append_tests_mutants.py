@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 C, D, R = "acceptance/changed.py", "acceptance/draft.py", "codetask/drafter.py"
-T = ["-rfEs", "tests/test_append_tests.py"]
+T = ["-rfEs", "tests/test_append_tests.py", "tests/test_append_tests_sandbox.py"]
 M = [
     # the builder
     ("the block limit is dropped", [(C, 'if len(block.encode("utf-8")) > limit:', "if False:")]),

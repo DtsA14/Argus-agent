@@ -1,7 +1,7 @@
 """SPEC_APPEND_TESTS (docs/reviews/SPEC_APPEND_TESTS.md): a changed_tests entry may carry `append` (test code added at the end
 of an existing test file) instead of `content`; the harness builds the whole file from the intake text. The pieces: the
 pure builder (acceptance/changed.py from_append), the draft shape and size, static_problems, K1's collection, and the
-drafter's arguments. Nothing here needs a sandbox: the collection is a fake."""
+drafter's arguments. Nothing here needs a sandbox: the collection is a fake (the real one is in test_append_tests_sandbox.py)."""
 import copy
 import hashlib
 import sys
@@ -503,48 +503,3 @@ def test_the_draft_review_of_a_new_test_file_is_what_it_was(tmp_path):
                                {"usd": 0.0, "usd_complete": True, "calls": 0}, source=intake_dir_of(tmp_path / "intake"))
     assert "### `tests/test_new.py`\n" in text and "The file:" in text
     assert "added at the end" not in text and "required existing tests: 1" in text
-
-
-# ---- end to end, in the sandbox (skipped without an image, like tests/test_draft.py) -----------------------------------
-
-import test_draft as tdr  # noqa: E402
-from test_draft import root, scfg  # noqa: E402,F401  (fixtures)
-
-FLOOR = "from src.shop import total\n\n\ndef test_total_floor():\n    assert total([1], 5) == 0\n"
-FLOOR_NODE = "tests/test_old.py::test_total_floor"
-FLOOR_FILE = tdr.OLD_TEST.rstrip("\n") + "\n\n\n" + FLOOR.strip("\n") + "\n"
-
-
-def appended_draft(must=(FLOOR_NODE,)):
-    d = copy.deepcopy(tdr.DRAFT)
-    d["new_tests"] = []
-    d["contract"]["validation"] = [tdr.spec("target", "tests/test_old.py", list(must))]
-    d["changed_tests"] = [{"path": "tests/test_old.py", "content": FLOOR_FILE}]
-    return d
-
-
-@pytest.fixture(scope="module")
-def appended_report(tmp_path_factory, scfg):
-    tmp = tmp_path_factory.mktemp("appended")
-    return tdr.run_check(tdr.make_root(tmp), tdr.patch(tmp, {"src/shop.py": tdr.FIXED}), scfg, draft=appended_draft())
-
-
-def test_a_draft_that_only_appends_a_test_to_an_existing_file_is_checked_and_approved(root, appended_report):
-    r = copy.deepcopy(appended_report)
-    assert r["ok"], r["problems"]
-    assert r["baseline"]["target"]["must_pass"] == {FLOOR_NODE: "FAIL"}                  # red by assertion, as any new test
-    assert r["collection"]["tests/test_old.py"] == {"intake": 1, "new": 2, "gone": []}   # K1 on the real collection
-    assert r["reference"]["target"] == "pass"
-    rec = dr.approve(r, appended_draft(), root=root)
-    task = root / "fixtures" / "repos" / "fix_shop"
-    assert (task / "tests" / "test_old.py").read_text() == FLOOR_FILE and intake.check(rec, task) == []
-    assert rec["changed"]["tests/test_old.py"]["after"] == hashlib.sha256(FLOOR_FILE.encode()).hexdigest()
-    assert rec["added"] == {}
-
-
-def test_a_required_test_the_intake_already_has_is_refused_by_k1_in_the_real_collection(root, tmp_path, scfg):
-    d = appended_draft(must=("tests/test_old.py::test_total_plain",))
-    d["new_tests"] = [{"path": "tests/test_new.py", "content": tdr.NEW_TEST}]         # so that only K1 can refuse it
-    d["contract"]["validation"].append(tdr.spec("new", "tests/test_new.py", [tdr.NEW_NODE]))
-    r = tdr.run_check(root, tdr.patch(tmp_path, {"src/shop.py": tdr.FIXED}), scfg, draft=d)
-    assert not r["ok"] and any("already a test of tests/test_old.py" in p for p in r["problems"]), r["problems"]

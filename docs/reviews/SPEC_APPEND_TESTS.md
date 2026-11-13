@@ -118,4 +118,4 @@ Dua hal dari kode yang tidak terlihat saat spek ditulis. Keduanya mengubah **di 
 **Batas yang diketahui dari review (tidak diubah):** blok `if __name__ == "__main__"` hanya dikenali di level atas; guard di dalam `try` atau `elif` diterima (tes tetap ikut di pytest, hanya tidak jalan bila berkas dijalankan sebagai
 skrip). Berkas ber-BOM ditolak, sama seperti jalur `content`.
 
-Tes: `tests/test_append_tests.py`. Mutan: `verification/append_tests_mutants.py`.
+Tes: `tests/test_append_tests.py` (unit, tanpa sandbox) dan `tests/test_append_tests_sandbox.py` (dua tes di sandbox sungguhan). Yang kedua **sengaja modul sendiri**: `conftest.py` memasukkan sebuah modul ke grup sandbox serial hanya bila sumbernya memuat `SANDBOX NOT AVAILABLE`, dan `test_acceptance_sandbox.py` memeriksa bahwa tidak ada kontainer sandbox tersisa di seluruh mesin. Saat dua tes itu masih di modul unit, ia berjalan paralel di worker lain dan `verify_at` gagal dua kali di tes pemeriksa itu (`verification/verify-20261113T154903Z-aarch64.log`, `...T161049Z-aarch64.log`). Mutan: `verification/append_tests_mutants.py`.
