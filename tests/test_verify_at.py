@@ -12,6 +12,13 @@ GIT_ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT
 STUB = """#!/usr/bin/env bash
 set -e
 mkdir -p verification
+if [ "${STUB_RACE:-0}" = 1 ]; then          # a step that fails under the signal, then the script goes on and starts the next one
+  set +e
+  echo ready > "$STUB_READY"
+  sleep 600 | cat
+  sleep 601 & echo $! > "$STUB_PIDFILE"
+  wait
+fi
 if [ "${STUB_HANG:-0}" = 1 ]; then          # a pytest controller with workers: children that outlive their parent unless killed
   bash -c 'sleep 600 & echo $! > "$STUB_PIDFILE"; wait' &
   echo ready > "$STUB_READY"
@@ -110,6 +117,39 @@ def alive(pid):
     except ProcessLookupError:
         return False
     return True
+
+
+def test_a_step_started_after_a_child_was_killed_does_not_survive_the_signal(repo, tmp_path):
+    import signal
+    import time
+    base = tmp_path / "wts"
+    base.mkdir()
+    pidfile, ready = tmp_path / "next.pid", tmp_path / "ready"
+    p = subprocess.Popen(["bash", str(ROOT / "scripts" / "verify_at.sh"), "HEAD", str(base)], cwd=repo, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+                         env={**GIT_ENV, "STUB_RESULT": "RESULT: PASS", "STUB_RACE": "1", "STUB_PIDFILE": str(pidfile),
+                              "STUB_READY": str(ready)})
+    try:
+        deadline = time.monotonic() + 30
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert ready.exists(), "the stub did not start"
+        time.sleep(0.5)                                          # inside `sleep 600 | cat`
+        os.kill(p.pid, signal.SIGTERM)
+        p.wait(timeout=30)
+        time.sleep(1.0)
+        if pidfile.exists():                                     # the script went on and started the next step: it must be dead
+            nxt = int(pidfile.read_text())
+            try:
+                assert not alive(nxt), "a step started after the first child died survived the signal"
+            finally:
+                if alive(nxt):
+                    os.kill(nxt, signal.SIGKILL)
+    finally:
+        if pidfile.exists() and alive(int(pidfile.read_text())):          # never leave a sleep behind, whatever failed
+            os.kill(int(pidfile.read_text()), signal.SIGKILL)
+        if p.poll() is None:
+            os.killpg(p.pid, signal.SIGKILL)
 
 
 @pytest.mark.parametrize("sig", ["TERM", "INT"])

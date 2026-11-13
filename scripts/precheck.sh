@@ -14,8 +14,14 @@ if ! git rev-parse --verify -q "$BASE^{commit}" >/dev/null; then
 fi
 PY="${PRECHECK_PYTHON:-.venv-verify/bin/python}"
 [ -x "$PY" ] || PY=python3
-changed="$( { git diff --name-only "$BASE" --; git ls-files --others --exclude-standard; } | sort -u )"
-tests="$(printf '%s\n' "$changed" | "$PY" scripts/precheck_select.py)"
+# quotePath off: a non-ASCII name is not printed in quotes, so it is neither lost nor misread; one test file per array element: a
+# name with a space is one file.
+changed="$( { git -c core.quotePath=false diff --name-only "$BASE" --; git -c core.quotePath=false ls-files --others --exclude-standard; } | sort -u )"
+mapfile -t tests < <(printf '%s\n' "$changed" | PYTHONUTF8=1 "$PY" scripts/precheck_select.py)
+if [ "${#tests[@]}" -eq 0 ] || [ -z "${tests[0]}" ]; then
+  echo "precheck: no test selected (the fixed set of tests is missing?): not running the whole suite instead" >&2
+  exit 2
+fi
 pins=()
 if [ -f .sandbox_image ]; then
   export ARGUS_SANDBOX_IMAGE="$(tr -d '[:space:]' < .sandbox_image)"
@@ -30,9 +36,9 @@ for f in .sandbox_image_*; do
 done
 ARGS=(-q -rs -p no:cacheprovider -n 4 --dist loadgroup)
 echo "base: $BASE"
-echo "tests: $tests"
+printf -v joined '%s, ' "${tests[@]}"
+echo "tests: ${joined%, }"
 echo "pytest: ${ARGS[*]}"
 echo "pins: ${pins[*]:-}"
 [ -z "${PRECHECK_PRINT:-}" ] || exit 0
-# shellcheck disable=SC2086
-exec "$PY" -m pytest "${ARGS[@]}" $tests
+exec "$PY" -m pytest "${ARGS[@]}" "${tests[@]}"

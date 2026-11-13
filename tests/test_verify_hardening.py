@@ -85,10 +85,40 @@ def test_the_precheck_prints_what_it_would_run_for_the_changes_since_a_base(tmp_
     (r / "codetask").mkdir()
     (r / "codetask" / "drafter.py").write_text("x = 1\n")                                         # an untracked source module
     p = printed(r)
-    tests = p["tests"].split()
+    tests = p["tests"].split(", ")
     assert "tests/test_other.py" in tests and "tests/test_new.py" in tests and "tests/test_drafter.py" in tests
     assert set(FIXED) <= set(tests)
     assert "-n 4 --dist loadgroup" in p["pytest"] and "-p no:cacheprovider" in p["pytest"]
+
+
+def test_a_path_with_a_space_or_a_non_ascii_name_is_one_test_file_and_is_not_lost(tmp_path):
+    r = repo_with_precheck(tmp_path)
+    for name in ("tests/test_sp ace.py", "tests/test_\u00e9.py"):
+        (r / name).write_text("def test_x():\n    pass\n")
+    tests = printed(r)["tests"].split(", ")
+    assert "tests/test_sp ace.py" in tests and "tests/test_\u00e9.py" in tests
+
+
+def test_the_precheck_really_runs_what_it_selected_with_the_scheduling_of_verify_sh_even_for_a_name_with_a_space(tmp_path):
+    r = repo_with_precheck(tmp_path)
+    (r / "tests" / "test_sp ace.py").write_text("def test_spaced():\n    pass\n")
+    out = subprocess.run(["bash", "scripts/precheck.sh", "HEAD"], cwd=r, capture_output=True, text=True, timeout=120,
+                         env={**GIT_ENV, "PRECHECK_PYTHON": sys.executable})
+    assert out.returncode == 0, out.stdout[-600:] + out.stderr[-600:]
+    assert f"{len(FIXED) + 1} passed" in out.stdout                   # the fixed set that exists here, and the spaced file
+
+
+def test_an_empty_selection_stops_instead_of_running_the_whole_suite(tmp_path):
+    r = tmp_path / "bare"
+    (r / "scripts").mkdir(parents=True)
+    for name in ("precheck.sh", "precheck_select.py"):
+        shutil.copy(ROOT / "scripts" / name, r / "scripts" / name)
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q", str(r)], check=True, env=GIT_ENV)
+    subprocess.run(["git", "-C", str(r), "add", "-A"], check=True, env=GIT_ENV)
+    subprocess.run(["git", "-C", str(r), "commit", "-qm", "base"], check=True, env=GIT_ENV, capture_output=True)
+    out = subprocess.run(["bash", "scripts/precheck.sh", "HEAD"], cwd=r, capture_output=True, text=True, timeout=60,
+                         env={**GIT_ENV, "PRECHECK_PRINT": "1"})
+    assert out.returncode == 2 and "no test selected" in out.stderr
 
 
 def test_the_precheck_exports_the_pins_by_name_and_never_prints_their_values(tmp_path):
@@ -206,6 +236,15 @@ def test_a_test_is_grouped_when_its_module_says_so_or_a_fixture_it_needs_comes_f
     assert g["test_b.py::test_b_plain"] is False
     assert g["test_c.py::test_uses_a_fixture_that_needs_box"] is True          # through another fixture
     assert g["test_c.py::test_uses_a_fixture_of_its_own"] is False
+
+
+def test_a_fixture_wrapped_with_functools_wraps_is_traced_to_the_file_that_defines_it(tmp_path):
+    g = grouped(tmp_path, {
+        "helper.py": "import functools\n\n\ndef wrapped(fn):\n    @functools.wraps(fn)\n    def w(*a, **k):\n        return fn(*a, **k)\n"
+                     "    return w\n",
+        "test_a.py": f'"""{MARK}"""\nimport pytest\nfrom helper import wrapped\n\n\n@pytest.fixture\n@wrapped\ndef wbox():\n    return 1\n',
+        "test_b.py": "from test_a import wbox  # noqa: F401\n\n\ndef test_uses_the_wrapped_fixture(wbox):\n    pass\n"})
+    assert g["test_b.py::test_uses_the_wrapped_fixture"] is True
 
 
 def test_a_fixture_of_the_conftest_is_not_a_sandbox_fixture_unless_it_comes_from_a_marked_file(tmp_path):

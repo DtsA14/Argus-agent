@@ -22,7 +22,7 @@ M = [
     ("a file that is not python is considered", [(S, 'if p.suffix != ".py":', "if False:")]),
     # the pre-check script
     ("the base is not checked", [(PC, 'if ! git rev-parse --verify -q "$BASE^{commit}" >/dev/null; then', "if false; then")]),
-    ("untracked files are not seen", [(PC, "git ls-files --others --exclude-standard;", "true;")]),
+    ("untracked files are not seen", [(PC, "git -c core.quotePath=false ls-files --others --exclude-standard;", "true;")]),
     ("the metadata of a pin is exported as a pin", [(PC, "*.json) continue ;;", "*.json) : ;;")]),
     ("the plain pin is not exported", [(PC, 'if [ -f .sandbox_image ]; then', "if false; then")]),
     ("the pin variable keeps its case", [(PC, "| tr 'a-z' 'A-Z')", "| cat)")]),
@@ -46,6 +46,14 @@ M = [
     ("a signal does not kill the children", [(VA, 'for c in $(pgrep -P "$1" 2>/dev/null || true); do kill_tree "$c"; done', ":")]),
     ("only the term signal is handled", [(VA, "trap on_signal INT TERM", "trap on_signal TERM")]),
     ("the tree is not killed at all", [(VA, '[ -z "$vpid" ] || kill_tree "$vpid"', ":")]),
+    # the review's findings
+    ("the group is not killed", [(VA, 'kill -TERM -- "-$vpid" 2>/dev/null || true', "true")]),
+    ("verify.sh does not run in its own group", [(VA, "exec setsid -w bash scripts/verify.sh", "exec bash scripts/verify.sh")]),
+    ("a wrapped fixture is not unwrapped", [(C, "func = inspect.unwrap(fd.func)", "func = fd.func")]),
+    ("non-ascii paths are quoted", [(PC, "git -c core.quotePath=false diff --name-only", "git diff --name-only")]),
+    ("untracked non-ascii paths are quoted", [(PC, "git -c core.quotePath=false ls-files", "git ls-files")]),
+    ("the tests are split on spaces", [(PC, 'exec "$PY" -m pytest "${ARGS[@]}" "${tests[@]}"', 'exec "$PY" -m pytest "${ARGS[@]}" ${tests[*]}')]),
+    ("an empty selection runs on", [(PC, 'if [ "${#tests[@]}" -eq 0 ] || [ -z "${tests[0]}" ]; then', "if false; then")]),
     # the scope helper
     ("the scope filter is dropped", [(SC, '"--filter", "label=argus.sandbox=1",\n                        "--filter", f"label=argus.test={token}"]', '"--filter", "label=argus.sandbox=1"]')]),
     ("removing a token's containers does nothing", [(SC, 'subprocess.run(["docker", "rm", "-f", *found], capture_output=True)', "pass")]),

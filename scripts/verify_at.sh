@@ -37,13 +37,19 @@ kill_tree() {
 }
 vpid=""
 on_signal() {
-  [ -z "$vpid" ] || kill_tree "$vpid"
-  [ -z "$vpid" ] || wait "$vpid" 2>/dev/null || true
+  if [ -n "$vpid" ]; then
+    # The whole process group at once (verify.sh runs in its own, see below): a step the script starts after one of its children
+    # died is in the group too, which a kill of the children one by one (parent last) lets through. Then the tree, for a process
+    # that left the group.
+    kill -TERM -- "-$vpid" 2>/dev/null || true
+    kill_tree "$vpid"
+    wait "$vpid" 2>/dev/null || true
+  fi
   exit 143
 }
 trap on_signal INT TERM
 set +e
-(cd "$wt" && exec bash scripts/verify.sh) &
+(cd "$wt" && exec setsid -w bash scripts/verify.sh) &
 vpid=$!
 wait "$vpid"
 set -e

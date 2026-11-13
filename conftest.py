@@ -11,6 +11,7 @@ collect_ignore = ["fixtures", "runs", "pilots"]   # pilots: target tests that fa
 # AVAILABLE" (the skip verify.sh counts as a failure), so a new sandbox module is grouped without being listed here.
 # Measured 2026-10-22 on the VM: the non-sandbox tests with verify.sh's settings, 327 s serial, 121 s with -n 4, the
 # same 1,201 passed and 90 skipped.
+import inspect
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,11 @@ def _fixture_files(item):
         return
     for name in getattr(item, "fixturenames", ()):
         for fd in fm.getfixturedefs(name, item) or ():
-            f = getattr(getattr(fd.func, "__code__", None), "co_filename", "")
+            try:
+                func = inspect.unwrap(fd.func)      # a fixture wrapped with functools.wraps is defined where the original is
+            except ValueError:
+                func = fd.func
+            f = getattr(getattr(func, "__code__", None), "co_filename", "")
             if f:
                 yield f
 

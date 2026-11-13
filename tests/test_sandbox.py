@@ -202,6 +202,7 @@ def test_cleanup_is_bounded_and_reported_when_the_daemon_hangs(cfg, tmp_path):
         assert r["timed_out"] and r["cleanup_failed"] is True
         assert failed and failed[0]["container"].startswith("argus-")
         assert events[-1]["cleanup_failed"] is True    # also on the sandbox_run event
+        assert scope.ids(token, all_states=True), "the label did not reach the container: the cleanup below would leak it"
     finally:
         scope.remove(token)                          # this test's own container only: never another run's
 

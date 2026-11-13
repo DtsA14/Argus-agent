@@ -1,6 +1,6 @@
 """Which tests the pre-check (scripts/precheck.sh) runs for a change (SPEC_VERIFY_HARDENING).
 
-  git diff --name-only <base> | python scripts/precheck_select.py     -> the test files, one line, space separated
+  git diff --name-only <base> | python scripts/precheck_select.py     -> the test files, one per line
 
 A fixed set that guards the verification itself (the sandbox check of no left-over container, the group list, the verify scripts),
 the test modules a change touches, and the test modules named after a touched source module (`codetask/drafter.py` selects
@@ -30,4 +30,4 @@ def select(changed, existing):
 
 if __name__ == "__main__":
     existing = [p.as_posix() for p in Path("tests").glob("test_*.py")]
-    print(" ".join(select([ln.strip() for ln in sys.stdin if ln.strip()], existing)))
+    print("\n".join(select([ln.rstrip("\n") for ln in sys.stdin if ln.strip()], existing)))

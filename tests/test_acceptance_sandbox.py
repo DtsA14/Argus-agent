@@ -5,6 +5,7 @@ import copy
 import json
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -123,8 +124,20 @@ def test_a_validation_that_hangs_is_killed_at_its_timeout(cfg, ws):
     spec = {**CONTRACT["validation"][0], "timeout_s": 3}
     token = scope.new_token()                                # this run's own containers, not the machine's
     t0 = time.monotonic()
-    v = va.run_validation(spec, root, {**cfg, "cleanup_timeout_s": 15, "labels": scope.labels(token)})
+    box = {}
+    th = threading.Thread(target=lambda: box.update(v=va.run_validation(
+        spec, root, {**cfg, "cleanup_timeout_s": 15, "labels": scope.labels(token)})))
+    th.start()
+    seen = []
+    for _ in range(100):                                     # the label must reach the container, or "gone" below proves nothing
+        seen = scope.ids(token)
+        if seen:
+            break
+        time.sleep(0.1)
+    th.join()
+    v = box["v"]
     took = time.monotonic() - t0
+    assert seen, "no container of this run carried its label while it ran"
     assert v["status"] == "fail" and "timed out after 3s" in v["reason"], v
     assert v["evidence"]["timed_out"] is True and v["evidence"]["cleanup_failed"] is False
     assert took < 3 + 15 + 5
