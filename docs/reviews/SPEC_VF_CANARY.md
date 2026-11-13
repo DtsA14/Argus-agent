@@ -60,5 +60,6 @@ Atha memilih O2 sebagai gerbang terminal, menerima false positive `os._exit` di 
 (`os.write(1,` atau `os.write(2,`; `os.write(fd, ...)` dengan variabel tidak), `S_ISFIFO`, dan `/proc/self`. Alasan kriteria menyebut "or can forge the test report" bila salah satunya kena;
 selebihnya (hanya baris baru, berkas tes dikecualikan, gagal tertutup) seperti SPEC_TEST_DETECTION_GATE, dan hit-nya terminal lewat GATE (#474). Fixture forger probe kini
 tertangkap oleh gerbang tanpa sandbox (`tests/test_test_detection.py`) dan oleh run lengkap (`tests/test_detection_terminal.py`). Yang **tidak** berubah: validasi forger itu
-sendiri masih `pass` (tes `tests/test_vf_forger.py` tetap xfail: O2 menutup di verdict, O1 kanari dan nonce menutup di validasi, belum dikerjakan). Batas yang diketahui: forger yang menyamarkan
-pemanggilannya (`getattr(os, "_ex" + "it")`, `os.write(fd, ...)` dengan fd dari variabel tanpa `S_ISFIFO`, atau lewat modul lain) tidak ditangkap.
+sendiri masih `pass` (tes `tests/test_vf_forger.py` tetap xfail: O2 menutup di verdict, O1 kanari dan nonce menutup di validasi, belum dikerjakan). Pola tambahan sesudah review: `os.abort(`, `os.kill(os.getpid()`, dan `os.write(sys.stdout.fileno(), ...)`. Batas yang diketahui: pemindaian per baris, jadi panggilan yang
+dipecah ke beberapa baris, forger yang menyamarkan pemanggilannya (`getattr(os, "_ex" + "it")`), `os.write(fd, ...)` dengan fd dari variabel tanpa `S_ISFIFO`, `os.dup2`, `open(1, ...)`, atau lewat modul lain tidak ditangkap;
+ini pagar, bukan bukti.

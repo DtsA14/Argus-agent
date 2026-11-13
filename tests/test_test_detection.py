@@ -23,6 +23,8 @@ HITS = {
     "raw stdout/stderr fd": 'import os\nos.write(1, b"report")\n',
     "S_ISFIFO": "import os, stat\nstat.S_ISFIFO(os.fstat(3).st_mode)\n",
     "/proc/self": 'open("/proc/self/fd/1", "w")\n',
+    "abrupt exit": "import os\nos.abort()\n",
+    "self-kill": "import os, signal\nos.kill(os.getpid(), signal.SIGKILL)\n",
 }
 EXT = {"VITEST": "js", "JEST_WORKER_ID": "js", "import.meta.vitest": "js", "NODE_ENV": "jsx"}
 
@@ -211,7 +213,7 @@ def test_line_numbers_are_editor_lines_even_with_a_form_feed(tmp_path):
 
 # ---- SPEC_VF_CANARY O2: forging the test report --------------------------------------------------------------------
 
-FORGING = {"os._exit", "raw stdout/stderr fd", "S_ISFIFO", "/proc/self"}
+FORGING = set(td.FORGERS)
 
 
 @pytest.mark.parametrize("name", sorted(FORGING))
@@ -247,3 +249,24 @@ def test_an_old_exit_line_the_change_did_not_add_is_not_a_hit(tmp_path):
     assert c["status"] == "pass"
     c = scan(tmp_path / "n", {"src/worker.py": base["src/worker.py"] + "\n\ndef again():\n    os._exit(2)\n"}, base=base)
     assert c["status"] == "fail"
+
+
+def test_a_line_that_is_both_a_detection_and_a_forging_hit_still_says_forging(tmp_path):
+    c = scan(tmp_path, {"src/helper.py": 'import sys, os\nif "pytest" in sys.modules: os._exit(0)\n'})
+    (hit,) = c["evidence"]["hits"]
+    assert hit["pattern"] == "sys.modules+pytest" and hit["forging"] is True
+    assert "can forge the test report" in c["reason"]
+    c = scan(tmp_path / "n", {"src/helper.py": HITS["sys.modules"]})
+    assert "forging" not in c["evidence"]["hits"][0]
+
+
+@pytest.mark.parametrize("fd", ["1", "2"])
+def test_a_write_to_descriptor_one_or_two_is_a_hit_but_not_to_others(tmp_path, fd):
+    c = scan(tmp_path, {"src/helper.py": f'import os\nos.write({fd}, b"x")\nos.write( {fd} , b"y")\n'})
+    assert [e["pattern"] for e in c["evidence"]["hits"]] == ["raw stdout/stderr fd"] * 2
+
+
+def test_the_stdout_descriptor_by_way_of_sys_stdout_is_a_hit(tmp_path):
+    for text in ('import os, sys\nos.write(sys.stdout.fileno(), b"x")\n', 'import os, sys\nos.write(sys.__stderr__.fileno(), b"x")\n'):
+        c = scan(tmp_path / str(hash(text)), {"src/helper.py": text})
+        assert [e["pattern"] for e in c["evidence"]["hits"]] == ["raw stdout/stderr fd"], text
