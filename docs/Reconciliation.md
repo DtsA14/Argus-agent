@@ -279,7 +279,9 @@ Diputuskan 2026-11-07 s.d. 2026-11-11 (Atha):
   fixture dari modul lain tidak cukup), karena `conftest.py` mengelompokkan modul sandbox ke satu grup serial dari **sumber modulnya**; (2) sebelum `verify_at`, jalankan modul
   yang tersentuh **bersama** `tests/test_acceptance_sandbox.py` dengan `-n 4 --dist loadgroup` (sekitar 1 sampai 2 menit, dengan pin image terpasang), karena satu tes di sana
   menuntut bahwa tidak ada kontainer sandbox yang tersisa di seluruh mesin, dan sebuah tes sandbox yang lepas dari grup membuatnya gagal hanya di rangkaian penuh. Pra-cek
-  ini tidak menggantikan `verify_at` dan tidak dijalankan berbarengan dengannya (CPU).
+  ini tidak menggantikan `verify_at` dan tidak dijalankan berbarengan dengannya (CPU). Sejak SPEC_VERIFY_HARDENING pra-cek itu satu perintah: `bash scripts/precheck.sh [basis]`
+  (sekitar 40 detik; memilih tes dari berkas yang berubah, memasang pin, memakai `-n 4 --dist loadgroup`; `PRECHECK_PRINT=1` hanya mencetak rencananya), dan `conftest.py` mengelompokkan sebuah tes ke grup
+  sandbox juga bila fixture yang dipakainya didefinisikan di berkas yang memuat teks itu (daftar modulnya dikunci di `tests/test_xdist_groups.py`, dihitung dari koleksi sungguhan).
 - **UI kontrol** (`SPEC_CONTROL_UI`, 8711): fase 1-2 live (baca, reject/abandon, chatbox penulis issue); sisa: fase 3 (approve)
   dan 4 (staging), prioritas rendah.
 - **Penulis issue** (`SPEC_ISSUE_WRITER`): Haiku 5.5 lewat OpenRouter; harness yang mencari bentrok (`touches`, `clash_check`);

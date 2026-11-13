@@ -28,9 +28,35 @@ echo "verify_at: $commit in $wt (${#pins[@]} image pin file(s) copied)"
 # newest", and no `ls | head`, whose early close kills the script under pipefail).
 declare -A before=()
 for f in "$wt"/verification/verify-*.log; do before["$f"]=1; done
+# A signal (the user stops the run) kills verify.sh's whole process tree (pytest, its workers, their children) before the
+# worktree goes: workers left behind kept writing into a removed tree and printed a burst of failures that were not real.
+descendants() {
+  local c
+  for c in $(pgrep -P "$1" 2>/dev/null || true); do echo "$c"; descendants "$c"; done
+}
+vpid=""
+on_signal() {
+  if [ -n "$vpid" ]; then
+    # The descendants are listed FIRST: once the group is killed their parents are gone and they are reparented to init, out of
+    # reach of a walk down from verify.sh. Then the whole process group at once (verify.sh runs in its own, see below): a step the
+    # script starts after one of its children died is in the group too, which a kill of the children one by one (parent last) lets
+    # through. Then the listed processes, for those that left the group.
+    local all
+    all="$vpid $(descendants "$vpid")"
+    kill -TERM -- "-$vpid" 2>/dev/null || true
+    # shellcheck disable=SC2086
+    kill $all 2>/dev/null || true
+    wait "$vpid" 2>/dev/null || true
+  fi
+  exit 143
+}
+trap on_signal INT TERM
 set +e
-(cd "$wt" && bash scripts/verify.sh)
+(cd "$wt" && exec setsid -w bash scripts/verify.sh) &
+vpid=$!
+wait "$vpid"
 set -e
+vpid=""
 logs=()
 for f in "$wt"/verification/verify-*.log; do
   [ -n "${before[$f]:-}" ] || logs+=("$f")
