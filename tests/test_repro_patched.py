@@ -205,8 +205,58 @@ def test_status_shows_the_file_of_the_stage_under_review(tmp_path, monkeypatch):
     monkeypatch.setattr(td, "ISSUE", td.ISSUE + "\n\n" + issue("print(1)"))
     env = Env(tmp_path)
     job = failed_a1(env, monkeypatch)
-    pfile(job, "a1").write_text(json.dumps({"key": "x", "skipped": None, "results": [res("ok", "STAGE-A1\n")]}))
+    issue_text = job.data["inputs"]["issue"]
+    # a1 has a file that would be valid for the patch it never produced (no package): it must not be the one shown
+    pfile(job, "a1").write_text(json.dumps({"key": rp.pkey(issue_text, rp.patch_sha("/nonexistent")), "skipped": None,
+                                            "results": [res("ok", "STAGE-A1\n")]}))
     job, r = retry(env)
     assert r["status"] == "DONE" and "a2" in job.data["stages"]
     text = rj.status("jtest", jobs_dir=env.jobs)
-    assert "STAGE-A1" not in text and "base -> patched: " in text
+    assert "STAGE-A1" not in text and 'ran clean "0o644" [changed]' in text
+
+
+def test_a_changed_issue_makes_the_result_stale(tmp_path, monkeypatch):
+    env, job, box, _ = run_to_review(tmp_path, monkeypatch, OK, PATCHED_OK)
+    p = job.dir / "job.json"
+    d = json.loads(p.read_text())
+    d["inputs"]["issue"] += "\nEdited."
+    p.write_text(json.dumps(d))
+    assert "not run (the patch changed since it was run)" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_a_patch_that_does_not_apply_reads_not_run_and_the_job_goes_on(tmp_path, monkeypatch):
+    real = rp.subprocess.run
+
+    def run(cmd, *a, **kw):
+        if list(cmd[:2]) == ["git", "-C"] and "apply" in cmd and "tree" in str(cmd[2]):
+            raise RuntimeError("does not apply")
+        return real(cmd, *a, **kw)
+    monkeypatch.setattr(rp.subprocess, "run", run)
+    box = Seen(OK)
+    env, job = code_with(tmp_path, monkeypatch, box)
+    job, r = env.approve()
+    assert job.data["state"] == rj.REVIEW_READY and len(box.calls) == 1
+    assert "not run (error)" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_the_final_write_is_a_replace_so_a_death_in_it_keeps_the_marker(tmp_path, monkeypatch):
+    real = rp.os.replace
+    n = []
+
+    def replace(a, b, **kw):
+        if Path(b).name.startswith("repro_patched"):
+            n.append(1)
+            if len(n) == 2:                # the first is the marker, the second the result
+                raise Died()
+        real(a, b, **kw)
+    monkeypatch.setattr(rp.os, "replace", replace)
+    env, job = code_with(tmp_path, monkeypatch, Seen(OK, PATCHED_OK))
+    with pytest.raises(Died):
+        env.approve()
+    assert json.loads(pfile(env.job()).read_text())["results"] is None           # still the marker, not half a result
+    assert "not run (error)" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_when_nothing_ran_on_either_side_there_is_no_comparison_line(tmp_path, monkeypatch):
+    skipped = {"index": 0, "status": "skipped", "exit_code": None, "stdout": "", "stderr_last_line": "", "reason": "x"}
+    assert rp.patched_line([skipped], ("results", [skipped])) is None

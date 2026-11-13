@@ -274,8 +274,8 @@ def patched_line(base, state):
         return PREFIX + "not run (error)"
     base = base if isinstance(base, list) else None
     labels = label(base, val)
-    if not val and not base:
-        return None
+    if not any(_kind(r) for r in val) and not any(_kind(r) for r in base or []):
+        return None                                           # nothing ran on either side: nothing to compare
     bmap = {r.get("index"): r for r in (base or []) if isinstance(r, dict)}
     pmap = {r.get("index"): r for r in val if isinstance(r, dict)}
     parts = []
