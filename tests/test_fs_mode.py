@@ -114,3 +114,11 @@ def test_the_review_patch_of_an_edited_executable_has_no_mode_change(tree, tmp_p
     patch = review.make_patch(base, ws, tmp_path / "work")
     text = patch if isinstance(patch, str) else patch[0] if isinstance(patch, tuple) else str(patch)
     assert "src/run.py" in text and "old mode" not in text and "new mode" not in text
+
+
+def test_a_target_that_is_not_a_regular_file_does_not_lend_its_mode(jail):
+    fifo = jail.root / "pipe.py"
+    os.mkfifo(fifo, 0o666)
+    os.chmod(fifo, 0o666)
+    jail.write_text("pipe.py", "x\n")
+    assert stat.S_ISREG(os.stat(fifo).st_mode) and mode(fifo) == 0o644
