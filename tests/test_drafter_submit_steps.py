@@ -30,7 +30,7 @@ def test_a_rejection_on_the_last_reading_step_can_still_be_fixed(root, tmp_path)
     assert r["status"] == dt.DRAFTED and len(model.calls) == 4
     res = json.loads((d / "result.json").read_text())
     assert res["drafting"]["submits"] == 3 and res["drafting"]["steps"] == 3       # the accepting submit: step 3
-    note = dt.SUBMIT_STEPS_NOTE.format(n=3)
+    note = dt.SUBMIT_STEPS_NOTE.format(n=td.cfg()["drafter"]["max_submits"] - 2)      # the submits left after the two used so far
     assert note in texts(model, 3) and note not in "\n".join(texts(model, 2))
 
 
