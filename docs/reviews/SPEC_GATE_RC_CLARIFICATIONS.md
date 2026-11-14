@@ -1,6 +1,6 @@
 # Spec GATE-RC-CLARIFICATIONS: amandemen atas GATE dan RC sesudah putaran kasus sintetis
 
-Status: **draf amandemen, menunggu persetujuan Atha atas isinya** (strict lane: ia mengubah arti spek; kode belum disentuh). Keputusan Atha 2026-11-14: **komentar dan docstring Python dikecualikan dari pola deteksi tes (butir D1)**; "mulai dari spek". Ditulis Claude, ditinjau Opus (hanya baca) sebelum dibuka.
+Status: **DISETUJUI Atha 2026-11-14 ("Ok setuju": lima kontradiksi, D1 dan P1)**; kode belum disentuh, paket kode (D1, P1, tes yang mengunci butir 4) dikerjakan di sesi lanjutan atas permintaan Atha. Keputusan Atha 2026-11-14: **komentar dan docstring Python dikecualikan dari pola deteksi tes (butir D1)**. Ditulis Claude, ditinjau Opus (hanya baca) sebelum dibuka.
 Dasar: `pilots/synthetic_rc_gate/RESULTS.md` (35 kasus dari penulis independen, 35 cocok), `pilots/synthetic_rc_gate/WRITER_REPORT.md` (12 celah dan 5 kontradiksi), saran Opus 2026-11-14.
 Mengubah atau menandai: `SPEC_TEST_DETECTION_GATE.md`, `SPEC_TEST_DETECTION_TERMINAL.md`, `FABLE_SPEC_REPORT_CONFLICT_v1.md`, `SPEC_REPORT_CONFLICT_V3.md` (masing-masing mendapat satu baris yang menunjuk ke sini; isinya tidak ditulis ulang).
 
