@@ -179,6 +179,9 @@ def main(argv=None, deps=None):
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user)")
+    ch = sub.add_parser("chat", help="the phone's chat app, read only in C1 (docs/reviews/SPEC_CHAT_APP.md)")
+    ch.add_subparsers(dest="chat_cmd", required=True).add_parser(
+        "serve", help="the jobs' state and cost as a chat page, forever, on 127.0.0.1:8712 only (systemd --user)")
     rs = sub.add_parser("research", help="a deep research job: planner, web workers, synthesis, claim checker (docs/reviews/SPEC_RESEARCH_JOB.md)")
     gq = rs.add_mutually_exclusive_group(required=True)
     gq.add_argument("--question")
@@ -202,6 +205,10 @@ def main(argv=None, deps=None):
     if o.cmd == "control":
         from router import control as rc
         rc.serve(Path(o.jobs_dir), cfg=load_config(o.config))
+        return 0
+    if o.cmd == "chat":
+        from router import chat as rchat
+        rchat.serve(Path(o.jobs_dir))
         return 0
     if o.cmd == "stage":
         from router import stage as sg
