@@ -36,6 +36,8 @@ MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its pr
 DAY = 24 * 3600
 PENDING_S = 600                    # a confirmed start the job directory does not show yet still counts this long
 MAX_PREPARED = 50
+DEFAULT_CAP_USD = 2.0
+AUDIT_STR = 200                    # a client string is cut to this before it is written to the audit
 BODY_MAX = 16 * 1024               # a JSON body of the two POST routes
 JOB_JSON_MAX = 4 * 1024 * 1024     # a job.json larger than this is not read
 
@@ -46,11 +48,14 @@ class Refusal(Exception):
         self.status, self.gate, self.why = status, gate, why
 
 
+EXTRA_INVISIBLE = re.compile("[\U000e0000-\U000e007f\u2028\u2029\u00ad\u061c]")     # tag characters, separators, soft hyphen, ALM
+
+
 def scrub(text):
     """The harness's own text cleaning (stage_data.clean_text: control and invisible characters removed, cut, no key pattern):
     what is shown is what a human can read, or a marker that it was withheld."""
     try:
-        return sd.clean_text(text.encode("utf-8"))
+        return sd.clean_text(EXTRA_INVISIBLE.sub("", text).encode("utf-8"))
     except sd.Excluded as e:
         return f"[withheld by the harness: {e}]"
 
@@ -92,8 +97,12 @@ class IssueView:
 
 
 class Actions:
-    def __init__(self, jobs_dir, cfg, *, state=STATE, clock=time.time, environ=os.environ, spawner=None, run=None):
-        self.jobs_dir, self.cfg, self.clock, self.environ = Path(jobs_dir), cfg, clock, environ
+    def __init__(self, jobs_dir, cfg, *, state=STATE, clock=time.time, environ=os.environ, spawner=None, run=None,
+                 config_path=None):
+        """cfg: the config as a dict, or a function that loads it. A function is called for every prepare and confirm, so the
+        card shows what the CLI will read (it reads config.yaml on every run); config_path is passed to the CLI as --config."""
+        self.jobs_dir, self._cfg, self.clock, self.environ = Path(jobs_dir), cfg, clock, environ
+        self.config_path = config_path
         self.state = Path(state)
         self.spawner = spawner or Spawner(self.state, clock)
         self.run = run or (lambda action, job_id, reason: control_cli(action, job_id, reason, "", self.jobs_dir))
@@ -104,6 +113,16 @@ class Actions:
     # ---- settings -------------------------------------------------------------------------------------------------
 
     @property
+    def cfg(self):
+        try:
+            c = self._cfg() if callable(self._cfg) else self._cfg
+        except (OSError, ValueError):
+            raise Refusal(503, "config", "the config cannot be read") from None
+        if not isinstance(c, dict):
+            raise Refusal(503, "config", "the config cannot be read")
+        return c
+
+    @property
     def writer(self):
         return self.cfg.get("issue_writer") or {}
 
@@ -111,8 +130,8 @@ class Actions:
         return self.writer.get("repos") or {}
 
     def daily_cap(self):
-        v = (self.cfg.get("chat") or {}).get("daily_cap_usd", 2.0)
-        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else 2.0
+        v = (self.cfg.get("chat") or {}).get("daily_cap_usd", DEFAULT_CAP_USD)
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else DEFAULT_CAP_USD
 
     def key_file(self, writer):
         return (self.environ.get(WRITER_KEY_ENV) if writer else None) or self.environ.get(KEY_ENV) or None
@@ -201,20 +220,22 @@ class Actions:
         """(card, argv builder inputs) for an action, from live data; Refusal when it cannot be run."""
         if action not in ACTIONS:
             raise Refusal(404, "path", "no such action")
-        w = self.writer
+        cfg = self.cfg
+        w = cfg.get("issue_writer") or {}
         if not w:
             raise Refusal(409, "config", "the config has no issue writer")
+        repos = w.get("repos") or {}
         turn_cap = float((w.get("turn") or {}).get("cap_usd") or 0)
         if action == "issue_new":
             repo, text = params.get("repo"), normalize(params.get("message") or "")
-            if repo not in self.repos():
-                raise Refusal(400, "form", f"repository {repo!r} is not one the writer reads")
-            why = ri.message_problem(self.cfg, text, first=True)
+            if repo not in repos:
+                raise Refusal(400, "form", "that repository is not one the writer reads")
+            why = ri.message_problem(cfg, text, first=True)
             if why:
                 raise Refusal(400, "form", why)
             self._need_key(True)
             card = {"action": action, "title": "Ask the writer", "repo": repo,
-                    "environment": self.repos()[repo].get("environment"), "message": text,
+                    "environment": repos[repo].get("environment"), "message": text,
                     "turn_cap_usd": turn_cap, "job_cap_usd": float(w.get("max_usd") or 0)}
             return card, {"repo": repo, "message": text}
         v = self.read_issue(params.get("job"))
@@ -229,15 +250,19 @@ class Actions:
             text = normalize(params.get("message") or "")
             if state not in ri.REPLYABLE:
                 raise Refusal(409, "state", f"job {v.id} is {state}: it cannot take a reply")
-            why = ri.message_problem(self.cfg, text, first=False)
+            why = ri.message_problem(cfg, text, first=False)
             if why:
                 raise Refusal(400, "form", why)
             self._need_key(True)
-            return {**base, "title": "Reply to the writer", "message": text, "turn_cap_usd": turn_cap}, {"job": v.id, "message": text}
+            return ({**base, "title": "Reply to the writer", "message": text, "turn_cap_usd": turn_cap,
+                     "counted": self.created_from_ui_in_window(v)}, {"job": v.id, "message": text})
         if action == "issue_start":
             if state != ri.AWAITING_HUMAN or v.issue_text is None:
                 raise Refusal(409, "state", f"job {v.id} is {state}: an issue is started when the writer waits for the human")
             self._need_key(False)
+            if scrub(v.issue_text) != v.issue_text:
+                raise Refusal(409, "issue", "the issue holds text the card cannot show as it is (a key-like string or invisible "
+                                            "characters): read it and start it from the terminal")
             i = v.data["inputs"]
             first = v.issue_text.strip().splitlines()[0] if v.issue_text.strip() else ""
             return ({**base, "title": "Start a code job", "issue_title": scrub(first), "issue_text": scrub(v.issue_text),
@@ -269,7 +294,11 @@ class Actions:
             names = []
         unknown = Refusal(503, "cap", "the daily exposure cannot be computed (a job could not be read)")
         for n in names:
-            if calendar.timegm(time.strptime(n[1:16], "%Y%m%d_%H%M%S")) < now - 2 * DAY:
+            try:
+                named = calendar.timegm(time.strptime(n[1:16], "%Y%m%d_%H%M%S"))
+            except ValueError:
+                continue                           # an id shape with an impossible date is no job this harness made
+            if named < now - 2 * DAY:
                 break                              # job ids sort by time: nothing older can be inside the window
             try:
                 sfd = os.open(self.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
@@ -306,11 +335,27 @@ class Actions:
         return total
 
     def exposure_of(self, card):
-        if card["action"] == "issue_new":
+        if card["action"] in ("issue_new", "issue_start"):
             return float(card["job_cap_usd"])
-        if card["action"] == "issue_start":
-            return float(card["job_cap_usd"])
+        if card["action"] == "issue_reply" and not card.get("counted"):
+            return float(card["turn_cap_usd"])           # a paid turn on a job whose creation the 24 hours do not hold
         return 0.0
+
+    def created_from_ui_in_window(self, v):
+        """True when this issue job's own max_usd is already in exposure(): created via the UI in the last 24 hours."""
+        try:
+            return any(isinstance(e, dict) and e.get("what") == "created" and e.get("via") == "ui"
+                       and parse_time(e["at"]) >= self.clock() - DAY for e in v.data.get("log") or [])
+        except (KeyError, TypeError, ValueError):
+            return False
+
+    def check_cap(self, card):
+        extra = self.exposure_of(card)
+        if extra:
+            used = self.exposure()
+            if used + extra > self.daily_cap() + 1e-9:
+                raise Refusal(403, "cap", f"the daily cap would be passed (${used:.2f} of ${self.daily_cap():.2f} in use, "
+                                          f"this adds ${extra:.2f})")
 
     # ---- prepare and confirm ----------------------------------------------------------------------------------------
 
@@ -321,6 +366,7 @@ class Actions:
         self.prepared = {t: p for t, p in self.prepared.items() if now - p["issued"] <= TOKEN_TTL}
         while len(self.prepared) >= MAX_PREPARED:
             self.prepared.pop(next(iter(self.prepared)))
+        self.check_cap(card)                       # 3: refuse at prepare too, not only after the human tapped
         token = secrets.token_urlsafe(32)
         self.prepared[token] = {"action": action, "params": params, "digest": self.digest(card), "issued": now}
         return {"token": token, "card": card, "expires_s": TOKEN_TTL, "min_delay_s": MIN_DELAY,
@@ -339,13 +385,12 @@ class Actions:
         card, run_params = self.build(p["action"], p["params"])
         if self.digest(card) != p["digest"]:
             raise Refusal(409, "card", "what the card showed changed since it was prepared: prepare it again")
-        extra = self.exposure_of(card)
-        if extra:
-            used = self.exposure()
-            if used + extra > self.daily_cap() + 1e-9:
-                raise Refusal(403, "cap", f"the daily cap would be passed (${used:.2f} of ${self.daily_cap():.2f} in use, "
-                                          f"this adds ${extra:.2f})")
+        self.check_cap(card)                       # and again now, with what other confirms and services added meanwhile
         return p["action"], card, run_params, self.digest(card)
+
+    def with_config(self, argv):
+        """The argv with --config before the subcommand when the chat was started with one (the CLI then reads the same file)."""
+        return argv[:2] + ["--config", str(self.config_path)] + argv[2:] if self.config_path else argv
 
     def execute(self, action, card, rp):
         """Start the confirmed action; returns the body. The CLI is the real gate."""
@@ -360,16 +405,18 @@ class Actions:
         if a == "issue_new":
             new_id = rj.new_job_id()
             message = self.spawner.message_file(rp["message"])
-            argv = issue_cli(c, key, "new", "--repo", rp["repo"], "--job-id", new_id, "--message-file", str(message))
+            argv = self.with_config(issue_cli(c, key, "new", "--repo", rp["repo"], "--job-id", new_id, "--message-file", str(message)))
             self.spawner.spawn(new_id, argv, message, action="new", text=rp["message"])
             self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))
             return {"job": new_id, "started": True}
         if a == "issue_reply":
             message = self.spawner.message_file(rp["message"])
-            argv = issue_cli(c, key, "reply", "--message-file", str(message)) + ["--", rp["job"]]
+            argv = self.with_config(issue_cli(c, key, "reply", "--message-file", str(message)) + ["--", rp["job"]])
             self.spawner.spawn(rp["job"], argv, message, action="reply", text=rp["message"])
+            if self.exposure_of(card):
+                self.pending.append((self.clock(), ("reply", rp["job"], self.clock()), self.exposure_of(card)))
             return {"job": rp["job"], "started": True}
-        argv = issue_cli(c, key, "start", "--sha", rp["sha"]) + ["--", rp["job"]]
+        argv = self.with_config(issue_cli(c, key, "start", "--sha", rp["sha"]) + ["--", rp["job"]])
         self.spawner.spawn(rp["job"], argv, None, action="start")
         self.pending.append((self.clock(), ("start", rp["job"]), self.exposure_of(card)))
         return {"job": rp["job"], "started": True}

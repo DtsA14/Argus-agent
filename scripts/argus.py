@@ -208,7 +208,12 @@ def main(argv=None, deps=None):
         return 0
     if o.cmd == "chat":
         from router import chat as rchat
-        rchat.serve(Path(o.jobs_dir), cfg=load_config(o.config))
+        try:
+            cfg = load_config(o.config)
+        except (OSError, ValueError) as e:             # the config cannot be read: the chat still serves the jobs, read only
+            print(f"argus chat: the config cannot be read ({type(e).__name__}); read only", file=sys.stderr, flush=True)
+            cfg = None
+        rchat.serve(Path(o.jobs_dir), cfg=cfg, config_path=o.config, load=(lambda: load_config(o.config)))
         return 0
     if o.cmd == "stage":
         from router import stage as sg

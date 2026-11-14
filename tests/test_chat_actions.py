@@ -175,14 +175,21 @@ def test_no_key_for_the_service_means_no_card(tmp_path):
         s.stop()
 
 
-def test_the_start_card_shows_the_issue_text_itself_scrubbed(svc):
-    make_issue(svc.jobs, JOB, issue="Fix ‮the​ page\n\nsecret sk-ant-api03-AAAAAAAAAAAAAAAAAAAA here\n")
+def test_the_start_card_shows_the_whole_issue_text(svc):
+    make_issue(svc.jobs, JOB, issue="Fix the page\n\nThe list page should show the cost.\nSecond paragraph, with `code`.\n")
     s, out = svc.prepare(action="issue_start", job=JOB)
     c = out["card"]
-    assert s == 200 and c["issue_title"] == "Fix the page" and "‮" not in c["issue_text"] and "​" not in c["issue_text"]
-    assert "sk-ant" not in json.dumps(out) and "withheld" in c["issue_text"]
+    assert s == 200 and c["issue_title"] == "Fix the page" and c["issue_text"] == "Fix the page\n\nThe list page should show the cost.\nSecond paragraph, with `code`.\n"
     assert c["repo"] == "argus-viewer" and c["commit"] == "9e78ed13b03f" and c["environment"] == "pwa_node22"
     assert c["job_cap_usd"] == 1.0 and out["exposure_usd"] == 1.0 and "/secret/path" not in json.dumps(out)
+
+
+@pytest.mark.parametrize("issue", ["Fix \u202ethe page\n", "Zero\u200bwidth\n", "tag \U000e0041 char\n", "soft\u00adhyphen\n", "sep\u2028arator\n",
+                                   "key sk-ant-api03-AAAAAAAAAAAAAAAAAAAA here\n", 'token = "abc"\n', "nul\x00 byte\n"])
+def test_an_issue_the_card_cannot_show_as_it_is_cannot_be_started_from_the_chat(svc, issue):
+    make_issue(svc.jobs, JOB, issue=issue)
+    status, out = svc.prepare(action="issue_start", job=JOB)
+    assert status == 409 and "token" not in out and "terminal" in out["refused"] and svc.spawner.calls == []
 
 
 @pytest.mark.parametrize("action, state, status", [
@@ -324,9 +331,8 @@ def test_a_start_made_from_the_ui_counts_the_code_cap(svc):
 def test_a_new_issue_is_refused_when_the_cap_would_be_passed(svc):
     for j in ("j20261115_100000_aaaa", "j20261115_110000_aaaa", "j20261115_120000_aaaa", "j20261115_130000_aaaa"):
         make_issue(svc.jobs, j, created=NOW - 3600)
-    token = svc.prepare(**NEW)[1]["token"]
-    status, out = svc.confirm(token)
-    assert status == 403 and "daily cap" in out["refused"] and svc.spawner.calls == []
+    status, out = svc.prepare(**NEW)                                 # refused at prepare, before the human taps anything
+    assert status == 403 and "daily cap" in out["refused"] and "token" not in out and svc.spawner.calls == []
 
 
 def test_two_confirms_back_to_back_cannot_beat_the_cap(tmp_path):
@@ -353,9 +359,7 @@ def test_an_unreadable_job_in_the_window_means_the_cap_cannot_be_computed(svc):
     d = svc.jobs / "j20261115_150000_aaaa"
     d.mkdir()
     (d / "job.json").write_text("{not json")
-    token = svc.prepare(**NEW)[1]["token"]
-    status, _ = svc.confirm(token)
-    assert status == 503 and svc.spawner.calls == []
+    assert svc.prepare(**NEW)[0] == 503 and svc.spawner.calls == []
 
 
 def test_a_job_with_a_garbled_time_means_the_cap_cannot_be_computed(svc):
@@ -364,7 +368,7 @@ def test_a_job_with_a_garbled_time_means_the_cap_cannot_be_computed(svc):
     d = json.loads(p.read_text())
     d["log"][0]["at"] = "yesterday"
     p.write_text(json.dumps(d))
-    assert svc.confirm(svc.prepare(**NEW)[1]["token"])[0] == 503
+    assert svc.prepare(**NEW)[0] == 503
 
 
 # ---- the POST gates (11.1, 11.10) -----------------------------------------------------------------------------------------
@@ -503,3 +507,250 @@ def test_a_job_id_cannot_walk_out_of_the_jobs_directory(svc, tmp_path):
         assert svc.prepare(action="issue_start", job=j)[0] == 404
         assert svc.request("GET", f"/api/issues/{j}")[0] == 404
         assert svc.actions.read_issue(j) is None
+
+
+# ---- Opus review of C2a (2026-11-14) -------------------------------------------------------------------------------------------
+
+def test_the_constants_are_pinned():
+    assert (ca.TOKEN_TTL, ca.MIN_DELAY, ca.DAY, ca.PENDING_S, ca.DEFAULT_CAP_USD, ca.BODY_MAX) == (300, 1.0, 86400, 600, 2.0, 16 * 1024)
+
+
+def test_the_default_cap_is_two_dollars_and_a_bad_value_falls_back_to_it(tmp_path):
+    for i, chat in enumerate(({}, {"daily_cap_usd": "x"}, {"daily_cap_usd": -1}, {"daily_cap_usd": True})):
+        (tmp_path / str(i)).mkdir()
+        s = Service(tmp_path / str(i), cfg={**CFG, "chat": chat})
+        try:
+            assert s.actions.daily_cap() == 2.0
+        finally:
+            s.stop()
+
+
+def test_the_cap_is_checked_at_prepare_and_again_at_confirm(tmp_path):
+    cfg = json.loads(json.dumps(CFG))
+    cfg["chat"]["daily_cap_usd"] = 0.6
+    s = Service(tmp_path, cfg=cfg)
+    try:
+        t = s.prepare(**NEW)[1]["token"]
+        make_issue(s.jobs, "j20261115_100000_aaaa", created=NOW - 60)           # another service started one meanwhile
+        status, out = s.confirm(t)
+        assert status == 403 and "daily cap" in out["refused"] and s.spawner.calls == []
+    finally:
+        s.stop()
+
+
+def test_two_starts_back_to_back_cannot_beat_the_cap(tmp_path):
+    cfg = json.loads(json.dumps(CFG))
+    cfg["chat"]["daily_cap_usd"] = 1.5
+    s = Service(tmp_path, cfg=cfg)
+    try:
+        for j in ("j20261115_100000_aaaa", "j20261115_110000_aaaa"):
+            make_issue(s.jobs, j, via="cli", created=NOW - 3 * 86400)             # not counted: old, from the terminal
+        t1 = s.prepare(action="issue_start", job="j20261115_100000_aaaa")[1]["token"]
+        t2 = s.prepare(action="issue_start", job="j20261115_110000_aaaa")[1]["token"]
+        assert s.confirm(t1)[0] == 200
+        assert s.confirm(t2)[0] == 403 and len(s.spawner.calls) == 1
+    finally:
+        s.stop()
+
+
+def test_a_reply_to_a_job_the_window_does_not_hold_counts_its_turn_cap(tmp_path):
+    cfg = json.loads(json.dumps(CFG))
+    cfg["chat"]["daily_cap_usd"] = 0.05
+    s = Service(tmp_path, cfg=cfg)
+    try:
+        make_issue(s.jobs, JOB, via="cli", created=NOW - 3 * 86400)
+        status, out = s.prepare(action="issue_reply", job=JOB, message="more")
+        assert status == 403 and "daily cap" in out["refused"]
+        make_issue(s.jobs, "j20261115_220001_abcd")                                 # created from the UI an hour ago: counted at 0.5
+        assert s.actions.exposure_of({"action": "issue_reply", "counted": True, "turn_cap_usd": 0.1}) == 0
+    finally:
+        s.stop()
+
+
+def test_a_reply_card_says_whether_the_job_is_already_counted(svc):
+    make_issue(svc.jobs, JOB)
+    assert svc.prepare(action="issue_reply", job=JOB, message="x")[1]["card"]["counted"] is True
+    make_issue(svc.jobs, "j20261115_220001_abcd", via="cli")
+    assert svc.prepare(action="issue_reply", job="j20261115_220001_abcd", message="x")[1]["card"]["counted"] is False
+
+
+def test_the_handoff_window_and_origin(svc):
+    make_issue(svc.jobs, "j20261115_100000_aaaa", state=ri.HANDED_OFF, via="cli", created=NOW - 3600,
+               handoff={"job": "j20261115_100001_aaaa", "at": iso(NOW - 25 * 3600), "via": "ui"})       # older than 24 h
+    make_issue(svc.jobs, "j20261115_110000_aaaa", state=ri.HANDED_OFF, via="cli", created=NOW - 3600,
+               handoff={"job": "j20261115_110001_aaaa", "at": iso(NOW - 600), "via": "cli"})           # from the terminal
+    assert svc.actions.exposure() == 0
+    make_issue(svc.jobs, "j20261115_120000_aaaa", state=ri.HANDED_OFF, via="cli", created=NOW - 3600,
+               handoff={"job": "j20261115_120001_aaaa", "at": iso(NOW - 600), "via": "ui"})
+    assert svc.actions.exposure() == pytest.approx(1.0)
+
+
+def test_a_job_created_from_the_ui_more_than_a_day_ago_is_not_counted_even_inside_the_two_day_scan(svc):
+    make_issue(svc.jobs, "j20261114_160000_aaaa", created=NOW - 30 * 3600)
+    assert svc.actions.exposure() == 0
+
+
+def test_the_pending_record_expires_and_is_not_counted_twice(svc):
+    t = svc.prepare(**NEW)[1]["token"]
+    body = svc.confirm(t)[1]
+    assert svc.actions.exposure() == pytest.approx(0.5)
+    svc.clock.t += ca.PENDING_S + 1
+    assert svc.actions.exposure() == 0 and svc.actions.pending == []
+    # the job directory the CLI made shows up: counted once, the pending record is not added on top
+    svc.clock.t = NOW
+    svc.actions.pending = [(svc.clock.t, ("new", body["job"]), 0.5)]
+    make_issue(svc.jobs, body["job"], created=NOW)
+    assert svc.actions.exposure() == pytest.approx(0.5)
+
+
+def test_a_failed_audit_at_confirm_runs_nothing(svc):
+    token = svc.prepare(**NEW)[1]["token"]
+    svc.actions.audit_path.unlink()
+    svc.actions.audit_path.mkdir()
+    status, _ = svc.confirm(token)
+    assert status == 503 and svc.spawner.calls == [] and svc.runs == []
+
+
+def test_a_failed_audit_at_prepare_keeps_no_token(svc):
+    svc.actions.audit_path.mkdir(parents=True)
+    assert svc.prepare(**NEW)[0] == 503 and svc.actions.prepared == {}
+
+
+def test_the_audit_cuts_what_the_client_sent(svc):
+    svc.request("POST", "/api/prepare", {"action": "issue_start", "job": "x" * 5000})
+    raw = svc.actions.audit_path.read_text()
+    assert len(raw) < 1500 and "x" * 300 not in raw
+
+
+@pytest.mark.parametrize("action, body, key_env", [
+    ("issue_reply", {"job": JOB, "message": "m"}, {ca.KEY_ENV: KEY}),
+    ("issue_new", NEW, {}), ("issue_start", {"job": JOB}, {ca.WRITER_KEY_ENV: WKEY})])
+def test_each_paid_action_needs_its_key_file(tmp_path, action, body, key_env):
+    s = Service(tmp_path, environ=key_env)
+    try:
+        make_issue(s.jobs, JOB)
+        status, _ = s.prepare(**{**body, "action": action} if action != "issue_new" else body)
+        assert status == (200 if (action == "issue_reply") else 409)       # a reply falls back to the code key; the others need theirs
+    finally:
+        s.stop()
+
+
+def test_a_reply_and_a_reason_are_checked_like_a_new_message(svc):
+    make_issue(svc.jobs, JOB)
+    assert svc.prepare(action="issue_reply", job=JOB, message="x" * 2001)[0] == 400
+    assert svc.prepare(action="issue_reply", job=JOB, message="")[0] == 400
+    assert svc.prepare(action="issue_abandon", job=JOB, reason="x" * 301)[0] == 400
+    assert svc.prepare(action="issue_abandon", job=JOB, reason="two\nlines")[0] == 400
+
+
+def test_two_origin_or_two_fetch_site_headers_are_refused(svc):
+    import socket
+    def raw(extra):
+        body = b'{"action": "issue_new", "repo": "argus-viewer", "message": "hi"}'
+        req = (b"POST /api/prepare HTTP/1.1\r\nHost: 127.0.0.1:8712\r\nContent-Type: application/json\r\nContent-Length: %d\r\n" % len(body)
+               + extra + b"\r\n" + body)
+        with socket.create_connection(("127.0.0.1", svc.port), timeout=5) as c:
+            c.sendall(req)
+            data = b""
+            while chunk := c.recv(4096):
+                data += chunk
+        return int(data.split(b" ", 2)[1])
+    good = b"Origin: http://127.0.0.1:8712\r\n"
+    assert raw(good) == 200
+    assert raw(good + good) == 403 and raw(good + b"Origin: http://evil.example\r\n") == 403
+    assert raw(good + b"Sec-Fetch-Site: same-origin\r\nSec-Fetch-Site: cross-site\r\n") == 403
+
+
+def test_a_job_json_that_is_not_an_object_is_unreadable(svc):
+    d = svc.jobs / "j20261115_150000_aaaa"
+    d.mkdir()
+    (d / "job.json").write_text("[]")
+    assert svc.actions.read_issue(d.name) is None
+    assert svc.prepare(**NEW)[0] == 503
+
+
+def test_an_id_with_an_impossible_date_is_skipped_not_a_500(svc):
+    (svc.jobs / "j20269999_999999_aaaa").mkdir()
+    assert svc.actions.exposure() == 0 and svc.prepare(**NEW)[0] == 200
+
+
+def test_the_card_follows_the_config_as_the_cli_reads_it_not_as_it_was_at_start(tmp_path):
+    cfg = {"v": json.loads(json.dumps(CFG))}
+    s = Service(tmp_path, cfg=lambda: cfg["v"])
+    try:
+        out = s.prepare(**NEW)[1]
+        cfg["v"] = json.loads(json.dumps(cfg["v"]))                                     # the file is read again: a new object
+        cfg["v"]["issue_writer"]["max_usd"] = 0.4                                       # edited after the card was shown
+        status, body = s.confirm(out["token"])
+        assert status == 409 and "changed" in body["refused"] and s.spawner.calls == []
+        assert s.prepare(**NEW)[1]["card"]["job_cap_usd"] == 0.4
+    finally:
+        s.stop()
+
+
+def test_an_unreadable_config_refuses_and_does_not_crash(tmp_path):
+    def broken():
+        raise OSError("gone")
+    s = Service(tmp_path, cfg=broken)
+    try:
+        assert s.prepare(**NEW)[0] == 503
+    finally:
+        s.stop()
+
+
+def test_the_config_path_goes_to_the_cli(tmp_path):
+    s = Service(tmp_path)
+    s.actions.config_path = "/etc/argus/other.yaml"
+    try:
+        token = s.prepare(**NEW)[1]["token"]
+        assert s.confirm(token)[0] == 200
+        argv = s.spawner.calls[0]["argv"]
+        assert argv[2:4] == ["--config", "/etc/argus/other.yaml"] and argv[4] == "--jobs-dir"
+    finally:
+        s.stop()
+
+
+def test_the_real_config_never_lets_the_writer_read_argus_itself():
+    from runner import load_config
+    repos = (load_config().get("issue_writer") or {}).get("repos") or {}
+    assert repos and all("argus-agent" not in n.lower() and "argus-agent" not in str(v.get("path")).lower() for n, v in repos.items())
+
+
+def test_a_confirm_whose_reply_cannot_be_written_is_audited_as_done(svc, monkeypatch):
+    token = svc.prepare(**NEW)[1]["token"]
+    original = rc.Handler._json
+    def boom(self, status, obj):
+        if obj.get("started"):
+            raise BrokenPipeError("client went away")
+        return original(self, status, obj)
+    monkeypatch.setattr(rc.Handler, "_json", boom)
+    svc.clock.t += 2
+    svc.request("POST", "/api/confirm", {"token": token})
+    lines = svc.audit()
+    assert any(x.get("ok") == "confirm" for x in lines) and any("reply could not be written" in x.get("note", "") for x in lines)
+    assert not any(x.get("refused") == "error" for x in lines)
+
+
+def test_two_replies_on_uncounted_jobs_back_to_back_cannot_beat_the_cap(tmp_path):
+    cfg = json.loads(json.dumps(CFG))
+    cfg["chat"]["daily_cap_usd"] = 0.15
+    s = Service(tmp_path, cfg=cfg)
+    try:
+        for j in ("j20261115_100000_aaaa", "j20261115_110000_aaaa"):
+            make_issue(s.jobs, j, via="cli", created=NOW - 3 * 86400)
+        t1 = s.prepare(action="issue_reply", job="j20261115_100000_aaaa", message="a")[1]["token"]
+        t2 = s.prepare(action="issue_reply", job="j20261115_110000_aaaa", message="b")[1]["token"]
+        assert s.confirm(t1)[0] == 200
+        assert s.confirm(t2)[0] == 403 and len(s.spawner.calls) == 1
+    finally:
+        s.stop()
+
+
+def test_a_reply_needs_a_key_file_of_some_kind(tmp_path):
+    s = Service(tmp_path, environ={})
+    try:
+        make_issue(s.jobs, JOB)
+        assert s.prepare(action="issue_reply", job=JOB, message="x")[0] == 409
+        assert s.prepare(action="issue_start", job=JOB)[0] == 409
+    finally:
+        s.stop()
