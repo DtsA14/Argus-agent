@@ -57,7 +57,7 @@ OPTIONAL_KEYS = {"changed_tests", "for_human"}   # W2a-ext (absent: []); for_hum
 FOR_HUMAN_MAX = 400
 PLAN_KEYS = {"files", "steps", "risks"}
 CONTRACT_KEYS = {"scope", "validation", "tools", "budget_profile"}
-MAX_TEST_BYTES = 50_000
+MAX_TEST_BYTES = ch.MAX_BLOCK_BYTES
 
 
 class DraftError(Exception):
@@ -138,8 +138,9 @@ def validate_draft(d):
     if len(runners) > 1:
         errors.append(f"a draft's validations must all use one runner (vitest, or Python's), not {sorted(runners)}")
     vitest = runners == {"vitest"}
-    tests = d["new_tests"]
-    if not isinstance(tests, list) or not tests:
+    tests, changes = d["new_tests"], d.get("changed_tests")
+    # SPEC_APPEND_TESTS: no new file is fine when an existing test file is changed (static_problems asks that it only add)
+    if not isinstance(tests, list) or (not tests and not (isinstance(changes, list) and changes)):
         errors.append("new_tests must name at least one new test file")
     else:
         paths = []
@@ -169,7 +170,7 @@ def validate_draft(d):
                       "Python's AST; a vitest draft only adds test files)")
     elif "changed_tests" in d:
         new_paths = [t.get("path") for t in tests if isinstance(t, dict)] if isinstance(tests, list) else []
-        errors += ch.shape_problems(d["changed_tests"], new_paths, intake._plain, MAX_TEST_BYTES)
+        errors += ch.shape_problems(d["changed_tests"], new_paths, intake._plain, ch.MAX_CHANGED_BYTES)
     return errors
 
 
@@ -325,6 +326,15 @@ def materialize(base_dir, draft, dest):
     return added
 
 
+def _intake_text(base_dir, path):
+    """The intake version's text of a regular file, or None."""
+    p = Path(base_dir) / path
+    try:
+        return p.read_bytes().decode("utf-8") if p.is_file() and not p.is_symlink() else None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def collection_problems(draft, contract, base_dir, ws, sandbox_cfg, collect=collect_nodes):
     """K1: each changed file collected in the sandbox from the intake (base_dir) and from the baseline (ws), with the
     environment and timeout of a validation that runs it whole. Returns (problems, per-file evidence)."""
@@ -341,6 +351,11 @@ def collection_problems(draft, contract, base_dir, ws, sandbox_cfg, collect=coll
                 break
         else:
             problems += ch.lost_problems(p, got["intake"], got["new"], [r["node"] for r in t.get("removed", [])])
+            old_text = _intake_text(base_dir, p)
+            if old_text is not None and ch.pure_addition(old_text, t["content"]):       # SPEC_APPEND_TESTS rule 4
+                problems += ch.appended_required_problems(
+                    p, got["intake"], [n for v in contract["validation"] for n in v.get("must_pass", [])
+                                       if n.split("::", 1)[0] == p])
             seen[p] = {"intake": len(got["intake"]), "new": len(got["new"]),
                        "gone": sorted(got["intake"] - got["new"])[:MAX_NODES]}
     return problems, seen
