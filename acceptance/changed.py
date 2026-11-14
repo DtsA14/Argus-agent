@@ -143,18 +143,98 @@ def _constant(node):
     return isinstance(node, ast.Constant) or (isinstance(node, ast.Tuple) and all(_constant(e) for e in node.elts))
 
 
+class _Binds(ast.NodeVisitor):
+    """The names one scope binds through the statements visited: assignment, for, with, except-as, del, import, def, class, match, :=
+    (also in a comprehension, which binds it in the enclosing scope). Nested function, lambda and class BODIES and comprehension
+    variables are other scopes and are not entered. names: every bound name; plain: those not bound only by an import;
+    imports: {name: where it comes from}."""
+
+    def __init__(self):
+        self.names, self.plain, self.imports = set(), set(), {}
+
+    def _bind(self, name):
+        self.names.add(name)
+        self.plain.add(name)
+
+    def visit_FunctionDef(self, n):
+        self._bind(n.name)
+        for x in (*n.decorator_list, *n.args.defaults, *[k for k in n.args.kw_defaults if k is not None]):
+            self.visit(x)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, n):
+        self._bind(n.name)
+        for x in (*n.bases, *n.keywords, *n.decorator_list):
+            self.visit(x)
+
+    def visit_Lambda(self, n):
+        pass
+
+    def _comprehension(self, n):
+        for x in ast.walk(n):
+            if isinstance(x, ast.NamedExpr) and isinstance(x.target, ast.Name):
+                self._bind(x.target.id)
+
+    visit_ListComp = visit_SetComp = visit_DictComp = visit_GeneratorExp = _comprehension
+
+    def visit_Name(self, n):
+        if isinstance(n.ctx, (ast.Store, ast.Del)):
+            self._bind(n.id)
+
+    def visit_ExceptHandler(self, n):
+        if n.name:
+            self._bind(n.name)
+        self.generic_visit(n)
+
+    def visit_Import(self, n):
+        for a in n.names:
+            b = a.asname or a.name.split(".")[0]
+            self.names.add(b)
+            self.imports[b] = ("import", a.name if a.asname else a.name.split(".")[0], a.asname)
+
+    def visit_ImportFrom(self, n):
+        for a in n.names:
+            b = a.asname or a.name
+            self.names.add(b)
+            self.imports[b] = ("from", n.level, n.module, a.name)
+
+    def visit_MatchAs(self, n):
+        if n.name:
+            self._bind(n.name)
+        self.generic_visit(n)
+
+    def visit_MatchStar(self, n):
+        if n.name:
+            self._bind(n.name)
+
+    def visit_MatchMapping(self, n):
+        if n.rest:
+            self._bind(n.rest)
+        self.generic_visit(n)
+
+
+def _scope_binds(stmts):
+    v = _Binds()
+    for x in stmts:
+        v.visit(x)
+    return v
+
+
 def _class_names(c):
-    """The names a class body binds directly (methods and assignments)."""
-    names = set()
-    for n in c.body:
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            names.add(n.name)
-        elif isinstance(n, ast.Assign):
-            for t in n.targets:
-                names |= {x.id for x in ast.walk(t) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Store)}
-        elif isinstance(n, (ast.AnnAssign, ast.AugAssign)) and isinstance(n.target, ast.Name):
-            names.add(n.target.id)
-    return names
+    """The names a class body binds directly (methods, assignments, anything under if/for/try/with in the body)."""
+    return _scope_binds(c.body).names
+
+
+def _inherited_names(tree, c, seen=()):
+    """The names bound by the classes of the same file that `c` inherits from (bases that are plain names of top-level classes)."""
+    out = set()
+    for b in c.bases:
+        if isinstance(b, ast.Name) and b.id not in seen:
+            tops = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == b.id]
+            if len(tops) == 1:
+                out |= _class_names(tops[0]) | _inherited_names(tree, tops[0], (*seen, b.id))
+    return out
 
 
 def insertion_problems(path, old, ins):
@@ -174,7 +254,7 @@ def insertion_problems(path, old, ins):
     problems = []
     if tops[0].decorator_list:
         problems.append(f"{where}: class {name} has a decorator, which can change its methods: no tests are inserted into it")
-    existing, seen = _class_names(tops[0]), set()
+    existing, seen = _class_names(tops[0]) | _inherited_names(tree, tops[0]), set()
     for s in ins["stmts"]:
         if not isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef)) or not s.name.startswith("test"):
             problems.append(f"{where}: only `def test*` methods may be inserted into class {name}, not "
@@ -183,10 +263,14 @@ def insertion_problems(path, old, ins):
         if s.decorator_list:
             problems.append(f"{where}: {name}.{s.name} has a decorator: an inserted test method takes none")
         a = s.args
+        notes = [x.annotation for x in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg) if x is not None] + [s.returns]
+        if any(n is not None for n in notes) or getattr(s, "type_params", None):
+            problems.append(f"{where}: {name}.{s.name} has an annotation or type parameters: they run when the class is built, so an "
+                            "inserted test method takes none")
         if not all(_constant(d) for d in [*a.defaults, *[k for k in a.kw_defaults if k is not None]]):
             problems.append(f"{where}: {name}.{s.name} has a default argument that is not a constant")
         if s.name in existing:
-            problems.append(f"{where}: {name}.{s.name} already exists in the class (it would replace an old test)")
+            problems.append(f"{where}: {name}.{s.name} already exists in the class or in a base class of this file (it would replace or override an old test or attribute)")
         if s.name in seen:
             problems.append(f"{where}: {name}.{s.name} is defined twice in the block")
         seen.add(s.name)
@@ -338,15 +422,6 @@ def _top_names(tree):
     return names
 
 
-def _import_names(tree):
-    """The names a module binds at its top level by import."""
-    names = set()
-    for n in tree.body:
-        if isinstance(n, (ast.Import, ast.ImportFrom)):
-            names |= {(x.asname or x.name.split(".")[0]) for x in n.names}
-    return names
-
-
 def _attribute_targets(tree):
     """Top-level statements of `tree` that assign to or delete an attribute or an item (X.test_a = ..., d['k'] = ..., del X.a)."""
     out = []
@@ -367,10 +442,14 @@ def redefined_problems(path, old, new):
     except (SyntaxError, ValueError) as e:
         return [f"changed test {path}: the code added at its end does not parse on its own: {e}"]
     problems = []
-    clash = sorted((_top_names(before) | _import_names(before)) & _top_names(added))
+    was, now = _scope_binds(before.body), _scope_binds(added.body)
+    clash = {n for n in now.plain if n in was.names}                                 # any statement at module scope rebinds it
+    clash |= {n for n, src in now.imports.items() if n in was.names and was.imports.get(n) != src}    # an import of something else
     if clash:
-        problems.append(f"changed test {path}: the added code redefines {', '.join(clash[:10])} of the intake version, which would "
+        problems.append(f"changed test {path}: the added code redefines {', '.join(sorted(clash)[:10])} of the intake version, which would "
                         "replace an old test or helper (an addition keeps every old definition as it is)")
+    if any(isinstance(n, ast.ImportFrom) and any(a.name == "*" for a in n.names) for n in ast.walk(added)):
+        problems.append(f"changed test {path}: the added code has a star import, which rebinds names nobody can list")
     lines = _attribute_targets(added)
     if lines:
         problems.append(f"changed test {path}: the added code assigns to or deletes an attribute or an item at its top level (added "
@@ -556,6 +635,9 @@ def static_problems(draft, contract, base_files, old_tests, sha):
             problems += redefined_problems(p, old_tests[p], t["content"])
         elif ins:
             problems += insertion_problems(p, old_tests[p], ins)          # SPEC_INSERT_INTO: whatever route made the draft
+            if any(c in t["content"] for c in ("\r", "\x0b", "\x0c")):
+                problems.append(f"changed test {p}: carriage returns, vertical tabs and form feeds are not allowed in a file that gets "
+                                "tests inserted into a class (the lines would not be the ones the review shows)")
         if (insertion_bytes(old_tests[p], t["content"]) > MAX_BLOCK_BYTES + APPEND_OVERHEAD) if ins \
                 else (len(t["content"].encode("utf-8")) > MAX_BLOCK_BYTES):
             problems.append(f"changed test {p} is larger than {MAX_BLOCK_BYTES} bytes (a file that only adds tests at its "
@@ -677,6 +759,11 @@ def warnings(path, old, new, removed):
     a, b = _count(o, _weak), _count(n, _weak)
     if b > a:
         out.append(f"{path} has more skip, xfail or `assert True` ({a} -> {b})")
+    ins = class_insertion(old, new)
+    if ins:                       # SPEC_INSERT_INTO: the inserted test methods are new tests, not changed class bodies
+        for c in n.body:
+            if isinstance(c, ast.ClassDef) and c.name == ins["class"]:
+                c.body = c.body[:len(c.body) - len(ins["stmts"])]
     if _module_rest(o) != _module_rest(n):
         out.append(f"{path} changes module-level code (helpers, fixtures, imports or class bodies): read it, it is "
                    "not held to the old version")

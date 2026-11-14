@@ -94,8 +94,11 @@ def test_the_new_method_is_the_class_s_own_and_the_old_tests_still_pass_with_it(
     assert c.count("def test_inherited") == 1 and c.count("def test_total_plain") == 1 and c.count("def test_other") == 1
 
 
-def test_a_method_that_overrides_an_inherited_test_is_refused_by_the_real_collection(world, scfg):
+def test_a_method_that_overrides_a_test_inherited_from_a_mixin_of_the_file_is_refused_by_check(world, scfg):
     root, tmp = world
-    d = draft_of(built("OtherTests", "def test_inherited(self):\n    self.assertEqual(total([1], 5), 0)\n"), [INHERITED])
+    over = CLASS_OLD.replace("        self.assertEqual(total([1], 0), 1)\n",
+                             "        self.assertEqual(total([1], 0), 1)\n\n    def test_inherited(self):\n        self.assertEqual(total([1], 5), 0)\n", 1)
+    assert ch.insertion(CLASS_OLD, over)["class"] == "OtherTests"            # a content draft, the builder is not involved
+    d = draft_of(over, [INHERITED])
     r = tdr.run_check(root, tdr.patch(tmp, {"src/shop.py": tdr.FIXED}), scfg, draft=d)
-    assert not r["ok"] and any("inherit" in p or "already" in p for p in r["problems"]), r["problems"]
+    assert not r["ok"] and any("base class of this file" in p for p in r["problems"]), r["problems"]

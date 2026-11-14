@@ -52,6 +52,8 @@ INSERTED = "\n    def test_new(self):\n        self.assertEqual(f(3), 4)\n"
 AFTER_B = "        self.assertEqual(f(2), 2)\n"
 EXPECTED = OLD2.replace(AFTER_B, AFTER_B + INSERTED, 1)
 NODE = f"{PATH}::AlphaTests::test_new"
+OLDX = ("import unittest\nfrom lib import f, ImportedMixin\n\n\nclass AlphaTests(unittest.TestCase):\n    def test_a(self):\n        pass\n\n\n"
+        "class BetaTests(ImportedMixin, unittest.TestCase):\n    def test_c(self):\n        pass\n")     # the base class lives in another file
 
 
 def build(into="AlphaTests", block=BLOCK, old=OLD2, **extra):
@@ -223,14 +225,17 @@ def test_the_whitelist_holds_for_a_content_draft_too_the_route_does_not_matter()
     assert ch.insertion_problems(PATH, OLD2, ch.insertion(OLD2, EXPECTED)) == []
 
 
-def test_a_name_collected_from_the_intake_for_that_class_is_refused_inherited_tests_included():
-    # BetaTests inherits test_inherited from MixinTests: the node id exists although the class body has no such name
-    out, problems = build(into="BetaTests", block="def test_inherited(self):\n    pass\n")
-    assert problems == []                          # the class body does not have it: only the collection can know
-    ins = ch.insertion(OLD2, out[0]["content"])
-    before = {f"{PATH}::BetaTests::test_inherited", f"{PATH}::BetaTests::test_c", f"{PATH}::MixinTests::test_inherited"}
+def test_a_name_collected_from_the_intake_for_that_class_is_refused_for_a_base_class_of_another_file():
+    out, problems = build(into="BetaTests", old=OLDX, block="def test_inherited(self):\n    pass\n")
+    assert problems == []              # the class body and the bases of this file do not have it: only the collection can know
+    ins = ch.insertion(OLDX, out[0]["content"])
+    before = {f"{PATH}::BetaTests::test_inherited", f"{PATH}::BetaTests::test_c", f"{PATH}::ImportedMixin::test_inherited"}
     assert any("test_inherited" in p and "BetaTests" in p for p in ch.inherited_problems(PATH, ins, before))
     assert ch.inherited_problems(PATH, ch.insertion(OLD2, EXPECTED), before) == []
+
+
+def test_an_inherited_test_of_a_base_class_in_the_same_file_is_refused_by_the_builder_itself():
+    assert "already" in refused(into="BetaTests", block="def test_inherited(self):\n    pass\n")
 
 
 # ---- re-indenting must not change what the block says -------------------------------------------------------------------------
@@ -374,9 +379,9 @@ def test_k1_holds_for_an_insertion_a_required_node_must_be_new(tmp_path):
 
 
 def test_k1_refuses_a_new_method_that_overrides_an_inherited_test(tmp_path):
-    out, _ = build(into="BetaTests", block="def test_inherited(self):\n    self.assertEqual(1, 2)\n")
+    out, _ = build(into="BetaTests", old=OLDX, block="def test_inherited(self):\n    self.assertEqual(1, 2)\n")
     d = ta.draft_of(out[0]["content"], must=(f"{PATH}::BetaTests::test_inherited",))
-    got = ta.k1(tmp_path, d, OLD2, {f"{PATH}::BetaTests::test_inherited", f"{PATH}::BetaTests::test_c"},
+    got = ta.k1(tmp_path, d, OLDX, {f"{PATH}::BetaTests::test_inherited", f"{PATH}::BetaTests::test_c"},
                 {f"{PATH}::BetaTests::test_inherited", f"{PATH}::BetaTests::test_c"})
     assert any("test_inherited" in p for p in got)
 
@@ -564,10 +569,109 @@ def test_into_class_without_append_is_refused(entry):
 
 def test_an_overridden_inherited_test_is_caught_even_when_it_is_not_the_required_node(tmp_path):
     block = "def test_inherited(self):\n    pass\n\ndef test_fresh(self):\n    self.assertEqual(1, 2)\n"
-    out, problems = build(into="BetaTests", block=block)
+    out, problems = build(into="BetaTests", old=OLDX, block=block)
     assert problems == []
     fresh = f"{PATH}::BetaTests::test_fresh"
     d = ta.draft_of(out[0]["content"], must=(fresh,))
     before = {f"{PATH}::BetaTests::test_inherited", f"{PATH}::BetaTests::test_c"}
-    got = ta.k1(tmp_path, d, OLD2, before, before | {fresh})
+    got = ta.k1(tmp_path, d, OLDX, before, before | {fresh})
     assert any("override a test the class inherits" in p for p in got), got
+
+
+# ---- the second review (attacker, 2026-11-14) ---------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("block", [
+    "def test_new(self) -> locals().__setitem__('test_a', lambda self: None):\n    pass\n",       # runs when the class is built
+    "def test_new(self, x: setattr(object, 'a', 1) = 1):\n    pass\n",
+    "def test_new(self, *a: print(1)):\n    pass\n",
+    "def test_new(self, **k: print(1)):\n    pass\n",
+    "def test_new(self, *, k: print(1) = 1):\n    pass\n",
+    "def test_new(self, a: int, /):\n    pass\n",
+    "def test_new(self) -> None:\n    pass\n",                          # no annotations at all: nothing to evaluate
+    "def test_new[T](self):\n    pass\n",
+])
+def test_an_inserted_method_has_no_annotations_which_run_when_the_class_is_built(block):
+    assert "annotation" in refused(block=block) or "parse" in refused(block=block)
+
+
+def test_the_annotation_rule_holds_for_a_content_draft_too():
+    content = EXPECTED.replace("def test_new(self):", "def test_new(self) -> locals().__setitem__('test_a', None):", 1)
+    ins = ch.insertion(OLD2, content)
+    assert ins and any("annotation" in p for p in ch.insertion_problems(PATH, OLD2, ins))
+
+
+OLD3 = OLD2.replace("\n\nclass MixinTests", "\n\ndef check(a, b):\n    assert a == b\n\n\nclass MixinTests", 1)
+
+
+@pytest.mark.parametrize("block", [
+    "from operator import eq as check\n",
+    "import check\n",
+    "if True:\n    def check(a, b):\n        pass\n",
+    "try:\n    def check(a, b):\n        pass\nexcept Exception:\n    pass\n",
+    "(check := lambda a, b: None)\n",
+    "for check in [1]:\n    pass\n",
+    "with open('x') as check:\n    pass\n",
+    "try:\n    pass\nexcept Exception as check:\n    pass\n",
+    "del check\n",
+    "check = 1\n",
+    "check += 1\n",
+    "XS = [(check := i) for i in range(3)]\n",                           # a walrus in a comprehension binds in the module
+    "from other import f\n",                                             # the intake imports f from lib
+    "match 1:\n    case check:\n        pass\n",
+])
+def test_an_append_may_not_rebind_a_name_of_the_intake_by_any_statement_at_module_scope(block):
+    probs = ch.redefined_problems(PATH, OLD3, end_append(block, OLD3))
+    assert any("redefines" in p and ("check" in p or " f" in p) for p in probs), (block, probs)
+
+
+@pytest.mark.parametrize("block", [
+    "import unittest\nfrom lib import f\n",                                # the same imports again
+    "XS = [check for check in range(3)]\n",                                # a comprehension has its own scope
+    "g = lambda check: check\n",
+    "def helper(check):\n    return check\n",                              # a parameter is local
+    "def helper():\n    check = 1\n    return check\n",                       # an assignment in a function body is local
+    "def helper():\n    import os as check\n    return check\n",
+    "class N(unittest.TestCase):\n    check = 1\n\n    def test_n(self):\n        pass\n",     # a class body is its own scope
+])
+def test_an_append_that_only_uses_the_name_or_binds_it_in_another_scope_is_fine(block):
+    assert ch.redefined_problems(PATH, OLD3, end_append(block, OLD3)) == []
+
+
+def test_a_star_import_in_an_append_is_refused_it_rebinds_names_nobody_can_list():
+    assert any("star" in p for p in ch.redefined_problems(PATH, OLD3, end_append("from os.path import *\n", OLD3)))
+
+
+def test_a_name_bound_in_the_class_under_if_or_for_is_taken_too():
+    old = OLD2.replace(AFTER_B, AFTER_B + "\n    if True:\n        def test_cond(self):\n            pass\n", 1)
+    assert "already" in refused(old=old, block="def test_cond(self):\n    pass\n")
+    old = OLD2.replace(AFTER_B, AFTER_B + "\n    for test_loop in range(2):\n        pass\n", 1)
+    assert "already" in refused(old=old, block="def test_loop(self):\n    pass\n")
+
+
+def test_a_name_an_inherited_attribute_of_a_base_class_of_the_file_has_is_taken_even_if_it_is_not_a_test_node():
+    old = ("import unittest\n\n\nclass Base:\n    testing = False\n\n    def test_base(self):\n        pass\n\n\n"
+           "class Mid(Base):\n    pass\n\n\nclass FooTests(Mid, unittest.TestCase):\n    def test_a(self):\n        pass\n")
+    for name in ("testing", "test_base"):
+        assert "already" in refused(into="FooTests", old=old, block=f"def {name}(self):\\n    pass\\n".replace("\\n", "\n"))
+    assert build(into="FooTests", old=old, block="def test_fresh(self):\n    pass\n")[1] == []
+
+
+def test_the_k3_warning_about_module_level_code_does_not_fire_for_methods_inserted_into_a_class_not_named_test():
+    assert not any("module-level code" in w for w in ch.warnings(PATH, OLD2, EXPECTED, []))
+    assert any("module-level code" in w for w in ch.warnings(PATH, OLD2, OLD2.replace("import unittest", "import unittest\nimport os", 1), []))
+    # an insertion that also changes something else at module level is not an insertion: it still warns
+    other = EXPECTED.replace("from lib import f", "from lib import f, g", 1)
+    assert any("module-level code" in w for w in ch.warnings(PATH, OLD2, other, []))
+
+
+@pytest.mark.parametrize("bad", ["\r", "\x0c"])
+def test_a_content_draft_with_a_carriage_return_or_form_feed_in_its_insertion_is_refused(bad):
+    content = EXPECTED.replace("def test_new(self):", f"def test_new(self):{bad}", 1) if bad == "\r" else EXPECTED.replace("assertEqual(f(3), 4)", f"assertEqual(f(3), 4){bad}", 1)
+    assert any("carriage" in p or "form feed" in p for p in statics_of(content, must=()))
+
+
+def test_bases_that_refer_to_each_other_do_not_loop():
+    old = "import unittest\n\n\nclass A(B):\n    pass\n\n\nclass B(A):\n    pass\n\n\nclass C(A, unittest.TestCase):\n    def test_x(self):\n        pass\n"
+    out, problems = build(into="C", old=old, block="def test_y(self):\n    pass\n")
+    assert problems == [] and out
