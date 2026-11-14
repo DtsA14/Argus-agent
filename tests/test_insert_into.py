@@ -619,6 +619,7 @@ OLD3 = OLD2.replace("\n\nclass MixinTests", "\n\ndef check(a, b):\n    assert a 
     "XS = [(check := i) for i in range(3)]\n",                           # a walrus in a comprehension binds in the module
     "from other import f\n",                                             # the intake imports f from lib
     "match 1:\n    case check:\n        pass\n",
+    "@(check := (lambda f: f))\ndef helper():\n    pass\n",                  # a decorator runs at module scope
 ])
 def test_an_append_may_not_rebind_a_name_of_the_intake_by_any_statement_at_module_scope(block):
     probs = ch.redefined_problems(PATH, OLD3, end_append(block, OLD3))
@@ -632,6 +633,7 @@ def test_an_append_may_not_rebind_a_name_of_the_intake_by_any_statement_at_modul
     "def helper(check):\n    return check\n",                              # a parameter is local
     "def helper():\n    check = 1\n    return check\n",                       # an assignment in a function body is local
     "def helper():\n    import os as check\n    return check\n",
+    "g = lambda: (check := 1)\n",                                           # a := in a lambda is the lambda's own
     "class N(unittest.TestCase):\n    check = 1\n\n    def test_n(self):\n        pass\n",     # a class body is its own scope
 ])
 def test_an_append_that_only_uses_the_name_or_binds_it_in_another_scope_is_fine(block):
@@ -675,3 +677,10 @@ def test_bases_that_refer_to_each_other_do_not_loop():
     old = "import unittest\n\n\nclass A(B):\n    pass\n\n\nclass B(A):\n    pass\n\n\nclass C(A, unittest.TestCase):\n    def test_x(self):\n        pass\n"
     out, problems = build(into="C", old=old, block="def test_y(self):\n    pass\n")
     assert problems == [] and out
+
+
+def test_import_os_and_import_os_path_bind_the_same_name_to_the_same_package_so_neither_is_a_rebinding():
+    old = OLD2.replace("import unittest\n", "import unittest\nimport os.path\n", 1)
+    assert ch.redefined_problems(PATH, old, end_append("import os\n", old)) == []
+    assert ch.redefined_problems(PATH, old, end_append("import os.environ\n", old)) == []
+    assert any("redefines os" in p for p in ch.redefined_problems(PATH, old, end_append("import os as os2\nimport sys as os\n", old)))
