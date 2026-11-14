@@ -1,0 +1,42 @@
+{
+ "R01": {
+  "issue": 813,
+  "X": "mine",
+  "Y": "maint"
+ },
+ "R02": {
+  "issue": 1252,
+  "X": "maint",
+  "Y": "mine"
+ },
+ "R03": {
+  "issue": 1247,
+  "X": "mine",
+  "Y": "maint"
+ },
+ "R04": {
+  "issue": 1192,
+  "X": "maint",
+  "Y": "mine"
+ },
+ "R05": {
+  "issue": 1152,
+  "X": "mine",
+  "Y": "maint"
+ },
+ "R06": {
+  "issue": 849,
+  "X": "maint",
+  "Y": "mine"
+ },
+ "R07": {
+  "issue": 1098,
+  "X": "maint",
+  "Y": "mine"
+ },
+ "R08": {
+  "issue": 1250,
+  "X": "mine",
+  "Y": "maint"
+ }
+}
