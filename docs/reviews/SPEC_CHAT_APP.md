@@ -1,6 +1,6 @@
 # Spec CHAT-APP (v2): aplikasi chat tepercaya di samping viewer; Argus tetap mesin
 
-Status: **DRAF v2.1: tinjau Opus ronde 2 = GO WITH CHANGES, dimuat di bagian 11 (yang bertentangan dengan bagian 1-10 memakai bagian 11); menunggu keputusan Atha**; kode belum disentuh. Ditulis Claude 2026-11-14.
+Status: **DISETUJUI Atha 2026-11-14 ("Ok gass")**; tinjau Opus ronde 2 = GO WITH CHANGES, dimuat di bagian 11 (yang bertentangan dengan bagian 1-10 memakai bagian 11). C1 ter-merge di #533 dan live; C2 sampai C5 menunggu C1 dipakai seminggu (K6). Ditulis Claude 2026-11-14.
 Menggantikan draf v1 (opsi A: satu origin di 8710), yang **ditolak** oleh tinjau Opus 2026-11-14 (NO-GO): JS viewer ditulis agen Argus, dan bila satu origin dengan rute POST, cek Origin dan token F3 tidak lagi membedakan Atha dari JS itu; bertentangan dengan `SPEC_CONTROL_UI.md:144-145,169`, `SPEC_PWA_VIEWER.md:95,113`, `SPEC_ISSUE_WRITER.md:5,96-98`. Draf v1 ada di riwayat git.
 Keputusan Atha 2026-11-14: **opsi B** (dua port: chat tepercaya yang menyerap kontrol, viewer baca-saja); chat app ditulis Claude, bukan agen Argus; di VM ini, akses HP tetap SSH forward.
 
