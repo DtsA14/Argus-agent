@@ -74,9 +74,10 @@ def test_javascript_is_not_narrowed(tmp_path):
     assert names(tmp_path / "b", "process.exit(0) // done\n", "js") == {"process.exit"}
 
 
-def test_the_detection_patterns_are_not_narrowed(tmp_path):
-    assert "PYTEST_CURRENT_TEST" in names(tmp_path, '"""uses PYTEST_CURRENT_TEST"""\n')
-    assert "sys.argv+pytest" in names(tmp_path / "b", "import sys\nx = sys.argv  # pytest\n")
+def test_the_detection_patterns_are_narrowed_too(tmp_path):      # D1, SPEC_GATE_RC_CLARIFICATIONS (before it they were not)
+    assert names(tmp_path, '"""uses PYTEST_CURRENT_TEST"""\n') == set()
+    assert names(tmp_path / "b", "import sys\nx = sys.argv  # pytest\n") == set()
+    assert "PYTEST_CURRENT_TEST" in names(tmp_path / "c", "import os\nos.environ.get('PYTEST_CURRENT_TEST')\n")
 
 
 def test_a_change_whose_only_mention_is_a_docstring_passes_and_real_code_fails(tmp_path):
