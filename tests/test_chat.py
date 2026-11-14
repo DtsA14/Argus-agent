@@ -76,8 +76,7 @@ def test_it_binds_127_0_0_1_on_8712_only(svc):
 @pytest.mark.parametrize("path", ROUTES + ["/nothing"])
 def test_a_foreign_host_is_refused_on_every_get_route(svc, host, path):
     status, _, body = svc.request("GET", path, host=host)
-    assert status == 421 and b"wrong host" in body
-    assert b"argus" not in body.lower() or b"refused" in body
+    assert status == 421 and json.loads(body) == {"refused": "wrong host"}
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
@@ -253,7 +252,8 @@ def test_no_route_starts_a_process(svc, monkeypatch):
 
 def test_the_module_imports_no_model_and_no_subprocess():
     src = (Path(rc.__file__)).read_text()
-    for banned in ("subprocess", "harness.llm", "LLMCaller", "build_chat_model", ".invoke(", "os.system", "Popen"):
+    for banned in ("subprocess", "harness.llm", "LLMCaller", "build_chat_model", ".invoke(", "os.system", "Popen", "os.exec",
+                   "spawn", "pty", "import socket"):
         assert banned not in src
 
 
@@ -273,6 +273,8 @@ def test_a_changed_static_file_stops_the_service(tmp_path, monkeypatch):
         rc.load_static()
 
 
+SINK_RES = [r"\bFunction\s*\(", r"\beval\s*\(", r"\.href\s*=", r"location\s*\.\s*(assign|replace|href)", r"location\s*=",
+            r"setAttribute\(\s*['\"](href|src|on)", r"\.src\s*=", r"\.(inner|outer)HTML", r"insertAdjacent", r"document\s*\.\s*write"]
 SINKS = ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "createContextualFragment",
          "DOMParser", "srcdoc", "setHTMLUnsafe", "parseHTMLUnsafe", "Worker(", "serviceWorker", "window.open", "import(",
          "localStorage", "sessionStorage", "indexedDB", "document.cookie", "XMLHttpRequest", "WebSocket", "EventSource",
@@ -330,3 +332,73 @@ def test_one_good_host_header_is_accepted_in_the_raw_helper(svc):
 @pytest.mark.parametrize("sites", [["same-origin", "cross-site"], ["cross-site", "same-origin"], ["same-origin", "same-origin"]])
 def test_two_sec_fetch_site_headers_are_refused(svc, sites):
     assert raw_get(svc, [("Host", HOST)] + [("Sec-Fetch-Site", x) for x in sites]) == 403
+
+
+@pytest.mark.parametrize("pattern", SINK_RES)
+def test_the_page_script_has_no_sink_whatever_the_spacing(pattern):
+    assert not re.search(pattern, (rc.STATIC_DIR / "app.js").read_text())
+
+
+# ---- Opus review of C1 (2026-11-14) ----------------------------------------------------------------------------------------
+
+def test_a_client_that_drips_bytes_is_cut_at_the_total_deadline(svc, monkeypatch):
+    import socket
+    import time
+    monkeypatch.setattr(rc, "TOTAL_S", 1)
+    t0 = time.monotonic()
+    c = socket.create_connection(("127.0.0.1", svc.port), timeout=5)
+    try:
+        for ch in b"GET /api/status HTTP/1.1\r\nHost: 127.0.0.1:8712\r\n":
+            c.sendall(bytes([ch]))
+            time.sleep(0.15)
+            if time.monotonic() - t0 > 4:
+                break
+    except OSError:
+        pass
+    c.close()
+    assert time.monotonic() - t0 < 4                                       # it was cut, not left to finish a 40 s drip
+    assert svc.request("GET", "/api/status")[0] == 200                      # and the server is free again
+
+
+def test_http_0_9_gets_no_answer_without_headers(svc):
+    import socket
+    with socket.create_connection(("127.0.0.1", svc.port), timeout=5) as c:
+        c.sendall(b"GET /\r\n\r\n")
+        data = c.recv(4096)
+    assert data == b""
+
+
+@pytest.mark.parametrize("method", ["TRACE", "CONNECT", "PROPFIND", "FOO"])
+def test_unknown_methods_get_405_after_the_host_check(svc, method):
+    assert svc.request(method, "/api/status")[0] == 405
+    assert svc.request(method, "/api/status", host="evil.example")[0] == 421
+
+
+def test_the_status_count_says_when_it_is_capped(tmp_path):
+    jobs = tmp_path / "jobs"
+    jobs.mkdir()
+    for i in range(rc.LIST_MAX + 3):
+        make_job(jobs, f"j20261109_{i:06d}_abcd")
+    s = Service(jobs)
+    try:
+        st = s.get_json("/api/status")[1]
+        assert st["jobs"] == rc.LIST_MAX + 3 and st["shown"] == rc.LIST_MAX and st["capped"] is True
+    finally:
+        s.stop()
+
+
+def test_a_thread_id_that_is_not_ui_shaped_never_reaches_the_projection(svc, monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("the projection was asked for a name that is not a job id")
+    monkeypatch.setattr(rc.sd, "_one", boom)
+    for name in ("..", "j1", "notes", "J20261109_120000_ABCD", "j20261109_120000_abc"):
+        assert svc.request("GET", f"/api/threads/{name}")[0] == 404
+
+
+def test_the_script_source_in_the_csp_is_the_exact_path(svc):
+    assert "script-src http://127.0.0.1:8712/static/app.js;" in rc.csp() and "'self' " not in rc.csp().split("style-src")[0]
+    assert "style-src 'self';" in svc.request("GET", "/")[1]["content-security-policy"]
+
+
+def test_the_sec_fetch_check_covers_the_thread_detail_too(svc):
+    assert svc.request("GET", f"/api/threads/{JOB}", {"Sec-Fetch-Site": "same-site"})[0] == 403

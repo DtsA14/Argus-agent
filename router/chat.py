@@ -11,6 +11,7 @@ Checks on every request, GET included (11.1, 11.2): the Host is exactly 127.0.0.
 same-origin or none (same-site is the viewer on localhost:8710 and is refused); no cookie is ever set or read.
 """
 import hashlib
+import io
 import json
 import os
 import re
@@ -24,6 +25,7 @@ from router import stage_data as sd
 BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while the chat is built, 8711 at C4 (one value)
 HOSTS = (f"{BIND}:{PORT}",)                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
+TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
 LIST_MAX = 100                                     # the single-threaded server reads at most this many job.json per request
 STATIC_DIR = Path(__file__).resolve().parent / "chat_static"
 STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
@@ -82,12 +84,11 @@ class Chat:
         return os.open(self.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
 
     def names(self):
-        """The newest LIST_MAX directory names that have the UI job shape (nothing else reaches the disk)."""
+        """Every directory name that has the UI job shape, newest first (nothing else reaches the disk)."""
         try:
-            names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
+            return sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
         except OSError:
             return []
-        return names[:LIST_MAX]
 
     def threads(self):
         out, skipped = [], 0
@@ -96,7 +97,7 @@ class Chat:
         except OSError:
             return {"threads": [], "skipped": 0}
         try:
-            for name in self.names():
+            for name in self.names()[:LIST_MAX]:
                 try:
                     jfd = sd._open_dir(name, sfd)
                     try:
@@ -111,7 +112,9 @@ class Chat:
         return {"threads": out, "skipped": skipped}
 
     def thread(self, job_id):
-        """The detail of one job (projected job, its cost from its ledgers), or None."""
+        """The detail of one job (projected job, its cost from its ledgers), or None. Known limit (Opus review 2026-11-14): `_one`
+        reads more than is shown (every ledger, and the draft files it then drops), unbounded per file up to READ_MAX; nothing of it
+        is exposed. 11.13 asks for a fixed file list and about 256 KB per text: do that before C3 (research reports)."""
         if not UI_ID.fullmatch(job_id or ""):
             return None
         try:
@@ -133,7 +136,26 @@ class Chat:
         by = {}
         for c in t:
             by[c["state"]] = by.get(c["state"], 0) + 1
-        return {"jobs": len(t), "by_state": by, "now": int(self.clock())}
+        total = len(self.names())
+        return {"jobs": total, "shown": len(t), "capped": total > LIST_MAX, "by_state": by, "now": int(self.clock())}
+
+
+class _DeadlineRaw(io.RawIOBase):
+    """The socket as a raw file whose every recv waits only for what is left of TOTAL_S: a client that drips a byte per
+    8 s inside one line is cut when the whole request has taken too long (the socket timeout alone is per recv)."""
+
+    def __init__(self, sock, deadline):
+        self.sock, self.deadline = sock, deadline
+
+    def readable(self):
+        return True
+
+    def readinto(self, b):
+        left = self.deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("the request took too long")
+        self.sock.settimeout(left)
+        return self.sock.recv_into(b)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -141,6 +163,24 @@ class Handler(BaseHTTPRequestHandler):
     timeout = 10
     sys_version = ""
     chat = None
+
+    def setup(self):
+        super().setup()
+        self.deadline = time.monotonic() + TOTAL_S
+        self.rfile = io.BufferedReader(_DeadlineRaw(self.connection, self.deadline), 65536)
+
+    def parse_request(self):
+        if not super().parse_request():
+            return False
+        if self.request_version == "HTTP/0.9":              # an HTTP/0.9 answer has no headers at all: none is given
+            self.close_connection = True
+            return False
+        return True
+
+    def __getattr__(self, name):                             # every method but GET, TRACE and CONNECT included (11.1)
+        if name.startswith("do_"):
+            return self._not_allowed
+        raise AttributeError(name)
 
     def end_headers(self):
         for k, v in HEADERS.items():
@@ -203,7 +243,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_HEAD = _not_allowed
 
 
 def server(chat, port=PORT):
