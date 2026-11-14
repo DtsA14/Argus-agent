@@ -1,6 +1,6 @@
 # Spec DRAFTER-STYLE: the appended test block is written like the file's own tests (prompt only)
 
-Status: **draf spec, minta review Opus; dikerjakan atas "go" Atha 2026-11-14 ("kalau review ok, langsung go dan merge"). Merge hanya bila review ok, mutan terbunuh, dan satu `verify_at` hijau.** Strict lane (`codetask/drafter.py`). Ditulis Claude.
+Status: **DITARIK (withdrawn) 2026-11-14, tidak dibangun.** Review Opus: NO-GO sebagaimana ditulis; gue memeriksa dua klaim kuncinya di kode dan keduanya benar (bagian 4). Spec ini disimpan sebagai catatan supaya perbaikan yang sama tidak diusulkan lagi tanpa membaca alasannya. Ditulis Claude.
 
 ## 0. Masalah (terukur)
 
@@ -29,3 +29,13 @@ Tidak berubah: aturan append, batas ukuran, `new_tests`, apa pun di `acceptance/
 ## 3. Batas yang diketahui
 
 Satu repositori, satu model (DeepSeek flash), n = 8, satu run tiap isu: hitungan, bukan laju. Penempatan di kelas yang ada (`insert_into`) tidak disentuh. Aturan 1 menganggap berkas itu unittest; pada repositori pytest murni model tetap memakai fungsi (kalimatnya bersyarat). Model bisa mengabaikan prompt.
+
+## 4. Mengapa ditarik (review Opus 2026-11-14, diperiksa Claude)
+
+1. **Pembungkus `try/except -> AssertionError` bukan kebiasaan buruk; itu dituntut harness.** Prompt Argus sendiri (`codetask/drafter.py:244-246`) memerintahkannya, dan pemeriksaan merah menolak tes wajib yang gagal bukan lewat assertion (`acceptance/draft.py:393-396`, `NOT_ASSERTION_HINT` di `:368`). Pada kode lama, `peekable[int]` melempar TypeError, `replace(default_arg=)` TypeError, `mi.synchronized` AttributeError, `interleave_evenly([])` IndexError, `reversed()` pada rentang kosong IndexError, `r[index]` dan `r.index` IndexError dan ValueError: tanpa pembungkus, tes wajibnya gagal bukan lewat assertion dan drafnya ditolak. Dari 15 `try:` di 8 blok, hanya sekitar 1 atau 2 bisa ditulis lain (satu `try/except/else` menjadi `assertRaises`, satu `hasattr` lebih dulu). Maintainer tidak memerlukannya karena tidak ada gerbang merah-lewat-assertion di PR mereka. **Ketidakcocokan gaya ini adalah akibat dari gerbang itu, sebuah keputusan desain, bukan cacat prompt.**
+2. **Aturan 3 (draf pertama) bertentangan dengan aturan 244** dan akan menaikkan penolakan draf dan putaran `ReviseDraft` (biaya dan tingkat penerimaan turun). Spec tidak menyebut aturan 244 di daftar "tidak berubah".
+3. **Aturan 1 (fungsi tingkat atas)**: 0 dari 8 blok melakukannya; tidak ada yang diperbaiki. Alasannya ("maintainer menjalankan unittest") tidak berlaku bagi harness, yang menjalankan `python -m pytest`.
+4. **Sisa yang nyata kecil**: `subTest` dipakai 31 kali dan `assertRaises` 112 kali di `tests/test_more.py` lama, tetapi blok draf memakai `subTest` 0 kali (beberapa blok memakai loop `assertEqual` dengan pesan). Itu pantas satu kalimat bersyarat suatu hari, bukan perubahan strict-lane tersendiri; sebelum itu perlu bukti bahwa ia bernilai.
+5. **Tidak ada batas panjang prompt yang dipin oleh tes** (klaim di draf tentang "batas yang dijaga tes prompt" menunjuk ke ketiadaan).
+
+**Yang tetap benar dan tetap terbuka:** kelas TestCase baru di akhir berkas (7 dari 8 kasus bernilai B karena itu dan gaya) hanya bisa diperbaiki dengan `insert_into` (tes masuk ke kelas yang ada), pekerjaan strict-lane tersendiri dengan spec sendiri. Ukuran yang lebih baik untuk itu nanti: jumlah blok yang masuk ke kelas yang ada, bukan jumlah `try:`.
