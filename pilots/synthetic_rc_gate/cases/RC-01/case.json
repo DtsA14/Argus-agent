@@ -1,0 +1,62 @@
+{
+  "id": "RC-01",
+  "spec_refs": [
+    "v3 C1",
+    "v3 C5",
+    "v3 C3.4",
+    "v1 R2.1-7"
+  ],
+  "what": "Genuine conflict in one file: an old exact-key-list test contradicts a new required key.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "cart/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_currency.py::test_summary_reports_currency"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_summary_keys.py"
+    ]
+  },
+  "expect": {
+    "decision": "confirmed",
+    "reasons_include": [
+      "old protected test red in its own frame",
+      "new test green",
+      "baseline green"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_currency.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_currency.py::test_summary_reports_currency"
+    ],
+    "red_with_workspace": [
+      "tests/test_summary_keys.py::test_summary_has_exact_keys"
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "id": "RC-02",
+  "spec_refs": [
+    "v3 C5",
+    "v3 C1",
+    "v2 B1"
+  ],
+  "what": "Genuine conflict spread over two old test files, both named.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "labels/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 4,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_collapse.py::test_inner_spaces_collapsed"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_normalize_old.py",
+      "tests/test_export_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "confirmed",
+    "reasons_include": [
+      "two named files, each with a red node",
+      "new test green"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_collapse.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_collapse.py::test_inner_spaces_collapsed"
+    ],
+    "red_with_workspace": [
+      "tests/test_normalize_old.py::test_inner_spaces_kept",
+      "tests/test_export_old.py::test_row_keeps_name_spacing"
+    ]
+  }
+}

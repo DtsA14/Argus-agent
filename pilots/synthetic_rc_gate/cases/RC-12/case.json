@@ -1,0 +1,63 @@
+{
+  "id": "RC-12",
+  "spec_refs": [
+    "v3 C1 (outcome)",
+    "v3 C5 (red_check pada node itu saja)",
+    "v1 R2.9",
+    "v2 §2 baris R2.9"
+  ],
+  "what": "Unstable red: the old test is red in the full validation run (state leaked by an earlier test through the agent's cache) and green when the harness re-runs that node alone.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "store/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_c_cache.py::test_price_is_cached"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_b_price.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "red_check of the node alone does not fail",
+      "validation result and red_check results differ"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_c_cache.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_c_cache.py::test_price_is_cached"
+    ],
+    "red_with_workspace": [
+      "tests/test_b_price.py::test_list_price"
+    ],
+    "red_with_workspace_when_node_runs_alone": [],
+    "note": "tests/test_b_price.py::test_list_price passes when it is the only node run, in the input and in the workspace"
+  }
+}

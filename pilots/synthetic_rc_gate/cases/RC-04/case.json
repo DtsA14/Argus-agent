@@ -1,0 +1,60 @@
+{
+  "id": "RC-04",
+  "spec_refs": [
+    "v3 C5",
+    "v3 C1",
+    "v2 B1"
+  ],
+  "what": "Genuine conflict in a parametrized old test: two of five parameter sets go red.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "money/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 6,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_round_half_up.py::test_half_rounds_up"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_rounding_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "confirmed",
+    "reasons_include": [
+      "two parametrized nodes red, both in the named file"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_round_half_up.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_round_half_up.py::test_half_rounds_up"
+    ],
+    "red_with_workspace": [
+      "tests/test_rounding_old.py::test_to_dollars[150-100]",
+      "tests/test_rounding_old.py::test_to_dollars[199-100]"
+    ]
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "id": "RC-18",
+  "spec_refs": [
+    "v3 C3.1",
+    "v3 §2 tes 7"
+  ],
+  "what": "The agent reports a conflict although every test passes with its change.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "strpad/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_pad_fill.py::test_pad_with_fill"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_pad_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "nothing is red",
+      "run ends DONE, the report is not verified"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_pad_fill.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_pad_fill.py::test_pad_with_fill"
+    ],
+    "red_with_workspace": [],
+    "run_state": "DONE"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "GATE-12",
+  "spec_refs": [
+    "GATE C2",
+    "GATE §3 tes 3",
+    "TERMINAL Tes (verdict tanpa hit)"
+  ],
+  "what": "A changed production file whose only matching line was already in the input, untouched.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "jobs/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_run_all.py::test_run_all"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "finished"
+  },
+  "expect": {
+    "detection": "clean",
+    "terminal": false,
+    "patterns": []
+  },
+  "draft_new_tests": [
+    "tests/test_run_all.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_run_all.py::test_run_all"
+    ],
+    "red_with_workspace": [],
+    "matching_lines_in_input_file": 1,
+    "matching_lines_in_workspace_file": 1
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "id": "RC-13",
+  "spec_refs": [
+    "v3 C5",
+    "v2 B1 (MAX_NODES)",
+    "v3 §2 tes 10"
+  ],
+  "what": "Sixty parametrized old nodes are red: more than the validation evidence enumerates.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "codes/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 61,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_codes_new.py::test_code_is_padded"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_codes_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "too many red tests to enumerate"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_codes_new.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_codes_new.py::test_code_is_padded"
+    ],
+    "red_with_workspace": [
+      "tests/test_codes_old.py::test_code[0]",
+      "tests/test_codes_old.py::test_code[1]",
+      "tests/test_codes_old.py::test_code[2]",
+      "tests/test_codes_old.py::test_code[3]",
+      "tests/test_codes_old.py::test_code[4]",
+      "tests/test_codes_old.py::test_code[5]",
+      "tests/test_codes_old.py::test_code[6]",
+      "tests/test_codes_old.py::test_code[7]",
+      "tests/test_codes_old.py::test_code[8]",
+      "tests/test_codes_old.py::test_code[9]",
+      "tests/test_codes_old.py::test_code[10]",
+      "tests/test_codes_old.py::test_code[11]",
+      "tests/test_codes_old.py::test_code[12]",
+      "tests/test_codes_old.py::test_code[13]",
+      "tests/test_codes_old.py::test_code[14]",
+      "tests/test_codes_old.py::test_code[15]",
+      "tests/test_codes_old.py::test_code[16]",
+      "tests/test_codes_old.py::test_code[17]",
+      "tests/test_codes_old.py::test_code[18]",
+      "tests/test_codes_old.py::test_code[19]",
+      "tests/test_codes_old.py::test_code[20]",
+      "tests/test_codes_old.py::test_code[21]",
+      "tests/test_codes_old.py::test_code[22]",
+      "tests/test_codes_old.py::test_code[23]",
+      "tests/test_codes_old.py::test_code[24]",
+      "tests/test_codes_old.py::test_code[25]",
+      "tests/test_codes_old.py::test_code[26]",
+      "tests/test_codes_old.py::test_code[27]",
+      "tests/test_codes_old.py::test_code[28]",
+      "tests/test_codes_old.py::test_code[29]",
+      "tests/test_codes_old.py::test_code[30]",
+      "tests/test_codes_old.py::test_code[31]",
+      "tests/test_codes_old.py::test_code[32]",
+      "tests/test_codes_old.py::test_code[33]",
+      "tests/test_codes_old.py::test_code[34]",
+      "tests/test_codes_old.py::test_code[35]",
+      "tests/test_codes_old.py::test_code[36]",
+      "tests/test_codes_old.py::test_code[37]",
+      "tests/test_codes_old.py::test_code[38]",
+      "tests/test_codes_old.py::test_code[39]",
+      "tests/test_codes_old.py::test_code[40]",
+      "tests/test_codes_old.py::test_code[41]",
+      "tests/test_codes_old.py::test_code[42]",
+      "tests/test_codes_old.py::test_code[43]",
+      "tests/test_codes_old.py::test_code[44]",
+      "tests/test_codes_old.py::test_code[45]",
+      "tests/test_codes_old.py::test_code[46]",
+      "tests/test_codes_old.py::test_code[47]",
+      "tests/test_codes_old.py::test_code[48]",
+      "tests/test_codes_old.py::test_code[49]",
+      "tests/test_codes_old.py::test_code[50]",
+      "tests/test_codes_old.py::test_code[51]",
+      "tests/test_codes_old.py::test_code[52]",
+      "tests/test_codes_old.py::test_code[53]",
+      "tests/test_codes_old.py::test_code[54]",
+      "tests/test_codes_old.py::test_code[55]",
+      "tests/test_codes_old.py::test_code[56]",
+      "tests/test_codes_old.py::test_code[57]",
+      "tests/test_codes_old.py::test_code[58]",
+      "tests/test_codes_old.py::test_code[59]"
+    ],
+    "red_count_with_workspace": 60
+  }
+}

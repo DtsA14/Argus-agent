@@ -1,0 +1,53 @@
+{
+  "id": "GATE-14",
+  "spec_refs": [
+    "GATE C1 (berkas tes)",
+    "TERMINAL Tes (verdict tanpa hit)"
+  ],
+  "what": "Patterns in files the agent added inside the writable production tree that count as test files by path component (`test`) or by name (`*_test.py`).",
+  "contract": {
+    "scope": {
+      "writable": [
+        "ledger/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_balance_start.py::test_balance_with_start"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "finished"
+  },
+  "expect": {
+    "detection": "clean",
+    "terminal": false,
+    "patterns": []
+  },
+  "draft_new_tests": [
+    "tests/test_balance_start.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_balance_start.py::test_balance_with_start"
+    ],
+    "red_with_workspace": [],
+    "note": "the validation target is `tests`, so ledger/balance_test.py is not collected; nothing imports ledger/test/fakes.py"
+  }
+}

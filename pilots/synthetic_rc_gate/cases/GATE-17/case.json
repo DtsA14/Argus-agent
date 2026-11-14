@@ -1,0 +1,54 @@
+{
+  "id": "GATE-17",
+  "spec_refs": [
+    "GATE C1 (pada baris yang sama)",
+    "GATE C4",
+    "TERMINAL Tes (verdict tanpa hit)"
+  ],
+  "what": "sys.modules on one line and pytest on another: real detection that the per-line patterns do not match.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "plugins/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_count.py::test_count"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "finished"
+  },
+  "expect": {
+    "detection": "clean",
+    "terminal": false,
+    "patterns": []
+  },
+  "draft_new_tests": [
+    "tests/test_count.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_count.py::test_count"
+    ],
+    "red_with_workspace": [],
+    "note": "the code DOES recognise pytest at run time; the gate as specified does not see it"
+  }
+}

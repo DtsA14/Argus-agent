@@ -1,0 +1,67 @@
+{
+  "id": "RC-05",
+  "spec_refs": [
+    "v2 B1",
+    "v3 C5",
+    "v3 C1"
+  ],
+  "what": "Genuine conflict in five old test files: the report names the maximum of five files.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "paper/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 6,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_render_id.py::test_render_id_is_padded"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_invoice.py",
+      "tests/test_receipt.py",
+      "tests/test_label.py",
+      "tests/test_email_subject.py",
+      "tests/test_audit.py"
+    ]
+  },
+  "expect": {
+    "decision": "confirmed",
+    "reasons_include": [
+      "five named files, each with exactly one red node"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_render_id.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_render_id.py::test_render_id_is_padded"
+    ],
+    "red_with_workspace": [
+      "tests/test_invoice.py::test_invoice_uses_hash_id",
+      "tests/test_receipt.py::test_receipt_uses_hash_id",
+      "tests/test_label.py::test_label_uses_hash_id",
+      "tests/test_email_subject.py::test_email_subject_uses_hash_id",
+      "tests/test_audit.py::test_audit_uses_hash_id"
+    ]
+  }
+}
