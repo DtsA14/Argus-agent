@@ -148,7 +148,8 @@ drafter:
   # 24 since SPEC_DRAFTER_SKIPPED_STEPS (2026-10-27): the 21379 re-run's drafters read 13 steps on sympy before a first
   # submit and ran out at 16 with one problem left, twice. The money bound is unchanged (attempt_usd, the stage cap).
   max_steps: 24
-  max_submits: 5            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23)
+  max_submits: 7            # 3 until pilot w2b2d2 ran out on small slips (2026-10-23); 5 until SPEC_MAX_SUBMITS (2026-11-14): since APPEND-TESTS
+                            # 11 of 16 drafts used all 5 and one ended submits_exhausted. The money bound is unchanged (attempt_usd, the stage cap).
   # Before a passing draft is accepted, it is shown why each required test fails now and asked once whether each is the
   # behaviour the issue asks for (pilots 021 t1 and prompt_injection_v0 V4: a test failing on its own data was padded
   # around by the agent). Shares the one question with the scope question; a held draft is accepted if never answered.

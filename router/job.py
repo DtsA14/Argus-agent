@@ -1559,6 +1559,25 @@ def _attempt_lines(job):
     return out
 
 
+def _submit_lines(job):
+    """SPEC_MAX_SUBMITS: per draft stage, how many submits the drafter used of the limit it ran with, from the stage's events (read
+    only). A submit that a resumed run writes twice counts once; a refused one (draft_submit_refused) is not a submit, so a run
+    that used its limit says "7 of 7". No limit event (an older run): the count alone. No events: no line."""
+    out = []
+    for sid, s in sorted(job.data["stages"].items(), key=lambda kv: int(kv[0][1:]) if kv[0][1:].isdigit() else 0):
+        if s.get("kind") != "draft" or not s.get("run_id"):
+            continue
+        try:
+            evs = parse_lines((job.runs / s["run_id"] / "events.jsonl").read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        evs = [e for e in evs if isinstance(e, dict)]
+        used = {e["submit"] for e in evs if e.get("event") == "draft_submitted" and isinstance(e.get("submit"), int)}
+        limit = next((e["max_submits"] for e in evs if e.get("event") == "drafter_policy" and isinstance(e.get("max_submits"), int)), None)
+        out.append(f"  {sid} submits: {len(used)}" + (f" of {limit}" if limit is not None else ""))
+    return out
+
+
 def _estimate_lines(job):
     """SPEC_ESTIMATE_REASONING E3: per stage whose ledger has estimate_miss events (billed input above the estimate it
     was reserved with), how many of its billed (ok) calls and the largest billed / estimated input. Read only."""
@@ -1652,6 +1671,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     if d["state"] in (AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE):
         out += _handoff_lines(job)
     out += _attempt_lines(job)
+    out += _submit_lines(job)
     out += _estimate_lines(job)
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
         out += _review_lines(job, last_agent(job)[1]["review"])
