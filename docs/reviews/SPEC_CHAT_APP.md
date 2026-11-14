@@ -17,9 +17,9 @@ Keputusan Atha 2026-11-14: **opsi B** (dua port: chat tepercaya yang menyerap ko
 |---|---|---|---|
 | sekarang | ada | ada | – |
 | C1-C3 | tidak berubah | tidak berubah | **baru** (Status, Issue, Riset) |
-| C4 | tidak berubah | **diserap** ke chat, dimatikan sesudah satu rilis stabil | reject, abandon, start di chat |
+| C4 | tidak berubah | **diserap**: `argus-control` dimatikan, chat pindah bind ke **8711** | 8712 dimatikan; reject, abandon, start di chat |
 
-Kunci HP (`~/.ssh/authorized_keys`) sudah punya `permitopen` 8710 dan 8711; 8712 ditambahkan di C1 dan 8711 dicabut di akhir C4. Port hanya `127.0.0.1`, tidak pernah `0.0.0.0`, `localhost`-nama, 8000, 8710, atau 8711 (aturan F1 dipertahankan).
+**8712 hanya port pembangunan.** Keadaan akhir tetap dua port, 8710 dan 8711 (sama seperti sekarang): di C4 chat pindah ke 8711 sesudah `argus-control` berhenti, dan 8712 dimatikan. Kunci HP (`~/.ssh/authorized_keys`) sudah punya `permitopen` 8710 dan 8711; 8712 ditambahkan di C1 dan **dicabut lagi di C4**, jadi forward di Termius sesudah C4 tidak berubah dari hari ini. Konstanta port, Host, dan Origin di chat diparametrisasi supaya pindah 8712 → 8711 hanya satu nilai config, dengan tes untuk keduanya. Port hanya `127.0.0.1`, tidak pernah `0.0.0.0`, `localhost`-nama, 8000, 8710, atau 8711 (aturan F1 dipertahankan).
 
 ## 3. Service chat (`router/chat.py` dan paket di bawahnya)
 
@@ -40,7 +40,7 @@ Mode **Status** tidak memanggil model dan tidak memakai teks bebas selain filter
 
 ## 5. Yang berubah pada yang lain
 
-- **Viewer:** tidak ada kode baru yang wajib. Tautan `Decide` (F7) menunjuk `http://localhost:8712/...` setelah C4. Viewer tidak pernah memanggil rute chat.
+- **Viewer:** tidak ada kode baru yang wajib. Tautan `Decide` (F7) tetap `http://localhost:8711/jobs/<id>`; sesudah C4 alamat itu dilayani chat dan rute `/jobs/<id>` dipertahankan. Viewer tidak pernah memanggil rute chat.
 - **Snapshot publik:** tidak berubah (tetap tanpa teks issue atau percakapan).
 - **`control.py`/`control_issues.py`:** dipakai ulang sebagai pustaka (gerbang, token, form-validasi), dipindah bukan ditulis ulang; tes F9 lama dipertahankan dan dijalankan terhadap rute baru, dengan Host/Origin 8712.
 - **`AGENTS.md`:** satu baris: chat adalah kode tepercaya yang ditulis di jalur ketat, tidak oleh agen Argus.
@@ -53,7 +53,7 @@ Mode **Status** tidak memanggil model dan tidak memakai teks bebas selain filter
 | C1 | kerangka service 8712 + shell + mode **Status** (hanya baca) + deploy `argus-chat` + `permitopen` 8712; tanpa POST |
 | C2 | mode **Issue**: `prepare`/`confirm` untuk `issue new|reply|start|abandon`, kartu issue, batas harian |
 | C3 | mode **Riset**: mulai dan baca laporan |
-| C4 | serap kontrol: `reject`/`abandon` job, panel Keputusan; matikan 8711 dan cabut `permitopen` 8711; ubah tautan F7 |
+| C4 | serap kontrol: `reject`/`abandon` job, panel Keputusan; hentikan `argus-control`, pindahkan chat ke bind 8711, matikan 8712 dan cabut `permitopen` 8712; tautan F7 (`.../jobs/<id>` di 8711) tetap menunjuk 8711 dan dijamin menjawab dari chat |
 | C5 | poles: kosong dan galat, sambung ulang, bahasa |
 
 C1 memberi Atha manfaat tanpa satu pun aksi. Sesudah C1, pakai seminggu sebelum C2.
@@ -70,7 +70,7 @@ C1 memberi Atha manfaat tanpa satu pun aksi. Sesudah C1, pakai seminggu sebelum 
 - Mode Status: nol subproses model (tes mengunci dengan CLI palsu yang gagal bila dipanggil).
 - Viewer: tes bahwa tidak ada rute chat di allowlist proxy dan bahwa proxy tetap menolak semua non-GET (tes lama, tidak diubah).
 - Audit: satu baris per POST, termasuk yang ditolak di gerbang mana pun.
-- C4: tes F9 lama lulus untuk rute pengganti; 8711 tidak lagi mendengarkan sesudah dimatikan (cek `ss`).
+- C4: tes F9 lama lulus untuk rute pengganti; sesudah pindah, 8711 dilayani chat (`ss`: satu listener, proses chat), 8712 tidak lagi mendengarkan, dan `argus-control` tidak berjalan.
 
 ## 8. Lapisan bahasa bebas (v2, tidak dikerjakan di sini)
 
@@ -84,7 +84,7 @@ Akses dari internet (Vercel atau lainnya): mengubah model ancaman dan butuh spek
 
 | | Pertanyaan | Usul Claude |
 |---|---|---|
-| K1 | Port dan fase | 8712 baru dulu (C1-C3), serap 8711 di C4 |
+| K1 | Port dan fase | **diputuskan Atha 2026-11-14:** 8712 hanya selama pembangunan (C1-C3); di C4 chat pindah ke 8711 dan 8712 dimatikan |
 | K2 | Frontend | JS statis tanpa build tool, ditulis Claude; atau React bila Atha menginginkan |
 | K3 | Biaya lapisan bahasa bebas (v2) | putuskan saat spek v2; pastikan dulu apakah langganan Claude mencakup pemakaian lewat aplikasi sendiri (setahu Claude: API ditagih terpisah; belum diperiksa) |
 | K4 | Batas harian UI | $2,00 bawaan, ubah di config |
