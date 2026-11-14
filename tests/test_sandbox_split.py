@@ -193,13 +193,16 @@ def test_every_test_call_is_timestamped_once_to_the_file_asked_for_even_under_xd
     assert all(x["stop"] >= x["start"] > 1e9 for x in rows)
 
 
-def test_nothing_is_opened_without_the_variable(monkeypatch):
-    monkeypatch.delenv("ARGUS_TEST_TIMES", raising=False)
-
-    def boom(*a, **k):
-        raise AssertionError("a file was opened")
-    monkeypatch.setattr(conftest.os, "open", boom)
-    conftest.pytest_runtest_logreport(R("t.py::a", "call", 1.0, 2.0))
+def test_nothing_is_opened_without_the_variable():
+    # in a child process: a patch of os.open in this one would also hit pytest's own report of this very test
+    code = ("import conftest, sys\n"
+            "class Rep:\n    when, nodeid, start, stop = 'call', 't.py::a', 1.0, 2.0\n"
+            "def boom(*a, **k):\n    raise AssertionError('a file was opened')\n"
+            "conftest.os.open = boom\n"
+            "conftest.pytest_runtest_logreport(Rep())\nprint('nothing opened')\n")
+    env = {k: v for k, v in os.environ.items() if k != "ARGUS_TEST_TIMES"}
+    r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=60, env=env)
+    assert r.returncode == 0 and "nothing opened" in r.stdout, r.stdout + r.stderr
 
 
 def test_only_the_call_of_a_test_on_the_controller_is_written(monkeypatch, tmp_path):
