@@ -28,6 +28,17 @@
     return fetch(path, { credentials: "omit", cache: "no-store", headers: { "Accept": "application/json" } })
       .then(function (r) { if (!r.ok) { throw new Error("HTTP " + r.status); } return r.json(); });
   }
+  var VIEWER = "http://localhost:8710/jobs/";
+  // The one link the page makes (SPEC_CHAT_APP 11.2, 11.7): the server's viewer URL, accepted only as the viewer's job page
+  // for an id of plain characters; never built from text of a job, an issue or a report.
+  function viewerLink(url) {
+    if (typeof url !== "string" || url.indexOf(VIEWER) !== 0 || !/^[a-z0-9_]+$/.test(url.slice(VIEWER.length))) { return null; }
+    var a = el("a", "link", "Buka di viewer");
+    a.rel = "noopener noreferrer";
+    a.href = url;
+    a.addEventListener("click", function (e) { e.stopPropagation(); });
+    return a;
+  }
   function jobCard(t, spent) {
     var c = el("article", "card");
     c.appendChild(el("h2", "mono", t.title || t.id));
@@ -37,6 +48,8 @@
     row.appendChild(el("span", null, t.created_at));
     row.appendChild(el("span", null, spent !== undefined ? usd(spent) + " dari " + usd(t.max_usd) : usd(t.stages_usd) + " tahap selesai, batas " + usd(t.max_usd)));
     c.appendChild(row);
+    var link = viewerLink(t.viewer);
+    if (link) { c.appendChild(link); }
     return c;
   }
   function renderList() {

@@ -8,6 +8,9 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 T = ["-rfEs", "tests/test_chat.py"]
 C = "router/chat.py"
 M = [
+    ("viewer link on the chat's own host", C, [('VIEWER_ORIGIN = "http://localhost:8710"', 'VIEWER_ORIGIN = "http://127.0.0.1:8710"')]),
+    ("viewer link from the job's text", C, [("\"viewer\": f\"{VIEWER_ORIGIN}/jobs/{raw.get('job')}\"", "\"viewer\": raw.get('title') or ''")]),
+    ("no viewer link in the card", C, [(", \"viewer\": f\"{VIEWER_ORIGIN}/jobs/{raw.get('job')}\"", "")]),
     ("only the first Host header is read", C, [("        return len(hosts) == 1 and hosts[0] in HOSTS", "        return bool(hosts) and hosts[0] in HOSTS")]),
     ("only the first Sec-Fetch-Site is read", C, [("            if len(sites) > 1 or (sites and", "            if (sites and")]),
     ("Host not checked on GET", C, [("        if not self._host_ok():                              # every method", "        if False:                              # every method")]),
