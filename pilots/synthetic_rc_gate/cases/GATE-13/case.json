@@ -1,0 +1,53 @@
+{
+  "id": "GATE-13",
+  "spec_refs": [
+    "GATE C1 (ekstensi)",
+    "GATE §3 tes 5",
+    "TERMINAL Tes (verdict tanpa hit)"
+  ],
+  "what": "Whole patterns appear only in added .md and .json files, which are not scanned.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "stats/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_mean_empty.py::test_mean_of_nothing_is_zero"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "finished"
+  },
+  "expect": {
+    "detection": "clean",
+    "terminal": false,
+    "patterns": []
+  },
+  "draft_new_tests": [
+    "tests/test_mean_empty.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_mean_empty.py::test_mean_of_nothing_is_zero"
+    ],
+    "red_with_workspace": []
+  }
+}

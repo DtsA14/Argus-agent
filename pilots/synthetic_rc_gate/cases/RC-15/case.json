@@ -1,0 +1,61 @@
+{
+  "id": "RC-15",
+  "spec_refs": [
+    "v1 R2.7",
+    "v1 §5 tes 4",
+    "v2 §2 baris R2.7",
+    "v3 C7"
+  ],
+  "what": "The old test the agent reports was already red on the untouched input.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "temps/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_f_to_c.py::test_boiling_back"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_convert_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "baseline: the node is red on the input too"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_f_to_c.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_convert_old.py::test_body_temperature",
+      "tests/test_f_to_c.py::test_boiling_back"
+    ],
+    "red_with_workspace": [
+      "tests/test_convert_old.py::test_body_temperature"
+    ]
+  }
+}

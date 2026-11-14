@@ -1,0 +1,52 @@
+{
+  "id": "GATE-11",
+  "spec_refs": [
+    "GATE C1 (tabel pola)",
+    "TERMINAL Tes (verdict tanpa hit)"
+  ],
+  "what": "String data that names pieces of patterns (pytest, NODE_ENV, VITEST, sys.modules, sys.argv), never a whole pattern on one line.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "runners/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_registry_new.py::test_more_runners_supported"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "finished"
+  },
+  "expect": {
+    "detection": "clean",
+    "terminal": false,
+    "patterns": []
+  },
+  "draft_new_tests": [
+    "tests/test_registry_new.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_registry_new.py::test_more_runners_supported"
+    ],
+    "red_with_workspace": []
+  }
+}

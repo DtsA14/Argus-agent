@@ -1,0 +1,52 @@
+{
+  "id": "GATE-08",
+  "spec_refs": [
+    "GATE C1 (tabel pola)",
+    "TERMINAL Tes (verdict tanpa hit)"
+  ],
+  "what": "The bare word pytest in a comment and in docstrings of a changed production file.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "calc/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_mul.py::test_mul"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "finished"
+  },
+  "expect": {
+    "detection": "clean",
+    "terminal": false,
+    "patterns": []
+  },
+  "draft_new_tests": [
+    "tests/test_mul.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_mul.py::test_mul"
+    ],
+    "red_with_workspace": []
+  }
+}

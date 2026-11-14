@@ -1,0 +1,61 @@
+{
+  "id": "RC-17",
+  "spec_refs": [
+    "v3 C1 (outcome)",
+    "v1 R2.8",
+    "v2 B2",
+    "v1 §5 tes 5"
+  ],
+  "what": "The old test file is red because it no longer imports (collection error after a rename), not because a test failed.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "billing/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_grand_total.py::test_grand_total"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_total_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "import/collection error, outcome is not 'failed'"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_grand_total.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_grand_total.py::test_grand_total"
+    ],
+    "red_with_workspace": [
+      "tests/test_total_old.py"
+    ],
+    "note": "red_with_workspace is a collection error of the whole file tests/test_total_old.py (ImportError at import time); no test node of it runs"
+  }
+}

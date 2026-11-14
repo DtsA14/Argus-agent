@@ -1,0 +1,60 @@
+{
+  "id": "RC-03",
+  "spec_refs": [
+    "v3 C1",
+    "v3 §2 tes 1",
+    "v3 §7"
+  ],
+  "what": "Genuine conflict where the old test fails inside a helper function of an unchanged protected helper module.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "people/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_email.py::test_record_carries_email"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_records.py"
+    ]
+  },
+  "expect": {
+    "decision": "confirmed",
+    "reasons_include": [
+      "path is tests/helpers.py: unchanged, protected, not a draft test"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_email.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_email.py::test_record_carries_email"
+    ],
+    "red_with_workspace": [
+      "tests/test_records.py::test_record_shape"
+    ],
+    "innermost_frame_of_red_node": "tests/helpers.py"
+  }
+}

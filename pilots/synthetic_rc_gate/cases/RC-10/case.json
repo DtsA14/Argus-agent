@@ -1,0 +1,59 @@
+{
+  "id": "RC-10",
+  "spec_refs": [
+    "v3 C5",
+    "v3 §2 tes 10"
+  ],
+  "what": "The agent names two old files but only one of them has a red node.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "timefmt/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_hours.py::test_hours_shown"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_fmt_long.py",
+      "tests/test_fmt_minutes.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "named file without a red node: tests/test_fmt_minutes.py"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_hours.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_hours.py::test_hours_shown"
+    ],
+    "red_with_workspace": [
+      "tests/test_fmt_long.py::test_long_duration_in_minutes"
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "id": "RC-14",
+  "spec_refs": [
+    "v1 R2.6",
+    "v1 R2.5",
+    "v3 C5",
+    "v1 §5 tes 5"
+  ],
+  "what": "The agent changed nothing except SUMMARY.json and reports an old test file.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "geo/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_perimeter.py::test_perimeter"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_area_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "diff empty in writable files",
+      "must_pass red",
+      "named file has no red node"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_perimeter.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_perimeter.py::test_perimeter"
+    ],
+    "red_with_workspace": [
+      "tests/test_perimeter.py::test_perimeter"
+    ]
+  }
+}

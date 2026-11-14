@@ -1,0 +1,61 @@
+{
+  "id": "RC-16",
+  "spec_refs": [
+    "v1 R2.4",
+    "v3 C1(b)",
+    "v1 §5 tes 3"
+  ],
+  "what": "The red old test file is unchanged but matches no protected glob (the contract protects only the other test files).",
+  "contract": {
+    "scope": {
+      "writable": [
+        "report/**"
+      ],
+      "protected": [
+        "tests/test_width.py",
+        "tests/test_header_new.py"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_header_new.py::test_header_is_underlined"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_header_legacy.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "the red node's file does not match a protected glob"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_header_new.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_header_new.py::test_header_is_underlined"
+    ],
+    "red_with_workspace": [
+      "tests/test_header_legacy.py::test_header_is_upper_title"
+    ],
+    "note": "scope.protected deliberately does NOT cover tests/test_header_legacy.py; the tree has no .argus/protected file"
+  }
+}

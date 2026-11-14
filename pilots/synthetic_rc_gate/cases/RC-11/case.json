@@ -1,0 +1,65 @@
+{
+  "id": "RC-11",
+  "spec_refs": [
+    "v1 R2.5",
+    "v3 C1(c)",
+    "v1 R2.4",
+    "v1 §5 tes 3 dan 5"
+  ],
+  "what": "A required new draft test is red too (half-built feature); the agent names the old file and the new test file.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "tags/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_clean_new.py::test_lowercased",
+          "tests/test_clean_new.py::test_duplicates_dropped"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_clean_old.py",
+      "tests/test_clean_new.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "must_pass node red: test_duplicates_dropped",
+      "red node in a draft new-test file"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_clean_new.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_clean_new.py::test_lowercased",
+      "tests/test_clean_new.py::test_duplicates_dropped"
+    ],
+    "red_with_workspace": [
+      "tests/test_clean_old.py::test_case_preserved",
+      "tests/test_clean_new.py::test_duplicates_dropped"
+    ]
+  }
+}

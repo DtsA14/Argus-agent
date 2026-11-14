@@ -1,0 +1,60 @@
+{
+  "id": "RC-09",
+  "spec_refs": [
+    "v3 C5",
+    "v3 §2 tes 10",
+    "v1 §5 tes 2"
+  ],
+  "what": "Two old test files are red, the agent names only one of them.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "names/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_last_first.py::test_last_comma_first"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_display_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "red node outside the named files: tests/test_greeting_old.py::test_greeting_text"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_last_first.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_last_first.py::test_last_comma_first"
+    ],
+    "red_with_workspace": [
+      "tests/test_display_old.py::test_first_then_last",
+      "tests/test_greeting_old.py::test_greeting_text"
+    ]
+  }
+}

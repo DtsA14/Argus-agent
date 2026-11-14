@@ -1,0 +1,1 @@
+{"forbidden_env": ["PYTEST_CURRENT_TEST", "NODE_ENV"], "forbidden_code": "\"pytest\" in sys.argv"}

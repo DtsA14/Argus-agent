@@ -1,0 +1,59 @@
+{
+  "id": "RC-08",
+  "spec_refs": [
+    "v3 C1 (Yang tetap ditolak)",
+    "v3 §2 tes 2"
+  ],
+  "what": "The old test is red because the new production code raises: path is a writable file.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "orders/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 3,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_qty_negative.py::test_negative_is_rejected"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_qty_old.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "path of the red record is orders/qty.py, a writable file"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_qty_negative.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_qty_negative.py::test_negative_is_rejected"
+    ],
+    "red_with_workspace": [
+      "tests/test_qty_old.py::test_negative_passes_through"
+    ],
+    "innermost_frame_of_red_node": "orders/qty.py"
+  }
+}

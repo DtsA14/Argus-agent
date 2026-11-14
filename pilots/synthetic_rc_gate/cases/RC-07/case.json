@@ -1,0 +1,58 @@
+{
+  "id": "RC-07",
+  "spec_refs": [
+    "v1 R2.1",
+    "v3 §7"
+  ],
+  "what": "The agent changed the protected tests/conftest.py (a fixture value), which is what turns the old test red.",
+  "contract": {
+    "scope": {
+      "writable": [
+        "shipping/**"
+      ],
+      "protected": [
+        "tests/**"
+      ]
+    },
+    "validation": [
+      {
+        "id": "unit",
+        "executable": "python",
+        "args": [
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "timeout_s": 60,
+        "min_tests": 2,
+        "max_skipped": 0,
+        "must_pass": [
+          "tests/test_us_rate.py::test_us_rate"
+        ]
+      }
+    ]
+  },
+  "agent": {
+    "end": "conflict_reported",
+    "files": [
+      "tests/test_shipping.py"
+    ]
+  },
+  "expect": {
+    "decision": "unconfirmed",
+    "reasons_include": [
+      "scope criterion fails: tests/conftest.py is protected and was changed"
+    ]
+  },
+  "draft_new_tests": [
+    "tests/test_us_rate.py"
+  ],
+  "facts": {
+    "red_on_input": [
+      "tests/test_us_rate.py::test_us_rate"
+    ],
+    "red_with_workspace": [
+      "tests/test_shipping.py::test_default_region_cost"
+    ]
+  }
+}
