@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 VENV="${VENV:-.venv-verify}"
 export CRASH_REPEATS="${CRASH_REPEATS:-5}"
 export CRASH_STRESS="${CRASH_STRESS:-50}"
-WORKERS="${XDIST_WORKERS:-4}"        # pytest-xdist workers; the sandbox tests stay serial in one group (conftest.py)
+WORKERS="${XDIST_WORKERS:-4}"        # pytest-xdist workers; the sandbox tests stay serial within their group (conftest.py)
 if [ -z "${ARGUS_SANDBOX_IMAGE:-}" ] && [ -f .sandbox_image ]; then
   export ARGUS_SANDBOX_IMAGE="$(tr -d '[:space:]' < .sandbox_image)"
 fi
@@ -65,7 +65,9 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
     | LC_ALL=C sort | xargs sha256sum
   echo "== pytest"
   set +e
-  echo "workers: $WORKERS (--dist loadgroup; sandbox tests serial in one group)"
+  echo "workers: $WORKERS (--dist loadgroup; sandbox tests serial within each of ${VERIFY_SANDBOX_GROUPS:-2} group(s))"
+  echo "VERIFY_SANDBOX_GROUPS=${VERIFY_SANDBOX_GROUPS:-2} (1 = one sandbox group, 2 = sandbox_a for tests/test_draft.py and sandbox_b for the rest)"
+  echo "xdist: $("$VENV/bin/pip" show pytest-xdist 2>/dev/null | sed -n 's/^Version: //p')"
   PYTEST_EXTRA=()
   if [ -n "${VERIFY_MAXFAIL:-}" ]; then
     PYTEST_EXTRA=(--maxfail="$VERIFY_MAXFAIL")

@@ -37,7 +37,8 @@ def test_every_module_that_uses_the_sandbox_and_only_those_is_grouped(tmp_path):
             assert by_module[m] == {True}, m
 
 
-def test_the_hook_marks_sandbox_items_with_the_loadgroup_marker():
+def test_the_hook_marks_sandbox_items_with_the_loadgroup_marker(monkeypatch):
+    monkeypatch.delenv("VERIFY_SANDBOX_GROUPS", raising=False)
     class Item:
         def __init__(self, path):
             self.fspath, self.markers = path, []
@@ -46,7 +47,7 @@ def test_the_hook_marks_sandbox_items_with_the_loadgroup_marker():
             self.markers.append(m)
     items = [Item(ROOT / "tests" / "test_draft.py"), Item(ROOT / "tests" / "test_codetask.py")]
     conftest.pytest_collection_modifyitems(None, items)
-    assert [(m.name, m.args) for m in items[0].markers] == [("xdist_group", ("sandbox",))]
+    assert [(m.name, m.args) for m in items[0].markers] == [("xdist_group", ("sandbox_a",))]       # tests/test_draft.py: group a (SPEC_SANDBOX_SPLIT)
     assert items[1].markers == []
 
 

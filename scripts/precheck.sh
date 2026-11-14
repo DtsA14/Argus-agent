@@ -40,5 +40,6 @@ printf -v joined '%s, ' "${tests[@]}"
 echo "tests: ${joined%, }"
 echo "pytest: ${ARGS[*]}"
 echo "pins: ${pins[*]:-}"
+echo "sandbox groups: ${VERIFY_SANDBOX_GROUPS:-2} (VERIFY_SANDBOX_GROUPS)"
 [ -z "${PRECHECK_PRINT:-}" ] || exit 0
 exec "$PY" -m pytest "${ARGS[@]}" "${tests[@]}"
