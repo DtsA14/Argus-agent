@@ -1,5 +1,7 @@
 # Spek: acceptance menolak kode produksi yang mengenali tes (`scope:no_test_detection`)
 
+> **Amandemen 2026-11-14:** `SPEC_GATE_RC_CLARIFICATIONS.md` (kalimat terakhir C3 digantikan oleh TERMINAL Usul 1; komentar dan docstring Python dikecualikan dari pola deteksi, keputusan Atha; usulan P1 untuk berkas bernama tes yang boleh ditulis kontrak).
+
 Status: **usulan Claude 2026-11-11** (Atha: "butir tes lama bocor langsung kerjakan aja"; bagian pertama dari tiga). Jalur ketat:
 mengubah verdict acceptance. Berlaku AGENTS.md: tes yang gagal di kode lama → kode → mutants → `/code-review medium` +
 `/security-review` → `verify_at` sekali → "merge" Atha. Tanpa model, tanpa uang, tanpa perubahan kontrak.

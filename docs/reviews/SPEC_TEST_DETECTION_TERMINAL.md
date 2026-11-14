@@ -1,5 +1,7 @@
 # Spek: hit gerbang deteksi tes menjadi terminal (GATE)
 
+> **Amandemen 2026-11-14:** `SPEC_GATE_RC_CLARIFICATIONS.md` (TERMINAL Usul 1 menggantikan kalimat terakhir C3 di `SPEC_TEST_DETECTION_GATE.md`; perilaku hit bersama laporan konflik dan hit pada attempt diblokir dicatat di sana).
+
 Status: **dikerjakan Claude 2026-11-12** (fase 3, GATE; `FABLE_SPEC_REPORT_CONFLICT_v1.md` §8 butir 2, `FABLE_PLAN_2026-11-11.md`). Bertumpu pada RC
 (`ReportConflict`, #473): jalan keluar yang sah sudah ada, jadi umpan balik yang mengajari pola mana yang harus dihindari tidak lagi dibutuhkan. Jalur ketat:
 mengubah keputusan di node acceptance. Berlaku AGENTS.md; **merge dari Atha**. Tanpa model, tanpa uang.

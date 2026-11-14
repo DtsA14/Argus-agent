@@ -1,0 +1,47 @@
+# Spec GATE-RC-CLARIFICATIONS: amandemen atas GATE dan RC sesudah putaran kasus sintetis
+
+Status: **draf amandemen, menunggu persetujuan Atha atas isinya** (strict lane: ia mengubah arti spek; kode belum disentuh). Keputusan Atha 2026-11-14: **komentar dan docstring Python dikecualikan dari pola deteksi tes (butir D1)**; "mulai dari spek". Ditulis Claude, ditinjau Opus (hanya baca) sebelum dibuka.
+Dasar: `pilots/synthetic_rc_gate/RESULTS.md` (35 kasus dari penulis independen, 35 cocok), `pilots/synthetic_rc_gate/WRITER_REPORT.md` (12 celah dan 5 kontradiksi), saran Opus 2026-11-14.
+Mengubah atau menandai: `SPEC_TEST_DETECTION_GATE.md`, `SPEC_TEST_DETECTION_TERMINAL.md`, `FABLE_SPEC_REPORT_CONFLICT_v1.md`, `SPEC_REPORT_CONFLICT_V3.md` (masing-masing mendapat satu baris yang menunjuk ke sini; isinya tidak ditulis ulang).
+
+## 1. Lima kontradiksi: yang diimplementasikan, dan teks mana yang digantikan
+
+Dalam semua lima, **spek yang berubah, bukan kode**.
+
+1. **GATE C3 lawan TERMINAL Usul 1.** C3: "agen mendapat percobaan lagi seperti kriteria lain; tidak ada jalur khusus". TERMINAL: "Tidak ada attempt berikutnya". Kode mengikuti TERMINAL: node acceptance mengembalikan `FAILED_ACCEPTANCE` dengan alasan `test_detection` sebelum `max_iterations` dan stagnasi (`codetask/run.py:407-426`; urutan: lulus, diblokir, `llm_failed`, konflik, **hit**, lalu batas). **Kalimat terakhir C3 digantikan oleh TERMINAL Usul 1.**
+2. **Aturan flaky v1 lawan v3 C7.** Kode menjalankan red check **sekali pada input dan dua kali pada workspace, dan ketiganya harus sepakat** (`acceptance/conflict.py`, butir 7 dan 8 di docstring: "on the workspace, twice, they fail ... the two runs agree (a flaky test does not confirm)"). Itu bacaan v2/v3. **`FABLE_SPEC_REPORT_CONFLICT_v1.md` §4 (baris "Tes lama flaky | Butir 9") dan §5 tes 6 ("Baseline hijau lalu merah") digantikan** oleh v3 C7 dan butir 7 dan 8 itu. Alasan yang bisa dibela: konfirmasi palsu berhenti pada manusia, tidak pernah menjadi lulus.
+3. **v3 C3 butir 1 ("tidak diverifikasi") lawan pencatatan `unconfirmed: ["nothing is red"]`.** Bukan konflik nyata: kode tidak menjalankan red check (tidak ada yang merah) dan hanya mencatat alasan. **Kata-kata C3 butir 1 dibaca: "tidak ada red check; dicatat `unconfirmed: [\"red: nothing is red\"]`"** (kasus RC-18: `DONE`).
+4. **v1 R1 (paling banyak 3 berkas) lawan v2 B1 (1 sampai 5).** Kode mengizinkan 1 sampai 5 (`codetask/tools.py`, `ReportConflict`). **v1 R1 digantikan oleh v2 B1** (v1 sudah menyebutnya di kepalanya).
+5. **v3 C1 menyebut syarat (a)(b)(c) hanya untuk `path`; v3 §7 memperluasnya ke berkas node.** Kode menerapkan kedua-duanya (butir 4 dan 8 di `acceptance/conflict.py`). **Kalimat §7 dipindahkan ke C1**: syarat (a)(b)(c) berlaku untuk `path` **dan** untuk berkas setiap node merah.
+
+## 2. Keputusan yang sudah diambil Atha, belum diimplementasikan
+
+**D1. Komentar dan docstring Python tidak dipindai oleh pola deteksi tes.** Hari ini hanya pola *forger* (`FORGERS`) yang melihat `_code_view` (komentar dan pernyataan string mandiri dikosongkan, panjang dan nomor baris sama; `acceptance/testdetect.py`); pola deteksi (`PYTEST_CURRENT_TEST`, `sys.modules`+`pytest`, `sys.argv`+`pytest`, `NODE_ENV`+`'test'`, `import.meta.vitest`, dan seterusnya) memindai baris mentah. Akibatnya `os._exit(0)` di komentar bersih sedangkan komentar `# NOTE: never branch on "pytest" in sys.modules here` adalah hit terminal (kasus GATE-16). Aturan baru:
+- Untuk berkas `.py`, **semua** pola (bukan hanya `FORGERS`) dicocokkan pada `_code_view`; kode tidak disentuh.
+- Tidak dikecualikan: string biasa, f-string, dan string yang diberikan ke `exec` atau `eval` (tetap kode); baris `#` di dalam string tiga-kutip yang kemudian dieksekusi (tokenize melihatnya sebagai STRING, bukan COMMENT).
+- **Mundur yang aman tidak berubah:** bila `_code_view` ragu (galat sintaks, `\\r` telanjang, baris lebih dari 20.000 karakter, parser tidak sepakat) ia mengembalikan teks apa adanya dan pemindaian lama yang lebih lebar berlaku. Jadi berkas dengan galat sintaks yang polanya hanya ada di komentar tetap hit.
+- **Tidak berlaku untuk JS dan TS** (tidak ada tokenizer; komentar `//` dan `/* */` tetap dipindai seperti sekarang).
+- Yang tetap hit: `if "pytest" in m:  # sys.modules` (pola terbagi antara kode dan komentar) tetap bersih hanya bila kedua bagian pola tidak ada pada kode; baris itu kini bersih bila sebagian pola ada di komentar. Ini **pilihan yang disadari** dan dikunci tes agar terlihat (GATE sudah pagar, bukan bukti; GATE-17 menunjukkan pola yang dipecah dua baris bersih).
+- Bukan tambahan celah yang berarti: gerbang sudah bisa dilewati (`"pyt"+"est"`, `getattr(sys, "modules")`, alias impor, string ke `exec`); celah baru hanya `exec(f.__doc__)` dan pola terbagi kode dan komentar, keduanya tidak lebih mudah daripada penyambungan string, dan manusia atau hakim tetap membaca patch.
+
+## 3. Usulan baru, menunggu keputusan Atha
+
+**P1. Berkas bernama tes yang boleh ditulis kontrak tetap dipindai (celah 9, keamanan).** Hari ini `is_test_file` (direktori `tests`, `test`, `__tests__` di bagian mana pun dari jalur, `conftest.py`, `test_*.py`, `*_test.py`, `.test.` dan `.spec.` pada nama) membebaskan berkas dari pemindaian **menurut nama saja**. Sebuah berkas `pkg/test/helper.py` di dalam pohon writable bebas dari pemindaian, jadi kode produksi bisa mengimpor pendeteksi dari situ (kasus GATE-14). Usulan: **berkas yang cocok `is_test_file` tetap bebas kecuali bila ia juga cocok `scope.writable` kontrak.** Alasan: sebuah berkas yang boleh ditulis agen adalah berkas yang bisa menjadi kode produksi; tes yang sah dilindungi atau milik draf yang disetujui. Konsekuensi yang harus diputuskan: `check()` sekarang tidak menerima lingkup kontrak (`check(workspace, before, after, inputs_dir)`), jadi ia perlu `writable`; dan kontrak yang membolehkan agen menulis berkas tes akan memindainya (sebuah tes yang menyebut `sys.modules` dan `pytest` pada satu baris menjadi hit). Perkiraan: sekitar 10 baris kode dan satu argumen dari node acceptance.
+
+## 4. Perilaku yang berlaku sekarang dan dicatat (tidak diubah; dikunci tes di paket kode)
+
+- **Berkas yang diganti nama (celah 10).** Pengurangan baris lama (C2) hanya berlaku bila `path in before` (`testdetect.check`); berkas baru karena ganti nama yang masih memuat baris lama yang cocok dihitung hit, begitu juga baris lama yang diformat ulang. Itu disengaja oleh C2 dan dicatat; perbaikan (kurangi menurut isi berkas yang hilang) menunggu.
+- **Hit bersama laporan konflik tak terkonfirmasi (celah 12).** Kode mencatat laporan ke `new_conflict` (berkas dan alasan tak terkonfirmasi) dan tetap mengakhiri run `FAILED_ACCEPTANCE/test_detection` (`codetask/run.py:420-426`, kasus GATE-05). Laporan konflik tidak pernah terkonfirmasi bila kriteria deteksi gagal (RC mensyaratkan semua kriteria non-validasi lulus).
+- **Hit pada attempt yang berakhir diblokir atau `llm_failed`.** Node acceptance mengembalikan `BLOCKED` lebih dulu (`codetask/run.py:403-408`), sehingga `summary["detected"]` tidak ditulis dan manusia tidak melihat hit itu di ringkasan; verdict lengkap (`verdict_<i>.json`) tetap memuatnya.
+- **Workspace saat red check (celah 1).** Red check dan validasi berjalan lewat `sandbox.run_command`, yang memasang workspace **read-only** (`tools/sandbox.py:268`, `workspace_mode="ro"`); kode yang diuji tidak dapat memulihkan berkas tes yang disabotase selama red check.
+- **Pola peka huruf besar-kecil dan berlaku pada semua ekstensi (celah 7, 8).** `PyTest` tidak cocok; `NODE_ENV` dengan `'test'` di berkas `.py` adalah hit. Keduanya konservatif dan dibiarkan.
+- **`MAX_NODES` (celah 5).** Nilai 50 berasal dari v2 B1 dan ada di `acceptance/validation.py` (`MAX_NODES`); daftar yang terpotong membuat laporan tak terkonfirmasi ("too many red tests to enumerate", RC-13).
+- **Galat koleksi di RC (celah 4).** Dilihat harness sebagai validasi yang "did not finish cleanly" dan tak terkonfirmasi (RC-17); alasannya tidak membedakan galat impor.
+
+## 5. Celah yang menunggu
+
+Celah 2 (bidang tes draf di kasus), 3 (`SUMMARY.json` dan diff lingkup), 6 (diselesaikan D1), 11 (berkas di luar writable dan protected) hanya soal format kasus atau lingkup dan dapat menunggu. Berkas yang dihapus atau diganti nama di bawah C2 (celah 10) dan vitest/JS menunggu putaran kasus kedua.
+
+## 6. Paket kode yang mengikuti (spek dan review terpisah, tidak termasuk di sini)
+
+D1 (sekitar 2 sampai 4 baris di `testdetect._hits`), P1 bila disetujui, dan tes yang mengunci butir 4 (celah 10, 12, hit pada attempt diblokir). Tes: bersih untuk bentuk GATE-16, komentar di ujung baris, docstring modul dan fungsi; hit untuk string `exec`, f-string, baris `#` di dalam string tiga-kutip, galat sintaks dengan pola di komentar (tutup gagal), `// process.env.VITEST` di `.js`; pengurangan baris lama C2 tetap bekerja dengan `view`; pola yang terbagi kode dan komentar dikunci bersih. Mutan: `view` tidak dipakai untuk deteksi; `view` dipakai untuk JS.
