@@ -150,19 +150,20 @@ def test_wall_time_per_group_is_the_first_start_to_the_last_stop():
                R("t.py::c@sandbox_b", "call", 102.0, 130.0), R("t.py::c@sandbox_b", "teardown", 130.0, 131.0),
                R("t.py::d", "call", 100.0, 500.0, {})]
     w = conftest.group_walls(reports)
-    assert w == {"sandbox_a": {"seconds": 60.0, "tests": 2}, "sandbox_b": {"seconds": 29.0, "tests": 1}}
+    assert w == {"sandbox_a": {"seconds": 60.0, "tests": 2, "offset": 0.0}, "sandbox_b": {"seconds": 29.0, "tests": 1, "offset": 2.0}}
 
 
 def test_a_node_id_with_an_at_sign_inside_is_not_taken_for_a_group():
     w = conftest.group_walls([R("t.py::x[@pytest.fixture]@sandbox_a", "call", 0.0, 1.0), R("t.py::y[@sandbox_a-1]", "call", 0.0, 9.0)])
-    assert w == {"sandbox_a": {"seconds": 1.0, "tests": 1}}
+    assert w == {"sandbox_a": {"seconds": 1.0, "tests": 1, "offset": 0.0}}
 
 
 def test_the_walls_line_names_each_group_and_the_setting():
-    line = conftest.format_group_walls({"sandbox_a": {"seconds": 545.04, "tests": 300}, "sandbox_b": {"seconds": 580.0, "tests": 444}}, 2)
-    assert line == "sandbox groups: 2 (VERIFY_SANDBOX_GROUPS); wall seconds: sandbox_a 545.0 (300 tests), sandbox_b 580.0 (444 tests)"
-    assert conftest.format_group_walls({"sandbox": {"seconds": 1.5, "tests": 2}}, 1) == (
-        "sandbox groups: 1 (VERIFY_SANDBOX_GROUPS); wall seconds: sandbox 1.5 (2 tests)")
+    line = conftest.format_group_walls({"sandbox_a": {"seconds": 545.04, "tests": 300, "offset": 0.0}, "sandbox_b": {"seconds": 580.0, "tests": 444, "offset": 1.26}}, 2)
+    assert line == ("sandbox groups: 2 (VERIFY_SANDBOX_GROUPS); wall seconds: sandbox_a 545.0 (300 tests, starts +0.0), "
+                    "sandbox_b 580.0 (444 tests, starts +1.3)")
+    assert conftest.format_group_walls({"sandbox": {"seconds": 1.5, "tests": 2, "offset": 0.0}}, 1) == (
+        "sandbox groups: 1 (VERIFY_SANDBOX_GROUPS); wall seconds: sandbox 1.5 (2 tests, starts +0.0)")
 
 
 def test_a_run_without_xdist_has_no_group_suffix_and_prints_no_walls_line_but_does_not_break(tmp_path):
@@ -177,19 +178,21 @@ def test_the_group_walls_line_also_works_under_xdist_and_names_the_groups_the_wo
     line = [ln for ln in r.stdout.splitlines() if ln.startswith("sandbox groups:")]
     assert r.returncode == 0 and len(line) == 1 and line[0].startswith("sandbox groups: 2 (VERIFY_SANDBOX_GROUPS)"), r.stdout
     assert "sandbox_a" in line[0] and "sandbox_b" in line[0], r.stdout
+    offsets = [float(x) for x in re.findall(r"starts \+([\d.]+)", line[0])]
+    assert len(offsets) == 2 and min(offsets) == 0.0, line[0]
 
 
 # ---- the per-test times for the observer ---------------------------------------------------------------------------------------
 
 
-def test_every_test_call_is_timestamped_once_to_the_file_asked_for_even_under_xdist(tmp_path):
+def test_every_phase_of_every_test_is_timestamped_once_even_under_xdist(tmp_path):
     p = project(tmp_path, FILES)
     out = tmp_path / "times.jsonl"
     r = run_pytest(p, "-n", "2", "--dist", "loadgroup", ARGUS_TEST_TIMES=str(out))
     assert r.returncode == 0, r.stdout
     rows = [json.loads(line) for line in out.read_text().splitlines()]
-    assert sorted(x["nodeid"].split("@")[0] for x in rows) == sorted(
-        ["test_draft.py::test_in_draft", "test_red.py::test_uses_the_fixture_of_draft", "test_own.py::test_own_text", "test_plain.py::test_plain"])
+    nodes = ["test_draft.py::test_in_draft", "test_red.py::test_uses_the_fixture_of_draft", "test_own.py::test_own_text", "test_plain.py::test_plain"]
+    assert sorted((x["nodeid"].split("@")[0], x["when"]) for x in rows) == sorted((n, w) for n in nodes for w in ("setup", "call", "teardown"))
     assert all(x["stop"] >= x["start"] > 1e9 for x in rows)
 
 
@@ -205,39 +208,56 @@ def test_nothing_is_opened_without_the_variable():
     assert r.returncode == 0 and "nothing opened" in r.stdout, r.stdout + r.stderr
 
 
-def test_only_the_call_of_a_test_on_the_controller_is_written(monkeypatch, tmp_path):
+def test_every_phase_on_the_controller_is_written_with_its_name_and_nothing_from_a_worker(monkeypatch, tmp_path):
     out = tmp_path / "t.jsonl"
     monkeypatch.setenv("ARGUS_TEST_TIMES", str(out))
     monkeypatch.setattr(conftest, "_is_worker", False)
-    for when in ("setup", "call", "teardown"):
+    monkeypatch.setattr(conftest, "_times_failed", False)
+    for when in ("setup", "call", "teardown", "other"):
         conftest.pytest_runtest_logreport(R("t.py::a", when, 1.0, 2.0))
     monkeypatch.setattr(conftest, "_is_worker", True)
     conftest.pytest_runtest_logreport(R("t.py::b", "call", 1.0, 2.0))
-    assert [json.loads(x) for x in out.read_text().splitlines()] == [{"nodeid": "t.py::a", "start": 1.0, "stop": 2.0}]
+    assert [json.loads(x) for x in out.read_text().splitlines()] == [
+        {"nodeid": "t.py::a", "when": w, "start": 1.0, "stop": 2.0} for w in ("setup", "call", "teardown")]
+
+
+def test_a_file_that_cannot_be_written_is_said_once_on_stderr_and_never_ends_the_run(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("ARGUS_TEST_TIMES", str(tmp_path / "no" / "such" / "dir" / "t.jsonl"))
+    monkeypatch.setattr(conftest, "_is_worker", False)
+    monkeypatch.setattr(conftest, "_times_failed", False)
+    for _ in range(3):
+        conftest.pytest_runtest_logreport(R("t.py::a", "call", 1.0, 2.0))
+    err = capsys.readouterr().err
+    assert err.count("cannot be written") == 1 and "ARGUS_TEST_TIMES" in err
 
 
 # ---- the scripts ------------------------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("script", ["verify.sh", "precheck.sh"])
-def test_no_script_turns_the_reordering_of_xdist_off(script):
+def test_every_script_asks_for_the_reordering_of_xdist_by_name(script):
     text = (ROOT / "scripts" / script).read_text(encoding="utf-8")
-    assert "no-loadscope-reorder" not in text and "loadscope-reorder" not in text.replace("--no-loadscope-reorder", "")
+    assert "--no-loadscope-reorder" not in text and "--dist loadgroup --loadscope-reorder" in text
 
 
 def test_verify_sh_prints_the_setting_and_the_xdist_version_in_its_header():
     text = (ROOT / "scripts" / "verify.sh").read_text(encoding="utf-8")
-    assert 'echo "VERIFY_SANDBOX_GROUPS=${VERIFY_SANDBOX_GROUPS:-2}' in text
-    assert 'echo "xdist: $("$VENV/bin/pip" show pytest-xdist' in text
+    assert 'echo "VERIFY_SANDBOX_GROUPS=${VERIFY_SANDBOX_GROUPS-2}' in text
+    assert '''echo "xdist: $("$VENV/bin/python" -c 'import importlib.metadata as m; print(m.version("pytest-xdist"))' ''' in text
     assert text.index('echo "xdist:') < text.index('-m pytest')        # printed before the run, so the log has it even when the run dies
 
 
 def test_the_precheck_prints_the_setting_it_runs_with():
     text = (ROOT / "scripts" / "precheck.sh").read_text(encoding="utf-8")
-    assert 'echo "sandbox groups: ${VERIFY_SANDBOX_GROUPS:-2} (VERIFY_SANDBOX_GROUPS)"' in text
+    assert 'echo "sandbox groups: ${VERIFY_SANDBOX_GROUPS-2} (VERIFY_SANDBOX_GROUPS)"' in text
     assert text.index('echo "sandbox groups:') < text.index("exec ")
 
 
 def test_requirements_pin_the_xdist_whose_scheduling_the_split_relies_on():
     req = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     assert re.search(r"^pytest-xdist==\d", req, re.M)
+
+
+def test_an_empty_setting_is_printed_empty_by_the_headers_as_python_refuses_it():
+    for script in ("verify.sh", "precheck.sh"):
+        assert "VERIFY_SANDBOX_GROUPS:-2" not in (ROOT / "scripts" / script).read_text(encoding="utf-8")

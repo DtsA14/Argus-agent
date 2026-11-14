@@ -14,6 +14,7 @@ collect_ignore = ["fixtures", "runs", "pilots"]   # pilots: target tests that fa
 import inspect
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -91,6 +92,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 _is_worker = False
+_times_failed = False
 
 
 def pytest_configure(config):
@@ -100,16 +102,24 @@ def pytest_configure(config):
 
 
 def pytest_runtest_logreport(report):
-    """With ARGUS_TEST_TIMES set, append when each test call started and stopped (epoch seconds), once, on the controller."""
+    """With ARGUS_TEST_TIMES set, append when each phase of each test (setup, call, teardown) started and stopped (epoch seconds), once,
+    on the controller: a container killed during a fixture's setup or teardown falls in the window of its own test. A file that cannot
+    be written is reported once on stderr and never ends the run."""
+    global _times_failed
     path = os.environ.get(TIMES_ENV)
-    if not path or _is_worker or getattr(report, "when", None) != "call":
+    when = getattr(report, "when", None)
+    if not path or _is_worker or _times_failed or when not in ("setup", "call", "teardown"):
         return
-    line = json.dumps({"nodeid": report.nodeid, "start": report.start, "stop": report.stop}) + "\n"
-    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    line = json.dumps({"nodeid": report.nodeid, "when": when, "start": report.start, "stop": report.stop}) + "\n"
     try:
-        os.write(fd, line.encode("utf-8"))
-    finally:
-        os.close(fd)
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        try:
+            os.write(fd, line.encode("utf-8"))
+        finally:
+            os.close(fd)
+    except OSError as e:
+        _times_failed = True
+        print(f"conftest: {TIMES_ENV} {path!r} cannot be written ({e}); times are not recorded", file=sys.stderr)
 
 
 def group_totals(reports):
@@ -130,23 +140,27 @@ def format_group_totals(totals):
 
 
 def group_walls(reports):
-    """{group: {seconds, tests}} for the sandbox groups: wall seconds = the first start to the last stop of the group's reports, tests
-    counted by their call. The group is the suffix of the node id that xdist adds ("...@sandbox_a"), matched whole."""
-    spans = {}
+    """{group: {seconds, tests, offset}} for the sandbox groups: wall seconds = the first start to the last stop of the group's reports,
+    tests counted by their call, offset = seconds from the first start of any report to the group's first start (two groups that
+    overlap both start near 0). The group is the suffix of the node id that xdist adds ("...@sandbox_a"), matched whole."""
+    spans, run_first = {}, None
     for r in reports:
+        start, stop = getattr(r, "start", None), getattr(r, "stop", None)
+        if start is None or stop is None:
+            continue
+        run_first = start if run_first is None else min(run_first, start)
         node = getattr(r, "nodeid", "") or ""
         group = next((g for g in (GROUP_DRAFT, GROUP_REST, SANDBOX_GROUP) if node.endswith("@" + g)), None)
-        start, stop = getattr(r, "start", None), getattr(r, "stop", None)
-        if group is None or start is None or stop is None:
+        if group is None:
             continue
         w = spans.setdefault(group, {"first": start, "last": stop, "tests": 0})
         w["first"], w["last"] = min(w["first"], start), max(w["last"], stop)
         w["tests"] += getattr(r, "when", None) == "call"
-    return {g: {"seconds": w["last"] - w["first"], "tests": w["tests"]} for g, w in spans.items()}
+    return {g: {"seconds": w["last"] - w["first"], "tests": w["tests"], "offset": w["first"] - run_first} for g, w in spans.items()}
 
 
 def format_group_walls(walls, count):
-    parts = ", ".join(f"{g} {walls[g]['seconds']:.1f} ({walls[g]['tests']} tests)" for g in sorted(walls))
+    parts = ", ".join(f"{g} {walls[g]['seconds']:.1f} ({walls[g]['tests']} tests, starts +{walls[g]['offset']:.1f})" for g in sorted(walls))
     return f"sandbox groups: {count} ({GROUPS_ENV}); wall seconds: {parts}"
 
 
