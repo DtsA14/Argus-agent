@@ -3,6 +3,8 @@
 > R3, R6, R7 and section 3). Fable's covering message: the replay is on paper from `PENDING.md`, `SPEC_CONFLICT_GATE`, `SPEC_JUDGE`, the injection pilot and
 > the chain-probe result; the job records were not in its checkout, so "which tests would be red under a correct implementation" is inference in every row.
 > Claude's reading, and which code claims were re-checked, is in section 10 of [`FABLE_REVIEW_2026-11-11.md`](FABLE_REVIEW_2026-11-11.md).
+>
+> **Status 2026-11-14:** superseded. `ReportConflict` was built from `SPEC_REPORT_CONFLICT_V3.md` (approved by Atha, merged #473), which amends this draft; see also `SPEC_GATE_RC_CLARIFICATIONS.md`.
 
 # Spek v2: `ReportConflict` (koreksi atas v1, replay, dan MVP)
 

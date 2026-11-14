@@ -1,4 +1,6 @@
 > Verbatim copy of Fable's first draft `SPEC_REPORT_CONFLICT.md` (session B1), pasted by Atha on 2026-11-11 and not edited, apart from this note.
+>
+> **Status 2026-11-14:** superseded. `ReportConflict` was built from `SPEC_REPORT_CONFLICT_V3.md` (approved by Atha, merged #473); this draft is history.
 
 > **Amandemen 2026-11-14:** `SPEC_GATE_RC_CLARIFICATIONS.md` bagian 1: §4 (baris flaky) dan §5 tes 6 digantikan oleh v3 C7; R1 (3 berkas) digantikan oleh v2 B1 (1 sampai 5).
 > **Draft, not approved.** Parts of it are replaced by [`FABLE_SPEC_REPORT_CONFLICT_v2.md`](FABLE_SPEC_REPORT_CONFLICT_v2.md) (R1, R2.7-9, R3, R6, R7 and section 3);
