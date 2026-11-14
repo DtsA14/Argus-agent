@@ -191,6 +191,8 @@ def test_the_file_is_split_on_newlines_only_so_a_unicode_line_separator_in_a_str
     ("@staticmethod\ndef test_s():\n    pass\n", "decorator"),
     ("def test_a2(self, v=object()):\n    pass\n", "constant"),
     ("def test_a2(self, v=[1]):\n    pass\n", "constant"),
+    ("def test_a2(self, *, v=object()):\n    pass\n", "constant"),
+    ("def test_a2(self, v=(1, object())):\n    pass\n", "constant"),
     ("def setUp(self):\n    pass\n", "test"),
     ("def setUpClass(cls):\n    pass\n", "test"),
     ("def run(self, result=None):\n    pass\n", "test"),
@@ -266,6 +268,14 @@ def test_methods_added_at_the_end_of_one_class_are_an_insertion_of_kind_class():
     assert ins["kind"] == "class" and ins["class"] == "AlphaTests" and [s.name for s in ins["stmts"]] == ["test_new"]
 
 
+def test_the_region_of_an_insertion_is_exactly_the_inserted_methods_which_is_what_the_review_shows():
+    ins = ch.insertion(OLD2, EXPECTED)
+    assert "\n".join(EXPECTED.split("\n")[ins["first"] - 1:ins["last"]]) == INSERTED.strip("\n")
+    trailing = EXPECTED.replace(INSERTED, INSERTED + "    # a trailing comment of the block\n", 1)
+    t = ch.insertion(OLD2, trailing)
+    assert t and "\n".join(trailing.split("\n")[t["first"] - 1:t["last"]]).endswith("# a trailing comment of the block")
+
+
 def test_the_region_is_found_by_structure_not_by_text_offset():
     # Opus' counterexample: a text diff of this insertion before "\n    def test_c" is not parsable; the AST one is
     old = "class T:\n    def test_a(self):\n        pass\n\n    def test_c(self):\n        pass\n"
@@ -286,8 +296,13 @@ def test_the_region_is_found_by_structure_not_by_text_offset():
     OLD2.replace("    def test_b(self):\n        self.assertEqual(f(2), 2)\n", "", 1),                                # a test is removed
 ])
 def test_anything_but_methods_added_at_the_end_of_one_class_is_not_an_insertion(new):
-    assert ch.insertion(OLD2, new) is None or ch.insertion(OLD2, new) == {"kind": "end"}
-    assert ch.insertion(OLD2, new) != {"kind": "class"}
+    got = ch.insertion(OLD2, new)
+    assert got is None or got["kind"] == "end"          # never a class insertion: that is what the whitelist and K1 rest on
+
+
+def test_methods_added_to_two_classes_are_not_an_insertion():
+    both = EXPECTED.replace("    def test_c(self):\n        pass\n", "    def test_c(self):\n        pass\n\n    def test_c2(self):\n        pass\n", 1)
+    assert both != EXPECTED and ch.insertion(OLD2, both) is None
 
 
 def test_a_file_that_does_not_parse_is_no_insertion():
@@ -416,13 +431,15 @@ def test_the_draft_review_shows_an_insertion_as_new_tests_inserted_into_their_cl
                                {"usd": 0.0, "usd_complete": True, "calls": 0}, source=root)
     assert "required new tests: 1, required existing tests: 0" in text
     assert f"### `{PATH}` (inserted at the end of class AlphaTests of the existing file)" in text
+    assert "The methods inserted into the class:" in text and "The code added at the end of the file:" not in text
     section = text.split("\n## New tests\n", 1)[1].split("\n## ", 1)[0]
     assert "def test_new(self):" in section and "class BetaTests" not in section and "def test_a(self)" not in section
 
 
 def test_the_prompt_and_the_field_tell_the_drafter_when_to_use_into_class():
     assert "into_class" in drafter.SYSTEM and "only its methods" in drafter.SYSTEM
-    assert "into_class" in drafter.ChangedTest.model_fields["append"].description
+    desc = drafter.ChangedTest.model_fields["append"].description
+    assert "with into_class, at the end of that class" in desc and "unless it goes into a class (into_class)" in desc
     assert "end of that class" in drafter.ChangedTest.model_fields["into_class"].description or "end" in drafter.ChangedTest.model_fields["into_class"].description
     assert "into_class" in drafter.SubmitDraft.model_json_schema()["$defs"]["ChangedTest"]["properties"]
 
@@ -520,3 +537,37 @@ def test_an_import_with_as_or_a_dotted_name_binds_the_name_an_append_may_not_red
 
 def test_an_added_statement_that_assigns_to_a_plain_name_is_not_an_attribute_assignment():
     assert ch.redefined_problems(PATH, OLD2, end_append("x = a.b\ny: int = 1\nz = [1][0]\n")) == []
+
+
+@pytest.mark.parametrize("attr", ["test_alias = test_a", "test_alias: object = test_a", "test_alias, other = test_a, test_b"])
+def test_a_name_the_class_binds_by_assignment_is_taken_too(attr):
+    old = OLD2.replace(AFTER_B, AFTER_B + f"\n    {attr}\n", 1)
+    assert "already" in refused(old=old, block="def test_alias(self):\n    pass\n")
+
+
+def test_an_augmented_assignment_in_a_class_body_names_it_too():
+    old = OLD2.replace(AFTER_B, AFTER_B + "\n    test_alias = 1\n    test_alias += 1\n", 1)
+    assert "already" in refused(old=old, block="def test_alias(self):\n    pass\n")
+
+
+@pytest.mark.parametrize("ins", [None, {"kind": "end"}])
+def test_the_class_checks_say_nothing_for_an_append_at_the_end_or_no_insertion_at_all(ins):
+    assert ch.insertion_problems(PATH, OLD2, ins) == []
+    assert ch.inherited_problems(PATH, ins, {f"{PATH}::AlphaTests::test_new"}) == []
+
+
+@pytest.mark.parametrize("entry", [{"path": PATH, "into_class": "AlphaTests"}, {"path": PATH, "content": "x = 1\n", "into_class": "AlphaTests"}])
+def test_into_class_without_append_is_refused(entry):
+    out, problems = ch.from_append([entry], {PATH: OLD2}.get, intake._plain)
+    assert out == [] and any("into_class goes with append" in p for p in problems)
+
+
+def test_an_overridden_inherited_test_is_caught_even_when_it_is_not_the_required_node(tmp_path):
+    block = "def test_inherited(self):\n    pass\n\ndef test_fresh(self):\n    self.assertEqual(1, 2)\n"
+    out, problems = build(into="BetaTests", block=block)
+    assert problems == []
+    fresh = f"{PATH}::BetaTests::test_fresh"
+    d = ta.draft_of(out[0]["content"], must=(fresh,))
+    before = {f"{PATH}::BetaTests::test_inherited", f"{PATH}::BetaTests::test_c"}
+    got = ta.k1(tmp_path, d, OLD2, before, before | {fresh})
+    assert any("override a test the class inherits" in p for p in got), got

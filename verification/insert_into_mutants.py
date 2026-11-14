@@ -92,12 +92,30 @@ M = [
     ("the human is not told which class", [(R, "(\"The methods inserted into the class:\" if t.get(\"into\")", "(\"The code added at the end of the file:\" if t.get(\"into\")")]),
 ]
 
+# Mutants no test can kill because the code has a second, redundant defence (checked by experiment 2026-11-14 on eight varied inputs:
+# the outcome of acceptance.changed.insertion / from_append is identical with and without the mutant). Reported as EQUIVALENT, not counted
+# as killed.
+TEXT = "the final text must equal the old text plus the added lines, which already refuses it"
+EQUIVALENT = {
+    "a module that gained a statement may be an insertion": TEXT + " (an extra top-level statement stays in the remainder)",
+    "two classes may change": TEXT + " (the first changed class stays in the remainder)",
+    "the class header may change": TEXT + " (a header line differs in the remainder)",
+    "the old statements of the class may change": TEXT + " (an old line differs in the remainder)",
+    "a class that only lost statements counts": "a class whose AST differs but whose header and old body are the same does not exist, so the branch is unreachable",
+    "any trailing line belongs to the block": "a trailing line that is not a comment or blank is a statement: it changes the module AST and the body check refuses it first",
+    "a class bound twice is fine for the builder": "insertion_problems, called by the builder right after, counts the bindings again and refuses it",
+    "a decorated class is fine for the builder": "insertion_problems, called by the builder right after, refuses a decorated class",
+    "a one-line class is fine": "the next check (the body must be indented with spaces) refuses it",
+    "the class of the result is not checked": "the block is inserted into the class `name` only, so the class of the result can only be `name`",
+}
+
+
 if __name__ == "__main__":
     WT, PY = Path(sys.argv[1]), sys.argv[2]
     check_only = "--check" in sys.argv
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else ""
     todo = [m for m in M if only in m[0]]
-    killed = 0
+    killed = equiv = 0
     for name, edits in todo:
         originals, texts = {}, {}
         for f, a, b in edits:
@@ -119,6 +137,7 @@ if __name__ == "__main__":
         fails = [line for line in r.stdout.splitlines() if line.startswith("FAILED tests/test_")][:1]
         k = bool(fails) and "error" not in last
         killed += k
-        verdict = "KILLED  " if k else "SKIPPED " if "skipped" in last and not fails else "ERROR   " if "error" in last else "SURVIVED"
+        equiv += (not k) and name in EQUIVALENT
+        verdict = "KILLED  " if k else "EQUIVALENT" if name in EQUIVALENT else "SKIPPED " if "skipped" in last and not fails else "ERROR   " if "error" in last else "SURVIVED"
         print(f"{verdict} {name}: {fails or last}", flush=True)
-    print("patterns ok" if check_only else f"RESULT: {killed}/{len(todo)} killed")
+    print("patterns ok" if check_only else f"RESULT: {killed}/{len(todo) - equiv} killed, {equiv} equivalent (documented), {len(todo)} in all")
