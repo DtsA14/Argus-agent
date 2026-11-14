@@ -1,5 +1,7 @@
 > Verbatim copy of Fable's `PLAN.md` (planning session), pasted by Atha on 2026-11-11 and not edited, apart from this note. **Proposal, not adopted.** Claude's assessment, the changes
 > Claude proposes, and the decisions needed from Atha are in section 14 of [`FABLE_REVIEW_2026-11-11.md`](FABLE_REVIEW_2026-11-11.md).
+>
+> **Status 2026-11-14:** adopted. Atha approved its order on 2026-11-11 (`FABLE_REVIEW_2026-11-11.md` section 14); phases 1 and 3 are built, the phase 2 experiment ran in three batches, and the live status is the board in section 0 of the review.
 
 # PLAN: what to do with the 2026-11-11 reviews
 
