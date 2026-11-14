@@ -10,38 +10,38 @@ Per modul (log #508, tes >= 1 detik): `test_draft` 538 detik, `test_eval_sandbox
 
 ## 1. Usulan
 
-Dua grup serial `sandbox_a` dan `sandbox_b` (bukan lebih dari dua), masing-masing serial di dalamnya, saling paralel. Pembagian: **`test_draft.py` sendirian (sekitar 545 detik) lawan semua modul sandbox lain (sekitar 580 detik)**. Perkiraan waktu dinding sekitar 10 sampai 11 menit, sebelum biaya rebutan sumber daya. Pembagian "draft + eval lawan sisanya" tidak dipakai: 670 lawan 450 detik, tidak seimbang.
+Dua grup serial: **`sandbox_a` hanya berisi tes yang didefinisikan di `tests/test_draft.py`** (sekitar 545 detik); **semua tes sandbox lain masuk `sandbox_b`** (sekitar 580 detik). Perkiraan waktu dinding 10 sampai 11 menit, sebelum biaya rebutan sumber daya. Pembagian "draft + eval lawan sisanya" (670 lawan 450 detik) tidak dipakai.
 
-Aturan yang menjaga keselamatan (dikunci tes di `tests/test_xdist_groups.py`):
-1. Tiap modul sandbox ada di tepat satu grup, utuh (modul tidak dipecah).
-2. Pasangan ini selalu satu grup, karena berbagi keadaan global yang ditemukan Opus:
-   - `test_codetask_crash.py` dan `test_auto_validation.py` (run id `rc`, `sb.remove_labeled({"argus.run": "rc"})` memeriksa seluruh mesin dengan `count == 1`);
-   - `test_stage.py` dan `test_stage_viewer.py` (awalan dan label tetap);
-   - `test_env_node.py` dan `test_env_from_base.py` (cache `~/.cache/argus-npm` dan `argus-pip`, `docker rmi` pada image yang dibangunnya).
-3. Tes dengan batas waktu ketat (`test_sandbox`: `elapsed < 9`/`< 10`; `test_acceptance_sandbox`: `timeout_s: 3`; `test_stage`: `wait_s` 0,2 dan 0,5) tinggal di grup yang lebih ringan, dan margin waktunya dicatat.
-4. Sakelar mundur `VERIFY_SANDBOX_GROUPS=1` (bawaan: 2 setelah spec ini lolos) mengembalikan satu grup; nilainya dicetak di log. Aturan rollback tertulis: satu kegagalan karena batas waktu atau exit 137 yang tak terjelaskan setelah merge berarti kembali ke 1.
-5. Batas kontainer tidak diubah (1 CPU, 512 MB, `XDIST_WORKERS=4`), tidak ada plugin rerun.
+Karena hanya `test_draft.py` yang dipisah, semua modul yang berbagi keadaan global ada di grup yang sama secara otomatis (review Opus 2026-11-14): `remove_labeled` pada run id `rc` (`codetask/run.py:485`, `test_codetask_crash.py`, `test_auto_validation.py`), `docker rmi` di `test_env_node.py:226`, label staging (`router/stage.py:396`). `test_draft.py` sendiri tidak menyentuh apa pun di seluruh mesin (tidak ada `remove_labeled`, `docker ps/rm/rmi`, nama tetap, atau resume; `dr.check` tidak menambah label `argus.run`). Aturan pasangan modul dari draf pertama dibuang: tidak diperlukan.
 
-Aturan tertulis "tes sandbox tidak jalan bersamaan" di `conftest.py`, `docs/Reconciliation.md` dan `PENDING.md` diganti: tes sandbox tidak jalan bersamaan **dalam satu grup**, dan dua grup tidak berbagi keadaan global (butir 2).
+Aturan (dikunci tes di `tests/test_xdist_groups.py`):
+1. **Grup ditentukan per tes (node), bukan per modul**, dengan urutan: tes yang didefinisikan di `test_draft.py` masuk `sandbox_a`; tes sandbox lain (teksnya sendiri, atau fixture dari berkas yang memuat teks itu) masuk `sandbox_b`. Jadi `test_red_caught.py` (mengimpor `scfg` dari `test_draft`) dan `test_append_tests_sandbox.py` (memakai `root` dan `tdr` dari `test_draft`) masuk `sandbox_b`. Daftar `{node: grup}` dihitung dari koleksi sungguhan dan dipin.
+2. **Ketergantungan pada xdist dicatat dan dipin**: dua grup mulai bersamaan di dua worker hanya karena `--loadscope-reorder` aktif (bawaan xdist 3.8, `loadscope.py:375-398`: unit terbesar lebih dulu, satu per worker). Satu tes memastikan opsi `--no-loadscope-reorder` tidak ada di `verify.sh`, dan `verify.sh` mencetak versi xdist.
+3. **`VERIFY_SANDBOX_GROUPS`** (bawaan 2 setelah spec ini lolos; `1` mengembalikan satu grup `sandbox`): dibaca di `conftest.py`, hanya `1` atau `2` diterima (selain itu gagal keras), dicetak di header `verify.sh` dan di ringkasan akhir; `precheck.sh` mewarisi nilai yang sama. Aturan rollback: setelah merge, satu kegagalan `verify_at` karena batas waktu atau exit 137 yang tidak masuk daftar-izin (butir 3 di bagian 3) berarti kembali ke `1`.
+4. **Ringkasan per grup** (`group_totals`) membedakan grup lewat akhiran node id (`@sandbox_a`, `@sandbox_b`, dicocokkan dengan `endswith` pada nama grup yang dikenal, karena ada parameter id yang memuat `@`), dan mencetak **waktu dinding per grup** (paling awal `start` sampai paling akhir `stop` dari laporan tes).
+5. Tempat yang mengasumsikan satu grup diperbarui: `tests/grouplist_plugin.py:9`, `tests/test_xdist_groups.py:130`, `tests/test_verify_hardening.py:155-171`, komentar `conftest.py`, `docs/Reconciliation.md` (aturan "tes sandbox tidak jalan bersamaan" menjadi "dalam satu grup"; baris 280 sampai 281 yang menyebut `test_acceptance_sandbox` meminta tanpa kontainer di seluruh mesin sudah usang sejak `sandbox_scope` dan ikut dikoreksi), `PENDING.md`.
+6. Batas kontainer tidak diubah (1 CPU, 512 MB, `XDIST_WORKERS=4`), tidak ada plugin rerun. Aturan lama "tes dengan batas waktu ketat tinggal di grup ringan" **dibuang**: semuanya jatuh di `sandbox_b` yang justru lebih berat, jadi aturan itu bertentangan dengan pembagian. Gantinya: margin terukur (bagian 3, butir 5).
 
 ## 2. Apa yang dikoreksi dari catatan lama
 
-`docs/Reconciliation.md` menulis "CPU berebut membuat exit 137". Penyebab itu **tidak pernah dibuktikan** (tidak ada bukti tersimpan). Pengukuran dasar menunjukkan 137 juga muncul di run hijau: 28 kematian berstatus 137 dan satu event `oom` (sekitar 20:36 UTC), yang sebagian pasti disengaja (`tests/test_sandbox.py:148` menegakkan `exit_code == 137` dan `killed` untuk batas memori; tes batas waktu juga membunuh kontainer). Maka kriteria "nol exit 137" tidak dipakai.
+`docs/Reconciliation.md` menulis "CPU berebut membuat exit 137". Penyebab itu **tidak pernah dibuktikan**. Dasar `verification/verify-20261113T201900Z-aarch64.log` (commit 7175b91, PASS, 18 modul sandbox termasuk `test_append_tests_sandbox.py`) sudah punya 28 kematian 137 dan satu event `oom` (20:36:20 UTC), sebagian disengaja: dari image, 20 ada di tiga pin staging (`test_stage` menghentikan rilis), 8 di image python bawaan (`test_sandbox.py:146` batas memori, dan pembunuhan di `:168,196,272,281`); dua yang lain (20:20:32 dan 20:22:18) kemungkinan dari `test_acceptance_sandbox.py:124` dan `test_codetask_crash.py:181`, itu inferensi. Kriteria "nol 137" tidak dipakai.
 
 ## 3. Bukti yang diminta sebelum merge
 
-Urutan, murah dulu:
-1. **Audit statis** (hanya membaca) atas semua modul sandbox untuk nama tetap, run id, `docker` global, cache bersama, port, dan penulisan `.sandbox_image*`. `test_stage_viewer.py` dan `test_env_from_base.py` belum diperiksa sama sekali; hasilnya dicatat di spec ini.
-2. **Pemetaan 137 dan `oom` ke tes pemiliknya** pada run dasar: tiap kematian 137 harus dikaitkan ke tes yang sengaja menciptakannya (hitungan per image dibandingkan dengan dasar). Yang tak terkait ke tes mana pun menghentikan pekerjaan.
-3. **Pengukuran waktu dinding per grup** (mulai paling awal sampai berhenti paling akhir dari laporan tes) ditambahkan ke ringkasan `conftest.py`.
-4. **Tiga `verify_at` penuh berturut-turut, semuanya bersih**, tanpa job live dan tanpa `verify_at` kedua di mesin, dengan pencatat `docker events` dan tekanan CPU/memori. Syarat: semuanya `RESULT: PASS` dengan 0 tes sandbox dilewati; tidak ada event `oom` di luar yang berasal dari tes batas memori; hitungan 137 per image tidak melebihi dasar; tes berbatas waktu ketat memakai kurang dari separuh batasnya; satu kontainer terlama kurang dari separuh `timeout_s`. **Satu kegagalan menghentikan, bukan diulang sampai hijau.**
-5. Mutan: pasangan yang berpisah grup harus membuat tes pengunci gagal (tiga pasangan, satu mutan masing-masing), modul tak dikenal harus gagal, dan sakelar `VERIFY_SANDBOX_GROUPS=1` harus mengembalikan satu grup.
+1. **Audit statis** (membaca) sudah dikerjakan Opus untuk modul-modul sandbox (lihat 3.1); hasilnya dicatat di sini, dan setiap temuan baru menghentikan pekerjaan.
+2. **Pengamat yang lebih baik** (skrip di luar repositori, atau `scripts/` bila dipakai berulang): `docker events` dengan nama kontainer, label, event `start`, `die` (exitCode) dan `oom`; tekanan CPU/memori tiap 5 detik; **cap waktu per tes** dari hook `conftest.py` (`start`/`stop` tiap tes ke berkas di luar repositori) agar tiap event dapat dikaitkan ke tes. Kondisi awal dicatat (satu kontainer layanan staging hidup sebelum run mulai).
+3. **Daftar-izin**: setiap kematian 137 harus jatuh di dalam jendela waktu sebuah tes yang membunuh kontainer dengan sengaja (daftar eksplisit di spec ini, diisi dari pemetaan run dasar yang diulang dengan pengamat baru), dan setiap `oom` di dalam `test_memory_limit_kills_the_code` saja. Kematian 137 di luar daftar-izin menghentikan pekerjaan. Hitungan per image **tidak** dipakai (id image berubah tiap run).
+4. **Tiga `verify_at` penuh berturut-turut, semuanya bersih**, tanpa job live dan tanpa `verify_at` kedua: semuanya `RESULT: PASS` dengan 0 tes sandbox dilewati; butir 3 terpenuhi; waktu dinding per grup tercatat. Satu kegagalan menghentikan, bukan diulang sampai hijau.
+5. **Margin waktu**: tes berbatas waktu ketat tidak boleh lebih buruk dari dasar sebesar X (dasar: `test_cleanup_is_bounded…` 5,23 detik terhadap `< 9`; sekitar 5 detik bawaan: timeout 2 + cleanup 3). X ditetapkan dari tiga run (selisih terbesar antar run dasar) sebelum angkanya dipakai; sebelum itu hanya dicatat.
+6. **Mutan**: grup `test_draft` bocor ke `sandbox_b` atau sebaliknya harus membuat tes pin gagal; `test_red_caught` dan `test_append_tests_sandbox` di grup salah harus gagal; modul tak dikenal gagal; nilai `VERIFY_SANDBOX_GROUPS` tak sah gagal keras; `1` mengembalikan satu grup; `--no-loadscope-reorder` ditolak.
 
-### 3.1 Hasil audit statis sejauh ini (2026-11-14, grep, bukan pembacaan penuh)
+### 3.1 Hasil audit statis (Opus, 2026-11-14, membaca kode)
 
-- `test_stage_viewer.py`: docker sungguhan hanya di bagian "the real build in pwa_node22" (baris 856 dan seterusnya, lewat `approve_draft.sandbox_cfg`); sisanya memakai `Staging(run=...)` palsu atau `monkeypatch` pada `subprocess.run`. Tidak ada nama kontainer, port, atau cache tetap yang terlihat oleh grep. **Belum ditelusuri**: apakah bagian docker itu memakai `PREFIX`/`LABEL` milik `test_stage.py`.
-- `test_env_from_base.py`: kebanyakan memakai `docker` palsu di `tmp_path`; baris 170 dan 194 sampai 200 memakai `sb.status` dan `sb.run_command` sungguhan atas image yang dibangun ke direktori sementara. Tidak ada `docker rmi` di berkas ini (yang ada di `test_env_node.py:226`). **Belum ditelusuri**: apakah build-nya memakai `~/.cache/argus-pip`.
-- Keduanya tetap dipasangkan menurut aturan butir 2 sampai penelusuran itu selesai.
+- `test_stage_viewer.py`: docker sungguhan hanya lewat `vite_build` (`router/stage_viewer.py:202`, nama acak); `Staging` hanya dengan `run` palsu (`:267`); proxy memakai `port=0` (`:297`). Tidak memakai `TEST_PREFIX`/`TEST_LABEL` dengan docker sungguhan.
+- `test_env_from_base.py:192` memang membangun image (dua `docker import`, cache `~/.cache/argus-pip`, `build_env_from_base.sh:14`); `test_env_node` memakai `argus-npm`: keduanya **tidak berbagi cache** (alasan di draf pertama salah). Keduanya melabeli ulang `argus-sandbox-<env>:...`, aman karena pemakai memakai id yang dipin. Karena keduanya sama-sama di `sandbox_b`, tidak perlu aturan khusus.
+- `test_review`, `test_swe_pilot`, `test_eval_sandbox`, `test_pytest_sandbox`: tidak ada nama tetap atau perintah docker global. `sandbox_scope.py` dan `test_sandbox.py:171,317` dibatasi lewat token atau nama uuid.
+- Nama kontainer berisi uuid (`tools/sandbox.py:292`), tidak ada port tetap. Variabel Python global tidak bocor antar grup (tiap worker xdist adalah proses sendiri).
+- Di luar lingkup tetapi dicatat: `remove_labeled` dengan label kosong akan menghapus semua kontainer sandbox di mesin (`tools/sandbox.py:235-241`), perlu penjaga di PR terpisah.
 
 ## 4. Sengaja tidak dikerjakan
 
