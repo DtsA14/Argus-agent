@@ -29,7 +29,8 @@ def evaluate(contract, workspace, before, sandbox_cfg, log=None, run=run_validat
     criteria = scope_check(contract, before, after)
     # inputs_root: the directory the contract's input workspace is relative to; without it a changed file is scanned whole
     criteria.append(testdetect.check(workspace, before, after,
-                                     None if inputs_root is None else Path(inputs_root) / contract["inputs"]["workspace"]))
+                                     None if inputs_root is None else Path(inputs_root) / contract["inputs"]["workspace"],
+                                     contract["scope"]))
 
     doc, problems = cl.read_summary(workspace, claims_schema(contract))
     art = {"path": SUMMARY, "sha256": after.get(SUMMARY)}

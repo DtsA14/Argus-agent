@@ -14,6 +14,7 @@ import tokenize
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
+from .contract import matches
 from .workspace import SPECIAL
 
 ID = "scope:no_test_detection"
@@ -69,8 +70,8 @@ COMMENT = ("#", "//")      # a line that begins as a comment is a comment to its
 
 def _code_view(text):
     """The text of a Python file with what cannot run blanked out (comments, and docstrings or any other standalone string
-    statement), the same length and the same lines. Only forger patterns use it: `os._exit(0)` in a docstring or a trailing
-    comment is not a forger. Code is untouched: a `#` inside a string hides nothing, an f-string and a string given to exec stay.
+    statement), the same length and the same lines. Every pattern, detection and forger, looks at it (SPEC_GATE_RC_CLARIFICATIONS
+    D1): `os._exit(0)` or "pytest" in sys.modules` in a docstring or a trailing comment is not code. Code is untouched: a `#` inside a string hides nothing, an f-string and a string given to exec stay.
     When the lines are uncertain (a syntax error, a bare carriage return, anything the parser does not agree on) the text comes
     back unchanged and the old, wider scan applies."""
     try:
@@ -102,7 +103,7 @@ def _code_view(text):
 
 def _hits(text, py=False):
     """[(line number, pattern name, line)] of one file's text; a line is reported once, for its first pattern. For a Python file
-    (py) the forger patterns look at the code only (see _code_view)."""
+    (py) all patterns look at the code only (see _code_view); JS and TS are scanned as written, comments included."""
     out = []
     lines = text.split("\n")
     view = _code_view(text).split("\n") if py else lines
@@ -113,7 +114,7 @@ def _hits(text, py=False):
         for name, regexes in PATTERNS.items():
             if comment and name in FORGERS:
                 continue
-            target = view[n - 1] if name in FORGERS else line
+            target = view[n - 1]
             if all(r.search(target) for r in regexes):
                 out.append((n, name, line))
                 break
@@ -143,15 +144,22 @@ def _unscanned(path, why):
     return {"path": path, "line": 0, "pattern": "unscanned", "text": why}
 
 
-def check(workspace, before, after, inputs_dir=None):
+def _scanned_test_file(path, scope):
+    """A file named like a test that the contract lets the agent write (and does not protect) can be imported by production
+    code, so it is scanned like any other (SPEC_GATE_RC_CLARIFICATIONS P1). Without a scope, the name alone exempts it."""
+    return scope is not None and matches(path, scope["writable"]) and not matches(path, scope["protected"])
+
+
+def check(workspace, before, after, inputs_dir=None, scope=None):
     """The criterion for the files that differ between the snapshots `before` and `after` (path -> sha256).
     With the input directory, a changed file's lines that match and that the input file already had (same text, as many
     times) do not count; without it, or when the input file cannot be read, every matching line counts. A changed
     file that cannot be read or is too large is itself a hit: the gate fails closed. Special files (symlinks, FIFOs)
-    are left to scope:regular_files and never opened."""
+    are left to scope:regular_files and never opened. `scope` is the contract's {writable, protected}: a test-named file that
+    is writable and not protected is scanned too."""
     found = []
     for path in sorted(p for p, h in after.items() if before.get(p) != h and h != SPECIAL):
-        if PurePosixPath(path).suffix not in EXTENSIONS or is_test_file(path):
+        if PurePosixPath(path).suffix not in EXTENSIONS or (is_test_file(path) and not _scanned_test_file(path, scope)):
             continue
         try:
             text = _read(Path(workspace) / path)
