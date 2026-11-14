@@ -1,0 +1,62 @@
+{
+ "measured": "2026-11-14",
+ "harness": "main at 7c499e4 (INSERT-INTO #514)",
+ "stage": "draft only",
+ "total_drafter_usd": 0.0919,
+ "accepted": 7,
+ "of": 8,
+ "inserted_into_existing_class": 5,
+ "same_class_as_maintainers": 4,
+ "comparable_cases": 4,
+ "rows": [
+  {
+   "issue": "1252",
+   "state": "AWAITING_APPROVAL",
+   "usd": 0.0123,
+   "into_class": null
+  },
+  {
+   "issue": "1250",
+   "state": "AWAITING_APPROVAL",
+   "usd": 0.007,
+   "into_class": "ValueChainTests"
+  },
+  {
+   "issue": "1247",
+   "state": "DRAFT_FAILED",
+   "usd": 0.0182,
+   "into_class": null,
+   "reason": "submits_exhausted"
+  },
+  {
+   "issue": "1192",
+   "state": "AWAITING_APPROVAL",
+   "usd": 0.0068,
+   "into_class": "InterleaveEvenlyTests"
+  },
+  {
+   "issue": "849",
+   "state": "AWAITING_APPROVAL",
+   "usd": 0.011,
+   "into_class": "PeekableTests"
+  },
+  {
+   "issue": "1152",
+   "state": "AWAITING_APPROVAL",
+   "usd": 0.0097,
+   "into_class": "NumericRangeTests"
+  },
+  {
+   "issue": "813",
+   "state": "AWAITING_APPROVAL",
+   "usd": 0.0168,
+   "into_class": "ReplaceTests"
+  },
+  {
+   "issue": "1098",
+   "state": "AWAITING_APPROVAL",
+   "usd": 0.0101,
+   "into_class": null
+  }
+ ]
+}
