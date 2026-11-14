@@ -221,14 +221,15 @@ def test_every_phase_on_the_controller_is_written_with_its_name_and_nothing_from
         {"nodeid": "t.py::a", "when": w, "start": 1.0, "stop": 2.0} for w in ("setup", "call", "teardown")]
 
 
-def test_a_file_that_cannot_be_written_is_said_once_on_stderr_and_never_ends_the_run(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv("ARGUS_TEST_TIMES", str(tmp_path / "no" / "such" / "dir" / "t.jsonl"))
-    monkeypatch.setattr(conftest, "_is_worker", False)
-    monkeypatch.setattr(conftest, "_times_failed", False)
-    for _ in range(3):
-        conftest.pytest_runtest_logreport(R("t.py::a", "call", 1.0, 2.0))
-    err = capsys.readouterr().err
-    assert err.count("cannot be written") == 1 and "ARGUS_TEST_TIMES" in err
+def test_a_file_that_cannot_be_written_is_said_once_on_stderr_and_never_ends_the_run(tmp_path):
+    # in a child process: the variable would also reach pytest's own report of this very test
+    code = ("import conftest\n"
+            "class Rep:\n    when, nodeid, start, stop = 'call', 't.py::a', 1.0, 2.0\n"
+            "for _ in range(3):\n    conftest.pytest_runtest_logreport(Rep())\nprint('went on')\n")
+    env = {**os.environ, "ARGUS_TEST_TIMES": str(tmp_path / "no" / "such" / "dir" / "t.jsonl")}
+    r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=60, env=env)
+    assert r.returncode == 0 and "went on" in r.stdout, r.stdout + r.stderr
+    assert r.stderr.count("cannot be written") == 1 and "ARGUS_TEST_TIMES" in r.stderr
 
 
 # ---- the scripts ------------------------------------------------------------------------------------------------------------
