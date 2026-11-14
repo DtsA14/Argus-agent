@@ -1,6 +1,6 @@
 # Spec INSERT-INTO: tests the drafter adds go into an existing test class (not a new class at the end of the file)
 
-Status: **draf spec, minta review Opus; bila GO, dibangun segera, TANPA merge** (alur baku strict-lane, Atha 2026-11-14: merge menunggu kata "merge"). Ditulis Claude.
+Status: **review Opus: GO WITH FIXES (B1 sampai B5, diterapkan di bawah); dibangun TANPA merge** (alur baku strict-lane, Atha 2026-11-14: merge menunggu kata "merge"). Ditulis Claude.
 Dasar: `pilots/outside_v2/batch3/APPEND_READ.md` (pembacaan buta Opus), `APPEND_MEASUREMENT.md`, dan `SPEC_DRAFTER_STYLE.md` (ditarik; bagian 4 mencatat bahwa hanya `insert_into` yang dapat memperbaiki penempatan).
 
 ## 0. Masalah (terukur)
@@ -13,15 +13,16 @@ Dasar pengukuran penempatan: dari 8 draf batch 3 yang diulang, **0 dari 8 menaru
 
 Sebuah entri `changed_tests` dari drafter boleh membawa **`into_class`** bersama `append`: `{path, append, into_class: "SplitBeforeTest"}`. Harness menyisipkan blok **di akhir badan kelas itu** (sesudah pernyataan terakhirnya) dan menyimpan hasilnya sebagai `content` seperti biasa (draf hanya berisi `content`, sehingga sha sama lewat rute mana pun, aturan APPEND-TESTS tetap).
 
-Aturan (semuanya diperiksa harness, bukan prompt):
-1. `into_class` hanya dengan `append` (bukan `content`, tanpa `removed`/`modified`). Nama = **kelas tingkat atas yang didefinisikan tepat sekali** di berkas (bukan bersarang, bukan di dalam `if`, bukan nama bertitik); tidak ada atau ganda berarti ditolak dengan pesan.
-2. Blok, sesudah `textwrap.dedent`, hanya boleh memuat **fungsi/metode (`def`, `async def`, dengan dekorator) dan penugasan tingkat kelas**; **tanpa `import`, kelas, atau kode tingkat atas**. Impor yang dibutuhkan harus sudah ada di berkas (bila tidak, drafter memakai append biasa ke akhir berkas, seperti sekarang). Blok harus bisa di-parse sebagai badan kelas.
-3. Penyisipan: blok di-dedent lalu diberi indentasi badan kelas (indentasi pernyataan pertama badannya; **spasi saja, tab ditolak**; kelas satu baris `class A: pass` ditolak; berkas dengan `\\r` ditolak), satu baris kosong sebelum metode pertama, tepat sesudah baris terakhir badan kelas (`end_lineno`); komentar dan baris kosong yang mengikuti kelas tetap sesudahnya.
-4. **Tak satu pun nama yang didefinisikan blok boleh sudah ada di kelas itu** (metode dengan nama sama akan menimpa tes lama tanpa terlihat; analog `redefined_problems` untuk tingkat atas). Nama ganda di dalam blok ditolak.
-5. **Hasil harus "penyisipan murni"**: `new == old[:i] + X + old[i:]` untuk satu `i` (diperiksa dari awalan dan akhiran bersama; `pure_addition` yang berbasis awalan, dipakai di `acceptance/draft.py:355` dan `codetask/drafter.py:1003`, digeneralisasi: append di akhir adalah kasus khusus). Setiap pemeriksaan APPEND-TESTS yang bergantung padanya berlaku sama: aturan K1 (node wajib bukan tes yang sudah dikoleksi; id berparameter dibandingkan lewat fungsinya), batas 50.000 byte untuk wilayah tambahan dan 1 MiB untuk seluruh berkas, `new_tests` boleh kosong bila ada penyisipan yang menambah tes, wilayah tambahan harus di-parse.
-6. Kunci `__main__`: penyisipan ke dalam kelas yang berada **sebelum** blok `if __name__ == "__main__"` **diizinkan** (tes ikut jalan sebagai skrip); aturan APPEND-TESTS yang menolak append di akhir berkas ber-`__main__` tetap untuk append biasa. Tujuan: `new_tests` tidak lagi menjadi satu-satunya jalan untuk berkas ber-`__main__`.
-7. Satu entri per berkas (batas lama); sebuah isu yang butuh tes di dua kelas tetap memakai satu kelas (batas yang dicatat, bukan dipecahkan).
-8. Id node wajib `path::Kelas::test_x` (sudah sah di `NODE`).
+Aturan (semuanya diperiksa harness, bukan prompt; direvisi sesudah review Opus 2026-11-14, B1 sampai B5):
+1. `into_class` hanya dengan `append` (bukan `content`, tanpa `removed`/`modified`). Nama = **kelas tingkat atas** yang **terikat tepat sekali** di modul: tidak ada `ClassDef`/`def`/penugasan/`del`/impor lain dengan nama itu di mana pun (termasuk di dalam `if`, `try`, `for`, atau `A = deco(A)` sesudahnya), tanpa dekorator kelas, bukan bersarang atau bernama bertitik. Tidak ada, ganda, atau berdekorator berarti ditolak dengan pesan.
+2. **Daftar putih isi blok (B2):** sesudah `textwrap.dedent`, blok hanya boleh berisi **`def test*` atau `async def test*`**, tanpa dekorator, dengan nilai bawaan argumen hanya konstanta. **Tidak** ada penugasan tingkat kelas, pembantu non-tes, nama dunder, `setUp`/`tearDown`/`setUpClass`/`tearDownClass`/`run`/`__init__`, `import`, kelas, atau kode tingkat atas. Impor yang dibutuhkan harus sudah ada di berkas (bila tidak, append biasa di akhir berkas, seperti sekarang). Alasan: sebuah nama TestCase atau pembantu di dalam kelas mengubah cara **semua tes lama kelas itu** berjalan.
+3. **Nama (B2):** tak satu pun nama metode blok boleh sudah ada di kelas itu, **atau sudah dikoleksi dari intake sebagai `path::Kelas::nama`** (itu menangkap tes warisan dari mixin: `PeekableTests(PeekableMixinTests, TestCase)` akan menimpa tes warisan tanpa mengubah id node), dan tak boleh ganda di dalam blok.
+4. **Penyisipan (B3, B5):** blok di-dedent lalu diberi indentasi badan kelas (indentasi pernyataan pertama badannya; **spasi saja**; tab, `\r`, `\f`, `\v` dan kelas satu baris ditolak; garis dipisah dengan `split("\n")`, bukan `splitlines()`), satu baris kosong sebelum metode pertama, tepat sesudah baris terakhir kelas (`end_lineno` kelas). **Hasil diverifikasi dengan AST**: `ast.dump` pernyataan yang disisipkan di hasil harus sama dengan `ast.dump` blok yang di-dedent (indentasi ulang mengubah nilai string tiga-kutip dan sambungan `\`; yang berubah nilainya ditolak).
+5. **Predikat penyisipan struktural (B1, B4)**, bukan "satu `i` mana pun": `insertion(old, new)` mem-parse keduanya; AST modul baru harus sama dengan yang lama **kecuali** tepat satu kelas tingkat atas yang badannya bertambah pernyataan di akhir (atau modul bertambah pernyataan di akhir: append lama), dan teks hasil harus sama dengan teks lama ditambah tepat baris-baris pernyataan itu (satu baris kosong di depan). Semua pemeriksaan APPEND-TESTS yang bergantung pada `pure_addition` memakai predikat ini: `added_bytes` (`len(new)-len(old)` untuk sisipan), `redefined_problems` (untuk sisipan: nama metode, bukan nama tingkat atas; wilayah sisipan yang berindentasi tidak di-parse sendiri), aturan K1 (`acceptance/draft.py:355`), `_adds_a_test`, `_appended` dan `review_text` (`codetask/drafter.py:1003`, `:1025`, `:1049`), batas 50.000 byte untuk wilayah tambahan dan 1 MiB untuk berkas, dan `new_tests` kosong bila ada sisipan yang menambah tes. Daftar putih butir 2 dan 3 berlaku untuk pernyataan yang disisipkan **apa pun rutenya** (`append` atau `content`).
+6. **Menutup lubang APPEND-TESTS yang sudah ada** (ditemukan Opus; sisipan tidak boleh memperlebarnya): `redefined_problems` untuk append di akhir berkas juga menghitung **nama yang diimpor** intake (sebuah `def split_before` menimpa fungsi yang diimpor untuk tes lama) dan menolak **penugasan ke atribut atau subskrip di tingkat atas** (`SplitBeforeTest.test_a = ...`, `TestCase.assertEqual = ...`, `mod.f = fake`).
+7. Kunci `__main__`: sisipan ke kelas yang berakhir **sebelum** `if __name__ == "__main__"` diizinkan (kelasnya harus berakhir sebelum guard); aturan APPEND-TESTS atas append di akhir berkas ber-`__main__` tetap.
+8. Satu entri per berkas (batas lama); isu yang butuh tes di dua kelas memakai satu kelas.
+9. Id node wajib `path::Kelas::test_x` (sah di `NODE`).
 
 Perubahan prompt drafter: deskripsi `ChangedTest.into_class` dan satu kalimat pada aturan append ("bila berkas punya kelas tes untuk fungsi yang dibahas isu, beri namanya di `into_class` dan tulis hanya metodenya; bila tidak ada kelas yang cocok, append biasa"). Pemeriksaan harness di atas yang menegakkan, prompt hanya mengarahkan.
 
@@ -35,13 +36,20 @@ Tampilan untuk manusia: `review_text` dan `_appended` menampilkan metode yang di
 - Review Opus atas spec ini dan atas kodenya; satu `verify_at` penuh pada commit akhir (pra-cek dulu: `bash scripts/precheck.sh`). **Tidak di-merge sampai Atha bilang "merge".**
 - **Efek pada perilaku diukur terpisah sesudahnya** (draf-saja, 8 isu batch 3, sekitar $0,08, butuh persetujuan uang Atha): berapa dari 8 draf menyisipkan ke kelas yang sudah ada (dasar 0), draf yang diterima harness tetap 8 dari 8, tanpa kenaikan putaran revisi, dan pembacaan buta ulang bila hasilnya menarik.
 
+### 2.1 Tes tambahan dari review
+
+Tiap lubang yang ditemukan Opus mendapat tes dan mutan: tes warisan dari mixin ditimpa, `run`/`setUp`/`cls`, sisipan berbasis `content` tepat setelah impor (menyamar sebagai penambahan), nilai string yang berubah karena indentasi ulang, daerah rakus awalan/akhiran (`test_a2` sebelum `test_c`), `\f` dan `\x85`, kelas terakhir di berkas, kelas dengan `A = deco(A)` sesudahnya, kelas berdekorator, berkas tanpa baris akhir, impor yang tertimpa oleh append, dan penugasan atribut tingkat atas. Tes sandbox nyata memakai kelas mixin. Perkiraan ukuran dari Opus: 250 sampai 320 baris kode (`acceptance/changed.py` 180 sampai 220, `draft.py` sekitar 10, `drafter.py` 40 sampai 60) dan 450 sampai 600 baris tes.
+
 ## 3. Sengaja tidak dikerjakan
 
+- Pembantu non-tes, penugasan tingkat kelas, dekorator, dan `setUp` dalam blok sisipan (daftar putih butir 2).
 - Menyisipkan di antara metode (mis. dekat tes terkait) atau mengubah metode yang ada; hanya akhir badan kelas.
 - Kelas bersarang atau bernama bertitik, beberapa kelas per berkas, fungsi tingkat atas yang disisipkan sebelum fungsi tertentu (repositori pytest murni tetap memakai append di akhir).
 - Aturan gaya (`try/except`, `subTest`): ditarik di SPEC_DRAFTER_STYLE.
 - Impor baru lewat penyisipan.
 
 ## 4. Batas yang diketahui
+
+Penyisipan ke kelas dasar menambah tesnya ke setiap subkelas; node tambahan itu tidak wajib sehingga baseline menolak drafnya (aman, pesannya membingungkan). Tes baru kini jalan sebelum kelas sesudahnya (urutan pytest) atau di antara metode lama (unittest mengurutkan nama), sehingga keadaan global yang diubahnya bisa mencapai tes lama; daftar putih tidak menutup itu.
 
 Satu repositori (more-itertools: tes `unittest`) menjadi dasar; repositori pytest dengan kelas `Test*` tercakup, tetapi tidak diukur. Model bisa memilih kelas yang salah (harness hanya memastikan kelas itu ada, bukan bahwa ia yang paling tepat). Penyisipan di akhir kelas belum "dekat tes terkait" (nilai A maintainer mungkin juga menuntut itu). Berkas dengan beberapa definisi kelas bernama sama ditolak.
