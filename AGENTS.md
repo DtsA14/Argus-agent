@@ -52,6 +52,12 @@ returns "no finding"); it reads nothing outside the repository inputs it is give
 old code and one review; they do not need mutants or a full `verify_at` (run the touched tests). If any condition fails, or a reviewer doubts it,
 it is strict-lane. A hint that becomes a gate (refuses, fails or blocks something) is a new strict-lane change.
 
+### Chat app (SPEC_CHAT_APP, Atha 2026-11-14)
+- `router/chat.py` and `router/chat_static/` are trusted code written in the strict lane, never by an Argus agent. The viewer (`argus-viewer`, written by
+  agents) stays read only on its own origin and never calls a chat route; the two are linked by navigation only, never by `fetch`.
+- Flag any chat route that changes a job, spends money or starts a process without the spec's two steps (prepare, then confirm with a token bound to the card),
+  any Host check that skips a method, any cookie, any HTML sink or storage in `chat_static/app.js`.
+
 ### Tests
 - A new guarantee needs a test that fails when the guarantee is broken (we mutation-check them).
   A test that is skipped (e.g. Docker unavailable) does not count as passing.

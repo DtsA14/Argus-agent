@@ -1,0 +1,18 @@
+# SPEC_CHAT_APP C1: the phone's chat app, read only, on 127.0.0.1:8712 only (fixed in router/chat.py, never 0.0.0.0 or
+# `localhost`). It holds no key, runs no model and has no route that changes anything. The phone reaches it through
+# an SSH local forward (permitopen="127.0.0.1:8712", added by hand to the iphone-viewer key; it is removed again at C4).
+# Install (after "go live"): ln -s this file into ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload && systemctl --user enable --now argus-chat.service
+[Unit]
+Description=Argus chat app for the phone (127.0.0.1:8712)
+
+[Service]
+Type=simple
+WorkingDirectory=%h/pilot3a_live
+ExecStart=%h/pilot3a_live/.venv-verify/bin/python scripts/argus.py chat serve
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

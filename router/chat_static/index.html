@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Argus</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app">
+  <aside id="panel" aria-label="Daftar job">
+    <header><strong>Argus</strong><button id="close-panel" type="button" aria-label="Tutup daftar">×</button></header>
+    <ul id="threads"></ul>
+    <p id="skipped" class="muted"></p>
+  </aside>
+  <main>
+    <header class="bar">
+      <button id="open-panel" type="button" aria-label="Buka daftar">☰</button>
+      <span id="summary" class="muted">memuat…</span>
+    </header>
+    <section id="stream" aria-live="polite"></section>
+    <form id="composer" autocomplete="off">
+      <div id="chips" role="group" aria-label="Mode">
+        <button type="button" data-mode="status" aria-pressed="true">Status</button>
+        <button type="button" data-mode="issue" disabled title="Belum tersedia">Issue</button>
+        <button type="button" data-mode="research" disabled title="Belum tersedia">Riset</button>
+      </div>
+      <input id="query" type="text" maxlength="200" placeholder="Cari job: id, status, judul" aria-label="Cari job">
+    </form>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
