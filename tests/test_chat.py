@@ -300,3 +300,33 @@ def test_the_page_has_one_external_script_and_no_inline_code():
 
 def test_the_viewer_proxy_still_forwards_nothing_to_the_chat():
     assert "chat" not in sv.API.pattern and sv.API.match("/api/threads") is None
+
+
+# ---- one Host, one Sec-Fetch-Site (found by probing: the first of two used to stand in for both) -------------------------
+
+def raw_get(svc, headers):
+    import socket
+    req = b"GET /api/status HTTP/1.1\r\n" + b"".join(f"{k}: {v}\r\n".encode() for k, v in headers) + b"\r\n"
+    with socket.create_connection(("127.0.0.1", svc.port), timeout=5) as c:
+        c.sendall(req)
+        data = b""
+        while True:
+            chunk = c.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+    return int(data.split(b" ", 2)[1])
+
+
+@pytest.mark.parametrize("hosts", [[HOST, "evil.example"], ["evil.example", HOST], [HOST, HOST], []])
+def test_exactly_one_host_header_is_required(svc, hosts):
+    assert raw_get(svc, [("Host", h) for h in hosts]) == 421
+
+
+def test_one_good_host_header_is_accepted_in_the_raw_helper(svc):
+    assert raw_get(svc, [("Host", HOST)]) == 200
+
+
+@pytest.mark.parametrize("sites", [["same-origin", "cross-site"], ["cross-site", "same-origin"], ["same-origin", "same-origin"]])
+def test_two_sec_fetch_site_headers_are_refused(svc, sites):
+    assert raw_get(svc, [("Host", HOST)] + [("Sec-Fetch-Site", x) for x in sites]) == 403

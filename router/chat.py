@@ -163,13 +163,19 @@ class Handler(BaseHTTPRequestHandler):
     def _refuse(self, status, why):
         self._json(status, {"refused": why})
 
+    def _host_ok(self):
+        """Exactly one Host header, and it is ours (SPEC_PWA_VIEWER A: two Host headers are a 421): the first of two must
+        not stand in for the second, which a proxy or a rebinding page may have chosen."""
+        hosts = self.headers.get_all("Host") or []
+        return len(hosts) == 1 and hosts[0] in HOSTS
+
     def do_GET(self):
-        if self.headers.get("Host") not in HOSTS:            # every method, every route (11.1): reads are private too
+        if not self._host_ok():                              # every method, every route (11.1): reads are private too
             return self._refuse(421, "wrong host")
         path = self.path
         if path.startswith("/api/"):
-            site = self.headers.get("Sec-Fetch-Site")
-            if site not in (None, "same-origin", "none"):
+            sites = self.headers.get_all("Sec-Fetch-Site") or []
+            if len(sites) > 1 or (sites and sites[0] not in ("same-origin", "none")):
                 return self._refuse(403, "not a request of the chat's own page")
             return self._api(path)
         names = {"/": "index.html", "/static/app.js": "app.js", "/static/app.css": "app.css"}
@@ -189,7 +195,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._refuse(404, "not found")
 
     def _not_allowed(self):
-        if self.headers.get("Host") not in HOSTS:
+        if not self._host_ok():
             return self._refuse(421, "wrong host")
         self.close_connection = True                         # a body we never read must not be taken for the next request
         self.send_response(405)

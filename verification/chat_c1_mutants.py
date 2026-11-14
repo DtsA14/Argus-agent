@@ -8,12 +8,14 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 T = ["-rfEs", "tests/test_chat.py"]
 C = "router/chat.py"
 M = [
-    ("Host not checked on GET", C, [("        if self.headers.get(\"Host\") not in HOSTS:            # every method", "        if False:            # every method")]),
+    ("only the first Host header is read", C, [("        return len(hosts) == 1 and hosts[0] in HOSTS", "        return bool(hosts) and hosts[0] in HOSTS")]),
+    ("only the first Sec-Fetch-Site is read", C, [("            if len(sites) > 1 or (sites and", "            if (sites and")]),
+    ("Host not checked on GET", C, [("        if not self._host_ok():                              # every method", "        if False:                              # every method")]),
     ("localhost accepted as Host", C, [("HOSTS = (f\"{BIND}:{PORT}\",)", "HOSTS = (f\"{BIND}:{PORT}\", f\"localhost:{PORT}\")")]),
-    ("Host not checked before 405", C, [("    def _not_allowed(self):\n        if self.headers.get(\"Host\") not in HOSTS:\n            return self._refuse(421, \"wrong host\")\n", "    def _not_allowed(self):\n")]),
-    ("same-site accepted", C, [("if site not in (None, \"same-origin\", \"none\"):", "if site not in (None, \"same-origin\", \"none\", \"same-site\"):")]),
-    ("Sec-Fetch-Site not checked", C, [("            if site not in (None, \"same-origin\", \"none\"):", "            if False:")]),
-    ("Sec-Fetch-Site skipped on /api/status", C, [("            if site not in (None, \"same-origin\", \"none\"):", "            if site not in (None, \"same-origin\", \"none\") and path != \"/api/status\":")]),
+    ("Host not checked before 405", C, [("    def _not_allowed(self):\n        if not self._host_ok():\n            return self._refuse(421, \"wrong host\")\n", "    def _not_allowed(self):\n")]),
+    ("same-site accepted", C, [("sites[0] not in (\"same-origin\", \"none\")", "sites[0] not in (\"same-origin\", \"none\", \"same-site\")")]),
+    ("Sec-Fetch-Site not checked", C, [("            if len(sites) > 1 or (sites and sites[0] not in (\"same-origin\", \"none\")):", "            if False:")]),
+    ("Sec-Fetch-Site skipped on /api/status", C, [("            if len(sites) > 1 or (sites and sites[0] not in (\"same-origin\", \"none\")):", "            if (len(sites) > 1 or (sites and sites[0] not in (\"same-origin\", \"none\"))) and path != \"/api/status\":")]),
     ("CORP header dropped", C, [("    \"Cross-Origin-Resource-Policy\": \"same-origin\",\n", "")]),
     ("COOP header dropped", C, [("    \"Cross-Origin-Opener-Policy\": \"same-origin\",\n", "")]),
     ("X-Frame-Options dropped", C, [("    \"X-Frame-Options\": \"DENY\",\n", "")]),
