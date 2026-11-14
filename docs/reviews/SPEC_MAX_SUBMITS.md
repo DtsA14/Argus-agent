@@ -30,3 +30,9 @@ Normalisasi `must_pass` (P4) dan penyusunan ulang validasi (P5): spec terpisah b
 ## 4. Batas yang diketahui
 
 Batas 7 menutupi gejala, bukan penyebabnya (K1 dan jebakan berikutnya tetap membuat drafter butuh 4 sampai 5 submit). Tujuh dipilih karena data menunjukkan 5 sebagai maksimum yang dipakai dan satu draf yang mentok; ia bukan hasil optimasi. Dua kali lipat biaya per percobaan tidak terjadi (batas uang sama), tetapi waktu per draf yang gagal bertambah: satu submit biasanya 20 sampai 60 detik, **paling buruk `validation_timeout_s` (300 detik) per validasi**. Kebutuhan maksimum sebenarnya tidak diketahui (terpotong di 5); 7 dipilih karena batas uang tidak bergeser dan 8 juga akan dapat dibela.
+
+## 5. Dicatat sebelum merge (2026-11-14, setelah run ketiga #1247)
+
+- **Alasan tambahan menaikkan batas:** pertanyaan merah (`red_question`, `config.yaml:156`) hanya diajukan selama nomor submit di bawah `max_submits` (`codetask/drafter.py:782`). Dengan batas 5, draf yang baru diterima tepat di submit kelima diterima **tanpa** pertanyaan itu; dengan batas 7 pertanyaan itu diajukan. Jadi batas rendah ikut melewatkan gerbang mutu persis untuk draf yang paling banyak bergumul (data: `pilots/outside_v2/batch3/SUBMITS_ANALYSIS.md`, bagian "Third run of #1247").
+- **Keterbatasan baris status:** `dN submits: n of m` menghitung **jawaban atas pertanyaan merah** (submit ber-`held: true`) sebagai satu submit, sehingga `6 of 7` bisa terbaca lebih berat daripada kenyataannya (di run itu: 4 penolakan, 1 draf diterima, 1 jawaban). Baris yang memisahkan jawaban itu lebih jelas; belum dikerjakan.
+- **Tidak dibuktikan:** bahwa batas di atas 5 diperlukan agar sebuah draf diterima (tiga run #1247: gagal di 5, diterima di 5, diterima di 5 plus jawaban pertanyaan). Efek 7 pada run nyata di luar itu belum diukur.
