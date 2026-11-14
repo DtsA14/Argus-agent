@@ -17,6 +17,7 @@ M = [
     ("P1: writable ignored (any scope scans)", TD, [("matches(path, scope[\"writable\"]) and", "True and")]),
     ("P1: protected only exempts, writable inverted", TD, [("scope is not None and matches(path, scope[\"writable\"])", "scope is not None and not matches(path, scope[\"writable\"])")]),
     ("P1: verdict does not pass the scope", VD, [("                                     contract[\"scope\"]))", "                                     None))")]),
+    ("old file always read narrowed", TD, [("_hits(old, py and not wide)", "_hits(old, py)")]),
     ("blocked attempt no longer wins over a hit", RUN, [("        if v[\"outcome\"] == \"blocked\":\n            why =", "        if False:\n            why =")]),
 ]
 

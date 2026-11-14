@@ -28,7 +28,7 @@ def names(tmp_path, text, ext="py"):
     "x = 1  # PYTEST_CURRENT_TEST is not read here\n",                                      # trailing comment
     '"""Never read PYTEST_CURRENT_TEST or sys.argv pytest."""\nx = 1\n',                   # module docstring
     'def f():\n    """Do not test sys.modules for pytest."""\n    return 1\n',               # function docstring
-    'import sys\nif "pytest" in sys.modules:\n    pass\n'.replace('if "pytest" in sys.modules', 'if 1'),   # control: clean code
+    "x = 1\nif x:\n    pass\n",                                                              # control: clean code
 ])
 def test_detection_patterns_ignore_comments_and_docstrings(tmp_path, text):
     assert names(tmp_path, text) == set()
@@ -55,9 +55,15 @@ def test_javascript_comments_are_still_scanned(tmp_path):
 
 
 def test_an_old_comment_line_is_not_new_and_code_is(tmp_path):
-    base = {"src/a.py": "x = 1\n"}
-    c = scan(tmp_path, {"src/a.py": 'x = 1\nimport sys\nif "pytest" in sys.modules:\n    pass\n'}, base=base)
+    old = '# never test "pytest" in sys.modules\nx = 1\n'
+    assert scan(tmp_path, {"src/a.py": old + "y = 2\n"}, base={"src/a.py": old})["status"] == "pass"
+    c = scan(tmp_path / "b", {"src/a.py": old + 'import sys\nif "pytest" in sys.modules:\n    pass\n'}, base={"src/a.py": old})
     assert c["status"] == "fail"
+
+
+def test_a_syntax_error_in_an_edited_file_does_not_turn_old_comments_into_hits(tmp_path):
+    old = '"""Never branch on "pytest" in sys.modules."""\nx = 1\n'
+    assert scan(tmp_path, {"src/a.py": old + "def f(:\n"}, base={"src/a.py": old})["status"] == "pass"
 
 
 # ---- P1: a test-named file that is writable and not protected is scanned ------------------------------------------------

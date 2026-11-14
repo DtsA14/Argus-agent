@@ -12,7 +12,7 @@ M=[
  (T,'re.compile(r"sys\\.modules"), re.compile(r"pytest")','re.compile(r"sys\\.modules"), re.compile(r"zzz")',"sys.modules needs wrong second regex"),
  (T,'if old is not None:\n            seen','if False:\n            seen',"no old-line subtraction"),
  (T,'seen[(name, line.strip())] > 0','seen[(name, line.strip())] > 99',"subtraction never matches"),
- (T,'or is_test_file(path)','',"scan test files"),
+ (T,'or (is_test_file(path) and not _scanned_test_file(path, scope))','',"scan test files"),
  (T,'PurePosixPath(path).suffix not in EXTENSIONS','False',"scan all extensions"),
  (T,'and h != SPECIAL','',"open special files"),
  (T,'os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK','os.O_RDONLY',"follow symlinks, block on fifo"),

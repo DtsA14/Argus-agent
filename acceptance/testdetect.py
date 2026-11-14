@@ -68,17 +68,23 @@ MAX_VIEW_LINE = 20_000      # a longer line is not narrowed (see _code_view)
 COMMENT = ("#", "//")      # a line that begins as a comment is a comment to its end; "*" and "/*" can start code (`*_, x = f()`, `*/ exit()`)
 
 
-def _code_view(text):
+def _fallback(text, uncertain):
+    if uncertain is not None:
+        uncertain.append(True)
+    return text
+
+
+def _code_view(text, uncertain=None):
     """The text of a Python file with what cannot run blanked out (comments, and docstrings or any other standalone string
     statement), the same length and the same lines. Every pattern, detection and forger, looks at it (SPEC_GATE_RC_CLARIFICATIONS
-    D1): `os._exit(0)` or "pytest" in sys.modules` in a docstring or a trailing comment is not code. Code is untouched: a `#` inside a string hides nothing, an f-string and a string given to exec stay.
+    D1): `os._exit(0)` or `"pytest" in sys.modules` in a docstring or a trailing comment is not code. Code is untouched: a `#` inside a string hides nothing, an f-string and a string given to exec stay.
     When the lines are uncertain (a syntax error, a bare carriage return, anything the parser does not agree on) the text comes
     back unchanged and the old, wider scan applies."""
     try:
         if len(max(text.split("\n"), key=len)) > MAX_VIEW_LINE:
-            return text                              # tokenize and the blanking loop are quadratic in the length of one line: keep the linear old scan
+            return _fallback(text, uncertain)         # tokenize and the blanking loop are quadratic in the length of one line: keep the linear old scan
         if re.search(r"\r(?!\n)", text):
-            return text                              # Python counts a bare \r as a line end, split("\n") does not
+            return _fallback(text, uncertain)         # Python counts a bare \r as a line end, split("\n") does not
         lines = text.split("\n")
         spans = []
         for node in ast.walk(ast.parse(text)):
@@ -87,7 +93,7 @@ def _code_view(text):
                 sc = len(lines[a].encode("utf-8")[:node.col_offset].decode("utf-8", "ignore"))      # ast columns are bytes
                 ec = len(lines[b].encode("utf-8")[:node.end_col_offset].decode("utf-8", "ignore"))
                 if not re.match(r"[rRbBuUfF]{0,2}['\"]", lines[a][sc:]):
-                    return text                      # the span is not where a string starts: the parser and we disagree
+                    return _fallback(text, uncertain)         # the span is not where a string starts: the parser and we disagree
                 spans.append((a, sc, b, ec))
         for tok in tokenize.generate_tokens(io.StringIO(text).readline):
             if tok.type == tokenize.COMMENT:
@@ -98,7 +104,7 @@ def _code_view(text):
                 lines[i] = lines[i][:lo] + " " * (hi - lo) + lines[i][hi:]
         return "\n".join(lines)
     except Exception:
-        return text
+        return _fallback(text, uncertain)
 
 
 def _hits(text, py=False):
@@ -178,7 +184,12 @@ def check(workspace, before, after, inputs_dir=None, scope=None):
             except ValueError:
                 old = None
         if old is not None:
-            seen = Counter((name, line.strip()) for _, name, line in _hits(old, py))
+            # the new file fell back to the wide scan (a syntax error mid-edit): read the old one wide too, or its comment lines
+            # that name a pattern would count as new hits
+            flag = []
+            _code_view(text, flag) if py else None
+            wide = bool(flag)
+            seen = Counter((name, line.strip()) for _, name, line in _hits(old, py and not wide))
             kept = []
             for n, name, line in hits:
                 if seen[(name, line.strip())] > 0:
