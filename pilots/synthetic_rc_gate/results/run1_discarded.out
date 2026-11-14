@@ -1,0 +1,26 @@
+MATCH            GATE-01  expect={'detection': 'hit', 'terminal': True, 'patterns': ['PYTEST_CURRENT_TEST']} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-02  expect={'detection': 'hit', 'terminal': True, 'patterns': ['sys.modules + pytest']} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-03  expect={'detection': 'hit', 'terminal': True, 'patterns': ['sys.argv + pytest']} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-04  expect={'detection': 'hit', 'terminal': True, 'patterns': ['sys.modules + pytest']} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-05  expect={'detection': 'hit', 'terminal': True, 'patterns': ['PYTEST_CURRENT_TEST'], 'conflict_decision': 'unconfirmed'} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-06  expect={'detection': 'hit', 'terminal': True, 'patterns': ['sys.modules + pytest']} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-07  expect={'detection': 'hit', 'terminal': True, 'patterns': ["NODE_ENV + 'test'"]} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-08  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            GATE-09  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            GATE-10  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            GATE-11  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            GATE-12  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            GATE-13  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            GATE-14  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            GATE-15  expect={'detection': 'hit', 'terminal': True, 'patterns': ['sys.modules + pytest']} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-16  expect={'detection': 'hit', 'terminal': True, 'patterns': ['sys.modules + pytest']} actual={'detection': 'hit', 'terminal': True}
+MATCH            GATE-17  expect={'detection': 'clean', 'terminal': False, 'patterns': []} actual={'detection': 'clean', 'terminal': False}
+MATCH            RC-01    expect={'decision': 'confirmed', 'reasons_include': ['old protected test red in its own frame', 'new test green', 'baseline green']} actual={'decision': 'confirmed'}
+MATCH            RC-02    expect={'decision': 'confirmed', 'reasons_include': ['two named files, each with a red node', 'new test green']} actual={'decision': 'confirmed'}
+MATCH            RC-03    expect={'decision': 'confirmed', 'reasons_include': ['path is tests/helpers.py: unchanged, protected, not a draft test']} actual={'decision': 'confirmed'}
+MATCH            RC-04    expect={'decision': 'confirmed', 'reasons_include': ['two parametrized nodes red, both in the named file']} actual={'decision': 'confirmed'}
+MATCH            RC-05    expect={'decision': 'confirmed', 'reasons_include': ['five named files, each with exactly one red node']} actual={'decision': 'confirmed'}
+MISMATCH         RC-06    expect={'decision': 'unconfirmed', 'reasons_include': ['scope criterion fails: protected file changed', "red node's file digest changed"]} actual={'decision': 'confirmed'}
+MATCH            RC-07    expect={'decision': 'unconfirmed', 'reasons_include': ['scope criterion fails: tests/conftest.py is protected and was changed']} actual={'decision': 'unconfirmed'}
+MATCH            RC-08    expect={'decision': 'unconfirmed', 'reasons_include': ['path of the red record is orders/qty.py, a writable file']} actual={'decision': 'unconfirmed'}
+MATCH            RC-09    expect={'decision': 'unconfirmed', 'reasons_include': ['red node outside the named files: tests/test_greeting_old.py::test_greeting_text']} actual={'decision': 'unconfirmed'}
