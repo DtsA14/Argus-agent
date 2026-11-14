@@ -6,8 +6,8 @@
 collect_ignore = ["fixtures", "runs", "pilots"]   # pilots: target tests that fail until the agent fixes them
 
 # scripts/verify.sh runs the suite with pytest-xdist (-n 4 --dist loadgroup). Every test of a module that uses the Docker
-# sandbox goes to one group, so sandbox tests never run at the same time (they share the daemon, the images and the
-# VM's CPUs); all other tests are spread over the workers. A sandbox module is one that skips with "SANDBOX NOT
+# sandbox goes to a serial group (two since SPEC_SANDBOX_SPLIT, see below), so the sandbox tests of one group never run at the same
+# time (they share the daemon, the images and the VM's CPUs); all other tests are spread over the workers. A sandbox module is one that skips with "SANDBOX NOT
 # AVAILABLE" (the skip verify.sh counts as a failure), so a new sandbox module is grouped without being listed here.
 # Measured 2026-10-22 on the VM: the non-sandbox tests with verify.sh's settings, 327 s serial, 121 s with -n 4, the
 # same 1,201 passed and 90 skipped.

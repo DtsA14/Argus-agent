@@ -1,6 +1,6 @@
 """Mutants for SANDBOX-SPLIT (conftest.py, tests/grouplist_plugin.py, scripts/verify.sh, scripts/precheck.sh; SPEC_SANDBOX_SPLIT): each applied
 alone in a worktree, the grouping tests run with -x; killed = a test FAILED and pytest reported no error.
-Usage: <this> <worktree> <python>   (--check: only count the patterns)"""
+Usage: <this> <worktree> <python>   (--check: only count the patterns; --only <text>: only the mutants whose name has the text)"""
 import os
 import subprocess
 import sys
@@ -43,7 +43,9 @@ if __name__ == "__main__":
     WT, PY = Path(sys.argv[1]), sys.argv[2]
     check_only = "--check" in sys.argv
     killed = 0
-    for name, edits in M:
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else ""
+    todo = [m for m in M if only in m[0]]
+    for name, edits in todo:
         originals, texts = {}, {}
         for f, a, b in edits:
             texts.setdefault(f, (WT / f).read_text())
@@ -66,4 +68,4 @@ if __name__ == "__main__":
         killed += k
         verdict = "KILLED  " if k else "SKIPPED " if "skipped" in last and not fails else "ERROR   " if "error" in last else "SURVIVED"
         print(f"{verdict} {name}: {fails or last}", flush=True)
-    print("patterns ok" if check_only else f"RESULT: {killed}/{len(M)} killed")
+    print("patterns ok" if check_only else f"RESULT: {killed}/{len(todo)} killed")

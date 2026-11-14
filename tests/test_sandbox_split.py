@@ -193,10 +193,24 @@ def test_every_test_call_is_timestamped_once_to_the_file_asked_for_even_under_xd
     assert all(x["stop"] >= x["start"] > 1e9 for x in rows)
 
 
-def test_no_file_is_written_without_the_variable(tmp_path):
-    p = project(tmp_path, FILES)
-    r = run_pytest(p)
-    assert r.returncode == 0 and not list(p.glob("*.jsonl")) and not list(tmp_path.glob("*.jsonl"))
+def test_nothing_is_opened_without_the_variable(monkeypatch):
+    monkeypatch.delenv("ARGUS_TEST_TIMES", raising=False)
+
+    def boom(*a, **k):
+        raise AssertionError("a file was opened")
+    monkeypatch.setattr(conftest.os, "open", boom)
+    conftest.pytest_runtest_logreport(R("t.py::a", "call", 1.0, 2.0))
+
+
+def test_only_the_call_of_a_test_on_the_controller_is_written(monkeypatch, tmp_path):
+    out = tmp_path / "t.jsonl"
+    monkeypatch.setenv("ARGUS_TEST_TIMES", str(out))
+    monkeypatch.setattr(conftest, "_is_worker", False)
+    for when in ("setup", "call", "teardown"):
+        conftest.pytest_runtest_logreport(R("t.py::a", when, 1.0, 2.0))
+    monkeypatch.setattr(conftest, "_is_worker", True)
+    conftest.pytest_runtest_logreport(R("t.py::b", "call", 1.0, 2.0))
+    assert [json.loads(x) for x in out.read_text().splitlines()] == [{"nodeid": "t.py::a", "start": 1.0, "stop": 2.0}]
 
 
 # ---- the scripts ------------------------------------------------------------------------------------------------------------
