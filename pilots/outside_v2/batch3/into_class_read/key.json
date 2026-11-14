@@ -1,0 +1,66 @@
+{
+ "S01": {
+  "issue": 1247,
+  "job": "j20261114_073301_0d2a",
+  "kind": "class",
+  "class": "NumericRangeTests",
+  "X": "mine",
+  "Y": "maint"
+ },
+ "S02": {
+  "issue": 813,
+  "job": "j20261114_070348_1829",
+  "kind": "class",
+  "class": "ReplaceTests",
+  "X": "maint",
+  "Y": "mine"
+ },
+ "S03": {
+  "issue": 1152,
+  "job": "j20261114_070109_03af",
+  "kind": "class",
+  "class": "NumericRangeTests",
+  "X": "maint",
+  "Y": "mine"
+ },
+ "S04": {
+  "issue": 1250,
+  "job": "j20261114_065150_7b63",
+  "kind": "class",
+  "class": "ValueChainTests",
+  "X": "maint",
+  "Y": "mine"
+ },
+ "S05": {
+  "issue": 1098,
+  "job": "j20261114_070717_fef1",
+  "kind": "end",
+  "class": null,
+  "X": "maint",
+  "Y": "mine"
+ },
+ "S06": {
+  "issue": 1192,
+  "job": "j20261114_065728_ad88",
+  "kind": "class",
+  "class": "InterleaveEvenlyTests",
+  "X": "maint",
+  "Y": "mine"
+ },
+ "S07": {
+  "issue": 1252,
+  "job": "j20261114_064917_b5a5",
+  "kind": "end",
+  "class": null,
+  "X": "maint",
+  "Y": "mine"
+ },
+ "S08": {
+  "issue": 849,
+  "job": "j20261114_065859_a32f",
+  "kind": "class",
+  "class": "PeekableTests",
+  "X": "maint",
+  "Y": "mine"
+ }
+}

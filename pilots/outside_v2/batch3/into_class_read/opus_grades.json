@@ -1,0 +1,66 @@
+{
+ "S01": {
+  "X": {"catches_bug": "yes", "over_specified": "no", "style": "ok", "placement": "right", "grade": "B",
+        "why": "Goes in NumericRangeTests. It fails today because len(numeric_range(-8.732,-13.532,-2.4)) is 3 and r[3] of (0,1,0.1) is not in r, and it passes once len, contains, index and count follow the items produced. The per-case messages and the try/except that re-raises as AssertionError are heavier than the file's usual style."},
+  "Y": {"catches_bug": "yes", "over_specified": "no", "style": "good", "placement": "right", "grade": "A",
+        "why": "Goes in NumericRangeTests. Membership, index and count of every yielded item fail today because (v-start)%step != 0, and the len cases fail today because divmod over- or under-counts. It also checks that non-items such as 0.3 stay out, which matches the issue's 'settle against produced items'. Plain loops and asserts, like test_contains and test_len."},
+  "maintainer_guess": "Y", "confidence": "medium",
+  "guess_reason": "Y is plain assert loops with explanatory comments, while X carries the try/except-to-AssertionError wrapper that marks the drafter in the other cases."
+ },
+ "S02": {
+  "X": {"catches_bug": "no", "over_specified": "no", "style": "ok", "placement": "acceptable", "grade": "D",
+        "why": "These are only three changed `pred = lambda *args: True` lines inside existing ReplaceTests methods (for example replacing `lambda a, b, c, d, e: True`). They pass on the old code too and test neither the optimization nor default_arg; this looks like a diff fragment adapting old tests to a new implementation."},
+  "Y": {"catches_bug": "yes", "over_specified": "yes", "style": "ok", "placement": "right", "grade": "C",
+        "why": "Goes in ReplaceTests. It fails today with a TypeError on default_arg. However, it pins the exact padded argument tuples and the exact pred call sequence, which could reject a correct optimized implementation, and it repeats the try/except TypeError boilerplate in all three tests."},
+  "maintainer_guess": "X", "confidence": "high",
+  "guess_reason": "X is an odd fragment that adjusts existing lambdas, the kind of change that comes from a real refactor diff; a drafter would write new tests for the requested default_arg, as Y does."
+ },
+ "S03": {
+  "X": {"catches_bug": "yes", "over_specified": "no", "style": "good", "placement": "right", "grade": "A",
+        "why": "Goes in NumericRangeTests next to test_reversed. reversed(numeric_range(0)) raises IndexError today from _get_by_index(-1) and returns [] once the empty case is special-cased; it is a minimal one-line test in house style."},
+  "Y": {"catches_bug": "yes", "over_specified": "no", "style": "ok", "placement": "right", "grade": "B",
+        "why": "It covers many empty ranges (float, Decimal, Fraction, datetime, negative step, and an empty slice), all of which raise IndexError today and should give []. The coverage is useful, but wrapping in try/except Exception to re-raise as AssertionError is not the file's style."},
+  "maintainer_guess": "X", "confidence": "high",
+  "guess_reason": "X is the terse single assert that matches a one-line bug report; Y has the drafter's exception-rewrapping boilerplate."
+ },
+ "S04": {
+  "X": {"catches_bug": "yes", "over_specified": "no", "style": "good", "placement": "right", "grade": "A",
+        "why": "Goes in ValueChainTests. A generator raising TypeError mid-iteration is swallowed today, because `yield from` sits inside the try, and propagates with the iter()-then-yield-from fix. The second test checks that an object whose __iter__ raises TypeError is still emitted as-is. It uses assertRaises, as the file does."},
+  "Y": {"catches_bug": "yes", "over_specified": "yes", "style": "poor", "placement": "right", "grade": "B",
+        "why": "It reproduces the issue's map(len, ...) case and a generator case, both swallowed today, and also checks the not-iterable object. It asserts the CPython error text 'len()', and uses try/except/else blocks with raise AssertionError where assertRaises would do."},
+  "maintainer_guess": "X", "confidence": "medium",
+  "guess_reason": "X is compact assertRaises code, close to how the issue author's regression tests would read; Y has the drafter's try/else AssertionError pattern."
+ },
+ "S05": {
+  "X": {"catches_bug": "yes", "over_specified": "no", "style": "good", "placement": "acceptable", "grade": "A",
+        "why": "It fails today because mi.synchronized does not exist. With the fix, wrapped generators shared by several threads advance exactly limit*repetitions times; without a lock, concurrent next() raises 'generator already executing' and the count comes out wrong. It mirrors TestSerialize's thread style, and as a new class at the end of the file it sits just after TestSerialize and TestConcurrentTee."},
+  "Y": {"catches_bug": "yes", "over_specified": "yes", "style": "ok", "placement": "acceptable", "grade": "B",
+        "why": "It fails today on the missing attribute, and covers wrapping itertools.count, decorator use, exhaustion and a threaded sum. It asserts the result is an mi.serialize instance with a .lock attribute (an implementation detail), and repeats a try/except AttributeError block in every method."},
+  "maintainer_guess": "X", "confidence": "high",
+  "guess_reason": "X has the idiosyncratic threaded design with random sleeps that follows the existing TestSerialize author's style; Y has the drafter's boilerplate guards."
+ },
+ "S06": {
+  "X": {"catches_bug": "yes", "over_specified": "no", "style": "good", "placement": "right", "grade": "A",
+        "why": "Goes in InterleaveEvenlyTests next to test_degenerate_empty. Both calls raise IndexError today at lengths_desc[0] and should return []; it is two direct asserts."},
+  "Y": {"catches_bug": "yes", "over_specified": "no", "style": "poor", "placement": "right", "grade": "B",
+        "why": "It tests the same two cases correctly, but each is wrapped in try/except Exception that re-raises as AssertionError, which is verbose and not how the file is written."},
+  "maintainer_guess": "X", "confidence": "high",
+  "guess_reason": "X is the concise house style; Y is the drafter's exception-rewrapping pattern."
+ },
+ "S07": {
+  "X": {"catches_bug": "yes", "over_specified": "no", "style": "ok", "placement": "acceptable", "grade": "B",
+        "why": "This is a multi-hunk diff. It extends SplitAtTests.test_maxsplit to '' (passes before and after, guarding split_at), turns SplitBeforeTest.test_empty_collection into a maxsplit loop, and adds an empty-collection maxsplit loop for split_after and split_when. The split_before/split_after/split_when cases fail today at maxsplit=0, where the result is [[]]. It uses subTest as the file does, but the fragment as shown is missing a blank line and jumps between classes."},
+  "Y": {"catches_bug": "yes", "over_specified": "no", "style": "ok", "placement": "wrong", "grade": "C",
+        "why": "It catches maxsplit=0 on empty lists and iterators for all three functions, and pins split_at's [[]] and non-empty maxsplit=0 output, both of which match the issue. But it is a new class at the end of the file, far from SplitAtTests, SplitBeforeTest, SplitAfterTest and SplitWhenTests, and the tests are dict-comparison style rather than subTest."},
+  "maintainer_guess": "X", "confidence": "high",
+  "guess_reason": "X edits the existing tests in place across the split classes, as a maintainer patch would, while Y bolts a separate class onto the end of the file."
+ },
+ "S08": {
+  "X": {"catches_bug": "yes", "over_specified": "yes", "style": "ok", "placement": "right", "grade": "B",
+        "why": "Goes in PeekableTests. mi.peekable[str] raises TypeError today and passes with __class_getitem__ = classmethod(GenericAlias). Requiring types.GenericAlias specifically would reject a typing.Generic-based fix, which returns typing._GenericAlias; it also needs `import types` added at the top of the file."},
+  "Y": {"catches_bug": "yes", "over_specified": "no", "style": "ok", "placement": "right", "grade": "B",
+        "why": "It fails today on the TypeError. It is implementation-neutral: the subscripted alias still builds working peekables, and the string annotation (the file uses `from __future__ import annotations`) evals cleanly. The final assertIsNotNone is weak, and the try/except re-raise is boilerplate."},
+  "maintainer_guess": "X", "confidence": "medium",
+  "guess_reason": "Y has the drafter's try/except-to-AssertionError signature; X's direct GenericAlias check matches a classmethod(GenericAlias) fix."
+ }
+}
