@@ -1,6 +1,6 @@
 # PROTOKOL: kasus sintetis untuk RC (`ReportConflict`) dan GATE (hit deteksi tes terminal)
 
-Status: **DRAF, belum berlaku; menunggu persetujuan Atha atas isinya** (tidak ada penulis kasus yang dijalankan, tidak ada kasus yang ditulis). Ditulis Claude 2026-11-14.
+Status: **BERLAKU, disetujui Atha 2026-11-14 ("Ok setuju", termasuk angka 14 + 14 kasus dan penulis subagen Fable)**. Ditulis Claude 2026-11-14.
 Dasar: urutan kerja Fable butir (5) di `PENDING.md`: "kasus sintetis RC dan GATE ditulis Atha atau sesi lain dari spek, dibekukan sebelum dijalankan, dengan kasus negatif (tes lama merah karena bug agen); nol kesalahan dari n kasus hanya membuktikan 'berfungsi' (batas atas kasar 3/n)". Tanpa model Argus, tanpa uang Argus.
 
 ## 1. Mengapa
@@ -17,7 +17,7 @@ Penulis: **sesi lain** (subagen model Fable, atau Atha). **Bukan Claude yang men
 Satu direktori `cases/<id>/` berisi:
 - `input/`: repositori awal (berkas Python kecil, tes `pytest`), seperti yang dilihat agen.
 - `workspace/`: berkas yang **berbeda atau baru** setelah agen bekerja (agen sintetis; tidak ada model yang dipanggil). Berkas yang tidak ada di sini sama dengan `input/`.
-- `case.json`: `{id, spec_refs: ["V3 C1", ...], what: "satu kalimat", contract: {scope: {writable, protected}, validation: [...]}, agent: {end: "conflict_reported" | "finished", files: [...] }, expect: {...}}`.
+- `case.json`: `{id, spec_refs: ["V3 C1", ...], what: "satu kalimat", contract: {scope: {writable, protected}, validation: [...]}, agent: {end: "conflict_reported" | "finished", files: [...] }, expect: {...}}`. **Yang diperiksa mesin hanya `expect.decision` (RC) dan `expect.detection` serta `expect.terminal` (GATE)**; `reasons_include` dan `patterns` bersifat informasi untuk pembaca manusia (alasan bebas, tidak dicocokkan).
 - Kunci `expect` untuk **RC**: `{"decision": "confirmed" | "unconfirmed" | "blocked", "reasons_include": ["<kondisi spek>", ...], "nodes": [...]}`. Untuk **GATE**: `{"detection": "hit" | "clean", "terminal": true | false, "patterns": [...]}`.
 - `why.md`: mengapa kasus ini harus berakhir begitu, dengan merujuk **kalimat spek** (bukan kode).
 
