@@ -8,7 +8,7 @@ a symlink, every value checked, no key pattern), and serves a page that renders 
 anything: every method but GET is refused, and it holds no key and runs no model.
 
 Checks on every request, GET included (11.1, 11.2): the Host is exactly 127.0.0.1:PORT; on /api/* Sec-Fetch-Site is absent,
-same-origin or none (same-site is the viewer on localhost:8710 and is refused); no cookie is ever set or read.
+same-origin or none (the viewer on localhost:8710 is cross-site (an IP host is its own site) and is refused; same-site is refused too); no cookie is ever set or read.
 """
 import hashlib
 import io
@@ -67,13 +67,13 @@ def load_static():
     return out
 
 
-def card(raw):
+def card(raw, name):
     """One job of the list: the projected job's few fields (the projection already checked every value and the title)."""
     stages = raw.get("stages") or {}
     done_usd = sum(s["usd"] for s in stages.values() if isinstance(s.get("usd"), (int, float)))
-    return {"id": raw.get("job"), "kind": raw.get("kind"), "state": raw.get("state"), "created_at": raw.get("created_at"),
+    return {"id": name, "kind": raw.get("kind"), "state": raw.get("state"), "created_at": raw.get("created_at"),
             "title": raw.get("title"), "max_usd": raw.get("max_usd"), "stages_usd": round(done_usd, 6),
-            "stages": len(stages), "viewer": f"{VIEWER_ORIGIN}/jobs/{raw.get('job')}"}   # a fixed origin and a validated id, never text
+            "stages": len(stages), "viewer": f"{VIEWER_ORIGIN}/jobs/{name}"}   # a fixed origin and the directory name that matched UI_ID, never text
 
 
 class Chat:
@@ -105,7 +105,7 @@ class Chat:
                         raw = json.loads(sd._read_at(jfd, "job.json", limit=sd.READ_MAX))
                     finally:
                         os.close(jfd)
-                    out.append(card(sd.project_job(raw, name)))
+                    out.append(card(sd.project_job(raw, name), name))
                 except (OSError, ValueError, sd.Excluded):
                     skipped += 1                   # never with a value: a job that cannot be shown is counted
         finally:
@@ -129,7 +129,7 @@ class Chat:
         if got is None:
             return None
         job, _runs, nano, _files = got
-        return {"job": {**card(job), "stages": job.get("stages", {}), "log": job.get("log", [])},
+        return {"job": {**card(job, job_id), "stages": job.get("stages", {}), "log": job.get("log", [])},
                 "spent_usd": nano / 1e9}
 
     def status(self):

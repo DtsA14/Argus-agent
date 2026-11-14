@@ -434,8 +434,20 @@ def test_the_link_never_comes_from_text_of_the_job(svc):
 def test_the_page_makes_exactly_one_link_and_guards_its_target():
     js = (rc.STATIC_DIR / "app.js").read_text()
     assert js.count(LINK_LINE) == 1 and js.count("a.href") == 1 and "createElement(\"a\")" not in js
+    assert js.count("href") == 1 and js.count('el("a"') == 1 and "Object.assign" not in js      # no second anchor, no href by another door
+    assert 'a.addEventListener("click", function (e) { e.stopPropagation(); });' in js
     assert 'var VIEWER = "http://localhost:8710/jobs/";' in js
     guard = 'if (typeof url !== "string" || url.indexOf(VIEWER) !== 0 || !/^[a-z0-9_]+$/.test(url.slice(VIEWER.length))) { return null; }'
     assert js.index(guard) < js.index(LINK_LINE)
     assert 'a.rel = "noopener noreferrer";' in js and js.index('a.rel = "noopener noreferrer";') < js.index(LINK_LINE)
     assert "target" not in js and "window.open" not in js
+
+
+def test_the_viewer_link_uses_the_directory_name_not_a_field_of_job_json(svc):
+    p = svc.jobs / JOB / "job.json"
+    d = json.loads(p.read_text())
+    del d["job"]
+    p.write_text(json.dumps(d))
+    out = svc.get_json("/api/threads")[1]
+    for t in out["threads"]:
+        assert t["viewer"] == f"http://localhost:8710/jobs/{JOB}" and "None" not in t["viewer"]
