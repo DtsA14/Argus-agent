@@ -1,0 +1,136 @@
+{
+ "measured": "2026-11-14",
+ "harness": "main at 98e190f (APPEND-TESTS #506 merged)",
+ "stage": "draft only (no approve, no agent)",
+ "rows": [
+  {
+   "issue": "more-itertools#1252",
+   "new_job": "j20261114_030430_3ce6",
+   "drafter_usd": 0.0103,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 1335,
+   "batch3_job": "j20261113_132449_2496",
+   "batch3_new_tests": [
+    "tests/test_split_empty_maxsplit.py"
+   ],
+   "batch3_changed_tests": 0
+  },
+  {
+   "issue": "more-itertools#1250",
+   "new_job": "j20261114_030635_893a",
+   "drafter_usd": 0.008,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 1424,
+   "batch3_job": "j20261113_133048_4030",
+   "batch3_new_tests": [
+    "tests/test_value_chain_lazy_errors.py"
+   ],
+   "batch3_changed_tests": 0
+  },
+  {
+   "issue": "more-itertools#1247",
+   "new_job": "j20261114_030922_6085",
+   "drafter_usd": 0.0165,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 1893,
+   "batch3_job": "j20261113_133204_88d9",
+   "batch3_new_tests": [
+    "tests/test_numeric_range_float_consistency.py"
+   ],
+   "batch3_changed_tests": 0
+  },
+  {
+   "issue": "more-itertools#1192",
+   "new_job": "j20261114_031225_ff91",
+   "drafter_usd": 0.0064,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 783,
+   "batch3_job": "j20261113_133651_af64",
+   "batch3_new_tests": [
+    "tests/test_interleave_evenly_empty.py"
+   ],
+   "batch3_changed_tests": 0
+  },
+  {
+   "issue": "more-itertools#849",
+   "new_job": "j20261114_031442_6105",
+   "drafter_usd": 0.0106,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 1528,
+   "batch3_job": "j20261113_133741_0520",
+   "batch3_new_tests": [
+    "tests/test_peekable_subscript.py"
+   ],
+   "batch3_changed_tests": 0
+  },
+  {
+   "issue": "more-itertools#1152",
+   "new_job": "j20261114_031621_cb2d",
+   "drafter_usd": 0.0078,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 1344,
+   "batch3_job": "j20261113_134208_04f1",
+   "batch3_new_tests": [
+    "tests/test_numeric_range_reversed.py"
+   ],
+   "batch3_changed_tests": 0
+  },
+  {
+   "issue": "more-itertools#813",
+   "new_job": "j20261114_031918_6ce2",
+   "drafter_usd": 0.015,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 3256,
+   "batch3_job": "j20261113_134337_925c",
+   "batch3_new_tests": [
+    "tests/test_issue_replace_default_arg.py"
+   ],
+   "batch3_changed_tests": 0
+  },
+  {
+   "issue": "more-itertools#1098",
+   "new_job": "j20261114_032235_dad8",
+   "drafter_usd": 0.0099,
+   "new_tests": 0,
+   "changed_tests": [
+    "tests/test_more.py"
+   ],
+   "pure_addition": true,
+   "added_bytes": 3383,
+   "batch3_job": "j20261113_134939_136d",
+   "batch3_new_tests": [
+    "tests/test_synchronized.py"
+   ],
+   "batch3_changed_tests": 0
+  }
+ ],
+ "total_drafter_usd": 0.0845
+}
