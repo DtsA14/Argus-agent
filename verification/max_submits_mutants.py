@@ -13,7 +13,7 @@ M = [
     ("the limit is eight", [(Y, "  max_submits: 7            # 3 until", "  max_submits: 8            # 3 until")]),
     ("the line is not printed", [(J, "    out += _attempt_lines(job)\n    out += _submit_lines(job)\n", "    out += _attempt_lines(job)\n")]),
     ("the line comes from the estimate instead of its own call", [(J, "    out += _submit_lines(job)\n    out += _estimate_lines(job)", "    out += _estimate_lines(job)")]),
-    ("events are counted, not submits", [(J, "used = {e[\"submit\"] for e in evs if", "used = [e[\"submit\"] for e in evs if")]),
+    ("events are counted, not submits", [(J, "used = {e[\"submit\"] for e in evs if e.get(\"event\") == \"draft_submitted\" and isinstance(e.get(\"submit\"), int)}", "used = [e[\"submit\"] for e in evs if e.get(\"event\") == \"draft_submitted\" and isinstance(e.get(\"submit\"), int)]")]),
     ("a refused submit counts", [(J, "if e.get(\"event\") == \"draft_submitted\" and isinstance(e.get(\"submit\"), int)}", "if e.get(\"event\") in (\"draft_submitted\", \"draft_submit_refused\") and isinstance(e.get(\"submit\"), int)}")]),
     ("only an accepted submit counts", [(J, "if e.get(\"event\") == \"draft_submitted\" and isinstance(e.get(\"submit\"), int)}", "if e.get(\"event\") == \"draft_submitted\" and e.get(\"ok\") and isinstance(e.get(\"submit\"), int)}")]),
     ("a submit number that is not an int counts", [(J, "if e.get(\"event\") == \"draft_submitted\" and isinstance(e.get(\"submit\"), int)}", "if e.get(\"event\") == \"draft_submitted\"}")]),
