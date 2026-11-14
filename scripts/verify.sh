@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 VENV="${VENV:-.venv-verify}"
 export CRASH_REPEATS="${CRASH_REPEATS:-5}"
 export CRASH_STRESS="${CRASH_STRESS:-50}"
-WORKERS="${XDIST_WORKERS:-4}"        # pytest-xdist workers; the sandbox tests stay serial in one group (conftest.py)
+WORKERS="${XDIST_WORKERS:-4}"        # pytest-xdist workers; the sandbox tests stay serial within their group (conftest.py)
 if [ -z "${ARGUS_SANDBOX_IMAGE:-}" ] && [ -f .sandbox_image ]; then
   export ARGUS_SANDBOX_IMAGE="$(tr -d '[:space:]' < .sandbox_image)"
 fi
@@ -65,13 +65,15 @@ LOG="verification/verify-$(date -u +%Y%m%dT%H%M%SZ)-$(uname -m).log"
     | LC_ALL=C sort | xargs sha256sum
   echo "== pytest"
   set +e
-  echo "workers: $WORKERS (--dist loadgroup; sandbox tests serial in one group)"
+  echo "workers: $WORKERS (--dist loadgroup; sandbox tests serial within each of ${VERIFY_SANDBOX_GROUPS-2} group(s))"
+  echo "VERIFY_SANDBOX_GROUPS=${VERIFY_SANDBOX_GROUPS-2} (1 = one sandbox group, 2 = sandbox_a for tests/test_draft.py and sandbox_b for the rest)"
+  echo "xdist: $("$VENV/bin/python" -c 'import importlib.metadata as m; print(m.version("pytest-xdist"))' 2>&1)"
   PYTEST_EXTRA=()
   if [ -n "${VERIFY_MAXFAIL:-}" ]; then
     PYTEST_EXTRA=(--maxfail="$VERIFY_MAXFAIL")
     echo "maxfail: $VERIFY_MAXFAIL (a failing run stops early: not a full run)"
   fi
-  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider --durations=0 --durations-min=1.0 -n "$WORKERS" --dist loadgroup "${PYTEST_EXTRA[@]}" 2>&1 \
+  "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider --durations=0 --durations-min=1.0 -n "$WORKERS" --dist loadgroup --loadscope-reorder "${PYTEST_EXTRA[@]}" 2>&1 \
     | tee /dev/stderr > .verify-pytest.out
   rc=${PIPESTATUS[0]}
   set -e

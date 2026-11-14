@@ -34,11 +34,12 @@ for f in .sandbox_image_*; do
   export "$var=$(tr -d '[:space:]' < "$f")"
   pins+=("$var")
 done
-ARGS=(-q -rs -p no:cacheprovider -n 4 --dist loadgroup)
+ARGS=(-q -rs -p no:cacheprovider -n 4 --dist loadgroup --loadscope-reorder)
 echo "base: $BASE"
 printf -v joined '%s, ' "${tests[@]}"
 echo "tests: ${joined%, }"
 echo "pytest: ${ARGS[*]}"
 echo "pins: ${pins[*]:-}"
+echo "sandbox groups: ${VERIFY_SANDBOX_GROUPS-2} (VERIFY_SANDBOX_GROUPS)"
 [ -z "${PRECHECK_PRINT:-}" ] || exit 0
 exec "$PY" -m pytest "${ARGS[@]}" "${tests[@]}"
