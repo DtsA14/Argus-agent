@@ -209,7 +209,7 @@ def test_a_rejected_submit_goes_back_to_the_model_and_a_corrected_one_passes(roo
     r, model, d = run(root, tmp_path, [green, SUBMIT])
     assert r["status"] == dt.DRAFTED and r["drafting"]["submits"] == 2
     seen = tool_texts(model, 1)[0]
-    assert seen.startswith("Draft rejected (submit 1 of 5)") and "is 'ok', not a failure by assertion" in seen
+    assert seen.startswith(f"Draft rejected (submit 1 of {cfg()['drafter']['max_submits']})") and "is 'ok', not a failure by assertion" in seen
     assert dt.PASSING_HINT in seen                                           # how to keep a test that passes now
     assert [e["ok"] for e in events(d) if e["event"] == "draft_submitted"] == [False, True]
 
