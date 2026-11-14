@@ -124,10 +124,16 @@ class ChangedTest(BaseModel):
                                   "changes (give content), or the one that tests the code (give append)")
     content: Optional[str] = Field(default=None, description="The complete new file content (when an old test "
                                    "changes). Give either content or append, never both")
-    append: Optional[str] = Field(default=None, description="New test code added at the end of the existing file; the "
+    append: Optional[str] = Field(default=None, description="New test code added at the end of the existing file (or, with "
+                                  "into_class, at the end of that class); the "
                                   "harness joins it to the file, you never write the rest. Write the imports it needs "
                                   "in the block and follow the file's style (unittest or pytest). Old tests stay as "
-                                  "they are. Not for a file with an `if __name__ == \"__main__\"` block")
+                                  "they are. Not for a file with an `if __name__ == \"__main__\"` block, unless it goes into a class (into_class)")
+    into_class: Optional[str] = Field(default=None, description="With append: the name of a top-level test class of the existing "
+                                      "file that already tests the code the issue is about. The harness adds the block at the end "
+                                      "of that class; write only its methods (def test_..., no decorator, constant defaults, no "
+                                      "helper, setUp or import, and no name the class already has or inherits). Without it, "
+                                      "append goes to the end of the file")
     removed: List[TestNote] = Field(default_factory=list, description="Old tests the new content no longer has")
     modified: List[TestNote] = Field(default_factory=list, description="Old test functions whose code changes but "
                                                                        "that are not required (must_pass)")
@@ -255,7 +261,11 @@ SYSTEM = "\n".join([
     "- Put new tests where the repository keeps its tests. When an existing test file already tests the code the issue "
     "is about, add them to it: a changed_tests entry with path and append (only the new test code; the harness joins "
     "it at the end of the file, and every old test stays as it is). Write in append the imports the new tests need, "
-    "follow the file's style (unittest or pytest), and require only new tests in must_pass. Use new_tests (a new file) "
+    "follow the file's style (unittest or pytest), and require only new tests in must_pass. When the file has a test class "
+    "for the function the issue is about, put the new tests in it: add into_class with that class's name and write only its "
+    "methods in append (each `def test_...`, no decorator, constant defaults, no helper, setUp or import: use what the file "
+    "already imports; the harness indents them and adds them at the end of the class; a name the class already has or inherits "
+    "is refused); with no such class, append at the end of the file as before. Use new_tests (a new file) "
     "only when no existing test file fits, or when the file has an `if __name__ == \"__main__\"` block.",
     "- When the issue changes behaviour that an existing test checks, give that file's new content in changed_tests "
     "(never leave the test out of the validations). Its tests whose expectation changes are required and must fail "
@@ -995,13 +1005,20 @@ def call_path_warning(draft, report):
 
 
 def _appended(draft, source):
-    """[{path, content: the code added, appended}] of the changed files that only add tests at their end: shown with the
-    new tests, whose required nodes they are (the intake copy `source` gives the old text)."""
+    """[{path, content: the code added, appended, into: the class or None}] of the changed files that only add tests, at their end
+    or at the end of one class (SPEC_INSERT_INTO): shown with the new tests, whose required nodes they are (the intake copy
+    `source` gives the old text)."""
     out = []
     for t in draft.get("changed_tests") or []:
         old = dr._intake_text(source, t["path"]) if source else None
-        if old is not None and ch.pure_addition(old, t["content"]):
-            out.append({"path": t["path"], "content": t["content"][len(old.rstrip("\n")):].lstrip("\n"), "appended": True})
+        ins = ch.insertion(old, t["content"]) if old is not None else None
+        if not ins:
+            continue
+        if ins["kind"] == "class":
+            code = "\n".join(t["content"].split("\n")[ins["first"] - 1:ins["last"]])
+            out.append({"path": t["path"], "content": code, "appended": True, "into": ins["class"]})
+        else:
+            out.append({"path": t["path"], "content": t["content"][len(old.rstrip("\n")):].lstrip("\n"), "appended": True, "into": None})
     return out
 
 
@@ -1046,7 +1063,9 @@ def review_text(run_id, inputs, state, cost, source=None):
                                                      else "none (it rewrites whole files with WriteFile)")]
         out += ["", "## New tests"]
         for t in [*draft["new_tests"], *appended]:
-            out += ["", f"### `{t['path']}`" + (" (added at the end of the existing file)" if t.get("appended") else ""), ""]
+            where = (f" (inserted at the end of class {t['into']} of the existing file)" if t.get("into")
+                     else " (added at the end of the existing file)") if t.get("appended") else ""
+            out += ["", f"### `{t['path']}`{where}", ""]
             for v in c["validation"]:
                 mine = [n for n in v.get("must_pass", []) if n.split("::", 1)[0] == t["path"]]
                 b = (report.get("baseline") or {}).get(v["id"]) or {}
@@ -1063,7 +1082,8 @@ def review_text(run_id, inputs, state, cost, source=None):
                 elif ex:                    # no red check recorded (a report from before it): the output, as before
                     out += ["", "Why they fail now (test output; check that this is the behaviour to fix):", "",
                             fence(ex, "text")]
-            out += ["", "The code added at the end of the file:" if t.get("appended") else "The file:", "",
+            out += ["", ("The methods inserted into the class:" if t.get("into") else "The code added at the end of the file:")
+                   if t.get("appended") else "The file:", "",
                     fence(t["content"], "python")]
         out += _changed_text(draft, report, source)
         out += _leaks_text(report)

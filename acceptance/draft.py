@@ -352,10 +352,12 @@ def collection_problems(draft, contract, base_dir, ws, sandbox_cfg, collect=coll
         else:
             problems += ch.lost_problems(p, got["intake"], got["new"], [r["node"] for r in t.get("removed", [])])
             old_text = _intake_text(base_dir, p)
-            if old_text is not None and ch.pure_addition(old_text, t["content"]):       # SPEC_APPEND_TESTS rule 4
+            ins = ch.insertion(old_text, t["content"]) if old_text is not None else None
+            if ins:                                                   # SPEC_APPEND_TESTS rule 4, SPEC_INSERT_INTO: an insertion too
                 problems += ch.appended_required_problems(
                     p, got["intake"], [n for v in contract["validation"] for n in v.get("must_pass", [])
                                        if n.split("::", 1)[0] == p])
+                problems += ch.inherited_problems(p, ins, got["intake"])
             seen[p] = {"intake": len(got["intake"]), "new": len(got["new"]),
                        "gone": sorted(got["intake"] - got["new"])[:MAX_NODES]}
     return problems, seen

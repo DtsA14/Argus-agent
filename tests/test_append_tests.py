@@ -277,7 +277,8 @@ def test_an_addition_that_binds_new_names_or_repeats_an_import_is_fine():
 
 def test_the_added_code_must_parse_on_its_own():
     content = OLD.rstrip("\n") + "\n\n\n    indented = 1\n"
-    assert any("does not parse on its own" in p for p in statics(draft_of(content), OLD))
+    # SPEC_INSERT_INTO: an indented tail after a class is also a candidate insertion into it; either way the draft is refused
+    assert any("does not parse on its own" in p or "only `def test*` methods" in p for p in statics(draft_of(content), OLD))
 
 
 def test_the_same_check_holds_for_an_append_that_reaches_the_draft(tmp_path):
