@@ -208,7 +208,7 @@ def main(argv=None, deps=None):
         return 0
     if o.cmd == "chat":
         from router import chat as rchat
-        rchat.serve(Path(o.jobs_dir))
+        rchat.serve(Path(o.jobs_dir), cfg=load_config(o.config))
         return 0
     if o.cmd == "stage":
         from router import stage as sg
