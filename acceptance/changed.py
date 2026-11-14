@@ -18,6 +18,7 @@
 Whether a test got weaker cannot be checked; warnings() points the human at the places to read (K3).
 """
 import ast
+import textwrap
 import difflib
 import re
 
@@ -48,6 +49,285 @@ def pure_addition(old, new):
     return new.startswith(base + "\n") and new[len(base):].strip() != ""
 
 
+def _dump(nodes):
+    return [ast.dump(n) for n in nodes]
+
+
+def _class_header(c):
+    return (c.name, _dump(c.bases), _dump(c.keywords), _dump(c.decorator_list), _dump(getattr(c, "type_params", [])))
+
+
+def _trim(lines):
+    """`lines` without its trailing empty lines (the final newlines of a file)."""
+    out = list(lines)
+    while out and out[-1] == "":
+        out.pop()
+    return out
+
+
+def class_insertion(old, new):
+    """SPEC_INSERT_INTO: None, or {"kind": "class", "class": name, "stmts": [the statements added], "first", "last": their
+    lines in `new`, "node": the class} when `new` is `old` with statements added at the END of the body of exactly one
+    top-level class and nothing else changed: the two modules have the same AST except that class's body, whose old statements
+    are the beginning of the new one, and the new text is the old text plus the added lines (and one blank line before them).
+    The region is found by structure, not by a text offset."""
+    try:
+        t_old, t_new = ast.parse(old), ast.parse(new)
+    except (SyntaxError, ValueError):
+        return None
+    if len(t_old.body) != len(t_new.body):
+        return None
+    found = None
+    for a, b in zip(t_old.body, t_new.body):
+        if ast.dump(a) == ast.dump(b):
+            continue
+        if found or not (isinstance(a, ast.ClassDef) and isinstance(b, ast.ClassDef)) or _class_header(a) != _class_header(b):
+            return None
+        n = len(a.body)
+        if len(b.body) <= n or _dump(a.body) != _dump(b.body[:n]):
+            return None
+        found = (b, n)
+    if found is None:
+        return None
+    c, n = found
+    stmts = c.body[n:]
+    first = min(min([x.lineno] + [d.lineno for d in getattr(x, "decorator_list", [])]) for x in stmts)
+    last = max(x.end_lineno for x in stmts)
+    lines = new.split("\n")
+    start = first - 1 if first >= 2 and lines[first - 2].strip() == "" else first          # 1-based, with one blank line before
+    want, end = _trim(old.split("\n")), last
+    while True:                       # comment and blank lines that trail the block's last statement belong to the block
+        if _trim(lines[:start - 1] + lines[end:]) == want:
+            break
+        if end >= len(lines) or end - last >= 500 or not (lines[end].strip() == "" or lines[end].lstrip().startswith("#")):
+            return None
+        end += 1
+    last = max(last, end)
+    return {"kind": "class", "class": c.name, "stmts": stmts, "first": first, "last": last, "node": c}
+
+
+def insertion(old, new):
+    """None, {"kind": "end"} (`new` keeps `old` as its beginning and adds after it: pure_addition), or class_insertion's dict."""
+    ins = class_insertion(old, new)        # first: methods added to the LAST class of a file also keep the old text as a prefix
+    if ins:
+        return ins
+    return {"kind": "end"} if pure_addition(old, new) else None
+
+
+def insertion_bytes(old, new):
+    """The bytes an insertion adds: what an append costs (added_bytes), or the difference of the two texts for a class insertion."""
+    ins = insertion(old, new)
+    if ins and ins["kind"] == "end":
+        return added_bytes(old, new)
+    return len(new.encode("utf-8")) - len(old.encode("utf-8"))
+
+
+def _bindings(tree, name):
+    """How many times a module binds `name` anywhere (class, def, assignment, del, import, except-as, global)."""
+    n = 0
+    for x in ast.walk(tree):
+        if isinstance(x, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and x.name == name:
+            n += 1
+        elif isinstance(x, ast.Name) and x.id == name and isinstance(x.ctx, (ast.Store, ast.Del)):
+            n += 1
+        elif isinstance(x, ast.alias) and (x.asname or x.name.split(".")[0]) == name:
+            n += 1
+        elif isinstance(x, ast.ExceptHandler) and x.name == name:
+            n += 1
+        elif isinstance(x, (ast.Global, ast.Nonlocal)) and name in x.names:
+            n += 1
+    return n
+
+
+def _constant(node):
+    return isinstance(node, ast.Constant) or (isinstance(node, ast.Tuple) and all(_constant(e) for e in node.elts))
+
+
+class _Binds(ast.NodeVisitor):
+    """The names one scope binds through the statements visited: assignment, for, with, except-as, del, import, def, class, match, :=
+    (also in a comprehension, which binds it in the enclosing scope). Nested function, lambda and class BODIES and comprehension
+    variables are other scopes and are not entered. names: every bound name; plain: those not bound only by an import;
+    imports: {name: where it comes from}."""
+
+    def __init__(self):
+        self.names, self.plain, self.imports = set(), set(), {}
+
+    def _bind(self, name):
+        self.names.add(name)
+        self.plain.add(name)
+
+    def visit_FunctionDef(self, n):
+        self._bind(n.name)
+        for x in (*n.decorator_list, *n.args.defaults, *[k for k in n.args.kw_defaults if k is not None]):
+            self.visit(x)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, n):
+        self._bind(n.name)
+        for x in (*n.bases, *n.keywords, *n.decorator_list):
+            self.visit(x)
+
+    def visit_Lambda(self, n):
+        pass
+
+    def _comprehension(self, n):
+        for x in ast.walk(n):
+            if isinstance(x, ast.NamedExpr) and isinstance(x.target, ast.Name):
+                self._bind(x.target.id)
+
+    visit_ListComp = visit_SetComp = visit_DictComp = visit_GeneratorExp = _comprehension
+
+    def visit_Name(self, n):
+        if isinstance(n.ctx, (ast.Store, ast.Del)):
+            self._bind(n.id)
+
+    def visit_ExceptHandler(self, n):
+        if n.name:
+            self._bind(n.name)
+        self.generic_visit(n)
+
+    def visit_Import(self, n):
+        for a in n.names:
+            b = a.asname or a.name.split(".")[0]
+            self.names.add(b)
+            self.imports[b] = ("import", a.name if a.asname else a.name.split(".")[0], a.asname)
+
+    def visit_ImportFrom(self, n):
+        for a in n.names:
+            b = a.asname or a.name
+            self.names.add(b)
+            self.imports[b] = ("from", n.level, n.module, a.name)
+
+    def visit_MatchAs(self, n):
+        if n.name:
+            self._bind(n.name)
+        self.generic_visit(n)
+
+    def visit_MatchStar(self, n):
+        if n.name:
+            self._bind(n.name)
+
+    def visit_MatchMapping(self, n):
+        if n.rest:
+            self._bind(n.rest)
+        self.generic_visit(n)
+
+
+def _scope_binds(stmts):
+    v = _Binds()
+    for x in stmts:
+        v.visit(x)
+    return v
+
+
+def _class_names(c):
+    """The names a class body binds directly (methods, assignments, anything under if/for/try/with in the body)."""
+    return _scope_binds(c.body).names
+
+
+def _inherited_names(tree, c, seen=()):
+    """The names bound by the classes of the same file that `c` inherits from (bases that are plain names of top-level classes)."""
+    out = set()
+    for b in c.bases:
+        if isinstance(b, ast.Name) and b.id not in seen:
+            tops = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == b.id]
+            if len(tops) == 1:
+                out |= _class_names(tops[0]) | _inherited_names(tree, tops[0], (*seen, b.id))
+    return out
+
+
+def insertion_problems(path, old, ins):
+    """For a class insertion, whatever route made it: the class must be a top-level class bound once without decorators, and the
+    added statements may only be `def test*` methods with new names, no decorators, constant defaults. A name or helper inside
+    a TestCase changes how every old test of the class runs (setUp, run, an inherited or shadowed method)."""
+    if not ins or ins.get("kind") != "class":
+        return []
+    name, where = ins["class"], f"changed test {path}"
+    try:
+        tree = ast.parse(old)
+    except (SyntaxError, ValueError):
+        return []
+    tops = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == name]
+    if len(tops) != 1 or _bindings(tree, name) != 1:
+        return [f"{where}: {name} is not a top-level class bound exactly once, tests cannot be inserted into it"]
+    problems = []
+    if tops[0].decorator_list:
+        problems.append(f"{where}: class {name} has a decorator, which can change its methods: no tests are inserted into it")
+    existing, seen = _class_names(tops[0]) | _inherited_names(tree, tops[0]), set()
+    for s in ins["stmts"]:
+        if not isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef)) or not s.name.startswith("test"):
+            problems.append(f"{where}: only `def test*` methods may be inserted into class {name}, not "
+                            f"{type(s).__name__} (a helper, setUp, an attribute or an import changes how the old tests run)")
+            continue
+        if s.decorator_list:
+            problems.append(f"{where}: {name}.{s.name} has a decorator: an inserted test method takes none")
+        a = s.args
+        notes = [x.annotation for x in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg) if x is not None] + [s.returns]
+        if any(n is not None for n in notes) or getattr(s, "type_params", None):
+            problems.append(f"{where}: {name}.{s.name} has an annotation or type parameters: they run when the class is built, so an "
+                            "inserted test method takes none")
+        if not all(_constant(d) for d in [*a.defaults, *[k for k in a.kw_defaults if k is not None]]):
+            problems.append(f"{where}: {name}.{s.name} has a default argument that is not a constant")
+        if s.name in existing:
+            problems.append(f"{where}: {name}.{s.name} already exists in the class or in a base class of this file (it would replace or override an old test or attribute)")
+        if s.name in seen:
+            problems.append(f"{where}: {name}.{s.name} is defined twice in the block")
+        seen.add(s.name)
+    return problems
+
+
+def inherited_problems(path, ins, before):
+    """For a class insertion: a new method whose node id the intake collection already has (before: {node ids}) overrides an
+    inherited test of that class (a mixin's), which K1 would not see as a lost node."""
+    if not ins or ins.get("kind") != "class":
+        return []
+    return [f"inserted {ins['class']}::{s.name} is already collected from the intake as {path}::{ins['class']}::{s.name}: it would "
+            "override a test the class inherits" for s in ins["stmts"]
+            if f"{path}::{ins['class']}::{s.name}" in before]
+
+
+def _insert_into(path, old, tree, name, block, where):
+    """(content, problems): `old` with the block at the end of the body of the top-level class `name`."""
+    if not isinstance(name, str) or not re.match(r"^[A-Za-z_]\w{0,99}$", name):
+        return None, [f"{where}: into_class must be the name of a top-level class of the file"]
+    for ch_ in ("\r", "\x0b", "\x0c"):
+        if ch_ in old or ch_ in block:
+            return None, [f"{where}: carriage returns, vertical tabs and form feeds are not allowed in the file or the block when "
+                          "inserting into a class"]
+    tops = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == name]
+    if len(tops) != 1 or _bindings(tree, name) != 1:
+        return None, [f"{where}: {name} is not a top-level class of {path} bound exactly once (not defined, defined twice, under "
+                      "if/try, nested, or rebound): nothing can be inserted into it"]
+    c = tops[0]
+    if c.decorator_list:
+        return None, [f"{where}: class {name} has a decorator: nothing is inserted into it"]
+    lines, first = old.split("\n"), c.body[0]
+    if first.lineno == c.lineno:
+        return None, [f"{where}: class {name} has its body on the line of the class statement: nothing is inserted into it"]
+    indent = lines[first.lineno - 1][:first.col_offset]
+    if not indent or indent.strip(" ") != "":
+        return None, [f"{where}: the body of class {name} is not indented with spaces (tabs are refused)"]
+    dedented = textwrap.dedent(block).strip("\n")
+    try:
+        added = ast.parse(dedented)
+    except (SyntaxError, ValueError) as ex:
+        return None, [f"{where}: the block does not parse as methods: {ex}"]
+    if not added.body:
+        return None, [f"{where}: append must be a non-empty string of test code (a comment alone is not code)"]
+    body = "\n".join((indent + x) if x.strip() else "" for x in dedented.split("\n"))
+    content = "\n".join(lines[:c.end_lineno] + [""] + body.split("\n") + lines[c.end_lineno:])
+    content = content if content.endswith("\n") else content + "\n"
+    ins = class_insertion(old, content)
+    if ins is None or ins["class"] != name:
+        return None, [f"{where}: the block does not parse as statements at the end of class {name}"]
+    if _dump(ins["stmts"]) != _dump(added.body):
+        return None, [f"{where}: a string or a continuation line of the block would change its value under the class's "
+                      "indentation (indent it so the string does not depend on it)"]
+    bad = insertion_problems(path, old, ins)
+    return (None, [p.replace(f"changed test {path}", where, 1) for p in bad]) if bad else (content, [])
+
+
 def _main_guard(tree):
     """A top-level `if __name__ == "__main__":` (either order of the comparison)."""
     for n in tree.body:
@@ -74,16 +354,19 @@ def from_append(entries, read, plain, limit=MAX_BLOCK_BYTES):
             out.append(e)
             continue
         e = {k: v for k, v in e.items()
-             if not (k in ("content", "append") and v is None) and not (k in ("removed", "modified") and v == [])}
+             if not (k in ("content", "append", "into_class") and v is None) and not (k in ("removed", "modified") and v == [])}
         if "append" not in e:
+            if "into_class" in e:
+                problems.append(f"changed_tests[{i}]: into_class goes with append")
+                continue
             out.append(e)
             continue
         where = f"changed_tests[{i}]"
         if "content" in e:
             problems.append(f"{where}: give exactly one of content or append")
             continue
-        if set(e) - {"path", "append", "removed", "modified"} or not isinstance(e.get("path"), str):
-            problems.append(f"{where} must be {{path, append}} (removed and modified are for content)")
+        if set(e) - {"path", "append", "into_class", "removed", "modified"} or not isinstance(e.get("path"), str):
+            problems.append(f"{where} must be {{path, append}} or {{path, append, into_class}} (removed and modified are for content)")
             continue
         if e.get("removed") or e.get("modified"):
             problems.append(f"{where}: removed and modified go with content; an append changes no old test")
@@ -107,11 +390,17 @@ def from_append(entries, read, plain, limit=MAX_BLOCK_BYTES):
         except (SyntaxError, ValueError) as ex:
             problems.append(f"changed test {path} does not parse in the intake, nothing can be appended: {ex}")
             continue
-        if _main_guard(tree):
-            problems.append(f"changed test {path} has an `if __name__ == \"__main__\"` block: tests appended after it "
-                            "would not run when the file runs as a script, so it takes no append (use content)")
-            continue
-        content = old.rstrip("\n") + "\n\n\n" + block.strip("\n") + "\n"
+        if "into_class" in e:
+            content, why = _insert_into(path, old, tree, e["into_class"], block, where)
+            if why:
+                problems += why
+                continue
+        else:
+            if _main_guard(tree):
+                problems.append(f"changed test {path} has an `if __name__ == \"__main__\"` block: tests appended after it "
+                                "would not run when the file runs as a script, so it takes no append (use content or into_class)")
+                continue
+            content = old.rstrip("\n") + "\n\n\n" + block.strip("\n") + "\n"
         if len(content.encode("utf-8")) > MAX_CHANGED_BYTES:
             problems.append(f"{where}: the file with the block would be larger than {MAX_CHANGED_BYTES} bytes")
             continue
@@ -133,16 +422,39 @@ def _top_names(tree):
     return names
 
 
+def _attribute_targets(tree):
+    """Top-level statements of `tree` that assign to or delete an attribute or an item (X.test_a = ..., d['k'] = ..., del X.a)."""
+    out = []
+    for n in tree.body:
+        targets = n.targets if isinstance(n, (ast.Assign, ast.Delete)) else [n.target] if isinstance(n, (ast.AugAssign, ast.AnnAssign)) else []
+        if any(isinstance(x, (ast.Attribute, ast.Subscript)) for t in targets for x in ast.walk(t)):
+            out.append(n.lineno)
+    return out
+
+
 def redefined_problems(path, old, new):
-    """For a pure addition: the added code must parse on its own and bind no top-level name the intake version binds. A
-    redefined class or function would silently replace an old test (K1 only sees a node id vanish, not a weaker body)."""
+    """For a pure addition: the added code must parse on its own, bind no top-level name the intake version binds (by def, class,
+    assignment or IMPORT: a `def f` would shadow the `f` the old tests import) and assign to no attribute or item at the top
+    level (`SomeTests.test_a = ...`, `TestCase.assertEqual = ...`, `module.f = fake` change old tests without redefining a name).
+    A redefined class or function would silently replace an old test (K1 only sees a node id vanish, not a weaker body)."""
     try:
         before, added = ast.parse(old), ast.parse(new[len(old.rstrip("\n")):])
     except (SyntaxError, ValueError) as e:
         return [f"changed test {path}: the code added at its end does not parse on its own: {e}"]
-    clash = sorted(_top_names(before) & _top_names(added))
-    return [f"changed test {path}: the added code redefines {', '.join(clash[:10])} of the intake version, which would "
-            "replace an old test or helper (an addition keeps every old definition as it is)"] if clash else []
+    problems = []
+    was, now = _scope_binds(before.body), _scope_binds(added.body)
+    clash = {n for n in now.plain if n in was.names}                                 # any statement at module scope rebinds it
+    clash |= {n for n, src in now.imports.items() if n in was.names and was.imports.get(n) != src}    # an import of something else
+    if clash:
+        problems.append(f"changed test {path}: the added code redefines {', '.join(sorted(clash)[:10])} of the intake version, which would "
+                        "replace an old test or helper (an addition keeps every old definition as it is)")
+    if any(isinstance(n, ast.ImportFrom) and any(a.name == "*" for a in n.names) for n in ast.walk(added)):
+        problems.append(f"changed test {path}: the added code has a star import, which rebinds names nobody can list")
+    lines = _attribute_targets(added)
+    if lines:
+        problems.append(f"changed test {path}: the added code assigns to or deletes an attribute or an item at its top level (added "
+                        f"code line(s) {', '.join(map(str, lines[:5]))}): that can change how an old test runs; write only new tests")
+    return problems
 
 
 def appended_required_problems(path, before, required):
@@ -318,10 +630,15 @@ def static_problems(draft, contract, base_files, old_tests, sha):
                             "edit it)")
         if sha(t["content"]) == base_files[p]:
             problems.append(f"changed test {p} is the same as in the intake")
-        pure = pure_addition(old_tests[p], t["content"])
-        if pure:
+        ins = insertion(old_tests[p], t["content"])
+        if ins and ins["kind"] == "end":
             problems += redefined_problems(p, old_tests[p], t["content"])
-        if (added_bytes(old_tests[p], t["content"]) > MAX_BLOCK_BYTES + APPEND_OVERHEAD) if pure \
+        elif ins:
+            problems += insertion_problems(p, old_tests[p], ins)          # SPEC_INSERT_INTO: whatever route made the draft
+            if any(c in t["content"] for c in ("\r", "\x0b", "\x0c")):
+                problems.append(f"changed test {p}: carriage returns, vertical tabs and form feeds are not allowed in a file that gets "
+                                "tests inserted into a class (the lines would not be the ones the review shows)")
+        if (insertion_bytes(old_tests[p], t["content"]) > MAX_BLOCK_BYTES + APPEND_OVERHEAD) if ins \
                 else (len(t["content"].encode("utf-8")) > MAX_BLOCK_BYTES):
             problems.append(f"changed test {p} is larger than {MAX_BLOCK_BYTES} bytes (a file that only adds tests at its "
                             f"end may add at most that much to the intake version)")
@@ -359,7 +676,7 @@ def _adds_a_test(draft, contract, old_tests):
     intake version (a function that is, by its AST: K1's collection makes the same demand on the node ids)."""
     for t in draft.get("changed_tests") or []:
         old = old_tests.get(t["path"])
-        if old is None or not pure_addition(old, t["content"]):
+        if old is None or not insertion(old, t["content"]):
             continue
         try:
             have = _defined_tests(ast.parse(old))
@@ -442,6 +759,11 @@ def warnings(path, old, new, removed):
     a, b = _count(o, _weak), _count(n, _weak)
     if b > a:
         out.append(f"{path} has more skip, xfail or `assert True` ({a} -> {b})")
+    ins = class_insertion(old, new)
+    if ins:                       # SPEC_INSERT_INTO: the inserted test methods are new tests, not changed class bodies
+        for c in n.body:
+            if isinstance(c, ast.ClassDef) and c.name == ins["class"]:
+                c.body = c.body[:len(c.body) - len(ins["stmts"])]
     if _module_rest(o) != _module_rest(n):
         out.append(f"{path} changes module-level code (helpers, fixtures, imports or class bodies): read it, it is "
                    "not held to the old version")
