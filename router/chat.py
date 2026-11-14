@@ -8,7 +8,7 @@ a symlink, every value checked, no key pattern), and serves a page that renders 
 anything: every method but GET is refused, and it holds no key and runs no model.
 
 Checks on every request, GET included (11.1, 11.2): the Host is exactly 127.0.0.1:PORT; on /api/* Sec-Fetch-Site is absent,
-same-origin or none (same-site is the viewer on localhost:8710 and is refused); no cookie is ever set or read.
+same-origin or none (the viewer on localhost:8710 is cross-site (an IP host is its own site) and is refused; same-site is refused too); no cookie is ever set or read.
 """
 import hashlib
 import io
@@ -26,6 +26,7 @@ BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while 
 HOSTS = (f"{BIND}:{PORT}",)                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
+VIEWER_ORIGIN = "http://localhost:8710"             # the viewer: another origin on purpose (11.2: `localhost`, not 127.0.0.1, so its cookie jar and site are not the chat's)
 LIST_MAX = 100                                     # the single-threaded server reads at most this many job.json per request
 STATIC_DIR = Path(__file__).resolve().parent / "chat_static"
 STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
@@ -33,8 +34,8 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "20b7ff061209d34c8a391b19b8b5d39f32a8565733cb6138ca3f0e057551f90d",
-    "app.js": "e5388ebfeac272d3414b081c8f6aee8dbc74d17fa048d95a02dcad9aaa8ff24b",
-    "app.css": "4c27275837abc6c2277a5b570e5b1c9e65e9ea5fa629f06983828451b2a0cfc5",
+    "app.js": "910b5f7d2e644d5c2df9e61e8743242ec1324350ca390de8132a953d1cad1774",
+    "app.css": "26184b66e1902770c8c3532fb57388cddc8d653b52856272ee2509596cf5dcc9",
 }
 
 
@@ -66,13 +67,13 @@ def load_static():
     return out
 
 
-def card(raw):
+def card(raw, name):
     """One job of the list: the projected job's few fields (the projection already checked every value and the title)."""
     stages = raw.get("stages") or {}
     done_usd = sum(s["usd"] for s in stages.values() if isinstance(s.get("usd"), (int, float)))
-    return {"id": raw.get("job"), "kind": raw.get("kind"), "state": raw.get("state"), "created_at": raw.get("created_at"),
+    return {"id": name, "kind": raw.get("kind"), "state": raw.get("state"), "created_at": raw.get("created_at"),
             "title": raw.get("title"), "max_usd": raw.get("max_usd"), "stages_usd": round(done_usd, 6),
-            "stages": len(stages)}
+            "stages": len(stages), "viewer": f"{VIEWER_ORIGIN}/jobs/{name}"}   # a fixed origin and the directory name that matched UI_ID, never text
 
 
 class Chat:
@@ -104,7 +105,7 @@ class Chat:
                         raw = json.loads(sd._read_at(jfd, "job.json", limit=sd.READ_MAX))
                     finally:
                         os.close(jfd)
-                    out.append(card(sd.project_job(raw, name)))
+                    out.append(card(sd.project_job(raw, name), name))
                 except (OSError, ValueError, sd.Excluded):
                     skipped += 1                   # never with a value: a job that cannot be shown is counted
         finally:
@@ -128,7 +129,7 @@ class Chat:
         if got is None:
             return None
         job, _runs, nano, _files = got
-        return {"job": {**card(job), "stages": job.get("stages", {}), "log": job.get("log", [])},
+        return {"job": {**card(job, job_id), "stages": job.get("stages", {}), "log": job.get("log", [])},
                 "spent_usd": nano / 1e9}
 
     def status(self):

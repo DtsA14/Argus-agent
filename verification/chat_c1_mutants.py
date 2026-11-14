@@ -8,6 +8,10 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 T = ["-rfEs", "tests/test_chat.py"]
 C = "router/chat.py"
 M = [
+    ("viewer link from job.json's own field", C, [("\"viewer\": f\"{VIEWER_ORIGIN}/jobs/{name}\"", "\"viewer\": f\"{VIEWER_ORIGIN}/jobs/{raw.get('job')}\"")]),
+    ("viewer link on the chat's own host", C, [('VIEWER_ORIGIN = "http://localhost:8710"', 'VIEWER_ORIGIN = "http://127.0.0.1:8710"')]),
+    ("viewer link from the job's text", C, [("\"viewer\": f\"{VIEWER_ORIGIN}/jobs/{name}\"", "\"viewer\": raw.get('title') or ''")]),
+    ("no viewer link in the card", C, [(", \"viewer\": f\"{VIEWER_ORIGIN}/jobs/{name}\"", "")]),
     ("only the first Host header is read", C, [("        return len(hosts) == 1 and hosts[0] in HOSTS", "        return bool(hosts) and hosts[0] in HOSTS")]),
     ("only the first Sec-Fetch-Site is read", C, [("            if len(sites) > 1 or (sites and", "            if (sites and")]),
     ("Host not checked on GET", C, [("        if not self._host_ok():                              # every method", "        if False:                              # every method")]),
@@ -37,7 +41,7 @@ M = [
     ("query string accepted", C, [("        path = self.path\n", "        path = self.path.split(\"?\", 1)[0]\n")]),
     ("static pin not checked", C, [("        if STATIC_SHA256 and hashlib.sha256(data).hexdigest() != STATIC_SHA256.get(name):", "        if False:")]),
     ("detail has no cost", C, [("\"spent_usd\": nano / 1e9}", "\"spent_usd\": 0}")]),
-    ("raw job.json instead of the projection", C, [("out.append(card(sd.project_job(raw, name)))", "out.append(card(raw))")]),
+    ("raw job.json instead of the projection", C, [("out.append(card(sd.project_job(raw, name), name))", "out.append(card(raw, name))")]),
 ]
 
 if __name__ == "__main__":

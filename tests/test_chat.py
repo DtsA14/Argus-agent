@@ -281,9 +281,18 @@ SINKS = ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval
          "postMessage", "location =", "location.href", ".href =", "javascript:"]
 
 
+LINK_LINE = "    a.href = url;"
+
+
+def without_the_viewer_link(js):
+    """The script without its one allowed link line (see test_the_page_makes_exactly_one_link)."""
+    assert js.count(LINK_LINE + "\n") == 1
+    return js.replace(LINK_LINE + "\n", "")
+
+
 @pytest.mark.parametrize("sink", SINKS)
 def test_the_page_script_has_no_html_sink_or_storage(sink):
-    assert sink not in (rc.STATIC_DIR / "app.js").read_text()
+    assert sink not in without_the_viewer_link((rc.STATIC_DIR / "app.js").read_text())
 
 
 def test_the_script_does_not_listen_for_messages_or_pass_a_string_to_a_timer():
@@ -336,7 +345,7 @@ def test_two_sec_fetch_site_headers_are_refused(svc, sites):
 
 @pytest.mark.parametrize("pattern", SINK_RES)
 def test_the_page_script_has_no_sink_whatever_the_spacing(pattern):
-    assert not re.search(pattern, (rc.STATIC_DIR / "app.js").read_text())
+    assert not re.search(pattern, without_the_viewer_link((rc.STATIC_DIR / "app.js").read_text()))
 
 
 # ---- Opus review of C1 (2026-11-14) ----------------------------------------------------------------------------------------
@@ -402,3 +411,43 @@ def test_the_script_source_in_the_csp_is_the_exact_path(svc):
 
 def test_the_sec_fetch_check_covers_the_thread_detail_too(svc):
     assert svc.request("GET", f"/api/threads/{JOB}", {"Sec-Fetch-Site": "same-site"})[0] == 403
+
+
+# ---- C1b: the card links to the viewer (SPEC_CHAT_APP 11.2, 11.7) -----------------------------------------------------------
+
+def test_every_card_links_to_the_viewers_job_page_on_another_origin(svc):
+    (t,) = svc.get_json("/api/threads")[1]["threads"]
+    d = svc.get_json(f"/api/threads/{JOB}")[1]["job"]
+    assert t["viewer"] == d["viewer"] == f"http://localhost:8710/jobs/{JOB}"
+    assert rc.VIEWER_ORIGIN.startswith("http://localhost:") and rc.BIND not in rc.VIEWER_ORIGIN         # not the chat's cookie jar
+
+
+def test_the_link_never_comes_from_text_of_the_job(svc):
+    p = svc.jobs / JOB / "job.json"
+    d = json.loads(p.read_text())
+    d["inputs"]["issue"] = "javascript:alert(1)//http://evil.example/"
+    p.write_text(json.dumps(d))
+    t = svc.get_json("/api/threads")[1]["threads"][0]
+    assert t["viewer"] == f"http://localhost:8710/jobs/{JOB}" and "evil" not in json.dumps(t["viewer"])
+
+
+def test_the_page_makes_exactly_one_link_and_guards_its_target():
+    js = (rc.STATIC_DIR / "app.js").read_text()
+    assert js.count(LINK_LINE) == 1 and js.count("a.href") == 1 and "createElement(\"a\")" not in js
+    assert js.count("href") == 1 and js.count('el("a"') == 1 and "Object.assign" not in js      # no second anchor, no href by another door
+    assert 'a.addEventListener("click", function (e) { e.stopPropagation(); });' in js
+    assert 'var VIEWER = "http://localhost:8710/jobs/";' in js
+    guard = 'if (typeof url !== "string" || url.indexOf(VIEWER) !== 0 || !/^[a-z0-9_]+$/.test(url.slice(VIEWER.length))) { return null; }'
+    assert js.index(guard) < js.index(LINK_LINE)
+    assert 'a.rel = "noopener noreferrer";' in js and js.index('a.rel = "noopener noreferrer";') < js.index(LINK_LINE)
+    assert "target" not in js and "window.open" not in js
+
+
+def test_the_viewer_link_uses_the_directory_name_not_a_field_of_job_json(svc):
+    p = svc.jobs / JOB / "job.json"
+    d = json.loads(p.read_text())
+    del d["job"]
+    p.write_text(json.dumps(d))
+    out = svc.get_json("/api/threads")[1]
+    for t in out["threads"]:
+        assert t["viewer"] == f"http://localhost:8710/jobs/{JOB}" and "None" not in t["viewer"]
