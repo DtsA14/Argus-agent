@@ -40,3 +40,18 @@ The runner compares only the decision. I also compared the reasons the harness r
 - **GATE-16 / spec gap 6:** should a comment that contains the whole detection pattern count as a hit? (Today it does, and the hit is terminal.)
 - **The 12 spec gaps and 5 contradictions in `WRITER_REPORT.md`** (for example: GATE C3 says the agent gets another attempt, TERMINAL says there is none; v1 flaky rule against v3 C7; whether the workspace is writable during the red check). No case was written for a gap, so the 35 matches say nothing about them.
 - Whether to write a second round of cases aimed at the gaps and at conditions the first writer did not cover (vitest, deleted or renamed files, files in neither writable nor protected, hit plus unconfirmed report state), perhaps by a different model.
+
+## Second run after D1 and P1 (2026-11-14, code of #527, same frozen cases, runner unchanged)
+
+`run.py` on the merged code: **32 MATCH, 3 MISMATCH, 0 CRASH, 0 INVALID_CONTRACT.** The three are the cases the amendment
+(`docs/reviews/SPEC_GATE_RC_CLARIFICATIONS.md`) was written to change. The frozen cases and their `expect` were not edited; the
+expectations are those of the old spec, so the mismatches are read against the new one:
+
+| Case | Old expect | Now | Why (new spec) |
+|---|---|---|---|
+| GATE-16 | hit | clean | D1: the only mention of `"pytest" in sys.modules` is a `#` comment of a Python file. |
+| GATE-14 | clean | hit | P1: the test-named helper (`pkg/test/helper.py`-shaped) is writable and not protected, so it is scanned. |
+| GATE-10 | clean | hit | P1, consequence (b) of the spec: the contract makes `tests/test_agent_*.py` writable, the agent's own test names `sys.modules`, `pytest` and `PYTEST_CURRENT_TEST`, so the honest test is a terminal hit. Not predicted case by case; it is the cost the spec accepted ("a writable test that says `sys.modules` and `pytest` on one line becomes a hit"). |
+
+All 13 negatives and all RC cases still match. Nothing here is a defect of the code; GATE-10 is the one a human should look at again:
+an agent that is allowed to write tests and writes a test that inspects `sys.modules` now ends `FAILED_ACCEPTANCE` with no retry.
