@@ -161,3 +161,12 @@ def test_a_hit_on_an_attempt_that_ends_blocked_is_not_in_the_summary(tmp_path): 
     assert r["status"] == st.BLOCKED and r["blocked_reason"] == "sandbox_unavailable"
     assert "detected" not in r["verdict"]
     assert "scope:no_test_detection" in (d / "verdict_0.json").read_text()            # the full verdict keeps it
+
+
+def test_a_hit_on_an_attempt_that_ends_llm_failed_is_not_in_the_summary(tmp_path):
+    from models.fake import FakeHTTPError
+    r, model, d = run(tmp_path, [READ, CHEAT, FakeHTTPError(401, "invalid api key")])
+    assert r["status"] == st.BLOCKED and r["blocked_reason"] == "provider_failed"
+    assert "detected" not in r["verdict"]
+    assert "scope:no_test_detection" in (d / "verdict_0.json").read_text()
+
