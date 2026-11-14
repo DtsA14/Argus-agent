@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from router import stage_data as sd
-from router.chat_actions import Refusal, strict_json
+from router.chat_actions import AUDIT_STR, Refusal, strict_json
 
 BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while the chat is built, 8711 at C4 (one value)
 HOSTS = (f"{BIND}:{PORT}",)
@@ -260,10 +260,16 @@ class Handler(BaseHTTPRequestHandler):
             self._refuse(r.status, r.why)
         except Exception as e:                               # never a bare traceback to the client, and the connection ends
             self.close_connection = True
-            self._audit(a, **rec, refused="error", why=type(e).__name__)
+            if rec.get("executed"):                          # the action ran and its answer could not be written: say so
+                self._audit(a, **{k: v for k, v in rec.items() if k != "executed"}, note="the reply could not be written",
+                            why=type(e).__name__)
+            else:
+                self._audit(a, **rec, refused="error", why=type(e).__name__)
             self._refuse(500, "the chat could not do that")
 
     def _audit(self, a, **rec):
+        """One audit line; a client's text is cut first (the job id, the reason of a refusal), never the token or a message."""
+        rec = {k: (v[:AUDIT_STR] if isinstance(v, str) else v) for k, v in rec.items()}
         try:
             a.audit(**rec)
             return True
@@ -304,6 +310,7 @@ class Handler(BaseHTTPRequestHandler):
         rec.update(action=action if isinstance(action, str) else None, job=params.get("job") or None)
         out, digest = a.prepare(action, params)
         if not self._audit(a, **rec, ok="prepare", digest=digest):
+            a.prepared.pop(out["token"], None)             # a token that was never given out is not kept either
             raise Refusal(503, "audit", "the audit could not be written: nothing was prepared")
         self._json(200, out)
 
@@ -315,6 +322,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._audit(a, **rec, attempt="confirm"):
             raise Refusal(503, "audit", "the audit could not be written: nothing was run")
         out = a.execute(action, card, rp)
+        rec["executed"] = True
         self._audit(a, **{**rec, "ok": "confirm", "job": out.get("job")})
         self._json(200, out)
 
@@ -334,11 +342,14 @@ def server(chat, port=PORT):
     return HTTPServer((BIND, port), handler)
 
 
-def serve(jobs_dir, cfg=None):
+def serve(jobs_dir, cfg=None, config_path=None, load=None):
+    """cfg: the config at start, only to decide whether the issue writer's actions are on; they read the config again for every
+    prepare and confirm (load, or the file of config_path), so a card shows what the CLI will read. A config that cannot be
+    read at start leaves the chat read only (C1), it does not stop it."""
     actions = None
     if cfg is not None and cfg.get("issue_writer"):
         from router.chat_actions import Actions
-        actions = Actions(jobs_dir, cfg)
+        actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path)
     chat = Chat(jobs_dir, actions=actions)
     srv = server(chat)
     print(f"argus chat on http://{BIND}:{PORT} (jobs {jobs_dir})", flush=True)

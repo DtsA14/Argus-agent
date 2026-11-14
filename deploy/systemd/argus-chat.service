@@ -4,6 +4,9 @@
 # Go-live checklist: (1) update the ~/pilot3a_live checkout to the commit that has router/chat.py (that checkout also runs argus-control and
 # the stage proxy, which take the new code at their next restart); (2) add permitopen="127.0.0.1:8712" to the iphone-viewer key by hand;
 # (3) open the page once on the phone: the job list shows and the console has no CSP error.
+# C2: the issue writer's actions need the key files of the CLI in the service's environment, deliberately and by hand (a drop-in
+# like argus-control.service.d): ARGUS_CHAT_KEY_FILE (code jobs) and ARGUS_CHAT_WRITER_KEY_FILE (the writer's turns). Without them
+# every paid action is refused at prepare. The service never reads the files.
 # Install (after "go live"): ln -s this file into ~/.config/systemd/user/, then
 #   systemctl --user daemon-reload && systemctl --user enable --now argus-chat.service
 [Unit]
