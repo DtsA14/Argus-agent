@@ -67,3 +67,9 @@ Yang **tidak** ditutup (dicatat, bukan bug): aturan 6 adalah **pemeriksaan nama,
 **Tes lama yang dilonggarkan** (satu): `tests/test_append_tests.py::test_the_added_code_must_parse_on_its_own` menerima salah satu dari dua pesan ("does not parse on its own" atau "only `def test*` methods"): konten `OLD + "\n\n\n    indented = 1\n"` kini dibaca sebagai penyisipan `indented = 1` ke kelas `T` dan ditolak daftar putih, bukan oleh parse; draf tetap ditolak.
 
 **Mutan:** 98 pola; 88 terbunuh, 10 ekuivalen terdokumentasi dengan alasan dan eksperimen (di `verification/insert_into_mutants.py`, `EQUIVALENT`): pertahanan berlapis yang menolak kasus yang sama, bukan tes yang kurang.
+
+## 6. Bukti akhir (2026-11-14)
+
+`verify_at` penuh pada commit kode `e7f0fc4`: **4336 lolos, 1 xfailed, 0 tes sandbox dilewati, `RESULT: PASS`**, 750 s (log `verification/verify-20261114T063421Z-aarch64.log`; dua grup sandbox: `sandbox_a` 595 s, `sandbox_b` 740 s). Tes baru: `tests/test_insert_into.py` (162), `tests/test_insert_into_sandbox.py` (3, di grup sandbox nyata). Mutan: 88 dari 88 yang dapat dibunuh terbunuh, 10 ekuivalen terdokumentasi.
+
+**Belum terukur: perilaku model.** Tes membuktikan harness (apa yang diterima dan ditolak), bukan bahwa drafter memakai `into_class` dengan benar. Ukuran yang akan dipakai (draf-saja, 8 isu batch 3, sekitar $0,08, butuh persetujuan uang Atha): berapa dari 8 draf menyisipkan ke kelas yang sudah ada (dasar 0 dari 8), draf yang diterima tetap 8 dari 8, tidak ada kenaikan putaran revisi, kelas yang dipilih dibandingkan dengan kelas yang dipakai PR maintainer (delapan kasus diketahui). Mundur: satu `git revert` (field opsional; draf lama tidak berubah).
