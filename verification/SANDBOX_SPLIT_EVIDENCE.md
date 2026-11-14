@@ -8,8 +8,8 @@ Tiga `verify_at` penuh berturut-turut pada commit kode `2d55d76bec4c9777d39162e0
 | hasil | 4139 lolos, 1 xfailed, PASS | 4171 lolos, 1 xfailed, PASS | 4171, 1 xfailed, PASS | 4171, 1 xfailed, PASS |
 | tes sandbox dilewati | 0 | 0 | 0 | 0 |
 | waktu pytest | 1158,0 s | 740,4 s | 747,5 s | 738,3 s |
-| sandbox_a (test_draft) wall | - | 598,7 s (149 tes) | 602,3 s | (lihat log) |
-| sandbox_b wall | - | 729,8 s (595 tes) | 737,5 s | (lihat log) |
+| sandbox_a (test_draft) wall | - | 598,7 s (149 tes) | 602,3 s | 599,4 s |
+| sandbox_b wall | - | 729,8 s (595 tes) | 737,5 s | 728,3 s |
 | kedua grup mulai | - | +0,0 / +0,0 | +0,0 / +0,0 | +0,0 / +0,0 |
 | kematian 137 / oom | 28 / 1 | 28 / 1 | 28 / 1 | 28 / 1 |
 | 137 atau oom di luar jendela tes sandbox | - | 0 | 0 | 0 |
