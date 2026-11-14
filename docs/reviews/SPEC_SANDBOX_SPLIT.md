@@ -37,6 +37,12 @@ Urutan, murah dulu:
 4. **Tiga `verify_at` penuh berturut-turut, semuanya bersih**, tanpa job live dan tanpa `verify_at` kedua di mesin, dengan pencatat `docker events` dan tekanan CPU/memori. Syarat: semuanya `RESULT: PASS` dengan 0 tes sandbox dilewati; tidak ada event `oom` di luar yang berasal dari tes batas memori; hitungan 137 per image tidak melebihi dasar; tes berbatas waktu ketat memakai kurang dari separuh batasnya; satu kontainer terlama kurang dari separuh `timeout_s`. **Satu kegagalan menghentikan, bukan diulang sampai hijau.**
 5. Mutan: pasangan yang berpisah grup harus membuat tes pengunci gagal (tiga pasangan, satu mutan masing-masing), modul tak dikenal harus gagal, dan sakelar `VERIFY_SANDBOX_GROUPS=1` harus mengembalikan satu grup.
 
+### 3.1 Hasil audit statis sejauh ini (2026-11-14, grep, bukan pembacaan penuh)
+
+- `test_stage_viewer.py`: docker sungguhan hanya di bagian "the real build in pwa_node22" (baris 856 dan seterusnya, lewat `approve_draft.sandbox_cfg`); sisanya memakai `Staging(run=...)` palsu atau `monkeypatch` pada `subprocess.run`. Tidak ada nama kontainer, port, atau cache tetap yang terlihat oleh grep. **Belum ditelusuri**: apakah bagian docker itu memakai `PREFIX`/`LABEL` milik `test_stage.py`.
+- `test_env_from_base.py`: kebanyakan memakai `docker` palsu di `tmp_path`; baris 170 dan 194 sampai 200 memakai `sb.status` dan `sb.run_command` sungguhan atas image yang dibangun ke direktori sementara. Tidak ada `docker rmi` di berkas ini (yang ada di `test_env_node.py:226`). **Belum ditelusuri**: apakah build-nya memakai `~/.cache/argus-pip`.
+- Keduanya tetap dipasangkan menurut aturan butir 2 sampai penelusuran itu selesai.
+
 ## 4. Sengaja tidak dikerjakan
 
 - Memecah satu modul lintas grup, lebih dari dua grup, menambah worker, melonggarkan batas atau timeout.
