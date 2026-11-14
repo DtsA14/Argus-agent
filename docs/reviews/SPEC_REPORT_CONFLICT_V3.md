@@ -1,5 +1,7 @@
 # Spek v3: `ReportConflict`, amandemen atas v2
 
+> **Amandemen 2026-11-14:** `SPEC_GATE_RC_CLARIFICATIONS.md` bagian 1: C3 butir 1 dibaca "tidak ada red check; dicatat unconfirmed"; kalimat §7 tentang berkas node dipindahkan ke C1.
+
 Status: **disetujui Atha 2026-11-12** ("Gw udah setuju", sesudah membaca ringkasan Fable dan PR #471; lima lubang
 di bawah dan `retry` dengan flag eksplisit); **dikerjakan Claude 2026-11-12** sebagai PR (a): tool, verifikasi, state, `retry --not-a-conflict`. Jalur ketat (AGENTS.md): tes yang gagal di kode lama → kode → review → mutan →
 `verify_at` → "merge". Tanpa model, tanpa uang.
