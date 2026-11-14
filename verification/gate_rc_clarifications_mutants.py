@@ -11,7 +11,7 @@ M = [
     ("D1 undone: detection patterns read raw lines", TD, [("target = view[n - 1]\n", "target = view[n - 1] if name in FORGERS else line\n")]),
     ("D1: view not used at all", TD, [("view = _code_view(text).split(\"\\n\") if py else lines", "view = lines")]),
     ("D1: JS narrowed too", TD, [("        py = PurePosixPath(path).suffix == \".py\"\n", "        py = True\n")]),
-    ("D1: unsure file blanked instead of scanned wide", TD, [("    except Exception:\n        return text\n\n\ndef _hits", "    except Exception:\n        return \"\\n\".join(\"\" for _ in text.split(\"\\n\"))\n\n\ndef _hits")]),
+    ("D1: unsure file blanked instead of scanned wide", TD, [("    except Exception:\n        return _fallback(text, uncertain)\n\n\ndef _hits", "    except Exception:\n        return \"\\n\".join(\"\" for _ in text.split(\"\\n\"))\n\n\ndef _hits")]),
     ("P1 undone: the name alone exempts", TD, [("(is_test_file(path) and not _scanned_test_file(path, scope))", "is_test_file(path)")]),
     ("P1: protected ignored", TD, [(" and not matches(path, scope[\"protected\"])", "")]),
     ("P1: writable ignored (any scope scans)", TD, [("matches(path, scope[\"writable\"]) and", "True and")]),
