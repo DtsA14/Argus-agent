@@ -19,11 +19,15 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from router import job as rj
 from router import stage_data as sd
+from router.chat_actions import Refusal, strict_json
 
 BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while the chat is built, 8711 at C4 (one value)
-HOSTS = (f"{BIND}:{PORT}",)                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
+HOSTS = (f"{BIND}:{PORT}",)
+ORIGINS = (f"http://{BIND}:{PORT}",)                  # the one origin a POST may come from (11.2)
+POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm"}   # the only POST routes; any other POST is a 405
+PARAMS = {"repo", "message", "job", "reason"}
+BODY_MAX = 16 * 1024                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
 VIEWER_ORIGIN = "http://localhost:8710"             # the viewer: another origin on purpose (11.2: `localhost`, not 127.0.0.1, so its cookie jar and site are not the chat's)
@@ -77,8 +81,8 @@ def card(raw, name):
 
 
 class Chat:
-    def __init__(self, jobs_dir, clock=time.time):
-        self.jobs_dir, self.clock = Path(jobs_dir), clock
+    def __init__(self, jobs_dir, clock=time.time, actions=None):
+        self.jobs_dir, self.clock, self.actions = Path(jobs_dir), clock, actions   # actions: router/chat_actions.Actions (C2), else read only
         self.static = load_static()
 
     def _source(self):
@@ -225,6 +229,13 @@ class Handler(BaseHTTPRequestHandler):
         return self._refuse(404, "not found")
 
     def _api(self, path):
+        a = self.chat.actions
+        if a is not None and path == "/api/issues":
+            return self._json(200, a.issues())
+        m = re.fullmatch(r"/api/issues/([^/?#%]+)", path)
+        if a is not None and m:
+            got = a.thread(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if path == "/api/status":
             return self._json(200, self.chat.status())
         if path == "/api/threads":
@@ -234,6 +245,78 @@ class Handler(BaseHTTPRequestHandler):
             got = self.chat.thread(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         return self._refuse(404, "not found")
+
+    def do_POST(self):
+        a = self.chat.actions
+        if a is None or self.path not in POST_ROUTES:
+            return self._not_allowed()
+        route = POST_ROUTES[self.path]
+        rec = {"route": route}
+        try:
+            self._post(a, route, rec)
+        except Refusal as r:
+            self.close_connection = True
+            self._audit(a, **rec, refused=r.gate, why=r.why)
+            self._refuse(r.status, r.why)
+        except Exception as e:                               # never a bare traceback to the client, and the connection ends
+            self.close_connection = True
+            self._audit(a, **rec, refused="error", why=type(e).__name__)
+            self._refuse(500, "the chat could not do that")
+
+    def _audit(self, a, **rec):
+        try:
+            a.audit(**rec)
+            return True
+        except OSError:
+            return False
+
+    def _post(self, a, route, rec):
+        """The gates in order (11.1, 11.10, 11.14); the body is read only after the cheap ones passed."""
+        if not self._host_ok():
+            raise Refusal(421, "host", "wrong host")
+        if self.headers.get("Origin") not in ORIGINS or len(self.headers.get_all("Origin") or []) != 1:
+            raise Refusal(403, "origin", "this request did not come from the chat's own page")
+        sites = self.headers.get_all("Sec-Fetch-Site") or []
+        if len(sites) > 1 or (sites and sites[0] not in ("same-origin", "none")):
+            raise Refusal(403, "origin", "a cross-site request")
+        if (self.headers.get_all("Content-Type") or []) != ["application/json"]:
+            raise Refusal(415, "type", "the body must be application/json")
+        try:
+            length = int(self.headers.get("Content-Length") or "")
+        except ValueError:
+            raise Refusal(411, "length", "a Content-Length is required") from None
+        if not 0 < length <= BODY_MAX:
+            raise Refusal(413, "length", "the body is empty or too large")
+        try:
+            body = strict_json(self.rfile.read(length))
+        except (ValueError, UnicodeDecodeError, OSError) as e:
+            raise Refusal(400, "form", f"not a JSON object with different keys ({type(e).__name__})") from None
+        if route == "prepare":
+            self._prepare(a, body, rec)
+        else:
+            self._confirm(a, body, rec)
+
+    def _prepare(self, a, body, rec):
+        action = body.get("action")
+        params = {k: v for k, v in body.items() if k != "action"}
+        if set(params) - PARAMS or any(not isinstance(v, str) for v in params.values()):
+            raise Refusal(400, "form", "unknown or non-text fields")
+        rec.update(action=action if isinstance(action, str) else None, job=params.get("job") or None)
+        out, digest = a.prepare(action, params)
+        if not self._audit(a, **rec, ok="prepare", digest=digest):
+            raise Refusal(503, "audit", "the audit could not be written: nothing was prepared")
+        self._json(200, out)
+
+    def _confirm(self, a, body, rec):
+        if set(body) != {"token"} or not isinstance(body["token"], str):
+            raise Refusal(400, "form", "a confirm carries the token and nothing else")
+        action, card, rp, digest = a.confirm(body["token"])
+        rec.update(action=action, job=card.get("job"), digest=digest)
+        if not self._audit(a, **rec, attempt="confirm"):
+            raise Refusal(503, "audit", "the audit could not be written: nothing was run")
+        out = a.execute(action, card, rp)
+        self._audit(a, **{**rec, "ok": "confirm", "job": out.get("job")})
+        self._json(200, out)
 
     def _not_allowed(self):
         if not self._host_ok():
@@ -251,8 +334,12 @@ def server(chat, port=PORT):
     return HTTPServer((BIND, port), handler)
 
 
-def serve(jobs_dir):
-    chat = Chat(jobs_dir)
+def serve(jobs_dir, cfg=None):
+    actions = None
+    if cfg is not None and cfg.get("issue_writer"):
+        from router.chat_actions import Actions
+        actions = Actions(jobs_dir, cfg)
+    chat = Chat(jobs_dir, actions=actions)
     srv = server(chat)
     print(f"argus chat on http://{BIND}:{PORT} (jobs {jobs_dir})", flush=True)
     srv.serve_forever()

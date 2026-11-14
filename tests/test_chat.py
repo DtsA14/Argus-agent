@@ -253,8 +253,9 @@ def test_no_route_starts_a_process(svc, monkeypatch):
 def test_the_module_imports_no_model_and_no_subprocess():
     src = (Path(rc.__file__)).read_text()
     for banned in ("subprocess", "harness.llm", "LLMCaller", "build_chat_model", ".invoke(", "os.system", "Popen", "os.exec",
-                   "spawn", "pty", "import socket"):
+                   "import socket"):
         assert banned not in src
+    assert not re.search(r"\bspawn|\bpty\b", src)                           # the actions live in router/chat_actions.py
 
 
 # ---- the shipped files are pinned and carry no HTML sink --------------------------------------------------------------
