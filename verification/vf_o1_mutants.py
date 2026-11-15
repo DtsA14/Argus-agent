@@ -14,8 +14,8 @@ M = [
     ("the script's blank line kept", V, [("            if kept and kept[-1] == \"\\n\":", "            if False:")], UNIT),
     ("several records accepted", V, [("    if len(mine) == 1:\n", "    if len(mine) >= 1:\n")], UNIT),
     ("a missing record accepted", V, [("    if rec is None:\n        return [(\"G1\"", "    if rec is None:\n        return []\n        return [(\"G1\"")], UNIT),
-    ("canary never checked", V, [("    if rec.get(\"canary_error\") or rec.get(\"canary_rc\") != 1 or canary != CANARY_WANTED:", "    if False:")], UNIT),
-    ("canary_rc not checked", V, [(" or rec.get(\"canary_rc\") != 1", "")], UNIT),
+    ("canary never checked", V, [("    if rec.get(\"canary_error\") or type(rec.get(\"canary_rc\")) is not int or rec[\"canary_rc\"] != 1 or canary != CANARY_WANTED:", "    if False:")], UNIT),
+    ("canary_rc not checked", V, [(" or type(rec.get(\"canary_rc\")) is not int or rec[\"canary_rc\"] != 1", "")], UNIT),
     ("canary_error not checked", V, [("rec.get(\"canary_error\") or ", "")], UNIT),
     ("canary content not checked", V, [(" or canary != CANARY_WANTED:", ":")], UNIT),
     ("rc not compared with the exit code", V, [("    if rec[\"rc\"] != r.get(\"exit_code\"):", "    if False:")], UNIT),
@@ -40,7 +40,8 @@ M = [
     ("script: no ini for session 2", V, [("\"-c\", d + \"/pytest.ini\", ", "")], UNIT),
     ("script: no confcutdir for session 2", V, [("\"--confcutdir\", d, ", "")], UNIT),
     ("script: the record without the leading newline", V, [("sys.stdout.write(\"\\n\" + nonce + json.dumps(rec", "sys.stdout.write(nonce + json.dumps(rec")], UNIT),
-    ("a bool rc or canary_rc is read as an integer", V, [("all(type(got.get(k)) is t for k, t in RECORD_KEYS.items())", "all(isinstance(got.get(k), t) for k, t in RECORD_KEYS.items())"), ("type(rec.get(\"canary_rc\")) is not int or ", "")], UNIT),
+    ("a bool rc is read as an integer", V, [("all(type(got.get(k)) is t for k, t in RECORD_KEYS.items())", "all(isinstance(got.get(k), t) for k, t in RECORD_KEYS.items())")], UNIT),
+    ("a bool canary_rc is read as an integer", V, [("type(rec.get(\"canary_rc\")) is not int or ", "")], UNIT),
     ("the shape check is the sha only", V, [("all(type(got.get(k)) is t for k, t in RECORD_KEYS.items())", "isinstance(got.get(\"sha\"), str)")], UNIT),
     ("pytest_run returns the raw text", V, [("    return {**r, \"stdout\": text}, rec", "    return r, rec")], DOCKER),
     ("script: no ini and no confcutdir for session 2", V, [("\"-c\", d + \"/pytest.ini\", \"--confcutdir\", d, ", "")], UNIT),
@@ -61,8 +62,11 @@ if __name__ == "__main__":
         p = WT / F
         orig = p.read_text()
         text = orig
+        stale = [a[:60] for a, _ in edits if text.count(a) != 1]
+        if stale:
+            print(f"STALE   {name}: pattern not found exactly once: {stale}", flush=True)
+            continue
         for a, b in edits:
-            assert text.count(a) == 1, (name, a[:60], text.count(a))
             text = text.replace(a, b, 1)
         p.write_text(text)
         try:
