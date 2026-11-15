@@ -754,3 +754,8 @@ def test_a_reply_needs_a_key_file_of_some_kind(tmp_path):
         assert s.prepare(action="issue_start", job=JOB)[0] == 409
     finally:
         s.stop()
+
+
+def test_the_issue_list_answer_carries_the_repo_names_the_composer_offers(svc):
+    got = svc.request("GET", "/api/issues")[1]
+    assert got["repos"] == sorted(CFG["issue_writer"]["repos"]) and "issues" in got

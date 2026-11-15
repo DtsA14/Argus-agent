@@ -199,7 +199,7 @@ class Actions:
         try:
             names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)[:200]
         except OSError:
-            return {"issues": []}
+            return {"issues": [], "repos": []}
         for n in names:
             v = self.read_issue(n)
             if v is None:
@@ -208,7 +208,7 @@ class Actions:
             first = next((m.get("text") for m in conv if isinstance(m, dict) and m.get("from") == "human"), "") or ""
             out.append({"id": n, "state": v.data.get("state"), "repo": v.data["inputs"].get("repo_name"),
                         "title": scrub(first.strip().splitlines()[0][:80]) if first.strip() else n})
-        return {"issues": out}
+        return {"issues": out, "repos": sorted(str(r) for r in ((self.cfg.get("issue_writer") or {}).get("repos") or {}))}
 
     # ---- the card ---------------------------------------------------------------------------------------------------
 
