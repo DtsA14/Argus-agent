@@ -1,0 +1,9 @@
+Sandbox environment for the ATHENA repository (github.com/DtsA14/Athena, a public Python 3.12 stock scanner; the outside-repo pilot of
+SPEC_PRD_QUEUE, 2026-11-15): numpy, pandas, pyarrow, filelock, FastAPI (tested with its TestClient over httpx, no server, no network), yfinance (with its dependencies:
+some tests import it, the sandbox never reaches the network, the tests fake its calls), tzdata (the slim image has no system time zones; athena uses Asia/Jakarta) and pytest. No uvicorn.
+Base: python:3.12-slim (Python 3.12.16, arm64), pinned by digest in `base` (the same image as ledger_py312). Requirements are the exact versions of
+athena's own venv at the time (baseline 2026-11-15: 877 tests pass, 1 fails on weekends: tests/test_api_journal.py::TestGetTrailingStops::
+test_open_position_returns_a_level uses today's date), each uploaded to PyPI 2026-08-18 or earlier (before 2026-11-01), with the sha256 of the wheel
+pip downloaded in that base image (py3-none-any, plus cp312 manylinux aarch64 for the compiled ones: numpy, pandas, pyarrow, pydantic-core, curl_cffi, lxml, cffi, protobuf, websockets and others). Built by
+scripts/build_env_from_base.sh athena_py312; checked by scripts/check_env_image.py athena_py312 before any job may use it
+(docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md). Never in web.environments.
