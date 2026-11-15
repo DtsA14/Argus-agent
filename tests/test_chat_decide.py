@@ -727,3 +727,8 @@ def test_the_shell_is_served_to_a_navigation_from_the_viewer_with_same_site_fetc
         assert b.get("/api/status", "localhost:8711", {"Sec-Fetch-Site": "same-site"})[0] == 403          # the data stays closed to it
     finally:
         b.stop()
+
+
+def test_the_sha_of_a_job_that_is_not_there_is_a_refusal_not_no_draft(svc):
+    with pytest.raises(ca.Refusal):
+        svc.actions._sha("j20261109_120000_ffff")
