@@ -32,3 +32,14 @@ td,th{padding:.25rem .5rem;border-bottom:1px solid var(--line);text-align:left}
 a{color:var(--accent)}
 @media (min-width:60rem){#panel{position:static;transform:none;flex:0 0 20rem}#open-panel,#close-panel{display:none}}
 a.link{display:inline-block;margin-top:.5rem;min-height:2.75rem;line-height:2.75rem}
+#issue-form{display:flex;flex-direction:column;gap:.5rem}
+#issue-form[hidden]{display:none}
+#issue-form select,#issue-form textarea{width:100%;padding:.5rem .9rem;border-radius:1rem;border:1px solid var(--line);background:var(--card);color:inherit;font:inherit}
+#issue-form button,.actions button{min-height:2.75rem;padding:0 1.1rem;border-radius:999px;border:1px solid var(--line);background:none;color:inherit;font:inherit}
+.actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
+.actions button.go{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.actions button:disabled{opacity:.45}
+.fact{margin:.25rem 0;overflow-wrap:anywhere}.fact b{color:var(--muted);font-weight:600}
+.msg{white-space:pre-wrap;overflow-wrap:anywhere;margin:.25rem 0}
+.msg.human{color:var(--accent)}
+.note{font-size:.85rem;color:var(--warn);margin:.5rem 0 0}
