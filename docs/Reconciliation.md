@@ -1,7 +1,10 @@
-# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30, isi diperbarui sampai 2026-11-11)
+# Rekonsiliasi: `FUTURE_ARCHITECTURE.md` terhadap kode (2026-10-30, isi diperbarui sampai 2026-11-11; arah diperbarui 2026-11-15)
 
 Status: **laporan terkini; satu-satunya tempat status milestone dan ADR.** Basis: `main` sesudah #444 (2026-11-11); angka kerja nyata dikutip dari `verification/scoreboard-2026-11-11.json` (`scripts/scoreboard.py`). Status di bawah berasal
-dari kode, dari bukti di `verification/` dan `pilots/`, dan dari review di `docs/reviews/`. Laporan sebelumnya diarsipkan:
+dari kode, dari bukti di `verification/` dan `pilots/`, dan dari review di `docs/reviews/`. **Pembaruan 2026-11-15 hanya menyangkut arah**
+(bagian 0, 6 dan 7) dan butir yang sudah usang karenanya; tabel milestone, ADR dan mode kegagalan **belum direkonsiliasi ulang terhadap
+kode sesudah #444**, dan yang terjadi sesudahnya (#446–#545) dirangkum di bagian 0 dari `PENDING.md` dan `pilots/`, bukan dari pembacaan
+kode. Laporan sebelumnya diarsipkan: [`reviews/RECONCILIATION_2026-11-11.md`](reviews/RECONCILIATION_2026-11-11.md) (salinan utuh sebelum arah diperbarui),
 [`reviews/RECONCILIATION_2026-10-27.md`](reviews/RECONCILIATION_2026-10-27.md) (dengan tambahan sampai 2026-10-30),
 [`reviews/RECONCILIATION_2026-10-24.md`](reviews/RECONCILIATION_2026-10-24.md),
 [`reviews/RECONCILIATION_2026-10-22.md`](reviews/RECONCILIATION_2026-10-22.md) dan
@@ -25,6 +28,29 @@ dan peringatan tes lama bocor sebelum approve (#437); `verify_at.sh` (#400). Wew
 
 Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu, sisanya belum) · `[ ]` belum dimulai.
 
+## 0. Arah (Atha, 2026-11-15)
+
+**"Spesialis di sifatnya, generalis di permukaannya."** Kekuatan: **"agen yang bisa ditinggal: kerjanya terbukti, biayanya terkunci."**
+
+| Bagian arah | Artinya | Status | Yang belum |
+|---|---|---|---|
+| **Kerja terbukti** | setiap pekerjaan selesai dengan bukti yang bisa diperiksa: kontrak beku, gerbang, verdict dengan bukti | `[~]` kuat untuk kode (ADR-006) | verdict bisa dipalsukan kode di proses tes (terbukti 2026-11-12; kenari dan nonce belum ada); gerbang non-kode; riset: `SUPPORTED` hanya berarti kutipannya ada |
+| **Biaya terkunci** | reservasi sebelum kirim, ledger, cap per job, crash-resume tanpa beli ulang | `[~]` kuat (ADR-004) | cap USD non-Anthropic bertumpu pada perkiraan heuristik; batas E1 (`AGENTS.md`); tanpa idempotency key provider |
+| **Bisa ditinggal** | dari issue sampai staging tanpa manusia atau Claude di tengah, selain persetujuan yang disengaja | `[~]` lemah | Claude mereview draf dan patch, meng-apply dan men-deploy; `argus apply` belum ada; angkanya belum diukur (bagian 6 butir 1) |
+| **Permukaan generalis** | satu pintu (chat, `127.0.0.1:8711`); kemampuan ditambah satu per satu, hanya bila bisa diberi gerbang atau kartu konfirmasi | `[~]` | chat C1–C4 live (Issue, Riset, Keputusan, Status); kemampuan sesudah kode dan riset belum dipilih |
+
+Arah ini menggantikan "general-purpose agent, dimulai dari deep research" (2026-11-03) dan "coding agent untuk production" (2026-10-28);
+keduanya tetap tercatat di bagian 7 sebagai riwayat. Jalur kode adalah tempat sifat itu dibuktikan lebih dulu; riset adalah kemampuan
+permukaan, bukan pilar. M4, M7, M8, capability pack dan production tetap ditunda sampai ada bukti kebutuhan. Review arsitektur
+2026-11-11 (`docs/reviews/ARCH_REVIEW_2026-11-11.md`) sudah menilai "inti benar, label salah"; arah ini mengganti labelnya.
+
+Yang terjadi sesudah 2026-11-11 (dari `PENDING.md` dan `pilots/`, belum direkonsiliasi terhadap kode): rencana kerja dari review Fable
+(`docs/reviews/FABLE_PLAN_2026-11-11.md`); papan skor (#444); FIX-A (#446), FIX-B E2 (#448), FIX-C (#472); eksperimen repo luar tiga
+batch di boltons dan more-itertools (`pilots/outside_v0`, `outside_v1`, `outside_v2/batch3`; **vonis fase 2 belum tercatat**);
+`ReportConflict` MVP (#473), gerbang deteksi tes terminal (#474), verdict bisa dipalsukan TERBUKTI (#475) dan pola forger (#477);
+probe "PRD sampai staging" (`pilots/prd_probe_v0`, Stage 18 live); pengerasan verifikasi dan dua grup sandbox (#508, #509); **aplikasi
+chat** C1–C4 (`SPEC_CHAT_APP`, #533–#544) yang **menggantikan UI kontrol** di 8711 (`argus-control` dimatikan 2026-11-15).
+
 ## 1. Milestone
 
 | Milestone | Status | Bukti | Gap yang belum tertutup |
@@ -35,10 +61,10 @@ Legenda: `[x]` selesai dan terbukti · `[~]` sebagian (ada untuk jalur tertentu,
 | **M4** multi-agent dengan dependensi | `[ ]` | Graf riset punya fan-out tanpa dependensi; code task satu agen | Belum ada bukti single-agent menjadi penghalang |
 | **M5** observability dan benchmark | `[~]` | Ledger per panggilan; `audit_run.py`, `failure_trace.py`, `pilot_report.py`; keputusan manusia dengan waktunya di `job.json` (#185; `argus-ledger` 014 menampilkannya); `swe_grade.py`; `argus-ledger report` (biaya per stage); jumlah keputusan per pilot di setiap `RESULT.md` | Tracing/dashboard; benchmark single vs multi; **menit kerja Atha** belum ditanyakan; **eval set yang tidak jenuh** |
 | **M6** repo → PR | `[x]` MVP | Repo Argus (pilot M6, W2b, router); **sympy** (SWE, bagian 4b); **`argus-ledger`** Python/FastAPI, issue sampai 019 (Stage 17 live, bagian 4c); **`argus-viewer`** JS/React, issue sampai 044 (044 live), vitest di `pwa_node22` (bagian 4c) | Tingkat sukses umum (SWE tanpa bocoran sampel kecil); PR/apply tetap oleh manusia/Claude (disengaja); `argus apply` belum ada; berkas yang dilindungi ditegakkan harness (`.argus/protected`, #270); tes lama tidak bisa diubah agen, tanpa Playwright |
-| M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat: layanan approval bersama UI kontrol (bagian 7) |
+| M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat: layanan approval bersama `argus apply` atau approve lewat chat (bagian 7) |
 | M8 penemuan tool, memori prosedural | `[ ]` | – | Seluruhnya (ADR-003) |
 | M9 deployment terkendali | `[~]` (staging) | `argus stage deploy\|rollback\|restart\|check\|status\|monitor\|report` (#244, #246, #249, #251, #258): hanya commit job `APPLIED` apa adanya, container tanpa jaringan/read-only/non-root di Unix socket, peer = pid container, data asli lewat snapshot allowlist, monitor 15 menit, **notifikasi ntfy** sesudah 3 gagal (#259, #260), namespace per direktori staging (#258). **Aplikasi statis** (#257, #261, #263): build tanpa jaringan di `pwa_node22`, cek artifact (A4), `sw.js` dipin, swap `current` atomik sesudah smoke kandidat, proxy `127.0.0.1:8710` GET/HEAD (Host, CSP, `no-store` untuk API, hanya `/sw.js` boleh jadi service worker), unit `systemd --user`. Dua aplikasi, pilot staging #1, upgrade #1, data asli #1, viewer #1–#2; sampai 2026-11-11 ledger Stage 17 (`max_usd`) dan viewer rilis 044 live, snapshot menerbitkan `title` | **Production** (DNS/TLS, pengguna, kredensial): ditunda (keputusan 2026-10-30, pemicu di bagian 7); smoke kandidat tidak menguji lingkungan unit systemd |
-| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web berurutan (paralel belum, PENDING), sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi sejak 2026-11-03 (bagian 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
+| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web berurutan (paralel belum, PENDING), sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi 2026-11-03 sampai 2026-11-15; kini kemampuan permukaan, dibekukan sampai vonis fase 2 (bagian 0, 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
 | Capability pack (gambar, video/audio, game) | `[ ]` | – | Seluruhnya; gate non-kode ADR-006 |
 
 M4, M7, M8, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (keputusan 2026-10-21, ditegaskan 2026-10-24).
@@ -172,12 +198,15 @@ menunjukkan pola sama, adalah operator rantai tetap (T1 → apply → S → T2).
 
 ## 6. Gap terbuka, diurutkan menurut nilai sekarang
 
-1. **Supervisi dan "melepas" Argus:** di dua aplikasi latihan Atha menulis issue dari HP (chatbox, Haiku) dan Claude masih
+1. **Supervisi dan "melepas" Argus** (inti arah 2026-11-15, "bisa ditinggal"; urutan kerja di `PENDING.md`: kenari dan nonce,
+   `argus apply`, approve atas patch akhir; angka yang belum ada: persen issue yang sampai staging tanpa campur tangan Claude): di dua aplikasi latihan Atha menulis issue dari HP (chatbox, Haiku) dan Claude masih
    mereview draf dan patch, meng-apply dan men-deploy (didelegasikan 2026-11-08). Berkas yang dilindungi dipaksa harness
    (#270), `argus judge` memberi saran (J9). Terukur sejak 2026-11-11 (scoreboard): 1,9 keputusan per job kode, jeda tunggu
    manusia batas atas median 2 menit; belum terukur: menit perhatian sebenarnya dan token Claude. Pantau penolakan formulir drafter sesudah #431/#434 dan false positive `leaks` (#437).
-2. **UI kontrol interaktif** (permintaan Atha 2026-10-30): fase 1-2 live di 8711; fase 3 (tombol approve) dan 4 (staging) **ditahan**
-   (rencana Fable 2026-11-11: dibuka bila Atha menolak 4 dari 5 draf buruk yang ditanam, lewat ringkasan di HP).
+2. **Chat sebagai pintu depan** (dulu "UI kontrol interaktif", permintaan Atha 2026-10-30): UI kontrol fase 1-2 diserap aplikasi chat
+   (C4, 2026-11-15); approve dari HP (dulu fase 3) dan tombol staging (dulu fase 4) **ditahan**
+   (rencana Fable 2026-11-11: dibuka bila Atha menolak 4 dari 5 draf buruk yang ditanam, lewat ringkasan di HP). Terbuka: C5, lalu
+   kemampuan permukaan berikutnya (`PENDING.md`).
 3. **Operasional staging:** pin image per checkout disalin manual; smoke kandidat tidak menguji unit systemd; up2 selesai
    2026-11-07.
 4. **Tingkat sukses di repo luar tanpa bocoran** (SWE, alat regresi ±20% usaha).
@@ -291,8 +320,26 @@ Diputuskan 2026-11-07 s.d. 2026-11-11 (Atha):
 - **Probe rantai** (bagian 4e): operator rantai tetap sebelum planner; planner berhirarki belum dibenarkan.
 - **Prompt injection:** v0 bersih (#339); tes lanjutan dirancang Fable, voucher reset Fable Atha kedaluwarsa 17 November.
 
-Menunggu keputusan Atha:
-1. **UI kontrol fase 3 (approve) dan 4 (staging)** (`PENDING.md`): siapa yang approve, batas biaya lewat UI, "go live" lewat tombol;
-   prioritas rendah sesudah fase 1-2 live.
-2. **Operator rantai tetap** (`argus chain`) dan **redraft otomatis (3b)**: menunggu rantai lintas repo kedua dan kasus
+Diputuskan 2026-11-15 (Atha):
+- **Arah: "spesialis di sifatnya, generalis di permukaannya"**, dengan kekuatan **"agen yang bisa ditinggal: kerjanya terbukti,
+  biayanya terkunci"** (bagian 0). Menggantikan arah 2026-11-03 (general-purpose agent, dimulai dari deep research) dan 2026-10-28
+  (coding agent untuk production). Alasan yang dibahas: jaminan Argus baru kuat untuk kode; lebar bukan tempat bersaing; riset belum
+  terbukti dibutuhkan kode; planner tiga kali diuji tetap tidak dibenarkan; Atha ingin daya saing sekaligus enak untuk pekerjaan
+  sehari-hari, yang dijawab dengan memisahkan sifat (inti) dari permukaan (chat).
+- **Lapisan 2026-11-05 dibaca ulang:** L0 fondasi dan L1 kode = inti; L2 riset dan L3 gabungan = kemampuan permukaan; L4 hirarki dan
+  L5 kemampuan baru = ditunda sampai ada bukti. Urutan tahap 1–4 (2026-11-05) tidak berlaku lagi.
+- **Yang tidak lagi berkaitan diarsipkan:** `PENDING.md` ditulis ulang, salinan utuh di `reviews/PENDING_ARCHIVE_2026-11-15.md`; daftar
+  yang diarsipkan ada di bagian "Diarsipkan 2026-11-15" `PENDING.md`.
+- **Waktu kerja Atha:** kurang lebih 8 jam per hari, tergantung limit Claude. Angka "4 jam per minggu" di rencana Fable 2026-11-11
+  diketik asal dan tidak berlaku (jadwal bagian 8 rencana itu ikut tidak berlaku).
+- **UI kontrol dipensiunkan**, diserap aplikasi chat (C4): chat di `127.0.0.1:8711`, `argus-control` dimatikan.
+
+Menunggu keputusan Atha (rinci di `PENDING.md`):
+1. **Vonis fase 2** eksperimen repo luar; yang menunggunya: antrean "PRD sampai staging", operator rantai, pekerjaan baru di jalur riset.
+2. **Aturan main arah** (usul Claude 2026-11-15): satu angka di repo, titik cek tetap untuk mengubah arah, jatah eksplorasi, log
+   permintaan yang chat belum bisa.
+3. **Urutan inti** (usul Claude): vonis → kenari dan nonce → `argus apply` → antrean PRD; di permukaan: assistant atas Argus sendiri.
+4. **"Daya saing" untuk siapa:** portofolio/karier atau produk dengan pengguna lain (mengubah kapan production dibuka).
+5. **Approve dari HP lewat chat** dan tombol staging (dulu UI kontrol fase 3 dan 4): ditahan, prioritas rendah.
+6. **Operator rantai tetap** (`argus chain`) dan **redraft otomatis (3b)**: menunggu rantai lintas repo kedua dan kasus
    `submits_exhausted` berikutnya.

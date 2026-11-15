@@ -1,6 +1,8 @@
 # Argus: notes for agents and reviewers
 
 Argus is an agent harness on LangGraph. Its value is in the guarantees below; review changes against them first.
+Direction (Atha, 2026-11-15): a specialist in its properties, a generalist on its surface; "an agent you can leave alone: its work
+is proven, its cost is locked". A new capability enters through the chat, one at a time, and only with a gate or a confirmation card.
 The guarantees hold on every pipeline:
 
 - **Code job** (`scripts/argus.py code`, `router/job.py`): optional research r1 (`codetask/research.py`) → drafter

@@ -2,40 +2,53 @@
 
 > **Status: draft spec for a future project (Atha, 2026-10-15).** These are proposed decisions from discussion with
 > GPT, **not** a description of what the repository implements. **The status of every ADR and milestone against the
-> code is kept in one place: [`docs/Reconciliation.md`](Reconciliation.md)** (updated 2026-11-11; M3 and the M6 MVP
+> code is kept in one place: [`docs/Reconciliation.md`](Reconciliation.md)** (status updated 2026-11-11, direction 2026-11-15; M3 and the M6 MVP
 > done, including a first repository outside Argus; M5, M9 (staging only) and ADR-002/004/005/006/007 partial, for code tasks; M4, M7, M8,
 > ADR-001/003 and the capability packs not started). No code from this file without a reality check and a reviewed plan.
 >
-> **Direction update (2026-11-03, Atha):** the goal is now a general-purpose agent, starting with **deep research**
-> (`argus research`: planner, parallel web workers, synthesis with sources, evaluator), which replaces "production coding
-> agent" (2026-10-28) as the target. Research is not one of M3–M9; it is tracked in `Reconciliation.md` section 7 and
-> `PENDING.md`. The hierarchical pipeline (job → planner → research/code/deploy tasks with dependencies) needs M4 and
-> ADR-005 (artifact handoff) and is not yet justified by evidence. Capability packs (image/video/game) come after research.
+> **Direction (2026-11-15, Atha): "a specialist in its properties, a generalist on its surface."** Argus's strength is
+> **"an agent you can leave alone: its work is proven, its cost is locked."** The specialism is the property, not a domain:
+> every job ends with evidence that can be checked, inside a hard budget, with no human or Claude in the middle except
+> approvals that are meant to be there. The surface is one door, the chat (`router/chat.py`), and capabilities are added to
+> it one at a time on the same core, each only when it can carry a gate or a confirmation card. The code job is where the
+> property is proven first; research is one surface capability, not a pillar.
 >
-> **Update 2026-11-11:** the hierarchical pipeline is still not justified. A chain probe without a planner (ledger field →
-> staging → viewer, `pilots/chain_probe_v0`) passed results between repos with almost no friction; the friction was old tests
-> that a new feature breaks and an agent tempted to game locked tests, now fenced by `scope:no_test_detection` (#436) and an
-> advisory leak warning before approve (#437). Next candidate if a second chain shows the same glue: a fixed-order chain
-> operator, not a planner (ADR-002/005 and M4 stay deferred). Status of everything else: `Reconciliation.md` (updated 2026-11-11).
+> This replaces "general-purpose agent, starting with deep research" (2026-11-03) and "production coding agent"
+> (2026-10-28). The hierarchical pipeline (job → planner → research/code/deploy tasks) is still not justified by evidence:
+> three probes (`pilots/from_research_v0`, `research_need_v0`, `chain_probe_v0`) did not need a planner; M4, M7, M8, the
+> capability packs and production stay deferred until evidence asks for them. The earlier direction notes are kept in
+> `Reconciliation.md` section 7 and in [`reviews/RECONCILIATION_2026-11-11.md`](reviews/RECONCILIATION_2026-11-11.md).
+> Section 1 below was rewritten for this direction (the original is in git history, `7d2532d:docs/FUTURE_ARCHITECTURE.md`);
+> sections 2 to 9 are unchanged and are read through it: an ADR or milestone is built when it makes work more proven,
+> cost more locked, or Argus easier to leave alone.
 >
 > The one-time instructions for Claude's first review ("Instructions for Claude" and "Expected response", sections 0
 > and 10 of the original) were carried out by [`reviews/M6_GAP_ANALYSIS.md`](reviews/M6_GAP_ANALYSIS.md),
 > [`reviews/M6_PLAN.md`](reviews/M6_PLAN.md) and the reconciliation reports, and were removed on 2026-10-22; the
 > original text is in git history (`bf5416d:docs/FUTURE_ARCHITECTURE.md`). "M4 slice 1" in older review files meant the
-> single general-task agent, **not** this file's M4 (parallel multi-agent). The ADRs and roadmap below are unchanged.
+> single general-task agent, **not** this file's M4 (parallel multi-agent).
 
 ## 1. Vision and scope
 
-Argus is intended to become a general-purpose creation agent. It should plan and execute workflows using local tools,
-model APIs, and cloud resources; verify outputs; and recover safely. Long-term capabilities include software, image
-generation/editing, video/audio creation, game creation, and controlled deployment.
+Argus is an agent you can leave alone: its work is proven and its cost is locked. It is a specialist in those properties and
+a generalist on its surface.
+
+- **Core (the specialism).** Proven work: acceptance criteria fixed before execution, deterministic gates where they exist,
+  verdicts with evidence, and nothing counted as done because a model said so. Locked cost: a reservation before every
+  request, a ledger entry for every attempt, a cap per job, crash-resume that never buys the same result twice. Left alone:
+  from request to result without a human or another model in the middle, except approvals that are deliberate.
+- **Surface (the generalism).** One door, the chat. A capability (code, research, and later others such as everyday tasks,
+  images, video, games, deployment) is added one at a time, and only when it can carry the core: a gate that can fail it, or
+  a confirmation card bound to the exact action. Actions with an effect outside (sending a message, a production deploy, a
+  transaction, deleting data) always need a human approval.
 
 Execution strategy: hybrid local + API + cloud. Tool discovery is semi-autonomous: Argus may find tools, read docs,
 inspect schemas, and test in a sandbox, but discovery does not grant trust or permissions. Every tool must be
 registered and pass policy checks before production execution.
 
-Near-term priority: finish M3–M5, then M6 repository-to-PR agent. Add MCP and tool discovery after the core workflow
-is proven. Image/video/game capabilities and production deployment are later increments.
+Near-term priority: make the code job something that can be left alone (a verdict that cannot be forged, `argus apply`,
+approval on the final patch), measured as the share of issues that reach staging without Claude stepping in. Then widen the
+surface from the chat, one capability at a time. Open work is in `PENDING.md`; status is in `Reconciliation.md`.
 
 ## 2. Agreed architecture decisions
 
