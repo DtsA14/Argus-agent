@@ -48,7 +48,7 @@ M = [
     ("a non-string kind breaks the title", A, [("            return sd.job_title(data) if isinstance(data.get(\"kind\"), str) else None\n        except Exception:\n            return None", "            return sd.job_title(data)\n        except KeyError:\n            return None")], BACK),
     ("the list opens ledgers", A, [("            got = self._read_data(n, ledgers=False)\n            try:", "            got = self._read_data(n)\n            try:")], BACK),
     ("a bad row breaks the list", A, [("            except Exception:\n                skipped += 1", "            except KeyError:\n                skipped += 1")], BACK),
-    ("the draft is read by path", A, [("            return rj.draft_sha_of(json.loads(raw))[:12]", "            return rj.draft_sha_of(json.loads(Path(self.jobs_dir, job_id, 'runs', run, 'draft.json').read_text()))[:12]")], BACK),
+    ("the draft is read by path", A, [('                            raw = sd._read_at(dfd, "draft.json", limit=JOB_JSON_MAX)', "                            raw = Path(self.jobs_dir, job_id, 'runs', run, 'draft.json').read_bytes()")], BACK),
     ("any run id is a name", A, [("            if not isinstance(run, str) or not self.RUN_NAME.fullmatch(run):\n                raise bad", "            if not isinstance(run, str):\n                raise bad")], BACK),
     ("a sha is taken for issue actions", C, [('            if action in ACTIONS and not action.startswith("job_"):', "            if False:")], BACK),
     ("the timeout has no exit", A, [('self.last_exit = code if code is not None else "timeout"', "self.last_exit = code")], BACK),

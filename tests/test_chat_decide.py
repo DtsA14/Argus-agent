@@ -732,3 +732,28 @@ def test_the_shell_is_served_to_a_navigation_from_the_viewer_with_same_site_fetc
 def test_the_sha_of_a_job_that_is_not_there_is_a_refusal_not_no_draft(svc):
     with pytest.raises(ca.Refusal):
         svc.actions._sha("j20261109_120000_ffff")
+
+
+def test_a_run_id_that_climbs_out_of_the_runs_directory_is_refused_even_when_a_draft_waits_there(svc):
+    d = mk(svc)
+    (d / "other").mkdir()
+    (d / "other" / "draft.json").write_text(json.dumps(tc.DRAFT))
+    data = json.loads((d / "job.json").read_text())
+    data["stages"]["d1"]["run_id"] = "../other"
+    (d / "job.json").write_text(json.dumps(data))
+    s, body = svc.prepare(action="job_reject", job=JOB, sha=rj.draft_sha_of(tc.DRAFT)[:12], reason="x")
+    assert s == 409 and "token" not in body
+
+
+def test_one_row_that_cannot_be_shown_is_skipped_and_counted_not_fatal(svc, monkeypatch):
+    mk(svc, job_id="j20261109_120000_aaaa")
+    mk(svc, job_id="j20261109_130000_bbbb")
+    real = ca.Actions.decision_row
+
+    def row(self, job_id, data, spent):
+        if job_id.endswith("aaaa"):
+            raise TypeError("a record nobody expected")
+        return real(self, job_id, data, spent)
+    monkeypatch.setattr(ca.Actions, "decision_row", row)
+    d = svc.request("GET", "/api/decisions")[1]
+    assert [r["id"] for r in d["decisions"]] == ["j20261109_130000_bbbb"] and d["skipped"] == 1
