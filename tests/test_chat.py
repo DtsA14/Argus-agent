@@ -275,7 +275,7 @@ def test_a_changed_static_file_stops_the_service(tmp_path, monkeypatch):
 
 
 SINK_RES = [r"\bFunction\s*\(", r"\beval\s*\(", r"\.href\s*=", r"location\s*\.\s*(assign|replace|href)", r"location\s*=",
-            r"setAttribute\(\s*['\"](href|src|on)", r"\.src\s*=", r"\.(inner|outer)HTML", r"insertAdjacent", r"document\s*\.\s*write"]
+            r"setAttribute\(\s*['\"](href|src|on)", r"\.src\s*=", r"location\s*\.\s*\w+\s*=", r"history\s*\.\s*(push|replace)State", r"\.(inner|outer)HTML", r"insertAdjacent", r"document\s*\.\s*write"]
 SINKS = ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "createContextualFragment",
          "DOMParser", "srcdoc", "setHTMLUnsafe", "parseHTMLUnsafe", "Worker(", "serviceWorker", "window.open", "import(",
          "localStorage", "sessionStorage", "indexedDB", "document.cookie", "XMLHttpRequest", "WebSocket", "EventSource",

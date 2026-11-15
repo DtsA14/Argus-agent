@@ -137,8 +137,8 @@
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Lingkungan"], ["commit", "Commit"],
     ["turn", "Giliran"], ["turn_cap_usd", "Batas giliran"], ["job_cap_usd", "Batas job"], ["reason", "Alasan"],
     ["profile", "Profil"], ["stage_models", "Model"], ["stage_caps", "Batas tahap"], ["web", "Web"], ["data_sent", "Data keluar"],
-    ["free_models", "Model gratis"]];
-  var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1 };
+    ["free_models", "Model gratis"], ["kind", "Jenis"], ["job_title", "Judul"], ["sha12", "Draf"], ["spent_usd", "Biaya"], ["cap_usd", "Batas"]];
+  var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1 };
   function fact(parent, label, value) {
     var p = el("p", "fact");
     p.appendChild(el("b", null, label + ": "));
@@ -237,6 +237,7 @@
       var c = renderCard(prep, function (r) {
         message.value = "";
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
+        if (mode === "decide") { loadDecisions(); return; }
         loadIssues();
         if (r.job && mode === "issue") { showIssue(r.job, true); }
       });
@@ -272,9 +273,11 @@
   }
   function formState() {
     var r = mode === "research";
-    repoSel.hidden = r || openIssue !== null;
+    var dc = mode === "decide";
+    repoSel.hidden = r || dc || openIssue !== null;
+    document.getElementById("prepare").hidden = dc;                     // a decision is prepared from the button of a card
     document.getElementById("prepare").textContent = r ? "Siapkan riset" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru");
-    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : "Tulis pesan";
+    message.placeholder = dc ? "Alasan (wajib untuk Reject)" : (r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : "Tulis pesan");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
@@ -386,6 +389,59 @@
       stream.appendChild(back);
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Riset tidak dapat dibaca.")); });
   }
+  // ---- C4: decisions. Reject and abandon of a job through the same prepare and confirm; no draft is accepted here. ------------------------
+  var decisionRows = [];
+  var openDecision = null;                              // a job opened from the Decide link: its card replaces the list
+  function decideCard(r) {
+    var c = el("article", "card");
+    c.appendChild(el("h2", null, r.title || r.id));
+    var row = el("div", "row");
+    row.appendChild(el("span", "state " + stateClass(r.state), r.state));
+    if (r.kind) { row.appendChild(el("span", null, r.kind)); }
+    if (typeof r.spent_usd === "number") { row.appendChild(el("span", null, usd(r.spent_usd) + " dari " + usd(r.cap_usd))); }
+    c.appendChild(row);
+    c.appendChild(el("p", "muted mono", r.id));
+    c.appendChild(el("p", "note", r.sha12 ? "Draf " + r.sha12 + ". Baca draf di viewer sebelum memutuskan." : "Belum ada draf."));
+    if (r.draft_problem) { c.appendChild(el("p", "note", "Draf tidak dapat dibaca: " + r.draft_problem)); }
+    if (r.busy) { c.appendChild(el("p", "note", "Chat ini masih menjalankan sesuatu pada job ini.")); }
+    var link = viewerLink(VIEWER + r.id);
+    if (link) { c.appendChild(link); }
+    var acts = el("div", "actions");
+    if (!r.busy && r.allowed) {
+      if (r.allowed.indexOf("reject") !== -1) {
+        acts.appendChild(act("Reject", function () { return { action: "job_reject", job: r.id, sha: r.sha12 || "", reason: message.value }; }));
+      }
+      if (r.allowed.indexOf("abandon") !== -1) {
+        acts.appendChild(act("Abandon", function () { return { action: "job_abandon", job: r.id, sha: r.sha12 || "", reason: message.value }; }));
+      }
+    }
+    c.appendChild(acts);
+    return c;
+  }
+  function renderDecisions() {
+    clear(stream);
+    if (!decisionRows.length) { stream.appendChild(el("p", "muted", "Tidak ada job yang menunggu keputusan.")); }
+    decisionRows.forEach(function (r) { stream.appendChild(decideCard(r)); });
+  }
+  function loadDecisions() {
+    get("/api/decisions").then(function (d) {
+      decisionRows = d.decisions || [];
+      if (mode === "decide" && openDecision === null) { renderDecisions(); }
+    }).catch(function () { summary.textContent = "gagal memuat keputusan"; });
+  }
+  function showDecision(id) {                           // the Decide link of the viewer: opens a card, chooses and prepares nothing
+    openDecision = id;
+    get("/api/decisions/" + encodeURIComponent(id)).then(function (d) {
+      if (mode !== "decide" || openDecision !== id) { return; }
+      if (d.kind === "issue") { setMode("issue"); showIssue(id); return; }
+      clear(stream);
+      stream.appendChild(decideCard(d));
+      var back = el("button", null, "Semua keputusan");
+      back.type = "button";
+      back.addEventListener("click", function () { openDecision = null; renderDecisions(); loadDecisions(); });
+      stream.appendChild(back);
+    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Job tidak dapat dibaca.")); });
+  }
   function setMode(m) {
     mode = m;
     dropPending();
@@ -396,9 +452,11 @@
     query.hidden = m !== "status";
     researchSeq++;
     openResearch = null;
+    openDecision = null;
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
+    else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
@@ -415,10 +473,13 @@
   document.getElementById("composer").addEventListener("submit", function (e) { e.preventDefault(); });
   document.getElementById("open-panel").addEventListener("click", function () { panel.classList.add("open"); });
   document.getElementById("close-panel").addEventListener("click", function () { panel.classList.remove("open"); });
+  var deep = /^\/jobs\/(j[0-9]{8}_[0-9]{6}_[0-9a-f]{4})$/.exec(location.pathname);
+  if (deep) { setMode("decide"); showDecision(deep[1]); }
   load();
   setInterval(function () {
     if (document.hidden) { return; }
     load();
+    if (mode === "decide" && openDecision === null && !(pending && pending.sent)) { loadDecisions(); }
     if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else if (researchLive) { showResearch(openResearch); } }
   }, 30000);
 })();
