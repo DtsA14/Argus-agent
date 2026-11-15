@@ -137,3 +137,30 @@ def test_the_form_says_whether_it_makes_a_new_issue_or_a_reply():
 
 def test_a_prepare_answered_after_the_user_moved_on_is_dropped():
     assert "if (mode !== ctx.mode || openIssue !== ctx.open) { return; }" in JS
+
+
+# ---- second Opus review of C2b: the buttons act on their own card, and a card is tied to the issue on screen --------------------
+
+def test_batal_and_tutup_remove_their_own_card_not_the_current_one():
+    assert JS.count("{ removeCard(c); }") == 2
+    body = JS.split("function removeCard")[1].split("function dropPending")[0]
+    assert "if (pending === c) { pending = null; }" in body and "c.settle();" in body
+
+
+def test_a_prepare_that_resolves_while_a_confirm_is_on_its_way_shows_nothing():
+    assert JS.count("if (pending && pending.sent) { return; }") == 3          # dropPending, the .then and the .catch of prepare
+
+
+def test_a_finished_confirm_draws_the_thread_only_in_issue_mode():
+    assert 'if (r.job && mode === "issue") { showIssue(r.job, true); }' in JS
+
+
+def test_a_card_is_dropped_when_another_issue_or_the_list_is_opened():
+    assert "if (!keep && id !== openIssue) { dropPending(); }" in JS
+    assert 'back.addEventListener("click", function () { dropPending(); openIssue = null;' in JS
+    assert 'showIssue(openIssue, true)' in JS
+
+
+def test_the_slot_has_a_vh_fallback_before_dvh():
+    css = (rc.STATIC_DIR / "app.css").read_text()
+    assert "max-height:50vh;max-height:50dvh" in css

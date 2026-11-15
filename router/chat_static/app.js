@@ -165,7 +165,7 @@
     var armed = setTimeout(function () { ok.disabled = false; }, Math.ceil((prep.min_delay_s || 1) * 1000) + 300);
     var expire = setTimeout(function () { ok.disabled = true; c.appendChild(el("p", "note", "Kartu kedaluwarsa: siapkan lagi.")); }, ((prep.expires_s || 300) - 5) * 1000);
     function settle() { clearTimeout(armed); clearTimeout(expire); ok.disabled = true; no.disabled = true; }
-    no.addEventListener("click", function () { dropPending(); });
+    no.addEventListener("click", function () { removeCard(c); });
     c.settle = settle;
     ok.addEventListener("click", function () {
       if (ok.disabled) { return; }
@@ -181,7 +181,7 @@
         c.appendChild(el("p", "note", "Hasilnya ada di daftar issue."));
         var close = el("button", null, "Tutup");
         close.type = "button";
-        close.addEventListener("click", function () { dropPending(); });
+        close.addEventListener("click", function () { removeCard(c); });
         c.appendChild(close);
         done(r);
       }).catch(function (e) {
@@ -194,6 +194,7 @@
           c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar issue sebelum mencoba lagi."));
           no.disabled = false;
           loadIssues();
+          if (mode === "issue" && openIssue !== null) { showIssue(openIssue, true); }
         }
       });
     });
@@ -201,6 +202,11 @@
     row.appendChild(no);
     c.appendChild(row);
     return c;
+  }
+  function removeCard(c) {                              // a button acts on its own card, never on whichever card is current
+    c.settle();
+    if (c.parentNode) { c.parentNode.removeChild(c); }
+    if (pending === c) { pending = null; }
   }
   function dropPending() {
     if (pending && pending.sent) { return; }               // a confirm is on its way: the card stays until the server answers
@@ -220,14 +226,16 @@
     var ctx = { mode: mode, open: openIssue };
     post("/api/prepare", body).then(function (prep) {
       busy = false;
+      if (pending && pending.sent) { return; }          // a confirm went out meanwhile: this card is not shown, its token lapses
       if (mode !== ctx.mode || openIssue !== ctx.open) { return; }     // the user moved on while it was prepared: the token just lapses
       dropPending();
-      var c = renderCard(prep, function (r) { message.value = ""; loadIssues(); if (r.job) { showIssue(r.job); } });
+      var c = renderCard(prep, function (r) { message.value = ""; loadIssues(); if (r.job && mode === "issue") { showIssue(r.job, true); } });
       pending = c;
       slot.appendChild(c);
       c.scrollIntoView({ block: "nearest" });
     }).catch(function (e) {
       busy = false;
+      if (pending && pending.sent) { return; }
       showNote("Tidak bisa disiapkan: " + e.message);
     });
   }
@@ -256,7 +264,8 @@
     repoSel.hidden = openIssue !== null;
     document.getElementById("prepare").textContent = openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru";
   }
-  function showIssue(id) {
+  function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
+    if (!keep && id !== openIssue) { dropPending(); }
     get("/api/issues/" + encodeURIComponent(id)).then(function (d) {
       openIssue = id;
       formState();
@@ -287,7 +296,7 @@
       stream.appendChild(c);
       var back = el("button", null, "Semua issue");
       back.type = "button";
-      back.addEventListener("click", function () { openIssue = null; formState(); renderIssues(); });
+      back.addEventListener("click", function () { dropPending(); openIssue = null; formState(); renderIssues(); });
       stream.appendChild(back);
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Issue tidak dapat dibaca.")); });
   }

@@ -43,4 +43,4 @@ a.link{display:inline-block;margin-top:.5rem;min-height:2.75rem;line-height:2.75
 .msg{white-space:pre-wrap;overflow-wrap:anywhere;margin:.25rem 0}
 .msg.human{color:var(--accent)}
 .note{font-size:.85rem;color:var(--warn);margin:.5rem 0 0}
-#slot{max-width:48rem;width:100%;margin:0 auto;padding:0 1rem;max-height:50dvh;overflow:auto}
+#slot{max-width:48rem;width:100%;margin:0 auto;padding:0 1rem;max-height:50vh;max-height:50dvh;overflow:auto}

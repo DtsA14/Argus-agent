@@ -40,6 +40,14 @@ M = [
     ("the open issue is set before the thread is read", J, [("      openIssue = id;\n      formState();\n      clear(stream);", "      formState();\n      clear(stream);"), ("  function showIssue(id) {\n", "  function showIssue(id) {\n    openIssue = id;\n")]),
     ("the repo select stays for a reply", J, [("    repoSel.hidden = openIssue !== null;\n", "")]),
     ("a late prepare lands in the new view", J, [("      if (mode !== ctx.mode || openIssue !== ctx.open) { return; }", "")]),
+    ("batal removes whichever card is current", J, [("no.addEventListener(\"click\", function () { removeCard(c); });", "no.addEventListener(\"click\", function () { dropPending(); });")]),
+    ("tutup removes whichever card is current", J, [("close.addEventListener(\"click\", function () { removeCard(c); });", "close.addEventListener(\"click\", function () { dropPending(); });")]),
+    ("a late prepare shows a card beside a sent one", J, [("      if (pending && pending.sent) { return; }          // a confirm went out", "      // a confirm went out")]),
+    ("a late prepare failure replaces a sent card", J, [("      busy = false;\n      if (pending && pending.sent) { return; }\n      showNote(", "      busy = false;\n      showNote(")]),
+    ("a finished confirm draws the thread in any mode", J, [("if (r.job && mode === \"issue\") { showIssue(r.job, true); }", "if (r.job) { showIssue(r.job, true); }")]),
+    ("a card stays when another issue is opened", J, [("    if (!keep && id !== openIssue) { dropPending(); }\n", "")]),
+    ("a card stays when the list is opened", J, [("function () { dropPending(); openIssue = null; formState(); renderIssues(); }", "function () { openIssue = null; formState(); renderIssues(); }")]),
+    ("the slot has no vh fallback", "router/chat_static/app.css", [("max-height:50vh;max-height:50dvh", "max-height:50dvh")]),
 ]
 
 if __name__ == "__main__":
