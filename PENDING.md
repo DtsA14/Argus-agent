@@ -6,7 +6,7 @@ yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-15
 (salinan utuh sampai 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
 [`PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-15 (angka papan skor sebagai batas atas; Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
+Terakhir diperbarui: 2026-11-15 (antrean PRD bagian A, pilot v0 dan Stage 19; sebelumnya hari yang sama: angka papan skor sebagai batas atas; Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
 terbuka dibawa ke sini atau dicatat di bagian "Diarsipkan 2026-11-15"). Butir di bawah yang menyebut "arsip" punya rincian lengkap di
 arsip 2026-11-15.
 
@@ -64,7 +64,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 |---|---|---|
 | Fondasi (M1–M3, budget, ledger, crash-resume, sandbox) | `[x]` | Reconciliation bagian 1 |
 | Jalur kode, issue sampai staging (M6, M9 staging) | `[x]` MVP | repo Argus, sympy (SWE), `argus-ledger`, `argus-viewer`; dua aplikasi di staging |
-| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; VF O1 dan `argus apply` ter-merge; antrean PRD dan angka "tanpa campur tangan Claude" belum ada |
+| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; VF O1, `argus apply` dan antrean bagian A ter-merge, pilot antrean 3 issue live (n = 1, `pilots/queue_pilot_v0/RESULT.md`); tahap PRD (bagian B) dan angka "tanpa campur tangan Claude" belum ada |
 | Permukaan: chat | `[~]` | C1–C4 live di 8711 (Issue, Riset, Keputusan, Status); C5 terbuka |
 | Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset: pekerjaan baru tidak dimulai (di luar urutan inti); lainnya belum dimulai |
 | M5 observability | `[~]` | ledger, inspektor, papan skor; belum: angka "tanpa campur tangan Claude", eval set tidak jenuh |
@@ -152,9 +152,17 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
   Bersamanya yang dulu tercatat: (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
   paling terasa (`pilots/prd_probe_v0/RESULT.md`). Bersamanya: `argus applied --amend <commit>` hanya untuk `APPLIED` yang belum
   di-deploy (kasus viewer 021). Jalur ketat; membuka layanan approval di kode (ADR-007).
-- [ ] **Arah "PRD sampai staging"** (Atha 2026-11-12): tahap PRD (obrolan menghasilkan `PRD.md` + daftar issue berurutan, di-approve
-  sekali dengan sha), antrean berurutan (issue berikutnya jalan setelah yang sebelumnya `APPLIED`), `argus apply`. Probe manual
-  selesai dan live 2026-11-12 (`pilots/prd_probe_v0/`, `GLUE_LOG.md`). Urutan inti diterima Atha 2026-11-15: dibuka sesudah kenari dan nonce dan `argus apply`, karena tanpa keduanya antrean tetap butuh Claude di tengah.
+- [~] **Arah "PRD sampai staging"** (Atha 2026-11-12): **bagian A (antrean) selesai dan dipakai 2026-11-15**; bagian B (tahap PRD) belum. Spek `docs/reviews/SPEC_PRD_QUEUE.md` rev 2 (tinjauan Fable atas spek dan diff, keduanya
+  GO WITH FIXES, semua temuan dibenahi), PR #555: `argus queue new/go/step/status/close` (`router/queue.py`): satu repo, daftar issue tetap, issue berikutnya di atas commit hasil `APPLIED` sebelumnya,
+  berhenti di kegagalan pertama, batas uang per antrean (plafon $5,00) dengan setiap job yang masih bisa membelanjakan dihitung pada cap penuhnya, tidak pernah memanggil `approve` atau `apply`. 62 tes, mutan 36/36 yang tidak ekuivalen
+  (`verification/queue_mutants.log`), `verify_at` PASS 5201 (`verification/verify-20261115T162128Z-aarch64.log`). **Keputusan Atha 2026-11-15 ("ikut usul lu dulu"):** D1 berhenti di kegagalan pertama untuk seluruh antrean; D2 batas per antrean, "go live" di luar antrean
+  (antrean berakhir di `APPLIED`), `queue go` = persetujuan jumlah uangnya; D3 Atha menyetujui tiap draf (`approve --sha`) dan tiap patch (`apply --read-sha`). **Pilot v0 (2026-11-15, n = 1, `pilots/queue_pilot_v0/`):**
+  tiga issue berantai di `argus-ledger` (ledger 021-023), semuanya `APPLIED`, tiap draf lolos pada percobaan pertama, biaya model $0,1092 dari $3,00, sekitar 46 menit dari `go` sampai apply terakhir (21 menit menunggu satu approve); deploy ke staging sebagai Stage 19
+  (`pilots/staging_stage19/`, "go live" Atha). **Yang tidak ditunjukkan:** angka "tanpa campur tangan Claude" (tiap gerbang lewat manusia, antrean v0 tetap dua tindakan manusia per issue), perilaku saat item gagal di dunia nyata, issue yang kurang jelas
+  (issue ditulis Claude dengan contoh persis). **Belum:** bagian B (PRD + `issues.json` berurutan, disetujui sekali dengan sha, pemeriksaan jalur Argus terhadap `router/stage_viewer.API` dan tabel field `router/stage_data.py`), tes CLI `queue new` dan `queue step`
+  dengan konfigurasi sungguhan, mencatat kenapa venv Argus tanpa `fastapi` (tes ledger dijalankan di image sandbox). Bagian B dibuka paling cepat di titik cek 2026-11-29 (aturan arah).
+- [ ] **Ketergantungan tersembunyi ketiga (Stage 19, 2026-11-15):** `/api/scoreboard/models` di ledger Stage 19 live tetapi 404 lewat proxy viewer 8710, karena regex `API` (`router/stage_viewer.py:76`) hanya meneruskan jalur tetap; belum ada halaman yang memakainya.
+  Perbaikan = jalur ketat dan restart proxy (seperti #460 untuk `/api/scoreboard`); dikerjakan bila viewer butuh data itu. Pelajaran: rencana staging yang menjalankan `stage monitor` harus dijalankan dari `~/pilot3a_live` (`jobs/` timer), bukan checkout lain (refresh menolak menerbitkan; tidak ada data rusak).
 - [ ] **`argus fix <job>`** dari temuan yang dibekukan (kandidat; satu kali per job, agen boleh lapor "terjepit tes lama"); **redraft
   otomatis (3b)** sekali per job bila d1 `submits_exhausted` (ditunda Atha 2026-11-11 sampai kasusnya muncul lagi). Jalur ketat.
 - [ ] **Operator rantai tetap** (`argus chain`: T1 → apply → S → T2): tunggu rantai lintas repo kedua dengan pola perekat yang sama.
