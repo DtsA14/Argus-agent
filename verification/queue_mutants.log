@@ -36,3 +36,4 @@ KILLED  a job that is missing is not forgotten: ['FAILED tests/test_queue.py::te
 KILLED  queue step exits 0 when stopped: ['FAILED tests/test_queue.py::test_queue_step_exits_1_when_the_queue_is_stopped[queue q STOPPED on demo (1 issues)-1]']
 KILLED  the queue is not damage-checked: ['FAILED tests/test_queue.py::test_a_damaged_queue_file_is_refused_not_a_traceback']
 RESULT: 33/37 killed
+RERUN after the tests for the three survivors (commit e0d97a2): the issue, the repository and the forgetting mutants KILLED; "matched whole" is equivalent (see the file header). Total: 36/36 non-equivalent killed.
