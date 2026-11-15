@@ -236,6 +236,12 @@ class Handler(BaseHTTPRequestHandler):
         if a is not None and m:
             got = a.thread(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        if a is not None and path == "/api/research":
+            return self._json(200, a.research_list())
+        m = re.fullmatch(r"/api/research/([^/?#%]+)", path)
+        if a is not None and m:
+            got = a.research_thread(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if path == "/api/status":
             return self._json(200, self.chat.status())
         if path == "/api/threads":
@@ -347,7 +353,7 @@ def serve(jobs_dir, cfg=None, config_path=None, load=None):
     prepare and confirm (load, or the file of config_path), so a card shows what the CLI will read. A config that cannot be
     read at start leaves the chat read only (C1), it does not stop it."""
     actions = None
-    if cfg is not None and cfg.get("issue_writer"):
+    if cfg is not None and (cfg.get("issue_writer") or cfg.get("research_job")):
         from router.chat_actions import Actions
         actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path)
     chat = Chat(jobs_dir, actions=actions)
