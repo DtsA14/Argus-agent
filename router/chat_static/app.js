@@ -274,12 +274,9 @@
   }
   function formState() {
     var r = mode === "research";
-    var dc = mode === "decide";
-    repoSel.hidden = r || dc || openIssue !== null;
-    document.getElementById("prepare").hidden = dc;                     // a decision is prepared from the button of a card
+    repoSel.hidden = r || openIssue !== null;
     document.getElementById("prepare").textContent = r ? "Siapkan riset" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru");
-    message.setAttribute("aria-label", dc ? "Alasan" : "Pesan");
-    message.placeholder = dc ? "Alasan (wajib untuk Reject)" : (r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : "Tulis pesan");
+    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : "Tulis pesan";
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
@@ -409,16 +406,37 @@
     var link = viewerLink(VIEWER + r.id);
     if (link) { c.appendChild(link); }
     var acts = el("div", "actions");
-    if (!r.busy && r.allowed) {
-      if (r.allowed.indexOf("reject") !== -1) {
-        acts.appendChild(act("Reject", function () { return { action: "job_reject", job: r.id, sha: r.sha12 || "", reason: message.value }; }));
-      }
-      if (r.allowed.indexOf("abandon") !== -1) {
-        acts.appendChild(act("Abandon", function () { return { action: "job_abandon", job: r.id, sha: r.sha12 || "", reason: message.value }; }));
-      }
+    if (!r.busy && r.allowed && r.allowed.length) {
+      var why = el("input", "reason");                  // the reason is in the card, above its buttons, never in a shared box
+      why.type = "text";
+      why.maxLength = 300;
+      why.autocomplete = "off";
+      why.placeholder = "Alasan (wajib untuk Reject)";
+      why.setAttribute("aria-label", "Alasan");
+      c.appendChild(why);
+      var hint = el("p", "note");
+      hint.setAttribute("role", "status");
+      c.appendChild(hint);
+      var decide = function (label, action, needReason) {
+        var b = el("button", null, label);
+        b.type = "button";
+        b.addEventListener("click", function () {
+          if (needReason && why.value.trim() === "") { hint.textContent = "Isi alasan dulu di kolom di atas tombol."; return; }
+          hint.textContent = "";
+          prepare({ action: action, job: r.id, sha: r.sha12 || "", reason: why.value });
+        });
+        acts.appendChild(b);
+      };
+      if (r.allowed.indexOf("reject") !== -1) { decide("Reject", "job_reject", true); }
+      if (r.allowed.indexOf("abandon") !== -1) { decide("Abandon", "job_abandon", false); }
     }
     c.appendChild(acts);
     return c;
+  }
+  function reasonTyped() {                              // the poll must not wipe a reason that is being typed
+    return Array.prototype.some.call(document.querySelectorAll("#stream input.reason"), function (i) {
+      return i.value.trim() !== "" || i === document.activeElement;
+    });
   }
   function renderDecisions() {
     clear(stream);
@@ -450,7 +468,7 @@
     Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
       b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");
     });
-    issueForm.hidden = m === "status";
+    issueForm.hidden = m === "status" || m === "decide";
     query.hidden = m !== "status";
     researchSeq++;
     openResearch = null;
@@ -458,7 +476,7 @@
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
-    else if (m === "decide") { message.value = ""; loadDecisions(); renderDecisions(); }
+    else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
@@ -482,7 +500,7 @@
   setInterval(function () {
     if (document.hidden) { return; }
     load();
-    if (mode === "decide" && openDecision === null && !(pending && pending.sent)) { loadDecisions(); }
+    if (mode === "decide" && openDecision === null && !(pending && pending.sent) && !reasonTyped()) { loadDecisions(); }
     if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else if (researchLive) { showResearch(openResearch); } }
   }, 30000);
 })();
