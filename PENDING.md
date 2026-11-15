@@ -48,6 +48,12 @@ terbukti, biayanya terkunci."**
      dipilih dari log itu di titik cek.
 - **"Daya saing" untuk siapa (Atha, 2026-11-15: "Portofolio/karier"):** bukti dan angka cukup; production dan pengguna kedua tetap di
   "Ditunda sampai ada bukti kebutuhan". Bisa dibuka lagi di titik cek.
+- **Peninjau jalur ketat (Atha 2026-11-15: "Reviewer pake fable aja 1"):** satu peninjau, Fable, untuk spek dan diff jalur ketat (Opus tidak lagi diminta). Dasarnya tiga sampel Opus dan Fable
+  atas artefak yang sama (spek VF O1, diff VF O1, spek `argus apply`): hampir semua temuan keduanya nyata dan diverifikasi dengan menjalankan, masing-masing menemukan hal yang tidak ditemukan
+  yang lain (n = 3, bukan kesimpulan statistik); Claude menyarankan keduanya, Atha memilih satu. Dikaji lagi di titik cek 2026-11-29 dengan jumlah temuan unik per PR.
+- **`argus apply` (Atha 2026-11-15: "K1-k7 setuju ... Merge semua PR. Langsung lanjut"):** spek `docs/reviews/SPEC_ARGUS_APPLY.md` rev 2 disetujui (K1 `--read-sha` wajib; K2 HEAD sama dengan `intake.commit`, tanpa
+  `--onto-descendant`; K3 commit di cabang aktif; K4 tanpa push, merge atau deploy; K5 hook, filter, fsmonitor dan gpg tidak berjalan, konfigurasi lokal di luar daftar putih ditolak; K6 kartu chat menyusul; K7 dua PR:
+  PR 1 memperbaiki `applied()` dan mencatat sha patch, PR 2 `argus apply`). Merge kedua PR diizinkan sesudah `verify_at` lulus.
 
 Cara menilai butir baru: apakah ia membuat kerja lebih terbukti, biaya lebih terkunci, atau Argus lebih bisa ditinggal? Bila tidak,
 ia masuk "Ditunda sampai ada bukti kebutuhan".
@@ -137,7 +143,7 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 
 ### Inti 2: bisa ditinggal (tanpa Claude di tengah)
 
-- [ ] **`argus apply`** (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
+- [~] **`argus apply`** (spek rev 2 disetujui Atha 2026-11-15, dua PR: `applied()` lalu `apply`) (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
   paling terasa (`pilots/prd_probe_v0/RESULT.md`). Bersamanya: `argus applied --amend <commit>` hanya untuk `APPLIED` yang belum
   di-deploy (kasus viewer 021). Jalur ketat; membuka layanan approval di kode (ADR-007).
 - [ ] **Arah "PRD sampai staging"** (Atha 2026-11-12): tahap PRD (obrolan menghasilkan `PRD.md` + daftar issue berurutan, di-approve
