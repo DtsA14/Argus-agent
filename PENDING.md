@@ -64,7 +64,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 |---|---|---|
 | Fondasi (M1–M3, budget, ledger, crash-resume, sandbox) | `[x]` | Reconciliation bagian 1 |
 | Jalur kode, issue sampai staging (M6, M9 staging) | `[x]` MVP | repo Argus, sympy (SWE), `argus-ledger`, `argus-viewer`; dua aplikasi di staging |
-| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; VF O1 ter-merge (pemalsuan yang tidak mencari nonce tertutup, bukan semua); `argus apply` belum ada |
+| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; VF O1 dan `argus apply` ter-merge; antrean PRD dan angka "tanpa campur tangan Claude" belum ada |
 | Permukaan: chat | `[~]` | C1–C4 live di 8711 (Issue, Riset, Keputusan, Status); C5 terbuka |
 | Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset: pekerjaan baru tidak dimulai (di luar urutan inti); lainnya belum dimulai |
 | M5 observability | `[~]` | ledger, inspektor, papan skor; belum: angka "tanpa campur tangan Claude", eval set tidak jenuh |
@@ -108,7 +108,7 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
   spek dan diff. **Batas yang diterima, jangan dikutip lebih lebar:** hanya menutup cetak-lalu-keluar dan penambalan global yang ikut mengenai kenari; pemalsu yang terbatas
   pada sesi 1 atau pada tes kontrak (F1 sampai F3) atau yang membaca nonce dari argv (F6) lolos (xfail-strict di `tests/test_vf_canary.py`). **Aturan "jangan apply job `DONE`
   tanpa dibaca" tetap berlaku.** Proyek jujur dengan hook `pytest_report_teststatus` kustom bisa kena G4 (image kita tanpa plugin pytest).
-- [ ] **Approve atas patch akhir, bukan rencana** (`pilots/outside_v2/PROTOCOL_FINAL_PATCH.md`): dipakai di batch 3; pembacaan acak 1
+- [~] **Approve atas patch akhir, bukan rencana** (sebagian besar dicakup `argus apply --read-sha` sejak 2026-11-15: apply hanya jalan dengan sha patch akhir; yang belum: alur approve draf tetap atas rencana, dan `--read-sha` bukan bukti membaca) (`pilots/outside_v2/PROTOCOL_FINAL_PATCH.md`): dipakai di batch 3; pembacaan acak 1
   dari 3 oleh pembaca yang didelegasikan Atha: 0 dari 3 terbalik, tidak bisa membedakan karena semuanya reject (`atha_verdicts.json`,
   #504). Belum menjadi alur baku di harness.
 - [~] **Urutan Fable 2026-11-13, butir 3–4 (judge, R1b, validitas, rubrik)**: **sebagian besar selesai.** Judge mati sebagai bawaan (#485); R1b, issue
@@ -143,7 +143,13 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 
 ### Inti 2: bisa ditinggal (tanpa Claude di tengah)
 
-- [~] **`argus apply`** (spek rev 2 disetujui Atha 2026-11-15, dua PR). **PR 1 selesai (2026-11-15):** `applied()` membandingkan seperti paket menulis patch (biner, pindah berkas, config diff lokal, textconv, `GIT_*` tidak lagi menyesatkan `as_is`), sha256 patch dicatat di `job.json` saat review, pencatat `_record_applied` tanpa kunci; `verify_at` PASS 5070, mutan 19/19 (`verification/applied_asis_mutants.log`). **Tersisa PR 2: perintah `argus apply`.** Catatan dari tinjauan: `patch-id --stable` buta terhadap spasi (indentasi, CRLF, newline akhir), jadi PR 2 membandingkan byte `git diff --cached` dengan `changes.patch` sebelum commit (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
+- [x] **`argus apply`** (2026-11-15, spek `docs/reviews/SPEC_ARGUS_APPLY.md` rev 2 disetujui Atha, dua PR, keduanya ter-merge). PR 1 (#552): `applied()` membandingkan seperti paket menulis patch, sha256 patch dicatat di `job.json`,
+  `_record_applied` tanpa kunci. **PR 2: `argus apply <job> --read-sha <sha>` (`router/apply.py`)**: patch dalam satu commit di cabang aktif repo target; konfigurasi lokal di luar daftar putih, `GIT_*` pemanggil, hook, filter, fsmonitor dan gpg
+  tidak berjalan; patch yang menyentuh `.git`, `.gitattributes`, `.gitmodules`, symlink atau submodule ditolak; perbandingan byte `git diff --cached` dengan `changes.patch` sebelum perubahan pertama; gagal di tengah dibatalkan dan diperiksa,
+  mati sesudah commit disembuhkan panggilan berikutnya; kunci per repo; tanpa push, merge, deploy atau model. `verify_at` PASS 5134 (`verification/verify-20261115T130852Z-aarch64.log`), mutan 40/40
+  (`verification/apply_cmd_mutants.log`), tinjauan Fable atas spek dan diff. **Batas yang diterima:** `--read-sha` hanya membuktikan seseorang menyalin sha yang `status` cetak, bukan bahwa patch dibaca; repo target dan `.git`-nya dianggap tepercaya;
+  kunci per repo bergantung pada `jobs_dir` yang sama; `core.excludesFile` global membuat berkas ter-ignore terbaca "tree kotor" (aman, membingungkan). Belum: kartu apply di chat (K6), `argus applied --amend`.
+  Bersamanya yang dulu tercatat: (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
   paling terasa (`pilots/prd_probe_v0/RESULT.md`). Bersamanya: `argus applied --amend <commit>` hanya untuk `APPLIED` yang belum
   di-deploy (kasus viewer 021). Jalur ketat; membuka layanan approval di kode (ADR-007).
 - [ ] **Arah "PRD sampai staging"** (Atha 2026-11-12): tahap PRD (obrolan menghasilkan `PRD.md` + daftar issue berurutan, di-approve

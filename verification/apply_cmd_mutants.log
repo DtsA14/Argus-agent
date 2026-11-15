@@ -1,0 +1,50 @@
+KILLED  GIT_* of the caller kept: ['FAILED tests/test_apply_cmd.py::test_variables_of_the_caller_do_not_steer_the_git_commands']
+KILLED  the hooksPath pin removed: ['FAILED tests/test_apply_cmd.py::test_hooks_of_the_repository_do_not_run - Ass...']
+KILLED  the local configuration allowlist ignored: ['FAILED tests/test_apply_cmd.py::test_a_local_configuration_outside_the_allowlist_is_refused_by_name[filter.x.clean-cat]']
+KILLED  the allowlist accepts everything: ['FAILED tests/test_apply_cmd.py::test_a_local_configuration_outside_the_allowlist_is_refused_by_name[filter.x.clean-cat]']
+KILLED  no identity check: ['FAILED tests/test_apply_cmd.py::test_without_any_identity_the_command_refuses_and_makes_none_up']
+KILLED  the global identity is not read: ['FAILED tests/test_apply_cmd.py::test_binary_move_delete_mode_no_newline_unicode_and_gitignore_changes_go_in_as_they_were[<lambda>2]']
+KILLED  --read-sha not checked: ['FAILED tests/test_apply_cmd.py::test_a_wrong_short_or_empty_read_sha_is_refused']
+KILLED  the recorded and provenance shas not compared: ['FAILED tests/test_apply_cmd.py::test_a_provenance_that_does_not_name_the_patch_is_refused']
+KILLED  only provenance compared (the recorded sha ignored): ['FAILED tests/test_apply_cmd.py::test_a_job_json_that_does_not_name_the_patch_is_refused_even_when_provenance_does']
+KILLED  a job without a recorded sha accepted: ['FAILED tests/test_apply_cmd.py::test_a_job_from_before_the_recorded_sha_is_refused_with_the_manual_way']
+KILLED  the protected globs not re-checked: ['FAILED tests/test_apply_cmd.py::test_a_protected_file_in_the_patch_is_refused_again']
+KILLED  an empty patch accepted: ['FAILED tests/test_apply_cmd.py::test_an_empty_patch_and_a_patch_that_does_not_apply_are_refused']
+SURVIVED a repository without its own .git directory accepted: 61 passed in 15.64s
+KILLED  the Argus checkout accepted: ['FAILED tests/test_apply_cmd.py::test_a_repository_that_is_gone_or_is_the_argus_checkout_is_refused']
+SURVIVED the top level not compared: 61 passed in 15.30s
+KILLED  a dirty tree accepted: ['FAILED tests/test_apply_cmd.py::test_a_dirty_tree_is_refused[tracked] - Faile...']
+KILLED  a detached HEAD accepted: ['FAILED tests/test_apply_cmd.py::test_a_detached_head_and_a_head_that_is_not_the_base_commit_are_refused']
+KILLED  a borrowed branch accepted: ['FAILED tests/test_apply_cmd.py::test_a_branch_checked_out_in_another_worktree_is_refused']
+KILLED  a HEAD that is not the base commit accepted: ['FAILED tests/test_apply_cmd.py::test_a_detached_head_and_a_head_that_is_not_the_base_commit_are_refused']
+KILLED  symlinks and submodules accepted: ['FAILED tests/test_apply_cmd.py::test_a_patch_that_makes_a_symlink_is_refused']
+KILLED  git metadata paths accepted: ['FAILED tests/test_apply_cmd.py::test_a_patch_touching_git_metadata_files_is_refused_at_any_depth[sub/.gitattributes-*.py text\\n]']
+KILLED  .gitignore refused as metadata: ['FAILED tests/test_apply_cmd.py::test_binary_move_delete_mode_no_newline_unicode_and_gitignore_changes_go_in_as_they_were[<lambda>6]']
+KILLED  the file list not compared: ['FAILED tests/test_apply_cmd.py::test_the_file_list_must_be_the_one_the_package_names']
+SURVIVED no entries accepted: 61 passed in 15.50s
+KILLED  the staged change not compared byte for byte: ['FAILED tests/test_apply_cmd.py::test_a_patch_that_is_not_what_git_would_write_byte_for_byte_is_undone']
+KILLED  a failed apply is not undone: ['FAILED tests/test_apply_cmd.py::test_a_commit_that_fails_leaves_the_repository_and_the_job_as_they_were']
+KILLED  apply_started not logged: ['FAILED tests/test_apply_cmd.py::test_a_crash_after_the_commit_is_healed_by_the_next_call_without_a_second_commit']
+KILLED  a recovered commit of another job accepted: ['FAILED tests/test_apply_cmd.py::test_a_commit_of_another_job_or_another_patch_is_not_taken_for_this_jobs_apply']
+KILLED  a recovered commit of another patch accepted: ['FAILED tests/test_apply_cmd.py::test_a_commit_two_on_from_the_recorded_head_or_with_another_patch_is_not_recovered']
+SURVIVED a recovered commit with another parent accepted: 61 passed in 15.56s
+KILLED  as_is not required: ['FAILED tests/test_apply_cmd.py::test_a_commit_that_is_not_the_patch_is_not_recorded_but_stays_and_is_named']
+KILLED  as_is not required by the recorder: ['FAILED tests/test_apply_cmd.py::test_a_commit_that_is_not_the_patch_is_not_recorded_but_stays_and_is_named']
+KILLED  a failure after the commit is undone as if there was none: ['FAILED tests/test_apply_cmd.py::test_a_failure_after_the_commit_is_not_reported_as_undone_and_is_recorded']
+SURVIVED only git failures are undone (a bad title leaves the patch staged): 61 passed in 15.72s
+KILLED  a NUL stays in the title: ['FAILED tests/test_apply_cmd.py::test_a_pr_md_that_cannot_be_read_as_a_title_gives_the_fallback_not_a_half_applied_repository']
+KILLED  a HEAD that moved is not noticed: ['FAILED tests/test_apply_cmd.py::test_a_head_that_moved_while_the_patch_went_in_is_named_and_not_recorded']
+KILLED  the repository lock is by path, not by real path: ['FAILED tests/test_apply_cmd.py::test_the_repository_lock_is_the_same_for_two_paths_to_one_repository']
+KILLED  no global isolation and no fsmonitor pin: ['FAILED tests/test_apply_cmd.py::test_the_users_global_git_configuration_is_used_for_the_identity_and_for_nothing_else']
+KILLED  no global isolation, no gpg pin and no --no-gpg-sign: ['FAILED tests/test_apply_cmd.py::test_the_users_global_git_configuration_is_used_for_the_identity_and_for_nothing_else']
+KILLED  the repository lock not taken: ['FAILED tests/test_apply_cmd.py::test_two_applies_on_one_repository_and_on_one_job_are_refused_while_one_runs']
+KILLED  the status prints no command: ['FAILED tests/test_apply_cmd.py::test_the_status_prints_the_command_with_the_sha_to_read_and_the_manual_steps_stay']
+STALE   the CLI does not apply: ['ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.not']
+RESULT: 36/41 killed
+--- after the review of that run: two equivalent mutants removed (reasons in the script), one stale pattern fixed, tests added for the others; rerun of the four:
+KILLED  a repository without its own .git directory accepted: ['FAILED tests/test_apply_cmd.py::test_a_repository_whose_git_is_a_file_not_a_directory_is_refused']
+KILLED  a recovered commit with another parent accepted: ['FAILED tests/test_apply_cmd.py::test_a_commit_with_this_jobs_trailers_but_another_parent_is_not_recovered']
+KILLED  only git failures are undone (a bad title leaves the patch staged): ['FAILED tests/test_apply_cmd.py::test_a_failure_that_is_not_a_git_failure_after_the_change_is_undone_too']
+KILLED  the CLI does not apply: ['FAILED tests/test_apply_cmd.py::test_the_cli_applies_and_prints_the_status - ...']
+RESULT: 4/4 killed
+RESULT (40 mutants listed): 40/40 killed
