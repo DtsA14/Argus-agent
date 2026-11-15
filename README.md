@@ -3,6 +3,11 @@
 Agent harness on LangGraph with a budget, a ledger and crash-resume on every model call. The pipelines in use are the
 code job and the research job (`scripts/argus.py code` / `research`); see `AGENTS.md` for their stages.
 
+Direction (2026-11-15): a specialist in its properties, a generalist on its surface. Argus aims to be an agent you can leave
+alone: its work is proven and its cost is locked. The guarantees below are that core; the chat (`scripts/argus.py chat serve`,
+`router/chat.py`) is the one door through which capabilities are added, one at a time. Status: `docs/Reconciliation.md`;
+open work: `PENDING.md`.
+
 The quick start below runs `main.py`: the M1–M3 demo graph (`graph.py`, orchestrator → workers → synthesize → evaluator
 on a sales report), fake nodes by default. It is not a production path. Of the guarantees below, the iteration rule is the demo graph's; the per-request,
 ledger and crash-resume ones hold on every pipeline.
