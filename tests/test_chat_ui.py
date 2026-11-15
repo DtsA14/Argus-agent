@@ -61,7 +61,7 @@ def test_the_page_does_not_build_the_action_from_the_card():
 def test_the_issue_chip_is_on_and_the_composer_starts_hidden():
     assert re.search(r'data-mode="issue"[^>]*>Issue<', HTML) and not re.search(r'data-mode="issue"[^>]*disabled', HTML)
     assert re.search(r'<form id="issue-form" hidden[ >]', HTML)
-    assert 'data-mode="research" disabled' in HTML                                    # research is C3
+    assert re.search(r'data-mode="research"[^>]*>Riset<', HTML) and not re.search(r'data-mode="research"[^>]*disabled', HTML)   # C3
 
 
 def test_an_enter_in_the_message_box_does_not_prepare_by_a_hidden_default():
@@ -71,7 +71,7 @@ def test_an_enter_in_the_message_box_does_not_prepare_by_a_hidden_default():
 def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
-    assert JS.count("action:") == 5                                 # the reply is prepared from a button and from the composer
+    assert JS.count("action:") == 6                                 # the reply is prepared from a button and from the composer; research_new from the composer
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -131,7 +131,7 @@ def test_a_failed_fetch_is_not_shown_as_a_refusal():
 
 
 def test_the_form_says_whether_it_makes_a_new_issue_or_a_reply():
-    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = openIssue !== null" in JS
+    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || openIssue !== null" in JS
     assert re.search(r'encodeURIComponent\(id\)\)\.then\(function \(d\) \{\n\s+openIssue = id;', JS)      # set when the thread was read, not before
 
 
@@ -164,3 +164,60 @@ def test_a_card_is_dropped_when_another_issue_or_the_list_is_opened():
 def test_the_slot_has_a_vh_fallback_before_dvh():
     css = (rc.STATIC_DIR / "app.css").read_text()
     assert "max-height:50vh;max-height:50dvh" in css
+
+
+# ---- C3: research mode of the page ----------------------------------------------------------------------------------------
+
+def research_part():
+    return JS.split("function researchCard")[1].split("function setMode")[0]
+
+
+def test_the_report_goes_on_the_page_as_text_under_the_servers_banner_and_the_label_comes_from_the_server():
+    body = research_part()
+    assert 'el("pre", "report", d.report.text)' in body
+    assert body.index("d.banner") < body.index("d.report.text")
+    assert 'd.checked ? "Sudah dicek oleh e1' in body and "Belum dicek oleh e1." in body
+    assert "report.text.indexOf" not in JS and "match(" not in body and "replace(" not in body       # the text is never read for a label
+
+
+def test_research_mode_prepares_the_question_and_nothing_else():
+    assert 'prepare({ action: "research_new", message: message.value })' in JS
+    assert re.findall(r'\{ action: "research_new"[^}]*\}', JS) == ['{ action: "research_new", message: message.value }']
+    assert "profile:" not in JS and "job: openResearch" not in JS
+
+
+def test_a_research_job_has_no_action_buttons_only_a_viewer_link():
+    body = research_part()
+    assert "act(" not in body      # card click and back: nothing posts
+    assert "post(" not in body and "prepare(" not in body
+    assert 'viewerLink(d.state === "starting" || d.state === "refused" ? null : VIEWER + d.id)' in body
+
+
+def test_starting_refused_and_stalled_jobs_are_said_so():
+    body = research_part()
+    for text in ("Riset sedang dimulai", "Ditolak sebelum dimulai", "Terhenti: jalankan argus resume"):
+        assert text in body
+
+
+def test_the_confirm_card_shows_the_go_live_screen_fields():
+    for key in ("profile", "stage_models", "stage_caps", "web", "data_sent", "free_models"):
+        assert f'["{key}"' in JS
+
+
+def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden():
+    assert 'var r = mode === "research";' in JS and "Siapkan riset" in JS
+    assert 'issueForm.hidden = m === "status";' in JS and 'query.hidden = m !== "status";' in JS
+
+
+def test_a_finished_research_confirm_opens_the_job_in_research_mode_only():
+    assert 'if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }' in JS
+    assert "if (mode !== \"research\") { return; }" in research_part()                 # a late answer after the user left the mode draws nothing
+
+
+def test_the_poll_does_not_redraw_research_while_a_confirm_is_on_its_way():
+    assert 'if (mode === "research" && !(pending && pending.sent))' in JS
+
+
+def test_the_report_box_wraps_and_is_bounded():
+    css = (rc.STATIC_DIR / "app.css").read_text()
+    assert ".report{white-space:pre-wrap" in css and "max-height:60vh" in css

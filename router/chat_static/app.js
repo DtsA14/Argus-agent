@@ -135,7 +135,9 @@
       });
   }
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Lingkungan"], ["commit", "Commit"],
-    ["turn", "Giliran"], ["turn_cap_usd", "Batas giliran"], ["job_cap_usd", "Batas job"], ["reason", "Alasan"]];
+    ["turn", "Giliran"], ["turn_cap_usd", "Batas giliran"], ["job_cap_usd", "Batas job"], ["reason", "Alasan"],
+    ["profile", "Profil"], ["stage_models", "Model"], ["stage_caps", "Batas tahap"], ["web", "Web"], ["data_sent", "Data keluar"],
+    ["free_models", "Model gratis"]];
   var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1 };
   function fact(parent, label, value) {
     var p = el("p", "fact");
@@ -229,7 +231,12 @@
       if (pending && pending.sent) { return; }          // a confirm went out meanwhile: this card is not shown, its token lapses
       if (mode !== ctx.mode || openIssue !== ctx.open) { return; }     // the user moved on while it was prepared: the token just lapses
       dropPending();
-      var c = renderCard(prep, function (r) { message.value = ""; loadIssues(); if (r.job && mode === "issue") { showIssue(r.job, true); } });
+      var c = renderCard(prep, function (r) {
+        message.value = "";
+        if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
+        loadIssues();
+        if (r.job && mode === "issue") { showIssue(r.job, true); }
+      });
       pending = c;
       slot.appendChild(c);
       c.scrollIntoView({ block: "nearest" });
@@ -261,8 +268,10 @@
     return b;
   }
   function formState() {
-    repoSel.hidden = openIssue !== null;
-    document.getElementById("prepare").textContent = openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru";
+    var r = mode === "research";
+    repoSel.hidden = r || openIssue !== null;
+    document.getElementById("prepare").textContent = r ? "Siapkan riset" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru");
+    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : "Tulis pesan";
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
@@ -310,15 +319,77 @@
       if (mode === "issue" && openIssue === null) { renderIssues(); }
     }).catch(function () { summary.textContent = "gagal memuat issue"; });
   }
+  // ---- C3: research mode. A report is text from the web and a model: it goes on the page as text under the server's banner. ----------
+  var researchJobs = [];
+  var openResearch = null;
+  function researchCard(t) {
+    var c = el("article", "card");
+    c.appendChild(el("h2", null, t.title || t.id));
+    var row = el("div", "row");
+    row.appendChild(el("span", "state " + stateClass(t.state), t.state));
+    if (t.busy) { row.appendChild(el("span", null, "berjalan")); }
+    c.appendChild(row);
+    c.addEventListener("click", function () { showResearch(t.id); });
+    return c;
+  }
+  function renderResearchList() {
+    clear(stream);
+    if (!researchJobs.length) { stream.appendChild(el("p", "muted", "Belum ada riset. Tulis pertanyaan di bawah.")); }
+    researchJobs.slice(0, 20).forEach(function (t) { stream.appendChild(researchCard(t)); });
+  }
+  function loadResearch() {
+    get("/api/research").then(function (d) {
+      researchJobs = d.research || [];
+      if (mode === "research" && openResearch === null) { renderResearchList(); }
+    }).catch(function () { summary.textContent = "gagal memuat riset"; });
+  }
+  function showResearch(id) {
+    get("/api/research/" + encodeURIComponent(id)).then(function (d) {
+      if (mode !== "research") { return; }
+      openResearch = id;
+      clear(stream);
+      var c = el("article", "card");
+      c.appendChild(el("h2", "mono", d.id));
+      var row = el("div", "row");
+      row.appendChild(el("span", "state " + stateClass(d.state), d.state));
+      if (d.busy) { row.appendChild(el("span", null, "berjalan")); }
+      if (typeof d.spent_usd === "number" || d.spent_usd === null) { row.appendChild(el("span", null, usd(d.spent_usd) + " dari " + usd(d.cap_usd))); }
+      c.appendChild(row);
+      if (d.state === "starting") { c.appendChild(el("p", "note", "Riset sedang dimulai.")); }
+      if (d.state === "refused") { c.appendChild(el("p", "note", "Ditolak sebelum dimulai: " + d.line)); }
+      if (d.stalled) { c.appendChild(el("p", "note", "Terhenti: jalankan argus resume " + d.id + " dari terminal.")); }
+      if (d.question) { c.appendChild(el("p", "msg human", "Pertanyaan: " + d.question)); }
+      if (d.report) {
+        c.appendChild(el("p", "note", d.checked ? "Sudah dicek oleh e1 (hanya menandai klaim)." : "Belum dicek oleh e1."));
+        c.appendChild(el("p", "note", d.banner));
+        if (d.report.withheld) { c.appendChild(el("p", "note", d.report.withheld)); }
+        else {
+          if (d.report.cut) { c.appendChild(el("p", "note", "Dipotong: sumber di akhir bisa hilang.")); }
+          c.appendChild(el("pre", "report", d.report.text));
+        }
+      }
+      var link = viewerLink(d.state === "starting" || d.state === "refused" ? null : VIEWER + d.id);
+      if (link) { c.appendChild(link); }
+      stream.appendChild(c);
+      var back = el("button", null, "Semua riset");
+      back.type = "button";
+      back.addEventListener("click", function () { openResearch = null; renderResearchList(); loadResearch(); });
+      stream.appendChild(back);
+    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Riset tidak dapat dibaca.")); });
+  }
   function setMode(m) {
     mode = m;
     dropPending();
     Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
       b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");
     });
-    issueForm.hidden = m !== "issue";
-    query.hidden = m === "issue";
-    if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); } else { renderOverview(); }
+    issueForm.hidden = m === "status";
+    query.hidden = m !== "status";
+    openResearch = null;
+    formState();
+    if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
+    else if (m === "research") { loadResearch(); renderResearchList(); }
+    else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
     if (b.disabled) { return; }
@@ -326,7 +397,8 @@
   });
   issueForm.addEventListener("submit", function (e) {
     e.preventDefault();
-    if (openIssue !== null) { prepare({ action: "issue_reply", job: openIssue, message: message.value }); }
+    if (mode === "research") { prepare({ action: "research_new", message: message.value }); }
+    else if (openIssue !== null) { prepare({ action: "issue_reply", job: openIssue, message: message.value }); }
     else { prepare({ action: "issue_new", repo: repoSel.value, message: message.value }); }
   });
   query.addEventListener("input", function () { renderList(); if (current === null) { renderOverview(); } });
@@ -334,5 +406,9 @@
   document.getElementById("open-panel").addEventListener("click", function () { panel.classList.add("open"); });
   document.getElementById("close-panel").addEventListener("click", function () { panel.classList.remove("open"); });
   load();
-  setInterval(function () { if (!document.hidden) { load(); } }, 30000);
+  setInterval(function () {
+    if (document.hidden) { return; }
+    load();
+    if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else { showResearch(openResearch); } }
+  }, 30000);
 })();
