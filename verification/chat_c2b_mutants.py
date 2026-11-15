@@ -37,7 +37,7 @@ M = [
     ("a prepare is allowed while a confirm is on its way", J, [("    if (busy || (pending && pending.sent)) { return; }", "    if (busy) { return; }")]),
     ("a lost answer reads as a refusal", J, [("        if (e.answered) {", "        if (true) {")]),
     ("a lost answer does not reload the list", J, [("          no.disabled = false;\n          loadIssues();", "          no.disabled = false;")]),
-    ("the open issue is set before the thread is read", J, [("      openIssue = id;\n      formState();\n      clear(stream);", "      formState();\n      clear(stream);"), ("  function showIssue(id) {\n", "  function showIssue(id) {\n    openIssue = id;\n")]),
+    ("the open issue is set before the thread is read", J, [("      openIssue = id;\n      formState();\n      clear(stream);", "      formState();\n      clear(stream);"), ("    if (!keep && id !== openIssue) { dropPending(); }\n", "    if (!keep && id !== openIssue) { dropPending(); }\n    openIssue = id;\n")]),
     ("the repo select stays for a reply", J, [("    repoSel.hidden = openIssue !== null;\n", "")]),
     ("a late prepare lands in the new view", J, [("      if (mode !== ctx.mode || openIssue !== ctx.open) { return; }", "")]),
     ("batal removes whichever card is current", J, [("no.addEventListener(\"click\", function () { removeCard(c); });", "no.addEventListener(\"click\", function () { dropPending(); });")]),
