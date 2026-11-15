@@ -231,6 +231,7 @@ issue_writer:
   repos:
     argus-viewer: {path: "~/argus-viewer", environment: pwa_node22}
     argus-ledger: {path: "~/argus-ledger", environment: ledger_py312_up2}
+    athena: {path: "~/athena", environment: athena_py312}   # outside-repo pilot (public repository), 2026-11-15
   # max_input_tokens: Haiku's bound through the gateway (#415): its long-context price starts at 100,000 tokens and the
   # heuristic count of an OpenRouter prompt is not exact, so 100,000 x 1.2 / 3 = 40,000 (harness/llm.py
   # check_long_context); the replays used at most ~25,000. cap_usd is the bound: one turn never costs more.
@@ -585,6 +586,10 @@ sandbox:
     # ledger_py312: Python 3.12 + FastAPI, httpx and pytest for the argus-ledger practice app (PENDING.md, stage 2);
     # defined in environments/ledger_py312/, built and checked like sympy_py39.
     ledger_py312:
+      image: null
+    # athena_py312 (SPEC_PRD_QUEUE pilot 2, 2026-11-15): Python 3.12 + numpy, pandas, pyarrow, filelock, FastAPI, httpx and pytest for the
+    # public ATHENA repository (environments/athena_py312/); built and checked like ledger_py312. Never in web.environments.
+    athena_py312:
       image: null
     # ledger_staging (docs/reviews/SPEC_STAGING_V0.md S1): ledger_py312 plus uvicorn, the runtime image of the staging
     # container; built and checked like ledger_py312. Never in web.environments.
