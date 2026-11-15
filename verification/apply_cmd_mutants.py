@@ -2,7 +2,8 @@
 Usage: <this> <worktree> <python> [name fragments to run only some]. DOCKER is not needed.
 Not listed alone (each layer is redundant with the others, so only the combinations above can be seen): the fsmonitor pin, the gpg pin, --no-gpg-sign, and the global
 configuration switched off protect together; --no-verify and the hooksPath pin; DIFF_PINS (no diff configuration reaches the command); `core.fsmonitor=false`.
-Also equivalent (Fable): the state guard (the recorder checks it too), `rev-parse --show-toplevel` alone, `no_entries`, and the case variants of the metadata names."""
+Also equivalent (Fable, and by the order of the checks): the state guard (the recorder checks it too), the top-level comparison (the `.git` directory check and the
+configuration allowlist refuse everything it would), an empty entry list (an empty patch is refused earlier), and the case variants of the metadata names."""
 import subprocess
 import sys
 from pathlib import Path
@@ -33,7 +34,6 @@ M = [
     ("an empty patch accepted", A, [off("    if not patch.strip() or not listed:")]),
     ("a repository without its own .git directory accepted", A, [off('    if not (repo / ".git").is_dir():')]),
     ("the Argus checkout accepted", A, [off("    if real == ROOT.resolve():")]),
-    ("the top level not compared", A, [off("        if top != real:")]),
     ("a dirty tree accepted", A, [off("        if dirty:")]),
     ("a detached HEAD accepted", A, [off('        if not ref.startswith("refs/heads/"):')]),
     ("a borrowed branch accepted", A, [off("        if len(held) > 1:")]),
@@ -42,7 +42,6 @@ M = [
     ("git metadata paths accepted", A, [off('        if METADATA & set(parts) or path.startswith("/") or ".." in parts:')]),
     (".gitignore refused as metadata", A, [('METADATA = {".git", ".gitattributes", ".gitmodules"}', 'METADATA = {".git", ".gitattributes", ".gitmodules", ".gitignore"}')]),
     ("the file list not compared", A, [off("    if sorted(p for _, _, _, p in entries) != listed:")]),
-    ("no entries accepted", A, [off("    if not entries:")]),
     ("the staged change not compared byte for byte", A, [off("    if staged != patch:")]),
     ("a failed apply is not undone", A, [("        undone = _undo(repo, patch)", "        undone = True")]),
     ("apply_started not logged", A, [('    job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha)\n', "")]),
@@ -60,7 +59,7 @@ M = [
     ("no global isolation, no gpg pin and no --no-gpg-sign", A, [('        env["GIT_CONFIG_GLOBAL"] = os.devnull', "        pass"), ('"-c", "commit.gpgsign=false", ', ""), ('"--no-verify", "--no-gpg-sign", ', '"--no-verify", ')]),
     ("the repository lock not taken", A, [("        with lock_repo(jobs_dir, repo):\n            return _apply(job, read_sha, deps=deps, note=note)", "        if True:\n            return _apply(job, read_sha, deps=deps, note=note)")]),
     ("the status prints no command", J, [('                  f"  argus apply {job.id} --read-sha {sha[:12]}",\n', "")]),
-    ("the CLI does not apply", "scripts/argus.py", [("ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id", "o.job")]),
+    ("the CLI does not apply", "scripts/argus.py", [("done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note)", "done = rj.open_job(o.job, o.jobs_dir)")]),
 ]
 
 if __name__ == "__main__":

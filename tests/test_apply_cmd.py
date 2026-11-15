@@ -606,3 +606,53 @@ def test_the_cli_prints_the_branch_and_says_it_was_not_pushed(env, tmp_path, cap
     assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12]], deps=env.deps) == 0
     out = capsys.readouterr().out
     assert f"applied on branch {branch}" in out and "not pushed, not deployed" in out and "argus stage deploy jtest" in out
+
+
+def test_a_repository_whose_git_is_a_file_not_a_directory_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    wt = tmp_path / "linked"
+    g(env.repo, "worktree", "add", "-q", "-b", "linked-branch", str(wt))
+    assert (wt / ".git").is_file()
+    job = env.job()
+    job.data["inputs"]["repo"] = str(wt)
+    job.save()
+    with pytest.raises(rj.Refused, match="own .git directory"):
+        run_apply(env, sha)
+    assert env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_commit_with_this_jobs_trailers_but_another_parent_is_not_recovered(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = rj._record_applied
+    monkeypatch.setattr(rj, "_record_applied", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt("killed after the commit")))
+    with pytest.raises(KeyboardInterrupt):
+        run_apply(env, sha)
+    monkeypatch.setattr(rj, "_record_applied", real)
+    ident = ["-c", "user.name=t", "-c", "user.email=t@example.org"]
+    g(env.repo, "reset", "-q", "--hard", before)
+    (env.repo / "other.txt").write_text("a human commit in between\n")
+    g(env.repo, "add", "-A")
+    g(env.repo, *ident, "commit", "-q", "-m", "a human commit")
+    p = env.repo.parent / "again.patch"
+    p.write_bytes(patch)
+    g(env.repo, "apply", "--index", str(p))
+    g(env.repo, *ident, "commit", "-q", "-m", f"copy\n\nArgus-Job: jtest\nArgus-Patch-Sha256: {sha}")
+    with pytest.raises(rj.Refused):
+        run_apply(env, sha)                                   # right trailers, same changes, but not a child of the HEAD the job logged
+    assert env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_failure_that_is_not_a_git_failure_after_the_change_is_undone_too(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = ra.run_git
+
+    def full(repo, *args, **kw):
+        if args and args[0] == "commit":
+            raise OSError("no space left on device")
+        return real(repo, *args, **kw)
+    monkeypatch.setattr(ra, "run_git", full)
+    with pytest.raises(rj.Refused, match="undone"):
+        run_apply(env, sha)
+    untouched(env, before)
