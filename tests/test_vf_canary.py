@@ -128,10 +128,10 @@ def test_a_subtest_that_is_skipped_does_not_make_the_record_disagree(tmp_path):
     ws = project(tmp_path, '''
         def test_sub(subtests):
             with subtests.test("a"):
-                assert 1 == 1
-            with subtests.test("b"):
                 import pytest
                 pytest.skip("no")
+            with subtests.test("b"):
+                assert 1 == 1
     ''')
     r = run_green(ws, "tests/test_x.py")
     v = va.judge_result(spec("tests/test_x.py"), r, nonce=NONCE)
@@ -346,7 +346,7 @@ def hostile_script(base):
 def test_an_ini_and_a_conftest_above_the_canary_directory_do_not_reach_the_canary(tmp_path):
     base = tmp_path / "tmpbase"
     base.mkdir()
-    (base / "pytest.ini").write_text("[pytest]\naddopts = --no-such-option\n")
+    (base / "pytest.ini").write_text("[pytest]\nrequired_plugins = no-such-plugin-xyz\naddopts = --no-such-option\n")
     (base / "conftest.py").write_text("raise RuntimeError('a conftest above the canary')\n")
     ws = project(tmp_path / "p", "def test_a(): pass\n")
     r = run_green(ws, "tests/test_x.py", script=hostile_script(base))
@@ -434,3 +434,16 @@ def test_an_honest_run_keeps_its_old_reason_and_evidence_and_gains_three_keys():
 def test_known_gap_f6_a_forger_that_reads_the_nonce(tmp_path):
     v = va.judge_result(spec("tests/test_new.py"), run_green(forger(tmp_path, "pytest_nonce_reader_forger"), "tests/test_new.py"), nonce=NONCE)
     assert v["status"] != "pass"
+
+
+def test_pytest_run_gives_the_text_without_the_record_and_the_record(monkeypatch):
+    seen = {}
+
+    def fake(argv, **kw):
+        seen["argv"] = argv
+        return {**RUN, "stdout": with_record(PYTEST_OK, nonce=argv[5])}
+
+    monkeypatch.setattr(va.sb, "run_command", fake)
+    r, rec = va.pytest_run(spec("tests/t.py"), ".", {})
+    assert r["stdout"] == PYTEST_OK and "ARGUS-GREEN" not in r["stdout"] and rec["rc"] == 0 and rec["canary"] == va.CANARY_WANTED
+    assert seen["argv"][5].startswith("ARGUS-GREEN-")
