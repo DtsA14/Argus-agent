@@ -71,7 +71,7 @@ def test_an_enter_in_the_message_box_does_not_prepare_by_a_hidden_default():
 def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
-    assert JS.count("action:") == 8                                 # the reply is prepared from a button and from the composer; research_new from the composer
+    assert JS.count("action:") == 7                                 # the reply is prepared from a button and from the composer; research_new from the composer
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -131,7 +131,7 @@ def test_a_failed_fetch_is_not_shown_as_a_refusal():
 
 
 def test_the_form_says_whether_it_makes_a_new_issue_or_a_reply():
-    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || dc || openIssue !== null" in JS
+    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || openIssue !== null" in JS
     assert re.search(r'encodeURIComponent\(id\)\)\.then\(function \(d\) \{\n\s+openIssue = id;', JS)      # set when the thread was read, not before
 
 
@@ -206,7 +206,7 @@ def test_the_confirm_card_shows_the_go_live_screen_fields():
 
 def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden():
     assert 'var r = mode === "research";' in JS and "Siapkan riset" in JS
-    assert 'issueForm.hidden = m === "status";' in JS and 'query.hidden = m !== "status";' in JS
+    assert 'issueForm.hidden = m === "status" || m === "decide";' in JS and 'query.hidden = m !== "status";' in JS
 
 
 def test_a_finished_research_confirm_opens_the_job_in_research_mode_only():
@@ -251,12 +251,12 @@ def test_the_decisions_chip_is_on_and_there_is_no_approve_anywhere_in_the_page()
         assert text not in JS and text not in HTML
 
 
-def test_a_decision_is_prepared_from_a_button_with_the_sha_the_card_showed_and_the_reason_box():
+def test_a_decision_is_prepared_from_a_button_with_the_sha_the_card_showed_and_the_reason_of_its_own_card():
     body = decide_part()
-    assert 'action: "job_reject", job: r.id, sha: r.sha12 || "", reason: message.value' in body
-    assert 'action: "job_abandon", job: r.id, sha: r.sha12 || "", reason: message.value' in body
-    assert "if (!r.busy && r.allowed)" in body and 'indexOf("reject")' in body and 'indexOf("abandon")' in body
-
+    assert 'prepare({ action: action, job: r.id, sha: r.sha12 || "", reason: why.value });' in body
+    assert 'decide("Reject", "job_reject", true)' in body and 'decide("Abandon", "job_abandon", false)' in body
+    assert "if (!r.busy && r.allowed && r.allowed.length)" in body and 'indexOf("reject")' in body and 'indexOf("abandon")' in body
+    assert "message.value" not in body                                                   # never the shared composer box
 
 def test_the_decide_link_reads_the_path_once_matches_it_and_opens_a_card_without_preparing():
     assert JS.count("location") == 1 and 'exec(location.pathname)' in JS
@@ -274,9 +274,13 @@ def test_a_late_answer_for_another_job_or_mode_draws_nothing():
     assert 'if (mode !== "decide" || openDecision !== id) { return; }' in JS
 
 
-def test_the_decision_form_shows_no_prepare_button_and_asks_for_a_reason():
-    assert 'document.getElementById("prepare").hidden = dc;' in JS and "Alasan (wajib untuk Reject)" in JS
-
+def test_the_reason_is_a_field_inside_each_card_and_a_reject_without_one_is_not_prepared():
+    body = decide_part()
+    assert 'var why = el("input", "reason");' in body and 'why.placeholder = "Alasan (wajib untuk Reject)";' in body
+    assert 'why.setAttribute("aria-label", "Alasan");' in body and "why.maxLength = 300;" in body
+    assert 'if (needReason && why.value.trim() === "") { hint.textContent = "Isi alasan dulu di kolom di atas tombol."; return; }' in body
+    assert body.index("why.value.trim()") < body.index("prepare({ action: action")
+    assert 'issueForm.hidden = m === "status" || m === "decide";' in JS                    # the composer is not shown in decisions
 
 def test_the_poll_refreshes_the_list_only_when_no_confirm_is_on_its_way():
     assert 'if (mode === "decide" && openDecision === null && !(pending && pending.sent)) { loadDecisions(); }' in JS
@@ -296,7 +300,5 @@ def test_after_a_decision_the_opened_card_is_read_again_and_the_texts_name_the_d
     assert 'else if (card.action.indexOf("job_") === 0) { loadDecisions(); }' in JS
 
 
-def test_the_reason_box_is_labelled_and_emptied_for_decisions_and_the_form_does_not_submit_there():
-    assert 'message.setAttribute("aria-label", dc ? "Alasan" : "Pesan");' in JS
-    assert 'else if (m === "decide") { message.value = ""; loadDecisions(); renderDecisions(); }' in JS
+def test_the_form_does_not_submit_in_decisions():
     assert 'if (mode === "decide") { return; }\n    if (mode === "research")' in JS

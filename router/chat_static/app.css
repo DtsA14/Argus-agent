@@ -45,3 +45,4 @@ a.link{display:inline-block;margin-top:.5rem;min-height:2.75rem;line-height:2.75
 .note{font-size:.85rem;color:var(--warn);margin:.5rem 0 0}
 #slot{max-width:48rem;width:100%;margin:0 auto;padding:0 1rem;max-height:50vh;max-height:50dvh;overflow:auto}
 .report{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:.5rem 0;padding:.75rem;border:1px solid var(--line);border-radius:.75rem;max-height:60vh;overflow:auto}
+input.reason{width:100%;min-height:2.75rem;margin-top:.5rem;padding:.5rem .9rem;border-radius:1rem;border:1px solid var(--line);background:var(--card);color:inherit;font:inherit}
