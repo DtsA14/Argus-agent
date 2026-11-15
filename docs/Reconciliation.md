@@ -46,7 +46,7 @@ permukaan, bukan pilar. M4, M7, M8, capability pack dan production tetap ditunda
 
 Yang terjadi sesudah 2026-11-11 (dari `PENDING.md` dan `pilots/`, belum direkonsiliasi terhadap kode): rencana kerja dari review Fable
 (`docs/reviews/FABLE_PLAN_2026-11-11.md`); papan skor (#444); FIX-A (#446), FIX-B E2 (#448), FIX-C (#472); eksperimen repo luar tiga
-batch di boltons dan more-itertools (`pilots/outside_v0`, `outside_v1`, `outside_v2/batch3`; **vonis fase 2 belum tercatat**);
+batch di boltons dan more-itertools (`pilots/outside_v0`, `outside_v1`, `outside_v2/batch3`; **vonis fase 2: ditutup 2026-11-15, garis diganti**, bagian 7);
 `ReportConflict` MVP (#473), gerbang deteksi tes terminal (#474), verdict bisa dipalsukan TERBUKTI (#475) dan pola forger (#477);
 probe "PRD sampai staging" (`pilots/prd_probe_v0`, Stage 18 live); pengerasan verifikasi dan dua grup sandbox (#508, #509); **aplikasi
 chat** C1–C4 (`SPEC_CHAT_APP`, #533–#544) yang **menggantikan UI kontrol** di 8711 (`argus-control` dimatikan 2026-11-15).
@@ -64,7 +64,7 @@ chat** C1–C4 (`SPEC_CHAT_APP`, #533–#544) yang **menggantikan UI kontrol** d
 | M7 registry dan policy, MCP | `[ ]` | – | Seluruhnya (ADR-001, sebagian ADR-007). Kandidat: layanan approval bersama `argus apply` atau approve lewat chat (bagian 7) |
 | M8 penemuan tool, memori prosedural | `[ ]` | – | Seluruhnya (ADR-003) |
 | M9 deployment terkendali | `[~]` (staging) | `argus stage deploy\|rollback\|restart\|check\|status\|monitor\|report` (#244, #246, #249, #251, #258): hanya commit job `APPLIED` apa adanya, container tanpa jaringan/read-only/non-root di Unix socket, peer = pid container, data asli lewat snapshot allowlist, monitor 15 menit, **notifikasi ntfy** sesudah 3 gagal (#259, #260), namespace per direktori staging (#258). **Aplikasi statis** (#257, #261, #263): build tanpa jaringan di `pwa_node22`, cek artifact (A4), `sw.js` dipin, swap `current` atomik sesudah smoke kandidat, proxy `127.0.0.1:8710` GET/HEAD (Host, CSP, `no-store` untuk API, hanya `/sw.js` boleh jadi service worker), unit `systemd --user`. Dua aplikasi, pilot staging #1, upgrade #1, data asli #1, viewer #1–#2; sampai 2026-11-11 ledger Stage 17 (`max_usd`) dan viewer rilis 044 live, snapshot menerbitkan `title` | **Production** (DNS/TLS, pengguna, kredensial): ditunda (keputusan 2026-10-30, pemicu di bagian 7); smoke kandidat tidak menguji lingkungan unit systemd |
-| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web berurutan (paralel belum, PENDING), sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi 2026-11-03 sampai 2026-11-15; kini kemampuan permukaan, dibekukan sampai vonis fase 2 (bagian 0, 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
+| **`argus research`** (deep research, di luar M3–M9) | `[~]` | Planner, worker web berurutan (paralel belum, PENDING), sintesis s1, checker e1, gate G1/G2/G4; DeepSeek Search/Fetch via gateway OpenRouter (#285-#294); eval v0 `deepinfra` 8/8; `argus code --from-research` (#297). Arah resmi 2026-11-03 sampai 2026-11-15; kini kemampuan permukaan, pekerjaan baru menunggu urutan inti (bagian 0, 7) | Ambang v1: job nyata pertama (bagian 4d) lolos sesudah #307-#309 dan #311 (e1 selesai, 0 UNSUPPORTED, 17/17 SUPPORTED); baru satu pertanyaan; pipeline berhirarki (butuh M4, ADR-005) belum dibenarkan oleh bukti |
 | Capability pack (gambar, video/audio, game) | `[ ]` | – | Seluruhnya; gate non-kode ADR-006 |
 
 M4, M7, M8, dan capability pack tetap **ditunda sampai ada bukti kebutuhan** (keputusan 2026-10-21, ditegaskan 2026-10-24).
@@ -334,11 +334,20 @@ Diputuskan 2026-11-15 (Atha):
   diketik asal dan tidak berlaku (jadwal bagian 8 rencana itu ikut tidak berlaku).
 - **UI kontrol dipensiunkan**, diserap aplikasi chat (C4): chat di `127.0.0.1:8711`, `argus-control` dimatikan.
 
+- **Vonis fase 2, eksperimen repo luar (boltons, more-itertools): fase ditutup, garisnya diganti** (Atha memilih pilihan 3 dari tiga:
+  sukses, gagal menurut rubrik, ganti garis). Dicatat sebagai **"benar menurut tes, belum rapi menurut rubrik"**: tes pemelihara 6 dari 8
+  (batch 2) dan 6 dari 6 (batch 3); nilai buta batch 2 A1 B6 C1, batch 3 B semua; batch 1 dari 7 issue sah 6 A 1 C bila artefak mode
+  diabaikan, 2 A bila dihitung (`pilots/outside_v0/RESULT.md` adendum 2026-11-13 dan 2026-11-15). Bukan "sukses", bukan "gagal". Garis
+  A/B/C untuk 10 issue tidak dipakai lagi; **ukuran pengganti: persen issue yang sampai staging tanpa campur tangan Claude** (belum
+  diukur). Yang dulu menunggu vonis (antrean "PRD sampai staging", operator rantai, pekerjaan baru di jalur riset) kini menunggu urutan
+  inti di bawah.
+
 Menunggu keputusan Atha (rinci di `PENDING.md`):
-1. **Vonis fase 2** eksperimen repo luar; yang menunggunya: antrean "PRD sampai staging", operator rantai, pekerjaan baru di jalur riset.
+1. *(selesai 2026-11-15: vonis fase 2, lihat di atas)*
 2. **Aturan main arah** (usul Claude 2026-11-15): satu angka di repo, titik cek tetap untuk mengubah arah, jatah eksplorasi, log
    permintaan yang chat belum bisa.
-3. **Urutan inti** (usul Claude): vonis → kenari dan nonce → `argus apply` → antrean PRD; di permukaan: assistant atas Argus sendiri.
+3. **Urutan inti** (usul Claude): kenari dan nonce → `argus apply` → antrean PRD; di permukaan: assistant atas Argus sendiri. Menentukan
+   kapan antrean PRD, operator rantai dan pekerjaan riset baru dibuka.
 4. **"Daya saing" untuk siapa:** portofolio/karier atau produk dengan pengguna lain (mengubah kapan production dibuka).
 5. **Approve dari HP lewat chat** dan tombol staging (dulu UI kontrol fase 3 dan 4): ditahan, prioritas rendah.
 6. **Operator rantai tetap** (`argus chain`) dan **redraft otomatis (3b)**: menunggu rantai lintas repo kedua dan kasus

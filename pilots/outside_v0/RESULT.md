@@ -42,3 +42,13 @@ After the blind grading of batch 2 it turned out that every more-itertools patch
 | Batch 2, 8 jobs (`pilots/outside_v1/REPORT_FOR_FABLE.md` section 10) | A 6, B 1, C 1 if the artefact is removed (unverified by rereading) | A 1, B 6, C 1 (Opus 5.5 as graded) |
 
 The 6-of-7 reading therefore holds only if the defect is not a flaw; the defect is fixed, so patches of later runs carry no such change.
+
+## Addendum 2026-11-15: verdict (Atha)
+
+Phase 2 is **closed and its lines are retired**. Of three readings offered (success; failed by the rubric; replace the lines) Atha
+chose the third. The result is recorded as **"correct by the tests, not yet tidy by the rubric"**: maintainer tests resolved 6 of 8
+(batch 2) and 6 of 6 (batch 3), while the blind grades are almost all B (batch 2 A 1, B 6, C 1; batch 3 all B), and batch 1 is 6 A of
+7 valid or 2 A, depending on the file-mode artefact (table above). This is **neither "success" nor "kill"**: the lines were
+pre-registered for 10 issues, were met on one count and missed on the other in batch 1, and were never applied to batches 2 and 3.
+The measure that replaces them, from the direction of 2026-11-15, is the share of issues that reach staging without Claude stepping
+in (not measured yet; `PENDING.md`). Nothing waits on this verdict any more.

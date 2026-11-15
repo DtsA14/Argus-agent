@@ -6,7 +6,7 @@ yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-15
 (salinan utuh sampai 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
 [`PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-15 (arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
+Terakhir diperbarui: 2026-11-15 (vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
 terbuka dibawa ke sini atau dicatat di bagian "Diarsipkan 2026-11-15"). Butir di bawah yang menyebut "arsip" punya rincian lengkap di
 arsip 2026-11-15.
 
@@ -28,6 +28,14 @@ terbukti, biayanya terkunci."**
   di `docs/reviews/FABLE_PLAN_2026-11-11.md` diketik asal dan tidak berlaku; jadwal di bagian 8 rencana itu ikut tidak berlaku,
   urutan dan syarat buka ulangnya (bagian 2 dan 4) tetap.
 
+- **Vonis fase 2, eksperimen repo luar (Atha, 2026-11-15): fase ditutup, garisnya diganti.** Hasilnya dicatat sebagai **"benar
+  menurut tes, belum rapi menurut rubrik"**: tes pemelihara lolos 6 dari 8 (batch 2) dan 6 dari 6 (batch 3), tetapi nilai buta
+  hampir semuanya B (batch 2 A1 B6 C1, batch 3 B semua); batch 1 dari 7 issue yang sah 6 A dan 1 C bila artefak mode diabaikan, 2 A
+  bila dihitung (`pilots/outside_v0/RESULT.md`, `pilots/outside_v1/`, `pilots/outside_v2/batch3/RESULTS.md`). Ini **bukan vonis
+  "sukses"** dan bukan "gagal": garis A/B/C untuk 10 issue (gagal ≤ 2 A, sukses ≥ 5) tidak dipakai lagi. **Ukuran penggantinya:**
+  persen issue yang sampai staging tanpa campur tangan Claude (belum ada di papan skor, lihat "Ukuran"). Tidak ada butir yang
+  menunggu vonis ini lagi; yang dulu menunggunya kini mengikuti urutan inti.
+
 Cara menilai butir baru: apakah ia membuat kerja lebih terbukti, biaya lebih terkunci, atau Argus lebih bisa ditinggal? Bila tidak,
 ia masuk "Ditunda sampai ada bukti kebutuhan".
 
@@ -39,7 +47,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 | Jalur kode, issue sampai staging (M6, M9 staging) | `[x]` MVP | repo Argus, sympy (SWE), `argus-ledger`, `argus-viewer`; dua aplikasi di staging |
 | **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; verdict masih bisa dipalsukan (VF O1 belum ada) |
 | Permukaan: chat | `[~]` | C1–C4 live di 8711 (Issue, Riset, Keputusan, Status); C5 terbuka |
-| Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset dibekukan; lainnya belum dimulai |
+| Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset: pekerjaan baru menunggu urutan inti; lainnya belum dimulai |
 | M5 observability | `[~]` | ledger, inspektor, papan skor; belum: angka "tanpa campur tangan Claude", eval set tidak jenuh |
 | M4, M7, M8, capability pack, production | `[ ]` | ditunda sampai ada bukti kebutuhan |
 
@@ -59,17 +67,13 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ### Keputusan Atha yang ditunggu
 
-- [ ] **Vonis fase 2 (eksperimen repo luar) belum tercatat.** Garis yang didaftarkan sebelum batch 1: gagal bila ≤ 2 A dari 10,
-  sukses bila ≥ 5, 3–4 = batch kedua. Batch 1 (`pilots/outside_v0/RESULT.md`): dari 7 issue yang sah 6 A dan 1 C apa adanya, atau 2 A
-  bila artefak mode dihitung (tepat di garis gagal). Batch 2 (`pilots/outside_v1/`): nilai buta A1 B6 C1, tes pemelihara 6 dari 8.
-  Batch 3 (`pilots/outside_v2/batch3/RESULTS.md`): tes pemelihara 6 dari 6, nilai buta dua model B semua. Garis itu tidak diterapkan
-  pada batch 2 dan 3 (8 job). Yang menunggu vonis ini: antrean PRD, operator rantai, pekerjaan baru di jalur riset.
 - [ ] **Aturan main arah** (usul Claude 2026-11-15, belum diputuskan): (1) satu kalimat tujuan dan satu angka di repo, angkanya persen
   issue yang sampai staging tanpa campur tangan Claude; (2) arah hanya diubah di titik cek tetap (usul: tiap empat minggu), ide di
   antaranya masuk parkiran; (3) jatah eksplorasi tetap untuk permukaan (dulu diusulkan 1 dari 4 jam; perlu dihitung ulang dengan
   waktu kerja yang benar); (4) log permintaan yang chat belum bisa, dan kemampuan berikutnya dipilih dari log itu di titik cek.
-- [ ] **Urutan inti** (usul Claude 2026-11-15, belum diputuskan): vonis fase 2 → VF O1 kenari dan nonce → `argus apply` → antrean
-  PRD; di permukaan: assistant atas Argus sendiri (lapis 1).
+- [ ] **Urutan inti** (usul Claude 2026-11-15, belum diputuskan): VF O1 kenari dan nonce → `argus apply` → antrean PRD; di
+  permukaan: assistant atas Argus sendiri (lapis 1). Sejak fase 2 ditutup, urutan ini yang menentukan kapan antrean PRD, operator
+  rantai dan pekerjaan baru di jalur riset dibuka; sampai diputuskan, ketiganya tidak dimulai.
 - [ ] **"Daya saing" untuk siapa:** portofolio/karier (bukti dan angka cukup) atau produk dengan pengguna lain (production dan
   pengguna kedua naik dari parkiran). Mengubah prioritas, belum dijawab.
 - [ ] **GATE-10** (tidak darurat, 2026-11-14): P1 memindai tes yang ditulis agen sendiri dengan pola deteksi, sehingga tes jujur yang
@@ -105,6 +109,9 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
     positive `NODE_ENV: 'test'` di config; tes draf memasang `history.state` `{}`, bukan `null` seperti browser
 - [ ] **Stage mutan di job kode** (Atha 2026-11-11: "yang bikin mutant kalo nanti Argus lu lepas siapa?"): model memilih 5–15 mutan
   untuk baris yang diubah, harness menjalankannya di sandbox dan melaporkan yang lolos sebelum applied. Jalur ketat, belum dimulai.
+- [ ] **Mutu patch: dari B ke A** (temuan fase 2: benar menurut tes, belum bisa di-merge tanpa dirapikan). Yang membuat B menurut
+  catatan batch: letak tes (semua patch batch 3 menaruh tes di berkas baru; APPEND-TESTS #506 dan INSERT-INTO #514 sudah ter-merge,
+  diukur pada data batch 3 di `pilots/outside_v2/batch3/` (`APPEND_MEASUREMENT`, `INTO_CLASS_MEASUREMENT`), belum pada batch baru), mode berkas (diperbaiki #482), pembungkus exception. Belum ada batch sesudah perbaikan itu.
 - [ ] **Mutu drafter dan agen** (kandidat, dari batch SWE dan repo luar): tes lama yang diubah drafter otomatis wajib (`22456` d1);
   drafter mencari titik nilai salah pertama kali muncul (`20428`); gerbang writable lebar vs regresi sempit; over-spesifikasi di tes
   drafter (3 dari 8, pembacaan buta); DROP-OLD-REQUIRED (`SPEC_DROP_OLD_REQUIRED.md` bagian 5, sengaja dibiarkan terbuka); baris
@@ -121,7 +128,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
   di-deploy (kasus viewer 021). Jalur ketat; membuka layanan approval di kode (ADR-007).
 - [ ] **Arah "PRD sampai staging"** (Atha 2026-11-12): tahap PRD (obrolan menghasilkan `PRD.md` + daftar issue berurutan, di-approve
   sekali dengan sha), antrean berurutan (issue berikutnya jalan setelah yang sebelumnya `APPLIED`), `argus apply`. Probe manual
-  selesai dan live 2026-11-12 (`pilots/prd_probe_v0/`, `GLUE_LOG.md`). **Tidak dibangun sebelum vonis fase 2.**
+  selesai dan live 2026-11-12 (`pilots/prd_probe_v0/`, `GLUE_LOG.md`). Dulu menunggu vonis fase 2; kini menunggu urutan inti (usul: sesudah kenari dan nonce dan `argus apply`, karena tanpa keduanya antrean tetap butuh Claude di tengah).
 - [ ] **`argus fix <job>`** dari temuan yang dibekukan (kandidat; satu kali per job, agen boleh lapor "terjepit tes lama"); **redraft
   otomatis (3b)** sekali per job bila d1 `submits_exhausted` (ditunda Atha 2026-11-11 sampai kasusnya muncul lagi). Jalur ketat.
 - [ ] **Operator rantai tetap** (`argus chain`: T1 → apply → S → T2): tunggu rantai lintas repo kedua dengan pola perekat yang sama.
@@ -171,7 +178,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ### Permukaan: kemampuan lain (satu per satu, hanya dengan gerbang)
 
-- [~] **Riset (`argus research`): dibekukan** sampai vonis fase 2; tetap tersedia sebagai mode di chat (C3) dan sebagai tahap opsional
+- [~] **Riset (`argus research`): pekerjaan baru tidak dimulai** sampai urutan inti diputuskan (dulu: dibekukan sampai vonis fase 2); tetap tersedia sebagai mode di chat (C3) dan sebagai tahap opsional
   untuk kode (`--from-research`). Yang terbuka saat dibuka lagi:
   - [ ] kebenaran faktual ("7/8 benar") belum dinilai terhadap sumber independen; **eval riset independen** (set pertanyaan beku
     dengan cek fakta independen; `SUPPORTED` hanya berarti kutipannya ada)
