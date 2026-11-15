@@ -200,6 +200,12 @@ def main(argv=None, deps=None):
     qc = qsub.add_parser("close", help="close a stuck queue; no job is touched")
     qc.add_argument("queue")
     qc.add_argument("--note", required=True)
+    pp = sub.add_parser("prd", help="a PRD folder (PRD.md, issues.json, issue-<n>.md) checked against the data paths that pass through Argus, then approved once (docs/reviews/SPEC_PRD_STAGE.md)")
+    psub = pp.add_subparsers(dest="prd_cmd", required=True)
+    psub.add_parser("check", help="read only, no model, no money: BLOCK and WARN findings and the folder's sha").add_argument("dir")
+    pa = psub.add_parser("approve", help="the same check on the same bytes, then a PENDING queue (the money is still `queue go`)")
+    pa.add_argument("dir")
+    pa.add_argument("--sha", required=True, help="the folder's sha as `prd check` prints it (12+ hex)")
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user); retired at C4b by `chat serve --port 8711`, code removed at C5")
@@ -368,6 +374,17 @@ def main(argv=None, deps=None):
                 job = ri.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0 if job.data["state"] == ri.AWAITING_HUMAN else 1
+        elif o.cmd == "prd":
+            from router import prd as rp
+            if o.prd_cmd == "check":
+                text, ok = rp.report(o.dir, cfg=cfg, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir)
+                print(text)
+                return 0 if ok else 1
+            from router import queue as rq
+            q = rp.approve(o.dir, o.sha, cfg=cfg, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir)
+            print(f"queue {q['id']} PENDING: {len(q['items'])} issues on {q['name']}, up to ${q['max_usd']:.2f}, from the PRD {q['prd']['sha'][:12]}\n"
+                  f"approve the list and the money: argus queue go {q['id']} --sha {rq.list_sha(q)[:12]}")
+            return 0
         elif o.cmd == "queue":
             from router import queue as rq
             if o.queue_cmd == "new":
