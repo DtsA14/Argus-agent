@@ -6,7 +6,7 @@ yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-15
 (salinan utuh sampai 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
 [`PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-15 (vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
+Terakhir diperbarui: 2026-11-15 (tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
 terbuka dibawa ke sini atau dicatat di bagian "Diarsipkan 2026-11-15"). Butir di bawah yang menyebut "arsip" punya rincian lengkap di
 arsip 2026-11-15.
 
@@ -36,6 +36,19 @@ terbukti, biayanya terkunci."**
   persen issue yang sampai staging tanpa campur tangan Claude (belum ada di papan skor, lihat "Ukuran"). Tidak ada butir yang
   menunggu vonis ini lagi; yang dulu menunggunya kini mengikuti urutan inti.
 
+- **Urutan inti (Atha, 2026-11-15: "Terima urutan"):** VF O1 kenari dan nonce → `argus apply` → antrean PRD; di permukaan: assistant
+  atas Argus sendiri (lapis 1). Antrean PRD dibuka sesudah kenari, nonce dan `argus apply` ada. Operator rantai dan pekerjaan baru di
+  jalur riset tidak ada di urutan ini, jadi tetap tidak dimulai; dibahas lagi paling cepat di titik cek.
+- **Aturan main arah (Atha, 2026-11-15: "2 minggu, 1 hari"):**
+  1. Satu angka di repo: **persen issue yang sampai staging tanpa campur tangan Claude** (belum diukur, lihat "Ukuran").
+  2. Arah hanya diubah di **titik cek tetap, tiap 2 minggu; yang pertama 2026-11-29**. Ide arah atau kemampuan baru di antaranya
+     dicatat di "Parkiran sampai titik cek" di bawah, tidak langsung dikerjakan.
+  3. Jatah eksplorasi permukaan: **1 hari per minggu**; sisanya inti (dihitung dengan waktu kerja kurang lebih 8 jam per hari).
+  4. Permintaan yang chat belum bisa dicatat di "Log permintaan yang chat belum bisa" di bawah; kemampuan permukaan berikutnya
+     dipilih dari log itu di titik cek.
+- **"Daya saing" untuk siapa (Atha, 2026-11-15: "Portofolio/karier"):** bukti dan angka cukup; production dan pengguna kedua tetap di
+  "Ditunda sampai ada bukti kebutuhan". Bisa dibuka lagi di titik cek.
+
 Cara menilai butir baru: apakah ia membuat kerja lebih terbukti, biaya lebih terkunci, atau Argus lebih bisa ditinggal? Bila tidak,
 ia masuk "Ditunda sampai ada bukti kebutuhan".
 
@@ -47,7 +60,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 | Jalur kode, issue sampai staging (M6, M9 staging) | `[x]` MVP | repo Argus, sympy (SWE), `argus-ledger`, `argus-viewer`; dua aplikasi di staging |
 | **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; verdict masih bisa dipalsukan (VF O1 belum ada) |
 | Permukaan: chat | `[~]` | C1–C4 live di 8711 (Issue, Riset, Keputusan, Status); C5 terbuka |
-| Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset: pekerjaan baru menunggu urutan inti; lainnya belum dimulai |
+| Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset: pekerjaan baru tidak dimulai (di luar urutan inti); lainnya belum dimulai |
 | M5 observability | `[~]` | ledger, inspektor, papan skor; belum: angka "tanpa campur tangan Claude", eval set tidak jenuh |
 | M4, M7, M8, capability pack, production | `[ ]` | ditunda sampai ada bukti kebutuhan |
 
@@ -67,15 +80,6 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ### Keputusan Atha yang ditunggu
 
-- [ ] **Aturan main arah** (usul Claude 2026-11-15, belum diputuskan): (1) satu kalimat tujuan dan satu angka di repo, angkanya persen
-  issue yang sampai staging tanpa campur tangan Claude; (2) arah hanya diubah di titik cek tetap (usul: tiap empat minggu), ide di
-  antaranya masuk parkiran; (3) jatah eksplorasi tetap untuk permukaan (dulu diusulkan 1 dari 4 jam; perlu dihitung ulang dengan
-  waktu kerja yang benar); (4) log permintaan yang chat belum bisa, dan kemampuan berikutnya dipilih dari log itu di titik cek.
-- [ ] **Urutan inti** (usul Claude 2026-11-15, belum diputuskan): VF O1 kenari dan nonce → `argus apply` → antrean PRD; di
-  permukaan: assistant atas Argus sendiri (lapis 1). Sejak fase 2 ditutup, urutan ini yang menentukan kapan antrean PRD, operator
-  rantai dan pekerjaan baru di jalur riset dibuka; sampai diputuskan, ketiganya tidak dimulai.
-- [ ] **"Daya saing" untuk siapa:** portofolio/karier (bukti dan angka cukup) atau produk dengan pengguna lain (production dan
-  pengguna kedua naik dari parkiran). Mengubah prioritas, belum dijawab.
 - [ ] **GATE-10** (tidak darurat, 2026-11-14): P1 memindai tes yang ditulis agen sendiri dengan pola deteksi, sehingga tes jujur yang
   menyebut `sys.modules` dan `pytest` berakhir `FAILED_ACCEPTANCE` tanpa retry. Usul Opus: persempit sedikit (sekitar 15 baris,
   jalur ketat). Risiko kecil; ditunda (arsip, butir "Fase 3 dan batch kedua").
@@ -128,7 +132,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
   di-deploy (kasus viewer 021). Jalur ketat; membuka layanan approval di kode (ADR-007).
 - [ ] **Arah "PRD sampai staging"** (Atha 2026-11-12): tahap PRD (obrolan menghasilkan `PRD.md` + daftar issue berurutan, di-approve
   sekali dengan sha), antrean berurutan (issue berikutnya jalan setelah yang sebelumnya `APPLIED`), `argus apply`. Probe manual
-  selesai dan live 2026-11-12 (`pilots/prd_probe_v0/`, `GLUE_LOG.md`). Dulu menunggu vonis fase 2; kini menunggu urutan inti (usul: sesudah kenari dan nonce dan `argus apply`, karena tanpa keduanya antrean tetap butuh Claude di tengah).
+  selesai dan live 2026-11-12 (`pilots/prd_probe_v0/`, `GLUE_LOG.md`). Urutan inti diterima Atha 2026-11-15: dibuka sesudah kenari dan nonce dan `argus apply`, karena tanpa keduanya antrean tetap butuh Claude di tengah.
 - [ ] **`argus fix <job>`** dari temuan yang dibekukan (kandidat; satu kali per job, agen boleh lapor "terjepit tes lama"); **redraft
   otomatis (3b)** sekali per job bila d1 `submits_exhausted` (ditunda Atha 2026-11-11 sampai kasusnya muncul lagi). Jalur ketat.
 - [ ] **Operator rantai tetap** (`argus chain`: T1 → apply → S → T2): tunggu rantai lintas repo kedua dengan pola perekat yang sama.
@@ -178,7 +182,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ### Permukaan: kemampuan lain (satu per satu, hanya dengan gerbang)
 
-- [~] **Riset (`argus research`): pekerjaan baru tidak dimulai** sampai urutan inti diputuskan (dulu: dibekukan sampai vonis fase 2); tetap tersedia sebagai mode di chat (C3) dan sebagai tahap opsional
+- [~] **Riset (`argus research`): pekerjaan baru tidak dimulai** (tidak ada di urutan inti yang diterima Atha 2026-11-15; dibahas lagi paling cepat di titik cek 2026-11-29); tetap tersedia sebagai mode di chat (C3) dan sebagai tahap opsional
   untuk kode (`--from-research`). Yang terbuka saat dibuka lagi:
   - [ ] kebenaran faktual ("7/8 benar") belum dinilai terhadap sumber independen; **eval riset independen** (set pertanyaan beku
     dengan cek fakta independen; `SUPPORTED` hanya berarti kutipannya ada)
@@ -194,6 +198,20 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
   (pembungkus ringan riset); email dan kalender hanya-baca dengan draf balasan, tanpa mengirim. Tindakan berefek ke luar (kirim pesan,
   deploy production, transaksi, hapus data) selalu butuh persetujuan manusia (keputusan 2026-11-03) dan butuh memori, policy dan
   approval di kode (M8, M7, ADR-007) lebih dulu.
+
+## Parkiran sampai titik cek (berikutnya: 2026-11-29)
+
+Ide arah atau kemampuan baru yang muncul di antara titik cek: tanggal, kata-kata Atha, tempatnya terhadap arah. Tidak dikerjakan
+sebelum titik cek, kecuali Atha berkata ia mengganti pekerjaan yang sedang berjalan.
+
+- (kosong)
+
+## Log permintaan yang chat belum bisa
+
+Satu baris per permintaan: tanggal, apa yang diminta, kenapa chat belum bisa. Kemampuan permukaan berikutnya dipilih dari sini di
+titik cek.
+
+- (kosong)
 
 ## Pekerjaan operasional (Atha, di luar repo)
 
