@@ -102,3 +102,20 @@ def test_the_cli_takes_via_and_job_id(tmp_path, capsys):
     assert rc == 0 and created(rj.open_job(GOOD, env.jobs))["via"] == "ui"
     with pytest.raises(SystemExit):
         argus.main(["--jobs-dir", str(env.jobs), "research", "--question", t.QUESTION, "--via", "web"], deps=env.deps)
+
+
+def test_issue_new_also_refuses_a_job_that_appeared_after_the_first_check(tmp_path, monkeypatch):
+    import json as _json
+
+    import test_issue_writer as w
+    env = w.Env(tmp_path, [])
+    real = rj.Job.lock
+
+    def lock(self):
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.file.write_text(_json.dumps({"job": self.dir.name, "kind": "issue", "state": "ABANDONED", "log": []}))
+        return real(self)
+    monkeypatch.setattr(rj.Job, "lock", lock)
+    with pytest.raises(rj.Refused, match="already exists"):
+        env.new()
+    assert _json.loads((env.jobs / "ji" / "job.json").read_text())["state"] == "ABANDONED"

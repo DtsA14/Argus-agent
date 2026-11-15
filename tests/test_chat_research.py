@@ -272,6 +272,20 @@ def test_the_audit_is_a_net_when_the_cli_lost_the_via_field(svc):
     assert svc.actions.exposure() == pytest.approx(1.0)
 
 
+def test_an_old_audit_line_is_not_counted(svc):
+    svc.confirm(prep(svc)[1]["token"])
+    svc.actions.pending.clear()
+    svc.clock.t += 25 * 3600
+    assert svc.actions.exposure() == 0
+
+
+def test_an_audit_line_of_another_action_or_a_failed_confirm_is_not_counted(svc):
+    svc.actions.audit(action="issue_new", ok="confirm", job="j20261115_221000_beef")
+    svc.actions.audit(action="research_new", attempt="confirm", job="j20261115_221000_beef")
+    svc.actions.audit(action="research_new", refused="cap", job="j20261115_221000_beef")
+    assert svc.actions.exposure() == 0
+
+
 def test_an_audit_that_cannot_be_read_is_an_unknown_exposure(svc):
     svc.confirm(prep(svc)[1]["token"])
     svc.actions.audit_path.unlink()
