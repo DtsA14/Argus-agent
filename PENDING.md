@@ -245,6 +245,9 @@ sebelum titik cek, kecuali Atha berkata ia mengganti pekerjaan yang sedang berja
   mengecek image, menjalankan tes baseline di sandbox dan melaporkan yang gagal di-import. Latar: `athena_py312` dibuat dengan tangan dalam sekitar 10 langkah (resolve, tanggal PyPI, unduh, hash, build, cek, baseline; dua dependensi tersembunyi, `yfinance` dan `tzdata`, baru
   ketahuan dari baseline). Tempatnya terhadap arah: membuat "bisa ditinggal" berlaku untuk repo luar tanpa melonggarkan sandbox tanpa jaringan dan pin berhash (dua pilihan lain, satu image gemuk dan install saat job jalan, ditolak). Bukan pengganti pekerjaan berjalan; dibahas
   di titik cek 2026-11-29 dengan angka pembanding (waktu membuat `ledger_py312` dan `athena_py312` dengan tangan).
+- **Gerbang lint, type-check dan impor-bersih per repo** (Atha 2026-11-15, dari video pendek "tiap agent push kode ada lima hal yang dicek": lint, type-check, test, build tanpa DB dan env, schema = migration): Argus sudah punya cek 3 (tes, lebih ketat) dan sebagian cek 4 (sandbox tanpa jaringan dan tanpa kredensial), tidak punya cek 1 dan 2 (grep kode: nol `ruff`, `mypy`, `eslint`, `tsc` di gerbang),
+  cek 5 tidak relevan (tidak ada repo dengan DB). Usulan: gerbang yang menolak, tanpa model, opt-in lewat konfigurasi repo (`ruff`, `mypy`, `eslint` hanya bila repo punya konfigurasinya; athena dan ledger belum), plus "impor modul utama dengan environment kosong" untuk cek 4.
+  `docs/reviews/ACCEPTANCE_GENERAL.md:56` sudah memperbolehkan "tes, build, lint, atau skrip cek" sebagai perintah validasi di kontrak, tetapi drafter hanya menulis pytest dan vitest. Tempatnya terhadap arah: inti ("kerja terbukti"). Dibahas di titik cek 2026-11-29 bersama `argus env init` (keduanya: repo luar tanpa kerja tangan).
 
 ## Log permintaan yang chat belum bisa
 
