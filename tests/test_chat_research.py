@@ -273,16 +273,19 @@ def test_the_audit_is_a_net_when_the_cli_lost_the_via_field(svc):
 
 
 def test_an_old_audit_line_is_not_counted(svc):
-    svc.confirm(prep(svc)[1]["token"])
+    st, d = svc.confirm(prep(svc)[1]["token"])
     svc.actions.pending.clear()
+    make_research(svc.jobs, d["job"], via=None, created=t.NOW)          # the directory exists, without via: only the audit could count it
     svc.clock.t += 25 * 3600
     assert svc.actions.exposure() == 0
 
 
 def test_an_audit_line_of_another_action_or_a_failed_confirm_is_not_counted(svc):
-    svc.actions.audit(action="issue_new", ok="confirm", job="j20261115_221000_beef")
-    svc.actions.audit(action="research_new", attempt="confirm", job="j20261115_221000_beef")
-    svc.actions.audit(action="research_new", refused="cap", job="j20261115_221000_beef")
+    job = "j20261115_221000_beef"
+    make_research(svc.jobs, job, via=None)                               # a directory that exists, whose audit lines are not research confirms
+    svc.actions.audit(action="issue_new", ok="confirm", job=job)
+    svc.actions.audit(action="research_new", attempt="confirm", job=job)
+    svc.actions.audit(action="research_new", refused="cap", job=job)
     assert svc.actions.exposure() == 0
 
 
