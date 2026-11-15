@@ -482,24 +482,24 @@ def test_the_research_routes_answer_get_only_and_the_gates_still_apply(svc):
     assert svc.request("GET", "/api/research", host="evil.test:8712")[0] == 421
 
 
-@pytest.mark.parametrize("only, on", [("research_job", True), ("issue_writer", True), ("chat", False)])
-def test_the_service_has_actions_when_the_config_has_a_research_job_or_an_issue_writer(tmp_path, monkeypatch, only, on):
+@pytest.mark.parametrize("only", ["research_job", "issue_writer", "chat", None])
+def test_the_service_always_has_actions_so_reject_and_abandon_need_no_config(tmp_path, monkeypatch, only):
     from router import chat as rc
     got = {}
 
     class Stop(Exception):
         pass
 
-    def fake_server(chat, port=rc.PORT):
+    def fake_server(chat, port=rc.PORT, public=rc.PORT):
         got["actions"] = chat.actions
         raise Stop
 
     monkeypatch.setattr(rc, "server", fake_server)
     monkeypatch.setattr(ca, "STATE", tmp_path / "state")
-    cfg = {only: copy.deepcopy(BASE.get(only) or {"x": 1})}
+    cfg = None if only is None else {only: copy.deepcopy(BASE.get(only) or {"x": 1})}
     with pytest.raises(Stop):
         rc.serve(tmp_path, cfg)
-    assert (got["actions"] is not None) is on
+    assert got["actions"] is not None
 
 
 # ---- Opus code review of C3 (2026-11-15) ---------------------------------------------------------------------------------------

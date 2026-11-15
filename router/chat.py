@@ -23,10 +23,11 @@ from router import stage_data as sd
 from router.chat_actions import AUDIT_STR, Refusal, strict_json
 
 BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while the chat is built, 8711 at C4 (one value)
+PORTS = (8711, 8712)                              # SPEC_CHAT_APP 13.4: 8712 while the chat is built, 8711 after C4b; nothing else
 HOSTS = (f"{BIND}:{PORT}",)
 ORIGINS = (f"http://{BIND}:{PORT}",)                  # the one origin a POST may come from (11.2)
 POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm"}   # the only POST routes; any other POST is a 405
-PARAMS = {"repo", "message", "job", "reason"}
+PARAMS = {"repo", "message", "job", "reason", "sha"}
 BODY_MAX = 16 * 1024                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
@@ -43,21 +44,34 @@ STATIC_SHA256 = {
 }
 
 
+def names_for(port):
+    """The host names the chat answers to on a port (13.4): 127.0.0.1 always; `localhost` too on 8711 only, because the viewer's
+    Decide link is http://localhost:8711/jobs/<id> (control answers to both today)."""
+    if port not in PORTS:
+        raise ValueError(f"the chat serves on {PORTS} only, not {port}")
+    return (BIND, "localhost") if port == 8711 else (BIND,)
+
+
 def csp(port=PORT):
-    return ("default-src 'none'; script-src http://127.0.0.1:%d/static/app.js; style-src 'self'; connect-src 'self'; "
+    script = " ".join(f"http://{n}:{port}/static/app.js" for n in names_for(port))
+    return (f"default-src 'none'; script-src {script}; style-src 'self'; connect-src 'self'; "
             "img-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; worker-src 'none'; "
-            "require-trusted-types-for 'script'; trusted-types 'none'" % port)
+            "require-trusted-types-for 'script'; trusted-types 'none'")
 
 
-HEADERS = {
-    "Content-Security-Policy": csp(),
-    "X-Frame-Options": "DENY",
-    "Referrer-Policy": "same-origin",
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff",
-    "Cross-Origin-Resource-Policy": "same-origin",
-    "Cross-Origin-Opener-Policy": "same-origin",
-}
+def headers_for(port=PORT):
+    return {
+        "Content-Security-Policy": csp(port),
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "same-origin",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Cross-Origin-Opener-Policy": "same-origin",
+    }
+
+
+HEADERS = headers_for()
 
 
 def load_static():
@@ -168,6 +182,7 @@ class Handler(BaseHTTPRequestHandler):
     timeout = 10
     sys_version = ""
     chat = None
+    hosts, origins, hdrs = HOSTS, ORIGINS, HEADERS          # bound per port by server() (13.4), never module state at request time
 
     def setup(self):
         super().setup()
@@ -188,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
         raise AttributeError(name)
 
     def end_headers(self):
-        for k, v in HEADERS.items():
+        for k, v in self.hdrs.items():
             self.send_header(k, v)
         super().end_headers()
 
@@ -212,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
         """Exactly one Host header, and it is ours (SPEC_PWA_VIEWER A: two Host headers are a 421): the first of two must
         not stand in for the second, which a proxy or a rebinding page may have chosen."""
         hosts = self.headers.get_all("Host") or []
-        return len(hosts) == 1 and hosts[0] in HOSTS
+        return len(hosts) == 1 and hosts[0] in self.hosts
 
     def do_GET(self):
         if not self._host_ok():                              # every method, every route (11.1): reads are private too
@@ -224,6 +239,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._refuse(403, "not a request of the chat's own page")
             return self._api(path)
         names = {"/": "index.html", "/static/app.js": "app.js", "/static/app.css": "app.css"}
+        if UI_ID.fullmatch(path[len("/jobs/"):]) and path.startswith("/jobs/"):
+            path = "/"                                       # the Decide link of the viewer (13.3): the same shell, no disk read
         if path in names:
             return self._send(200, self.chat.static[names[path]], STATIC_TYPES[names[path]])
         return self._refuse(404, "not found")
@@ -235,6 +252,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/issues/([^/?#%]+)", path)
         if a is not None and m:
             got = a.thread(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        if a is not None and path == "/api/decisions":
+            return self._json(200, a.decisions())
+        m = re.fullmatch(r"/api/decisions/([^/?#%]+)", path)
+        if a is not None and m:
+            got = a.decision(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if a is not None and path == "/api/research":
             return self._json(200, a.research_list())
@@ -286,7 +309,7 @@ class Handler(BaseHTTPRequestHandler):
         """The gates in order (11.1, 11.10, 11.14); the body is read only after the cheap ones passed."""
         if not self._host_ok():
             raise Refusal(421, "host", "wrong host")
-        if self.headers.get("Origin") not in ORIGINS or len(self.headers.get_all("Origin") or []) != 1:
+        if self.headers.get("Origin") not in self.origins or len(self.headers.get_all("Origin") or []) != 1:
             raise Refusal(403, "origin", "this request did not come from the chat's own page")
         sites = self.headers.get_all("Sec-Fetch-Site") or []
         if len(sites) > 1 or (sites and sites[0] not in ("same-origin", "none")):
@@ -314,6 +337,8 @@ class Handler(BaseHTTPRequestHandler):
         if set(params) - PARAMS or any(not isinstance(v, str) for v in params.values()):
             raise Refusal(400, "form", "unknown or non-text fields")
         rec.update(action=action if isinstance(action, str) else None, job=params.get("job") or None)
+        if "sha" in params:
+            rec["sha"] = params["sha"]
         out, digest = a.prepare(action, params)
         if not self._audit(a, **rec, ok="prepare", digest=digest):
             a.prepared.pop(out["token"], None)             # a token that was never given out is not kept either
@@ -325,9 +350,16 @@ class Handler(BaseHTTPRequestHandler):
             raise Refusal(400, "form", "a confirm carries the token and nothing else")
         action, card, rp, digest = a.confirm(body["token"])
         rec.update(action=action, job=card.get("job"), digest=digest)
+        if card.get("sha12"):
+            rec["sha"] = card["sha12"]
         if not self._audit(a, **rec, attempt="confirm"):
             raise Refusal(503, "audit", "the audit could not be written: nothing was run")
-        out = a.execute(action, card, rp)
+        a.last_exit = None
+        try:
+            out = a.execute(action, card, rp)
+        finally:
+            if a.last_exit is not None:
+                rec["exit"] = a.last_exit
         rec["executed"] = True
         self._audit(a, **{**rec, "ok": "confirm", "job": out.get("job")})
         self._json(200, out)
@@ -343,20 +375,21 @@ class Handler(BaseHTTPRequestHandler):
 
 
 
-def server(chat, port=PORT):
-    handler = type("Bound", (Handler,), {"chat": chat})
+def server(chat, port=PORT, public=PORT):
+    """port: where to bind (0 in tests); public: the port the chat is known by (13.4), which decides Host, Origin and the CSP."""
+    hosts = tuple(f"{n}:{public}" for n in names_for(public))
+    handler = type("Bound", (Handler,), {"chat": chat, "hosts": hosts, "origins": tuple(f"http://{h}" for h in hosts),
+                                         "hdrs": headers_for(public)})
     return HTTPServer((BIND, port), handler)
 
 
-def serve(jobs_dir, cfg=None, config_path=None, load=None):
+def serve(jobs_dir, cfg=None, config_path=None, load=None, port=PORT):
     """cfg: the config at start, only to decide whether the issue writer's actions are on; they read the config again for every
     prepare and confirm (load, or the file of config_path), so a card shows what the CLI will read. A config that cannot be
     read at start leaves the chat read only (C1), it does not stop it."""
-    actions = None
-    if cfg is not None and (cfg.get("issue_writer") or cfg.get("research_job")):
-        from router.chat_actions import Actions
-        actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path)
+    from router.chat_actions import Actions
+    actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path)   # always (13.7 item 5): reject and abandon need no config
     chat = Chat(jobs_dir, actions=actions)
-    srv = server(chat)
-    print(f"argus chat on http://{BIND}:{PORT} (jobs {jobs_dir})", flush=True)
+    srv = server(chat, port=port, public=port)
+    print(f"argus chat on http://{BIND}:{port} (jobs {jobs_dir})", flush=True)
     srv.serve_forever()

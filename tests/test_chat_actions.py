@@ -83,8 +83,11 @@ class Service:
         self.spawner = FakeSpawner(tmp / "state")
         self.runs = []
 
-        def fake_run(action, job_id, reason):
+        self.shas = []
+
+        def fake_run(action, job_id, reason, sha=None):
             self.runs.append((action, job_id, reason))
+            self.shas.append(sha)
             return (run or (lambda *a: (0, "ok")))(action, job_id, reason)
         self.actions = ca.Actions(self.jobs, cfg, state=tmp / "state", clock=self.clock,
                                   environ={ca.WRITER_KEY_ENV: WKEY, ca.KEY_ENV: KEY} if environ is None else environ,

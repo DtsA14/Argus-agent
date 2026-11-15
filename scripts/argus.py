@@ -180,8 +180,10 @@ def main(argv=None, deps=None):
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user)")
     ch = sub.add_parser("chat", help="the phone's chat app, read only in C1 (docs/reviews/SPEC_CHAT_APP.md)")
-    ch.add_subparsers(dest="chat_cmd", required=True).add_parser(
-        "serve", help="the jobs' state and cost as a chat page, forever, on 127.0.0.1:8712 only (systemd --user)")
+    chs = ch.add_subparsers(dest="chat_cmd", required=True).add_parser(
+        "serve", help="the jobs' state and cost as a chat page, forever, on 127.0.0.1:8712 (8711 after C4b) only (systemd --user)")
+    chs.add_argument("--port", type=int, choices=(8711, 8712), default=8712,
+                     help="8712 while the chat is built; 8711 once it replaced the control service (SPEC_CHAT_APP 13)")
     rs = sub.add_parser("research", help="a deep research job: planner, web workers, synthesis, claim checker (docs/reviews/SPEC_RESEARCH_JOB.md)")
     gq = rs.add_mutually_exclusive_group(required=True)
     gq.add_argument("--question")
@@ -215,7 +217,7 @@ def main(argv=None, deps=None):
         except (OSError, ValueError) as e:             # the config cannot be read: the chat still serves the jobs, read only
             print(f"argus chat: the config cannot be read ({type(e).__name__}); read only", file=sys.stderr, flush=True)
             cfg = None
-        rchat.serve(Path(o.jobs_dir), cfg=cfg, config_path=o.config, load=(lambda: load_config(o.config)))
+        rchat.serve(Path(o.jobs_dir), cfg=cfg, config_path=o.config, load=(lambda: load_config(o.config)), port=o.port)
         return 0
     if o.cmd == "stage":
         from router import stage as sg
