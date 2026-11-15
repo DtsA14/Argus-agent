@@ -33,8 +33,11 @@ class IntakeError(Exception):
     pass
 
 
-def git(repo, *args, data=None):
-    env = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"}
+def git(repo, *args, data=None, clean=False):
+    """clean: no inherited GIT_* variable and no EMAIL (GIT_DIR would send -C to another repository, GIT_CONFIG_COUNT would add
+    configuration, GIT_AUTHOR_* an identity; SPEC_ARGUS_APPLY PR 1): for commands that read a repository the human works in."""
+    base = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "EMAIL"} if clean else dict(os.environ)
+    env = {**base, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"}
     r = subprocess.run(["git", "-c", "core.hooksPath=" + os.devnull, "-C", str(repo), *args], input=data,
                        capture_output=True, env=env, timeout=300)
     if r.returncode != 0:

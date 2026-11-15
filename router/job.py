@@ -1032,7 +1032,11 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
     kw = {"validate": deps.validate} if deps.validate else {}
     out = review.build(job.runs / st["run_id"], repo=job.data["inputs"]["repo"],
                        sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root, **kw)
-    st["review"] = {"valid": out["valid"], "problems": out["problems"], "dir": str(out["dir"])}
+    try:        # SPEC_ARGUS_APPLY PR 1: the patch as the review built it, in job.json (provenance.json sits beside the patch on disk)
+        patch_sha = hashlib.sha256((Path(out["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    except OSError:
+        patch_sha = None
+    st["review"] = {"valid": out["valid"], "problems": out["problems"], "dir": str(out["dir"]), "patch_sha256": patch_sha}
     job.move(REVIEW_READY if out["valid"] else REVIEW_INVALID, deps, stage=sid)
     _repro_patched(job, sid, out, cfg, deps)      # after the state is saved: nothing here can hold the job
     return r
@@ -1421,8 +1425,15 @@ def reject(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
 
 def patch_id(repo, diff):
     """git patch-id --stable of a diff: the same for the same changes whatever their line numbers and whitespace."""
-    out = intake.git(repo, "patch-id", "--stable", data=diff).split()
+    out = intake.git(repo, "patch-id", "--stable", data=diff, clean=True).split()
     return out[0].decode() if out else None
+
+
+# How the commit's changes are written for the comparison with the package's patch: the way codetask/review.py writes the patch (binary, full
+# index, no renames), with no textconv or external diff of the repository and none of its diff configuration (SPEC_ARGUS_APPLY PR 1).
+SHOW_AS_PACKAGED = ("-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false", "-c", "diff.renames=false", "-c", "diff.context=3",
+                    "-c", "diff.algorithm=default", "-c", "diff.indentHeuristic=true",
+                    "show", "--no-color", "--no-ext-diff", "--no-textconv", "--binary", "--full-index", "--no-renames", "--format=")
 
 
 def applied(job_id, commit, *, deps, jobs_dir=JOBS, note=None):
@@ -1431,20 +1442,25 @@ def applied(job_id, commit, *, deps, jobs_dir=JOBS, note=None):
     are (git patch-id), so a patch rewritten before it was committed is told apart from one applied as it was."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
-        if job.data["state"] != REVIEW_READY:
-            raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
-        repo = job.data["inputs"]["repo"]
-        patch = Path(last_agent(job)[1]["review"]["dir"]) / "changes.patch"
-        try:
-            sha = intake.git(repo, "rev-parse", "--verify", "--end-of-options", f"{commit}^{{commit}}").decode().strip()
-            mine = patch_id(repo, patch.read_bytes())
-            theirs = patch_id(repo, intake.git(repo, "show", "--no-color", "--no-ext-diff", "--format=", sha))
-        except intake.IntakeError as e:
-            raise Refused(f"job {job.id}: {e}") from None
-        job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(patch.read_bytes()).hexdigest(),
-                 as_is=None if mine is None or theirs is None else mine == theirs, by=os.environ.get("USER"),
-                 **({"note": note} if note else {}))
-        return job
+        return _record_applied(job, commit, deps=deps, note=note)
+
+
+def _record_applied(job, commit, *, deps, note=None, **extra):
+    """applied() without the lock: the caller holds job.lock() (`argus apply` holds it across its git work). extra: more fields for the log entry."""
+    if job.data["state"] != REVIEW_READY:
+        raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
+    repo = job.data["inputs"]["repo"]
+    patch = Path(last_agent(job)[1]["review"]["dir"]) / "changes.patch"
+    try:
+        sha = intake.git(repo, "rev-parse", "--verify", "--end-of-options", f"{commit}^{{commit}}", clean=True).decode().strip()
+        mine = patch_id(repo, patch.read_bytes())
+        theirs = patch_id(repo, intake.git(repo, *SHOW_AS_PACKAGED, sha, clean=True))
+    except intake.IntakeError as e:
+        raise Refused(f"job {job.id}: {e}") from None
+    job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(patch.read_bytes()).hexdigest(),
+             as_is=None if mine is None or theirs is None else mine == theirs, by=os.environ.get("USER"),
+             **({"note": note} if note else {}), **extra)
+    return job
 
 
 def _job_line(path):
