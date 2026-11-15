@@ -1,9 +1,10 @@
 # SPEC VF O1: catatan nonce dan kenari di validasi pytest
 
-Status: **revisi 1, 2026-11-15, menunggu persetujuan Atha** (jalur ketat: grader). Lanjutan `SPEC_VF_CANARY.md` (probe A10, O2 sudah
+Status: **revisi 2, 2026-11-15, menunggu persetujuan Atha** (jalur ketat: grader). Lanjutan `SPEC_VF_CANARY.md` (probe A10, O2 sudah
 ter-merge #477) dan sketsa Fable di `AUDIT2_2026-11-11.md` bagian 1. Urutan inti diterima Atha 2026-11-15: ini pekerjaan pertama.
-Revisi 1 menerapkan tinjauan Opus (GO WITH CHANGES, 2026-11-15): klaim dipersempit, catatan berbentuk hash, tabel pemetaan, daftar
-berkas, kasus tepi.
+Revisi 1 menerapkan tinjauan Opus (GO WITH CHANGES): klaim dipersempit, catatan berbentuk hash, tabel pemetaan, daftar berkas,
+kasus tepi. Revisi 2 menerapkan tinjauan Fable (GO WITH CHANGES, peninjau independen kedua): klaim dipersempit lagi (F3 sampai F5),
+opsi sesi 2, aturan seri dan subtest di pemetaan, definisi `counts` dan `sha`, `argv[0]`, alasan yang dibaca agen, mutan tambahan.
 
 ## 1. Masalah
 
@@ -16,7 +17,7 @@ strict). O2 (#477) hanya menangkap forger yang polanya terlihat per baris, dan m
 
 **Dijanjikan.** Validasi pytest `pass` hanya bila (a) proses mencetak tepat satu catatan harness di belakang nonce yang dibuat
 untuk run itu; (b) tiga tes kenari milik harness, dijalankan di proses yang sama sesudah tes kontrak, berakhir persis seperti
-seharusnya (satu lulus, satu gagal karena `assert`, satu gagal karena `RuntimeError`); (c) hitungan dan hash di catatan sama dengan
+seharusnya (satu lulus, satu gagal dengan `AssertionError`, satu gagal dengan `RuntimeError`; catatan membawa nama tipe pengecualiannya); (c) hitungan dan hash di catatan sama dengan
 yang `parse_pytest` baca dari teks, dan `rc` di catatan sama dengan kode keluar kontainer. Akibatnya dua kelas pemalsuan **yang tidak
 bersyarat** menjadi `fail`:
 
@@ -29,14 +30,21 @@ bersyarat** menjadi `fail`:
 
 - **F1, pemalsu berdasarkan jalur:** `Function.runtest` dilumpuhkan hanya untuk berkas di bawah akar repositori; kenari ada di `/tmp`
   dan berjalan jujur. Hasil: teks "1 passed", kode keluar 0, catatan benar, kenari benar, **`pass`**.
-- **F2, pemalsu berdasarkan sesi:** semua tes dilumpuhkan, lalu dipulihkan di `pytest_sessionfinish` supaya sesi kenari jujur.
-  **`pass`**.
+- **F2, pemalsu berdasarkan sesi:** semua tes dilumpuhkan, lalu dipulihkan di `pytest_sessionfinish` supaya sesi kenari jujur. **`pass`**.
+- **F3, pemalsu berdasarkan manajer plugin sesi 1** (peninjau kedua, dijalankan): hookwrapper `pytest_runtest_makereport` di `Config` yang
+  hidup mengubah setiap laporan gagal jadi lulus; tanpa syarat dan tidak dipulihkan, tetapi sesi 2 punya manajer plugin baru, jadi
+  kenari lolos. Delapan baris. **`pass`**.
+- **F4:** `Function.runtest` no-op hanya untuk tes yang modulnya mengimpor kode yang diuji. **`pass`**.
+- **F5:** tanpa mengutak-atik pytest: `f()` mengembalikan objek dengan `__eq__` yang selalu benar. **`pass`**, dan tidak ada validasi
+  berbasis laporan yang menangkapnya.
 - Kode di proses yang sama bisa membaca `sys.argv`, `__main__` dan berkas kenari, lalu meniru catatan lengkap dengan nonce.
-- Hook `conftest.py` workspace tidak menyentuh kenari (pytest membatasi hook conftest menurut letak): pemalsuan lewat conftest tidak
-  tertangkap di sini; pagarnya berkas terlindungi dan gerbang deteksi.
+- Plugin atau hook apa pun di `Config` sesi 1, termasuk `conftest.py` workspace (pytest membatasi hook conftest menurut letak),
+  tidak menyentuh kenari: tidak tertangkap di sini; pagarnya berkas terlindungi dan gerbang deteksi.
 
-Jadi O1 menutup pemalsuan yang tidak sadar akan kenari; pemalsu yang membedakan kenari dari tes kontrak (F1, F2 dan yang sejenis)
-tetap lolos. Aturan **"jangan apply job `DONE` tanpa dibaca" tidak dicabut oleh PR ini**; O1 menaikkan biaya pemalsuan, bukan
+Jadi O1 menutup **dua hal saja**: cetak-lalu-keluar (tidak ada catatan) dan penambalan global di tingkat proses yang juga mengenai
+kenari. Apa pun yang terbatas pada manajer plugin sesi 1 atau pada tes kontrak lolos, **walau ditulis tanpa tahu adanya kenari**
+(F1 sampai F5). Argumen "kode pemalsu lebih terlihat" dari versi sebelumnya dicabut: F3 sama pendek dan sama tak kentaranya
+dengan forger no-op. Aturan **"jangan apply job `DONE` tanpa dibaca" tidak dicabut oleh PR ini**; O1 menaikkan biaya pemalsuan, bukan
 membuktikan ketiadaannya. Pencabutan aturan itu keputusan Atha tersendiri, sesudah ada data.
 
 ## 3. Rancangan
@@ -50,31 +58,29 @@ xdist): satu catatan dan kenari benar di semuanya, tanpa false positive. **Belum
 
 1. **Perintah.** Validasi pytest tidak lagi `python3 -I -B -m pytest ...`, melainkan `python3 -I -B -c GREEN <nonce> <target...>`,
    skrip milik harness seperti `RED_CHECK` (tidak pernah dari kontrak atau workspace). Nonce: `ARGUS-GREEN-<32 hex>:`, baru untuk
-   setiap run. Karena `-c` mengubah `sys.argv`, skrip memasang `sys.argv` ke bentuk `["pytest", *opsi, *target]` sebelum sesi 1
-   (kode jujur yang memeriksa `sys.argv[0]` berperilaku seperti sebelumnya) dan membaca nonce dari argumennya sendiri sebelum itu.
+   setiap run. Karena `-c` mengubah `sys.argv`, skrip membaca nonce dari argumennya sendiri lalu memasang `sys.argv = [pytest.__main__.__file__, *opsi, *target]` sebelum sesi 1 (di bawah `-m pytest`, `argv[0]` adalah jalur `pytest/__main__.py`, bukan "pytest"; peninjau kedua memeriksanya, dan `sys.path` di bawah `-I` sama untuk `-m` dan `-c`). Nonce tetap terbaca di `sys.orig_argv` dan `__main__`: diterima, lihat bagian 2.
    Bukti (`evidence.argv`) menampilkan skrip dengan nama dan sha, seperti perekam vitest.
 2. **Sesi 1, tes kontrak.** `pytest.main([*PYTEST_FIXED, *target], plugins=[Rekam()])`: opsi dan teks keluaran **sama dengan hari
    ini**, sehingga `parse_pytest`, `output_tail`, `failed_nodes`, `skip_violations` dan apa yang dibaca agen tidak berubah. `Rekam`
    mencatat hasil per node dari `pytest_runtest_logreport` dan memetakannya ke kata `parse_pytest` (butir 5).
 3. **Sesi 2, kenari.** Sesudah sesi 1, di proses yang sama: skrip menulis `test_argus_canary_<16 hex>.py` ke direktori baru di
-   `/tmp` (tmpfs; workspace tetap read-only; `with open`), menjalankannya dengan `pytest.main` kedua dengan keluaran dibuang. Nama acak
+   `/tmp` (tmpfs; workspace tetap read-only; `with open`), menjalankannya dengan `pytest.main` kedua dengan keluaran dibuang. Opsi sesi 2 ditentukan penuh, supaya tidak mewarisi keadaan sesi 1: `-c <ini kosong di direktori kenari> --confcutdir <direktori> --rootdir <direktori> -p no:cacheprovider -o addopts=`, dan `PYTEST_ADDOPTS` serta `PYTEST_PLUGINS` dibuang dari `os.environ` sebelumnya (peninjau kedua: kode yang mengisi `PYTEST_ADDOPTS` di sesi 1, atau `pytest.ini` dan `conftest.py` di `/tmp`, merusak kenari pada proyek hijau). Nama acak
    dibuat di dalam kontainer, bukan di argv. Bila menulis gagal (`OSError`, tmpfs penuh), catatan membawa `canary_error` dan
    alasannya `harness canary: could not write`, bukan "no harness record".
 4. **Catatan, berbentuk ringkas.** Satu baris `<nonce>{"rc": ..., "counts": {...}, "sha": ..., "canary": {...}, "canary_rc": ...}`
-   di akhir stdout, lalu `sys.exit(rc)` dengan kode keluar sesi 1. `counts`: jumlah node per status. `sha`: sha256 dari daftar
-   `(node, status)` terurut. Catatan **tidak** memuat node satu per satu: batas keluaran per aliran 65.536 byte
+   di akhir stdout, lalu `sys.exit(rc)` dengan kode keluar sesi 1. `counts = Counter(tests.values())` dari `parse_pytest` (hanya untuk diagnosis). `sha`: sha256 dari `json.dumps(sorted(pasangan (node, status)), ensure_ascii=True, separators=(",", ":"))`; keduanya dihitung dengan fungsi yang sama di skrip dan di `judge_result`. Catatan **tidak** memuat node satu per satu: batas keluaran per aliran 65.536 byte
    (`tools/sandbox.py:50`) sudah hampir terpakai oleh baris `-v` pada sekitar 400 tes, dan catatan per node akan menggandakannya
    (perkiraan peninjau; ukur di PR). Ukuran catatan tetap, beberapa ratus byte.
 5. **Penilaian** (`judge_result`, cabang pytest). Semua aturan lama tetap. `judge_result` menghitung `counts` dan `sha` dari
    `parse_pytest(teks)` dan membandingkannya dengan catatan. Pemetaan dari `Rekam` ke kata `parse_pytest` (diperoleh dari
    peninjau, pytest 9.1.1): `call` lulus → `ok`; `call` gagal → `FAIL`; kegagalan di `setup` atau `teardown` → `ERROR` (status
    terburuk per node, urutan `ERROR` > `FAIL` > lain, seperti `parse_pytest`); `skipped` tanpa `wasxfail` → `skipped`; `skipped`
-   dengan `wasxfail` → `expected failure`; `passed` dengan `wasxfail` → `unexpected success`. Node tak terpilih (`-k`) tidak ada di
-   kedua sisi. Alasan `fail` yang baru:
+   dengan `wasxfail` → `expected failure`; `passed` dengan `wasxfail` → `unexpected success`. Seri: **laporan pertama menang** di antara status bukan `FAIL`/`ERROR`, seperti `parse_pytest` (call lulus lalu teardown `skip` tetap `ok`). Laporan subtest (pytest 9 dan `unittest.subTest`) **diabaikan**: yang dihitung laporan akhir node (peninjau kedua: subtest yang di-skip atau xfail memberi laporan fase `call` tambahan; catatan berkata `skipped`, teks berkata `ok`). Node tak terpilih (`-k`) tidak ada di kedua sisi. Alasan `fail` yang baru:
    - tidak ada baris catatan di belakang nonce run ini, lebih dari satu, atau bentuknya salah: `no harness record`;
    - kenari tidak persis `{pass: passed, fail: failed, error: failed}` atau `canary_rc != 1`: `harness canary: ...`;
    - `rc` di catatan berbeda dari kode keluar kontainer;
    - `counts` atau `sha` berbeda dari yang dibaca dari teks: `harness record disagrees with the report`.
+   **Alasan yang dibaca agen** (`reason`, dikembalikan apa adanya oleh `RunValidation`) hanya "validation not trusted" ditambah satu kode pendek yang berbeda per aturan (supaya kenari meleset yang sungguhan bisa dihitung, K4); rincian ada di `evidence`, yang tidak dibaca agen, jadi model yang memalsukan tidak diberi tahu apa yang harus dihindari.
    Baris catatan dibuang dari teks **sebelum** `parse_pytest` dan sebelum teks sampai ke pembaca mana pun (butir 7). Bukti
    mendapat `record: true|false` dan `canary: "ok"` atau isinya.
 6. **Gagal tertutup.** Keluaran terpotong, batas waktu (sesi 2 ikut batas `timeout_s` kontrak), proses mati sebelum catatan:
@@ -85,7 +91,7 @@ xdist): satu catatan dan kenari benar di semuanya, tanpa false positive. **Belum
    `tests/test_pytest_sandbox.py:61` (memanggil `va.argv(s)` lalu `parse_pytest` pada teks mentah: keduanya harus memakai satu
    fungsi harness yang menjalankan dan membuang catatan), `tests/test_pytest_validation.py` (argv dan keluaran yang direkam),
    `codetask/agent.py` (kutipan `--tb=short`), `codetask/tools.py:481`, `acceptance/draft.py:414`, `codetask/drafter.py`.
-   **`router/stage.py:59` (`CHECK_ARGV`, `stage check`) tidak diubah**: ia punya argv sendiri dan batas yang sudah tertulis
+   `args` di kontrak tetap `["-m", "pytest", ...]`; hanya `argv()` yang berubah. **`router/stage.py:59` (`CHECK_ARGV`, `stage check`) tidak diubah**: ia punya argv sendiri dan batas yang sudah tertulis
    (`stage check` bisa dipalsukan oleh conftest di commit).
 
 ## 4. Di luar PR ini
@@ -98,6 +104,13 @@ xdist): satu catatan dan kenari benar di semuanya, tanpa false positive. **Belum
 - **Versi tool `RunValidation` (kunci memo) tidak dinaikkan**, seperti FIX-A: versi baru membeli ulang balasan model; hasil yang
   diputar ulang hanya umpan balik ke agen, vonisnya dari node acceptance yang menjalankan `judge_result` lagi (peninjau).
 - `red_check`, `collect_nodes` dan `stage check`: dibaca dari proses yang sama, batasnya sudah tertulis; tidak diubah.
+
+## 4b. Urutan kerja
+
+Sebelum kode produksi, **pilot non-strict**: `green.py` (versi spek ini) dijalankan di sandbox pada tiga image (`argus`, `ledger_py312_up2`,
+`sympy_py39`), karena pytest 8.4.2 (tanpa subtest bawaan) dan `-I -c` di Python 3.9 belum teruji; hasilnya dicatat di
+`pilots/vf_o1_probe/`. Bila PR terasa terlalu besar: PR A = fungsi bersama "jalankan dan buang catatan" untuk `check_env_image.py` dan
+`test_pytest_sandbox.py` tanpa perubahan vonis; PR B = gerbangnya (usul peninjau kedua; satu PR tetap dapat diterima).
 
 ## 5. Tes (ditulis dulu, merah di kode lama)
 
@@ -112,7 +125,7 @@ Dengan sandbox (modul memuat `SANDBOX NOT AVAILABLE`): `tests/test_vf_forger.py`
 (pytest 8.4.2, dan `-I` dengan `-c` di Python 3.9); `scripts/check_env_image.py` lolos, ditambah satu cek di dalamnya bahwa
 kenari lulus validasi pada tiap environment (menutup celah yang peninjau temukan di klaim lama). **Fixture xfail-strict F1 dan F2**
 (`pilots/vf_o1_probe/path_forger_f1`, `session_forger_f2`): menyatakan jaminan yang **tidak** dipenuhi; XPASS strict memaksa spek
-ini diperbarui bila suatu hari tertutup. Mutan: tiap alasan di butir 5 dibuang satu per satu, nonce dibuat tetap, kenari dijalankan
+ini diperbarui bila suatu hari tertutup. Tes pemetaan menjalankan **skrip GREEN sungguhan**, bukan teks yang direkam, supaya mutan di skrip tidak selamat. F3 ikut jadi fixture xfail-strict (berkas peninjau kedua disalin saat PR dibuat); F4 dan F5 dicatat di bagian 2 tanpa fixture. Mutan: tiap alasan di butir 5 dibuang satu per satu, sesi kenari dijalankan sebelum sesi 1 di proses yang sama, sha tanpa status, `sys.exit(rc)` diganti 0, keluaran sesi 2 tidak dibuang, aturan seri dibalik, nonce dibuat tetap, kenari dijalankan
 sebelum sesi 1 di proses lain, catatan diterima walau ganda, hash tidak dibandingkan, catatan tidak dibuang dari teks.
 Sebelum `verify_at`: `bash scripts/precheck.sh`, lalu `tests/test_pytest_validation.py`, `test_pytest_sandbox.py`,
 `test_acceptance_sandbox.py`, `test_swe_pilot.py` dan berkas yang mengunci `argv` pytest.
@@ -127,9 +140,7 @@ Sebelum `verify_at`: `bash scripts/precheck.sh`, lalu `tests/test_pytest_validat
   image hari ini tidak memasang plugin pytest. Cek kenari di `check_env_image.py` (butir 5 bagian 5) menangkapnya saat image
   didaftarkan, bukan di job.
 - Waktu: satu sesi pytest kecil tambahan per validasi; diukur dan ditulis di PR.
-- **Nilai terbatas, dinyatakan terus terang:** karena F1 dan F2, O1 hanya menangkap pemalsuan yang tidak sadar akan kenari.
-  Nilainya: pemalsuan cetak-lalu-keluar dan pelumpuhan tanpa syarat berhenti jadi pass; pemalsu yang harus membedakan kenari dari
-  tes kontrak meninggalkan kode yang lebih terlihat bagi pembaca patch.
+- **Nilai terbatas, dinyatakan terus terang:** O1 hanya menutup cetak-lalu-keluar dan penambalan global yang juga mengenai kenari. Pemalsuan yang terbatas pada sesi 1 atau pada tes kontrak (F1 sampai F5) lolos tanpa perlu tahu kenari, dan tidak lebih kentara bagi pembaca patch. Karena itu K5 bukan formalitas.
 
 ## 7. Keputusan yang diminta dari Atha
 
