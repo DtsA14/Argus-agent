@@ -1,6 +1,6 @@
 # SPEC tahap PRD (bagian B antrean PRD): memeriksa PRD dan daftar issue terhadap jalur data Argus, lalu satu persetujuan yang membuat antrean
 
-Status: **rev 1, 2026-11-15; tinjauan Fable GO WITH FIXES (dua blocker, semua temuan diterapkan); menunggu keputusan D4 Atha (bagian 5, usul diikuti sementara).** Bagian B dari `docs/reviews/SPEC_PRD_QUEUE.md` (bagian A ter-merge #555, pilot v0 `pilots/queue_pilot_v0/`). Bahan: `pilots/prd_probe_v0/` (RESULT, GLUE_LOG: dua ketergantungan
+Status: **rev 1, 2026-11-15; tinjauan Fable atas spek dan diff GO WITH FIXES (semua temuan diterapkan); D4 (Atha 2026-11-15): B2 ditunda sampai pilot kedua (di repo luar: athena); B1 dibangun, `verify_at` PASS 5305, mutan 31/31 non-ekuivalen.** Bagian B dari `docs/reviews/SPEC_PRD_QUEUE.md` (bagian A ter-merge #555, pilot v0 `pilots/queue_pilot_v0/`). Bahan: `pilots/prd_probe_v0/` (RESULT, GLUE_LOG: dua ketergantungan
 tersembunyi di sisi Argus), `pilots/staging_stage19/steps.md` (yang ketiga: `/api/scoreboard/models` 404 lewat proxy), `router/stage_viewer.py:76` dan `:530`, `router/stage_data.py:93-98`, `router/queue.py`. Atha 2026-11-15: "Kenapa bagian B harus tunggu titik cek": bagian B ada di urutan inti yang diterima, jadi tidak menunggu.
 
 ## 1. Apa yang dibuktikan probe dan Stage 19, dan apa yang bukan
