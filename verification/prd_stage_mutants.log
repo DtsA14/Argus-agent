@@ -33,3 +33,4 @@ KILLED  the list sha ignores the prd: ['FAILED tests/test_prd_stage.py::test_a_q
 SURVIVED a damaged prd is not refused when loading: 165 passed in 20.41s
 KILLED  a damaged prd argument is not refused by new: ['FAILED tests/test_prd_stage.py::test_queue_new_refuses_a_damaged_prd_argument_before_writing']
 RESULT: 30/33 killed
+RERUN after the fixes (commit db0d5b5): the left boundary and the damaged-prd-on-load mutants KILLED. The two proxy-check layers and the NUL-in-commit mutants are equivalent (see the file header). Total: 31/31 non-equivalent killed (30 + 2 reruns, 1 anchor repaired).
