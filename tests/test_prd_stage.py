@@ -322,7 +322,7 @@ def test_the_prd_of_an_approved_queue_cannot_be_changed_or_damaged(fo, qe, edit)
     data = qe.q(q)
     edit(data)
     (qe.queues / q["id"] / "queue.json").write_text(json.dumps(data))
-    with pytest.raises(rj.Refused):
+    with pytest.raises(rj.Refused, match="damaged|not approved|changed since"):
         qe.step(q)
 
 
@@ -330,3 +330,105 @@ def test_an_approved_queue_with_its_prd_still_steps(fo, qe):
     q = qe.go(fo.approve())
     qe.step(q)
     assert len(qe.calls) == 1
+
+
+# ---- Fable's review of the diff ---------------------------------------------------------------------------------------------------------
+
+def test_a_deeply_nested_issues_json_is_a_finding_not_a_traceback(fo):
+    (fo.dir / "issues.json").write_text("[" * 100000 + "]" * 100000)
+    text, ok = fo.check()
+    assert not ok and "BLOCK" in text
+
+
+def test_a_nul_in_the_commit_is_a_finding(fo):
+    body = json.loads((fo.dir / "issues.json").read_text())
+    body["commit"] = "a" * 39 + "\0"
+    (fo.dir / "issues.json").write_text(json.dumps(body))
+    assert not fo.check()[1]
+
+
+def test_a_fifo_named_prd_md_does_not_hang_the_check(fo):
+    (fo.dir / "PRD.md").unlink()
+    os.mkfifo(fo.dir / "PRD.md")
+    text, ok = fo.check()
+    assert not ok and "not a regular file" in text
+
+
+def test_a_symlinked_prd_md_is_refused(fo, tmp_path):
+    (tmp_path / "other.md").write_text("contract")
+    (fo.dir / "PRD.md").unlink()
+    os.symlink(tmp_path / "other.md", fo.dir / "PRD.md")
+    assert not fo.check()[1]
+
+
+@pytest.mark.parametrize("line", ["the /api/ routes", "all /api/* routes", "see the /api-docs page", "import x from '@/api/client'", "GET /", "the \\/api\\/ prefix"])
+def test_prose_about_the_api_prefix_is_not_a_path(fo, line):
+    with_text(fo, line)
+    assert fo.check()[1]
+
+
+@pytest.mark.parametrize("line", ["curl http://127.0.0.1:8710/api/scoreboard/models", "<code>/api/scoreboard/models</code>", "/api/scoreboard/models$", "PUT /scoreboard/models",
+                                  "DELETE /jobs/x", "/api/scoreboard/models:list"])
+def test_paths_in_urls_markup_and_other_verbs_are_seen(fo, line):
+    with_text(fo, line)
+    blocked(fo, "is not in this item's paths")
+
+
+def test_a_declared_template_is_not_a_warning(fo):
+    with_text(fo, "Call /api/jobs/<id>/draft", items=[{"n": 1, "paths": [{"side": "viewer-api", "path": "/api/jobs/j20261112_053107_1929/draft"}]}, {"n": 2}])
+    text, ok = fo.check()
+    assert ok and "WARN  the text names a templated" not in text
+
+
+@pytest.mark.parametrize("spec", [{"max_usd": True}, {"max_usd": "3.0"}, {"commit": "HEAD"}, {"commit": "abc1234"}])
+def test_loose_types_in_issues_json_are_blocked(fo, spec):
+    body = json.loads((fo.dir / "issues.json").read_text())
+    body.update(spec)
+    (fo.dir / "issues.json").write_text(json.dumps(body))
+    assert not fo.check()[1]
+
+
+@pytest.mark.parametrize("n", [True, 1.0])
+def test_n_must_be_an_integer(fo, n):
+    fo.write(items=[{"n": n}, {"n": 2}])
+    assert not fo.check()[1]
+
+
+def test_a_ledger_path_that_stays_off_the_proxy_still_has_plain_characters(fo):
+    fo.write(items=[{"n": 1, "paths": [{"side": "ledger", "path": "/x y\n", "via_proxy": False}]}, {"n": 2}])
+    blocked(fo, "space or a control character")
+
+
+def test_an_unknown_key_in_a_path_object_is_blocked(fo):
+    fo.write(items=[{"n": 1, "paths": [{"side": "viewer-api", "path": "/api/summary", "extra": 1}]}, {"n": 2}])
+    assert not fo.check()[1]
+
+
+def test_the_sha_covers_prd_md_and_is_pinned(fo):
+    a = fo.sha()
+    (fo.dir / "PRD.md").write_text("# PRD\n\nThe contract changed.\n")
+    assert fo.sha() != a
+    import hashlib
+    files = {"PRD.md": b"p", "issues.json": b"j", "issue-1.md": b"a"}
+    want = hashlib.sha256(json.dumps([["PRD.md", hashlib.sha256(b"p").hexdigest()], ["issues.json", hashlib.sha256(b"j").hexdigest()],
+                                      ["issue-1.md", hashlib.sha256(b"a").hexdigest()]], separators=(",", ":")).encode()).hexdigest()
+    assert rp.folder_sha(files) == want
+
+
+def test_queue_new_refuses_a_damaged_prd_argument_before_writing(qe):
+    with pytest.raises(rj.Refused, match="prd must be"):
+        qe.new(prd="x")
+    assert not list(qe.queues.glob("q*"))
+
+
+def test_the_command_line_exits_1_on_a_block_and_0_on_a_sound_folder(fo, qe, monkeypatch, capsys):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    monkeypatch.setattr(argus, "load_config", lambda *_a, **_k: qe.cfg)
+    monkeypatch.setattr(argus, "sandbox_cfg", lambda *_a, **_k: {})
+    base = ["--jobs-dir", str(qe.jobs), "--queues-dir", str(qe.queues), "prd"]
+    assert argus.main([*base, "check", str(fo.dir)], deps=qe.env.deps) == 0
+    assert argus.main([*base, "approve", str(fo.dir), "--sha", fo.sha()[:12]], deps=qe.env.deps) == 0
+    assert "PENDING" in capsys.readouterr().out
+    with_text(fo, "Add `GET /scoreboard/models`.")
+    assert argus.main([*base, "check", str(fo.dir)], deps=qe.env.deps) == 1

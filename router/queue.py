@@ -169,9 +169,10 @@ def validate_new(*, repo, commit, max_usd, issues, cfg, queues_dir=QUEUES, jobs_
 def new(*, repo, commit, max_usd, issues, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS, queue_id=None, prd=None):
     """A queue (PENDING). issues: the texts, in order. Nothing runs and no money is reserved before `go`. prd: {sha, dir} of the approved
     PRD folder it came from (SPEC_PRD_STAGE; provenance only, written with the queue)."""
+    if prd is not None and not (isinstance(prd, dict) and isinstance(prd.get("sha"), str) and re.fullmatch(r"[0-9a-f]{64}", prd["sha"]) and isinstance(prd.get("dir"), str)):
+        raise Refused("prd must be {sha: 64 hex, dir: text}")
     qid = queue_id or "q" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(2)
     d = _dir(queues_dir, qid)
-    Path(queues_dir).mkdir(parents=True, exist_ok=True)
     with _flock(Path(queues_dir) / ".new.lock", "the queues directory"):     # two `new` on one repository race
         v = validate_new(repo=repo, commit=commit, max_usd=max_usd, issues=issues, cfg=cfg, queues_dir=queues_dir, jobs_dir=jobs_dir)
         if d.exists():

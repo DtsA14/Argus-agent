@@ -26,9 +26,9 @@ PUBLISHED_EXTRA = {"JOB_FIELDS": {"title", "stages", "log"}}
 TOP_KEYS, ITEM_KEYS, PATH_KEYS = {"repo", "commit", "max_usd", "items"}, {"n", "paths", "fields"}, {"side", "path", "via_proxy"}
 SIDES = ("viewer-api", "ledger")
 PLAIN = re.compile(r"[\x21-\x7e]+")
-LEFT = r"(?<![A-Za-z0-9_.-])"
-API_HIT = re.compile(LEFT + r"/api(?:/[A-Za-z0-9_./?=&-]*)?")
-VERB_HIT = re.compile(r"\b(?:GET|HEAD|POST)\s+(/[A-Za-z0-9_./?=&-]*)")
+LEFT = r"(?<![A-Za-z_.@~\\-])"
+API_HIT = re.compile(LEFT + r"/api/[A-Za-z0-9_./?=&-]*")
+VERB_HIT = re.compile(r"\b(?:GET|HEAD|POST|PUT|PATCH|DELETE)\s+(/[A-Za-z0-9_./?=&-]*)")
 TAIL = ".,;:)?]'\""
 
 
@@ -39,7 +39,7 @@ class Folder(Exception):
 def _read(dir_, name, cap):
     """One regular file of the folder, as bytes, without following a link; at most `cap` bytes."""
     try:
-        fd = os.open(os.path.join(dir_, name), os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        fd = os.open(os.path.join(dir_, name), os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)         # a FIFO must not hang the read; fstat refuses it
     except OSError as e:
         raise Folder(f"{name}: cannot be read ({e.strerror})") from None
     try:
@@ -62,12 +62,12 @@ def read_folder(dir_):
     files = {"PRD.md": _read(dir_, "PRD.md", DOC_MAX), "issues.json": _read(dir_, "issues.json", DOC_MAX)}
     try:
         n = len(json.loads(files["issues.json"].decode("utf-8"))["items"])
-    except (ValueError, KeyError, TypeError, AttributeError):
+    except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
         raise Folder("issues.json: is not valid UTF-8 JSON with a list \"items\"") from None
     expected = {"PRD.md", "issues.json", *(f"issue-{k}.md" for k in range(1, n + 1))}
     extra = sorted(set(names) - expected)
     if extra:
-        raise Folder(f"unexpected entries in the folder: {', '.join(extra)} (only PRD.md, issues.json and issue-<n>.md)")
+        raise Folder(f"unexpected entries in the folder: {', '.join(ascii(e) for e in extra)} (only PRD.md, issues.json and issue-<n>.md)")
     for k in range(1, n + 1):
         files[f"issue-{k}.md"] = _read(dir_, f"issue-{k}.md", 4000 * 4 + 64)      # message_max characters; a character is up to 4 bytes
     return files
@@ -105,9 +105,9 @@ def _hits(text):
     out = []
     for start, end in spans:
         path = text[start:end].rstrip(TAIL)
-        if not path:
+        if path in ("", "/", "/api/"):                  # a bare slash or "the /api/ routes": a prefix mentioned, not a path
             continue
-        template = text[end:end + 1] in ("<", "{", "$") or re.match(r":[A-Za-z]", text[end:end + 2]) is not None
+        template = path.endswith("/") and (text[end:end + 1] in ("<", "{", "$") or re.match(r":[A-Za-z]", text[end:end + 2]) is not None)
         out.append((path, template))
     return out
 
@@ -122,21 +122,24 @@ def check(files, *, cfg, queues_dir=rq.QUEUES, jobs_dir=rj.JOBS):
         spec = json.loads(files["issues.json"].decode("utf-8"))
         texts = [files[f"issue-{k}.md"].decode("utf-8") for k in range(1, len(spec["items"]) + 1)]
         files["PRD.md"].decode("utf-8")
-    except (UnicodeDecodeError, ValueError, KeyError, TypeError) as e:
+    except (UnicodeDecodeError, ValueError, KeyError, TypeError, RecursionError) as e:
         add(BLOCK, f"the folder is not valid UTF-8 JSON and issue files ({type(e).__name__})")
         return f, None
     if not isinstance(spec, dict) or set(spec) != TOP_KEYS or not isinstance(spec["items"], list):
         add(BLOCK, f"issues.json must be an object with exactly the keys {sorted(TOP_KEYS)}")
         return f, None
+    if type(spec["max_usd"]) not in (int, float) or not isinstance(spec["commit"], str) or not re.fullmatch(r"[0-9a-f]{40}", spec["commit"]) or not isinstance(spec["repo"], str):
+        add(BLOCK, "issues.json: repo is a name, commit 40 hex, max_usd a number (not a string or a boolean)")
+        return f, None
     try:
         v = rq.validate_new(repo=spec["repo"], commit=spec["commit"], max_usd=spec["max_usd"], issues=texts, cfg=cfg, queues_dir=queues_dir, jobs_dir=jobs_dir)
-    except rj.Refused as e:
+    except (rj.Refused, ValueError, TypeError) as e:
         add(BLOCK, str(e))
         v = None
     declared_all = set()
     for i, item in enumerate(spec["items"], 1):
         where = f"item {i}"
-        if not isinstance(item, dict) or not set(item) <= ITEM_KEYS or item.get("n") != i or not isinstance(item.get("paths", []), list) or not isinstance(item.get("fields", []), list):
+        if not isinstance(item, dict) or not set(item) <= ITEM_KEYS or type(item.get("n")) is not int or item.get("n") != i or not isinstance(item.get("paths", []), list) or not isinstance(item.get("fields", []), list):
             add(BLOCK, f"{where}: must be an object with n = {i} and only the keys {sorted(ITEM_KEYS)}")
             continue
         declared = set()
@@ -145,6 +148,9 @@ def check(files, *, cfg, queues_dir=rq.QUEUES, jobs_dir=rj.JOBS):
                 add(BLOCK, f"{where}: a path needs side ({' or '.join(SIDES)}) and path, and only the keys {sorted(PATH_KEYS)}")
                 continue
             path, side = p["path"], p["side"]
+            if not PLAIN.fullmatch(path):
+                add(BLOCK, f"{where}: path {ascii(path)} has a space or a control character")
+                continue
             if side == "viewer-api":
                 if "via_proxy" in p:
                     add(BLOCK, f"{where}: via_proxy belongs to side ledger")
@@ -191,7 +197,7 @@ def report(dir_, *, cfg, queues_dir=rq.QUEUES, jobs_dir=rj.JOBS):
     blocked = any(level == BLOCK for level, _ in f)
     lines = [f"{level:5} {text}" for level, text in f]
     lines.append(f"prd sha {folder_sha(files)}")
-    lines.append("checked: the declared paths and fields, and every /api/... and `GET /path` in the issue texts; a path built from pieces, written /API/ or %2F is not seen. "
+    lines.append("checked: the declared paths and fields, and every /api/... and `GET|HEAD|POST|PUT|PATCH|DELETE /path` (upper case) in the issue texts; a path built from pieces, written /API/, %2F or `get /x` is not seen. "
                  "Nothing here judges whether the PRD is good.")
     lines.append("BLOCKED: nothing can be approved" if blocked else f"no BLOCK: argus prd approve {dir_} --sha {folder_sha(files)[:12]}")
     return "\n".join(lines), not blocked
