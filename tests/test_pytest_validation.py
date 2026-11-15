@@ -4,6 +4,7 @@ the contract fields, and how a named sandbox environment selects its image.
 
 The real runs in the sandbox are in tests/test_pytest_sandbox.py."""
 import copy
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ import pytest
 from acceptance import contract as ct
 from acceptance import validation as va
 from tools import sandbox as sb
+from green_helpers import NONCE, judge, recorded, with_record
 
 DATA = Path(__file__).resolve().parent / "data"
 DEMO = "tests/test_demo.py::"
@@ -70,11 +72,13 @@ def test_refused_pytest_commands(args, why):
 
 
 def test_the_harness_alone_sets_pytest_options_and_the_contract_only_names_targets():
-    argv = va.argv(spec("-k", "add", "tests"))
-    assert argv[:5] == ["python3", "-I", "-B", "-m", "pytest"]
-    assert argv[5:5 + len(va.PYTEST_FIXED)] == va.PYTEST_FIXED
-    assert argv[5 + len(va.PYTEST_FIXED):] == ["-k", "add", "tests"]
+    argv = va.argv(spec("-k", "add", "tests"), NONCE)
+    assert argv[:4] == ["python3", "-I", "-B", "-c"] and argv[4] == va.GREEN and argv[5] == NONCE
+    assert json.loads(argv[6]) == va.PYTEST_FIXED and argv[7:] == ["-k", "add", "tests"]
     assert "--rootdir" in va.PYTEST_FIXED and "no:cacheprovider" in va.PYTEST_FIXED and "addopts=" in va.PYTEST_FIXED
+    shown = va.argv(spec("tests"))                      # the evidence names the script by its sha and the nonce by a placeholder
+    assert va.GREEN not in shown and shown[4] == f"<harness pytest runner sha256:{va.GREEN_SHA}>" and shown[5] == "<nonce>"
+    assert spec("tests")["args"][:2] == ["-m", "pytest"]  # the contract still says -m pytest
 
 
 def test_unittest_commands_are_unchanged():
@@ -133,14 +137,14 @@ def test_a_collection_error_is_not_consistent():
 def test_a_clean_run_with_every_required_node_passes():
     nodes = ["tests/test_isolation.py::test_no_network", "tests/test_isolation.py::test_workspace_is_read_only",
              "tests/test_isolation.py::test_runs_as_nobody"]
-    v = va.judge_result(spec("tests/test_isolation.py", must=nodes, min_tests=3), result("isolation"))
+    v = judge(spec("tests/test_isolation.py", must=nodes, min_tests=3), result("isolation"))
     assert v["status"] == "pass", v["reason"]
     assert v["evidence"]["must_pass"] == {n: "ok" for n in nodes} and v["evidence"]["runner"] == "pytest"
 
 
 def test_required_nodes_are_reported_one_by_one_and_only_ok_passes():
     must = [DEMO + "test_add", DEMO + "test_teardown_error", DEMO + "test_xpass", DEMO + "test_skipped"]
-    v = va.judge_result(spec("tests", must=must, max_skipped=5), result("all"))
+    v = judge(spec("tests", must=must, max_skipped=5), result("all"))
     assert v["status"] == "fail"
     assert v["evidence"]["must_pass"] == {DEMO + "test_add": "ok", DEMO + "test_teardown_error": "ERROR",
                                           DEMO + "test_xpass": "unexpected success", DEMO + "test_skipped": "skipped"}
@@ -150,7 +154,7 @@ def test_required_nodes_are_reported_one_by_one_and_only_ok_passes():
 
 def test_a_required_node_that_was_not_collected_fails():
     missing = "tests/test_isolation.py::test_never_written"
-    v = va.judge_result(spec("tests/test_isolation.py", must=[missing]), result("isolation"))
+    v = judge(spec("tests/test_isolation.py", must=[missing]), result("isolation"))
     assert v["status"] == "fail" and v["evidence"]["must_pass"] == {missing: None}
     assert f"required test {missing} did not run" in v["reason"]
     assert "ran under the full name" not in v["reason"]
@@ -169,7 +173,7 @@ def test_a_required_node_named_without_its_class_names_the_one_that_ran():
     ("deselected", "exit code 5"),
 ])
 def test_runs_that_did_not_test_anything_fail(name, why):
-    v = va.judge_result(spec("tests"), result(name))
+    v = judge(spec("tests"), result(name))
     assert v["status"] == "fail" and why in v["reason"] and "outcome NO TESTS RAN" in v["reason"]
 
 
@@ -189,18 +193,18 @@ def test_output_whose_lines_do_not_account_for_the_summary_fails_even_with_exit_
         out = drop_line(out, "3 passed in")
     else:
         out = out.replace("3 passed in", "4 passed in")
-    v = va.judge_result(spec("tests/test_isolation.py"), {**result("isolation"), "stdout": out})
+    v = judge(spec("tests/test_isolation.py"), {**result("isolation"), "stdout": out})
     assert v["status"] == "fail"
     assert ("inconsistent" in v["reason"]) or ("no pytest summary" in v["reason"])
 
 
 def test_truncated_output_fails_closed():
-    v = va.judge_result(spec("tests/test_isolation.py"), result("isolation", truncated=True))
+    v = judge(spec("tests/test_isolation.py"), result("isolation", truncated=True))
     assert v["status"] == "fail" and "output truncated" in v["reason"]
 
 
 def test_exit_0_with_a_failing_summary_fails():
-    v = va.judge_result(spec("tests"), result("all", exit_code=0))
+    v = judge(spec("tests"), result("all", exit_code=0))
     assert v["status"] == "fail" and "pytest outcome FAILED" in v["reason"]
 
 

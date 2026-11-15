@@ -58,12 +58,15 @@ def test_every_node_is_classified_the_same_way_in_two_runs(cfg, demo):
     """Not only the same totals: the same status for every node, and the expected one."""
     run_cfg = {**cfg, "environment": "argus", "timeout_s": 120}
     s = spec("tests", max_skipped=5)
-    runs = [sb.run_command(va.argv(s), workdir=str(demo), cfg=run_cfg) for _ in range(2)]
-    parsed = [va.parse_pytest(r["stdout"]) for r in runs]
+    runs = [va.pytest_run(s, str(demo), run_cfg) for _ in range(2)]               # the text without the harness's record line
+    parsed = [va.parse_pytest(r["stdout"]) for r, _ in runs]
+    assert all(rec is not None and rec["canary"] == va.CANARY_WANTED and rec["sha"] == va.tests_sha(p["tests"])
+               for (_, rec), p in zip(runs, parsed))
+    assert all("ARGUS-GREEN" not in r["stdout"] for r, _ in runs)                # the record line is taken out of the text
     assert parsed[0]["tests"] == parsed[1]["tests"] == EXPECTED
-    for r, p in zip(runs, parsed):
+    for _, p in zip(runs, parsed):
         assert p["consistent"] and p["collected"] == 13
-        e = va.judge_result(s, r)["evidence"]
+        e = va.run_validation(s, str(demo), run_cfg)["evidence"]
         assert (e["tests_run"], e["failures"], e["errors"], e["skipped"]) == (13, 1, 2, 3)
 
 
@@ -85,7 +88,7 @@ def test_the_default_image_is_not_used_for_an_environment(cfg, demo):
     if not sb.status(cfg)[0]:
         pytest.skip(f"SANDBOX NOT AVAILABLE: default image: {sb.status(cfg)[1]}")
     v = va.run_validation(spec("tests/test_isolation.py", must=ISOLATION, environment=None), str(demo), cfg)
-    assert v["status"] == "fail" and "No module named pytest" in v["evidence"]["stderr_tail"]
+    assert v["status"] == "fail" and "No module named 'pytest'" in v["evidence"]["stderr_tail"]   # the runner script's own import
 
 
 def test_argus_tests_run_in_the_argus_environment(cfg, tmp_path):

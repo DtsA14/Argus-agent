@@ -58,7 +58,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 |---|---|---|
 | Fondasi (M1–M3, budget, ledger, crash-resume, sandbox) | `[x]` | Reconciliation bagian 1 |
 | Jalur kode, issue sampai staging (M6, M9 staging) | `[x]` MVP | repo Argus, sympy (SWE), `argus-ledger`, `argus-viewer`; dua aplikasi di staging |
-| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; verdict masih bisa dipalsukan (VF O1 belum ada) |
+| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; VF O1 ter-merge (pemalsuan yang tidak mencari nonce tertutup, bukan semua); `argus apply` belum ada |
 | Permukaan: chat | `[~]` | C1–C4 live di 8711 (Issue, Riset, Keputusan, Status); C5 terbuka |
 | Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset: pekerjaan baru tidak dimulai (di luar urutan inti); lainnya belum dimulai |
 | M5 observability | `[~]` | ledger, inspektor, papan skor; belum: angka "tanpa campur tangan Claude", eval set tidak jenuh |
@@ -96,9 +96,12 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 
 ### Inti 1: kerja terbukti
 
-- [ ] **VF O1 kenari dan nonce** (`SPEC_VF_CANARY.md:36`; `tests/test_vf_forger.py:46` masih xfail). Verdict bisa dipalsukan kode di
-  proses tes (TERBUKTI 2026-11-12, probe A10); pola forger (O2, #477) hanya pagar per baris. Sampai ada: **jangan apply job `DONE`
-  tanpa dibaca.** Ini penghalang utama "bisa ditinggal".
+- [x] **VF O1 kenari dan nonce** (2026-11-15; `docs/reviews/SPEC_VF_O1_CANARY_NONCE.md` rev 2; PR `vf-o1-canary`): validasi pytest hanya dipercaya dengan catatan
+  harness di belakang nonce per run, sesi kenari yang berakhir seperti seharusnya, dan catatan yang sepakat dengan laporan. `verify_at` PASS (5037 lulus, 4 xfail yang
+  disengaja, 0 sandbox ter-skip; `verification/verify-20261115T084657Z-aarch64.log`), mutan 39/39 (`verification/vf_o1_mutants.log`), tinjauan Opus dan Fable atas
+  spek dan diff. **Batas yang diterima, jangan dikutip lebih lebar:** hanya menutup cetak-lalu-keluar dan penambalan global yang ikut mengenai kenari; pemalsu yang terbatas
+  pada sesi 1 atau pada tes kontrak (F1 sampai F3) atau yang membaca nonce dari argv (F6) lolos (xfail-strict di `tests/test_vf_canary.py`). **Aturan "jangan apply job `DONE`
+  tanpa dibaca" tetap berlaku.** Proyek jujur dengan hook `pytest_report_teststatus` kustom bisa kena G4 (image kita tanpa plugin pytest).
 - [ ] **Approve atas patch akhir, bukan rencana** (`pilots/outside_v2/PROTOCOL_FINAL_PATCH.md`): dipakai di batch 3; pembacaan acak 1
   dari 3 oleh pembaca yang didelegasikan Atha: 0 dari 3 terbalik, tidak bisa membedakan karena semuanya reject (`atha_verdicts.json`,
   #504). Belum menjadi alur baku di harness.

@@ -179,8 +179,8 @@ def test_the_sympy_py39_image_passes_every_check(cfg, tmp_path):
     ws = tmp_path / "ws"
     shutil.copytree(ROOT / "fixtures" / "repos" / "pytest_demo", ws)
     results = m.checks("sympy_py39", cfg, str(ws))
-    assert [c for c, ok, _ in results] == ["isolation", "classification like argus", "red check", "collection",
-                                           "no shell, git or pip", "versions"]
+    assert [c for c, ok, _ in results] == ["isolation", "canary (harness record)", "classification like argus", "red check",
+                                           "collection", "no shell, git or pip", "versions"]
     assert all(ok for _, ok, _ in results), results
 
 
@@ -211,7 +211,7 @@ GOOD_PROBE = {"python": "3.9.25", "pytest": "8.4.2", "sh": False, "bash": False,
 @pytest.mark.parametrize("flip, check", [
     ("isolation", "isolation"), ("classification", "classification like argus"), ("inconsistent", "classification like argus"),
     ("red", "red check"), ("collection", "collection"), ("sh", "no shell, git or pip"), ("git", "no shell, git or pip"),
-    ("pip", "no shell, git or pip"), ("pytest", "versions"), ("python", "versions"),
+    ("pip", "no shell, git or pip"), ("pytest", "versions"), ("python", "versions"), ("canary", "canary (harness record)"),
 ])
 def test_each_check_fails_when_its_condition_does_not_hold(monkeypatch, flip, check):
     m = load("check_env_u", ROOT / "scripts" / "check_env_image.py")
@@ -242,6 +242,11 @@ def test_each_check_fails_when_its_condition_does_not_hold(monkeypatch, flip, ch
 
     red = {"tests/test_demo.py::test_fails": {"assertion": flip != "red", "outcome": "failed"},
            "tests/test_demo.py::test_add": {"outcome": "passed"}}
+    def pytest_run(spec, wd, cfg, log=None, meta=None):        # the harness's runner: the text, and its record with the canary
+        bad = flip == "canary" and cfg["environment"] == "sympy_py39"
+        return {"stdout": cfg["environment"]}, {"canary": {} if bad else dict(m.va.CANARY_WANTED), "canary_rc": 1, "canary_error": None}
+
+    monkeypatch.setattr(m.va, "pytest_run", pytest_run)
     monkeypatch.setattr(m.va, "run_validation", run_validation)
     monkeypatch.setattr(m.sb, "run_command", run_command)
     monkeypatch.setattr(m.va, "parse_pytest", parse)

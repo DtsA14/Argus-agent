@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from acceptance import validation as va
+from green_helpers import judge
 from codetask.tools import Toolbox
 from harness.events import EventLog
 
@@ -92,7 +93,7 @@ def run(stdout, stderr, exit_code):
 
 
 def test_without_a_pytest_summary_the_output_shown_includes_stderr():
-    v = va.judge_result(SPEC, run("", CONFTEST_ERROR, 4))
+    v = judge(SPEC, run("", CONFTEST_ERROR, 4))
     assert v["status"] == "fail"
     assert "--- stderr ---" in v["evidence"]["output_tail"]
     assert "could not locate the original sympy/core/numbers.py" in v["evidence"]["output_tail"]
@@ -105,7 +106,7 @@ PYTEST_OK = ("collecting ... collected 1 item\n\n"
 
 def test_with_a_pytest_summary_the_output_shown_is_stdout_only():
     out = PYTEST_OK
-    v = va.judge_result(SPEC, run(out, "some warning on stderr\n", 0))
+    v = judge(SPEC, run(out, "some warning on stderr\n", 0))
     assert v["status"] == "pass", v["reason"]
     assert v["evidence"]["output_tail"] == out
 
