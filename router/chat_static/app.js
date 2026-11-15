@@ -122,12 +122,14 @@
   var issues = [];
   var openIssue = null;
   var busy = false;
+  var slot = document.getElementById("slot");
+  var pending = null;                                   // the one card that may be live; a new one settles and removes the old
   function post(path, body) {
     return fetch(path, { method: "POST", credentials: "omit", cache: "no-store",
       headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(body) })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) { throw new Error(j && j.refused ? String(j.refused) : "HTTP " + r.status); }
+          if (!r.ok) { var err = new Error(j && j.refused ? String(j.refused) : "HTTP " + r.status); err.answered = true; throw err; }
           return j;
         });
       });
@@ -163,37 +165,70 @@
     var armed = setTimeout(function () { ok.disabled = false; }, Math.ceil((prep.min_delay_s || 1) * 1000) + 300);
     var expire = setTimeout(function () { ok.disabled = true; c.appendChild(el("p", "note", "Kartu kedaluwarsa: siapkan lagi.")); }, ((prep.expires_s || 300) - 5) * 1000);
     function settle() { clearTimeout(armed); clearTimeout(expire); ok.disabled = true; no.disabled = true; }
-    no.addEventListener("click", function () { settle(); if (c.parentNode) { c.parentNode.removeChild(c); } });
+    no.addEventListener("click", function () { dropPending(); });
+    c.settle = settle;
     ok.addEventListener("click", function () {
       if (ok.disabled) { return; }
       ok.disabled = true;
+      c.sent = true;
+      no.disabled = true;                               // once sent, the server may run it: no Batal that only looks like one
       post("/api/confirm", { token: prep.token }).then(function (r) {
+        c.sent = false;
         settle();
         clear(c);
         c.appendChild(el("h2", null, "Dijalankan"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", "Hasil muncul di daftar issue sesudah penulis selesai."));
+        c.appendChild(el("p", "note", "Hasilnya ada di daftar issue."));
+        var close = el("button", null, "Tutup");
+        close.type = "button";
+        close.addEventListener("click", function () { dropPending(); });
+        c.appendChild(close);
         done(r);
-      }).catch(function (e) { settle(); c.appendChild(el("p", "note", "Ditolak: " + e.message)); });
+      }).catch(function (e) {
+        c.sent = false;
+        settle();
+        if (e.answered) {
+          c.appendChild(el("p", "note", "Ditolak: " + e.message));
+          no.disabled = false;
+        } else {                                        // no answer: the server may have run it; do not prepare the same thing again blind
+          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar issue sebelum mencoba lagi."));
+          no.disabled = false;
+          loadIssues();
+        }
+      });
     });
     row.appendChild(ok);
     row.appendChild(no);
     c.appendChild(row);
     return c;
   }
-  function prepare(body, after) {
-    if (busy) { return; }
+  function dropPending() {
+    if (pending && pending.sent) { return; }               // a confirm is on its way: the card stays until the server answers
+    if (pending) { pending.settle(); if (pending.parentNode) { pending.parentNode.removeChild(pending); } pending = null; }
+  }
+  function showNote(text) {
+    dropPending();
+    var c = el("article", "card");
+    c.appendChild(el("p", "note", text));
+    c.settle = function () {};
+    pending = c;
+    slot.appendChild(c);
+  }
+  function prepare(body) {
+    if (busy || (pending && pending.sent)) { return; }
     busy = true;
+    var ctx = { mode: mode, open: openIssue };
     post("/api/prepare", body).then(function (prep) {
       busy = false;
+      if (mode !== ctx.mode || openIssue !== ctx.open) { return; }     // the user moved on while it was prepared: the token just lapses
+      dropPending();
       var c = renderCard(prep, function (r) { message.value = ""; loadIssues(); if (r.job) { showIssue(r.job); } });
-      stream.insertBefore(c, stream.firstChild);
-      if (after) { after(); }
+      pending = c;
+      slot.appendChild(c);
+      c.scrollIntoView({ block: "nearest" });
     }).catch(function (e) {
       busy = false;
-      var c = el("article", "card");
-      c.appendChild(el("p", "note", "Tidak bisa disiapkan: " + e.message));
-      stream.insertBefore(c, stream.firstChild);
+      showNote("Tidak bisa disiapkan: " + e.message);
     });
   }
   function issueCard(t) {
@@ -217,9 +252,14 @@
     b.addEventListener("click", function () { prepare(build()); });
     return b;
   }
+  function formState() {
+    repoSel.hidden = openIssue !== null;
+    document.getElementById("prepare").textContent = openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru";
+  }
   function showIssue(id) {
-    openIssue = id;
     get("/api/issues/" + encodeURIComponent(id)).then(function (d) {
+      openIssue = id;
+      formState();
       clear(stream);
       var c = el("article", "card");
       c.appendChild(el("h2", "mono", d.id));
@@ -247,26 +287,29 @@
       stream.appendChild(c);
       var back = el("button", null, "Semua issue");
       back.type = "button";
-      back.addEventListener("click", function () { openIssue = null; renderIssues(); });
+      back.addEventListener("click", function () { openIssue = null; formState(); renderIssues(); });
       stream.appendChild(back);
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Issue tidak dapat dibaca.")); });
   }
   function loadIssues() {
     get("/api/issues").then(function (d) {
       issues = d.issues || [];
+      var keep = repoSel.value;
       clear(repoSel);
       (d.repos || []).forEach(function (r) { var o = el("option", null, r); o.value = r; repoSel.appendChild(o); });
+      if (keep) { repoSel.value = keep; }
       if (mode === "issue" && openIssue === null) { renderIssues(); }
     }).catch(function () { summary.textContent = "gagal memuat issue"; });
   }
   function setMode(m) {
     mode = m;
+    dropPending();
     Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
       b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");
     });
     issueForm.hidden = m !== "issue";
     query.hidden = m === "issue";
-    if (m === "issue") { openIssue = null; loadIssues(); renderIssues(); } else { renderOverview(); }
+    if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); } else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
     if (b.disabled) { return; }

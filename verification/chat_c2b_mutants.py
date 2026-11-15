@@ -28,6 +28,18 @@ M = [
     ("a start is prepared with a message of the page", J, [("{ action: \"issue_start\", job: d.id }", "{ action: \"issue_start\", job: d.id, action: \"issue_new\" }")]),
     ("a second link by the handoff", J, [("viewerLink(d.handoff ? VIEWER + d.handoff : null)", "viewerLink(d.handoff)")]),
     ("an autofocus on the composer", H, [("<textarea id=\"message\"", "<textarea autofocus id=\"message\"")]),
+    ("the issue form is nested in the composer form", H, [("    <div id=\"dock\">", "    <form id=\"composer-outer\"><div id=\"dock\">"), ("    </div>\n  </main>", "    </div></form>\n  </main>")]),
+    ("the script looks up an id the page lacks", H, [("<div id=\"slot\" role=\"status\" aria-live=\"polite\"></div>", "<div id=\"slot2\" role=\"status\" aria-live=\"polite\"></div>")]),
+    ("a new card does not settle the old one", J, [("    if (pending) { pending.settle();", "    if (pending) { if (false) pending.settle();")]),
+    ("a card is pushed into the stream", J, [("      slot.appendChild(c);\n      c.scrollIntoView", "      stream.insertBefore(c, stream.firstChild);\n      c.scrollIntoView")]),
+    ("batal stays on after confirm", J, [("      no.disabled = true;                               // once sent", "      // once sent")]),
+    ("a card with a confirm on its way is dropped", J, [("    if (pending && pending.sent) { return; }               // a confirm", "    // a confirm")]),
+    ("a prepare is allowed while a confirm is on its way", J, [("    if (busy || (pending && pending.sent)) { return; }", "    if (busy) { return; }")]),
+    ("a lost answer reads as a refusal", J, [("        if (e.answered) {", "        if (true) {")]),
+    ("a lost answer does not reload the list", J, [("          no.disabled = false;\n          loadIssues();", "          no.disabled = false;")]),
+    ("the open issue is set before the thread is read", J, [("      openIssue = id;\n      formState();\n      clear(stream);", "      formState();\n      clear(stream);"), ("  function showIssue(id) {\n", "  function showIssue(id) {\n    openIssue = id;\n")]),
+    ("the repo select stays for a reply", J, [("    repoSel.hidden = openIssue !== null;\n", "")]),
+    ("a late prepare lands in the new view", J, [("      if (mode !== ctx.mode || openIssue !== ctx.open) { return; }", "")]),
 ]
 
 if __name__ == "__main__":

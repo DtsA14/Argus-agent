@@ -37,9 +37,9 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
                 "app.css": "text/css; charset=utf-8"}
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
-    "index.html": "a91c4281e97add998e29d8ebceab4f34375d9a76ea33658d5647a839dd262752",
-    "app.js": "4222a1b59940c40615384f8600a1d6353c9daaf2606b3860a54987cfd77e27c0",
-    "app.css": "20914b2c9cbbb76e11fdd2429318427ac392ee1c33c0dda0e8c229975eb2329a",
+    "index.html": "69da68d1bf5bdd0cf1ee0ed19c2f25454da6626e480d7919eab979a854eab0da",
+    "app.js": "a754dce4fd2d927e96b268b683ce7c73072dcc5ad25a48f2381022310167f1bf",
+    "app.css": "7cc44b6c505d9bf5cafc23deefd47437b23e1fa6dd2e8a5915272819f7400e57",
 }
 
 

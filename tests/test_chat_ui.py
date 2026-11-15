@@ -60,7 +60,7 @@ def test_the_page_does_not_build_the_action_from_the_card():
 
 def test_the_issue_chip_is_on_and_the_composer_starts_hidden():
     assert re.search(r'data-mode="issue"[^>]*>Issue<', HTML) and not re.search(r'data-mode="issue"[^>]*disabled', HTML)
-    assert re.search(r'<form id="issue-form" hidden>', HTML)
+    assert re.search(r'<form id="issue-form" hidden[ >]', HTML)
     assert 'data-mode="research" disabled' in HTML                                    # research is C3
 
 
@@ -78,3 +78,62 @@ def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through
     assert "viewerLink(d.handoff ? VIEWER + d.handoff : null)" in JS
     assert JS.count("href") == 1
 
+
+
+# ---- Opus review of C2b (2026-11-15): NO-GO on the nested form, and the rest ------------------------------------------------
+
+def test_no_form_is_opened_inside_another_form():
+    from html.parser import HTMLParser
+
+    class P(HTMLParser):
+        depth = 0
+        bad = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "form":
+                if self.depth:
+                    self.bad.append(dict(attrs).get("id"))
+                self.depth += 1
+
+        def handle_endtag(self, tag):
+            if tag == "form":
+                self.depth -= 1
+    p = P()
+    p.feed(HTML)
+    assert p.bad == [] and p.depth == 0
+    assert HTML.count("<form ") == 2
+
+
+def test_every_element_the_script_looks_up_by_id_exists_in_the_page():
+    ids = set(re.findall(r'id="([^"]+)"', HTML))
+    wanted = set(re.findall(r'getElementById\("([^"]+)"\)', JS))
+    assert wanted <= ids, wanted - ids
+
+
+def test_only_one_card_can_be_live_and_a_new_one_settles_the_old():
+    body = JS.split("function dropPending")[1].split("function issueCard")[0]
+    assert "pending.settle()" in body and body.count("slot.appendChild(c)") == 2
+    assert body.index("dropPending();\n      var c = renderCard") > 0
+    assert "stream.insertBefore" not in JS                                              # no card is pushed in under the finger
+
+
+def test_batal_is_off_once_confirm_was_sent_and_a_card_with_a_confirm_on_its_way_is_kept():
+    ok = JS.split('ok.addEventListener("click"')[1].split("post(")[0]
+    assert "no.disabled = true;" in ok and "c.sent = true;" in ok
+    assert "if (pending && pending.sent) { return; }" in JS
+    assert "if (busy || (pending && pending.sent)) { return; }" in JS
+
+
+def test_a_failed_fetch_is_not_shown_as_a_refusal():
+    assert "err.answered = true" in JS and "Status tidak diketahui" in JS
+    after = JS.split("Status tidak diketahui")[1].split("});")[0]
+    assert "loadIssues()" in after
+
+
+def test_the_form_says_whether_it_makes_a_new_issue_or_a_reply():
+    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = openIssue !== null" in JS
+    assert re.search(r'encodeURIComponent\(id\)\)\.then\(function \(d\) \{\n\s+openIssue = id;', JS)      # set when the thread was read, not before
+
+
+def test_a_prepare_answered_after_the_user_moved_on_is_dropped():
+    assert "if (mode !== ctx.mode || openIssue !== ctx.open) { return; }" in JS
