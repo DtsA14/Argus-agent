@@ -342,13 +342,18 @@ Diputuskan 2026-11-15 (Atha):
   diukur). Yang dulu menunggu vonis (antrean "PRD sampai staging", operator rantai, pekerjaan baru di jalur riset) kini menunggu urutan
   inti di bawah.
 
+- **Urutan inti** (Atha 2026-11-15, memilih "Terima urutan" dari empat pilihan: terima, `argus apply` dulu, permukaan dulu, bahas
+  dulu): VF O1 kenari dan nonce → `argus apply` → antrean PRD; di permukaan: assistant atas Argus sendiri. Antrean PRD dibuka sesudah
+  kenari, nonce dan `argus apply`. Operator rantai dan pekerjaan baru di jalur riset tidak ada di urutan itu dan tetap tidak dimulai.
+- **Aturan main arah** (Atha 2026-11-15, memilih "2 minggu, 1 hari"): (1) satu angka di repo, persen issue yang sampai staging tanpa
+  campur tangan Claude; (2) arah hanya diubah di titik cek tetap **tiap 2 minggu, pertama 2026-11-29**, ide di antaranya masuk parkiran
+  di `PENDING.md`; (3) jatah eksplorasi permukaan **1 hari per minggu** (dihitung dengan kurang lebih 8 jam per hari; usul lama 1 dari
+  4 jam tidak berlaku); (4) log permintaan yang chat belum bisa di `PENDING.md`, kemampuan berikutnya dipilih dari log itu di titik cek.
+- **"Daya saing" untuk siapa** (Atha 2026-11-15, memilih "Portofolio/karier"): bukti dan angka cukup; production dan pengguna kedua
+  tetap ditunda. Bisa dibuka lagi di titik cek.
+
 Menunggu keputusan Atha (rinci di `PENDING.md`):
-1. *(selesai 2026-11-15: vonis fase 2, lihat di atas)*
-2. **Aturan main arah** (usul Claude 2026-11-15): satu angka di repo, titik cek tetap untuk mengubah arah, jatah eksplorasi, log
-   permintaan yang chat belum bisa.
-3. **Urutan inti** (usul Claude): kenari dan nonce → `argus apply` → antrean PRD; di permukaan: assistant atas Argus sendiri. Menentukan
-   kapan antrean PRD, operator rantai dan pekerjaan riset baru dibuka.
-4. **"Daya saing" untuk siapa:** portofolio/karier atau produk dengan pengguna lain (mengubah kapan production dibuka).
-5. **Approve dari HP lewat chat** dan tombol staging (dulu UI kontrol fase 3 dan 4): ditahan, prioritas rendah.
-6. **Operator rantai tetap** (`argus chain`) dan **redraft otomatis (3b)**: menunggu rantai lintas repo kedua dan kasus
+1. *(selesai 2026-11-15: vonis fase 2, urutan inti, aturan main arah, "daya saing" untuk siapa; lihat di atas)*
+2. **Approve dari HP lewat chat** dan tombol staging (dulu UI kontrol fase 3 dan 4): ditahan, prioritas rendah.
+3. **Operator rantai tetap** (`argus chain`) dan **redraft otomatis (3b)**: menunggu rantai lintas repo kedua dan kasus
    `submits_exhausted` berikutnya.
