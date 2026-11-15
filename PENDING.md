@@ -143,7 +143,7 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 
 ### Inti 2: bisa ditinggal (tanpa Claude di tengah)
 
-- [~] **`argus apply`** (spek rev 2 disetujui Atha 2026-11-15, dua PR: `applied()` lalu `apply`) (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
+- [~] **`argus apply`** (spek rev 2 disetujui Atha 2026-11-15, dua PR). **PR 1 selesai (2026-11-15):** `applied()` membandingkan seperti paket menulis patch (biner, pindah berkas, config diff lokal, textconv, `GIT_*` tidak lagi menyesatkan `as_is`), sha256 patch dicatat di `job.json` saat review, pencatat `_record_applied` tanpa kunci; `verify_at` PASS 5070, mutan 19/19 (`verification/applied_asis_mutants.log`). **Tersisa PR 2: perintah `argus apply`.** Catatan dari tinjauan: `patch-id --stable` buta terhadap spasi (indentasi, CRLF, newline akhir), jadi PR 2 membandingkan byte `git diff --cached` dengan `changes.patch` sebelum commit (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
   paling terasa (`pilots/prd_probe_v0/RESULT.md`). Bersamanya: `argus applied --amend <commit>` hanya untuk `APPLIED` yang belum
   di-deploy (kasus viewer 021). Jalur ketat; membuka layanan approval di kode (ADR-007).
 - [ ] **Arah "PRD sampai staging"** (Atha 2026-11-12): tahap PRD (obrolan menghasilkan `PRD.md` + daftar issue berurutan, di-approve

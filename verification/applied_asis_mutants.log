@@ -1,0 +1,28 @@
+KILLED  intake.git(clean) keeps GIT_* variables: ['FAILED tests/test_applied_asis.py::test_inherited_git_variables_do_not_redirect_the_commands']
+KILLED  show without --binary and --full-index: ['FAILED tests/test_applied_asis.py::test_a_binary_change_goes_in_as_it_was - a...']
+KILLED  show without --no-renames and diff.renames=false: ['FAILED tests/test_applied_asis.py::test_a_file_move_goes_in_as_it_was - asser...']
+STALE   no diff.context override: ['"-c", "diff.context=3", ']
+SURVIVED no diff.interHunkContext pin: 113 passed in 33.24s
+KILLED  no core.quotePath pin: ['FAILED tests/test_applied_asis.py::test_a_non_ascii_path_is_compared_as_the_package_writes_it']
+SURVIVED no color pin: 113 passed in 32.70s
+SURVIVED show with the external diff: 113 passed in 32.97s
+KILLED  show without --no-textconv: ['FAILED tests/test_applied_asis.py::test_a_textconv_driver_of_the_repository_does_not_run']
+KILLED  no diff.noprefix override: ['FAILED tests/test_applied_asis.py::test_local_diff_configuration_does_not_change_the_comparison[diff.noprefix-true]']
+SURVIVED no diff.mnemonicPrefix override: 113 passed in 33.42s
+KILLED  rev-parse not clean: ['FAILED tests/test_applied_asis.py::test_inherited_git_variables_do_not_redirect_the_commands']
+KILLED  show not clean: ['FAILED tests/test_applied_asis.py::test_inherited_git_variables_do_not_redirect_the_commands']
+KILLED  patch sha not recorded in job.json: ['FAILED tests/test_applied_asis.py::test_the_review_stage_records_the_patchs_sha256_in_the_job']
+KILLED  applied() without the lock: ['FAILED tests/test_applied_asis.py::test_applied_still_takes_the_lock_and_still_refuses_a_job_that_is_not_ready']
+KILLED  extra fields dropped from the log entry: ['FAILED tests/test_applied_asis.py::test_the_recording_is_one_function_that_does_not_take_the_lock']
+KILLED  reserved log fields allowed: ['FAILED tests/test_applied_asis.py::test_the_recorder_refuses_fields_that_are_the_log_entrys_own[at]']
+KILLED  the patch read twice: ['FAILED tests/test_applied_asis.py::test_the_recorded_sha_is_of_the_bytes_that_were_compared']
+KILLED  a missing patch is not a refusal: ['FAILED tests/test_applied_asis.py::test_a_missing_patch_is_a_refusal_not_a_traceback']
+KILLED  a git timeout is not a refusal: ['FAILED tests/test_applied_asis.py::test_a_git_timeout_is_a_refusal - subproce...']
+STALE   state not checked in the recorder: ['    if job.data["state"] != REVIEW_READY:\n        raise Refu']
+KILLED  as_is always True: ['FAILED tests/test_applied_asis.py::test_a_patch_changed_by_hand_is_still_told_apart']
+RESULT: 16/22 killed
+--- after the review of the run: 3 equivalent mutants removed (reasons in the script), the interHunkContext test strengthened, 2 stale patterns fixed; those three rerun:
+KILLED  no diff.context override
+KILLED  no diff.interHunkContext pin
+KILLED  state not checked in the recorder
+RESULT (19 mutants listed): 19/19 killed
