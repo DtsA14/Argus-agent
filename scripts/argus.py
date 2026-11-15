@@ -376,7 +376,9 @@ def main(argv=None, deps=None):
                 print(f"queue {q['id']}: {len(q['items'])} issues on {q['name']} at {q['base_commit'][:12]}, up to ${q['max_usd']:.2f}\n"
                       f"list sha {rq.list_sha(q)}\napprove the list and the money: argus queue go {q['id']} --sha {rq.list_sha(q)[:12]}")
             else:
-                print(rq.step(o.queue, cfg=cfg, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
+                text = rq.step(o.queue, cfg=cfg, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir)
+                print(text)
+                return 1 if " STOPPED " in text.splitlines()[0] else 0      # a /loop can tell a stopped queue from a waiting one
             return 0
         elif o.cmd == "research":
             from router import research as rr

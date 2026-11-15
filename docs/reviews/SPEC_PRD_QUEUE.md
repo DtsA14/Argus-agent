@@ -36,13 +36,13 @@ tindakan manusia. Itu dikatakan di sini supaya angka "tanpa campur tangan Claude
 
 ### 4.1 Bentuk
 `queues/<id>/queue.json` (di luar `jobs/`, di `.gitignore`; kunci `queues/<id>/.lock` `flock` tak-memblokir, seperti `Job.lock`, `router/job.py:163`):
-`{id, repo, base_commit (40 heksa, sudah di-resolve), max_usd, items: [{n, issue_sha256, job (id, dicatat SEBELUM job dimulai), at}], approved: {sha, at} | null, closed: {at, note} | null, created_at}`.
+`{id, repo, jobs_dir (path resolvido; ikut sha daftar, `step` menolak jobs dir lain: temuan Fable B1 rev 2), base_commit (40 heksa, sudah di-resolve), max_usd, items: [{n, issue_sha256, job (id, dicatat SEBELUM job dimulai), at}], approved: {sha, at} | null, closed: {at, note} | null, created_at}`.
 Teks issue disimpan di `queues/<id>/issue-<n>.md` dan **tidak pernah** dibaca ulang dari tempat lain; job menerima teks itu persis (sha dicek sebelum dipakai).
 Status antrean **diturunkan** setiap kali dari `job.json` tiap item, tidak disimpan (satu hal yang bisa basi lebih sedikit): `PENDING` (belum `go`), `WAITING <apa yang manusia harus lakukan>`,
 `STOPPED <alasan>`, `DONE`, `CLOSED`.
 
 ### 4.2 Perintah
-- `argus queue new --repo <nama> --commit <sha> --max-usd <usd> --issue f1.md --issue f2.md ...`: repo dari daftar `issue_writer.repos` (K2: tidak pernah Argus-agent); commit di-resolve ke 40 heksa;
+- `argus queue new --repo <nama> --commit <sha> --max-usd <usd> --issue-file f1.md --issue-file f2.md ...`: repo dari daftar `issue_writer.repos` (K2: tidak pernah Argus-agent); commit di-resolve ke 40 heksa;
   paling banyak `QUEUE_MAX_ITEMS` item (usul 8); satu antrean tidak-`CLOSED`/tidak-`DONE` per repo (dua antrean pada satu repo berebut HEAD). Mencetak daftar, sha tiap issue, dan **sha daftar** (sha256 dari repo, commit, batas biaya, dan sha issue berurutan).
 - `argus queue go <id> --sha <sha daftar, 12+>`: persetujuan manusia atas daftar dan jumlah uangnya. Tanpa ini `step` menolak.
 - `argus queue step <id>`: **paling banyak satu jalan model per panggilan** (drafter item berikutnya) dan hanya bila syaratnya terpenuhi; selain itu hanya mencetak apa yang menunggu (perintah `approve --sha ...` atau `apply --read-sha ...` dengan sha untuk `approve`; untuk `apply` sha patch dibaca dari `status`).

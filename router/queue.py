@@ -33,7 +33,8 @@ QUEUE_MAX_ITEMS = 8
 QUEUE_ID = re.compile(r"^q[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}$")
 PENDING, WAITING, STOPPED, DONE, CLOSED = "PENDING", "WAITING", "STOPPED", "DONE", "CLOSED"
 RUNNING_NEXT = "NEXT"           # derive's answer when the next item can start (shown as WAITING for `step`)
-FAILED = (rj.DRAFT_FAILED, rj.AGENT_FAILED, rj.REVIEW_INVALID, rj.BLOCKED, rj.REJECTED, rj.ABANDONED)
+FAILED = (rj.DRAFT_FAILED, rj.AGENT_FAILED, rj.REVIEW_INVALID, rj.BLOCKED, rj.REJECTED, rj.ABANDONED,
+          rj.RESEARCH_INCONCLUSIVE, rj.RESEARCH_FAILED)
 LIVE = (rj.NEW, rj.DRAFTING, rj.AWAITING_APPROVAL, rj.AGENT_RUNNING, rj.REVIEW_READY)
 SPENT_ONLY = (rj.ABANDONED, rj.BLOCKED, rj.REVIEW_INVALID)      # states that cannot spend again (LEGAL, JUDGEABLE)
 
@@ -47,7 +48,7 @@ def _sha(text):
 
 
 def _dir(queues_dir, qid):
-    if not isinstance(qid, str) or not QUEUE_ID.match(qid):
+    if not isinstance(qid, str) or not QUEUE_ID.fullmatch(qid):
         raise Refused(f"{qid!r} is not a queue id")
     return Path(queues_dir) / qid
 
@@ -76,21 +77,33 @@ def _flock(path, what):
 def _locked(queues_dir, qid):
     """The queue under its exclusive lock (refused at once if another command holds it): (dir, queue)."""
     d = _dir(queues_dir, qid)
+    if not (d / "queue.json").is_file():
+        raise Refused(f"no queue {qid!r}")
     with _flock(d / ".lock", f"queue {qid}"):
         yield d, _load(d, qid)
 
 
 def _load(d, qid):
     try:
-        return json.loads((d / "queue.json").read_text(encoding="utf-8"))
+        q = json.loads((d / "queue.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         raise Refused(f"no queue {qid!r}") from None
+    try:
+        ok = (isinstance(q, dict) and q["id"] == qid and isinstance(q["max_usd"], (int, float)) and isinstance(q["job_cap_usd"], (int, float))
+              and all(isinstance(q[k], str) for k in ("repo", "name", "base_commit", "jobs_dir"))
+              and isinstance(q["items"], list) and q["items"]
+              and all(isinstance(i, dict) and isinstance(i.get("issue_sha256"), str) and isinstance(i.get("n"), int) for i in q["items"]))
+    except KeyError:
+        ok = False
+    if not ok:
+        raise Refused(f"queue {qid}: queue.json is damaged; nothing was changed")
+    return q
 
 
 def list_sha(q):
     """What the human approves: the repository, the commit, the money, the caps and the issues in order."""
     return _sha(json.dumps({"repo": q["repo"], "name": q["name"], "commit": q["base_commit"], "max_usd_nano": to_nano(q["max_usd"]),
-                            "job_cap_nano": to_nano(q["job_cap_usd"]), "environment": q["environment"],
+                            "job_cap_nano": to_nano(q["job_cap_usd"]), "environment": q["environment"], "jobs_dir": q["jobs_dir"],
                             "issues": [i["issue_sha256"] for i in q["items"]]}, sort_keys=True))
 
 
@@ -147,8 +160,8 @@ def new(*, repo, commit, max_usd, issues, cfg, deps, queues_dir=QUEUES, jobs_dir
     d = _dir(queues_dir, qid)
     with _flock(Path(queues_dir) / ".new.lock", "the queues directory"):     # two `new` on one repository race
         for other in _all(queues_dir):
-            if other["repo"] == str(real) and derive(other, jobs_dir=jobs_dir)[0] not in (DONE, CLOSED):
-                raise Refused(f"queue {other['id']} on this repository is not finished (status {derive(other, jobs_dir=jobs_dir)[0]}): "
+            if other["repo"] == str(real) and derive(other)[0] not in (DONE, CLOSED):
+                raise Refused(f"queue {other['id']} on this repository is not finished (status {derive(other)[0].replace(RUNNING_NEXT, WAITING)}): "
                               "two queues would race for the same HEAD")
         if d.exists():
             raise Refused(f"queue {qid} already exists")
@@ -156,7 +169,7 @@ def new(*, repo, commit, max_usd, issues, cfg, deps, queues_dir=QUEUES, jobs_dir
         for n, t in enumerate(texts, 1):
             (d / f"issue-{n}.md").write_text(t, encoding="utf-8")
         q = {"id": qid, "repo": str(real), "name": repo, "environment": environment, "base_commit": full, "max_usd": money,
-             "job_cap_usd": cap, "created_at": deps.clock(),
+             "job_cap_usd": cap, "jobs_dir": str(Path(jobs_dir).resolve()), "created_at": deps.clock(),
              "items": [{"n": n, "issue_sha256": _sha(t), "job": None} for n, t in enumerate(texts, 1)],
              "approved": None, "closed": None}
         _save(d, q)
@@ -168,7 +181,7 @@ def _all(queues_dir):
     for p in sorted(Path(queues_dir).glob("q*/queue.json")) if Path(queues_dir).exists() else []:
         try:
             q = json.loads(p.read_text(encoding="utf-8"))
-            if isinstance(q, dict) and QUEUE_ID.match(q.get("id", "")):
+            if isinstance(q, dict) and QUEUE_ID.fullmatch(str(q.get("id", ""))):
                 out.append(q)
         except (OSError, ValueError):
             continue
@@ -226,25 +239,28 @@ def _bound(job, q, item, commit):
             and i.get("repo") == q["repo"])
 
 
-def derive(q, *, jobs_dir=rj.JOBS):
-    """(status, detail, actions, forget): the queue's status from the jobs, nothing written. forget: the items whose recorded
+def derive(q, *, jobs_dir=None):
+    """(status, detail, actions, forget, next): the queue's status from the jobs, nothing written. forget: the items whose recorded
     job is to be forgotten (missing, or ended without a stage); `step` does it, `status` only reads past it.
     actions: the lines for the human; the item to start is the first without a job (a dict under 'next')."""
     if q.get("closed"):
         return CLOSED, q["closed"].get("note") or "", [], [], None
     if not q.get("approved"):
         return PENDING, f"approve with `argus queue go {q['id']} --sha {list_sha(q)[:12]}`", [], [], None
+    jobs_dir = q["jobs_dir"]                            # the queue's own: a step on another jobs directory cannot see its jobs
     commit, forget, committed = q["base_commit"], [], 0
     for item in q["items"]:
         job = _open(item, jobs_dir) if item["job"] else None
+        if job is not None and not _bound(job, q, item, commit):
+            return STOPPED, f"item {item['n']}: job {job.id} is not this queue's issue on commit {commit[:12]}", [], forget, None
         if item["job"] and (job is None or (not job.data.get("stages") and job.data["state"] in (rj.NEW, rj.ABANDONED, rj.BLOCKED))):
-            forget.append(item)                         # recorded, but never started (missing, or ended before its first stage)
+            if job is not None and job.data["state"] == rj.BLOCKED:     # it would be made again at every step
+                return STOPPED, f"item {item['n']}: job {job.id} is BLOCKED before its first stage", [f"argus status {job.id}"], forget, None
+            forget.append(item)                         # recorded, but never started (missing, NEW, or abandoned before its first stage)
             job = None
         if job is None:
             return _next(q, item, commit, committed, jobs_dir, forget)
         state = job.data["state"]
-        if not _bound(job, q, item, commit):
-            return STOPPED, f"item {item['n']}: job {job.id} is not this queue's issue on commit {commit[:12]}", [], forget, None
         committed += committed_nano(job)
         if state == rj.APPLIED:
             nxt, as_is = _applied_commit(job)
@@ -285,8 +301,8 @@ def _next(q, item, commit, committed, jobs_dir, forget):
     return RUNNING_NEXT, f"item {item['n']} is next", [], forget, {"item": item, "commit": commit}
 
 
-def status_lines(q, *, jobs_dir=rj.JOBS):
-    status, detail, actions, _, nxt = derive(q, jobs_dir=jobs_dir)
+def status_lines(q, *, jobs_dir=None):
+    status, detail, actions, _, nxt = derive(q)
     status = WAITING if status == RUNNING_NEXT else status
     head = f"queue {q['id']} {status} on {q['name']} ({len(q['items'])} issues, up to ${q['max_usd']:.2f}, ${q['job_cap_usd']:.2f} per job)"
     lines = [head, *([detail] if detail else []), *[f"  {a}" for a in actions]]
@@ -295,8 +311,8 @@ def status_lines(q, *, jobs_dir=rj.JOBS):
     return "\n".join(lines)
 
 
-def status(qid, *, queues_dir=QUEUES, jobs_dir=rj.JOBS):
-    return status_lines(_load(_dir(queues_dir, qid), qid), jobs_dir=jobs_dir)
+def status(qid, *, queues_dir=QUEUES, jobs_dir=None):
+    return status_lines(_load(_dir(queues_dir, qid), qid))
 
 
 # ---- step ---------------------------------------------------------------------------------------------------------
@@ -308,11 +324,13 @@ def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
             raise Refused(f"queue {qid} is closed")
         if not q.get("approved") or q["approved"].get("sha") != list_sha(q):
             raise Refused(f"queue {qid} is not approved, or its list changed since (approve with `argus queue go`); nothing was started")
+        if Path(jobs_dir).resolve() != Path(q["jobs_dir"]):
+            raise Refused(f"queue {qid} belongs to the jobs directory {q['jobs_dir']}, not {Path(jobs_dir).resolve()}; nothing was started")
         if not 0 < q["job_cap_usd"] <= ri.CODE_MAX_USD:
             raise Refused("the queue's job cap is more than issue_writer allows; nothing was started")
         for item in q["items"]:
             _issue_text(d, item)
-        status, detail, actions, forget, nxt = derive(q, jobs_dir=jobs_dir)
+        status, detail, actions, forget, nxt = derive(q)
         for item in forget:                             # B1: a job that ended before its first stage is not the item's
             job = _open(item, jobs_dir)
             if job is not None and job.data["state"] == rj.NEW:
@@ -321,10 +339,10 @@ def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
         if forget:
             _save(d, q)
         if nxt is None:
-            return status_lines(q, jobs_dir=jobs_dir)
+            return status_lines(q)
         item = nxt["item"]
         job_id = rj.new_job_id()
-        item["job"] = job_id                            # recorded before the job exists: a start cut off never starts a second one
+        item["job"], item["at"] = job_id, deps.clock()  # recorded before the job exists: a start cut off never starts a second one
         _save(d, q)
         try:
             rj.start_code(repo=q["repo"], commit=nxt["commit"], issue=_issue_text(d, item), cfg=cfg, deps=deps,
@@ -332,4 +350,4 @@ def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
                           environment=q["environment"])
         except rj.Refused:
             raise                                       # the id stays recorded: the next step settles it (forget, abandon NEW)
-        return status_lines(q, jobs_dir=jobs_dir)
+        return status_lines(q)
