@@ -307,7 +307,11 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "apply":
             from router import apply as ra
-            print(rj.status(ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id, jobs_dir=o.jobs_dir))
+            done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note)
+            print(rj.status(done.id, jobs_dir=o.jobs_dir))
+            e = done.data["log"][-1]
+            print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}); not pushed, not deployed.\n"
+                  f"next: `argus stage deploy {done.id}` needs its PLAN.md and your go live.")
             return 0
         if o.cmd == "applied":
             print(rj.status(rj.applied(o.job, o.commit, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id,

@@ -4,7 +4,8 @@ the sha `status` prints (it does not prove the patch was read, as `approve --sha
 
 Nothing here pushes, merges, deploys or calls a model. The target repository and its .git are trusted code and so is the git binary; everything else the
 repository could make git run (hooks, filters, fsmonitor, gpg, diff drivers, includes, GIT_* of the caller) is switched off or refused. Every refusal before the
-first change leaves the repository and the job untouched; a failure after it is undone and checked."""
+first change leaves the repository and the job untouched (git may write one unreachable blob object while it checks the patch in a temporary index); a failure after it is
+undone and checked, unless the commit was already made."""
 import fcntl
 import hashlib
 import json
@@ -82,14 +83,6 @@ def lock_repo(jobs_dir, repo):
         os.close(fd)
 
 
-def _lock_repo(jobs_dir, repo):
-    """For tests: the raw lock, held until the returned descriptor is closed."""
-    key = hashlib.sha256(os.path.realpath(repo).encode()).hexdigest()[:16]
-    fd = os.open(Path(jobs_dir) / f".repo-{key}.lock", os.O_RDWR | os.O_CREAT, 0o644)
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    return fd
-
-
 def raw_entries(out):
     """[(old mode, new mode, status, path)] from `git diff-index --raw -z --no-renames`."""
     parts, i, entries = out.split(b"\0"), 0, []
@@ -109,11 +102,13 @@ def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None):
 
 
 def _title(review_dir, job_id):
+    """The package's PR title for the commit message; any trouble reading it (no file, not UTF-8, a NUL) is the fallback, never an exception."""
     try:
-        for line in (Path(review_dir) / "PR.md").read_text(encoding="utf-8").splitlines():
+        text = (Path(review_dir) / "PR.md").read_bytes().decode("utf-8", "replace").replace("\0", "")
+        for line in text.splitlines():
             if line.startswith("# "):
                 return line[2:].strip()[:120] or f"job {job_id}"
-    except OSError:
+    except (OSError, ValueError):
         pass
     return f"job {job_id}"
 
@@ -163,13 +158,13 @@ def _apply(job, read_sha, *, deps, note):
         bad = sorted({k for k in keys if not LOCAL_OK.match(k)})
         if bad:
             refuse(f"the repository's local git configuration has keys this command does not accept ({', '.join(bad[:5])}); apply by hand")
-        identity = _identity(repo)
-        if identity is None:
-            refuse("no git identity (user.name and user.email): set them in the repository or globally; none is made up")
         head = run_git(repo, "rev-parse", "HEAD").decode().strip()
         started = [e for e in job.data.get("log") or [] if e.get("what") == "apply_started"]
         if started and _recovered(job, repo, head, started[-1], sha, patch, deps, note, read_sha):
             return job
+        identity = _identity(repo)
+        if identity is None:
+            refuse("no git identity (user.name and user.email): set them in the repository or globally; none is made up")
         # 4. the repository: clean, on a branch nobody else holds, at the commit the job was taken in at
         dirty = run_git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all")
         if dirty:
@@ -188,11 +183,15 @@ def _apply(job, read_sha, *, deps, note):
             index = Path(tmp) / "index"
             run_git(repo, "read-tree", "HEAD", index=index)
             run_git(repo, "apply", "--cached", "--whitespace=nowarn", data=patch, index=index)
+            staged = run_git(repo, *DIFF_PINS, "diff", "--cached", "--binary", "--full-index", "--no-renames", "--no-textconv", "--no-color",
+                             "--no-ext-diff", index=index)
             entries = raw_entries(run_git(repo, "diff-index", "--cached", "--raw", "-z", "--no-renames", "HEAD", index=index))
     except GitFail as e:
         refuse(str(e))
     except subprocess.TimeoutExpired:
         refuse("git took too long")
+    if staged != patch:
+        refuse("what git would stage is not the package's patch byte for byte (the patch is not as the package writes it, or a conversion changes it)")
     if not entries:
         refuse("the patch changes nothing")
     for old, new, status, path in entries:
@@ -203,21 +202,33 @@ def _apply(job, read_sha, *, deps, note):
             refuse(f"{path}: a git metadata path is not applied by this command")
     if sorted(p for _, _, _, p in entries) != listed:
         refuse("the files the patch changes are not the files the package lists")
-    # 6. the change itself: logged first, applied to the tree and the index, compared byte for byte with the package's patch, committed
+    # 6. the change itself: logged first, applied to the tree and the index, committed
+    title = _title(review_dir, job.id)
     job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha)
     commit = None
     try:
         run_git(repo, "apply", "--index", "--whitespace=nowarn", data=patch)
-        staged = run_git(repo, *DIFF_PINS, "diff", "--cached", "--binary", "--full-index", "--no-renames", "--no-textconv", "--no-color", "--no-ext-diff")
-        if staged != patch:
-            raise GitFail("the staged change is not the package's patch byte for byte (a conversion on the way in?)")
-        run_git(repo, "commit", "-q", "--no-verify", "--no-gpg-sign", "-m", _title(review_dir, job.id),
+        run_git(repo, "commit", "-q", "--no-verify", "--no-gpg-sign", "-m", title,
                 "-m", f"Applied by `argus apply` from the review package of job {job.id}.",
                 "-m", f"Argus-Job: {job.id}\nArgus-Patch-Sha256: {sha}", identity=identity)
         commit = run_git(repo, "rev-parse", "HEAD").decode().strip()
-    except (GitFail, subprocess.TimeoutExpired) as e:
-        undone = _undo(repo, patch)
-        raise rj.Refused(f"job {job.id}: {e}; the change was undone" + ("" if undone else f"; THE TREE IS NOT CLEAN: git -C {repo} status")) from None
+    except Exception as e:                                  # not BaseException: a kill is the crash the next call heals
+        try:
+            now = run_git(repo, "rev-parse", "HEAD").decode().strip()
+        except Exception:
+            now = None
+        if now and now != head:                             # the commit exists (the failure came after it): it is not undone
+            commit = now
+        else:
+            undone = _undo(repo, patch)
+            raise rj.Refused(f"job {job.id}: {e}; the change was undone" + ("" if undone else f"; THE TREE IS NOT CLEAN: git -C {repo} status")) from None
+    try:
+        parent = run_git(repo, "rev-parse", f"{commit}^").decode().strip()
+    except Exception:
+        parent = None
+    if parent != head:
+        raise rj.Refused(f"job {job.id}: HEAD moved while the patch went in: the commit {commit[:12]} was made on {str(parent)[:12]}, not on {head[:12]}; "
+                         "it stays and the job is not recorded: look at it, then `argus applied` if it is right")
     return _record(job, commit, deps, note, head, ref[11:], read_sha)
 
 

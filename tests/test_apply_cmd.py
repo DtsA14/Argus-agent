@@ -186,7 +186,7 @@ def test_a_job_from_before_the_recorded_sha_is_refused_with_the_manual_way(env, 
     job = env.job()
     job.data["stages"]["a1"]["review"].pop("patch_sha256")
     job.save()
-    refused(env, tmp_path, sha, "by hand|predates|recorded")
+    refused(env, tmp_path, sha, "predates")
 
 
 def test_the_file_list_must_be_the_one_the_package_names(env, tmp_path):
@@ -256,24 +256,30 @@ def test_a_patch_that_makes_a_symlink_is_refused(env, tmp_path):
 
 def test_an_empty_patch_and_a_patch_that_does_not_apply_are_refused(env, tmp_path):
     patch, sha = rewrite(env, b"", [])
-    refused(env, tmp_path, sha, "empty|no change")
+    refused(env, tmp_path, sha, "the patch is empty")
     bad = (b"diff --git a/src/shop.py b/src/shop.py\n--- a/src/shop.py\n+++ b/src/shop.py\n@@ -1,2 +1,2 @@\n-nothing like it\n+x\n")
     patch, sha = rewrite(env, bad, [{"path": "src/shop.py", "change": "M"}])
     refused(env, tmp_path, sha)
 
 
 @pytest.mark.parametrize("key, value", [("filter.x.clean", "cat"), ("core.fsmonitor", "true"), ("include.path", "/dev/null"),
-                                        ("diff.x.textconv", "cat"), ("commit.gpgsign", "true"), ("core.hooksPath", "/tmp/h")])
+                                        ("diff.x.textconv", "cat"), ("commit.gpgsign", "true"), ("core.hooksPath", "/tmp/h"),
+                                        ("alias.st", "status"), ("core.sshCommand", "ssh"), ("core.worktree", "/tmp"),
+                                        ("core.attributesFile", "/tmp/a"), ("gpg.program", "/bin/true"), ("diff.external", "/bin/true")])
 def test_a_local_configuration_outside_the_allowlist_is_refused_by_name(env, tmp_path, key, value):
     patch, sha = package(env, tmp_path, edit_shop())
     g(env.repo, "config", key, value)
-    refused(env, tmp_path, sha, key.split(".")[0])
+    before = head(env)
+    with pytest.raises(rj.Refused, match=key.split(".")[0] + "|top level"):          # core.worktree moves git's top level: refused for that, still refused
+        run_apply(env, sha)
+    g(env.repo, "config", "--unset", key)                                        # the check below reads the repository with git: without the key
+    untouched(env, before)
 
 
 def test_without_any_identity_the_command_refuses_and_makes_none_up(env, tmp_path, home):
     patch, sha = package(env, tmp_path, edit_shop())
     (home / ".gitconfig").unlink()
-    refused(env, tmp_path, sha, "identity|user.name")
+    refused(env, tmp_path, sha, "no git identity")
 
 
 def test_a_repository_that_is_gone_or_is_the_argus_checkout_is_refused(env, tmp_path, monkeypatch):
@@ -335,13 +341,19 @@ def test_two_applies_on_one_repository_and_on_one_job_are_refused_while_one_runs
     held = env.job()
     with held.lock(), pytest.raises(rj.Refused):
         run_apply(env, sha)
-    fd = ra._lock_repo(env.jobs, env.repo)
-    try:
+    with ra.lock_repo(env.jobs, env.repo):
         with pytest.raises(rj.Refused, match="another"):
             run_apply(env, sha)
-    finally:
-        os.close(fd)
     run_apply(env, sha)
+
+
+def test_the_repository_lock_is_the_same_for_two_paths_to_one_repository(env, tmp_path):
+    link = tmp_path / "link"
+    link.symlink_to(env.repo)
+    with ra.lock_repo(env.jobs, env.repo):
+        with pytest.raises(rj.Refused, match="another"):
+            with ra.lock_repo(env.jobs, link):
+                pass
 
 
 def test_a_commit_that_fails_leaves_the_repository_and_the_job_as_they_were(env, tmp_path, monkeypatch):
@@ -405,3 +417,192 @@ def test_a_patch_that_is_not_what_git_would_write_byte_for_byte_is_undone(env, t
     with pytest.raises(rj.Refused, match="byte for byte"):
         run_apply(env, sha)
     untouched(env, before)
+
+
+def test_a_commit_that_is_not_the_patch_is_not_recorded_but_stays_and_is_named(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    calls = []
+
+    def patch_id(repo, diff):
+        calls.append(1)
+        return "same" if len(calls) % 2 else "different"            # the patch's id, then the commit's: they differ
+    monkeypatch.setattr(rj, "patch_id", patch_id)
+    with pytest.raises(rj.Refused, match="was made and stays.*argus applied"):
+        run_apply(env, sha)
+    assert head(env) != before and env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_commit_of_another_job_or_another_patch_is_not_taken_for_this_jobs_apply(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = rj._record_applied
+    monkeypatch.setattr(rj, "_record_applied", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt("killed after the commit")))
+    with pytest.raises(KeyboardInterrupt):
+        run_apply(env, sha)
+    monkeypatch.setattr(rj, "_record_applied", real)
+    g(env.repo, "-c", "user.name=t", "-c", "user.email=t@example.org", "commit", "-q", "--amend", "-m", "x\n\nArgus-Job: another\nArgus-Patch-Sha256: " + sha, check=True)
+    with pytest.raises(rj.Refused):
+        run_apply(env, sha)
+    assert env.job().data["state"] == rj.REVIEW_READY and g(env.repo, "rev-list", "--count", f"{before}..HEAD") == "1"
+
+
+# ---- the review of the first implementation -----------------------------------------------------------------------------------------------
+
+def test_a_job_json_that_does_not_name_the_patch_is_refused_even_when_provenance_does(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    job = env.job()
+    job.data["stages"]["a1"]["review"]["patch_sha256"] = "0" * 64
+    job.save()
+    refused(env, tmp_path, sha, "not the one the review recorded")
+
+
+def test_the_users_global_git_configuration_is_used_for_the_identity_and_for_nothing_else(env, tmp_path, home):
+    marks = {n: tmp_path / f"ran-{n}" for n in ("fsmonitor", "gpg", "filter", "pager")}
+    scripts = {}
+    for n, mark in marks.items():
+        sc = tmp_path / f"{n}.sh"
+        sc.write_text(f"#!/bin/sh\ntouch {mark}\ncat\n")
+        sc.chmod(0o755)
+        scripts[n] = sc
+    (home / ".gitconfig").write_text(
+        "[user]\n\tname = Global Person\n\temail = global@example.org\n"
+        f"[core]\n\tfsmonitor = {scripts['fsmonitor']}\n\tpager = {scripts['pager']}\n"
+        f"[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = {scripts['gpg']}\n"
+        f"[filter \"x\"]\n\tclean = {scripts['filter']}\n\tsmudge = {scripts['filter']}\n")
+    patch, sha = package(env, tmp_path, edit_shop())
+    (env.repo / ".git" / "info").mkdir(exist_ok=True)
+    (env.repo / ".git" / "info" / "attributes").write_text("*.py filter=x\n")
+    for m in marks.values():
+        m.unlink(missing_ok=True)
+    job = run_apply(env, sha)
+    assert job.data["state"] == rj.APPLIED and [n for n, m in marks.items() if m.exists()] == []
+    assert g(env.repo, "log", "-1", "--format=%an") == "Global Person"
+
+
+def test_a_pr_md_that_cannot_be_read_as_a_title_gives_the_fallback_not_a_half_applied_repository(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    d = Path(env.job().data["stages"]["a1"]["review"]["dir"])
+    (d / "PR.md").write_bytes(b"# title with a NUL \x00 and bad bytes \xff\xfe\n")
+    job = run_apply(env, sha)
+    assert job.data["state"] == rj.APPLIED and "\x00" not in g(env.repo, "log", "-1", "--format=%s")
+    shutil.rmtree(tmp_path / "s", ignore_errors=True)
+
+
+def test_a_head_that_moved_while_the_patch_went_in_is_named_and_not_recorded(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    real = ra.run_git
+    moved = []
+
+    def racing(repo, *args, **kw):
+        if args and args[0] == "apply" and "--index" in args and not moved:
+            moved.append(1)
+            real(repo, "-c", "user.name=h", "-c", "user.email=h@example.org", "commit", "-q", "--allow-empty", "-m", "a human commit")
+        return real(repo, *args, **kw)
+    monkeypatch.setattr(ra, "run_git", racing)
+    with pytest.raises(rj.Refused, match="HEAD moved"):
+        run_apply(env, sha)
+    assert env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_failure_after_the_commit_is_not_reported_as_undone_and_is_recorded(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = ra.run_git
+    state = {"committed": False, "failed": False}
+
+    def flaky(repo, *args, **kw):
+        out = real(repo, *args, **kw)
+        if args and args[0] == "commit":
+            state["committed"] = True
+        elif args == ("rev-parse", "HEAD") and state["committed"] and not state["failed"]:
+            state["failed"] = True
+            raise ra.GitFail("rev-parse timed out")
+        return out
+    monkeypatch.setattr(ra, "run_git", flaky)
+    job = run_apply(env, sha)
+    assert job.data["state"] == rj.APPLIED and g(env.repo, "rev-list", "--count", f"{before}..HEAD") == "1"
+
+
+def test_when_even_the_reverse_apply_fails_the_hard_reset_cleans_and_when_nothing_works_the_tree_is_named(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = ra.run_git
+
+    def broken(repo, *args, **kw):
+        if args and args[0] == "commit":
+            raise ra.GitFail("commit refused")
+        if args[:2] == ("apply", "-R"):
+            raise ra.GitFail("reverse refused")
+        return real(repo, *args, **kw)
+    monkeypatch.setattr(ra, "run_git", broken)
+    with pytest.raises(rj.Refused, match="was undone"):
+        run_apply(env, sha)
+    untouched(env, before)
+    def worse(repo, *args, **kw):
+        if args and args[0] in ("commit", "reset") or args[:2] == ("apply", "-R"):
+            raise ra.GitFail("refused")
+        return real(repo, *args, **kw)
+    monkeypatch.setattr(ra, "run_git", worse)
+    with pytest.raises(rj.Refused, match="THE TREE IS NOT CLEAN"):
+        run_apply(env, sha)
+
+
+def test_a_commit_two_on_from_the_recorded_head_or_with_another_patch_is_not_recovered(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = rj._record_applied
+    monkeypatch.setattr(rj, "_record_applied", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt("killed after the commit")))
+    with pytest.raises(KeyboardInterrupt):
+        run_apply(env, sha)
+    monkeypatch.setattr(rj, "_record_applied", real)
+    mine = head(env)
+    g(env.repo, "-c", "user.name=t", "-c", "user.email=t@example.org", "commit", "-q", "--allow-empty", "-m", "someone else, on top")
+    with pytest.raises(rj.Refused):
+        run_apply(env, sha)                                    # HEAD is two commits on from head_before: not the one this job made
+    assert env.job().data["state"] == rj.REVIEW_READY
+    g(env.repo, "reset", "-q", "--hard", mine)
+    g(env.repo, "-c", "user.name=t", "-c", "user.email=t@example.org", "commit", "-q", "--amend", "-m", "x\n\nArgus-Job: jtest\nArgus-Patch-Sha256: " + "0" * 64)
+    with pytest.raises(rj.Refused):
+        run_apply(env, sha)                                    # the trailers name another patch
+    assert before != head(env)
+
+
+def link_in_the_base(env):
+    """A symlink in the repository's base commit: the job's intake commit is moved to it."""
+    os.symlink("src/shop.py", env.repo / "alias")
+    g(env.repo, "add", "-A")
+    td.git(env.repo, "commit", "-qm", "base with a symlink")
+    job = env.job()
+    job.data["intake"]["commit"] = head(env)
+    job.save()
+
+
+def test_a_patch_that_changes_a_symlink_that_exists_is_refused(env, tmp_path):
+    link_in_the_base(env)
+    def change(r):
+        (r / "alias").unlink()
+        os.symlink("tests/test_old.py", r / "alias")
+    patch, sha = package(env, tmp_path, change)
+    refused(env, tmp_path, sha, "symlink")
+
+
+def test_a_patch_that_adds_a_submodule_entry_is_refused(env, tmp_path):
+    scratch = tmp_path / "s3"
+    shutil.copytree(env.repo, scratch)
+    g(scratch, "update-index", "--add", "--cacheinfo", f"160000,{head(env)},sub")
+    patch = subprocess.run(["git", "-C", str(scratch), "diff", "--cached", "--binary", "--full-index", "--no-renames", "--no-color", "--no-ext-diff"],
+                           capture_output=True, check=True).stdout
+    assert b"160000" in patch
+    patch, sha = rewrite(env, patch, [{"path": "sub", "change": "A"}])
+    refused(env, tmp_path, sha, "symlink or a submodule")
+
+
+def test_the_cli_prints_the_branch_and_says_it_was_not_pushed(env, tmp_path, capsys):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    patch, sha = package(env, tmp_path, edit_shop())
+    branch = g(env.repo, "symbolic-ref", "--short", "HEAD")
+    assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12]], deps=env.deps) == 0
+    out = capsys.readouterr().out
+    assert f"applied on branch {branch}" in out and "not pushed, not deployed" in out and "argus stage deploy jtest" in out
