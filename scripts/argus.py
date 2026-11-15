@@ -82,6 +82,7 @@ def main(argv=None, deps=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config")
     ap.add_argument("--jobs-dir", default=str(rj.JOBS))
+    ap.add_argument("--queues-dir", default=str(rj.ROOT / "queues"))
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("code")
     c.add_argument("--repo", required=True)
@@ -181,6 +182,24 @@ def main(argv=None, deps=None):
     ist.add_argument("--via", choices=rj.VIA, help="where the start was decided (SPEC_CONTROL_UI F4)")
     ist.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
     ist.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
+    qp = sub.add_parser("queue", help="issues in order on one repository, each on the commit the one before was applied as (docs/reviews/SPEC_PRD_QUEUE.md)")
+    qsub = qp.add_subparsers(dest="queue_cmd", required=True)
+    qn = qsub.add_parser("new", help="a queue (PENDING): nothing runs until `go`")
+    qn.add_argument("--repo", required=True, help="a name of issue_writer.repos in the config")
+    qn.add_argument("--commit", required=True, help="the repository's HEAD now")
+    qn.add_argument("--max-usd", type=float, required=True, help="the queue's money; at most $5.00")
+    qn.add_argument("--issue-file", action="append", required=True, help="one issue per file, in order (repeat)")
+    qg = qsub.add_parser("go", help="approve the list and the money (its sha, as `new` and `status` print it)")
+    qg.add_argument("queue")
+    qg.add_argument("--sha", required=True)
+    qs = qsub.add_parser("step", help="at most one drafter run; otherwise what waits for a human. Never approves or applies")
+    qs.add_argument("queue")
+    qs.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
+    qs.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
+    qsub.add_parser("status").add_argument("queue")
+    qc = qsub.add_parser("close", help="close a stuck queue; no job is touched")
+    qc.add_argument("queue")
+    qc.add_argument("--note", required=True)
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user); retired at C4b by `chat serve --port 8711`, code removed at C5")
@@ -305,6 +324,15 @@ def main(argv=None, deps=None):
             print(rj.status(fn(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir, sha=o.sha, via=o.via).id,
                             jobs_dir=o.jobs_dir))
             return 0
+        if o.cmd == "queue" and o.queue_cmd in ("go", "status", "close"):
+            from router import queue as rq
+            if o.queue_cmd == "status":
+                print(rq.status(o.queue, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
+                return 0
+            q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir) if o.queue_cmd == "go"
+                 else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
+            print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
+            return 0
         if o.cmd == "apply":
             from router import apply as ra
             done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note)
@@ -340,6 +368,16 @@ def main(argv=None, deps=None):
                 job = ri.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0 if job.data["state"] == ri.AWAITING_HUMAN else 1
+        elif o.cmd == "queue":
+            from router import queue as rq
+            if o.queue_cmd == "new":
+                q = rq.new(repo=o.repo, commit=o.commit, max_usd=o.max_usd, cfg=cfg, deps=deps, queues_dir=o.queues_dir,
+                           jobs_dir=o.jobs_dir, issues=[Path(f).read_text(encoding="utf-8") for f in o.issue_file])
+                print(f"queue {q['id']}: {len(q['items'])} issues on {q['name']} at {q['base_commit'][:12]}, up to ${q['max_usd']:.2f}\n"
+                      f"list sha {rq.list_sha(q)}\napprove the list and the money: argus queue go {q['id']} --sha {rq.list_sha(q)[:12]}")
+            else:
+                print(rq.step(o.queue, cfg=cfg, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
+            return 0
         elif o.cmd == "research":
             from router import research as rr
             question = o.question if o.question is not None else Path(o.question_file).read_text(encoding="utf-8")
