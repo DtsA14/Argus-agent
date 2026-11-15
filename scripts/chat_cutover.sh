@@ -71,7 +71,7 @@ PY
   if [ -n "$cp" ] && [ "$cp" = "$(main_pid argus-control.service)" ]; then ok "8711 is argus-control (pid $cp)"; else note "8711 listener: ${cp:-none}"; fi
   if [ -n "$hp" ] && [ "$hp" = "$(main_pid argus-chat.service)" ]; then ok "8712 is argus-chat (pid $hp)"; else note "8712 listener: ${hp:-none}"; fi
   # 5. the rollback is possible
-  [ -e "$HOME/.config/systemd/user/argus-control.service" ] && ok "argus-control.service is still installed (rollback possible)" || bad "argus-control.service is gone"
+  [ -e "$LIVE/deploy/systemd/argus-control.service" ] && ok "argus-control.service is in the checkout (rollback possible: `disable` removes the installed link, rollback re-links it)" || bad "deploy/systemd/argus-control.service is missing from the checkout"
   ls "$HOME"/.ssh/authorized_keys.bak-* >/dev/null 2>&1 && ok "an authorized_keys backup exists" || note "no ~/.ssh/authorized_keys.bak-* yet: make one before step 7"
   echo
   [ "$FAILED" = 0 ] && echo "SAFE to cut over." || { echo "NOT safe yet."; exit 1; }
@@ -147,7 +147,7 @@ rollback() {
   run rm -f "$DROPIN"
   run systemctl --user daemon-reload
   run systemctl --user restart argus-chat.service
-  run systemctl --user enable --now argus-control.service
+  run systemctl --user enable --now "$LIVE/deploy/systemd/argus-control.service"      # `disable` removed the link in ~/.config/systemd/user; enabling by path makes it again
   if [ "$yes" = "--yes" ]; then
     sleep 3
     [ "$(listener_pid 8711)" = "$(main_pid argus-control.service)" ] && ok "8711 is argus-control again" || bad "8711 is not argus-control"
