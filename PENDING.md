@@ -6,7 +6,7 @@ yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-15
 (salinan utuh sampai 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
 [`PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-15 (tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
+Terakhir diperbarui: 2026-11-15 (Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
 terbuka dibawa ke sini atau dicatat di bagian "Diarsipkan 2026-11-15"). Butir di bawah yang menyebut "arsip" punya rincian lengkap di
 arsip 2026-11-15.
 
@@ -78,6 +78,14 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ## Terbuka sekarang
 
+**Dicek 2026-11-15 terhadap kode dan git log (Inti 1, 2 dan 3):** tiga butir Inti 1 sudah dikerjakan tetapi masih tercatat terbuka (butir judge dan R1b, kalimat
+rerun di "Paket 3", baris `dN submits`); dikoreksi di bawah. Inti 2 dan 3: tidak ada pekerjaan yang terlewat. Dasarnya: grep tidak menemukan
+`argus apply`, `applied --amend`, `argus fix`, `argus chain`, antrean atau tahap PRD, redraft otomatis, pembacaan `lock_sha256`, kontrak API di snapshot, ukuran
+waktu sandbox per job, atau idempotency key di `scripts/`, `router/`, `codetask/`, `harness/`. Yang tidak bisa dipastikan dari grep: apakah `viewer-smoke` kini ikut
+gerbang `viewer-deploy` (perintahnya ada di `router/stage_viewer.py`), dan penolakan key yang tetap meninggalkan job `NEW` (`start_code` membuat job sebelum
+pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya mengenal Anthropic (`KEY_SHAPE`, `router/job.py:80`).
+
+
 ### Keputusan Atha yang ditunggu
 
 - [ ] **GATE-10** (tidak darurat, 2026-11-14): P1 memindai tes yang ditulis agen sendiri dengan pola deteksi, sehingga tes jujur yang
@@ -94,16 +102,16 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 - [ ] **Approve atas patch akhir, bukan rencana** (`pilots/outside_v2/PROTOCOL_FINAL_PATCH.md`): dipakai di batch 3; pembacaan acak 1
   dari 3 oleh pembaca yang didelegasikan Atha: 0 dari 3 terbalik, tidak bisa membedakan karena semuanya reject (`atha_verdicts.json`,
   #504). Belum menjadi alur baku di harness.
-- [ ] **Judge mati sebagai bawaan**, diganti R1 dijalankan lagi pada pohon yang sudah di-patch (`raised` di dasar lalu `ran clean`);
-  aturan validitas (tes yang ditambah PR harus gagal di dasar, F2P ≥ 1; issue fitur yang nama API-nya belum ada di dasar masuk "rubrik
-  saja"); rubrik A/B/C ditulis eksplisit, semua patch dinilai dua model, Atha menilai 3 sampai 4 sebagai jangkar; cek batas
-  pengetahuan DeepSeek (urutan Fable 2026-11-13, arsip).
+- [~] **Urutan Fable 2026-11-13, butir 3–4 (judge, R1b, validitas, rubrik)**: **sebagian besar selesai.** Judge mati sebagai bawaan (#485); R1b, issue
+  dijalankan lagi pada pohon yang sudah di-patch, `raised` di dasar lalu `ran clean` (#485, `tests/test_repro_patched.py`); aturan validitas v2, F2P hanya dari
+  tes yang ditambah PR (#487, dipakai di batch 3); semua patch batch 3 dinilai buta oleh Opus dan Fable (#505); cek batas pengetahuan DeepSeek
+  (`knowledge_check.py` #495, hasil "no" di 10 probe; probe tidak bisa memisahkan ingatan dari kehati-hatian). **Tersisa:** Atha sendiri menilai 3 sampai 4 patch
+  sebagai jangkar (tidak ada buktinya di git log; pembaca yang didelegasikan Atha tidak sama dengan penilaian Atha).
 - [ ] **R2 `ReportNoRepro`** (hanya spek, `SPEC_REPRO_V0.md:25`): hanya bila ada perbandingan mekanis "harap X, dapat Y".
 - [ ] **RC bagian (b)**: `--from-conflict` dan layar (`FABLE_SPEC_REPORT_CONFLICT_v1.md:95`; layar sebagian lewat `47bcce6`). Batas
   yang diketahui: RC tak bisa mengonfirmasi konflik "sekarang raise" atau yang melibatkan `subTest`.
 - [ ] **Paket 3**: putaran kasus sintetis kedua untuk RC dan GATE (10 sampai 15 kasus, model dari keluarga lain, adversarial, hanya
-  dari spek; daftar kasus di arsip). Juga: `pilots/synthetic_rc_gate/run.py` belum dijalankan ulang sesudah #527, `RESULTS.md` masih
-  mencatat GATE-14 dan GATE-16 dengan perilaku lama (butuh `ARGUS_SANDBOX_IMAGE` dan `ARGUS_SANDBOX_IMAGE_ARGUS`).
+  dari spek; daftar kasus di arsip). Rerun `pilots/synthetic_rc_gate/run.py` sesudah #527 **sudah dilakukan** (#529: 32 dari 35 cocok; GATE-10, -14 dan -16 berubah seperti amandemen; `RESULTS.md` sudah memuat perilaku baru).
 - [~] **Tes lama bocor oleh fitur baru** (probe rantai, Reconciliation bagian 4e): gerbang `scope:no_test_detection` (#436) dan
   peringatan `leaks` (#437, penasihat, Python) ada. Belum:
   - [ ] pesan "terjepit tes lama" saat `FAILED_ACCEPTANCE` karena tes lama terkunci (retry tak menolong)
@@ -118,8 +126,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
   diukur pada data batch 3 di `pilots/outside_v2/batch3/` (`APPEND_MEASUREMENT`, `INTO_CLASS_MEASUREMENT`), belum pada batch baru), mode berkas (diperbaiki #482), pembungkus exception. Belum ada batch sesudah perbaikan itu.
 - [ ] **Mutu drafter dan agen** (kandidat, dari batch SWE dan repo luar): tes lama yang diubah drafter otomatis wajib (`22456` d1);
   drafter mencari titik nilai salah pertama kali muncul (`20428`); gerbang writable lebar vs regresi sempit; over-spesifikasi di tes
-  drafter (3 dari 8, pembacaan buta); DROP-OLD-REQUIRED (`SPEC_DROP_OLD_REQUIRED.md` bagian 5, sengaja dibiarkan terbuka); baris
-  `dN submits` menghitung jawaban pertanyaan merah sebagai submit; `remove_labeled` dengan label kosong perlu penjaga; kontaminasi
+  drafter (3 dari 8, pembacaan buta); DROP-OLD-REQUIRED (`SPEC_DROP_OLD_REQUIRED.md` bagian 5, sengaja dibiarkan terbuka); baris submits di status sudah ada (#519) tetapi menghitung jawaban pertanyaan merah sebagai submit; `remove_labeled` dengan label kosong perlu penjaga; kontaminasi
   data latih.
 - [ ] **Vitest v0**: tes lama tidak bisa diubah (`changed_tests` hanya Python), tanpa `-t`; Playwright (tahap 3b) bila ada kebutuhan.
 - [ ] **Verifikasi** (sisa SPEC_VERIFY_HARDENING): pangkas run kontainer di `tests/test_draft.py` (322 detik); penjaga untuk pemakaian
@@ -249,7 +256,7 @@ Syarat buka ulang dari `docs/reviews/FABLE_PLAN_2026-11-11.md` bagian 4, kecuali
 - **Chatbox penulis issue** di UI kontrol (amandemen 1–5 `SPEC_ISSUE_WRITER`, optimasi kecepatan giliran, eksperimen model penulis):
   selesai atau dihentikan (rencana Fable: stop menyetel latensi penulis issue); mode Issue kini di chat.
 - **Shadow mode** batch 1–2 dan **Tahap 2 "kurangi supervisi"** (ditutup Atha 2026-11-06): riwayat. `argus judge` tetap ada sebagai
-  saran, tidak lagi bawaan (lihat "Judge mati sebagai bawaan").
+  saran, tidak lagi bawaan (lihat butir "Urutan Fable 2026-11-13, butir 3–4").
 - **Self-review Argus** (`argus review --diff` tidak dibangun), **Alur A** (bug yang jawabannya tidak ada di ingatan model; task dua
   lengan untuk upgrade), **Email Agensi.io** (marketplace skill).
 - **Rencana Fable fase 1** (SB, FIX-A, FIX-B E2, ENV varian 1, GUARD, PRE) dan **fase 3 yang ter-merge** (REPRO R1, FIX-C, RC MVP,
