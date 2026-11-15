@@ -1,0 +1,407 @@
+"""SPEC_ARGUS_APPLY PR 2: `argus apply <job> --read-sha <sha>`: the review package's patch goes into the target repository and one commit is made, with the
+repository's own code never run, every refusal leaving the repository and the job as they were, and a crash after the commit healed by a second call."""
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_router as tr  # noqa: E402
+from router import apply as ra  # noqa: E402
+from router import job as rj  # noqa: E402
+
+td = tr.td
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="posix")
+
+
+@pytest.fixture(autouse=True)
+def home(tmp_path, monkeypatch):
+    """A HOME of its own: the identity the command reads is the test's, never the developer's."""
+    h = tmp_path / "home"
+    h.mkdir()
+    (h / ".gitconfig").write_text("[user]\n\tname = Global Person\n\temail = global@example.org\n")
+    monkeypatch.setenv("HOME", str(h))
+    for k in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(k)
+    return h
+
+
+@pytest.fixture
+def env(tmp_path):
+    e = tr.Env(tmp_path)
+    e.code()
+    e.approve()
+    return e
+
+
+def g(repo, *args, check=True):
+    r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull})
+    assert r.returncode == 0 or not check, r.stderr
+    return r.stdout.strip()
+
+
+def head(env):
+    return g(env.repo, "rev-parse", "HEAD")
+
+
+def package(env, tmp_path, change, name="s"):
+    """Make the package say `change` (made on a copy of the repository, as the package is made); returns (patch bytes, its sha256 hex)."""
+    scratch = tmp_path / name
+    shutil.copytree(env.repo, scratch)
+    change(scratch)
+    td.git(scratch, "add", "-A", "-f")
+    patch = subprocess.run(["git", "-C", str(scratch), "diff", "--cached", "--binary", "--full-index", "--no-renames", "--no-color", "--no-ext-diff"],
+                           capture_output=True, check=True).stdout
+    files = [{"path": p, "change": "M"} for p in g(scratch, "diff", "--cached", "--name-only", "--no-renames", "-z").split("\0") if p]
+    return rewrite(env, patch, files)
+
+
+def rewrite(env, patch, files=None):
+    job = env.job()
+    d = Path(job.data["stages"]["a1"]["review"]["dir"])
+    (d / "changes.patch").write_bytes(patch)
+    sha = hashlib.sha256(patch).hexdigest()
+    prov = json.loads((d / "provenance.json").read_text())
+    prov["patch"]["sha256"] = sha
+    if files is not None:
+        prov["patch"]["files"] = files
+    (d / "provenance.json").write_text(json.dumps(prov))
+    job.data["stages"]["a1"]["review"]["patch_sha256"] = sha
+    job.save()
+    return patch, sha
+
+
+def edit_shop(extra="# apply\n"):
+    return lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n" + extra)
+
+
+def run_apply(env, sha, **kw):
+    return ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs, **kw)
+
+
+def untouched(env, before):
+    assert head(env) == before and g(env.repo, "status", "--porcelain", "--untracked-files=all") == ""
+    assert env.job().data["state"] == rj.REVIEW_READY
+
+
+# ---- the good paths -----------------------------------------------------------------------------------------------------------------
+
+def test_the_patch_goes_in_as_one_commit_on_the_current_branch_and_the_job_is_applied(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before, branch = head(env), g(env.repo, "symbolic-ref", "--short", "HEAD")
+    job = run_apply(env, sha, note="n")
+    new = head(env)
+    assert new != before and g(env.repo, "rev-parse", "HEAD^") == before and g(env.repo, "symbolic-ref", "--short", "HEAD") == branch
+    msg = g(env.repo, "log", "-1", "--format=%B")
+    assert "Argus-Job: jtest" in msg and f"Argus-Patch-Sha256: {sha}" in msg and msg.splitlines()[0]
+    assert g(env.repo, "status", "--porcelain", "--untracked-files=all") == ""
+    e = job.data["log"][-1]
+    assert job.data["state"] == rj.APPLIED and e["commit"] == new and e["as_is"] is True and e["method"] == "apply"
+    assert e["head_before"] == before and e["branch"] == branch and e["read_sha"] == sha[:12] and e["note"] == "n"
+    assert "Global Person" in g(env.repo, "log", "-1", "--format=%an")                # no local identity: the global one, read once
+
+
+@pytest.mark.parametrize("change", [
+    lambda r: (r / "logo.bin").write_bytes(b"\x00\x01binary\xff" * 30),
+    lambda r: (r / "tests" / "test_old.py").rename(r / "tests" / "test_older.py"),
+    lambda r: (r / "src" / "shop.py").unlink(),
+    lambda r: (r / "tests" / "test_old.py").chmod(0o755),
+    lambda r: (r / "notes.txt").write_bytes(b"no final newline"),
+    lambda r: (r / "naïve é.txt").write_text("unicode path\n"),
+    lambda r: (r / ".gitignore").write_text("*.cache\n"),
+])
+def test_binary_move_delete_mode_no_newline_unicode_and_gitignore_changes_go_in_as_they_were(env, tmp_path, change):
+    patch, sha = package(env, tmp_path, change)
+    job = run_apply(env, sha)
+    assert job.data["state"] == rj.APPLIED and job.data["log"][-1]["as_is"] is True
+    assert subprocess.run(["git", "-C", str(env.repo), "diff", "--cached", "--quiet"]).returncode == 0
+    assert g(env.repo, "status", "--porcelain", "--untracked-files=all") == ""
+
+
+def test_a_repository_with_only_a_global_identity_and_one_with_a_local_one_both_work(env, tmp_path):
+    g(env.repo, "config", "user.name", "Local Person")
+    g(env.repo, "config", "user.email", "local@example.org")
+    patch, sha = package(env, tmp_path, edit_shop())
+    run_apply(env, sha)
+    assert g(env.repo, "log", "-1", "--format=%an <%ae>") == "Local Person <local@example.org>"
+
+
+def test_the_status_prints_the_command_with_the_sha_to_read_and_the_manual_steps_stay(env):
+    text = rj.status("jtest", jobs_dir=env.jobs)
+    sha = hashlib.sha256((Path(env.job().data["stages"]["a1"]["review"]["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    assert f"argus apply jtest --read-sha {sha[:12]}" in text and "git -C" in text
+
+
+def test_the_cli_applies_and_prints_the_status(env, tmp_path, capsys):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    patch, sha = package(env, tmp_path, edit_shop())
+    assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12]], deps=env.deps) == 0
+    assert "applied: commit" in capsys.readouterr().out and env.job().data["state"] == rj.APPLIED
+    with pytest.raises(SystemExit):
+        argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest"], deps=env.deps)                  # --read-sha is required
+
+
+# ---- refusals: nothing changes -----------------------------------------------------------------------------------------------------
+
+def refused(env, tmp_path, sha, match=None, **kw):
+    before = head(env)
+    with pytest.raises(rj.Refused, match=match):
+        run_apply(env, sha, **kw)
+    untouched(env, before)
+
+
+def test_a_wrong_short_or_empty_read_sha_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    for bad in ("0" * 12, sha[:11], ""):
+        before = head(env)
+        with pytest.raises(rj.Refused):
+            ra.apply("jtest", bad, deps=env.deps, jobs_dir=env.jobs)
+        untouched(env, before)
+
+
+def test_a_patch_changed_after_it_was_read_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    d = Path(env.job().data["stages"]["a1"]["review"]["dir"])
+    (d / "changes.patch").write_bytes(patch + b"\n")
+    refused(env, tmp_path, hashlib.sha256(patch + b"\n").hexdigest(), "recorded|changed|sha")
+
+
+def test_a_provenance_that_does_not_name_the_patch_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    d = Path(env.job().data["stages"]["a1"]["review"]["dir"])
+    prov = json.loads((d / "provenance.json").read_text())
+    prov["patch"]["sha256"] = "0" * 64
+    (d / "provenance.json").write_text(json.dumps(prov))
+    refused(env, tmp_path, sha)
+
+
+def test_a_job_from_before_the_recorded_sha_is_refused_with_the_manual_way(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    job = env.job()
+    job.data["stages"]["a1"]["review"].pop("patch_sha256")
+    job.save()
+    refused(env, tmp_path, sha, "by hand|predates|recorded")
+
+
+def test_the_file_list_must_be_the_one_the_package_names(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    rewrite(env, patch, [{"path": "src/other.py", "change": "M"}])
+    refused(env, tmp_path, sha, "files|list")
+
+
+def test_a_protected_file_in_the_patch_is_refused_again(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    job = env.job()
+    job.data["protected_repo"] = {"sha256": "x", "globs": ["src/*.py"]}
+    job.save()
+    refused(env, tmp_path, sha, "protected")
+
+
+@pytest.mark.parametrize("what", ["tracked", "untracked"])
+def test_a_dirty_tree_is_refused(env, tmp_path, what):
+    patch, sha = package(env, tmp_path, edit_shop())
+    (env.repo / ("conftest.py" if what == "tracked" else "new.txt")).write_text("x\n")
+    before = head(env)
+    with pytest.raises(rj.Refused, match="clean|dirty"):
+        run_apply(env, sha)
+    assert head(env) == before and env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_detached_head_and_a_head_that_is_not_the_base_commit_are_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    (env.repo / "later.txt").write_text("later\n")
+    g(env.repo, "add", "-A")
+    td.git(env.repo, "commit", "-qm", "later")
+    refused(env, tmp_path, sha, "base|HEAD")
+    g(env.repo, "checkout", "-q", "--detach")
+    refused(env, tmp_path, sha, "branch|detached")
+
+
+def test_a_branch_checked_out_in_another_worktree_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    branch = g(env.repo, "symbolic-ref", "--short", "HEAD")
+    g(env.repo, "checkout", "-q", "-b", "other")
+    g(env.repo, "worktree", "add", "-q", str(tmp_path / "wt"), branch)
+    g(env.repo, "checkout", "-q", branch, check=False)
+    # the main worktree is on "other" now and wt holds the branch the base is on: apply from a repository whose current branch is borrowed
+    shutil.rmtree(env.repo / "nothing", ignore_errors=True)
+    g(env.repo, "worktree", "remove", "--force", str(tmp_path / "wt"))
+    g(env.repo, "checkout", "-q", branch)
+    g(env.repo, "worktree", "add", "-q", "--detach", str(tmp_path / "wt2"))
+    g(tmp_path / "wt2", "checkout", "-q", "--ignore-other-worktrees", branch)
+    refused(env, tmp_path, sha, "worktree")
+
+
+@pytest.mark.parametrize("path, content", [
+    ("sub/.gitattributes", "*.py text\n"), (".gitattributes", "*.py text\n"), (".gitmodules", "[submodule \"x\"]\n"),
+])
+def test_a_patch_touching_git_metadata_files_is_refused_at_any_depth(env, tmp_path, path, content):
+    def change(r):
+        (r / path).parent.mkdir(parents=True, exist_ok=True)
+        (r / path).write_text(content)
+    patch, sha = package(env, tmp_path, change)
+    refused(env, tmp_path, sha, "git metadata|gitattributes|gitmodules|not allowed")
+
+
+def test_a_patch_that_makes_a_symlink_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, lambda r: os.symlink("/etc/passwd", r / "link"))
+    refused(env, tmp_path, sha, "symlink|120000|mode")
+
+
+def test_an_empty_patch_and_a_patch_that_does_not_apply_are_refused(env, tmp_path):
+    patch, sha = rewrite(env, b"", [])
+    refused(env, tmp_path, sha, "empty|no change")
+    bad = (b"diff --git a/src/shop.py b/src/shop.py\n--- a/src/shop.py\n+++ b/src/shop.py\n@@ -1,2 +1,2 @@\n-nothing like it\n+x\n")
+    patch, sha = rewrite(env, bad, [{"path": "src/shop.py", "change": "M"}])
+    refused(env, tmp_path, sha)
+
+
+@pytest.mark.parametrize("key, value", [("filter.x.clean", "cat"), ("core.fsmonitor", "true"), ("include.path", "/dev/null"),
+                                        ("diff.x.textconv", "cat"), ("commit.gpgsign", "true"), ("core.hooksPath", "/tmp/h")])
+def test_a_local_configuration_outside_the_allowlist_is_refused_by_name(env, tmp_path, key, value):
+    patch, sha = package(env, tmp_path, edit_shop())
+    g(env.repo, "config", key, value)
+    refused(env, tmp_path, sha, key.split(".")[0])
+
+
+def test_without_any_identity_the_command_refuses_and_makes_none_up(env, tmp_path, home):
+    patch, sha = package(env, tmp_path, edit_shop())
+    (home / ".gitconfig").unlink()
+    refused(env, tmp_path, sha, "identity|user.name")
+
+
+def test_a_repository_that_is_gone_or_is_the_argus_checkout_is_refused(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    monkeypatch.setattr(ra, "ROOT", env.repo.resolve())
+    before = head(env)
+    with pytest.raises(rj.Refused, match="Argus"):
+        run_apply(env, sha)
+    monkeypatch.undo()
+    shutil.move(env.repo, tmp_path / "moved")
+    with pytest.raises(rj.Refused):
+        run_apply(env, sha)
+    shutil.move(tmp_path / "moved", env.repo)
+    assert head(env) == before
+
+
+def test_a_job_that_is_not_review_ready_and_a_second_apply_are_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    run_apply(env, sha)
+    with pytest.raises(rj.Refused, match="only a valid review package"):
+        run_apply(env, sha)
+
+
+# ---- the repository's own code does not run, and the caller's environment does not steer ------------------------------------------------
+
+def test_hooks_of_the_repository_do_not_run(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())          # before the hooks exist: the scratch copy of the repository would run them
+    marks = []
+    for name in ("pre-commit", "commit-msg", "post-commit", "post-index-change", "prepare-commit-msg", "post-applypatch", "pre-applypatch"):
+        mark = tmp_path / f"ran-{name}"
+        hook = env.repo / ".git" / "hooks" / name
+        hook.write_text(f"#!/bin/sh\ntouch {mark}\n")
+        hook.chmod(0o755)
+        marks.append(mark)
+    run_apply(env, sha)
+    assert not [m for m in marks if m.exists()]
+
+
+def test_variables_of_the_caller_do_not_steer_the_git_commands(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    other = tmp_path / "other"
+    td.git(tmp_path, "init", "-q", str(other))
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "Evil Env")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "evil@example.org")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.hooksPath")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "/tmp")
+    monkeypatch.setenv("EMAIL", "evil@example.org")
+    run_apply(env, sha)
+    monkeypatch.undo()
+    assert "Evil" not in g(env.repo, "log", "-1", "--format=%an %ae %cn %ce") and g(other, "log", "--oneline", check=False) == ""
+
+
+# ---- locks, crashes and failures in the middle -----------------------------------------------------------------------------------------
+
+def test_two_applies_on_one_repository_and_on_one_job_are_refused_while_one_runs(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    held = env.job()
+    with held.lock(), pytest.raises(rj.Refused):
+        run_apply(env, sha)
+    fd = ra._lock_repo(env.jobs, env.repo)
+    try:
+        with pytest.raises(rj.Refused, match="another"):
+            run_apply(env, sha)
+    finally:
+        os.close(fd)
+    run_apply(env, sha)
+
+
+def test_a_commit_that_fails_leaves_the_repository_and_the_job_as_they_were(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = ra.run_git
+
+    def failing(repo, *args, **kw):
+        if args and args[0] == "commit":
+            raise ra.GitFail("commit refused")
+        return real(repo, *args, **kw)
+    monkeypatch.setattr(ra, "run_git", failing)
+    with pytest.raises(rj.Refused, match="commit"):
+        run_apply(env, sha)
+    untouched(env, before)
+
+
+def test_a_crash_after_the_commit_is_healed_by_the_next_call_without_a_second_commit(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = rj._record_applied
+
+    def crash(*a, **k):
+        raise KeyboardInterrupt("killed after the commit")
+    monkeypatch.setattr(rj, "_record_applied", crash)
+    with pytest.raises(KeyboardInterrupt):
+        run_apply(env, sha)
+    assert head(env) != before and env.job().data["state"] == rj.REVIEW_READY
+    monkeypatch.setattr(rj, "_record_applied", real)
+    job = run_apply(env, sha)
+    assert job.data["state"] == rj.APPLIED and g(env.repo, "rev-list", "--count", f"{before}..HEAD") == "1"
+    assert job.data["log"][-1]["recovered"] is True
+
+
+def test_changes_left_in_the_tree_by_a_crash_before_the_commit_are_named_not_guessed(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    real = ra.run_git
+
+    def die(repo, *args, **kw):
+        if args and args[0] == "commit":
+            raise KeyboardInterrupt("killed before the commit")
+        return real(repo, *args, **kw)
+    monkeypatch.setattr(ra, "run_git", die)
+    with pytest.raises(KeyboardInterrupt):
+        run_apply(env, sha)
+    monkeypatch.setattr(ra, "run_git", real)
+    with pytest.raises(rj.Refused, match="apply -R"):
+        run_apply(env, sha)
+
+
+def test_a_patch_that_is_not_what_git_would_write_byte_for_byte_is_undone(env, tmp_path):
+    """The patch applies, but its header (an abbreviated index line) is not what the package writes: the staged change differs, so it is refused and undone."""
+    scratch = tmp_path / "s2"
+    shutil.copytree(env.repo, scratch)
+    (scratch / "doc.txt").write_text("one\ntwo\n")
+    td.git(scratch, "add", "-A", "-f")
+    short = subprocess.run(["git", "-C", str(scratch), "diff", "--cached", "--binary", "--no-renames", "--no-color", "--no-ext-diff"],
+                           capture_output=True, check=True).stdout
+    patch, sha = rewrite(env, short, [{"path": "doc.txt", "change": "A"}])
+    before = head(env)
+    with pytest.raises(rj.Refused, match="byte for byte"):
+        run_apply(env, sha)
+    untouched(env, before)

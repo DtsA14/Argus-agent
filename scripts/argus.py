@@ -6,6 +6,7 @@
   python scripts/argus.py approve <job> --sha <first 12 of the draft sha, as status shows it> [--max-usd X]
   python scripts/argus.py reject <job> "why"             # a draft, or a review package that will not be applied
   python scripts/argus.py applied <job> --commit <sha>   # the review package was applied in that commit of the repo
+  python scripts/argus.py apply <job> --read-sha <sha>   # apply the patch whose sha status prints: one commit in the repo, then the same record
   python scripts/argus.py redraft <job>
   python scripts/argus.py resume <job>
   python scripts/argus.py retry <job> [--max-usd X] [--not-a-conflict]   # after AGENT_FAILED: the agent again, as a new stage
@@ -125,6 +126,10 @@ def main(argv=None, deps=None):
     t.add_argument("--not-a-conflict", action="store_true",
                    help="after BLOCKED/test_conflict: you judge the old tests right; the agent runs again told so, and "
                         "cannot report a conflict in that run")
+    ap_ = sub.add_parser("apply", help="apply the review package's patch to the target repository (one commit) and record it (SPEC_ARGUS_APPLY)")
+    ap_.add_argument("job")
+    ap_.add_argument("--read-sha", required=True, help="the patch's sha256 that status prints, at least 12 characters: you read that patch")
+    ap_.add_argument("--note")
     p = sub.add_parser("applied")
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
@@ -299,6 +304,10 @@ def main(argv=None, deps=None):
             fn = rj.reject if o.cmd == "reject" else rj.abandon
             print(rj.status(fn(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir, sha=o.sha, via=o.via).id,
                             jobs_dir=o.jobs_dir))
+            return 0
+        if o.cmd == "apply":
+            from router import apply as ra
+            print(rj.status(ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id, jobs_dir=o.jobs_dir))
             return 0
         if o.cmd == "applied":
             print(rj.status(rj.applied(o.job, o.commit, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id,

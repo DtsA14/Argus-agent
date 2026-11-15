@@ -7,6 +7,7 @@
   argus reject / redraft / resume / status
   argus judge    advice on a finished job: another model says PASS or BLOCK; the job is not changed (SPEC_JUDGE)
   argus applied  the human applied the review package's patch in a commit of the target repository        -> APPLIED
+  argus apply    the same, done by the command (router/apply.py, SPEC_ARGUS_APPLY): the patch, one commit, then APPLIED
                  (reject also closes a review package that will not be applied)                           -> REJECTED
   argus retry    the agent again on the approved contract (a new stage, told how the previous one ended)
 
@@ -1447,7 +1448,7 @@ def applied(job_id, commit, *, deps, jobs_dir=JOBS, note=None):
         return _record_applied(job, commit, deps=deps, note=note)
 
 
-def _record_applied(job, commit, *, deps, note=None, **extra):
+def _record_applied(job, commit, *, deps, note=None, require_as_is=False, **extra):
     """applied() without the lock: the caller holds job.lock() (`argus apply` holds it across its git work). extra: more fields for the log entry."""
     if job.data["state"] != REVIEW_READY:
         raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
@@ -1463,8 +1464,11 @@ def _record_applied(job, commit, *, deps, note=None, **extra):
         theirs = patch_id(repo, intake.git(repo, *SHOW_AS_PACKAGED, sha, clean=True))
     except (OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:
         raise Refused(f"job {job.id}: {e}") from None
+    as_is = None if mine is None or theirs is None else mine == theirs
+    if require_as_is and as_is is not True:             # `argus apply`: a commit that is not the patch is not recorded as the job's
+        raise Refused(f"job {job.id}: the commit's changes are not the package's patch (as_is {as_is})")
     job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(data).hexdigest(),
-             as_is=None if mine is None or theirs is None else mine == theirs, by=os.environ.get("USER"),
+             as_is=as_is, by=os.environ.get("USER"),
              **({"note": note} if note else {}), **extra)
     return job
 
@@ -1556,7 +1560,9 @@ def _review_lines(job, rv):
         sha = "unreadable"
     repo, p, q = shlex.quote(job.data["inputs"]["repo"]), shlex.quote(str(patch)), shlex.quote
     return out + [f"  patch:          {patch} (sha256 {sha})",
-                  "apply (by hand, in the target repository):",
+                  "apply (read the patch first; its sha256 is the --read-sha):",
+                  f"  argus apply {job.id} --read-sha {sha[:12]}",
+                  "or by hand, in the target repository:",
                   f"  sha256sum {p}",
                   f"  git -C {repo} checkout -b {q(branch_name(job.id))} {q(job.data['intake']['commit'])}",
                   f"  git -C {repo} apply --check --whitespace=nowarn {p}",
