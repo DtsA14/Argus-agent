@@ -138,7 +138,7 @@ def lines(n, edit=()):
     return "".join(f"line {i}{' edited' if i in edit else ''}\n" for i in range(1, n + 1))
 
 
-def asis_of(tmp_path, *, config=(), env=None, edit=(10, 14), path="data.txt"):
+def asis_of(tmp_path, *, config=(), env=None, edit=(10, 20), path="data.txt"):      # 9 lines between the hunks: past the context, within interHunkContext=10
     """as_is as `applied` computes it, on a repository made here: the package's patch (built as codetask/review.py builds it) against the commit."""
     repo = tmp_path / "r"
     td.git(tmp_path, "init", "-q", str(repo))
