@@ -16,8 +16,11 @@ have, the synthesis and the checker), so a job that runs within its caps is neve
 REPORT.md is rendered by the harness when s1 passes (unchecked) and again when e1 ends; e1 only flags (v0): whatever it
 says, the job ends REPORT_READY, unless its provider fails or it cannot be funded (BLOCKED, the unchecked REPORT.md kept).
 """
+import calendar
 import json
 import math
+import re
+import time
 import os
 from pathlib import Path
 
@@ -77,28 +80,40 @@ def _web_provider(cfg):
     return (cfg.get("web_research") or {}).get("provider", "deepseek")
 
 
-def _screen(job, cfg, title):
-    """The confirmation screen, from the stage config (cfg: router overrides applied) so it shows what will be called."""
+def screen_facts(cfg, roles):
+    """The facts of the confirmation screen, from the stage config (router overrides applied): what the CLI prints with a typed
+    confirmation and what the chat's card shows, from this one function so the two cannot drift (SPEC_CHAT_APP 12.10 item 2)."""
     rcfg, wr = _settings(cfg)
     prices = wr.get("price_usd_per_request") or {}
-    plan = job.data.get("plan")
-    workers = len(plan["sub_questions"]) if plan else rcfg["planner"]["max_sub_questions"]
-    roles = job.data["stage_roles"]
     models = {k: cfg["roles"][r]["model"] for k, r in roles.items()}
-    fallbacks = {k: cfg["roles"][r].get("fallback_models") or [] for k, r in roles.items()}
-    free = sorted({m for k in models for m in [models[k], *fallbacks[k]] if _is_free(cfg, m)})
+    fallbacks = {k: list(cfg["roles"][r].get("fallback_models") or []) for k, r in roles.items()}
+    return {"models": models, "fallbacks": fallbacks,
+            "free": sorted({m for k in models for m in [models[k], *fallbacks[k]] if _is_free(cfg, m)}),
+            "caps": {"planner": rcfg["planner"]["cap_usd"], "worker": rcfg["worker"]["cap_usd"],
+                     "synthesis": rcfg["synthesis"]["cap_usd"], "checker": rcfg["checker"]["cap_usd"]},
+            "max_workers": rcfg["planner"]["max_sub_questions"],
+            "web": {"provider": _web_provider(cfg), "search_usd": prices.get("search"), "fetch_usd": prices.get("fetch"),
+                    "max_searches": rcfg["worker"]["max_searches"], "max_fetches": rcfg["worker"]["max_fetches"]}}
+
+
+def _screen(job, cfg, title):
+    """The confirmation screen, from the stage config (cfg: router overrides applied) so it shows what will be called."""
+    plan = job.data.get("plan")
+    f = screen_facts(cfg, job.data["stage_roles"])
+    workers = len(plan["sub_questions"]) if plan else f["max_workers"]
+    models, fallbacks, free, prices, web = f["models"], f["fallbacks"], f["free"], f["caps"], f["web"]
     return rj._limits_text(job, title, [
         "question: " + job.data["inputs"]["question"][:300] + ("..." if len(job.data["inputs"]["question"]) > 300 else ""),
         f"profile {job.data['profile']}: " + ", ".join(f"{k} {models[k]}" for k in STAGE_KINDS),
         *([("free fallbacks when rate limited: " + "; ".join(f"{k} " + " -> ".join([models[k], *fallbacks[k]]) for k in STAGE_KINDS
                                                               if fallbacks[k]))] if any(fallbacks.values()) else []),
-        f"caps: planner ${rcfg['planner']['cap_usd']:.2f}, {'' if plan else 'up to '}{workers} worker(s) at "
-        f"${rcfg['worker']['cap_usd']:.2f} each, synthesis ${rcfg['synthesis']['cap_usd']:.2f}, claim checker "
-        f"${rcfg['checker']['cap_usd']:.2f} (it only flags)",
-        f"web: {_web_provider(cfg)} Search ${prices.get('search')} and Fetch ${prices.get('fetch')} per "
-        f"request, paid from each worker's cap; at most {rcfg['worker']['max_searches']} searches and "
-        f"{rcfg['worker']['max_fetches']} fetches per worker",
-        f"data sent out: the question, the search queries and the URLs go to {_web_provider(cfg)}, and the prompts to "
+        f"caps: planner ${prices['planner']:.2f}, {'' if plan else 'up to '}{workers} worker(s) at "
+        f"${prices['worker']:.2f} each, synthesis ${prices['synthesis']:.2f}, claim checker "
+        f"${prices['checker']:.2f} (it only flags)",
+        f"web: {web['provider']} Search ${web['search_usd']} and Fetch ${web['fetch_usd']} per "
+        f"request, paid from each worker's cap; at most {web['max_searches']} searches and "
+        f"{web['max_fetches']} fetches per worker",
+        f"data sent out: the question, the search queries and the URLs go to {web['provider']}, and the prompts to "
         "each stage's model provider; do not put secrets in the question",
         *([f"free models ({', '.join(free)}): their providers may keep the prompts or train on them"] if free else []),
         "tools: WebSearch, WebFetch, Submit; nothing is written outside the job, nothing is sent anywhere else",
@@ -150,11 +165,36 @@ def _need(rcfg):
             + float(rcfg["synthesis"]["cap_usd"]) + float(rcfg["checker"]["cap_usd"]))
 
 
-def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None, profile=None):
-    """A new research job, confirmed once, then every stage. Returns the job."""
+UI_JOB_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
+UI_ID_SKEW_S = 600
+
+
+def ui_job_id_problem(job_id, now):
+    """Why an id given with --via ui is not one the chat's daily cap can find (SPEC_CHAT_APP 12.10 item 9), or None: the
+    exact shape of a harness id (fullmatch: rj.JOB_ID's `$` accepts a trailing newline) and its time within ten minutes of now."""
+    if not isinstance(job_id, str) or not UI_JOB_ID.fullmatch(job_id):
+        return f"{job_id!r} is not an id of the shape jYYYYMMDD_HHMMSS_xxxx"
+    try:
+        named = calendar.timegm(time.strptime(job_id[1:16], "%Y%m%d_%H%M%S"))
+        at = calendar.timegm(time.strptime(now, "%Y-%m-%dT%H:%M:%SZ"))
+    except (ValueError, TypeError):
+        return f"{job_id!r} has an impossible date"
+    if abs(named - at) > UI_ID_SKEW_S:
+        return f"{job_id!r} is not the time of now (within {UI_ID_SKEW_S // 60} minutes)"
+    return None
+
+
+def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None, profile=None, via=None):
+    """A new research job, confirmed once, then every stage. Returns the job. via: where it was started (SPEC_CONTROL_UI F4)."""
     from research.stages import QUESTION_MAX, QUESTION_MIN
     if not isinstance(question, str) or not QUESTION_MIN <= len(question.strip()) <= QUESTION_MAX:
         raise rj.Refused(f"the question must have {QUESTION_MIN} to {QUESTION_MAX} characters; no job was created")
+    if via is not None and via not in rj.VIA:
+        raise rj.Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; no job was created")
+    if via is not None and job_id is not None:
+        why = ui_job_id_problem(job_id, deps.clock())
+        if why:
+            raise rj.Refused(f"{why}; no job was created")
     rcfg, wr = _settings(cfg)
     roles = stage_roles(cfg, profile)
     cap = float(max_usd if max_usd is not None else rcfg.get("max_usd", 1.0))
@@ -165,16 +205,18 @@ def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None, p
                          "no job was created")
     _preflight(cfg, roles, cap)
     job_id = job_id or rj.new_job_id()
-    if not rj.JOB_ID.match(job_id):
+    if not rj.JOB_ID.fullmatch(job_id):
         raise rj.Refused(f"{job_id!r} is not a job id")
     job = rj.Job(Path(jobs_dir) / job_id)
     if job.file.exists():
         raise rj.Refused(f"job {job_id} already exists")
     with job.lock():
+        if job.data is not None:                       # a second start of the same id that won the lock after a quick refusal
+            raise rj.Refused(f"job {job_id} already exists")
         job.data = {"job": job_id, "kind": "research", "state": NEW, "created_at": deps.clock(), "max_usd": cap,
                     "inputs": {"question": rj.clean(question.strip())}, "stages": {}, "plan": None, "log": [],
                     "profile": profile or rcfg.get("profile") or "default", "stage_roles": roles}
-        job.note(deps, "created", by=os.environ.get("USER"))
+        job.note(deps, "created", by=os.environ.get("USER"), **({"via": via} if via else {}))
         try:
             with rj.live(deps, rj.stage_config(cfg, cap), sorted(set(roles.values())),
                          _screen(job, rj.stage_config(cfg, cap), "research job"),

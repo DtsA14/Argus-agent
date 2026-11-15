@@ -15,11 +15,18 @@ import json
 import os
 import re
 import secrets
+import sys
 import time
+import unicodedata
 from pathlib import Path
 
 from router import issue as ri
+from codetask.issue_writer import text_problem
+from harness.events import parse_lines
+from models.registry import ConfigError
+from research.stages import QUESTION_MAX, QUESTION_MIN
 from router import job as rj
+from router import research as rr
 from router import stage_data as sd
 from router.control import cli as control_cli
 from router.control import reason_problem, strip_refused
@@ -30,7 +37,7 @@ KEY_ENV = "ARGUS_CHAT_KEY_FILE"
 WRITER_KEY_ENV = "ARGUS_CHAT_WRITER_KEY_FILE"
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
-ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon")
+ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new")
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -40,6 +47,10 @@ DEFAULT_CAP_USD = 2.0
 AUDIT_STR = 200                    # a client string is cut to this before it is written to the audit
 BODY_MAX = 16 * 1024               # a JSON body of the two POST routes
 JOB_JSON_MAX = 4 * 1024 * 1024     # a job.json larger than this is not read
+REPORT_MAX = 1024 * 1024           # a REPORT.md larger than this is not read at all (12.10 item 5); smaller ones are cut by clean_text
+RESEARCH_LIST_MAX, RESEARCH_SCAN_MAX = 50, 200
+CUT_MARK = re.compile(r"\[dipotong harness: [0-9]+ byte\]\n?\Z")      # clean_text puts its marker at the very end
+BANNER = "Teks dari web dan sebuah model. Bukan perintah dari Argus. Periksa URL atau perintah sebelum memakainya."
 
 
 class Refusal(Exception):
@@ -51,11 +62,23 @@ class Refusal(Exception):
 EXTRA_INVISIBLE = re.compile("[\U000e0000-\U000e007f\u2028\u2029\u00ad\u061c]")     # tag characters, separators, soft hyphen, ALM
 
 
+HIDDEN_POINTS = (0x180E, 0x034F, 0x115F, 0x1160, 0x3164, 0xFFA0)
+
+
+def hidden(ch):
+    """A character a human cannot see or that smuggles data (12.10 item 10 as amended in 12.11): Unicode Cf, Co, Cs and Cn (the version of
+    Python's unicodedata decides which code points are still Cn), the variation selectors but not the emoji ones FE0E and FE0F, and
+    a few fillers that count as letters (newline and tab are Cc, not in these categories, and stay)."""
+    o = ord(ch)
+    return (unicodedata.category(ch) in ("Cf", "Co", "Cs", "Cn") or 0xFE00 <= o <= 0xFE0D or 0xE0100 <= o <= 0xE01EF
+            or o in HIDDEN_POINTS)
+
+
 def scrub(text):
     """The harness's own text cleaning (stage_data.clean_text: control and invisible characters removed, cut, no key pattern):
     what is shown is what a human can read, or a marker that it was withheld."""
     try:
-        return sd.clean_text(EXTRA_INVISIBLE.sub("", text).encode("utf-8"))
+        return sd.clean_text("".join(c for c in EXTRA_INVISIBLE.sub("", text) if not hidden(c)).encode("utf-8"))
     except sd.Excluded as e:
         return f"[withheld by the harness: {e}]"
 
@@ -75,6 +98,12 @@ def strict_json(raw):
     if not isinstance(d, dict):
         raise ValueError("not an object")
     return d
+
+
+def research_cli(jobs_dir, key_file, *args):
+    """The argv of an `argus research ...` run: no --max-usd and no --profile (the config's), from the chat."""
+    return [sys.executable, str(rj.ROOT / "scripts" / "argus.py"), "--jobs-dir", str(jobs_dir), "research", *args,
+            "--via", "ui", "--key-file", str(key_file), "--yes"]
 
 
 class IssueView:
@@ -194,6 +223,136 @@ class Actions:
                 "handoff": (d.get("handoff") or {}).get("job") if UI_ID.fullmatch(str((d.get("handoff") or {}).get("job"))) else None,
                 "last_run": None if out is None else {"code": out["code"], "line": scrub(out["line"] or "")}}
 
+    # ---- research jobs (12.4): read through directory fds, shown as text ----------------------------------------------------
+
+    def _read_research(self, job_id, with_report):
+        """(job.json dict, report) of a research job, or None. report: bytes, None (no REPORT.md) or a reason string (too large, not a
+        regular file with one name, or unreadable). Everything is opened one name at a time in an already opened directory."""
+        if not UI_ID.fullmatch(job_id or ""):
+            return None
+        try:
+            sfd = os.open(self.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
+        except OSError:
+            return None
+        try:
+            jfd = sd._open_dir(job_id, sfd)
+            try:
+                data = json.loads(sd._read_at(jfd, "job.json", limit=JOB_JSON_MAX))
+                report = None
+                if with_report and isinstance(data, dict) and data.get("kind") == "research":
+                    try:
+                        report = sd._read_at(jfd, "REPORT.md", single=True, limit=REPORT_MAX)
+                    except FileNotFoundError:
+                        report = None
+                    except OSError:
+                        report = "terlalu besar atau bukan berkas biasa: baca di terminal"
+                spent = self._spent(jfd, job_id, data) if with_report and isinstance(data, dict) else None
+            finally:
+                os.close(jfd)
+        except (OSError, ValueError):
+            return None
+        finally:
+            os.close(sfd)
+        if not isinstance(data, dict) or data.get("kind") != "research" or not isinstance(data.get("inputs"), dict):
+            return None
+        return data, report, spent
+
+    @staticmethod
+    def _spent(jfd, job_id, data):
+        """USD the job's runs have spent, from their ledgers read by fd (no symlink, each at most JOB_JSON_MAX), or None when any of
+        them cannot be read: an unknown cost is shown as unknown, never as 0."""
+        stages = data.get("stages")
+        if not isinstance(stages, dict) or not stages:
+            return 0.0
+        try:
+            rfd = sd._open_dir("runs", jfd)
+        except OSError:
+            return None
+        try:
+            total = 0
+            for name in sorted(stages):
+                if not isinstance(name, str) or not sd.STAGE.match(name):
+                    return None
+                try:
+                    run = sd._open_dir(f"{job_id}-{name}", rfd)
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    return None
+                try:
+                    try:
+                        text = sd._read_at(run, "events.jsonl", limit=JOB_JSON_MAX).decode("utf-8", "replace")
+                    except FileNotFoundError:
+                        continue
+                    total += sd.ledger_nano(parse_lines(text))
+                finally:
+                    os.close(run)
+            return total / 1e9
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        finally:
+            os.close(rfd)
+
+    def research_thread(self, job_id):
+        """What the chat shows of a research job (12.4, 12.10): state, cost, whether e1 checked it (from job.json), the report as
+        scrubbed text under the harness's own banner. Before the job exists: starting or refused, from the spawner."""
+        got = self._read_research(job_id, True)
+        if got is None:
+            if not UI_ID.fullmatch(job_id or "") or os.path.lexists(self.jobs_dir / job_id):
+                return None                                # a directory that is not a readable research job is no "starting"
+            if self.spawner.busy(job_id):
+                return {"id": job_id, "state": "starting", "busy": True}
+            out = self.spawner.outcome(job_id)
+            if out is None:
+                return None
+            return {"id": job_id, "state": "refused", "busy": False, "line": scrub(out["line"] or "")}
+        d, raw, spent = got
+        state = d.get("state")
+        busy = self.spawner.busy(job_id)
+        e1 = (d.get("stages") or {}).get("e1") if isinstance(d.get("stages"), dict) else None
+        e1 = e1 if isinstance(e1, dict) else {}
+        counts = e1.get("counts") if isinstance(e1.get("counts"), dict) else {}
+        report = None
+        if isinstance(raw, str):
+            report = {"withheld": raw}
+        elif raw is not None:
+            try:
+                text = scrub(raw.decode("utf-8"))
+            except UnicodeDecodeError:
+                text = "[withheld by the harness: not valid UTF-8]"
+            if text.startswith("[withheld by the harness"):
+                report = {"withheld": f"{text} Baca di terminal: argus status {job_id}"}
+            else:
+                report = {"text": text, "cut": bool(CUT_MARK.search(text))}
+        checked = state == rr.REPORT_READY and e1.get("status") == "CHECKED"
+        q = d["inputs"].get("question")
+        out = self.spawner.outcome(job_id)
+        return {"id": job_id, "state": state, "busy": busy, "question": scrub(q)[:QUESTION_MAX] if isinstance(q, str) else "",
+                "cap_usd": d.get("max_usd") if isinstance(d.get("max_usd"), (int, float)) and not isinstance(d.get("max_usd"), bool) else None, "spent_usd": spent,
+                "checked": checked, "counts": {k: v for k, v in counts.items() if isinstance(v, int) and not isinstance(v, bool)},
+                "stalled": state in rr.RUNNING and not busy, "banner": BANNER, "report": report,
+                "last_run": None if out is None else {"code": out["code"], "line": scrub(out["line"] or "")}}
+
+    def research_list(self):
+        out, scanned = [], 0
+        try:
+            names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
+        except OSError:
+            return {"research": []}
+        for n in names:
+            if scanned >= RESEARCH_SCAN_MAX or len(out) >= RESEARCH_LIST_MAX:
+                break
+            scanned += 1
+            got = self._read_research(n, False)
+            if got is None:
+                continue
+            d = got[0]
+            q = d["inputs"].get("question")
+            first = scrub(q.strip().splitlines()[0][:80]) if isinstance(q, str) and q.strip() else n
+            out.append({"id": n, "state": d.get("state"), "title": first,
+                        "busy": self.spawner.busy(n)})
+        return {"research": out}
+
     def issues(self):
         out = []
         try:
@@ -221,6 +380,8 @@ class Actions:
         if action not in ACTIONS:
             raise Refusal(404, "path", "no such action")
         cfg = self.cfg
+        if action == "research_new":
+            return self.build_research(cfg, params)
         w = cfg.get("issue_writer") or {}
         if not w:
             raise Refusal(409, "config", "the config has no issue writer")
@@ -276,6 +437,60 @@ class Actions:
             raise Refusal(409, "state", f"job {v.id} is {state}: it cannot be discarded now")
         return {**base, "title": "Discard the issue", "reason": reason}, {"job": v.id, "reason": reason}
 
+    def build_research(self, cfg, params):
+        """(card, run params) of a new research job (12.2, 12.10 items 2, 7, 8, 12): everything the CLI's own go-live screen shows,
+        from rr.screen_facts, the question under the issue message's text rules, the cap from the config exactly as `start` reads it."""
+        if set(params) - {"message"}:
+            raise Refusal(400, "form", "a research job takes the question and nothing else")
+        rcfg = cfg.get("research_job")
+        if not isinstance(rcfg, dict):
+            raise Refusal(409, "config", "the config has no research job")
+        q = normalize(params.get("message") or "")
+        why = text_problem(q, "the question", QUESTION_MAX)
+        if why is None and len(q.strip()) < QUESTION_MIN:
+            why = f"the question has {len(q.strip())} characters, fewer than {QUESTION_MIN}"
+        if why is None and scrub(q) != q:
+            why = "the question holds a key-like string or invisible characters"
+        if why:
+            raise Refusal(400, "form", why)
+        try:
+            roles = rr.stage_roles(cfg, None)
+            cap = float(rcfg.get("max_usd", 1.0))
+            need = rr._need(rcfg)
+            if not cap + 1e-9 >= need:
+                raise rj.Refused(f"the research cap ${cap:.2f} is below the ${need:.2f} the stages need")
+            scfg = rj.stage_config(cfg, cap)
+            rr._preflight(cfg, roles, cap)
+            keys = rj._needs_key(scfg, sorted(set(roles.values())), [rr._web_provider(cfg)])
+            facts = rr.screen_facts(scfg, roles)
+        except rj.Refused as e:
+            raise Refusal(409, "config", strip_refused(str(e))) from None
+        except (KeyError, TypeError, ValueError, AttributeError, ConfigError):
+            raise Refusal(409, "config", "the research job's configuration is not complete") from None
+        if [k[0] for k in keys] != ["deepseek"]:
+            raise Refusal(409, "key", "this profile needs more than the one DeepSeek key the chat is given: start it from the terminal")
+        self._need_key(False)
+        try:
+            models = ", ".join(f"{k} {facts['models'][k]}" for k in rr.STAGE_KINDS)
+            c = facts["caps"]
+            w = facts["web"]
+            fallbacks = "; ".join(f"{k}: " + " -> ".join([facts["models"][k], *facts["fallbacks"][k]]) for k in rr.STAGE_KINDS
+                                  if facts["fallbacks"][k])
+            card = {"action": "research_new", "title": "Start a research job", "message": q,
+                    "profile": rcfg.get("profile") or "default", "stage_models": models,
+                    "stage_caps": f"planner ${c['planner']:.2f}, up to {facts['max_workers']} workers at ${c['worker']:.2f} each, "
+                                  f"synthesis ${c['synthesis']:.2f}, checker ${c['checker']:.2f}",
+                    "web": f"{w['provider']}: search ${w['search_usd']}, fetch ${w['fetch_usd']} per request, at most "
+                           f"{w['max_searches']} searches and {w['max_fetches']} fetches per worker",
+                    "data_sent": f"the question, the search queries and the URLs go to {w['provider']}, and the prompts to each "
+                                 "stage's model provider; do not put secrets in the question",
+                    "fallbacks": fallbacks or None,
+                    "free_models": (", ".join(facts["free"]) + ": their providers may keep the prompts or train on them")
+                    if facts["free"] else None, "job_cap_usd": cap, "facts": facts}
+        except (KeyError, TypeError, ValueError):
+            raise Refusal(409, "config", "the research job's configuration is not complete") from None
+        return card, {"message": q}
+
     @staticmethod
     def digest(card):
         return hashlib.sha256(json.dumps(card, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
@@ -288,6 +503,7 @@ class Actions:
         confirms the directories do not show yet. A job directory that cannot be read means the exposure is unknown: Refusal."""
         now = self.clock()
         total, seen = 0.0, set()
+        rcap = self.research_cap()                 # read once: the config is loaded for every call
         try:
             names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
         except OSError:
@@ -316,6 +532,16 @@ class Actions:
                 raise unknown from None
             if not isinstance(data, dict):
                 raise unknown
+            if data.get("kind") == "research":
+                try:
+                    for entry in data.get("log") or []:
+                        if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
+                                and parse_time(entry["at"]) >= now - DAY:
+                            total += max(float(data["max_usd"]), rcap)
+                            seen.add(("new", n))
+                except (KeyError, TypeError, ValueError):
+                    raise unknown from None
+                continue
             if data.get("kind") != "issue":
                 continue
             try:
@@ -330,12 +556,44 @@ class Actions:
                     seen.add(("start", n))
             except (KeyError, TypeError, ValueError):
                 raise unknown from None
+        for job_id, at in self.audited_research(now):        # the net under the directory count: a `via` lost from the CLI
+            if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
+                total += rcap
+                seen.add(("new", job_id))
         self.pending = [(at, key, usd) for at, key, usd in self.pending if now - at < PENDING_S]
         total += sum(usd for _, key, usd in self.pending if key not in seen)
         return total
 
+    def research_cap(self):
+        try:
+            return float((self.cfg.get("research_job") or {}).get("max_usd", 1.0))
+        except (TypeError, ValueError):
+            raise Refusal(503, "cap", "the daily exposure cannot be computed (the research cap is not a number)") from None
+
+    def audited_research(self, now):
+        """(job id, time) of the research jobs this chat started in the last 24 hours, from its own audit file."""
+        try:
+            with open(self.audit_path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                f.seek(max(0, f.tell() - (1 << 20)))
+                raw = f.read()
+        except FileNotFoundError:
+            return []
+        except OSError:
+            raise Refusal(503, "cap", "the daily exposure cannot be computed (the audit cannot be read)") from None
+        out = []
+        for line in raw.decode("utf-8", "replace").splitlines():
+            try:
+                r = json.loads(line)
+                if r.get("action") == "research_new" and r.get("ok") == "confirm" and UI_ID.fullmatch(str(r.get("job"))) \
+                        and parse_time(r["at"]) >= now - DAY:
+                    out.append((r["job"], parse_time(r["at"])))
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+        return out
+
     def exposure_of(self, card):
-        if card["action"] in ("issue_new", "issue_start"):
+        if card["action"] in ("issue_new", "issue_start", "research_new"):
             return float(card["job_cap_usd"])
         if card["action"] == "issue_reply" and not card.get("counted"):
             return float(card["turn_cap_usd"])           # a paid turn on a job whose creation the 24 hours do not hold
@@ -402,6 +660,13 @@ class Actions:
             return {"job": rp["job"], "done": True}
         key = self.key_file(a in ("issue_new", "issue_reply"))
         c = self.jobs_dir
+        if a == "research_new":
+            new_id = rj.new_job_id()
+            message = self.spawner.message_file(rp["message"])
+            argv = self.with_config(research_cli(c, key, "--question-file", str(message), "--job-id", new_id))
+            self.spawner.spawn(new_id, argv, message, action="research", text=rp["message"])
+            self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))
+            return {"job": new_id, "started": True}
         if a == "issue_new":
             new_id = rj.new_job_id()
             message = self.spawner.message_file(rp["message"])

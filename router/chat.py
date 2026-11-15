@@ -37,9 +37,9 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
                 "app.css": "text/css; charset=utf-8"}
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
-    "index.html": "69da68d1bf5bdd0cf1ee0ed19c2f25454da6626e480d7919eab979a854eab0da",
-    "app.js": "cbeb88cf8ab2e699d2116b3511ddfe876d21a6ac012d59057f39a96490de50de",
-    "app.css": "7aa8984fcd07f63946340047657f5dbff16cbd0ed7548a62c412b80966abce4b",
+    "index.html": "6183bfd1ba13eb4cc805932889fd19eb6387a0194e41642e8d1842fdff8bbf19",
+    "app.js": "57e1678144ca1f40a35be458d58f160edbc35cd0a1e952a69ea2f053fcc5970a",
+    "app.css": "047543a2a65a9bcd837bda2dfb84ba9e1463390f171968690983f4529044ca1b",
 }
 
 
@@ -236,6 +236,12 @@ class Handler(BaseHTTPRequestHandler):
         if a is not None and m:
             got = a.thread(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        if a is not None and path == "/api/research":
+            return self._json(200, a.research_list())
+        m = re.fullmatch(r"/api/research/([^/?#%]+)", path)
+        if a is not None and m:
+            got = a.research_thread(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if path == "/api/status":
             return self._json(200, self.chat.status())
         if path == "/api/threads":
@@ -347,7 +353,7 @@ def serve(jobs_dir, cfg=None, config_path=None, load=None):
     prepare and confirm (load, or the file of config_path), so a card shows what the CLI will read. A config that cannot be
     read at start leaves the chat read only (C1), it does not stop it."""
     actions = None
-    if cfg is not None and cfg.get("issue_writer"):
+    if cfg is not None and (cfg.get("issue_writer") or cfg.get("research_job")):
         from router.chat_actions import Actions
         actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path)
     chat = Chat(jobs_dir, actions=actions)
