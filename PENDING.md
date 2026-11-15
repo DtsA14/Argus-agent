@@ -6,7 +6,7 @@ yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-15
 (salinan utuh sampai 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
 [`PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-15 (Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
+Terakhir diperbarui: 2026-11-15 (angka papan skor sebagai batas atas; Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
 terbuka dibawa ke sini atau dicatat di bagian "Diarsipkan 2026-11-15"). Butir di bawah yang menyebut "arsip" punya rincian lengkap di
 arsip 2026-11-15.
 
@@ -177,8 +177,11 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 
 ### Ukuran (M5)
 
-- [ ] **Angka utama belum ada di papan skor:** persen issue yang sampai staging tanpa campur tangan Claude. Yang ada
-  (`verification/scoreboard-2026-11-11.json`): 119 job kode, 62 applied (52%), $0,116 per perubahan, judge pada 8,4% job.
+- [~] **Angka utama di papan skor: ada sebagai BATAS ATAS, belum tepat** (2026-11-15, `scripts/scoreboard.py`, `verification/scoreboard-2026-11-15.json`, jobs `~/pilot3a_live/jobs`):
+  dari 126 job kode, **30 sampai staging tanpa retry, redraft, research ok atau steering dan diterapkan seperti yang direview = 23,8%** (batas atas dari "sampai staging tanpa campur tangan Claude"); 35 sampai staging (27,8%);
+  66 applied (52,4%, 65 persis seperti direview); $0,1145 per perubahan; judge pada 7,9% job; `argus apply` belum dipakai (0). **Kenapa batas atas, bukan angkanya:** siapa yang approve, apply dan deploy tidak tercatat
+  (`by` = `$USER`, sama untuk Atha dan Claude), jadi job di dalam himpunan itu masih bisa saja dikerjakan Claude dengan tangan; job di luarnya pasti butuh keputusan tambahan. Menjadi tepat bila approve bisa dari chat (`via=ui`,
+  masih ditahan) dan apply tercatat `method=apply` (`argus apply`, sejak 2026-11-15): dihitung ulang di titik cek 2026-11-29, angkanya akan terpisah dari data lama.
 - [ ] **Supervisi:** menit kerja Atha per pilot dan pemakaian Claude belum dicatat (satu baris per minggu yang dikutip papan skor).
 - [ ] **Eval set yang tidak jenuh:** Eval Set v1 16/16 hanya regresi; instance SWE terkontaminasi. Perluas dari kegagalan nyata,
   bekukan hash.

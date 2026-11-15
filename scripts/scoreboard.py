@@ -52,6 +52,28 @@ def outcome(data):
     return ("failed" if state in FAILED else "open"), state
 
 
+def staged(data):
+    """True when the job's log has the entry a staging deploy writes (router/stage.py, stage_viewer.py)."""
+    return any(e.get("what") == "staged" for e in data.get("log") or [])
+
+
+def applied_by(data):
+    """"command" when `argus apply` recorded the apply (method=apply, since 2026-11-15), "unknown" for an applied job without it (by hand, or before the
+    command), None when the job was not applied."""
+    if data.get("state") != "APPLIED":
+        return None
+    entry = next((e for e in reversed(data.get("log") or []) if e.get("what") == "state" and e.get("new") == "APPLIED"), {})
+    return "command" if entry.get("method") == "apply" else "unknown"
+
+
+def hands_off(data):
+    """True when nothing beyond the approval and the closing APPLIED is in the job's decisions (no retry, redraft or research ok), nobody steered it
+    (`human_steered`), and the applied commit is the reviewed patch (as_is). A NECESSARY condition for "without Claude", not a sufficient one: who approved,
+    applied and deployed is not recorded (`by` is $USER), so a job that is True here may still have had Claude do each of those by hand."""
+    category, _ = outcome(data)
+    return category == "applied_untouched" and not data.get("human_steered") and decisions(data) == 2
+
+
 def decisions(data):
     log = data.get("log") or []
     n = sum(1 for e in log if e.get("what") in DECISION_WHATS or e.get("what") == "approved")
@@ -120,6 +142,7 @@ def build(jobs_dir):
             "usd_nano": nano[job], "issue_usd_nano": issue_money[job],
             "stage_usd_sum": round(stage_usd, 9), "decisions": decisions(data), "wait_s": human_wait(data),
             "judge": judge(data), "human_steered": bool(data.get("human_steered")),
+            "staged": staged(data), "applied_by": applied_by(data), "hands_off": hands_off(data),
         })
     research = sum(nano[d["job"]] for _, d in jobs if d.get("kind") == "research")
     kinds = Counter(d.get("kind") for _, d in jobs)
@@ -128,9 +151,21 @@ def build(jobs_dir):
     code_total = sum(r["usd_nano"] + r["issue_usd_nano"] for r in rows)
     waits = [r["wait_s"][k] for r in rows for k in ("draft", "review") if r["wait_s"][k] is not None]
     judged = Counter(r["judge"] for r in rows)
+    n_staged = sum(1 for r in rows if r["staged"])
+    n_hands = sum(1 for r in rows if r["hands_off"])
+    n_hands_staged = sum(1 for r in rows if r["hands_off"] and r["staged"])
+    n_command = sum(1 for r in rows if r["applied_by"] == "command")
     return {
         "jobs_dir": str(jobs_dir), "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "jobs_by_kind": dict(kinds), "code_jobs": len(rows), "outcomes": dict(counts),
+        "staged": n_staged, "staged_share_of_code_jobs": round(n_staged / len(rows), 4) if rows else None,
+        "hands_off_applied": n_hands, "hands_off_staged": n_hands_staged,
+        "hands_off_to_staging_upper_bound": round(n_hands_staged / len(rows), 4) if rows else None,
+        "applied_by_command": n_command, "applied_by_command_share_of_applied": round(n_command / applied, 4) if applied else None,
+        "hands_off_meaning": "hands_off_to_staging_upper_bound = code jobs that reached staging with no retry, redraft, research ok or steering and applied as reviewed, "
+                             "over all code jobs. It is an UPPER BOUND of 'to staging without Claude', not 'without Claude': who approved, applied and deployed is "
+                             "not recorded, so a job inside it may still have had Claude do each step by hand; a job outside it certainly needed an extra decision. "
+                             "It becomes exact only when approve is possible from the chat (via=ui) and apply records method=apply (argus apply, from 2026-11-15).",
         "applied": applied, "applied_share_of_code_jobs": round(applied / len(rows), 4) if rows else None,
         "applied_untouched_share": round(counts["applied_untouched"] / applied, 4) if applied else None,
         "usd_code_jobs": code_total / 1e9, "usd_research_jobs": research / 1e9, "usd_issue_jobs_unattached": orphan_issue / 1e9,
@@ -143,9 +178,11 @@ def build(jobs_dir):
         "ledger_vs_stage_usd": {"ledger": sum(r["usd_nano"] for r in rows) / 1e9, "job_json": sum(r["stage_usd_sum"] for r in rows)},
         "caveat": "applied_untouched means the applied commit equals the reviewed patch (as_is); it is not a success rate "
                   "and not 'mergeable untouched' (that needs grading by someone outside the loop). The denominator of "
-                  "applied_share_of_code_jobs counts every code job, including open ones.",
+                  "applied_share_of_code_jobs counts every code job, including open ones. hands_off_to_staging_upper_bound is an upper bound "
+                  "(see hands_off_meaning), not the share of work done without Claude.",
         "rows": rows,
-        "not_known": ["re-issues of one issue (jobs per applied change are by repo only)", "who decided (by is $USER)",
+        "not_known": ["re-issues of one issue (jobs per applied change are by repo only)",
+                      "who decided (by is $USER): the hands-off figure is an upper bound of 'without Claude' for that reason",
                       "minutes of attention (waits include idle time)", "Claude's token cost (outside the harness)",
                       "spend of stages cut off before their ledger was written (the ledger figure is used where it exists)"],
     }
@@ -157,6 +194,9 @@ def text(report):
              "outcomes: " + ", ".join(f"{k} {v}" for k, v in sorted(o.items())),
              f"applied: {report['applied']} = {report['applied_share_of_code_jobs']} of code jobs; of those, as reviewed (as_is) "
              f"{report['applied_untouched_share']}",
+             f"staged: {report['staged']} = {report['staged_share_of_code_jobs']} of code jobs; applied by `argus apply`: {report['applied_by_command']}",
+             f"hands off to staging (UPPER BOUND of 'without Claude'): {report['hands_off_staged']} of {report['code_jobs']} = "
+             f"{report['hands_off_to_staging_upper_bound']} (hands off and applied: {report['hands_off_applied']})",
              f"ledger vs job.json stage usd: {report['ledger_vs_stage_usd']}",
              "caveat: " + report["caveat"],
              f"money, code jobs (ledgers, issue jobs attached): ${report['usd_code_jobs']:.4f}; research ${report['usd_research_jobs']:.4f}",
