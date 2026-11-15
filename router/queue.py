@@ -92,7 +92,9 @@ def _load(d, qid):
         ok = (isinstance(q, dict) and q["id"] == qid and isinstance(q["max_usd"], (int, float)) and isinstance(q["job_cap_usd"], (int, float))
               and all(isinstance(q[k], str) for k in ("repo", "name", "base_commit", "jobs_dir"))
               and isinstance(q["items"], list) and q["items"]
-              and all(isinstance(i, dict) and isinstance(i.get("issue_sha256"), str) and isinstance(i.get("n"), int) for i in q["items"]))
+              and all(isinstance(i, dict) and isinstance(i.get("issue_sha256"), str) and isinstance(i.get("n"), int) for i in q["items"])
+              and (q.get("prd") is None or (isinstance(q["prd"], dict) and isinstance(q["prd"].get("sha"), str)
+                                            and re.fullmatch(r"[0-9a-f]{64}", q["prd"]["sha"]) and isinstance(q["prd"].get("dir"), str))))
     except KeyError:
         ok = False
     if not ok:
@@ -104,7 +106,7 @@ def list_sha(q):
     """What the human approves: the repository, the commit, the money, the caps and the issues in order."""
     return _sha(json.dumps({"repo": q["repo"], "name": q["name"], "commit": q["base_commit"], "max_usd_nano": to_nano(q["max_usd"]),
                             "job_cap_nano": to_nano(q["job_cap_usd"]), "environment": q["environment"], "jobs_dir": q["jobs_dir"],
-                            "issues": [i["issue_sha256"] for i in q["items"]]}, sort_keys=True))
+                            "issues": [i["issue_sha256"] for i in q["items"]], **({"prd": q["prd"]} if q.get("prd") else {})}, sort_keys=True))
 
 
 def _issue_text(d, item):
@@ -120,8 +122,9 @@ def _issue_text(d, item):
 
 # ---- new, go, close -------------------------------------------------------------------------------------------------
 
-def new(*, repo, commit, max_usd, issues, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS, queue_id=None):
-    """A queue (PENDING). issues: the texts, in order. Nothing runs and no money is reserved before `go`."""
+def validate_new(*, repo, commit, max_usd, issues, cfg, queues_dir=QUEUES, jobs_dir=rj.JOBS):
+    """Everything `new` checks before it writes, as one function (SPEC_PRD_STAGE 3 rule 1: `argus prd check` and `approve` use it too, so a
+    check never passes what `new` refuses). Returns the facts `new` writes; raises Refused. Reads the repository and the other queues; writes nothing."""
     path, environment = ri.repo_of(cfg, repo)
     real = Path(path).resolve()
     if real == rj.ROOT.resolve():
@@ -156,22 +159,31 @@ def new(*, repo, commit, max_usd, issues, cfg, deps, queues_dir=QUEUES, jobs_dir
         raise Refused(f"the repository: {e}") from None
     if full != here:
         raise Refused(f"--commit is {full[:12]} but the repository's HEAD is {here[:12]}: `argus apply` needs HEAD on the commit")
+    for other in _all(queues_dir):
+        if other["repo"] == str(real) and derive(other)[0] not in (DONE, CLOSED):
+            raise Refused(f"queue {other['id']} on this repository is not finished (status {derive(other)[0].replace(RUNNING_NEXT, WAITING)}): "
+                          "two queues would race for the same HEAD")
+    return {"real": real, "environment": environment, "cap": cap, "money": money, "texts": texts, "full": full}
+
+
+def new(*, repo, commit, max_usd, issues, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS, queue_id=None, prd=None):
+    """A queue (PENDING). issues: the texts, in order. Nothing runs and no money is reserved before `go`. prd: {sha, dir} of the approved
+    PRD folder it came from (SPEC_PRD_STAGE; provenance only, written with the queue)."""
+    if prd is not None and not (isinstance(prd, dict) and isinstance(prd.get("sha"), str) and re.fullmatch(r"[0-9a-f]{64}", prd["sha"]) and isinstance(prd.get("dir"), str)):
+        raise Refused("prd must be {sha: 64 hex, dir: text}")
     qid = queue_id or "q" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(2)
     d = _dir(queues_dir, qid)
     with _flock(Path(queues_dir) / ".new.lock", "the queues directory"):     # two `new` on one repository race
-        for other in _all(queues_dir):
-            if other["repo"] == str(real) and derive(other)[0] not in (DONE, CLOSED):
-                raise Refused(f"queue {other['id']} on this repository is not finished (status {derive(other)[0].replace(RUNNING_NEXT, WAITING)}): "
-                              "two queues would race for the same HEAD")
+        v = validate_new(repo=repo, commit=commit, max_usd=max_usd, issues=issues, cfg=cfg, queues_dir=queues_dir, jobs_dir=jobs_dir)
         if d.exists():
             raise Refused(f"queue {qid} already exists")
         d.mkdir(parents=True)
-        for n, t in enumerate(texts, 1):
+        for n, t in enumerate(v["texts"], 1):
             (d / f"issue-{n}.md").write_text(t, encoding="utf-8")
-        q = {"id": qid, "repo": str(real), "name": repo, "environment": environment, "base_commit": full, "max_usd": money,
-             "job_cap_usd": cap, "jobs_dir": str(Path(jobs_dir).resolve()), "created_at": deps.clock(),
-             "items": [{"n": n, "issue_sha256": _sha(t), "job": None} for n, t in enumerate(texts, 1)],
-             "approved": None, "closed": None}
+        q = {"id": qid, "repo": str(v["real"]), "name": repo, "environment": v["environment"], "base_commit": v["full"], "max_usd": v["money"],
+             "job_cap_usd": v["cap"], "jobs_dir": str(Path(jobs_dir).resolve()), "created_at": deps.clock(),
+             "items": [{"n": n, "issue_sha256": _sha(t), "job": None} for n, t in enumerate(v["texts"], 1)],
+             "approved": None, "closed": None, **({"prd": prd} if prd else {})}
         _save(d, q)
     return q
 
