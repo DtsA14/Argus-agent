@@ -459,3 +459,24 @@ def test_queue_step_exits_1_when_the_queue_is_stopped(qe, monkeypatch, text, cod
     import argus
     monkeypatch.setattr(rq, "step", lambda *a, **k: text)
     assert argus.main(["--jobs-dir", str(qe.jobs), "--queues-dir", str(qe.queues), "queue", "step", "q20260101T000000Z-abcd"], deps=qe.env.deps) == code
+
+
+@pytest.mark.parametrize("field,value", [("issue", "another issue entirely"), ("repo", "/somewhere/else"), ("commit", "c" * 40)])
+def test_a_started_job_that_differs_in_issue_repository_or_commit_is_not_the_items(qe, field, value):
+    q = qe.ready()
+    qe.step(q)
+    job = qe.job(q, 0)
+    with job.lock():
+        job.data["inputs"][field] = value
+        job.save()
+    assert "is not this queue's issue" in qe.step(q) and len(qe.calls) == 1
+
+
+def test_a_forgotten_id_is_saved_even_when_the_queue_then_stops(qe):
+    q = qe.ready()
+    data = qe.q(q)
+    data["items"][0]["job"] = "j20260101_000000_dead"
+    (qe.queues / q["id"] / "queue.json").write_text(json.dumps(data))
+    git(qe.repo, "commit", "-q", "--allow-empty", "-m", "someone else")          # HEAD moved: nothing starts after the forgetting
+    assert "HEAD moved" in qe.step(q)
+    assert qe.q(q)["items"][0]["job"] is None and qe.calls == []

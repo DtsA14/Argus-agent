@@ -1,4 +1,5 @@
 """Mutants for SPEC_PRD_QUEUE PR 1 (router/queue.py, the queue commands in scripts/argus.py): each applied alone in a worktree; killed = a test FAILED and pytest reported no error.
+Equivalent (listed, not counted as a miss): "the queue id matched, not matched whole" (`$` lets "<id>\\n" through the pattern, but that names a directory that does not exist, so the next check refuses it all the same; `fullmatch` stays as depth).
 Usage: <this> <worktree> <python> [name fragments to run only some]. Docker is not needed."""
 import subprocess
 import sys
