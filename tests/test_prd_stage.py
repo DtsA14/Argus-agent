@@ -316,13 +316,14 @@ def test_a_queue_without_prd_has_the_sha_it_had_before_prd_existed():
     assert rq.list_sha({**q, "prd": {"sha": "a" * 64, "dir": "/x"}}) != rq.list_sha(q)
 
 
-@pytest.mark.parametrize("edit", [lambda q: q.pop("prd"), lambda q: q["prd"].update(sha="b" * 64), lambda q: q.update(prd="x"), lambda q: q["prd"].update(sha="zz")])
-def test_the_prd_of_an_approved_queue_cannot_be_changed_or_damaged(fo, qe, edit):
+@pytest.mark.parametrize("edit,why", [(lambda q: q.pop("prd"), "changed since"), (lambda q: q["prd"].update(sha="b" * 64), "changed since"),
+                                      (lambda q: q.update(prd="x"), "damaged"), (lambda q: q["prd"].update(sha="zz"), "damaged"), (lambda q: q["prd"].update(dir=5), "damaged")])
+def test_the_prd_of_an_approved_queue_cannot_be_changed_or_damaged(fo, qe, edit, why):
     q = qe.go(fo.approve())
     data = qe.q(q)
     edit(data)
     (qe.queues / q["id"] / "queue.json").write_text(json.dumps(data))
-    with pytest.raises(rj.Refused, match="damaged|not approved|changed since"):
+    with pytest.raises(rj.Refused, match=why):
         qe.step(q)
 
 
