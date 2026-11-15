@@ -571,3 +571,14 @@ def test_the_audit_is_read_from_its_tail_only(svc):
     svc.actions.audit_path.write_bytes(b"x" * (3 << 20) + b"\n")
     svc.confirm(prep(svc)[1]["token"])
     assert svc.actions.exposure() == pytest.approx(1.0)
+
+
+def test_a_stage_cap_written_as_text_in_the_config_is_a_refusal_not_a_500(tmp_path):
+    c = config()
+    c["research_job"]["planner"]["cap_usd"] = "0.05"
+    s = t.Service(tmp_path, cfg=c)
+    try:
+        st, d = s.prepare(action="research_new", message=Q)
+        assert st == 409 and "token" not in d
+    finally:
+        s.stop()
