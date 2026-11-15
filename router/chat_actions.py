@@ -65,9 +65,7 @@ HIDDEN_POINTS = (0x180E, 0x034F, 0x115F, 0x1160, 0x3164, 0xFFA0)
 
 def hidden(ch):
     """A character a human cannot see or that smuggles data (12.10 item 10): Unicode Cf, Co, Cs and Cn, the variation selectors and
-    a few fillers that count as letters; `\n` and `\t` stay."""
-    if ch in "\n\t":
-        return False
+    a few fillers that count as letters (newline and tab are Cc, not in these categories, and stay)."""
     o = ord(ch)
     return (unicodedata.category(ch) in ("Cf", "Co", "Cs", "Cn") or 0xFE00 <= o <= 0xFE0F or 0xE0100 <= o <= 0xE01EF
             or o in HIDDEN_POINTS)

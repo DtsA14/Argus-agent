@@ -437,6 +437,22 @@ def test_a_symlinked_ledger_is_not_followed_for_the_cost(svc, tmp_path):
     assert svc.request("GET", f"/api/research/{RID}")[1]["spent_usd"] is None
 
 
+def test_a_symlinked_run_directory_is_not_followed_for_the_cost(svc, tmp_path):
+    d = make_research(svc.jobs)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (d / "runs").mkdir()
+    os.symlink(elsewhere, d / "runs" / f"{RID}-e1")
+    assert svc.request("GET", f"/api/research/{RID}")[1]["spent_usd"] is None
+
+
+def test_a_job_directory_that_is_not_a_harness_id_is_not_listed_or_read(svc):
+    make_research(svc.jobs, "jfoo")
+    make_research(svc.jobs, "j20261115_222000_ABCD")
+    assert svc.request("GET", "/api/research")[1]["research"] == []
+    assert svc.request("GET", "/api/research/jfoo")[0] == 404 and svc.request("GET", "/api/research/j20261115_222000_ABCD")[0] == 404
+
+
 def test_an_issue_job_and_a_bad_id_are_404_on_the_research_route(svc):
     t.make_issue(svc.jobs, "j20261115_221000_beef")
     for path in ("/api/research/j20261115_221000_beef", "/api/research/jfoo", "/api/research/..", "/api/research/j20261115_000000_0000"):

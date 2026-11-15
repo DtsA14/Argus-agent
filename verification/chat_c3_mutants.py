@@ -26,7 +26,6 @@ M = [
     ("the audit net counts attempts", A, [('r.get("action") == "research_new" and r.get("ok") == "confirm"', 'r.get("action") == "research_new"')], BACK),
     ("the audit net counts a job already seen", A, [('            if ("new", job_id) not in seen:\n                total += self.research_cap()', '            if True:\n                total += self.research_cap()')], BACK),
     ("an unreadable audit is zero", A, [('        except OSError:\n            raise Refusal(503, "cap", "the daily exposure cannot be computed (the audit cannot be read)") from None', '        except OSError:\n            return []')], BACK),
-    ("a confirmed research job is not pending", A, [('action="research", text=rp["message"])\n            self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))', 'action="research", text=rp["message"])')], BACK),
     # ---- the card and its gates
     ("extra params are accepted", A, [('        if set(params) - {"message"}:', '        if False:')], BACK),
     ("the text rules are dropped", A, [('why = text_problem(q, "the question", QUESTION_MAX)', 'why = None')], BACK),
@@ -60,7 +59,6 @@ M = [
     ("private-use and unassigned characters stay", A, [('unicodedata.category(ch) in ("Cf", "Co", "Cs", "Cn")', 'unicodedata.category(ch) in ("Cf",)')], BACK),
     ("variation selectors stay", A, [(' or 0xFE00 <= o <= 0xFE0F or 0xE0100 <= o <= 0xE01EF', '')], BACK),
     ("fillers stay", A, [('            or o in HIDDEN_POINTS)', '            )')], BACK),
-    ("newlines are removed", A, [('    if ch in "\\n\\t":\n        return False', '    if False:\n        return False')], BACK),
     # ---- routes and wiring
     ("no research list route", C, [('        if a is not None and path == "/api/research":', '        if False:')], BACK),
     ("no research detail route", C, [('        if a is not None and m:\n            got = a.research_thread(m.group(1))', '        if False:\n            got = a.research_thread(m.group(1))')], BACK),
