@@ -448,8 +448,22 @@ class Actions:
 
     # ---- reject and abandon of a job (13): the control service's rules, in the chat's two steps ----------------------------------
 
-    def _read_data(self, job_id):
-        """(job.json dict, spent USD or None) of any job, through directory fds, or None (not an id, not there, not an object)."""
+    @staticmethod
+    def _stage_usd(data):
+        """The money a job's stages record in job.json, with no ledger read (the list's cost, 13.7 item 9); None when it is not readable."""
+        stages = data.get("stages")
+        if not isinstance(stages, dict):
+            return None
+        total = 0.0
+        for st in stages.values():
+            u = st.get("usd") if isinstance(st, dict) else None
+            if isinstance(u, (int, float)) and not isinstance(u, bool):
+                total += u
+        return total
+
+    def _read_data(self, job_id, ledgers=True):
+        """(job.json dict, spent USD or None) of any job, through directory fds, or None (not an id, not there, not an object).
+        ledgers=False: the cost is the stages' own usd of job.json and no ledger is opened."""
         if not UI_ID.fullmatch(job_id or ""):
             return None
         try:
@@ -460,7 +474,7 @@ class Actions:
             jfd = sd._open_dir(job_id, sfd)
             try:
                 data = json.loads(sd._read_at(jfd, "job.json", limit=JOB_JSON_MAX))
-                spent = self._spent(jfd, job_id, data) if isinstance(data, dict) else None
+                spent = (self._spent(jfd, job_id, data) if ledgers else self._stage_usd(data)) if isinstance(data, dict) else None
             finally:
                 os.close(jfd)
         except (OSError, ValueError):
@@ -469,14 +483,46 @@ class Actions:
             os.close(sfd)
         return (data, spent) if isinstance(data, dict) else None
 
-    def _sha(self, job_id):
-        """The sha12 of the job's last draft, "" when it has none. Anything that goes wrong reading it is a refusal, never "no draft"."""
+    RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}")
+
+    def _sha(self, job_id, data=None):
+        """The sha12 of the job's last draft, "" when it has none, read through directory fds (13.7 item 9: no symlink at any step). Anything
+        that goes wrong reading it is a refusal, never "no draft". Same pick and same hash as the control service's draft_sha12."""
+        bad = Refusal(409, "draft", "the draft cannot be read")
         try:
-            return draft_sha12(rj.open_job(job_id, self.jobs_dir)) or ""
-        except Unreadable as e:
-            raise Refusal(409, "draft", str(e)) from None
+            if data is None:
+                got = self._read_data(job_id, ledgers=False)
+                if got is None:
+                    raise bad
+                data = got[0]
+            drafts = [st for st in data["stages"].values() if st["kind"] == "draft" and st.get("status") == "DRAFTED"]
+            if not drafts:
+                return ""
+            run = drafts[-1]["run_id"]
+            if not isinstance(run, str) or not self.RUN_NAME.fullmatch(run):
+                raise bad
+            sfd = os.open(self.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                jfd = sd._open_dir(job_id, sfd)
+                try:
+                    rfd = sd._open_dir("runs", jfd)
+                    try:
+                        dfd = sd._open_dir(run, rfd)
+                        try:
+                            raw = sd._read_at(dfd, "draft.json", limit=JOB_JSON_MAX)
+                        finally:
+                            os.close(dfd)
+                    finally:
+                        os.close(rfd)
+                finally:
+                    os.close(jfd)
+            finally:
+                os.close(sfd)
+            return rj.draft_sha_of(json.loads(raw))[:12]
+        except Refusal:
+            raise
         except Exception:
-            raise Refusal(409, "draft", "the draft cannot be read") from None
+            raise bad from None
 
     def build_job(self, action, params):
         if set(params) - {"job", "sha", "reason"}:
@@ -498,14 +544,14 @@ class Actions:
             raise Refusal(409, "state", f"job {job_id} is {state}: it cannot be {verb}ed now")
         if self.spawner.busy(job_id):
             raise Refusal(409, "busy", "a run of this service is still working on this job")
-        live = self._sha(job_id)
+        live = self._sha(job_id, data)
         if sha != live:
             raise Refusal(409, "draft", "the draft changed since you read it: open the job again")
         reason = (params.get("reason") or "").strip(" ")
         why = reason_problem(reason, required=verb == "reject")
         if why:
             raise Refusal(400, "form", why)
-        title = sd.job_title(data)
+        title = self._title(data)
         cap = data.get("max_usd")
         card = {"action": action, "title": "Reject the draft" if verb == "reject" else "Abandon the job", "job": job_id,
                 "kind": kind if isinstance(kind, str) else None, "state": state, "sha12": live or None,
@@ -514,13 +560,20 @@ class Actions:
                 "cap_usd": cap if isinstance(cap, (int, float)) and not isinstance(cap, bool) else None}
         return card, {"job": job_id, "sha": live, "reason": reason, "verb": verb}
 
+    @staticmethod
+    def _title(data):
+        try:
+            return sd.job_title(data) if isinstance(data.get("kind"), str) else None
+        except Exception:
+            return None                                   # a title is a convenience: a malformed record must not break the list
+
     def decision_row(self, job_id, data, spent):
         state = data.get("state")
         try:
-            sha, why = self._sha(job_id), None
+            sha, why = self._sha(job_id, data), None
         except Refusal as r:
             sha, why = "", r.why
-        title = sd.job_title(data)
+        title = self._title(data)
         cap = data.get("max_usd")
         return {"id": job_id, "kind": data.get("kind") if isinstance(data.get("kind"), str) else None, "state": state,
                 "title": scrub(title) if isinstance(title, str) else None, "sha12": sha or None, "draft_problem": why,
@@ -529,20 +582,24 @@ class Actions:
                 "allowed": [] if why else allowed(state)}
 
     def decisions(self):
-        """Jobs waiting for a decision (state in REJECTABLE, any kind): at most 200 directories looked at, 50 rows (13.7 item 9)."""
-        rows, scanned = [], 0
+        """Jobs waiting for a decision (state in REJECTABLE, any kind): at most 200 directories looked at, 50 rows (13.7 item 9), no ledger
+        opened; a record that cannot be shown is counted in `skipped`, it never breaks the list."""
+        rows, scanned, skipped = [], 0, 0
         try:
             names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
         except OSError:
-            return {"decisions": [], "capped": False}
+            return {"decisions": [], "capped": False, "skipped": 0}
         for n in names:
             if scanned >= RESEARCH_SCAN_MAX or len(rows) >= RESEARCH_LIST_MAX:
-                return {"decisions": rows, "capped": True}
+                return {"decisions": rows, "capped": True, "skipped": skipped}
             scanned += 1
-            got = self._read_data(n)
-            if got is not None and got[0].get("state") in REJECTABLE and got[0].get("kind") != "issue":
-                rows.append(self.decision_row(n, *got))
-        return {"decisions": rows, "capped": False}
+            got = self._read_data(n, ledgers=False)
+            try:
+                if got is not None and got[0].get("state") in REJECTABLE and got[0].get("kind") != "issue":
+                    rows.append(self.decision_row(n, *got))
+            except Exception:
+                skipped += 1
+        return {"decisions": rows, "capped": False, "skipped": skipped}
 
     def decision(self, job_id):
         """One job for the Decide link: its row with what it allows; an issue job is only named, the page opens its thread."""
@@ -771,7 +828,7 @@ class Actions:
         a = action
         if a in ("job_reject", "job_abandon"):
             code, line = self.run(rp["verb"], rp["job"], rp["reason"] or ABANDON_DEFAULT, rp["sha"])
-            self.last_exit = code
+            self.last_exit = code if code is not None else "timeout"
             if code != 0:
                 raise Refusal(409, "cli", strip_refused(line or "") or "the command failed")
             return {"job": rp["job"], "done": True}

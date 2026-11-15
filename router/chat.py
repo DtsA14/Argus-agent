@@ -1,14 +1,17 @@
-"""The chat app of the phone, C1 (docs/reviews/SPEC_CHAT_APP.md, sections 3 and 11): read only, no POST, no model.
+"""The chat app of the phone (docs/reviews/SPEC_CHAT_APP.md, sections 3, 11, 12, 13): the jobs' state, the issue writer, research, and
+the reject and abandon of a job, all through GET reads and the two POST routes prepare and confirm.
 
-  argus chat serve         forever, on 127.0.0.1:8712 only (systemd --user argus-chat)
+  argus chat serve [--port 8711|8712]   forever, on 127.0.0.1 only (systemd --user argus-chat); 8712 while it is built, 8711 after C4b
 
 Trusted code (written in the strict lane, never by an Argus agent). It shows the jobs' state, cost and stages from the same
 allowlisted projection the staging snapshot uses (router/stage_data.py `_one`: read through directory fds, never through
-a symlink, every value checked, no key pattern), and serves a page that renders them as text. It has no route that changes
-anything: every method but GET is refused, and it holds no key and runs no model.
+a symlink, every value checked, no key pattern), and serves a page that renders them as text. Every action is a card the
+server builds from live data and a one-time token (`prepare`, then `confirm`); the CLI behind it stays the real gate. It
+holds no key itself (key files are named in the service's environment) and runs no model.
 
-Checks on every request, GET included (11.1, 11.2): the Host is exactly 127.0.0.1:PORT; on /api/* Sec-Fetch-Site is absent,
-same-origin or none (the viewer on localhost:8710 is cross-site (an IP host is its own site) and is refused; same-site is refused too); no cookie is ever set or read.
+Checks on every request, GET included (11.1, 11.2, 13.4): the Host is exactly 127.0.0.1:PORT (and localhost:8711 on 8711 only, because
+the viewer's Decide link says so; no cookie is ever set or read); on /api/* Sec-Fetch-Site is absent, same-origin or none (same-site
+and cross-site are refused). Host, Origin and the CSP are bound to the port by server(), not module state.
 """
 import hashlib
 import io
@@ -20,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from router import stage_data as sd
-from router.chat_actions import AUDIT_STR, Refusal, strict_json
+from router.chat_actions import ACTIONS, AUDIT_STR, Refusal, strict_json
 
 BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while the chat is built, 8711 at C4 (one value)
 PORTS = (8711, 8712)                              # SPEC_CHAT_APP 13.4: 8712 while the chat is built, 8711 after C4b; nothing else
@@ -39,7 +42,7 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "aa26869a7e6ecd3f4c23f2a00ab962d5e55610fa35fc2277862eb4bbdf8421c3",
-    "app.js": "3e8c7e62f12cae91c41d80f60a5170b40aefba67f2e135a7fbf7531b28bfe9db",
+    "app.js": "03dff499db35595379d1409641074f49c530d8cb53fb2a02998879ff05d58f89",
     "app.css": "047543a2a65a9bcd837bda2dfb84ba9e1463390f171968690983f4529044ca1b",
 }
 
@@ -338,6 +341,8 @@ class Handler(BaseHTTPRequestHandler):
             raise Refusal(400, "form", "unknown or non-text fields")
         rec.update(action=action if isinstance(action, str) else None, job=params.get("job") or None)
         if "sha" in params:
+            if action in ACTIONS and not action.startswith("job_"):
+                raise Refusal(400, "form", "only a decision of a job takes a draft sha")
             rec["sha"] = params["sha"]
         out, digest = a.prepare(action, params)
         if not self._audit(a, **rec, ok="prepare", digest=digest):

@@ -480,7 +480,7 @@ def test_the_origin_of_the_page_is_accepted_on_each_host_and_nothing_else(bound)
     assert bound.post("/api/prepare", body, f"http://127.0.0.1:{p}", f"127.0.0.1:{p}", {"Origin": f"http://localhost:8710"})[0] in (400, 403)
 
 
-def test_localhost_as_origin_with_the_other_hosts_name_is_refused(bound):
+def test_localhost_as_origin_with_the_127_host_is_accepted_on_8711_only_as_control_did(bound):
     p = bound.public
     body = {"action": "job_reject", "job": JOB, "sha": "0" * 12, "reason": "x"}
     assert bound.post("/api/prepare", body, f"http://localhost:{p}", f"127.0.0.1:{p}")[0] == (404 if p == 8711 else 403)
@@ -600,3 +600,130 @@ def test_the_same_job_decided_twice_the_second_is_refused(live):
     b = live.prepare(action="job_abandon", job=JOB, sha=live.env.sha(JOB), reason="")[1]["token"]
     assert live.confirm(a)[0] == 200
     assert live.confirm(b)[0] == 409 and rj.open_job(JOB, live.jobs).data["state"] == rj.REJECTED
+
+
+# ---- Opus code review of C4a (2026-11-15) ---------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("kind", [[], {}, 5, None])
+def test_a_job_whose_kind_is_not_a_string_breaks_neither_the_list_nor_the_detail_nor_a_prepare(svc, kind):
+    d = mk(svc)
+    data = json.loads((d / "job.json").read_text())
+    data["kind"] = kind
+    (d / "job.json").write_text(json.dumps(data))
+    mk(svc, job_id="j20261109_130000_bbbb")
+    s, body = svc.request("GET", "/api/decisions")
+    assert s == 200 and "j20261109_130000_bbbb" in [r["id"] for r in body["decisions"]]
+    assert svc.request("GET", f"/api/decisions/{JOB}")[0] in (200, 404)
+    assert svc.prepare(action="job_reject", job=JOB, sha=sha(svc), reason="x")[0] in (200, 409)
+
+
+def test_the_list_opens_no_ledger_and_takes_the_cost_from_the_stages_of_job_json(svc, monkeypatch):
+    d = mk(svc)
+    data = json.loads((d / "job.json").read_text())
+    data["stages"]["d1"]["usd"] = 0.2
+    (d / "job.json").write_text(json.dumps(data))
+
+    def boom(*a, **k):
+        raise AssertionError("a ledger was opened for the list")
+    monkeypatch.setattr(ca.Actions, "_spent", staticmethod(boom))
+    row = svc.request("GET", "/api/decisions")[1]["decisions"][0]
+    assert row["spent_usd"] == pytest.approx(0.2)
+
+
+def test_the_list_does_not_read_the_ledger_of_a_job_that_is_not_waiting(svc, monkeypatch):
+    mk(svc, state=rj.APPLIED)
+    monkeypatch.setattr(ca.Actions, "_spent", staticmethod(lambda *a, **k: (_ for _ in ()).throw(AssertionError("read"))))
+    assert svc.request("GET", "/api/decisions")[1]["decisions"] == []
+
+
+def test_a_draft_that_is_a_symlink_is_not_read_for_the_sha(svc, tmp_path):
+    d = mk(svc)
+    secret = tmp_path / "secret.json"
+    secret.write_text(json.dumps(tc.DRAFT))
+    p = d / "runs" / f"{JOB}-d1" / "draft.json"
+    p.unlink()
+    os.symlink(secret, p)
+    s, body = svc.prepare(action="job_reject", job=JOB, sha="0" * 12, reason="x")
+    assert s == 409 and "token" not in body
+    assert svc.request("GET", "/api/decisions")[1]["decisions"][0]["draft_problem"]
+
+
+def test_a_runs_directory_that_is_a_symlink_is_not_followed_for_the_sha(svc, tmp_path):
+    d = mk(svc)
+    real = tmp_path / "elsewhere"
+    os.rename(d / "runs", real)
+    os.symlink(real, d / "runs")
+    assert svc.prepare(action="job_abandon", job=JOB, sha="", reason="")[0] == 409
+
+
+@pytest.mark.parametrize("run_id", ["../x", "a/b", "", ".", "..", 5, None, "x" * 200])
+def test_a_run_id_that_is_not_a_plain_name_is_refused(svc, run_id):
+    d = mk(svc)
+    data = json.loads((d / "job.json").read_text())
+    data["stages"]["d1"]["run_id"] = run_id
+    (d / "job.json").write_text(json.dumps(data))
+    assert svc.prepare(action="job_abandon", job=JOB, sha="", reason="")[0] == 409
+
+
+def test_the_sha_is_the_one_the_control_service_computes(svc):
+    from router.control import draft_sha12
+    mk(svc)
+    assert svc.actions._sha(JOB) == draft_sha12(rj.open_job(JOB, svc.jobs))
+
+
+def test_the_cap_of_two_hundred_directories_is_reached_before_an_older_waiting_job(svc):
+    mk(svc, job_id="j20261001_120000_aaaa")
+    for i in range(205):
+        mk(svc, job_id=f"j20261109_1{i:05d}_{i:04x}", state=rj.APPLIED)
+    d = svc.request("GET", "/api/decisions")[1]
+    assert d["capped"] is True and d["decisions"] == []
+
+
+def test_a_decision_made_elsewhere_between_prepare_and_confirm_is_refused_and_changes_nothing_more(live):
+    token = live.prepare(action="job_abandon", job=JOB, sha=live.env.sha(JOB), reason="")[1]["token"]
+    code, line = ca.control_cli("reject", JOB, "from the control service", live.env.sha(JOB), live.jobs)      # what control does
+    assert code == 0
+    s, d = live.confirm(token)
+    assert s == 409 and rj.open_job(JOB, live.jobs).data["state"] == rj.REJECTED
+    assert [e["new"] for e in rj.open_job(JOB, live.jobs).data["log"] if e.get("what") == "state"][-1] == rj.REJECTED
+
+
+def test_the_cli_is_the_gate_when_the_state_changes_after_the_chat_rebuilt_the_card(live):
+    token = live.prepare(action="job_reject", job=JOB, sha=live.env.sha(JOB), reason="x")[1]["token"]
+    real = ca.control_cli
+
+    def run(action, job_id, reason, sha=""):
+        job = rj.open_job(JOB, live.jobs)
+        job.data["state"] = rj.APPLIED
+        job.save()
+        return real(action, job_id, reason, sha, live.jobs)
+    live.actions.run = run
+    s, d = live.confirm(token)
+    assert s == 409 and rj.open_job(JOB, live.jobs).data["state"] == rj.APPLIED
+
+
+def test_a_draft_sha_is_refused_on_an_issue_action_and_never_written_to_its_audit(svc):
+    s, d = svc.prepare(action="issue_new", repo="argus-viewer", message="tambahkan tombol di halaman daftar", sha="0" * 12)
+    assert s == 400 and "token" not in d
+    assert all("sha" not in r for r in svc.audit())
+
+
+def test_a_cli_that_times_out_is_a_refusal_and_the_audit_says_timeout(tmp_path):
+    s = t.Service(tmp_path, cfg=t.CFG, run=lambda *a: (None, "the command did not finish in time"))
+    try:
+        tc.make_job(s.jobs)
+        token = s.prepare(action="job_reject", job=JOB, sha=tc.sha12(s.jobs), reason="x")[1]["token"]
+        st, d = s.confirm(token)
+        assert st == 409 and "in time" in d["refused"] and s.audit()[-1]["exit"] == "timeout"
+    finally:
+        s.stop()
+
+
+def test_the_shell_is_served_to_a_navigation_from_the_viewer_with_same_site_fetch_metadata(tmp_path):
+    b = Bound(tmp_path, 8711)
+    try:
+        s, h, body = b.get(f"/jobs/{JOB}", "localhost:8711", {"Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"})
+        assert s == 200 and b"/static/app.js" in body
+        assert b.get("/api/status", "localhost:8711", {"Sec-Fetch-Site": "same-site"})[0] == 403          # the data stays closed to it
+    finally:
+        b.stop()

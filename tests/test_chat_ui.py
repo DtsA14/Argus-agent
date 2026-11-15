@@ -286,3 +286,17 @@ def test_the_decision_card_shows_the_cost_the_draft_and_a_viewer_link_only():
     body = decide_part()
     assert "Baca draf di viewer" in body and "viewerLink(VIEWER + r.id)" in body
     assert 'el("a"' not in body and "href" not in body
+
+
+# ---- Opus code review of C4a (2026-11-15) ---------------------------------------------------------------------------------------
+
+def test_after_a_decision_the_opened_card_is_read_again_and_the_texts_name_the_decision_list():
+    assert 'if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); }' in JS
+    assert 'card.action.indexOf("job_") === 0 ? "Keputusan tercatat' in JS
+    assert 'else if (card.action.indexOf("job_") === 0) { loadDecisions(); }' in JS
+
+
+def test_the_reason_box_is_labelled_and_emptied_for_decisions_and_the_form_does_not_submit_there():
+    assert 'message.setAttribute("aria-label", dc ? "Alasan" : "Pesan");' in JS
+    assert 'else if (m === "decide") { message.value = ""; loadDecisions(); renderDecisions(); }' in JS
+    assert 'if (mode === "decide") { return; }\n    if (mode === "research")' in JS

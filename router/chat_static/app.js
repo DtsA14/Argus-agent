@@ -180,7 +180,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Dijalankan"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.action === "research_new" ? "Hasilnya ada di daftar riset." : "Hasilnya ada di daftar issue."));
+        c.appendChild(el("p", "note", card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
         var close = el("button", null, "Tutup");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -193,9 +193,10 @@
           c.appendChild(el("p", "note", "Ditolak: " + e.message));
           no.disabled = false;
         } else {                                        // no answer: the server may have run it; do not prepare the same thing again blind
-          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar " + (card.action === "research_new" ? "riset" : "issue") + " sebelum mencoba lagi."));
+          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar " + (card.action === "research_new" ? "riset" : (card.action.indexOf("job_") === 0 ? "keputusan" : "issue")) + " sebelum mencoba lagi."));
           no.disabled = false;
           if (card.action === "research_new") { loadResearch(); }
+          else if (card.action.indexOf("job_") === 0) { loadDecisions(); }
           else {
             loadIssues();
             if (mode === "issue" && openIssue !== null) { showIssue(openIssue, true); }
@@ -237,7 +238,7 @@
       var c = renderCard(prep, function (r) {
         message.value = "";
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
-        if (mode === "decide") { loadDecisions(); return; }
+        if (mode === "decide") { if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); } return; }
         loadIssues();
         if (r.job && mode === "issue") { showIssue(r.job, true); }
       });
@@ -277,6 +278,7 @@
     repoSel.hidden = r || dc || openIssue !== null;
     document.getElementById("prepare").hidden = dc;                     // a decision is prepared from the button of a card
     document.getElementById("prepare").textContent = r ? "Siapkan riset" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru");
+    message.setAttribute("aria-label", dc ? "Alasan" : "Pesan");
     message.placeholder = dc ? "Alasan (wajib untuk Reject)" : (r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : "Tulis pesan");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
@@ -456,7 +458,7 @@
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
-    else if (m === "decide") { loadDecisions(); renderDecisions(); }
+    else if (m === "decide") { message.value = ""; loadDecisions(); renderDecisions(); }
     else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
@@ -465,6 +467,7 @@
   });
   issueForm.addEventListener("submit", function (e) {
     e.preventDefault();
+    if (mode === "decide") { return; }
     if (mode === "research") { prepare({ action: "research_new", message: message.value }); }
     else if (openIssue !== null) { prepare({ action: "issue_reply", job: openIssue, message: message.value }); }
     else { prepare({ action: "issue_new", repo: repoSel.value, message: message.value }); }

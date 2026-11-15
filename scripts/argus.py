@@ -178,7 +178,7 @@ def main(argv=None, deps=None):
     ist.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
-        "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user)")
+        "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user); retired at C4b by `chat serve --port 8711`, code removed at C5")
     ch = sub.add_parser("chat", help="the phone's chat app, read only in C1 (docs/reviews/SPEC_CHAT_APP.md)")
     chs = ch.add_subparsers(dest="chat_cmd", required=True).add_parser(
         "serve", help="the jobs' state and cost as a chat page, forever, on 127.0.0.1:8712 (8711 after C4b) only (systemd --user)")

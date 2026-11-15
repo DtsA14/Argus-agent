@@ -1,16 +1,16 @@
-# SPEC_CHAT_APP C1: the phone's chat app, read only, on 127.0.0.1:8712 only (fixed in router/chat.py, never 0.0.0.0 or
-# `localhost`). It holds no key, runs no model and has no route that changes anything. The phone reaches it through
-# an SSH local forward (permitopen="127.0.0.1:8712", added by hand to the iphone-viewer key; it is removed again at C4).
-# Go-live checklist: (1) update the ~/pilot3a_live checkout to the commit that has router/chat.py (that checkout also runs argus-control and
-# the stage proxy, which take the new code at their next restart); (2) add permitopen="127.0.0.1:8712" to the iphone-viewer key by hand;
-# (3) open the page once on the phone: the job list shows and the console has no CSP error.
-# C2: the issue writer's actions need the key files of the CLI in the service's environment, deliberately and by hand (a drop-in
-# like argus-control.service.d): ARGUS_CHAT_KEY_FILE (code jobs) and ARGUS_CHAT_WRITER_KEY_FILE (the writer's turns). Without them
-# every paid action is refused at prepare. The service never reads the files.
-# Install (after "go live"): ln -s this file into ~/.config/systemd/user/, then
-#   systemctl --user daemon-reload && systemctl --user enable --now argus-chat.service
+# SPEC_CHAT_APP: the phone's chat app on 127.0.0.1 only (never 0.0.0.0): 8712 while it is built (the default), 8711 after the cutover C4b
+# (SPEC_CHAT_APP 13.7 item 11). It runs no model and holds no key; the CLI behind each confirmed card is the real gate. The phone reaches
+# it through an SSH local forward (permitopen on the iphone-viewer key, by hand).
+# Key files (C2): ARGUS_CHAT_KEY_FILE (code jobs, research) and ARGUS_CHAT_WRITER_KEY_FILE (the writer's turns) come from a drop-in
+# argus-chat.service.d/key.conf and writer-key.conf, deliberately and by hand; the service never reads the files.
+# C4b cutover (by hand, reversible; the port and the conflict live in a drop-in, never in this file, so a restart before the cutover is safe):
+#   argus-chat.service.d/port.conf:  [Unit] Conflicts=argus-control.service   [Service] ExecStart=  then
+#   ExecStart=%h/pilot3a_live/.venv-verify/bin/python scripts/argus.py chat serve --port 8711
+#   then: systemctl --user disable --now argus-control.service; daemon-reload; restart argus-chat.
+# Rollback: remove port.conf, daemon-reload, restart argus-chat, enable --now argus-control.
+# Install: ln -s this file into ~/.config/systemd/user/, then systemctl --user daemon-reload && systemctl --user enable --now argus-chat.service
 [Unit]
-Description=Argus chat app for the phone (127.0.0.1:8712)
+Description=Argus chat app for the phone (127.0.0.1, 8712 or 8711)
 
 [Service]
 Type=simple
