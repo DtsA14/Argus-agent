@@ -116,6 +116,8 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, job_id=None, via=None):
     if job.file.exists():
         raise rj.Refused(f"job {job_id} already exists")
     with job.lock():
+        if job.data is not None:                       # the same id won the lock after a quick refusal of the first start
+            raise rj.Refused(f"job {job_id} already exists")
         job.data = {"job": job_id, "kind": "issue", "state": NEW, "created_at": deps.clock(), "max_usd": cap,
                     "inputs": {"repo": path, "repo_name": repo, "commit": commit, "environment": env},
                     "conversation": [{"from": "human", "at": deps.clock(), "text": message.strip()}],

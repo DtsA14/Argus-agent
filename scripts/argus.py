@@ -188,6 +188,8 @@ def main(argv=None, deps=None):
     gq.add_argument("--question-file")
     rs.add_argument("--max-usd", type=float)
     rs.add_argument("--profile", help="the models of each stage (research_job.profiles; default research_job.profile)")
+    rs.add_argument("--via", choices=rj.VIA, help="where the job was started (SPEC_CHAT_APP 12: the chat's daily cap counts it)")
+    rs.add_argument("--job-id", help="the new job's id (the chat picks it to show its page); with --via the exact shape of a harness id, now")
     for name in ("reject", "abandon"):
         r = sub.add_parser(name)
         r.add_argument("job")
@@ -327,7 +329,7 @@ def main(argv=None, deps=None):
             from router import research as rr
             question = o.question if o.question is not None else Path(o.question_file).read_text(encoding="utf-8")
             job = rr.start(question=question, cfg=cfg, deps=deps, max_usd=o.max_usd, jobs_dir=o.jobs_dir,
-                           profile=o.profile)
+                           profile=o.profile, via=o.via, job_id=o.job_id)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0 if job.data["state"] == rr.REPORT_READY else 1
         elif o.cmd == "judge":
