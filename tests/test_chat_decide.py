@@ -195,10 +195,13 @@ def test_an_abandon_is_offered_in_a_state_control_allowed(svc):
 
 
 def test_an_issue_job_is_decided_on_the_issue_page_not_here(svc):
-    t.make_issue(svc.jobs, ISSUE)
+    d = t.make_issue(svc.jobs, ISSUE)
+    data = json.loads((d / "job.json").read_text())
+    data["stages"] = {}                                   # a readable record: only the kind may refuse it
+    (d / "job.json").write_text(json.dumps(data))
     for fn in (reject, abandon):
-        s, d = fn(svc, job=ISSUE, sha="")
-        assert s == 409 and "token" not in d
+        s, body = fn(svc, job=ISSUE, sha="")
+        assert s == 409 and "token" not in body and "issue page" in body["refused"]
 
 
 def test_a_busy_job_gets_no_card(svc):
@@ -216,7 +219,8 @@ def test_a_job_that_does_not_exist_or_is_not_a_ui_id_is_404(svc):
 def test_an_approve_is_not_an_action_at_all(svc):
     mk(svc)
     for action in ("job_approve", "approve", "job_redraft", "job_start"):
-        assert svc.prepare(action=action, job=JOB, sha=sha(svc))[0] == 404
+        s, body = svc.prepare(action=action, job=JOB, sha=sha(svc))
+        assert s == 404 and body["refused"] == "no such action"
 
 
 def test_extra_fields_are_refused(svc):

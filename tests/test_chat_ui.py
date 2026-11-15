@@ -246,6 +246,7 @@ def decide_part():
 
 def test_the_decisions_chip_is_on_and_there_is_no_approve_anywhere_in_the_page():
     assert re.search(r'data-mode="decide"[^>]*>Keputusan<', HTML)
+    assert not re.search(r'data-mode="decide"[^>]*disabled', HTML)
     for text in ("approve", "Approve", "job_approve", "setujui"):
         assert text not in JS and text not in HTML
 
