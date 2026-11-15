@@ -101,7 +101,7 @@ def test_a_research_job_takes_the_question_and_nothing_else(svc, extra):
 
 @pytest.mark.parametrize("q", ["terlalu pendek", "x" * 2001, "", "   ", "pertanyaan‮terbalik tentang python versi tiga empat",
                                "pertanyaan dengan​karakter nol lebar tentang python", "pertanyaan\U000e0041tag tentang python 3.14",
-                               "pertanyaan dengan variation️ selector python", "pertanyaan memuat sk-" + "a" * 30 + " kunci python",
+                               "pertanyaan dengan variation\ufe0d selector python", "pertanyaan memuat sk-" + "a" * 30 + " kunci python",
                                "pertanyaan dengan api_key = \"abc\" di dalamnya python"])
 def test_a_question_that_breaks_the_text_rules_is_refused_at_prepare(svc, q):
     s, d = svc.prepare(action="research_new", message=q)
@@ -400,7 +400,7 @@ def test_a_report_with_a_key_like_string_is_withheld_whole_and_says_where_to_rea
     assert "text" not in r and f"argus status {RID}" in r["withheld"] and "sk-aaaa" not in json.dumps(r)
 
 
-@pytest.mark.parametrize("hidden", ["‮", "​", "\U000e0041", "️", "\U000e0100", "᠎", "͏", "ㅤ", "ﾠ",
+@pytest.mark.parametrize("hidden", ["‮", "​", "\U000e0041", "\ufe0d", "\U000e0100", "᠎", "͏", "ㅤ", "ﾠ",
                                     "⁡", "￹", "", "͸"])
 def test_hidden_characters_of_every_class_are_removed_from_the_report(svc, hidden):
     make_research(svc.jobs, report=f"aman{hidden}teks\n")
@@ -497,3 +497,74 @@ def test_the_service_has_actions_when_the_config_has_a_research_job_or_an_issue_
     with pytest.raises(Stop):
         rc.serve(tmp_path, cfg)
     assert (got["actions"] is not None) is on
+
+
+# ---- Opus code review of C3 (2026-11-15) ---------------------------------------------------------------------------------------
+
+def test_emoji_variation_selectors_stay_so_an_emoji_question_and_report_are_not_refused(svc):
+    assert svc.prepare(action="research_new", message="Apa arti \u26a0\ufe0f dan \u2764\ufe0f dalam pesan teks Unicode?")[0] == 200
+    make_research(svc.jobs, report="Peringatan \u26a0\ufe0f: cek dulu\n")
+    assert svc.request("GET", f"/api/research/{RID}")[1]["report"]["text"] == "Peringatan \u26a0\ufe0f: cek dulu\n"
+
+
+def test_an_issue_with_an_emoji_can_still_be_started_from_the_chat(svc):
+    t.make_issue(svc.jobs, "j20261115_221000_beef", issue="Judul\n\nPeringatan \u26a0\ufe0f di tombol.\n")
+    assert svc.prepare(action="issue_start", job="j20261115_221000_beef")[0] == 200
+
+
+def test_a_confirm_the_cli_refused_before_any_job_existed_does_not_block_the_cap(svc):
+    for _ in range(2):
+        assert svc.confirm(prep(svc)[1]["token"])[0] == 200
+    svc.actions.pending.clear()                      # the CLI refused both starts: no directory, no run
+    assert svc.actions.exposure() == 0
+    assert prep(svc)[0] == 200
+
+
+def test_a_confirm_whose_run_is_alive_but_whose_directory_is_not_there_yet_counts(svc):
+    st, d = svc.confirm(prep(svc)[1]["token"])
+    svc.actions.pending.clear()
+    svc.actions.spawner.busy_ids.add(d["job"])
+    assert svc.actions.exposure() == pytest.approx(1.0)
+
+
+def test_the_stalled_line_does_not_claim_the_job_is_dead():
+    js = (ROOT / "router" / "chat_static" / "app.js").read_text()
+    line = [x for x in js.split("\n") if "if (d.stalled)" in x][0]
+    assert "argus resume" not in line and "argus status" in line and "berjalan dari terminal atau terhenti" in line
+
+
+def test_the_cut_note_is_only_for_the_harness_marker_at_the_end(svc):
+    make_research(svc.jobs, report="# Laporan\n\nteks [dipotong harness: 5 byte] di tengah\n\nlanjut\n")
+    assert svc.request("GET", f"/api/research/{RID}")[1]["report"]["cut"] is False
+
+
+def test_a_directory_that_is_not_a_research_job_is_never_starting_or_refused(svc):
+    t.make_issue(svc.jobs, "j20261115_221000_beef")
+    svc.actions.spawner.busy_ids.add("j20261115_221000_beef")
+    svc.actions.spawner.outcome = lambda job_id: {"code": 2, "line": "refused", "action": "research", "text": None}
+    assert svc.request("GET", "/api/research/j20261115_221000_beef")[0] == 404
+
+
+def test_a_cap_written_as_text_in_the_config_is_a_refusal_not_a_crash(tmp_path):
+    c = config()
+    c["research_job"]["max_usd"] = "1.0"
+    s = t.Service(tmp_path, cfg=c)
+    try:
+        assert s.prepare(action="research_new", message=Q)[0] in (200, 409)
+    finally:
+        s.stop()
+
+
+def test_a_boolean_cap_is_not_shown_as_a_number(svc):
+    d = make_research(svc.jobs)
+    data = json.loads((d / "job.json").read_text())
+    data["max_usd"] = True
+    (d / "job.json").write_text(json.dumps(data))
+    assert svc.request("GET", f"/api/research/{RID}")[1]["cap_usd"] is None
+
+
+def test_the_audit_is_read_from_its_tail_only(svc):
+    svc.actions.audit_path.parent.mkdir(parents=True, exist_ok=True)
+    svc.actions.audit_path.write_bytes(b"x" * (3 << 20) + b"\n")
+    svc.confirm(prep(svc)[1]["token"])
+    assert svc.actions.exposure() == pytest.approx(1.0)

@@ -195,7 +195,7 @@ def test_a_research_job_has_no_action_buttons_only_a_viewer_link():
 
 def test_starting_refused_and_stalled_jobs_are_said_so():
     body = research_part()
-    for text in ("Riset sedang dimulai", "Ditolak sebelum dimulai", "Terhenti: jalankan argus resume"):
+    for text in ("Riset sedang dimulai", "Ditolak sebelum dimulai", "berjalan dari terminal atau terhenti"):
         assert text in body
 
 
@@ -211,13 +211,28 @@ def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden()
 
 def test_a_finished_research_confirm_opens_the_job_in_research_mode_only():
     assert 'if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }' in JS
-    assert "if (mode !== \"research\") { return; }" in research_part()                 # a late answer after the user left the mode draws nothing
+    assert 'if (mode !== "research" || my !== researchSeq) { return; }' in research_part()                 # a late answer after the user left the mode draws nothing
 
 
 def test_the_poll_does_not_redraw_research_while_a_confirm_is_on_its_way():
-    assert 'if (mode === "research" && !(pending && pending.sent))' in JS
+    assert 'if (mode === "research" && !(pending && pending.sent))' in JS and "else if (researchLive) { showResearch(openResearch); }" in JS
 
 
 def test_the_report_box_wraps_and_is_bounded():
     css = (rc.STATIC_DIR / "app.css").read_text()
     assert ".report{white-space:pre-wrap" in css and "max-height:60vh" in css
+
+
+def test_the_e1_tally_is_shown_so_a_report_with_unsupported_claims_does_not_look_clean():
+    body = research_part()
+    assert "tidak didukung" in body and "n.UNSUPPORTED" in body and body.index("tally") < body.index("Belum dicek oleh e1")
+
+
+def test_the_poll_redraws_a_research_job_only_while_it_can_change_and_an_older_answer_draws_nothing():
+    assert "researchLive = !!(d.busy || d.state === \"starting\" || d.stalled);" in JS
+    assert "var my = ++researchSeq;" in JS and "researchSeq++; openResearch = null; renderResearchList()" in JS
+
+
+def test_the_card_wording_follows_the_action():
+    assert 'card.action === "research_new" ? "Hasilnya ada di daftar riset."' in JS
+    assert 'card.action === "research_new") { loadResearch(); }' in JS

@@ -205,7 +205,7 @@ def start(*, question, cfg, deps, max_usd=None, jobs_dir=rj.JOBS, job_id=None, p
                          "no job was created")
     _preflight(cfg, roles, cap)
     job_id = job_id or rj.new_job_id()
-    if not rj.JOB_ID.match(job_id):
+    if not rj.JOB_ID.fullmatch(job_id):
         raise rj.Refused(f"{job_id!r} is not a job id")
     job = rj.Job(Path(jobs_dir) / job_id)
     if job.file.exists():

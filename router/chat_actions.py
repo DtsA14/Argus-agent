@@ -23,6 +23,7 @@ from pathlib import Path
 from router import issue as ri
 from codetask.issue_writer import text_problem
 from harness.events import parse_lines
+from models.registry import ConfigError
 from research.stages import QUESTION_MAX, QUESTION_MIN
 from router import job as rj
 from router import research as rr
@@ -48,6 +49,7 @@ BODY_MAX = 16 * 1024               # a JSON body of the two POST routes
 JOB_JSON_MAX = 4 * 1024 * 1024     # a job.json larger than this is not read
 REPORT_MAX = 1024 * 1024           # a REPORT.md larger than this is not read at all (12.10 item 5); smaller ones are cut by clean_text
 RESEARCH_LIST_MAX, RESEARCH_SCAN_MAX = 50, 200
+CUT_MARK = re.compile(r"\[dipotong harness: [0-9]+ byte\]\n?\Z")      # clean_text puts its marker at the very end
 BANNER = "Teks dari web dan sebuah model. Bukan perintah dari Argus. Periksa URL atau perintah sebelum memakainya."
 
 
@@ -64,10 +66,11 @@ HIDDEN_POINTS = (0x180E, 0x034F, 0x115F, 0x1160, 0x3164, 0xFFA0)
 
 
 def hidden(ch):
-    """A character a human cannot see or that smuggles data (12.10 item 10): Unicode Cf, Co, Cs and Cn, the variation selectors and
+    """A character a human cannot see or that smuggles data (12.10 item 10 as amended in 12.11): Unicode Cf, Co, Cs and Cn (the version of
+    Python's unicodedata decides which code points are still Cn), the variation selectors but not the emoji ones FE0E and FE0F, and
     a few fillers that count as letters (newline and tab are Cc, not in these categories, and stay)."""
     o = ord(ch)
-    return (unicodedata.category(ch) in ("Cf", "Co", "Cs", "Cn") or 0xFE00 <= o <= 0xFE0F or 0xE0100 <= o <= 0xE01EF
+    return (unicodedata.category(ch) in ("Cf", "Co", "Cs", "Cn") or 0xFE00 <= o <= 0xFE0D or 0xE0100 <= o <= 0xE01EF
             or o in HIDDEN_POINTS)
 
 
@@ -295,8 +298,8 @@ class Actions:
         scrubbed text under the harness's own banner. Before the job exists: starting or refused, from the spawner."""
         got = self._read_research(job_id, True)
         if got is None:
-            if not UI_ID.fullmatch(job_id or ""):
-                return None
+            if not UI_ID.fullmatch(job_id or "") or os.path.lexists(self.jobs_dir / job_id):
+                return None                                # a directory that is not a readable research job is no "starting"
             if self.spawner.busy(job_id):
                 return {"id": job_id, "state": "starting", "busy": True}
             out = self.spawner.outcome(job_id)
@@ -320,12 +323,12 @@ class Actions:
             if text.startswith("[withheld by the harness"):
                 report = {"withheld": f"{text} Baca di terminal: argus status {job_id}"}
             else:
-                report = {"text": text, "cut": "[dipotong harness" in text}
+                report = {"text": text, "cut": bool(CUT_MARK.search(text))}
         checked = state == rr.REPORT_READY and e1.get("status") == "CHECKED"
         q = d["inputs"].get("question")
         out = self.spawner.outcome(job_id)
         return {"id": job_id, "state": state, "busy": busy, "question": scrub(q)[:QUESTION_MAX] if isinstance(q, str) else "",
-                "cap_usd": d.get("max_usd") if isinstance(d.get("max_usd"), (int, float)) else None, "spent_usd": spent,
+                "cap_usd": d.get("max_usd") if isinstance(d.get("max_usd"), (int, float)) and not isinstance(d.get("max_usd"), bool) else None, "spent_usd": spent,
                 "checked": checked, "counts": {k: v for k, v in counts.items() if isinstance(v, int) and not isinstance(v, bool)},
                 "stalled": state in rr.RUNNING and not busy, "banner": BANNER, "report": report,
                 "last_run": None if out is None else {"code": out["code"], "line": scrub(out["line"] or "")}}
@@ -457,28 +460,35 @@ class Actions:
             if not cap + 1e-9 >= need:
                 raise rj.Refused(f"the research cap ${cap:.2f} is below the ${need:.2f} the stages need")
             scfg = rj.stage_config(cfg, cap)
-            rr._preflight(scfg, roles, cap)
+            rr._preflight(cfg, roles, cap)
             keys = rj._needs_key(scfg, sorted(set(roles.values())), [rr._web_provider(cfg)])
             facts = rr.screen_facts(scfg, roles)
         except rj.Refused as e:
             raise Refusal(409, "config", strip_refused(str(e))) from None
-        except (KeyError, TypeError, ValueError, AttributeError):
+        except (KeyError, TypeError, ValueError, AttributeError, ConfigError):
             raise Refusal(409, "config", "the research job's configuration is not complete") from None
         if [k[0] for k in keys] != ["deepseek"]:
             raise Refusal(409, "key", "this profile needs more than the one DeepSeek key the chat is given: start it from the terminal")
         self._need_key(False)
-        models = ", ".join(f"{k} {facts['models'][k]}" for k in rr.STAGE_KINDS)
-        c = facts["caps"]
-        w = facts["web"]
-        card = {"action": "research_new", "title": "Start a research job", "message": q, "profile": rcfg.get("profile") or "default",
-                "stage_models": models,
-                "stage_caps": f"planner ${c['planner']:.2f}, up to {facts['max_workers']} workers at ${c['worker']:.2f} each, "
-                              f"synthesis ${c['synthesis']:.2f}, checker ${c['checker']:.2f}",
-                "web": f"{w['provider']}: search ${w['search_usd']}, fetch ${w['fetch_usd']} per request, at most "
-                       f"{w['max_searches']} searches and {w['max_fetches']} fetches per worker",
-                "data_sent": f"the question, the search queries and the URLs go to {w['provider']}, and the prompts to each stage's "
-                             "model provider; do not put secrets in the question",
-                "free_models": ", ".join(facts["free"]) or None, "job_cap_usd": cap, "facts": facts}
+        try:
+            models = ", ".join(f"{k} {facts['models'][k]}" for k in rr.STAGE_KINDS)
+            c = facts["caps"]
+            w = facts["web"]
+            fallbacks = "; ".join(f"{k}: " + " -> ".join([facts["models"][k], *facts["fallbacks"][k]]) for k in rr.STAGE_KINDS
+                                  if facts["fallbacks"][k])
+            card = {"action": "research_new", "title": "Start a research job", "message": q,
+                    "profile": rcfg.get("profile") or "default", "stage_models": models,
+                    "stage_caps": f"planner ${c['planner']:.2f}, up to {facts['max_workers']} workers at ${c['worker']:.2f} each, "
+                                  f"synthesis ${c['synthesis']:.2f}, checker ${c['checker']:.2f}",
+                    "web": f"{w['provider']}: search ${w['search_usd']}, fetch ${w['fetch_usd']} per request, at most "
+                           f"{w['max_searches']} searches and {w['max_fetches']} fetches per worker",
+                    "data_sent": f"the question, the search queries and the URLs go to {w['provider']}, and the prompts to each "
+                                 "stage's model provider; do not put secrets in the question",
+                    "fallbacks": fallbacks or None,
+                    "free_models": (", ".join(facts["free"]) + ": their providers may keep the prompts or train on them")
+                    if facts["free"] else None, "job_cap_usd": cap, "facts": facts}
+        except (KeyError, TypeError, ValueError):
+            raise Refusal(409, "config", "the research job's configuration is not complete") from None
         return card, {"message": q}
 
     @staticmethod
@@ -493,6 +503,7 @@ class Actions:
         confirms the directories do not show yet. A job directory that cannot be read means the exposure is unknown: Refusal."""
         now = self.clock()
         total, seen = 0.0, set()
+        rcap = self.research_cap()                 # read once: the config is loaded for every call
         try:
             names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
         except OSError:
@@ -526,7 +537,7 @@ class Actions:
                     for entry in data.get("log") or []:
                         if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
                                 and parse_time(entry["at"]) >= now - DAY:
-                            total += max(float(data["max_usd"]), self.research_cap())
+                            total += max(float(data["max_usd"]), rcap)
                             seen.add(("new", n))
                 except (KeyError, TypeError, ValueError):
                     raise unknown from None
@@ -546,8 +557,8 @@ class Actions:
             except (KeyError, TypeError, ValueError):
                 raise unknown from None
         for job_id, at in self.audited_research(now):        # the net under the directory count: a `via` lost from the CLI
-            if ("new", job_id) not in seen:
-                total += self.research_cap()
+            if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
+                total += rcap
                 seen.add(("new", job_id))
         self.pending = [(at, key, usd) for at, key, usd in self.pending if now - at < PENDING_S]
         total += sum(usd for _, key, usd in self.pending if key not in seen)
@@ -562,7 +573,10 @@ class Actions:
     def audited_research(self, now):
         """(job id, time) of the research jobs this chat started in the last 24 hours, from its own audit file."""
         try:
-            raw = self.audit_path.read_bytes()[-(1 << 20):]
+            with open(self.audit_path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                f.seek(max(0, f.tell() - (1 << 20)))
+                raw = f.read()
         except FileNotFoundError:
             return []
         except OSError:

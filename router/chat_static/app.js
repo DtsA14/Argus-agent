@@ -180,7 +180,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Dijalankan"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", "Hasilnya ada di daftar issue."));
+        c.appendChild(el("p", "note", card.action === "research_new" ? "Hasilnya ada di daftar riset." : "Hasilnya ada di daftar issue."));
         var close = el("button", null, "Tutup");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -193,10 +193,13 @@
           c.appendChild(el("p", "note", "Ditolak: " + e.message));
           no.disabled = false;
         } else {                                        // no answer: the server may have run it; do not prepare the same thing again blind
-          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar issue sebelum mencoba lagi."));
+          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar " + (card.action === "research_new" ? "riset" : "issue") + " sebelum mencoba lagi."));
           no.disabled = false;
-          loadIssues();
-          if (mode === "issue" && openIssue !== null) { showIssue(openIssue, true); }
+          if (card.action === "research_new") { loadResearch(); }
+          else {
+            loadIssues();
+            if (mode === "issue" && openIssue !== null) { showIssue(openIssue, true); }
+          }
         }
       });
     });
@@ -322,6 +325,8 @@
   // ---- C3: research mode. A report is text from the web and a model: it goes on the page as text under the server's banner. ----------
   var researchJobs = [];
   var openResearch = null;
+  var researchSeq = 0;                                  // a draw belongs to the last request: an older answer draws nothing
+  var researchLive = false;                             // the open job can still change, so the poll redraws it
   function researchCard(t) {
     var c = el("article", "card");
     c.appendChild(el("h2", null, t.title || t.id));
@@ -344,9 +349,11 @@
     }).catch(function () { summary.textContent = "gagal memuat riset"; });
   }
   function showResearch(id) {
+    var my = ++researchSeq;
+    openResearch = id;
     get("/api/research/" + encodeURIComponent(id)).then(function (d) {
-      if (mode !== "research") { return; }
-      openResearch = id;
+      if (mode !== "research" || my !== researchSeq) { return; }
+      researchLive = !!(d.busy || d.state === "starting" || d.stalled);
       clear(stream);
       var c = el("article", "card");
       c.appendChild(el("h2", "mono", d.id));
@@ -357,10 +364,12 @@
       c.appendChild(row);
       if (d.state === "starting") { c.appendChild(el("p", "note", "Riset sedang dimulai.")); }
       if (d.state === "refused") { c.appendChild(el("p", "note", "Ditolak sebelum dimulai: " + d.line)); }
-      if (d.stalled) { c.appendChild(el("p", "note", "Terhenti: jalankan argus resume " + d.id + " dari terminal.")); }
+      if (d.stalled) { c.appendChild(el("p", "note", "Tidak ada proses dari chat ini yang menjalankannya: berjalan dari terminal atau terhenti. Cek argus status " + d.id + ".")); }
       if (d.question) { c.appendChild(el("p", "msg human", "Pertanyaan: " + d.question)); }
       if (d.report) {
-        c.appendChild(el("p", "note", d.checked ? "Sudah dicek oleh e1 (hanya menandai klaim)." : "Belum dicek oleh e1."));
+        var n = d.counts || {};
+        var tally = " " + (n.SUPPORTED || 0) + " didukung, " + (n.PARTIAL || 0) + " sebagian, " + (n.UNSUPPORTED || 0) + " tidak didukung.";
+        c.appendChild(el("p", "note", d.checked ? "Sudah dicek oleh e1 (hanya menandai klaim):" + tally : "Belum dicek oleh e1."));
         c.appendChild(el("p", "note", d.banner));
         if (d.report.withheld) { c.appendChild(el("p", "note", d.report.withheld)); }
         else {
@@ -373,7 +382,7 @@
       stream.appendChild(c);
       var back = el("button", null, "Semua riset");
       back.type = "button";
-      back.addEventListener("click", function () { openResearch = null; renderResearchList(); loadResearch(); });
+      back.addEventListener("click", function () { researchSeq++; openResearch = null; renderResearchList(); loadResearch(); });
       stream.appendChild(back);
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Riset tidak dapat dibaca.")); });
   }
@@ -385,6 +394,7 @@
     });
     issueForm.hidden = m === "status";
     query.hidden = m !== "status";
+    researchSeq++;
     openResearch = null;
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
@@ -409,6 +419,6 @@
   setInterval(function () {
     if (document.hidden) { return; }
     load();
-    if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else { showResearch(openResearch); } }
+    if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else if (researchLive) { showResearch(openResearch); } }
   }, 30000);
 })();

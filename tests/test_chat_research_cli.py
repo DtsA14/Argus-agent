@@ -119,3 +119,10 @@ def test_issue_new_also_refuses_a_job_that_appeared_after_the_first_check(tmp_pa
     with pytest.raises(rj.Refused, match="already exists"):
         env.new()
     assert _json.loads((env.jobs / "ji" / "job.json").read_text())["state"] == "ABANDONED"
+
+
+def test_a_job_id_with_a_trailing_newline_is_refused_even_without_via(tmp_path):
+    env = t.Env(tmp_path, [])
+    with pytest.raises(rj.Refused, match="not a job id"):
+        start(env, job_id="jx\n")
+    assert not env.jobs.exists() or not list(env.jobs.glob("*"))
