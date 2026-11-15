@@ -144,6 +144,7 @@ def test_an_honest_green_run_passes_with_the_old_evidence_and_no_record_line_in_
     v = va.judge_result(spec("tests/test_x.py"), r, nonce=NONCE)
     assert v["status"] == "pass", v["reason"]
     assert NONCE not in v["evidence"]["output_tail"] and "ARGUS-GREEN" not in v["evidence"]["output_tail"]
+    assert "canary" not in v["evidence"]["output_tail"] and "failed" not in v["evidence"]["output_tail"]   # session 2 prints nothing
     assert v["evidence"]["tests_run"] == 2 and v["evidence"]["consistent"] is True
 
 
@@ -304,3 +305,131 @@ def test_the_script_and_the_host_hash_the_same_way(tmp_path):
 def test_the_runner_is_run_by_the_harness_never_named_by_the_contract():
     assert va.argv(spec("tests"), NONCE)[:4] == ["python3", "-I", "-B", "-c"]
     assert va.validate_command("python", ["-m", "pytest", "-c", "x.ini", "tests"])                          # still refused
+
+
+# ---- review of the first implementation: node ids, the second session's surroundings, the record's line ---------------------------------
+
+YAML_CONFTEST = """
+import pytest
+
+def pytest_collect_file(parent, file_path):
+    if file_path.suffix == ".yaml" and file_path.name.startswith("test"):
+        return YamlFile.from_parent(parent, path=file_path)
+
+class YamlFile(pytest.File):
+    def collect(self):
+        yield YamlItem.from_parent(self, name="spec.case_one")
+
+class YamlItem(pytest.Item):
+    def runtest(self): pass
+    def reportinfo(self): return self.path, 0, "spec.case_one"
+"""
+
+
+def test_a_node_the_terminal_prints_with_colons_instead_of_dots_agrees_with_the_record(tmp_path):
+    ws = project(tmp_path, "def test_a(): pass\n", YAML_CONFTEST)
+    (ws / "tests" / "test_y.yaml").write_text("x: 1\n")
+    r = run_green(ws, "tests")
+    text = va.split_record(r["stdout"], NONCE)[0]
+    assert "tests/test_y.yaml::spec::case_one PASSED" in text                    # what pytest prints is not the nodeid
+    v = va.judge_result(spec("tests"), r, nonce=NONCE)
+    assert trusted(v), (v["reason"], v["evidence"].get("record_problems"))
+
+
+def hostile_script(base):
+    """The script with its canary directory under `base` (a test's own directory instead of /tmp)."""
+    assert va.GREEN.count('dir="/tmp"') == 1
+    return va.GREEN.replace('dir="/tmp"', f'dir={str(base)!r}')
+
+
+def test_an_ini_and_a_conftest_above_the_canary_directory_do_not_reach_the_canary(tmp_path):
+    base = tmp_path / "tmpbase"
+    base.mkdir()
+    (base / "pytest.ini").write_text("[pytest]\naddopts = --no-such-option\n")
+    (base / "conftest.py").write_text("raise RuntimeError('a conftest above the canary')\n")
+    ws = project(tmp_path / "p", "def test_a(): pass\n")
+    r = run_green(ws, "tests/test_x.py", script=hostile_script(base))
+    v = va.judge_result(spec("tests/test_x.py"), r, nonce=NONCE)
+    assert v["status"] == "pass" and trusted(v), (v["reason"], v["evidence"].get("record_problems"))
+
+
+def test_the_canary_directory_is_removed_when_the_script_is_done(tmp_path):
+    base = tmp_path / "tmpbase"
+    base.mkdir()
+    ws = project(tmp_path / "p", "def test_a(): pass\n")
+    assert run_green(ws, "tests/test_x.py", script=hostile_script(base))["exit_code"] == 0
+    assert list(base.iterdir()) == []
+
+
+def test_a_canary_that_cannot_be_written_is_reported_as_such_and_fails(tmp_path):
+    ws = project(tmp_path / "p", "def test_a(): pass\n")
+    r = run_green(ws, "tests/test_x.py", script=hostile_script(tmp_path / "does-not-exist"))
+    v = va.judge_result(spec("tests/test_x.py"), r, nonce=NONCE)
+    assert v["status"] == "fail" and v["evidence"]["record"] is True and "not trusted" in v["reason"]
+    assert any("could not write" in d for d in v["evidence"]["record_problems"])
+
+
+def test_a_project_that_leaves_the_temp_dir_and_the_path_broken_still_gets_its_canary(tmp_path):
+    ws = project(tmp_path / "p", """
+        import sys, tempfile
+        def test_breaks_things():
+            tempfile.tempdir = "/nonexistent-temp-dir"
+            sys.path[:] = []
+    """)
+    v = va.judge_result(spec("tests/test_x.py"), run_green(ws, "tests/test_x.py"), nonce=NONCE)
+    assert v["status"] == "pass" and trusted(v), (v["reason"], v["evidence"].get("record_problems"))
+
+
+def test_output_without_a_newline_right_before_the_record_does_not_hide_it(tmp_path):
+    ws = project(tmp_path / "p", "def test_a(): pass\n", "import os, sys\n\ndef pytest_unconfigure(config):\n    sys.stdout.flush()\n    os.write(1, b'XYZ')\n")
+    r = run_green(ws, "tests/test_x.py")
+    assert "XYZ\n" + NONCE in r["stdout"]
+    v = va.judge_result(spec("tests/test_x.py"), r, nonce=NONCE)
+    assert v["status"] == "pass" and trusted(v), (v["reason"], v["evidence"].get("record_problems"))
+
+
+@pytest.mark.parametrize("over", [{"rc": True}, {"rc": 1.0}, {"canary_rc": True}, {"canary_rc": 1.0}])
+def test_a_record_whose_numbers_are_not_plain_integers_is_not_read(over):
+    rec = json.loads(record(PYTEST_OK)[len(NONCE):])
+    rec.update(over)
+    out = PYTEST_OK + "\n" + NONCE + json.dumps(rec) + "\n"
+    v = verdict(out, exit_code=1) if "rc" in over else verdict(out)
+    assert v["status"] == "fail" and "validation not trusted" in v["reason"]
+
+
+def test_a_record_without_its_canary_is_refused_not_raised():
+    rec = json.loads(record(PYTEST_OK)[len(NONCE):])
+    del rec["canary"]
+    v = verdict(PYTEST_OK + "\n" + NONCE + json.dumps(rec) + "\n")
+    assert v["status"] == "fail" and v["evidence"]["record"] is False
+
+
+def test_each_run_gets_a_nonce_of_its_own_and_a_record_behind_another_is_not_read(monkeypatch):
+    seen = []
+
+    def fake(argv, **kw):
+        seen.append(argv[5])
+        return {**RUN, "stdout": with_record(PYTEST_OK, nonce=argv[5] if len(seen) == 1 else "ARGUS-GREEN-" + "9" * 32 + ":")}
+
+    monkeypatch.setattr(va.sb, "run_command", fake)
+    first = va.run_validation(spec("tests/t.py"), ".", {})
+    second = va.run_validation(spec("tests/t.py"), ".", {})
+    assert first["status"] == "pass" and second["status"] == "fail" and seen[0] != seen[1] and seen[0].startswith("ARGUS-GREEN-")
+
+
+def test_an_honest_run_keeps_its_old_reason_and_evidence_and_gains_three_keys():
+    import test_pytest_validation as tpv
+    nodes = ["tests/test_isolation.py::test_no_network", "tests/test_isolation.py::test_workspace_is_read_only",
+             "tests/test_isolation.py::test_runs_as_nobody"]
+    v = judge(tpv.spec("tests/test_isolation.py", must=nodes, min_tests=3), tpv.result("isolation"))
+    assert v["status"] == "pass" and v["reason"] == "" and v["layer"] == "C" and v["id"] == "validation:t"
+    assert set(v["evidence"]) == {"argv", "exit_code", "timed_out", "killed", "cleanup_failed", "output_limit_exceeded", "truncated", "tests_run",
+                                  "outcome", "skipped", "failures", "errors", "must_pass", "output_tail", "runner", "consistent", "collected",
+                                  "deselected", "stderr_tail", "failed_nodes", "record", "canary", "record_problems"}
+
+
+@pytest.mark.xfail(strict=True, reason="VF O1 does not promise this: a forger that reads the run's nonce from the interpreter's argv and writes "
+                   "a report and an agreeing record (accepted limit, SPEC_VF_O1_CANARY_NONCE section 2)")
+def test_known_gap_f6_a_forger_that_reads_the_nonce(tmp_path):
+    v = va.judge_result(spec("tests/test_new.py"), run_green(forger(tmp_path, "pytest_nonce_reader_forger"), "tests/test_new.py"), nonce=NONCE)
+    assert v["status"] != "pass"

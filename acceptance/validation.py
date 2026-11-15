@@ -5,7 +5,7 @@ Two shapes are allowed:
   python -m unittest discover [-s DIR] [-t DIR] [-p PATTERN] [-k NAME ...]
       run as  python3 -I -m unittest discover ... -v
   python -m pytest TARGET [TARGET ...] [-k NAME ...]      (M6 W1; TARGET: a relative path or a pytest node id)
-      run as  python3 -I -B -m pytest <fixed harness options> TARGET ... ; the harness alone chooses the options
+      run by the harness's own runner script (GREEN, below) as pytest.main(<fixed harness options> TARGET ...); the harness alone chooses the options
       (no plugins, ini overrides or rootdir from the contract) and pins the rootdir to /workspace, so node ids are
       relative to the workspace root.
   vitest run FILE [FILE ...]      (docs/reviews/SPEC_PWA_VIEWER.md V; FILE: a relative *.test.js|jsx|ts|tsx path)
@@ -339,12 +339,12 @@ def named_like(t, tests):
 # the exit code of session 2; the process then exits with session 1's code. Like any validation it is read from the process that runs
 # the code under test: it stops a forger that prints and exits and a global patch that also hits the canary, not one scoped to session 1.
 GREEN = r"""
-import contextlib, hashlib, io, json, os, sys, tempfile
+import contextlib, hashlib, io, json, os, shutil, sys, tempfile
 nonce, fixed, targets = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3:]
 import pytest
 import pytest.__main__ as _pm
 sys.argv = [_pm.__file__, *fixed, *targets]
-WORD = {"PASSED": "ok", "FAILED": "FAIL", "ERROR": "ERROR", "SKIPPED": "skipped", "XFAIL": "expected failure", "XPASS": "unexpected success"}
+saved_path = list(sys.path)
 RANK = {"ERROR": 2, "FAIL": 1}
 
 
@@ -359,16 +359,31 @@ class Rec:
         if call.excinfo is not None:
             self.exc[item.nodeid] = call.excinfo.type.__name__
 
+    def key(self, report):
+        try:
+            line = self.cfg.pluginmanager.get_plugin("terminalreporter")._locationline(report.nodeid, *report.location)
+            return line[:-1] if line.endswith(" ") else line     # pytest appends one space, then the status word
+        except Exception:
+            return report.nodeid
+
     def pytest_runtest_logreport(self, report):
         if hasattr(report, "context"):
             return
-        word = self.cfg.hook.pytest_report_teststatus(report=report, config=self.cfg)[2]
-        status = WORD.get(word[0] if isinstance(word, tuple) else word)
+        if hasattr(report, "wasxfail") and report.skipped:
+            status = "expected failure"
+        elif hasattr(report, "wasxfail") and report.passed:
+            status = "unexpected success"
+        elif report.when != "call":
+            status = "ERROR" if report.failed else "skipped" if report.skipped else None
+        else:
+            status = {"passed": "ok", "failed": "FAIL", "skipped": "skipped"}.get(report.outcome)
         if status is None:
             return
-        old = self.tests.get(report.nodeid)
+        node = self.key(report)
+        old = self.tests.get(node)
         if old is None or RANK.get(status, 0) > RANK.get(old, 0):
-            self.tests[report.nodeid] = status
+            self.tests[node] = status
+            self.exc[node] = self.exc.get(report.nodeid)
 
 
 def sha(tests):
@@ -378,9 +393,11 @@ def sha(tests):
 
 r1 = Rec()
 rc1 = int(pytest.main([*fixed, *targets], plugins=[r1]))
-canary, rc2, err = {}, None, None
+canary, rc2, err, d = {}, None, None, None
 for k in ("PYTEST_ADDOPTS", "PYTEST_PLUGINS"):
     os.environ.pop(k, None)
+sys.path[:] = saved_path
+tempfile.tempdir = None
 try:
     tag = os.urandom(8).hex()
     d = tempfile.mkdtemp(prefix="argus_canary_", dir="/tmp")
@@ -390,14 +407,16 @@ try:
     with open(p, "w") as f:
         f.write("def test_pass_" + tag + "(): assert 1 == 1\ndef test_fail_" + tag + "(): assert 1 == 2\n"
                 "def test_error_" + tag + "(): raise RuntimeError('x')\n")
+except OSError as e:
+    err = type(e).__name__
+if err is None:
     r2 = Rec()
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         rc2 = int(pytest.main(["-c", d + "/pytest.ini", "--confcutdir", d, "--rootdir", d, "-p", "no:cacheprovider", "-o", "addopts=",
                                "-q", "--tb=no", "--color=no", p], plugins=[r2]))
     for n, s in r2.tests.items():
         canary[n.split("::")[-1].rsplit("_", 1)[0]] = s if s == "ok" else s + ":" + str(r2.exc.get(n))
-except OSError as e:
-    err = type(e).__name__
+    shutil.rmtree(d, ignore_errors=True)
 rec = {"rc": rc1, "counts": {s: sum(1 for v in r1.tests.values() if v == s) for s in sorted(set(r1.tests.values()))},
        "sha": sha(r1.tests), "canary": canary, "canary_rc": rc2, "canary_error": err}
 sys.stdout.write("\n" + nonce + json.dumps(rec, sort_keys=True) + "\n")
@@ -439,8 +458,7 @@ def split_record(stdout, nonce):
             got = json.loads(mine[0])
         except ValueError:
             got = None
-        if isinstance(got, dict) and all(isinstance(got.get(k), t) for k, t in RECORD_KEYS.items()) \
-                and isinstance(got["rc"], int) and not isinstance(got["rc"], bool):
+        if isinstance(got, dict) and all(type(got.get(k)) is t for k, t in RECORD_KEYS.items()):
             rec = got
     return text, rec, len(mine)
 
@@ -451,8 +469,9 @@ def record_problems(rec, parsed, r):
         return [("G1", "no single, well-formed harness record behind the nonce")]
     out = []
     canary = rec["canary"]
-    if rec.get("canary_error") or rec.get("canary_rc") != 1 or canary != CANARY_WANTED:
-        out.append(("G2", f"canary {canary!r} canary_rc {rec.get('canary_rc')!r} canary_error {rec.get('canary_error')!r}"))
+    if rec.get("canary_error") or type(rec.get("canary_rc")) is not int or rec["canary_rc"] != 1 or canary != CANARY_WANTED:
+        why = "harness canary: could not write" if rec.get("canary_error") else "harness canary"
+        out.append(("G2", f"{why}: {canary!r} canary_rc {rec.get('canary_rc')!r} canary_error {rec.get('canary_error')!r}"))
     if rec["rc"] != r.get("exit_code"):
         out.append(("G3", f"record rc {rec['rc']} but the exit code is {r.get('exit_code')}"))
     counts = dict(collections.Counter(parsed["tests"].values()))

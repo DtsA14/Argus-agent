@@ -15,17 +15,17 @@ def sha_of(tests):
     return hashlib.sha256(json.dumps(pairs, ensure_ascii=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def record(text, rc=0, **over):
+def record(text, rc=0, nonce=NONCE, **over):
     """A record that agrees with `text` (as the harness's script writes it), with fields overridden by `over`."""
     tests = va.parse_pytest(text)["tests"]
     rec = {"rc": rc, "counts": dict(collections.Counter(tests.values())), "sha": sha_of(tests), "canary": dict(CANARY_OK),
            "canary_rc": 1, "canary_error": None}
     rec.update(over)
-    return NONCE + json.dumps(rec, sort_keys=True)
+    return nonce + json.dumps(rec, sort_keys=True)
 
 
-def with_record(text, rc=0, **over):
-    return text + ("" if text.endswith("\n") or not text else "\n") + "\n" + record(text, rc, **over) + "\n"
+def with_record(text, rc=0, nonce=NONCE, **over):
+    return text + ("" if text.endswith("\n") or not text else "\n") + "\n" + record(text, rc, nonce, **over) + "\n"
 
 
 def recorded(r, **over):

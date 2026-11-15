@@ -62,6 +62,7 @@ def test_every_node_is_classified_the_same_way_in_two_runs(cfg, demo):
     parsed = [va.parse_pytest(r["stdout"]) for r, _ in runs]
     assert all(rec is not None and rec["canary"] == va.CANARY_WANTED and rec["sha"] == va.tests_sha(p["tests"])
                for (_, rec), p in zip(runs, parsed))
+    assert all("ARGUS-GREEN" not in r["stdout"] for r, _ in runs)                # the record line is taken out of the text
     assert parsed[0]["tests"] == parsed[1]["tests"] == EXPECTED
     for _, p in zip(runs, parsed):
         assert p["consistent"] and p["collected"] == 13

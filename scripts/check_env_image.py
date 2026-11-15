@@ -79,13 +79,13 @@ def checks(name, cfg, workdir):
     out = []
     v = va.run_validation(spec("tests/test_isolation.py", must=ISOLATION, min_tests=3, environment=name), workdir, cfg)
     out.append(("isolation", v["status"] == "pass", v["reason"] or "ok"))
-    out.append(("canary (harness record)", v["evidence"].get("record") is True and v["evidence"].get("canary") == "ok",
-                "; ".join(v["evidence"].get("record_problems") or []) or "ok"))
-    runs = {}
+    runs, canary = {}, {}
     for env in ("argus", name):
         s = spec("tests", max_skipped=5, environment=env)
-        r, _ = va.pytest_run(s, workdir, {**cfg, "environment": env, "timeout_s": 300})
+        r, rec = va.pytest_run(s, workdir, {**cfg, "environment": env, "timeout_s": 300})
         runs[env] = va.parse_pytest(r.get("stdout") or "")
+        canary[env] = bool(rec) and rec.get("canary") == va.CANARY_WANTED and rec.get("canary_rc") == 1 and not rec.get("canary_error")
+    out.append(("canary (harness record)", all(canary.values()), "ok" if all(canary.values()) else f"canary by environment: {canary}"))
     same = runs[name]["tests"] == runs["argus"]["tests"] and runs[name]["consistent"]
     out.append(("classification like argus", bool(same and runs["argus"]["tests"]),
                 "same" if same else f"{runs[name]['tests']} vs argus {runs['argus']['tests']}"))
