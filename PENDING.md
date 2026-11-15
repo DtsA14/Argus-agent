@@ -6,7 +6,7 @@ yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-15
 (salinan utuh sampai 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
 [`PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-15 (antrean PRD bagian A, pilot v0 dan Stage 19; sebelumnya hari yang sama: angka papan skor sebagai batas atas; Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
+Terakhir diperbarui: 2026-11-15 (tahap PRD B1, environment athena dan parkiran `argus env init`; sebelumnya hari yang sama: antrean PRD bagian A, pilot v0 dan Stage 19; sebelumnya hari yang sama: angka papan skor sebagai batas atas; Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
 terbuka dibawa ke sini atau dicatat di bagian "Diarsipkan 2026-11-15"). Butir di bawah yang menyebut "arsip" punya rincian lengkap di
 arsip 2026-11-15.
 
@@ -159,8 +159,12 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
   (antrean berakhir di `APPLIED`), `queue go` = persetujuan jumlah uangnya; D3 Atha menyetujui tiap draf (`approve --sha`) dan tiap patch (`apply --read-sha`). **Pilot v0 (2026-11-15, n = 1, `pilots/queue_pilot_v0/`):**
   tiga issue berantai di `argus-ledger` (ledger 021-023), semuanya `APPLIED`, tiap draf lolos pada percobaan pertama, biaya model $0,1092 dari $3,00, sekitar 46 menit dari `go` sampai apply terakhir (21 menit menunggu satu approve); deploy ke staging sebagai Stage 19
   (`pilots/staging_stage19/`, "go live" Atha). **Yang tidak ditunjukkan:** angka "tanpa campur tangan Claude" (tiap gerbang lewat manusia, antrean v0 tetap dua tindakan manusia per issue), perilaku saat item gagal di dunia nyata, issue yang kurang jelas
-  (issue ditulis Claude dengan contoh persis). **Belum:** bagian B (PRD + `issues.json` berurutan, disetujui sekali dengan sha, pemeriksaan jalur Argus terhadap `router/stage_viewer.API` dan tabel field `router/stage_data.py`), tes CLI `queue new` dan `queue step`
-  dengan konfigurasi sungguhan, mencatat kenapa venv Argus tanpa `fastapi` (tes ledger dijalankan di image sandbox). Bagian B dibuka paling cepat di titik cek 2026-11-29 (aturan arah).
+  (issue ditulis Claude dengan contoh persis). **Bagian B1 selesai (2026-11-15, spek `docs/reviews/SPEC_PRD_STAGE.md` rev 1, PR #559, "kenapa bagian B harus tunggu titik cek": bagian B ada di urutan inti yang diterima):** `argus prd check <folder>` (baca saja, tanpa model, tanpa uang) dan `argus prd approve <folder> --sha` (satu persetujuan atas isi; antrean `PENDING`, uang tetap `queue go`).
+  Folder `PRD.md` + `issues.json` + `issue-<n>.md` dibaca sekali; pemeriksa mencocokkan jalur dengan `router.stage_viewer.API` dan field dengan tabel `router.stage_data` yang berjalan, memaksa penulis menyatakan `via_proxy` untuk jalur ledger, dan memblokir `/api/...` atau `GET /jalur` di teks issue yang tidak dideklarasikan
+  (bentuk asli Stage 19 ada di tesnya). `queue.validate_new` dipakai bersama `queue.new`. 104 tes tahap PRD, `verify_at` PASS 5305 (`verification/verify-20261115T191613Z-aarch64.log`), mutan 31/31 non-ekuivalen (`verification/prd_stage_mutants.log`), tinjauan Fable atas spek dan diff (GO WITH FIXES, semua temuan diterapkan).
+  **Batas:** hanya jalur dan field yang ditulis atau terlihat di teks; jalur yang disusun dari potongan, ditulis `/API/`, `%2F` atau `get /x` lolos. **B2 (penulis PRD di chat)** ditunda sampai pilot kedua (Atha 2026-11-15, D4).
+  **Pilot kedua (di repo luar, rencana):** repo `athena` (publik; `~/athena`, `venv/` di `.git/info/exclude`), environment `athena_py312` (#560: 43 paket berhash, `check_env_image` PASS; baseline di sandbox 871 lulus, 6 skip karena data universe tidak ada di checkout bersih, 1 gagal karena tes `test_open_position_returns_a_level` bergantung pada tanggal hari ini dan gagal di hari non-kerja, juga di base);
+  tiga issue dari backlog `athena` belum ditulis; batas uang menunggu kata Atha. **Belum:** tes CLI `queue new` dan `queue step` dengan konfigurasi sungguhan, mencatat kenapa venv Argus tanpa `fastapi` (tes ledger dijalankan di image sandbox).
 - [ ] **Ketergantungan tersembunyi ketiga (Stage 19, 2026-11-15):** `/api/scoreboard/models` di ledger Stage 19 live tetapi 404 lewat proxy viewer 8710, karena regex `API` (`router/stage_viewer.py:76`) hanya meneruskan jalur tetap; belum ada halaman yang memakainya.
   Perbaikan = jalur ketat dan restart proxy (seperti #460 untuk `/api/scoreboard`); dikerjakan bila viewer butuh data itu. Pelajaran: rencana staging yang menjalankan `stage monitor` harus dijalankan dari `~/pilot3a_live` (`jobs/` timer), bukan checkout lain (refresh menolak menerbitkan; tidak ada data rusak).
 - [ ] **`argus fix <job>`** dari temuan yang dibekukan (kandidat; satu kali per job, agen boleh lapor "terjepit tes lama"); **redraft
@@ -237,7 +241,10 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 Ide arah atau kemampuan baru yang muncul di antara titik cek: tanggal, kata-kata Atha, tempatnya terhadap arah. Tidak dikerjakan
 sebelum titik cek, kecuali Atha berkata ia mengganti pekerjaan yang sedang berjalan.
 
-- (kosong)
+- **`argus env init <repo>`** (Atha 2026-11-15, "#1 masuk parkiran"): satu perintah tanpa model yang membuat environment sandbox untuk repo luar: membaca dependensi repo, memilih versi yang lebih tua dari dua minggu, mengambil hash dari wheel di image dasar, membangun dan
+  mengecek image, menjalankan tes baseline di sandbox dan melaporkan yang gagal di-import. Latar: `athena_py312` dibuat dengan tangan dalam sekitar 10 langkah (resolve, tanggal PyPI, unduh, hash, build, cek, baseline; dua dependensi tersembunyi, `yfinance` dan `tzdata`, baru
+  ketahuan dari baseline). Tempatnya terhadap arah: membuat "bisa ditinggal" berlaku untuk repo luar tanpa melonggarkan sandbox tanpa jaringan dan pin berhash (dua pilihan lain, satu image gemuk dan install saat job jalan, ditolak). Bukan pengganti pekerjaan berjalan; dibahas
+  di titik cek 2026-11-29 dengan angka pembanding (waktu membuat `ledger_py312` dan `athena_py312` dengan tangan).
 
 ## Log permintaan yang chat belum bisa
 
