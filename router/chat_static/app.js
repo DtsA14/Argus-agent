@@ -415,6 +415,7 @@
       why.setAttribute("aria-label", "Alasan");
       c.appendChild(why);
       var hint = el("p", "note");
+      hint.setAttribute("role", "status");
       c.appendChild(hint);
       var decide = function (label, action, needReason) {
         var b = el("button", null, label);
@@ -431,6 +432,11 @@
     }
     c.appendChild(acts);
     return c;
+  }
+  function reasonTyped() {                              // the poll must not wipe a reason that is being typed
+    return Array.prototype.some.call(document.querySelectorAll("#stream input.reason"), function (i) {
+      return i.value.trim() !== "" || i === document.activeElement;
+    });
   }
   function renderDecisions() {
     clear(stream);
@@ -494,7 +500,7 @@
   setInterval(function () {
     if (document.hidden) { return; }
     load();
-    if (mode === "decide" && openDecision === null && !(pending && pending.sent)) { loadDecisions(); }
+    if (mode === "decide" && openDecision === null && !(pending && pending.sent) && !reasonTyped()) { loadDecisions(); }
     if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else if (researchLive) { showResearch(openResearch); } }
   }, 30000);
 })();

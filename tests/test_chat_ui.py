@@ -283,7 +283,7 @@ def test_the_reason_is_a_field_inside_each_card_and_a_reject_without_one_is_not_
     assert 'issueForm.hidden = m === "status" || m === "decide";' in JS                    # the composer is not shown in decisions
 
 def test_the_poll_refreshes_the_list_only_when_no_confirm_is_on_its_way():
-    assert 'if (mode === "decide" && openDecision === null && !(pending && pending.sent)) { loadDecisions(); }' in JS
+    assert 'if (mode === "decide" && openDecision === null && !(pending && pending.sent) && !reasonTyped()) { loadDecisions(); }' in JS
 
 
 def test_the_decision_card_shows_the_cost_the_draft_and_a_viewer_link_only():
@@ -302,3 +302,13 @@ def test_after_a_decision_the_opened_card_is_read_again_and_the_texts_name_the_d
 
 def test_the_form_does_not_submit_in_decisions():
     assert 'if (mode === "decide") { return; }\n    if (mode === "research")' in JS
+
+
+def test_the_poll_does_not_redraw_the_decision_list_while_a_reason_is_typed_or_focused():
+    body = JS.split("function reasonTyped")[1].split("function renderDecisions")[0]
+    assert 'querySelectorAll("#stream input.reason")' in body and 'i.value.trim() !== ""' in body and "i === document.activeElement" in body
+    assert "reasonTyped()" in JS.split("setInterval")[1]
+
+
+def test_the_empty_hint_of_a_decision_card_is_a_status_region():
+    assert 'hint.setAttribute("role", "status");' in decide_part()
