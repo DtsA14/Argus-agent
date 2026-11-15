@@ -36,6 +36,7 @@ import secrets
 import shlex
 import stat
 import unicodedata
+import subprocess
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1432,7 +1433,8 @@ def patch_id(repo, diff):
 # How the commit's changes are written for the comparison with the package's patch: the way codetask/review.py writes the patch (binary, full
 # index, no renames), with no textconv or external diff of the repository and none of its diff configuration (SPEC_ARGUS_APPLY PR 1).
 SHOW_AS_PACKAGED = ("-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false", "-c", "diff.renames=false", "-c", "diff.context=3",
-                    "-c", "diff.algorithm=default", "-c", "diff.indentHeuristic=true",
+                    "-c", "diff.algorithm=default", "-c", "diff.indentHeuristic=true", "-c", "diff.interHunkContext=0", "-c", "core.quotePath=true",
+                    "-c", "color.ui=false",
                     "show", "--no-color", "--no-ext-diff", "--no-textconv", "--binary", "--full-index", "--no-renames", "--format=")
 
 
@@ -1449,15 +1451,19 @@ def _record_applied(job, commit, *, deps, note=None, **extra):
     """applied() without the lock: the caller holds job.lock() (`argus apply` holds it across its git work). extra: more fields for the log entry."""
     if job.data["state"] != REVIEW_READY:
         raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
+    reserved = sorted(set(extra) & {"at", "what", "old", "new", "commit", "patch_sha256", "as_is", "by", "note"})
+    if reserved:
+        raise ValueError(f"_record_applied: {reserved} are fields of the log entry itself")
     repo = job.data["inputs"]["repo"]
     patch = Path(last_agent(job)[1]["review"]["dir"]) / "changes.patch"
     try:
+        data = patch.read_bytes()                  # once: the sha recorded is of the bytes compared
         sha = intake.git(repo, "rev-parse", "--verify", "--end-of-options", f"{commit}^{{commit}}", clean=True).decode().strip()
-        mine = patch_id(repo, patch.read_bytes())
+        mine = patch_id(repo, data)
         theirs = patch_id(repo, intake.git(repo, *SHOW_AS_PACKAGED, sha, clean=True))
-    except intake.IntakeError as e:
+    except (OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:
         raise Refused(f"job {job.id}: {e}") from None
-    job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(patch.read_bytes()).hexdigest(),
+    job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(data).hexdigest(),
              as_is=None if mine is None or theirs is None else mine == theirs, by=os.environ.get("USER"),
              **({"note": note} if note else {}), **extra)
     return job

@@ -1,6 +1,7 @@
 """Mutants for SPEC_ARGUS_APPLY PR 1 (applied(): the comparison as the package makes the patch, clean git environment, patch sha in job.json, the
 recorder without the lock): each applied alone in a worktree; killed = a test FAILED and pytest reported no error. Usage: <this> <worktree> <python>
-Not listed: `-c diff.renames=false` (redundant with --no-renames, an equivalent mutant)."""
+Pairs: --binary and --full-index, --no-renames and diff.renames=false, are each redundant only with their partner, so they go out together.
+Not listed (equivalent): `patch_id` not clean (`git patch-id` reads no repository)."""
 import subprocess
 import sys
 from pathlib import Path
@@ -10,18 +11,25 @@ T = ["-rfEs", "tests/test_applied_asis.py", "tests/test_router.py"]
 J, I = "router/job.py", "acceptance/intake.py"
 M = [
     ("intake.git(clean) keeps GIT_* variables", I, [("    base = {k: v for k, v in os.environ.items() if not k.startswith(\"GIT_\") and k != \"EMAIL\"} if clean else dict(os.environ)", "    base = dict(os.environ)")]),
-    ("show without --binary", J, [("\"--no-textconv\", \"--binary\", \"--full-index\"", "\"--no-textconv\", \"--full-index\"")]),
-    ("show without --full-index", J, [("\"--binary\", \"--full-index\", \"--no-renames\"", "\"--binary\", \"--no-renames\"")]),
-    ("show without --no-renames", J, [("\"--full-index\", \"--no-renames\", \"--format=\")", "\"--full-index\", \"--format=\")")]),
+    ("show without --binary and --full-index", J, [("\"--no-textconv\", \"--binary\", \"--full-index\", \"--no-renames\"", "\"--no-textconv\", \"--no-renames\"")]),
+    ("show without --no-renames and diff.renames=false", J, [("\"-c\", \"diff.renames=false\", ", ""), ("\"--full-index\", \"--no-renames\", \"--format=\")", "\"--full-index\", \"--format=\")")]),
+    ("no diff.context override", J, [("\"-c\", \"diff.context=3\", ", "")]),
+    ("no diff.interHunkContext pin", J, [("\"-c\", \"diff.interHunkContext=0\", ", "")]),
+    ("no core.quotePath pin", J, [("\"-c\", \"core.quotePath=true\",\n", "\n")]),
+    ("no color pin", J, [("\n                    \"-c\", \"color.ui=false\",", "")]),
+    ("show with the external diff", J, [("\"show\", \"--no-color\", \"--no-ext-diff\", ", "\"show\", \"--no-color\", ")]),
     ("show without --no-textconv", J, [("\"--no-ext-diff\", \"--no-textconv\",", "\"--no-ext-diff\",")]),
     ("no diff.noprefix override", J, [("\"-c\", \"diff.noprefix=false\", ", "")]),
     ("no diff.mnemonicPrefix override", J, [("\"-c\", \"diff.mnemonicPrefix=false\", ", "")]),
-    ("patch_id not clean", J, [("data=diff, clean=True).split()", "data=diff).split()")]),
     ("rev-parse not clean", J, [("f\"{commit}^{{commit}}\", clean=True).decode()", "f\"{commit}^{{commit}}\").decode()")]),
     ("show not clean", J, [("*SHOW_AS_PACKAGED, sha, clean=True)", "*SHOW_AS_PACKAGED, sha)")]),
     ("patch sha not recorded in job.json", J, [("\"dir\": str(out[\"dir\"]), \"patch_sha256\": patch_sha}", "\"dir\": str(out[\"dir\"]), \"patch_sha256\": None}")]),
     ("applied() without the lock", J, [("    with job.lock():\n        return _record_applied(job, commit, deps=deps, note=note)", "    return _record_applied(job, commit, deps=deps, note=note)")]),
     ("extra fields dropped from the log entry", J, [("**({\"note\": note} if note else {}), **extra)", "**({\"note\": note} if note else {}))")]),
+    ("reserved log fields allowed", J, [("    if reserved:\n        raise ValueError(", "    if False:\n        raise ValueError(")]),
+    ("the patch read twice", J, [("hashlib.sha256(data).hexdigest()", "hashlib.sha256(patch.read_bytes()).hexdigest()")]),
+    ("a missing patch is not a refusal", J, [("except (OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:", "except (intake.IntakeError, subprocess.TimeoutExpired) as e:")]),
+    ("a git timeout is not a refusal", J, [("except (OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:", "except (OSError, intake.IntakeError) as e:")]),
     ("state not checked in the recorder", J, [("    if job.data[\"state\"] != REVIEW_READY:\n        raise Refused(f\"job {job.id} is {job.data['state']}: only a valid review package is applied\")\n    repo = job.data[\"inputs\"][\"repo\"]\n    patch = Path(last_agent(job)[1][\"review\"][\"dir\"]) / \"changes.patch\"\n    try:\n        sha = intake.git(repo, \"rev-parse\"", "    repo = job.data[\"inputs\"][\"repo\"]\n    patch = Path(last_agent(job)[1][\"review\"][\"dir\"]) / \"changes.patch\"\n    try:\n        sha = intake.git(repo, \"rev-parse\"")]),
     ("as_is always True", J, [("as_is=None if mine is None or theirs is None else mine == theirs, by=os.environ.get(\"USER\"),\n             **({\"note\"", "as_is=True, by=os.environ.get(\"USER\"),\n             **({\"note\"")]),
 ]

@@ -91,9 +91,12 @@ def test_inherited_git_variables_do_not_redirect_the_commands(env, tmp_path, mon
     td.git(tmp_path, "init", "-q", str(other))
     commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# y\n")))
     monkeypatch.setenv("GIT_DIR", str(other / ".git"))
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", "diff.noprefix")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    assert as_is(env) is True
+
+
+def test_an_inherited_object_directory_does_not_redirect_the_commands(env, tmp_path, monkeypatch):
+    commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# v\n")))
+    monkeypatch.setenv("GIT_OBJECT_DIRECTORY", str(tmp_path / "no-objects-here"))
     assert as_is(env) is True
 
 
@@ -127,3 +130,100 @@ def test_applied_still_takes_the_lock_and_still_refuses_a_job_that_is_not_ready(
     rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
     with pytest.raises(rj.Refused, match="only a valid review package is applied"):
         rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+
+
+# ---- the comparison itself, on a file with room for hunks, odd paths and local settings --------------------------------------------------
+
+def lines(n, edit=()):
+    return "".join(f"line {i}{' edited' if i in edit else ''}\n" for i in range(1, n + 1))
+
+
+def asis_of(tmp_path, *, config=(), env=None, edit=(10, 14), path="data.txt"):
+    """as_is as `applied` computes it, on a repository made here: the package's patch (built as codetask/review.py builds it) against the commit."""
+    repo = tmp_path / "r"
+    td.git(tmp_path, "init", "-q", str(repo))
+    td.git(repo, "config", "user.email", "t@example.org")
+    td.git(repo, "config", "user.name", "t")
+    (repo / path).write_text(lines(40))
+    td.git(repo, "add", "-A")
+    td.git(repo, "commit", "-qm", "base")
+    scratch = tmp_path / "s"
+    shutil.copytree(repo, scratch)
+    (scratch / path).write_text(lines(40, edit))
+    td.git(scratch, "add", "-A", "-f")
+    patch = subprocess.run(["git", "-C", str(scratch), "diff", "--cached", "--binary", "--full-index", "--no-renames", "--no-color", "--no-ext-diff"],
+                           capture_output=True, check=True).stdout
+    (repo / path).write_text(lines(40, edit))
+    td.git(repo, "add", "-A")
+    td.git(repo, "commit", "-qm", "apply")
+    for k, v in config:
+        td.git(repo, "config", k, v)
+    for k, v in (env or {}).items():
+        os.environ[k] = v
+    try:
+        sha = rj.intake.git(repo, "rev-parse", "HEAD", clean=True).decode().strip()
+        return rj.patch_id(repo, patch) == rj.patch_id(repo, rj.intake.git(repo, *rj.SHOW_AS_PACKAGED, sha, clean=True))
+    finally:
+        for k in env or {}:
+            os.environ.pop(k, None)
+
+
+@pytest.mark.parametrize("config", [(), (("diff.context", "1"),), (("diff.interHunkContext", "10"),), (("diff.algorithm", "patience"),),
+                                    (("diff.indentHeuristic", "false"),), (("color.ui", "always"),), (("diff.noprefix", "true"),)])
+def test_local_settings_do_not_change_the_comparison_on_a_file_with_two_nearby_hunks(tmp_path, config):
+    assert asis_of(tmp_path, config=config) is True
+
+
+def test_a_non_ascii_path_is_compared_as_the_package_writes_it(tmp_path):
+    assert asis_of(tmp_path, config=(("core.quotePath", "false"),), path="données é.txt") is True
+
+
+def test_an_external_diff_program_does_not_run(tmp_path):
+    mark = tmp_path / "ext-ran"
+    script = tmp_path / "ext.sh"
+    script.write_text(f"#!/bin/sh\ntouch {mark}\n")
+    script.chmod(0o755)
+    assert asis_of(tmp_path, config=(("diff.external", str(script)),)) is True and not mark.exists()
+
+
+def test_a_missing_patch_is_a_refusal_not_a_traceback(env, tmp_path):
+    commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# m\n")))
+    package_patch(env).unlink()
+    with pytest.raises(rj.Refused):
+        rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+    assert env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_git_timeout_is_a_refusal(env, tmp_path, monkeypatch):
+    commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# t\n")))
+
+    def slow(*a, **k):
+        raise subprocess.TimeoutExpired("git", 1)
+    monkeypatch.setattr(rj.intake, "git", slow)
+    with pytest.raises(rj.Refused):
+        rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+
+
+def test_the_recorded_sha_is_of_the_bytes_that_were_compared(env, tmp_path):
+    commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# r\n")))
+    reads = []
+    real = Path.read_bytes
+
+    def counting(self):
+        if self.name == "changes.patch":
+            reads.append(1)
+        return real(self)
+    Path.read_bytes = counting
+    try:
+        rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+    finally:
+        Path.read_bytes = real
+    assert len(reads) == 1
+
+
+@pytest.mark.parametrize("field", ["at", "what", "old", "new", "patch_sha256", "as_is", "by"])
+def test_the_recorder_refuses_fields_that_are_the_log_entrys_own(env, tmp_path, field):
+    commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# q\n")))
+    job = rj.open_job("jtest", env.jobs)
+    with job.lock(), pytest.raises(ValueError, match="log entry itself"):
+        rj._record_applied(job, "HEAD", deps=env.deps, **{field: "x"})
