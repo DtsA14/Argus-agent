@@ -145,6 +145,7 @@ def test_an_honest_green_run_passes_with_the_old_evidence_and_no_record_line_in_
     assert v["status"] == "pass", v["reason"]
     assert NONCE not in v["evidence"]["output_tail"] and "ARGUS-GREEN" not in v["evidence"]["output_tail"]
     assert "canary" not in v["evidence"]["output_tail"] and "failed" not in v["evidence"]["output_tail"]   # session 2 prints nothing
+    assert v["evidence"]["output_tail"].endswith("====\n") and not v["evidence"]["output_tail"].endswith("\n\n")   # the script's blank line is gone
     assert v["evidence"]["tests_run"] == 2 and v["evidence"]["consistent"] is True
 
 

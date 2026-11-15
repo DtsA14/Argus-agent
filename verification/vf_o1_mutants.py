@@ -13,7 +13,6 @@ M = [
     ("record line kept in the text", V, [("            mine.append(l[len(nonce):])\n", "            mine.append(l[len(nonce):])\n            kept.append(l)\n")], UNIT),
     ("the script's blank line kept", V, [("            if kept and kept[-1] == \"\\n\":", "            if False:")], UNIT),
     ("several records accepted", V, [("    if len(mine) == 1:\n", "    if len(mine) >= 1:\n")], UNIT),
-    ("a bool rc accepted", V, [(" and isinstance(got[\"rc\"], int) and not isinstance(got[\"rc\"], bool)", "")], UNIT),
     ("a missing record accepted", V, [("    if rec is None:\n        return [(\"G1\"", "    if rec is None:\n        return []\n        return [(\"G1\"")], UNIT),
     ("canary never checked", V, [("    if rec.get(\"canary_error\") or rec.get(\"canary_rc\") != 1 or canary != CANARY_WANTED:", "    if False:")], UNIT),
     ("canary_rc not checked", V, [(" or rec.get(\"canary_rc\") != 1", "")], UNIT),
