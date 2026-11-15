@@ -112,7 +112,7 @@ def test_every_element_the_script_looks_up_by_id_exists_in_the_page():
 
 def test_only_one_card_can_be_live_and_a_new_one_settles_the_old():
     body = JS.split("function dropPending")[1].split("function issueCard")[0]
-    assert "pending.settle()" in body and body.count("slot.appendChild(c)") == 2
+    assert "    if (pending) { pending.settle(); if (pending.parentNode)" in body and body.count("slot.appendChild(c)") == 2
     assert body.index("dropPending();\n      var c = renderCard") > 0
     assert "stream.insertBefore" not in JS                                              # no card is pushed in under the finger
 
@@ -125,7 +125,7 @@ def test_batal_is_off_once_confirm_was_sent_and_a_card_with_a_confirm_on_its_way
 
 
 def test_a_failed_fetch_is_not_shown_as_a_refusal():
-    assert "err.answered = true" in JS and "Status tidak diketahui" in JS
+    assert "err.answered = true" in JS and "        if (e.answered) {" in JS and "Status tidak diketahui" in JS
     after = JS.split("Status tidak diketahui")[1].split("});")[0]
     assert "loadIssues()" in after
 
