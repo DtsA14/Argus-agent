@@ -29,7 +29,7 @@ from router import job as rj
 from router import research as rr
 from router import stage_data as sd
 from router.control import cli as control_cli
-from router.control import reason_problem, strip_refused
+from router.control import ABANDON_DEFAULT, NOT_ABANDONABLE, REJECTABLE, Unreadable, allowed, draft_sha12, reason_problem, strip_refused
 from router.control_issues import Spawner, issue_cli, normalize
 
 STATE = Path.home() / ".local" / "state" / "argus-chat"
@@ -37,7 +37,7 @@ KEY_ENV = "ARGUS_CHAT_KEY_FILE"
 WRITER_KEY_ENV = "ARGUS_CHAT_WRITER_KEY_FILE"
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
-ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new")
+ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "job_reject", "job_abandon")   # never an approve (13.7 item 9)
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -134,7 +134,8 @@ class Actions:
         self.config_path = config_path
         self.state = Path(state)
         self.spawner = spawner or Spawner(self.state, clock)
-        self.run = run or (lambda action, job_id, reason: control_cli(action, job_id, reason, "", self.jobs_dir))
+        self.run = run or (lambda action, job_id, reason, sha="": control_cli(action, job_id, reason, sha, self.jobs_dir))
+        self.last_exit = None                      # the exit code of the last CLI run of a job decision, for the audit line
         self.audit_path = self.state / "audit.jsonl"
         self.prepared = {}                         # token -> the prepared action
         self.pending = []                          # (at, ("new"|"start", job id), usd): confirms the job directories may not show yet
@@ -353,6 +354,12 @@ class Actions:
                         "busy": self.spawner.busy(n)})
         return {"research": out}
 
+    def _repo_names(self):
+        try:
+            return sorted(str(r) for r in ((self.cfg.get("issue_writer") or {}).get("repos") or {}))
+        except Refusal:
+            return []                                  # an unreadable config offers no repository, it does not break the page
+
     def issues(self):
         out = []
         try:
@@ -367,7 +374,7 @@ class Actions:
             first = next((m.get("text") for m in conv if isinstance(m, dict) and m.get("from") == "human"), "") or ""
             out.append({"id": n, "state": v.data.get("state"), "repo": v.data["inputs"].get("repo_name"),
                         "title": scrub(first.strip().splitlines()[0][:80]) if first.strip() else n})
-        return {"issues": out, "repos": sorted(str(r) for r in ((self.cfg.get("issue_writer") or {}).get("repos") or {}))}
+        return {"issues": out, "repos": self._repo_names()}
 
     # ---- the card ---------------------------------------------------------------------------------------------------
 
@@ -379,6 +386,8 @@ class Actions:
         """(card, argv builder inputs) for an action, from live data; Refusal when it cannot be run."""
         if action not in ACTIONS:
             raise Refusal(404, "path", "no such action")
+        if action in ("job_reject", "job_abandon"):
+            return self.build_job(action, params)                # no config, no exposure: a broken config.yaml must not stop a reject (13.7 item 5)
         cfg = self.cfg
         if action == "research_new":
             return self.build_research(cfg, params)
@@ -436,6 +445,170 @@ class Actions:
         if state in (rj.ABANDONED, ri.HANDED_OFF, ri.WRITING):
             raise Refusal(409, "state", f"job {v.id} is {state}: it cannot be discarded now")
         return {**base, "title": "Discard the issue", "reason": reason}, {"job": v.id, "reason": reason}
+
+    # ---- reject and abandon of a job (13): the control service's rules, in the chat's two steps ----------------------------------
+
+    @staticmethod
+    def _stage_usd(data):
+        """The money a job's stages record in job.json, with no ledger read (the list's cost, 13.7 item 9); None when it is not readable."""
+        stages = data.get("stages")
+        if not isinstance(stages, dict):
+            return None
+        total = 0.0
+        for st in stages.values():
+            u = st.get("usd") if isinstance(st, dict) else None
+            if isinstance(u, (int, float)) and not isinstance(u, bool):
+                total += u
+        return total
+
+    def _read_data(self, job_id, ledgers=True):
+        """(job.json dict, spent USD or None) of any job, through directory fds, or None (not an id, not there, not an object).
+        ledgers=False: the cost is the stages' own usd of job.json and no ledger is opened."""
+        if not UI_ID.fullmatch(job_id or ""):
+            return None
+        try:
+            sfd = os.open(self.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
+        except OSError:
+            return None
+        try:
+            jfd = sd._open_dir(job_id, sfd)
+            try:
+                data = json.loads(sd._read_at(jfd, "job.json", limit=JOB_JSON_MAX))
+                spent = (self._spent(jfd, job_id, data) if ledgers else self._stage_usd(data)) if isinstance(data, dict) else None
+            finally:
+                os.close(jfd)
+        except (OSError, ValueError):
+            return None
+        finally:
+            os.close(sfd)
+        return (data, spent) if isinstance(data, dict) else None
+
+    RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}")
+
+    def _sha(self, job_id, data=None):
+        """The sha12 of the job's last draft, "" when it has none, read through directory fds (13.7 item 9: no symlink at any step). Anything
+        that goes wrong reading it is a refusal, never "no draft". Same pick and same hash as the control service's draft_sha12."""
+        bad = Refusal(409, "draft", "the draft cannot be read")
+        try:
+            if data is None:
+                got = self._read_data(job_id, ledgers=False)
+                if got is None:
+                    raise bad
+                data = got[0]
+            drafts = [st for st in data["stages"].values() if st["kind"] == "draft" and st.get("status") == "DRAFTED"]
+            if not drafts:
+                return ""
+            run = drafts[-1]["run_id"]
+            if not isinstance(run, str) or not self.RUN_NAME.fullmatch(run):
+                raise bad
+            sfd = os.open(self.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                jfd = sd._open_dir(job_id, sfd)
+                try:
+                    rfd = sd._open_dir("runs", jfd)
+                    try:
+                        dfd = sd._open_dir(run, rfd)
+                        try:
+                            raw = sd._read_at(dfd, "draft.json", limit=JOB_JSON_MAX)
+                        finally:
+                            os.close(dfd)
+                    finally:
+                        os.close(rfd)
+                finally:
+                    os.close(jfd)
+            finally:
+                os.close(sfd)
+            return rj.draft_sha_of(json.loads(raw))[:12]
+        except Refusal:
+            raise
+        except Exception:
+            raise bad from None
+
+    def build_job(self, action, params):
+        if set(params) - {"job", "sha", "reason"}:
+            raise Refusal(400, "form", "a decision takes the job, the draft sha and the reason")
+        job_id, sha = params.get("job"), params.get("sha")
+        if not isinstance(job_id, str) or not UI_ID.fullmatch(job_id):
+            raise Refusal(404, "path", "no such job")
+        if not isinstance(sha, str) or not (sha == "" or SHA12.fullmatch(sha)):
+            raise Refusal(400, "form", "the draft sha must be given: 12 hex characters, or empty when the card showed none")
+        got = self._read_data(job_id)
+        if got is None:
+            raise Refusal(404, "path", "no such job")
+        data, spent = got
+        kind, state = data.get("kind"), data.get("state")
+        if kind == "issue":
+            raise Refusal(409, "kind", "an issue job is decided on the issue page")
+        verb = "reject" if action == "job_reject" else "abandon"
+        if verb not in allowed(state):
+            raise Refusal(409, "state", f"job {job_id} is {state}: it cannot be {verb}ed now")
+        if self.spawner.busy(job_id):
+            raise Refusal(409, "busy", "a run of this service is still working on this job")
+        live = self._sha(job_id, data)
+        if sha != live:
+            raise Refusal(409, "draft", "the draft changed since you read it: open the job again")
+        reason = (params.get("reason") or "").strip(" ")
+        why = reason_problem(reason, required=verb == "reject")
+        if why:
+            raise Refusal(400, "form", why)
+        title = self._title(data)
+        cap = data.get("max_usd")
+        card = {"action": action, "title": "Reject the draft" if verb == "reject" else "Abandon the job", "job": job_id,
+                "kind": kind if isinstance(kind, str) else None, "state": state, "sha12": live or None,
+                "job_title": scrub(title) if isinstance(title, str) else None, "reason": reason,
+                "spent_usd": None if spent is None else round(spent, 2),
+                "cap_usd": cap if isinstance(cap, (int, float)) and not isinstance(cap, bool) else None}
+        return card, {"job": job_id, "sha": live, "reason": reason, "verb": verb}
+
+    @staticmethod
+    def _title(data):
+        try:
+            return sd.job_title(data) if isinstance(data.get("kind"), str) else None
+        except Exception:
+            return None                                   # a title is a convenience: a malformed record must not break the list
+
+    def decision_row(self, job_id, data, spent):
+        state = data.get("state")
+        try:
+            sha, why = self._sha(job_id, data), None
+        except Refusal as r:
+            sha, why = "", r.why
+        title = self._title(data)
+        cap = data.get("max_usd")
+        return {"id": job_id, "kind": data.get("kind") if isinstance(data.get("kind"), str) else None, "state": state,
+                "title": scrub(title) if isinstance(title, str) else None, "sha12": sha or None, "draft_problem": why,
+                "spent_usd": spent, "busy": self.spawner.busy(job_id),
+                "cap_usd": cap if isinstance(cap, (int, float)) and not isinstance(cap, bool) else None,
+                "allowed": [] if why else allowed(state)}
+
+    def decisions(self):
+        """Jobs waiting for a decision (state in REJECTABLE, any kind): at most 200 directories looked at, 50 rows (13.7 item 9), no ledger
+        opened; a record that cannot be shown is counted in `skipped`, it never breaks the list."""
+        rows, scanned, skipped = [], 0, 0
+        try:
+            names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
+        except OSError:
+            return {"decisions": [], "capped": False, "skipped": 0}
+        for n in names:
+            if scanned >= RESEARCH_SCAN_MAX or len(rows) >= RESEARCH_LIST_MAX:
+                return {"decisions": rows, "capped": True, "skipped": skipped}
+            scanned += 1
+            got = self._read_data(n, ledgers=False)
+            try:
+                if got is not None and got[0].get("state") in REJECTABLE and got[0].get("kind") != "issue":
+                    rows.append(self.decision_row(n, *got))
+            except Exception:
+                skipped += 1
+        return {"decisions": rows, "capped": False, "skipped": skipped}
+
+    def decision(self, job_id):
+        """One job for the Decide link: its row with what it allows; an issue job is only named, the page opens its thread."""
+        got = self._read_data(job_id)
+        if got is None:
+            return None
+        if got[0].get("kind") == "issue":
+            return {"id": job_id, "kind": "issue", "state": got[0].get("state")}
+        return self.decision_row(job_id, *got)
 
     def build_research(self, cfg, params):
         """(card, run params) of a new research job (12.2, 12.10 items 2, 7, 8, 12): everything the CLI's own go-live screen shows,
@@ -653,6 +826,12 @@ class Actions:
     def execute(self, action, card, rp):
         """Start the confirmed action; returns the body. The CLI is the real gate."""
         a = action
+        if a in ("job_reject", "job_abandon"):
+            code, line = self.run(rp["verb"], rp["job"], rp["reason"] or ABANDON_DEFAULT, rp["sha"])
+            self.last_exit = code if code is not None else "timeout"
+            if code != 0:
+                raise Refusal(409, "cli", strip_refused(line or "") or "the command failed")
+            return {"job": rp["job"], "done": True}
         if a == "issue_abandon":
             code, line = self.run("abandon", rp["job"], rp["reason"] or "discarded from the phone")
             if code != 0:

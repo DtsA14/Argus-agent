@@ -71,7 +71,7 @@ def test_an_enter_in_the_message_box_does_not_prepare_by_a_hidden_default():
 def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
-    assert JS.count("action:") == 6                                 # the reply is prepared from a button and from the composer; research_new from the composer
+    assert JS.count("action:") == 8                                 # the reply is prepared from a button and from the composer; research_new from the composer
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -131,7 +131,7 @@ def test_a_failed_fetch_is_not_shown_as_a_refusal():
 
 
 def test_the_form_says_whether_it_makes_a_new_issue_or_a_reply():
-    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || openIssue !== null" in JS
+    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || dc || openIssue !== null" in JS
     assert re.search(r'encodeURIComponent\(id\)\)\.then\(function \(d\) \{\n\s+openIssue = id;', JS)      # set when the thread was read, not before
 
 
@@ -169,7 +169,7 @@ def test_the_slot_has_a_vh_fallback_before_dvh():
 # ---- C3: research mode of the page ----------------------------------------------------------------------------------------
 
 def research_part():
-    return JS.split("function researchCard")[1].split("function setMode")[0]
+    return JS.split("function researchCard")[1].split("// ---- C4")[0]
 
 
 def test_the_report_goes_on_the_page_as_text_under_the_servers_banner_and_the_label_comes_from_the_server():
@@ -236,3 +236,67 @@ def test_the_poll_redraws_a_research_job_only_while_it_can_change_and_an_older_a
 def test_the_card_wording_follows_the_action():
     assert 'card.action === "research_new" ? "Hasilnya ada di daftar riset."' in JS
     assert 'card.action === "research_new") { loadResearch(); }' in JS
+
+
+# ---- C4: decisions in the page, and the Decide link ----------------------------------------------------------------------------
+
+def decide_part():
+    return JS.split("function decideCard")[1].split("function setMode")[0]
+
+
+def test_the_decisions_chip_is_on_and_there_is_no_approve_anywhere_in_the_page():
+    assert re.search(r'data-mode="decide"[^>]*>Keputusan<', HTML)
+    assert not re.search(r'data-mode="decide"[^>]*disabled', HTML)
+    for text in ("approve", "Approve", "job_approve", "setujui"):
+        assert text not in JS and text not in HTML
+
+
+def test_a_decision_is_prepared_from_a_button_with_the_sha_the_card_showed_and_the_reason_box():
+    body = decide_part()
+    assert 'action: "job_reject", job: r.id, sha: r.sha12 || "", reason: message.value' in body
+    assert 'action: "job_abandon", job: r.id, sha: r.sha12 || "", reason: message.value' in body
+    assert "if (!r.busy && r.allowed)" in body and 'indexOf("reject")' in body and 'indexOf("abandon")' in body
+
+
+def test_the_decide_link_reads_the_path_once_matches_it_and_opens_a_card_without_preparing():
+    assert JS.count("location") == 1 and 'exec(location.pathname)' in JS
+    assert r"/^\/jobs\/(j[0-9]{8}_[0-9]{6}_[0-9a-f]{4})$/" in JS
+    body = JS.split("function showDecision")[1].split("function setMode")[0]
+    assert "prepare(" not in body and "post(" not in body and "message.value" not in body
+    assert 'if (deep) { setMode("decide"); showDecision(deep[1]); }' in JS
+
+
+def test_an_issue_job_from_the_decide_link_opens_its_thread_not_a_decision():
+    assert 'if (d.kind === "issue") { setMode("issue"); showIssue(id); return; }' in JS
+
+
+def test_a_late_answer_for_another_job_or_mode_draws_nothing():
+    assert 'if (mode !== "decide" || openDecision !== id) { return; }' in JS
+
+
+def test_the_decision_form_shows_no_prepare_button_and_asks_for_a_reason():
+    assert 'document.getElementById("prepare").hidden = dc;' in JS and "Alasan (wajib untuk Reject)" in JS
+
+
+def test_the_poll_refreshes_the_list_only_when_no_confirm_is_on_its_way():
+    assert 'if (mode === "decide" && openDecision === null && !(pending && pending.sent)) { loadDecisions(); }' in JS
+
+
+def test_the_decision_card_shows_the_cost_the_draft_and_a_viewer_link_only():
+    body = decide_part()
+    assert "Baca draf di viewer" in body and "viewerLink(VIEWER + r.id)" in body
+    assert 'el("a"' not in body and "href" not in body
+
+
+# ---- Opus code review of C4a (2026-11-15) ---------------------------------------------------------------------------------------
+
+def test_after_a_decision_the_opened_card_is_read_again_and_the_texts_name_the_decision_list():
+    assert 'if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); }' in JS
+    assert 'card.action.indexOf("job_") === 0 ? "Keputusan tercatat' in JS
+    assert 'else if (card.action.indexOf("job_") === 0) { loadDecisions(); }' in JS
+
+
+def test_the_reason_box_is_labelled_and_emptied_for_decisions_and_the_form_does_not_submit_there():
+    assert 'message.setAttribute("aria-label", dc ? "Alasan" : "Pesan");' in JS
+    assert 'else if (m === "decide") { message.value = ""; loadDecisions(); renderDecisions(); }' in JS
+    assert 'if (mode === "decide") { return; }\n    if (mode === "research")' in JS

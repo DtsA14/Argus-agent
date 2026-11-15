@@ -147,7 +147,7 @@ def test_the_csp_is_as_strict_as_the_spec_says():
 @pytest.mark.parametrize("path", ["/api/", "/api/threads/", "/api/threads/x", f"/api/threads/{JOB}/", f"/api/threads/{JOB}?x=1",
                                   "/api/status?x=1", "/api/STATUS", "/index.html", "/static/", "/static/app.js?v=1",
                                   "/static/../router/chat.py", "/static/%61pp.js", f"/api/threads/{JOB[:-1]}%64",
-                                  "/api/threads/..%2Fx", "/api/threads/" + "j" * 300, "/chat/x", "/jobs/" + JOB])
+                                  "/api/threads/..%2Fx", "/api/threads/" + "j" * 300, "/chat/x"])
 def test_anything_but_the_fixed_routes_is_404(svc, path):
     assert svc.request("GET", path)[0] == 404
 
@@ -275,7 +275,7 @@ def test_a_changed_static_file_stops_the_service(tmp_path, monkeypatch):
 
 
 SINK_RES = [r"\bFunction\s*\(", r"\beval\s*\(", r"\.href\s*=", r"location\s*\.\s*(assign|replace|href)", r"location\s*=",
-            r"setAttribute\(\s*['\"](href|src|on)", r"\.src\s*=", r"\.(inner|outer)HTML", r"insertAdjacent", r"document\s*\.\s*write"]
+            r"setAttribute\(\s*['\"](href|src|on)", r"\.src\s*=", r"location\s*\.\s*\w+\s*=", r"history\s*\.\s*(push|replace)State", r"\.(inner|outer)HTML", r"insertAdjacent", r"document\s*\.\s*write"]
 SINKS = ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "createContextualFragment",
          "DOMParser", "srcdoc", "setHTMLUnsafe", "parseHTMLUnsafe", "Worker(", "serviceWorker", "window.open", "import(",
          "localStorage", "sessionStorage", "indexedDB", "document.cookie", "XMLHttpRequest", "WebSocket", "EventSource",
