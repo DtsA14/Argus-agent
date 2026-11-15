@@ -588,11 +588,11 @@ PYTEST_OUT = ("collecting ... collected 4 items\n\n"
 ])
 def test_acceptance_refuses_a_skip_or_xfail_in_a_changed_file_that_was_not_marked_before(no_skip, violations):
     # the same judge_result decides the baseline, the reference run and the agent's acceptance
-    from acceptance.validation import judge_result
     s = {**spec("lock", ["tests/test_lock.py", "tests/test_other.py"], []), "max_skipped": 5}
     if no_skip:
         s["no_skip"] = no_skip
-    v = judge_result(s, {"stdout": PYTEST_OUT, "exit_code": 0})
+    from green_helpers import judge
+    v = judge(s, {"stdout": PYTEST_OUT, "exit_code": 0})
     assert v["evidence"].get("skip_violations") == violations
     assert v["status"] == ("fail" if violations else "pass"), v["reason"]
     if violations:

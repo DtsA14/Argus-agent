@@ -79,10 +79,12 @@ def checks(name, cfg, workdir):
     out = []
     v = va.run_validation(spec("tests/test_isolation.py", must=ISOLATION, min_tests=3, environment=name), workdir, cfg)
     out.append(("isolation", v["status"] == "pass", v["reason"] or "ok"))
+    out.append(("canary (harness record)", v["evidence"].get("record") is True and v["evidence"].get("canary") == "ok",
+                "; ".join(v["evidence"].get("record_problems") or []) or "ok"))
     runs = {}
     for env in ("argus", name):
         s = spec("tests", max_skipped=5, environment=env)
-        r = sb.run_command(va.argv(s), workdir=workdir, cfg={**cfg, "environment": env, "timeout_s": 300})
+        r, _ = va.pytest_run(s, workdir, {**cfg, "environment": env, "timeout_s": 300})
         runs[env] = va.parse_pytest(r.get("stdout") or "")
     same = runs[name]["tests"] == runs["argus"]["tests"] and runs[name]["consistent"]
     out.append(("classification like argus", bool(same and runs["argus"]["tests"]),

@@ -20,10 +20,18 @@ Node ids may contain spaces (parametrize ids often do): a line is the node id, o
 end (with pytest's reason in parentheses for skips and xfails). A line read wrongly cannot make a run pass: the counts
 would no longer match the summary. Required tests (must_pass) are written without spaces.
 
+A pytest run is started by the harness's own script (GREEN, never a contract command; docs/reviews/SPEC_VF_O1_CANARY_NONCE.md): the
+contract's tests in one pytest session with the text exactly as `-m pytest` prints it, then three canary tests of the harness in a second
+session of the same process, then one record line behind a per-run nonce. The run is trusted only with that record, a canary that ended
+as it must, and a record that agrees with the text (counts, a hash of every (node, status), the exit code).
+
 Limits (stated, not hidden): the result is read from the test runner's own output, and the code under test runs in
 the same process. Code that deliberately forges unittest output from inside the process is not detected here; it
-is contained by the sandbox, and the protected test files (scope) keep the tests themselves honest.
+is contained by the sandbox, and the protected test files (scope) keep the tests themselves honest. For pytest the record and the
+canary stop a forger that prints and exits, and a global patch that also hits the canary; a forger that is scoped to session 1 or to the
+contract's tests passes (SPEC_VF_O1_CANARY_NONCE section 2: F1 to F5, tests/test_vf_canary.py known gaps). A DONE job is still read.
 """
+import collections
 import hashlib
 import json
 import os
@@ -144,8 +152,8 @@ def validate_command(executable, args):
 
 
 def argv(spec, nonce=None):
-    """The exact argv run in the container (no shell). Verbose output is always on: it names each test. A vitest
-    command needs the run's nonce; without one (evidence) the recorder and the nonce are shown by name only."""
+    """The exact argv run in the container (no shell). Verbose output is always on: it names each test. A vitest or pytest
+    command needs the run's nonce; without one (evidence) the recorder or script and the nonce are shown by name only."""
     errors = validate_command(spec["executable"], spec["args"])
     if errors:
         raise ValueError("; ".join(errors))
@@ -153,7 +161,10 @@ def argv(spec, nonce=None):
         a = vitest_argv(nonce or "<nonce>", spec["args"][1:])
         return a if nonce else [*a[:3], f"<harness vitest recorder sha256:{RECORDER_SHA}>", *a[4:]]
     if kind(spec) == "pytest":
-        return ["python3", "-I", "-B", *PYTEST_PREFIX, *PYTEST_FIXED, *spec["args"][2:]]
+        head = ["python3", "-I", "-B", "-c"]
+        if nonce:
+            return [*head, GREEN, nonce, json.dumps(PYTEST_FIXED), *spec["args"][2:]]
+        return [*head, f"<harness pytest runner sha256:{GREEN_SHA}>", "<nonce>", json.dumps(PYTEST_FIXED), *spec["args"][2:]]
     return ["python3", "-I", *spec["args"], "-v"]
 
 
@@ -320,6 +331,145 @@ def named_like(t, tests):
     return f" (ran under the full name: {', '.join(near[:NAMED_LIKE])}{more})"
 
 
+# SPEC_VF_O1_CANARY_NONCE: the harness's own runner for a pytest validation (never from the contract or the workspace). Session 1 runs the
+# contract's tests with the options and the text of `-m pytest` and records, per node, the word pytest itself prints for it (the status
+# the parser reads back). Session 2, in the same process, runs three canary tests that must end as they are written (one passes, one
+# fails with AssertionError, one with RuntimeError), with its own ini, confcutdir and rootdir and without PYTEST_ADDOPTS and PYTEST_PLUGINS.
+# One record line follows the nonce: the exit code, the count per status, the sha256 of the sorted (node, status) pairs, the canary, and
+# the exit code of session 2; the process then exits with session 1's code. Like any validation it is read from the process that runs
+# the code under test: it stops a forger that prints and exits and a global patch that also hits the canary, not one scoped to session 1.
+GREEN = r"""
+import contextlib, hashlib, io, json, os, sys, tempfile
+nonce, fixed, targets = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3:]
+import pytest
+import pytest.__main__ as _pm
+sys.argv = [_pm.__file__, *fixed, *targets]
+WORD = {"PASSED": "ok", "FAILED": "FAIL", "ERROR": "ERROR", "SKIPPED": "skipped", "XFAIL": "expected failure", "XPASS": "unexpected success"}
+RANK = {"ERROR": 2, "FAIL": 1}
+
+
+class Rec:
+    def __init__(self):
+        self.tests, self.exc, self.cfg = {}, {}, None
+
+    def pytest_configure(self, config):
+        self.cfg = config
+
+    def pytest_runtest_makereport(self, item, call):
+        if call.excinfo is not None:
+            self.exc[item.nodeid] = call.excinfo.type.__name__
+
+    def pytest_runtest_logreport(self, report):
+        if hasattr(report, "context"):
+            return
+        word = self.cfg.hook.pytest_report_teststatus(report=report, config=self.cfg)[2]
+        status = WORD.get(word[0] if isinstance(word, tuple) else word)
+        if status is None:
+            return
+        old = self.tests.get(report.nodeid)
+        if old is None or RANK.get(status, 0) > RANK.get(old, 0):
+            self.tests[report.nodeid] = status
+
+
+def sha(tests):
+    pairs = sorted([n, s] for n, s in tests.items())
+    return hashlib.sha256(json.dumps(pairs, ensure_ascii=True, separators=(",", ":")).encode()).hexdigest()
+
+
+r1 = Rec()
+rc1 = int(pytest.main([*fixed, *targets], plugins=[r1]))
+canary, rc2, err = {}, None, None
+for k in ("PYTEST_ADDOPTS", "PYTEST_PLUGINS"):
+    os.environ.pop(k, None)
+try:
+    tag = os.urandom(8).hex()
+    d = tempfile.mkdtemp(prefix="argus_canary_", dir="/tmp")
+    with open(d + "/pytest.ini", "w") as f:
+        f.write("[pytest]\n")
+    p = d + "/test_argus_canary_" + tag + ".py"
+    with open(p, "w") as f:
+        f.write("def test_pass_" + tag + "(): assert 1 == 1\ndef test_fail_" + tag + "(): assert 1 == 2\n"
+                "def test_error_" + tag + "(): raise RuntimeError('x')\n")
+    r2 = Rec()
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        rc2 = int(pytest.main(["-c", d + "/pytest.ini", "--confcutdir", d, "--rootdir", d, "-p", "no:cacheprovider", "-o", "addopts=",
+                               "-q", "--tb=no", "--color=no", p], plugins=[r2]))
+    for n, s in r2.tests.items():
+        canary[n.split("::")[-1].rsplit("_", 1)[0]] = s if s == "ok" else s + ":" + str(r2.exc.get(n))
+except OSError as e:
+    err = type(e).__name__
+rec = {"rc": rc1, "counts": {s: sum(1 for v in r1.tests.values() if v == s) for s in sorted(set(r1.tests.values()))},
+       "sha": sha(r1.tests), "canary": canary, "canary_rc": rc2, "canary_error": err}
+sys.stdout.write("\n" + nonce + json.dumps(rec, sort_keys=True) + "\n")
+sys.stdout.flush()
+sys.exit(rc1)
+"""
+GREEN_SHA = hashlib.sha256(GREEN.encode("utf-8")).hexdigest()[:16]
+CANARY_WANTED = {"test_pass": "ok", "test_fail": "FAIL:AssertionError", "test_error": "FAIL:RuntimeError"}
+RECORD_KEYS = {"rc": int, "counts": dict, "sha": str, "canary": dict}
+TRUST = "validation not trusted"
+
+
+def green_nonce():
+    return "ARGUS-GREEN-" + secrets.token_hex(16) + ":"
+
+
+def tests_sha(tests):
+    """The hash the script writes: sha256 of the sorted [node, status] pairs, as ASCII json without spaces."""
+    pairs = sorted([n, s] for n, s in tests.items())
+    return hashlib.sha256(json.dumps(pairs, ensure_ascii=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def split_record(stdout, nonce):
+    """(the output without every line that starts with the nonce, the record, how many such lines). The record is the one line, when
+    it is exactly one and a json object of the expected shape; otherwise None (the run is then not trusted)."""
+    lines = (stdout or "").splitlines(keepends=True)
+    mine, kept = [], []
+    for l in lines:
+        if nonce and l.startswith(nonce):
+            mine.append(l[len(nonce):])
+            if kept and kept[-1] == "\n":          # the script starts its line with a newline, so no output can glue to it
+                kept.pop()
+        else:
+            kept.append(l)
+    text = "".join(kept)
+    rec = None
+    if len(mine) == 1:
+        try:
+            got = json.loads(mine[0])
+        except ValueError:
+            got = None
+        if isinstance(got, dict) and all(isinstance(got.get(k), t) for k, t in RECORD_KEYS.items()) \
+                and isinstance(got["rc"], int) and not isinstance(got["rc"], bool):
+            rec = got
+    return text, rec, len(mine)
+
+
+def record_problems(rec, parsed, r):
+    """[(code, detail)]: why a pytest run that finished is not trusted. The code goes to the agent; the detail stays in the evidence."""
+    if rec is None:
+        return [("G1", "no single, well-formed harness record behind the nonce")]
+    out = []
+    canary = rec["canary"]
+    if rec.get("canary_error") or rec.get("canary_rc") != 1 or canary != CANARY_WANTED:
+        out.append(("G2", f"canary {canary!r} canary_rc {rec.get('canary_rc')!r} canary_error {rec.get('canary_error')!r}"))
+    if rec["rc"] != r.get("exit_code"):
+        out.append(("G3", f"record rc {rec['rc']} but the exit code is {r.get('exit_code')}"))
+    counts = dict(collections.Counter(parsed["tests"].values()))
+    if rec["counts"] != counts or rec["sha"] != tests_sha(parsed["tests"]):
+        out.append(("G4", f"the record counts {rec['counts']} sha {rec['sha'][:12]}, the report counts {counts}"))
+    return out
+
+
+def pytest_run(spec, workdir, sandbox_cfg, log=None, meta=None):
+    """(the run, its record or None): one pytest run in the sandbox like run_validation, with the record line taken out of stdout. For
+    callers that read the text themselves (check_env_image, the sandbox tests); never a verdict."""
+    nonce = green_nonce()
+    r = sb.run_command(argv(spec, nonce), workdir=workdir, cfg=sandbox_cfg, log=log, meta=meta)
+    text, rec, _ = split_record(r.get("stdout") or "", nonce)
+    return {**r, "stdout": text}, rec
+
+
 def judge_result(spec, r, nonce=None):
     """Criterion verdict for one validation run: ok only when every condition in the contract holds. nonce: the one
     a vitest run was given (its record is read only behind it)."""
@@ -327,8 +477,10 @@ def judge_result(spec, r, nonce=None):
         return judge_vitest(spec, r, nonce)
     pytest = kind(spec) == "pytest"
     runner = "pytest" if pytest else "unittest"
+    stdout, rec = r.get("stdout") or "", None
     if pytest:
-        parsed = parse_pytest(r.get("stdout") or "")           # pytest reports on stdout, unittest on stderr
+        stdout, rec, _ = split_record(stdout, nonce)           # the harness's record line is not part of the text anyone reads
+        parsed = parse_pytest(stdout)                          # pytest reports on stdout, unittest on stderr
     else:
         parsed = parse_unittest((r.get("stderr") or "") + "\n" + (r.get("stdout") or ""))
     must = {t: parsed["tests"].get(t) for t in spec.get("must_pass", [])}
@@ -337,12 +489,12 @@ def judge_result(spec, r, nonce=None):
                 "output_limit_exceeded": r.get("output_limit_exceeded"), "truncated": r.get("truncated"),
                 "tests_run": parsed["tests_run"], "outcome": parsed["outcome"], "skipped": parsed["skipped"],
                 "failures": parsed["failures"], "errors": parsed["errors"], "must_pass": must,
-                "output_tail": ((r.get("stdout") or "") if pytest else (r.get("stderr") or ""))[-2000:]}
+                "output_tail": (stdout if pytest else (r.get("stderr") or ""))[-2000:]}
     _named_like_evidence(evidence, must, parsed)
     if pytest and parsed["tests_run"] is None and (r.get("stderr") or "").strip():
         # No pytest summary: the reason (e.g. an ImportError while loading a conftest, pytest exit code 4) is on stderr,
         # which the agent and the drafter otherwise never see (sympy-24562 dev run: two attempts on a broken import)
-        evidence["output_tail"] = ((r.get("stdout") or "").rstrip() + "\n--- stderr ---\n" + r["stderr"])[-2000:]
+        evidence["output_tail"] = (stdout.rstrip() + "\n--- stderr ---\n" + r["stderr"])[-2000:]
     if pytest:
         # failed_nodes (W2b): every node that failed or errored, required or not, so a check can name the unexpected ones
         evidence.update(runner="pytest", consistent=parsed["consistent"], collected=parsed["collected"],
@@ -352,6 +504,12 @@ def judge_result(spec, r, nonce=None):
             evidence["skip_violations"] = skip_violations(spec["no_skip"], parsed["tests"])[:MAX_NODES]
     if spec.get("environment"):
         evidence["environment"] = spec["environment"]
+    gate = record_problems(rec, parsed, r) if pytest else []
+    if pytest:
+        evidence["record"] = rec is not None
+        evidence["canary"] = "ok" if rec is not None and rec.get("canary") == CANARY_WANTED and not any(c == "G2" for c, _ in gate) \
+            else (rec or {}).get("canary")
+        evidence["record_problems"] = [f"{c}: {d}" for c, d in gate]
     skipped = sorted(n for n, s in parsed["tests"].items() if s in NOT_RUN)
     if skipped:                     # which ones, so a draft (or the agent) can leave them out without guessing
         evidence["skipped_nodes"] = skipped[:MAX_NODES]
@@ -376,6 +534,8 @@ def judge_result(spec, r, nonce=None):
         if evidence.get("skip_violations"):
             problems.append("skipped or xfail in a changed test file, and not marked so before the change: "
                             + ", ".join(evidence["skip_violations"]))
+        for code, _ in gate:               # a code only: the agent reads this reason, the detail is in the evidence
+            problems.append(f"{TRUST} (harness check {code})")
     return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail" if problems else "pass",
             "reason": "; ".join(problems), "evidence": evidence}
 
@@ -887,8 +1047,8 @@ def run_validation(spec, workdir, sandbox_cfg, log=None):
     cfg = {**(sandbox_cfg or {}), "timeout_s": spec["timeout_s"]}
     if spec.get("environment"):
         cfg["environment"] = spec["environment"]      # its own image, never the default one (tools/sandbox.settings)
-    nonce = vitest_nonce() if kind(spec) == "vitest" else None
-    shadow = vitest_workspace_problems(workdir) if nonce else []
+    nonce = vitest_nonce() if kind(spec) == "vitest" else green_nonce() if kind(spec) == "pytest" else None
+    shadow = vitest_workspace_problems(workdir) if kind(spec) == "vitest" else []
     if shadow:
         return {"id": f"validation:{spec['id']}", "layer": "C", "status": "fail", "reason": "; ".join(shadow),
                 "evidence": {"argv": argv(spec), "runner": "vitest", "consistent": False, "output_tail": "; ".join(shadow)}}
