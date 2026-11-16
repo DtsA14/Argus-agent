@@ -41,7 +41,7 @@ terbukti, biayanya terkunci."**
   (#552, #553) → antrean PRD (bagian A #555, tahap PRD B1 #559, penulis PRD B2 #566 dan #568). Yang tersisa dari urutan itu: assistant
   atas Argus sendiri di permukaan (lapis 1), belum dimulai. **Yang beres mesinnya, bukan klaimnya:** "bisa ditinggal" belum terbukti
   (lihat "Inti 2"). **Berikutnya (usul Claude 2026-11-16; Atha meminta rapikan `PENDING` dan prompt untuk uji lepas tangan):** ukur
-  yang sudah dibangun, yaitu uji lepas tangan, catat pelaku, gerbang contoh angka. Operator rantai dan pekerjaan baru di jalur riset
+  yang sudah dibangun, yaitu uji lepas tangan (ditunda 2026-11-16, terlalu berat), catat pelaku, gerbang contoh angka. Operator rantai dan pekerjaan baru di jalur riset
   tetap tidak ada di urutan; dibahas lagi paling cepat di titik cek.
 - **Aturan main arah (Atha, 2026-11-15: "2 minggu, 1 hari"):**
   1. Satu angka di repo: **persen issue yang sampai staging tanpa campur tangan Claude** (belum diukur, lihat "Ukuran").
@@ -156,7 +156,7 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ### Inti 2: bisa ditinggal (tanpa Claude di tengah)
 
-- [ ] **Uji lepas tangan** (usul Claude 2026-11-16; Atha meminta promptnya, `docs/reviews/PROMPT_HANDSOFF_PILOT_2026-11-16.md`): dua
+- [ ] **Uji lepas tangan — DITUNDA (Atha 2026-11-16: "terlalu berat, apalagi buat gw yang ga paham teknis"; dua PRD pilot lanjut dengan aturan biasa, Claude membaca dan meringkas).** Alasan beratnya, supaya tidak diulang: satu draf mentah 22 KB dan satu patch 14 KB per issue (pilot Rp1), sekitar 46 menit untuk 3 issue dengan ringkasan Claude (pilot antrean ledger), kira-kira 2-3 jam membaca mentah di HP untuk dua PRD, dan angkanya hanya sah kalau Atha benar-benar membaca. Dibuka lagi bila ada cara membaca yang ringan di HP (tampilan potongan dengan aturan tetap, atau tampilan chat untuk PRD) dan Atha mau. Sementara itu, pada pilot biasa Claude mencatat **koreksi Claude** (apa yang Claude tangkap atau perbaiki di issue, draf, patch) di `RESULT.md` pilotnya sebagai ukuran kasar, bukan sebagai angka "tanpa campur tangan". Isi usul semula (usul Claude 2026-11-16; Atha meminta promptnya, `docs/reviews/PROMPT_HANDSOFF_PILOT_2026-11-16.md`): dua
   PRD pilot yang tersisa (rencana tiga, satu selesai) dijalankan dengan Atha menulis keinginannya (cukup besar untuk beberapa issue
   berurutan) dan Atha sendiri yang membaca dan memutuskan `approve` dan `apply`; Claude hanya menjadi tangan (mengetik perintah yang
   Atha sebut, menampilkan draf atau patch tanpa komentar) dan tidak membaca, menilai, menyarankan atau memperbaiki lebih dulu; tiap
