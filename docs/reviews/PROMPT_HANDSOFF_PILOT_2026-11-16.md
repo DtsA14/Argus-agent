@@ -1,3 +1,5 @@
+> **DITUNDA 2026-11-16 (Atha: terlalu berat).** Prompt ini disimpan untuk nanti; lihat butir "Uji lepas tangan" di `PENDING.md`.
+
 # Prompt untuk uji lepas tangan (dua PRD pilot yang tersisa)
 
 Tempel isi bagian "PROMPT" ke sesi Claude yang baru di VM Argus (`~/Argus-agent`). Ditulis 2026-11-16 sesudah VF O1, `argus apply`,
