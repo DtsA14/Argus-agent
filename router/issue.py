@@ -75,13 +75,14 @@ def _preflight(cfg, cap, section="issue_writer"):
     if not (math.isfinite(cap) and cap + 1e-9 >= turn):
         raise rj.Refused(f"the job cap ${cap:.2f} does not fund one turn (${turn:.2f}); nothing was started")
     scfg = rj.stage_config(cfg, turn)
+    label = "issue writer" if section == "issue_writer" else section.replace("_", " ")
     try:
         ref = ModelRef.parse(scfg["roles"][role]["model"])
-        check_priced(scfg, ref, f"issue writer (role {role!r})")
+        check_priced(scfg, ref, f"{label} (role {role!r})")
         gateway.check_use(scfg, role, ref)
         iw.settings(scfg, section)
     except (ConfigError, KeyError, ValueError) as e:
-        raise rj.Refused(f"issue writer (role {role!r}): {e}; nothing was started") from e
+        raise rj.Refused(f"{label} (role {role!r}): {e}; nothing was started") from e
 
 
 def _screen(job, cfg, what):

@@ -252,6 +252,9 @@ def touches_problems(args, source, known=frozenset(), strict=False):
     known: texts that need not exist in the snapshot because an earlier item of the same PRD creates them (SPEC_PRD_WRITER
     3.3; exact match after strip, never a substring). strict: a touch that is found nowhere is refused even when some
     file went unread (the issue writer lets it pass, an unread file may hold it; the PRD writer cannot afford that hole)."""
+    if isinstance(known, str):              # a str would turn the exact match into a substring match
+        raise TypeError("known must be a collection of texts, not one string")
+    known = frozenset(k.strip() for k in known)
     touches = args.get("touches")
     if not isinstance(touches, list) or not 1 <= len(touches) <= TOUCHES_MAX:
         return [f"touches must list 1 to {TOUCHES_MAX} texts that exist in the code today and that the change alters "
@@ -272,6 +275,9 @@ def touches_problems(args, source, known=frozenset(), strict=False):
     tests_unread = [f for f in unread if is_test(f)]
     missing = [t for t in terms if t not in found and t not in known]
     if missing and (strict or not unread):  # an unread file may hold it (unless strict)
+        if unread:                          # strict only: the text may sit in a file the scan could not read
+            return [f"touch {t!r} was not found, and {len(unread)} file(s) went unread: read the code and name a text "
+                    "that exists exactly as the code has it" for t in missing], [], 0
         return [f"touch {t!r} occurs in no file of the repository: name texts that exist, exactly as the code has them"
                 for t in missing], [], 0
     if len(hits) > HITS_SHOWN:              # amendment 5: a list too long to read is no check; no code for it

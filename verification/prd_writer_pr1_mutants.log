@@ -1,6 +1,17 @@
 KILLED  known ignored: ['FAILED tests/test_prd_writer_base.py::test_a_touch_an_earlier_item_creates_is_accepted']
 KILLED  known matched as a substring: ['FAILED tests/test_prd_writer_base.py::test_known_is_matched_exactly_after_strip_never_as_a_substring']
-KILLED  known matched before strip: ['FAILED tests/test_prd_writer_base.py::test_known_is_matched_exactly_after_strip_never_as_a_substring']
+KILLED  the touch is not stripped (every touch): ['FAILED tests/test_prd_writer_base.py::test_known_is_matched_exactly_after_strip_never_as_a_substring']
+KILLED  known is not stripped: ['FAILED tests/test_prd_writer_base.py::test_known_is_stripped_like_the_touch_and_a_string_is_refused']
+KILLED  known as a string accepted: ['FAILED tests/test_prd_writer_base.py::test_known_is_stripped_like_the_touch_and_a_string_is_refused']
+KILLED  strict becomes and-not-unread: ['FAILED tests/test_prd_writer_base.py::test_a_touch_found_nowhere_is_refused_as_before']
+KILLED  the issue gate asks strict: ['FAILED tests/test_prd_writer_base.py::test_the_issue_gate_passes_neither_known_nor_strict']
+KILLED  the strict message is the plain one: ['FAILED tests/test_prd_writer_base.py::test_strict_refuses_a_missing_touch_even_with_an_unread_file']
+KILLED  the long-context label is the issue writer's: ['FAILED tests/test_prd_writer_base.py::test_the_preflight_checks_the_limits_of_the_named_section']
+KILLED  the preflight label is the issue writer's (after the unpriced-model test)
+KILLED  prd status drops the stage lines: ['FAILED tests/test_prd_writer_base.py::test_status_of_a_prd_job_says_prd_and_shows_the_money']
+KILLED  a blocked prd job may be written again: ['FAILED tests/test_prd_writer_base.py::test_the_legal_moves_of_the_kind_are_its_own']
+KILLED  a prd job cannot move from NEW to BLOCKED: ['FAILED tests/test_prd_writer_base.py::test_the_legal_moves_of_the_kind_are_its_own']
+KILLED  a prd turn cannot end WRITE_FAILED: ['FAILED tests/test_prd_writer_base.py::test_the_legal_moves_of_the_kind_are_its_own']
 KILLED  strict ignored: ['FAILED tests/test_prd_writer_base.py::test_strict_refuses_a_missing_touch_even_with_an_unread_file']
 KILLED  strict by default: ['FAILED tests/test_prd_writer_base.py::test_an_unread_file_still_lets_a_missing_touch_pass_by_default']
 KILLED  known by default is not empty: ['FAILED tests/test_prd_writer_base.py::test_the_issue_gate_is_unchanged_by_the_new_parameters']
@@ -9,14 +20,15 @@ KILLED  run_writer takes its limits from the issue writer: ['FAILED tests/test_p
 KILLED  run_writer takes its role from the issue writer: ['FAILED tests/test_prd_writer_base.py::test_run_writer_reads_its_role_and_limits_from_the_named_section']
 KILLED  the job settings ignore the section: ['FAILED tests/test_prd_writer_base.py::test_the_job_settings_name_the_missing_section']
 KILLED  the preflight reads the issue writer's section: ['FAILED tests/test_prd_writer_base.py::test_the_preflight_checks_the_named_section']
-SURVIVED the preflight checks the limits of the issue writer: 206 passed in 21.70s
+KILLED  the preflight checks the limits of the issue writer: ['FAILED tests/test_prd_writer_base.py::test_the_preflight_checks_the_limits_of_the_named_section']
 KILLED  move uses the code table for a prd job: ['FAILED tests/test_prd_writer_base.py::test_move_uses_the_prd_table_for_kind_prd']
 KILLED  move uses the issue table for a prd job: ['FAILED tests/test_prd_writer_base.py::test_move_uses_the_prd_table_for_kind_prd']
 KILLED  a prd job may be handed off: ['FAILED tests/test_prd_writer_base.py::test_the_legal_moves_of_the_kind_are_its_own']
 KILLED  an abandoned prd job may be written again: ['FAILED tests/test_prd_writer_base.py::test_the_legal_moves_of_the_kind_are_its_own']
-KILLED  a blocked prd job cannot be abandoned: ['FAILED tests/test_prd_writer_base.py::test_a_prd_job_can_be_abandoned_from_every_open_state']
-KILLED  resume of a prd job runs the code job's resume: ['FAILED tests/test_prd_writer_base.py::test_resume_of_a_prd_job_goes_to_its_own_module']
+KILLED  a blocked prd job cannot be abandoned: ['FAILED tests/test_prd_writer_base.py::test_the_legal_moves_of_the_kind_are_its_own']
+KILLED  resume of a prd job does nothing (returns the job): ['FAILED tests/test_prd_writer_base.py::test_resume_of_a_prd_job_goes_to_its_own_module']
+KILLED  the resume dispatch for prd is gone: ['FAILED tests/test_prd_writer_base.py::test_resume_of_a_prd_job_goes_to_its_own_module']
 KILLED  status of a prd job says issue: ['FAILED tests/test_prd_writer_base.py::test_status_of_a_prd_job_says_prd_and_shows_the_money']
 KILLED  status of a prd job drops the money: ['FAILED tests/test_prd_writer_base.py::test_status_of_a_prd_job_says_prd_and_shows_the_money']
-RESULT: 19/20 killed
-KILLED  the preflight checks the limits of the issue writer (after test_the_preflight_checks_the_limits_of_the_named_section): 1/1 killed; final: 20/20 killed
+RESULT: 31/32 killed
+RESULT: 32/32 killed (one first survivor closed by test_an_unpriced_model_is_refused_under_the_name_of_its_section; the stale patterns of verification/issue_writer_touches_mutants.py predate this change and are not touched)

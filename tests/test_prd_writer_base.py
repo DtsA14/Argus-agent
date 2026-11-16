@@ -49,6 +49,13 @@ def test_known_is_matched_exactly_after_strip_never_as_a_substring(tmp_path):
     assert problems(root, ["  compute_time_stop_status  "], known=frozenset({"compute_time_stop_status"})) == []
 
 
+def test_known_is_stripped_like_the_touch_and_a_string_is_refused(tmp_path):
+    root = snap(tmp_path)
+    assert problems(root, ["a_new_name"], known=frozenset({"  a_new_name  "})) == []
+    with pytest.raises(TypeError):
+        problems(root, ["a_new_name"], known="a_new_name")
+
+
 def test_only_the_known_touch_is_excused_when_there_are_two(tmp_path):
     p = problems(snap(tmp_path), ["compute_time_stop_status", "no_such_text"], known=frozenset({"compute_time_stop_status"}))
     assert len(p) == 1 and "'no_such_text'" in p[0]
@@ -70,12 +77,22 @@ def test_strict_refuses_a_missing_touch_even_with_an_unread_file(tmp_path, monke
     root = snap(tmp_path)
     monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 10)
     p = problems(root, ["no_such_text"], strict=True)
-    assert len(p) == 1 and "occurs in no file" in p[0]
+    assert len(p) == 1 and "was not found, and 1 file(s) went unread" in p[0]
+    monkeypatch.undo()                                      # nothing unread: the plain message
+    assert "occurs in no file" in problems(snap(tmp_path / "other"), ["no_such_text"], strict=True)[0]
     assert problems(root, ["no_such_text"], strict=True, known=frozenset({"no_such_text"})) == []
 
 
 def test_strict_changes_nothing_when_the_touch_exists(tmp_path):
     assert problems(snap(tmp_path), ["'share'"], strict=True) == []
+
+
+def test_the_issue_gate_passes_neither_known_nor_strict(tmp_path, monkeypatch):
+    seen = {}
+    real = iw.touches_problems
+    monkeypatch.setattr(iw, "touches_problems", lambda *a, **k: seen.update(a=a, k=k) or real(*a, **k))
+    iw.issue_gate({"reply": "ok", "issue": "x", "touches": ["'share'"]}, source=snap(tmp_path), environment="env")
+    assert seen.get("k", {}) == {} and len(seen.get("a", ())) == 2 or not seen
 
 
 def test_the_issue_gate_is_unchanged_by_the_new_parameters(tmp_path):
@@ -149,9 +166,12 @@ def deps():
 
 def test_the_legal_moves_of_the_kind_are_its_own():
     assert (pj.AWAITING_HUMAN, pj.WRITING) in pj.LEGAL and (pj.WRITE_FAILED, pj.WRITING) in pj.LEGAL
-    assert ("AWAITING_HUMAN", "HANDED_OFF") not in pj.LEGAL
-    assert all(old != ri.HANDED_OFF and new != ri.HANDED_OFF for old, new in pj.LEGAL)
-    assert (pj.ABANDONED, pj.WRITING) not in pj.LEGAL
+    assert pj.LEGAL == ri.LEGAL - {(ri.AWAITING_HUMAN, ri.HANDED_OFF)}      # the issue table, minus the hand-off
+    assert pj.LEGAL == {("NEW", "WRITING"), ("NEW", "BLOCKED"), ("WRITING", "AWAITING_HUMAN"),
+                        ("WRITING", "WRITE_FAILED"), ("WRITING", "BLOCKED"), ("AWAITING_HUMAN", "WRITING"),
+                        ("WRITE_FAILED", "WRITING")} | {(s, "ABANDONED") for s in
+                                                        ("NEW", "WRITING", "AWAITING_HUMAN", "WRITE_FAILED", "BLOCKED")}
+    assert ("BLOCKED", "WRITING") not in pj.LEGAL and ("ABANDONED", "WRITING") not in pj.LEGAL
 
 
 def test_move_uses_the_prd_table_for_kind_prd(tmp_path):
@@ -195,7 +215,10 @@ def test_resume_of_a_prd_job_says_the_turn_is_not_built_yet(tmp_path):
 
 def test_status_of_a_prd_job_says_prd_and_shows_the_money(tmp_path):
     job = make_job(tmp_path)
+    job.data["stages"] = {"w1": {"kind": "write", "run_id": "jp-w1", "status": "WRITTEN", "cap_usd": 0.25, "usd": 0.0421}}
+    job.save()
     text = rj.status("jp", jobs_dir=job.dir.parent)
+    assert "  w1 write: WRITTEN cap $0.2500 spent $0.0421" in text
     assert "job jp: AWAITING_HUMAN (prd)" in text and "money: cap $1.50" in text
     assert "repository demo at " + "a" * 12 in text
     assert "(issue)" not in text
@@ -218,6 +241,18 @@ def test_the_preflight_checks_the_limits_of_the_named_section():
     """A prd_writer whose input limit the model cannot take is refused; the issue writer's own section is not asked."""
     cfg = cfg_with_prd()
     cfg["prd_writer"]["turn"]["max_input_tokens"] = 10 ** 9
-    with pytest.raises(rj.Refused, match="nothing was started"):
+    with pytest.raises(rj.Refused, match=r"prd writer \(role .*prd_writer\.turn.*nothing was started"):
         ri._preflight(cfg, 1.5, "prd_writer")
     ri._preflight(cfg, 1.5)                                            # the issue writer's section is untouched
+
+
+def test_an_unpriced_model_is_refused_under_the_name_of_its_section():
+    cfg = cfg_with_prd()
+    cfg["roles"]["prd_role"] = {**cfg["roles"]["issue_writer"], "model": "openrouter:anthropic/model-nobody-priced"}
+    cfg["prd_writer"]["role"] = "prd_role"
+    with pytest.raises(rj.Refused, match=r"prd writer \(role 'prd_role'\)") as e:
+        ri._preflight(cfg, 1.5, "prd_writer")
+    assert "issue writer" not in str(e.value)                  # not even inside the pricing check's own words
+    cfg["issue_writer"]["role"] = "prd_role"
+    with pytest.raises(rj.Refused, match=r"issue writer \(role 'prd_role'\)"):
+        ri._preflight(cfg, 1.5)
