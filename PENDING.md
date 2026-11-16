@@ -2,13 +2,14 @@
 
 Daftar kerja Argus yang **masih terbuka**, disusun menurut arah 2026-11-15. Status milestone dan ADR beserta buktinya ada di
 [`docs/Reconciliation.md`](docs/Reconciliation.md) (satu-satunya tempat status). Riwayat butir yang selesai (bukti, angka, PR) dan butir
-yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-15.md`](docs/reviews/PENDING_ARCHIVE_2026-11-15.md)
-(salinan utuh sampai 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
+yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-16.md`](docs/reviews/PENDING_ARCHIVE_2026-11-16.md)
+(salinan utuh sebelum dirapikan 2026-11-16: rincian VF O1, `argus apply`, antrean dan tahap PRD),
+[`PENDING_ARCHIVE_2026-11-15.md`](docs/reviews/PENDING_ARCHIVE_2026-11-15.md) (salinan utuh sebelum arah 2026-11-15), [`PENDING_ARCHIVE_2026-10-30.md`](docs/reviews/PENDING_ARCHIVE_2026-10-30.md),
 [`PENDING_ARCHIVE_2026-10-22.md`](docs/reviews/PENDING_ARCHIVE_2026-10-22.md) dan `docs/reviews/`.
 
-Terakhir diperbarui: 2026-11-15 (tahap PRD B1, environment athena dan parkiran `argus env init`; sebelumnya hari yang sama: antrean PRD bagian A, pilot v0 dan Stage 19; sebelumnya hari yang sama: angka papan skor sebagai batas atas; Inti 1–3 dicocokkan dengan kode dan git log: tiga butir Inti 1 basi dikoreksi, Inti 2 dan 3 tidak berubah; sebelumnya hari yang sama: tiga keputusan Atha: urutan inti diterima, aturan main arah, daya saing = portofolio/karier; sebelumnya hari yang sama: vonis fase 2: fase ditutup, garis A/B/C diganti; sebelumnya hari yang sama: arah baru; daftar ditulis ulang, tidak ada butir yang diubah statusnya: yang `[x]` pindah ke arsip, yang
-terbuka dibawa ke sini atau dicatat di bagian "Diarsipkan 2026-11-15"). Butir di bawah yang menyebut "arsip" punya rincian lengkap di
-arsip 2026-11-15.
+Terakhir diperbarui: 2026-11-16 (dirapikan: urutan inti selesai dibangun, butir `[x]` diringkas dan rinciannya pindah ke arsip
+2026-11-16, tiga pertentangan dikoreksi, butir baru "uji lepas tangan", "catat pelaku" dan "gerbang contoh angka"). Tidak ada butir
+yang diubah statusnya selain koreksi itu. Butir yang menyebut "arsip" punya rincian lengkap di arsip 2026-11-16 atau 2026-11-15.
 
 Legenda: `[ ]` belum dimulai · `[~]` sebagian · `[x]` selesai (dipindah ke arsip saat daftar ini dirapikan berikutnya).
 
@@ -36,9 +37,12 @@ terbukti, biayanya terkunci."**
   persen issue yang sampai staging tanpa campur tangan Claude (belum ada di papan skor, lihat "Ukuran"). Tidak ada butir yang
   menunggu vonis ini lagi; yang dulu menunggunya kini mengikuti urutan inti.
 
-- **Urutan inti (Atha, 2026-11-15: "Terima urutan"):** VF O1 kenari dan nonce → `argus apply` → antrean PRD; di permukaan: assistant
-  atas Argus sendiri (lapis 1). Antrean PRD dibuka sesudah kenari, nonce dan `argus apply` ada. Operator rantai dan pekerjaan baru di
-  jalur riset tidak ada di urutan ini, jadi tetap tidak dimulai; dibahas lagi paling cepat di titik cek.
+- **Urutan inti (Atha, 2026-11-15: "Terima urutan"): selesai dibangun 2026-11-16.** VF O1 kenari dan nonce (#550) → `argus apply`
+  (#552, #553) → antrean PRD (bagian A #555, tahap PRD B1 #559, penulis PRD B2 #566 dan #568). Yang tersisa dari urutan itu: assistant
+  atas Argus sendiri di permukaan (lapis 1), belum dimulai. **Yang beres mesinnya, bukan klaimnya:** "bisa ditinggal" belum terbukti
+  (lihat "Inti 2"). **Berikutnya (usul Claude 2026-11-16; Atha meminta rapikan `PENDING` dan prompt untuk uji lepas tangan):** ukur
+  yang sudah dibangun, yaitu uji lepas tangan, catat pelaku, gerbang contoh angka. Operator rantai dan pekerjaan baru di jalur riset
+  tetap tidak ada di urutan; dibahas lagi paling cepat di titik cek.
 - **Aturan main arah (Atha, 2026-11-15: "2 minggu, 1 hari"):**
   1. Satu angka di repo: **persen issue yang sampai staging tanpa campur tangan Claude** (belum diukur, lihat "Ukuran").
   2. Arah hanya diubah di **titik cek tetap, tiap 2 minggu; yang pertama 2026-11-29**. Ide arah atau kemampuan baru di antaranya
@@ -51,9 +55,10 @@ terbukti, biayanya terkunci."**
 - **Peninjau jalur ketat (Atha 2026-11-15: "Reviewer pake fable aja 1"):** satu peninjau, Fable, untuk spek dan diff jalur ketat (Opus tidak lagi diminta). Dasarnya tiga sampel Opus dan Fable
   atas artefak yang sama (spek VF O1, diff VF O1, spek `argus apply`): hampir semua temuan keduanya nyata dan diverifikasi dengan menjalankan, masing-masing menemukan hal yang tidak ditemukan
   yang lain (n = 3, bukan kesimpulan statistik); Claude menyarankan keduanya, Atha memilih satu. Dikaji lagi di titik cek 2026-11-29 dengan jumlah temuan unik per PR.
-- **`argus apply` (Atha 2026-11-15: "K1-k7 setuju ... Merge semua PR. Langsung lanjut"):** spek `docs/reviews/SPEC_ARGUS_APPLY.md` rev 2 disetujui (K1 `--read-sha` wajib; K2 HEAD sama dengan `intake.commit`, tanpa
-  `--onto-descendant`; K3 commit di cabang aktif; K4 tanpa push, merge atau deploy; K5 hook, filter, fsmonitor dan gpg tidak berjalan, konfigurasi lokal di luar daftar putih ditolak; K6 kartu chat menyusul; K7 dua PR:
-  PR 1 memperbaiki `applied()` dan mencatat sha patch, PR 2 `argus apply`). Merge kedua PR diizinkan sesudah `verify_at` lulus.
+- **Keputusan lain yang berlaku** (rinci di arsip 2026-11-16): `argus apply` K1–K7 (Atha 2026-11-15; `--read-sha` wajib, tanpa push,
+  merge atau deploy); antrean D1–D3 (Atha 2026-11-15: berhenti di kegagalan pertama, batas uang per antrean, Atha menyetujui tiap
+  draf dan tiap patch); penulis PRD D5–D9 (Atha 2026-11-16: terminal dulu, Haiku, 5 issue, giliran $0,30 / job $1,50, Claude tidak
+  menulis issue selama tiga PRD pertama).
 
 Cara menilai butir baru: apakah ia membuat kerja lebih terbukti, biaya lebih terkunci, atau Argus lebih bisa ditinggal? Bila tidak,
 ia masuk "Ditunda sampai ada bukti kebutuhan".
@@ -63,11 +68,11 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 | | Status | Rinci |
 |---|---|---|
 | Fondasi (M1–M3, budget, ledger, crash-resume, sandbox) | `[x]` | Reconciliation bagian 1 |
-| Jalur kode, issue sampai staging (M6, M9 staging) | `[x]` MVP | repo Argus, sympy (SWE), `argus-ledger`, `argus-viewer`; dua aplikasi di staging |
-| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | Claude masih mereview, meng-apply dan men-deploy; VF O1, `argus apply` dan antrean bagian A ter-merge, pilot antrean 3 issue live (n = 1, `pilots/queue_pilot_v0/RESULT.md`); tahap PRD (bagian B) dan angka "tanpa campur tangan Claude" belum ada; B2 penulis PRD ter-merge (PR 1-2, #566 #568), satu PRD pilot (n = 1, $0,0527); penyambung satu-prompt di parkiran |
+| Jalur kode, issue sampai staging (M6, M9 staging) | `[x]` MVP | repo Argus, sympy (SWE), `argus-ledger`, `argus-viewer`; dua aplikasi di staging; repo luar `athena` (backend saja, tidak di staging Argus) |
+| **Bisa ditinggal** (tanpa Claude di tengah) | `[~]` | mesinnya ada (VF O1, `argus apply`, antrean, tahap PRD, penulis PRD; empat pilot n = 1); **belum terbukti**: di semua pilot Claude menjalankan perintah dan membaca draf serta patch; angka utama baru batas atas 23,8% (`verification/scoreboard-2026-11-15.json`) |
 | Permukaan: chat | `[~]` | C1–C4 live di 8711 (Issue, Riset, Keputusan, Status); C5 terbuka |
 | Kemampuan lain di permukaan (riset, lainnya) | `[~]` riset | riset: pekerjaan baru tidak dimulai (di luar urutan inti); lainnya belum dimulai |
-| M5 observability | `[~]` | ledger, inspektor, papan skor; belum: angka "tanpa campur tangan Claude", eval set tidak jenuh |
+| M5 observability | `[~]` | ledger, inspektor, papan skor; angka "tanpa campur tangan Claude" baru batas atas (pelaku tidak tercatat); eval set tidak jenuh |
 | M4, M7, M8, capability pack, production | `[ ]` | ditunda sampai ada bukti kebutuhan |
 
 ## Cara kerja (berlaku)
@@ -84,13 +89,10 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ## Terbuka sekarang
 
-**Dicek 2026-11-15 terhadap kode dan git log (Inti 1, 2 dan 3):** tiga butir Inti 1 sudah dikerjakan tetapi masih tercatat terbuka (butir judge dan R1b, kalimat
-rerun di "Paket 3", baris `dN submits`); dikoreksi di bawah. Inti 2 dan 3: tidak ada pekerjaan yang terlewat. Dasarnya: grep tidak menemukan
-`argus apply`, `applied --amend`, `argus fix`, `argus chain`, antrean atau tahap PRD, redraft otomatis, pembacaan `lock_sha256`, kontrak API di snapshot, ukuran
-waktu sandbox per job, atau idempotency key di `scripts/`, `router/`, `codetask/`, `harness/`. Yang tidak bisa dipastikan dari grep: apakah `viewer-smoke` kini ikut
-gerbang `viewer-deploy` (perintahnya ada di `router/stage_viewer.py`), dan penolakan key yang tetap meninggalkan job `NEW` (`start_code` membuat job sebelum
-pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya mengenal Anthropic (`KEY_SHAPE`, `router/job.py:80`).
-
+**Dicek 2026-11-16 terhadap `main` (#574):** `router/apply.py`, `router/queue.py`, `router/prd_job.py`, `codetask/prd_writer.py` dan
+`tests/test_vf_canary.py` ada. Belum dicek ulang sejak 2026-11-15: apakah `viewer-smoke` ikut gerbang `viewer-deploy`
+(`router/stage_viewer.py`), dan penolakan key yang tetap meninggalkan job `NEW` (`start_code` membuat job sebelum pemeriksaan key di
+`live()`). Pengecekan bentuk key hanya mengenal Anthropic (`KEY_SHAPE`, `router/job.py`).
 
 ### Keputusan Atha yang ditunggu
 
@@ -99,15 +101,26 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
   jalur ketat). Risiko kecil; ditunda (arsip, butir "Fase 3 dan batch kedua").
 - [ ] **Probe aplikasi dari nol** (`docs/reviews/FABLE_GREENFIELD_PROBE_PROPOSAL.md`): aplikasinya dan "ok"; saran Fable dan Claude:
   sesudah eksperimen repo luar.
+- [ ] **Riset 2026-11-16 terhadap aturan "pekerjaan riset baru tidak dimulai":** satu job riset (aturan ARB/ARA BEI) dan pilot
+  research → issue → kode dijalankan 2026-11-16. Tidak tercatat apakah itu jatah hari eksplorasi (1 hari per minggu) atau pengecualian;
+  Atha yang menentukan, supaya aturan main arah tetap bisa dipegang.
+- [ ] **Port 443 mesin ini dibuka ke luar untuk backend athena** (2026-11-16, lihat "Pekerjaan operasional"): catatan Claude: ini
+  menyentuh pemicu "M9 production" (akses tanpa Termius) yang tercatat ditunda dengan spek dan persetujuan terpisah. Athena bukan
+  staging Argus, jadi mungkin memang di luar aturan itu; Atha yang menentukan, dan security list Oracle belum diperiksa.
 
 ### Inti 1: kerja terbukti
 
-- [x] **VF O1 kenari dan nonce** (2026-11-15; `docs/reviews/SPEC_VF_O1_CANARY_NONCE.md` rev 2; PR `vf-o1-canary`): validasi pytest hanya dipercaya dengan catatan
-  harness di belakang nonce per run, sesi kenari yang berakhir seperti seharusnya, dan catatan yang sepakat dengan laporan. `verify_at` PASS (5037 lulus, 4 xfail yang
-  disengaja, 0 sandbox ter-skip; `verification/verify-20261115T084657Z-aarch64.log`), mutan 39/39 (`verification/vf_o1_mutants.log`), tinjauan Opus dan Fable atas
-  spek dan diff. **Batas yang diterima, jangan dikutip lebih lebar:** hanya menutup cetak-lalu-keluar dan penambalan global yang ikut mengenai kenari; pemalsu yang terbatas
-  pada sesi 1 atau pada tes kontrak (F1 sampai F3) atau yang membaca nonce dari argv (F6) lolos (xfail-strict di `tests/test_vf_canary.py`). **Aturan "jangan apply job `DONE`
-  tanpa dibaca" tetap berlaku.** Proyek jujur dengan hook `pytest_report_teststatus` kustom bisa kena G4 (image kita tanpa plugin pytest).
+- [x] **VF O1 kenari dan nonce** (#550, 2026-11-15; `verify_at` PASS, mutan 39/39; rinci di arsip 2026-11-16). **Batas yang
+  diterima, jangan dikutip lebih lebar:** hanya menutup cetak-lalu-keluar dan penambalan global yang ikut mengenai kenari; pemalsu
+  yang terbatas pada sesi 1 atau pada tes kontrak (F1 sampai F3) atau yang membaca nonce dari argv (F6) lolos (xfail-strict di
+  `tests/test_vf_canary.py`). **Aturan "jangan apply job `DONE` tanpa dibaca" tetap berlaku.** Proyek jujur dengan hook
+  `pytest_report_teststatus` kustom bisa kena G4.
+- [ ] **Pemalsu yang masih lolos (F1–F3, F6):** selama ini terbuka, setiap patch harus dibaca manusia, dan itu batas atas dari "bisa
+  ditinggal". Belum ada spek lanjutan.
+- [ ] **Gerbang contoh angka di issue** (temuan terpenting pilot athena 2026-11-16, `pilots/research_to_issue_v0/`): tidak ada gerbang
+  yang mencocokkan contoh angka di issue dengan kode; penulis issue salah di empat angka dan Claude yang menangkapnya dengan
+  menjalankan fungsinya. Usul: harness menjalankan contoh "masukan → keluaran" yang ditulis issue terhadap kode di commit dasar atau
+  menuntut contoh itu menjadi tes merah di draf. Belum dispek; jalur ketat (mengubah apa yang diterima sebagai issue atau draf).
 - [~] **Approve atas patch akhir, bukan rencana** (sebagian besar dicakup `argus apply --read-sha` sejak 2026-11-15: apply hanya jalan dengan sha patch akhir; yang belum: alur approve draf tetap atas rencana, dan `--read-sha` bukan bukti membaca) (`pilots/outside_v2/PROTOCOL_FINAL_PATCH.md`): dipakai di batch 3; pembacaan acak 1
   dari 3 oleh pembaca yang didelegasikan Atha: 0 dari 3 terbalik, tidak bisa membedakan karena semuanya reject (`atha_verdicts.json`,
   #504). Belum menjadi alur baku di harness.
@@ -143,28 +156,39 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 
 ### Inti 2: bisa ditinggal (tanpa Claude di tengah)
 
-- [x] **`argus apply`** (2026-11-15, spek `docs/reviews/SPEC_ARGUS_APPLY.md` rev 2 disetujui Atha, dua PR, keduanya ter-merge). PR 1 (#552): `applied()` membandingkan seperti paket menulis patch, sha256 patch dicatat di `job.json`,
-  `_record_applied` tanpa kunci. **PR 2: `argus apply <job> --read-sha <sha>` (`router/apply.py`)**: patch dalam satu commit di cabang aktif repo target; konfigurasi lokal di luar daftar putih, `GIT_*` pemanggil, hook, filter, fsmonitor dan gpg
-  tidak berjalan; patch yang menyentuh `.git`, `.gitattributes`, `.gitmodules`, symlink atau submodule ditolak; perbandingan byte `git diff --cached` dengan `changes.patch` sebelum perubahan pertama; gagal di tengah dibatalkan dan diperiksa,
-  mati sesudah commit disembuhkan panggilan berikutnya; kunci per repo; tanpa push, merge, deploy atau model. `verify_at` PASS 5134 (`verification/verify-20261115T130852Z-aarch64.log`), mutan 40/40
-  (`verification/apply_cmd_mutants.log`), tinjauan Fable atas spek dan diff. **Batas yang diterima:** `--read-sha` hanya membuktikan seseorang menyalin sha yang `status` cetak, bukan bahwa patch dibaca; repo target dan `.git`-nya dianggap tepercaya;
-  kunci per repo bergantung pada `jobs_dir` yang sama; `core.excludesFile` global membuat berkas ter-ignore terbaca "tree kotor" (aman, membingungkan). Belum: kartu apply di chat (K6), `argus applied --amend`.
-  Bersamanya yang dulu tercatat: (K6 v0): sekarang perintah apply dicetak `status` dan dijalankan Claude; di probe PRD ini sambungan yang
-  paling terasa (`pilots/prd_probe_v0/RESULT.md`). Bersamanya: `argus applied --amend <commit>` hanya untuk `APPLIED` yang belum
-  di-deploy (kasus viewer 021). Jalur ketat; membuka layanan approval di kode (ADR-007).
-- [~] **Arah "PRD sampai staging"** (Atha 2026-11-12): **bagian A (antrean) selesai dan dipakai 2026-11-15**; bagian B (tahap PRD) belum. Spek `docs/reviews/SPEC_PRD_QUEUE.md` rev 2 (tinjauan Fable atas spek dan diff, keduanya
-  GO WITH FIXES, semua temuan dibenahi), PR #555: `argus queue new/go/step/status/close` (`router/queue.py`): satu repo, daftar issue tetap, issue berikutnya di atas commit hasil `APPLIED` sebelumnya,
-  berhenti di kegagalan pertama, batas uang per antrean (plafon $5,00) dengan setiap job yang masih bisa membelanjakan dihitung pada cap penuhnya, tidak pernah memanggil `approve` atau `apply`. 62 tes, mutan 36/36 yang tidak ekuivalen
-  (`verification/queue_mutants.log`), `verify_at` PASS 5201 (`verification/verify-20261115T162128Z-aarch64.log`). **Keputusan Atha 2026-11-15 ("ikut usul lu dulu"):** D1 berhenti di kegagalan pertama untuk seluruh antrean; D2 batas per antrean, "go live" di luar antrean
-  (antrean berakhir di `APPLIED`), `queue go` = persetujuan jumlah uangnya; D3 Atha menyetujui tiap draf (`approve --sha`) dan tiap patch (`apply --read-sha`). **Pilot v0 (2026-11-15, n = 1, `pilots/queue_pilot_v0/`):**
-  tiga issue berantai di `argus-ledger` (ledger 021-023), semuanya `APPLIED`, tiap draf lolos pada percobaan pertama, biaya model $0,1092 dari $3,00, sekitar 46 menit dari `go` sampai apply terakhir (21 menit menunggu satu approve); deploy ke staging sebagai Stage 19
-  (`pilots/staging_stage19/`, "go live" Atha). **Yang tidak ditunjukkan:** angka "tanpa campur tangan Claude" (tiap gerbang lewat manusia, antrean v0 tetap dua tindakan manusia per issue), perilaku saat item gagal di dunia nyata, issue yang kurang jelas
-  (issue ditulis Claude dengan contoh persis). **Bagian B1 selesai (2026-11-15, spek `docs/reviews/SPEC_PRD_STAGE.md` rev 1, PR #559, "kenapa bagian B harus tunggu titik cek": bagian B ada di urutan inti yang diterima):** `argus prd check <folder>` (baca saja, tanpa model, tanpa uang) dan `argus prd approve <folder> --sha` (satu persetujuan atas isi; antrean `PENDING`, uang tetap `queue go`).
-  Folder `PRD.md` + `issues.json` + `issue-<n>.md` dibaca sekali; pemeriksa mencocokkan jalur dengan `router.stage_viewer.API` dan field dengan tabel `router.stage_data` yang berjalan, memaksa penulis menyatakan `via_proxy` untuk jalur ledger, dan memblokir `/api/...` atau `GET /jalur` di teks issue yang tidak dideklarasikan
-  (bentuk asli Stage 19 ada di tesnya). `queue.validate_new` dipakai bersama `queue.new`. 104 tes tahap PRD, `verify_at` PASS 5305 (`verification/verify-20261115T191613Z-aarch64.log`), mutan 31/31 non-ekuivalen (`verification/prd_stage_mutants.log`), tinjauan Fable atas spek dan diff (GO WITH FIXES, semua temuan diterapkan).
-  **Batas:** hanya jalur dan field yang ditulis atau terlihat di teks; jalur yang disusun dari potongan, ditulis `/API/`, `%2F` atau `get /x` lolos. **B2 (penulis PRD)**: pilot kedua selesai (athena, 3 issue APPLIED, $0.1297, #563); SPEC `docs/reviews/SPEC_PRD_WRITER.md` rev 1 ter-merge (#565, Fable GO WITH FIXES; Atha 2026-11-16 setuju D5-D9: terminal dulu, Haiku, 5 issue, giliran $0,30 / job $1,50, Claude tidak menulis issue selama tiga PRD pertama); PR 1 (`known`/`strict`, bagian config bernama, kind `prd` di `job.py`) ter-merge #566 (`verify_at` PASS 5331, mutan 32/32); PR 2 (penulis PRD: `codetask/prd_writer.py`, `router/prd_job.py` penuh, `argus prd new|reply`, bagian `prd_writer`) ter-merge #568 (`verify_at` PASS 5420, mutan 64/64; `verify_at` pertama FAIL karena `test_budget_experiment` tidak membuang bagian config baru, diperbaiki, kedua log di `verification/`); **berikutnya tiga PRD pilot** (`pilots/prd_writer_v0/`).
-  **Pilot di repo luar `athena` (2026-11-16, n = 1 tiap satu, dipisah dari angka papan skor):** (1) antrean 3 issue (tes weekend, `compute_time_stop_status`, `GET /journal/time-stops`), semuanya `APPLIED`, $0,1297, `pilots/queue_pilot_athena/RESULT.md` (#563); (2) **penulis PRD pertama** (`argus prd new`, Haiku 5.5): 1 issue (`GET /journal/open-summary`), 3 submit, lolos `prd check`, `APPLIED`, $0,0527, `pilots/prd_writer_v0/` (#570); (3) **research -> issue -> kode dengan tangan** (aturan BEI: harga minimum Rp50 -> Rp1), $0,2252, `pilots/research_to_issue_v0/` (#572). Suite athena di venv-nya: 871 -> 903 -> 908 -> 915 lulus, 0 gagal. **Temuan terpenting:** tidak ada gerbang yang mencocokkan contoh angka di issue dengan kode (penulis issue salah di empat angka; Claude yang menangkapnya dengan menjalankan fungsinya); laporan research jujur soal konflik tapi butuh pencarian manual untuk menyelesaikannya, tanpa sumber primer BEI.
-  **Yang tidak ditunjukkan:** aturan urutan antar-issue (`creates` sebelum `touches`) belum pernah jalan di kasus nyata (kedua PRD/issue satu item); keinginan awal ditulis Claude, bukan Atha ("tanpa campur tangan Claude" belum terukur); kualitas Haiku vs tulisan Claude (n kecil, pembanding tanpa `issue_gate`); frontend athena (tanpa node; `ScanResultCard.jsx` masih menulis Rp50). **Belum dikerjakan:** dua PRD pilot lagi (rencana tiga, satu selesai) dengan keinginan yang cukup besar untuk beberapa issue berurutan, idealnya ditulis Atha; tes CLI `queue new` dan `queue step` dengan konfigurasi sungguhan; lima commit athena belum di-push (`649e0c5`, `08700e9`, `dc98df1`, `c82cd47`, `705db5b`); mencatat kenapa venv Argus tanpa `fastapi` (tes ledger dijalankan di image sandbox).
+- [ ] **Uji lepas tangan** (usul Claude 2026-11-16; Atha meminta promptnya, `docs/reviews/PROMPT_HANDSOFF_PILOT_2026-11-16.md`): dua
+  PRD pilot yang tersisa (rencana tiga, satu selesai) dijalankan dengan Atha menulis keinginannya (cukup besar untuk beberapa issue
+  berurutan) dan Atha sendiri yang membaca dan memutuskan `approve` dan `apply`; Claude hanya menjadi tangan (mengetik perintah yang
+  Atha sebut, menampilkan draf atau patch tanpa komentar) dan tidak membaca, menilai, menyarankan atau memperbaiki lebih dulu; tiap
+  kali Atha meminta penilaian atau perbaikan, itu dicatat sebagai satu campur tangan beserta alasannya. Keluaran: jumlah campur tangan Claude per issue, menit
+  Atha per gerbang, dan apakah aturan urutan antar-issue (`creates` sebelum `touches`) jalan di kasus nyata. Sesudahnya Claude membaca
+  semua patch (aturan "jangan apply tanpa dibaca" tetap dipenuhi oleh Atha saat uji; pembacaan Claude adalah pembanding, dicatat
+  terpisah).
+- [x] **`argus apply`** (#552, #553, 2026-11-15; `router/apply.py`; `verify_at` PASS, mutan 40/40; rinci di arsip 2026-11-16).
+  **Batas yang diterima:** `--read-sha` hanya membuktikan seseorang menyalin sha yang `status` cetak, bukan bahwa patch dibaca; repo
+  target dan `.git`-nya dianggap tepercaya; kunci per repo bergantung pada `jobs_dir` yang sama; `core.excludesFile` global membuat
+  berkas ter-ignore terbaca "tree kotor" (aman, membingungkan).
+  - [ ] kartu apply di chat (K6); `argus applied --amend <commit>` hanya untuk `APPLIED` yang belum di-deploy (kasus viewer 021)
+- [~] **"PRD sampai staging"** (Atha 2026-11-12): antrean, tahap PRD dan penulis PRD ter-merge; rinci, keputusan dan batas di arsip
+  2026-11-16.
+  - [x] **Bagian A, antrean** (#555, `router/queue.py`, `SPEC_PRD_QUEUE.md` rev 2): satu repo, daftar issue tetap, berhenti di
+    kegagalan pertama, batas uang per antrean, tidak pernah memanggil `approve` atau `apply`. Pilot v0 (`pilots/queue_pilot_v0/`,
+    n = 1): tiga issue ledger `APPLIED`, $0,1092, live sebagai Stage 19.
+  - [x] **Bagian B1, tahap PRD** (#559, `SPEC_PRD_STAGE.md` rev 1): `argus prd check` (baca saja) dan `argus prd approve --sha`.
+    **Batas:** hanya jalur dan field yang ditulis atau terlihat di teks; jalur yang disusun dari potongan, ditulis `/API/`, `%2F`
+    atau `get /x` lolos.
+  - [x] **Bagian B2, penulis PRD** (#566, #568, `SPEC_PRD_WRITER.md` rev 1): `argus prd new|reply` (Haiku 5.5).
+  - [~] **Pilot di repo luar `athena`** (2026-11-16, n = 1 tiap satu, dipisah dari angka papan skor): antrean 3 issue `APPLIED`,
+    $0,1297 (`pilots/queue_pilot_athena/RESULT.md`); penulis PRD pertama, 1 issue `APPLIED`, $0,0527 (`pilots/prd_writer_v0/`);
+    research → issue → kode dengan tangan, $0,2252 (`pilots/research_to_issue_v0/`). **Yang tidak ditunjukkan:** aturan urutan
+    antar-issue belum pernah jalan di kasus nyata (PRD satu item); keinginan awal ditulis Claude, bukan Atha; di semua pilot Claude
+    menjalankan perintah dan membaca PRD, draf dan patch; perilaku saat item gagal; mutu Haiku terhadap tulisan Claude (n kecil,
+    pembanding tanpa `issue_gate`); frontend athena (tanpa node; `ScanResultCard.jsx` masih menulis Rp50).
+  - [ ] dua PRD pilot lagi: lihat "Uji lepas tangan" di atas
+  - [ ] tes CLI `queue new` dan `queue step` dengan konfigurasi sungguhan
+  - [ ] lima commit athena belum di-push (`649e0c5`, `08700e9`, `dc98df1`, `c82cd47`, `705db5b`); mencatat kenapa venv Argus tanpa
+    `fastapi` (tes ledger dijalankan di image sandbox)
+  - [ ] kegagalan provider pada job `prd` berakhir `BLOCKED` terminal (lihat parkiran): usulnya dikerjakan sebelum pilot berikutnya
 - [ ] **Ketergantungan tersembunyi ketiga (Stage 19, 2026-11-15):** `/api/scoreboard/models` di ledger Stage 19 live tetapi 404 lewat proxy viewer 8710, karena regex `API` (`router/stage_viewer.py:76`) hanya meneruskan jalur tetap; belum ada halaman yang memakainya.
   Perbaikan = jalur ketat dan restart proxy (seperti #460 untuk `/api/scoreboard`); dikerjakan bila viewer butuh data itu. Pelajaran: rencana staging yang menjalankan `stage monitor` harus dijalankan dari `~/pilot3a_live` (`jobs/` timer), bukan checkout lain (refresh menolak menerbitkan; tidak ada data rusak).
 - [ ] **`argus fix <job>`** dari temuan yang dibekukan (kandidat; satu kali per job, agen boleh lapor "terjepit tes lama"); **redraft
@@ -194,6 +218,10 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
   66 applied (52,4%, 65 persis seperti direview); $0,1145 per perubahan; judge pada 7,9% job; `argus apply` belum dipakai (0). **Kenapa batas atas, bukan angkanya:** siapa yang approve, apply dan deploy tidak tercatat
   (`by` = `$USER`, sama untuk Atha dan Claude), jadi job di dalam himpunan itu masih bisa saja dikerjakan Claude dengan tangan; job di luarnya pasti butuh keputusan tambahan. Menjadi tepat bila approve bisa dari chat (`via=ui`,
   masih ditahan) dan apply tercatat `method=apply` (`argus apply`, sejak 2026-11-15): dihitung ulang di titik cek 2026-11-29, angkanya akan terpisah dari data lama.
+- [ ] **Catat pelaku approve dan apply** (usul Claude 2026-11-16): `method=apply` mencatat bahwa perintahnya dipakai, bukan siapa yang
+  mengetik; selama `by` = `$USER`, angka utama tidak bisa memisahkan Atha dari Claude. Usul: penanda pelaku yang dinyatakan saat
+  perintah dijalankan (bukan ditebak), dicatat di `job.json` dan dibaca papan skor. Menyentuh `job.json` dan jalur approve: jalur
+  ketat, belum dispek. Sampai ada, uji lepas tangan mencatat pelaku dengan tangan di `RESULT.md`-nya.
 - [ ] **Supervisi:** menit kerja Atha per pilot dan pemakaian Claude belum dicatat (satu baris per minggu yang dikutip papan skor).
 - [ ] **Eval set yang tidak jenuh:** Eval Set v1 16/16 hanya regresi; instance SWE terkontaminasi. Perluas dari kegagalan nyata,
   bekukan hash.
@@ -219,7 +247,7 @@ pemeriksaan key di `live()`; tidak diuji ulang). Pengecekan bentuk key hanya men
 
 ### Permukaan: kemampuan lain (satu per satu, hanya dengan gerbang)
 
-- [~] **Riset (`argus research`): pekerjaan baru tidak dimulai** (tidak ada di urutan inti yang diterima Atha 2026-11-15; dibahas lagi paling cepat di titik cek 2026-11-29); tetap tersedia sebagai mode di chat (C3) dan sebagai tahap opsional
+- [~] **Riset (`argus research`): pekerjaan baru tidak dimulai** (tidak ada di urutan inti yang diterima Atha 2026-11-15; dibahas lagi paling cepat di titik cek 2026-11-29; satu job dan satu pilot dijalankan 2026-11-16, lihat "Keputusan Atha yang ditunggu"); tetap tersedia sebagai mode di chat (C3) dan sebagai tahap opsional
   untuk kode (`--from-research`). Yang terbuka saat dibuka lagi:
   - [ ] kebenaran faktual ("7/8 benar") belum dinilai terhadap sumber independen; **eval riset independen** (set pertanyaan beku
     dengan cek fakta independen; `SUPPORTED` hanya berarti kutipannya ada)
@@ -250,7 +278,7 @@ sebelum titik cek, kecuali Atha berkata ia mengganti pekerjaan yang sedang berja
   `docs/reviews/ACCEPTANCE_GENERAL.md:56` sudah memperbolehkan "tes, build, lint, atau skrip cek" sebagai perintah validasi di kontrak, tetapi drafter hanya menulis pytest dan vitest. Tempatnya terhadap arah: inti ("kerja terbukti"). Dibahas di titik cek 2026-11-29 bersama `argus env init` (keduanya: repo luar tanpa kerja tangan).
 - **Environment node untuk repo dengan frontend** (Atha 2026-11-16, setelah pilot athena): sandbox hanya punya Python, jadi issue yang mengubah `frontend/` tidak bisa divalidasi (athena punya `package-lock.json`, `vitest`, `oxlint`, `vite build`; `node_modules` tidak ada). Pilot athena membatasi issue 3 ke backend karena itu. Usulan: environment terpisah atau gabungan dengan node, paket dari lockfile, tanpa jaringan saat jalan, image dikunci digest, `check_env_image.py`; dibuat saat ada issue frontend nyata (mis. tampilan time-stop di tab Journal), bukan sebelumnya. Satu keluarga dengan `argus env init` dan gerbang lint.
 - **Kegagalan provider pada job `prd`** (Atha 2026-11-16, "catet dulu"): saat ini `BLOCKED` terminal (tabel `LEGAL`, sama dengan job `issue`), jadi provider yang sempat gagal mematikan percakapan dan uang yang sudah dibayar. Usul: petakan `llm_failed` ke `WRITE_FAILED` (bisa di-`reply`) di `run_prd_writer`, satu baris, tanpa mengubah `LEGAL`; `BLOCKED` tetap untuk uang, keadaan repo dan salinan snapshot. Alternatif yang ditolak: `BLOCKED -> WRITING` (mengaburkan arti BLOCKED). Dikerjakan sebelum atau sesudah pilot pertama sesuai hasilnya.
-- **Penyambung satu-prompt: research → penulis PRD/issue → antrean** (Atha 2026-11-16: "sekali nulis prompt langsung bisa semua kerja"): sekarang tiap langkah satu perintah (`research`, `issue new` atau `prd new`, `prd approve`, `queue go`, `queue step`, `approve`, `apply`). Usulan: satu perintah penyambung yang menjalankan urutannya dan berhenti hanya di gerbang manusia: (1) sesudah research, "pakai laporan ini?" (isi laporan dari web tidak tepercaya; pilot research 2026-11-16 punya dua sumber yang bertentangan), (2) approve PRD dan uang, (3) approve tiap draf, (4) apply tiap patch; tiap gerbang satu ketukan di chat dengan notifikasi, bukan satu perintah. Yang otomatis: laporan jadi pesan pertama penulis, `prd check`, antrean `PENDING`, `queue step`. Gerbang manusia tidak dihapus ("jangan apply job tanpa dibaca"). Belum diketahui: kualitas penulis PRD untuk pekerjaan besar (data baru satu PRD satu issue, $0,0527), biaya dan titik macet satu rantai penuh, tampilan chat 8712 untuk PRD dan research. Tempatnya terhadap arah: kelanjutan langsung "bisa ditinggal", bukan arah baru; spek ditulis sesudah perubahan Rp1 (jalur issue biasa) mengukur satu rantai nyata, dengan angka dari pilot research, PRD, dan athena.
+- **Penyambung satu-prompt: research → penulis PRD/issue → antrean** (Atha 2026-11-16: "sekali nulis prompt langsung bisa semua kerja"): sekarang tiap langkah satu perintah (`research`, `issue new` atau `prd new`, `prd approve`, `queue go`, `queue step`, `approve`, `apply`). Usulan: satu perintah penyambung yang menjalankan urutannya dan berhenti hanya di gerbang manusia: (1) sesudah research, "pakai laporan ini?" (isi laporan dari web tidak tepercaya; pilot research 2026-11-16 punya dua sumber yang bertentangan), (2) approve PRD dan uang, (3) approve tiap draf, (4) apply tiap patch; tiap gerbang satu ketukan di chat dengan notifikasi, bukan satu perintah. Yang otomatis: laporan jadi pesan pertama penulis, `prd check`, antrean `PENDING`, `queue step`. Gerbang manusia tidak dihapus ("jangan apply job tanpa dibaca"). Belum diketahui: kualitas penulis PRD untuk pekerjaan besar (data baru satu PRD satu issue, $0,0527), biaya dan titik macet satu rantai penuh, tampilan chat (8711; catatan asli menulis 8712, port pembangunan yang sudah mati) untuk PRD dan research. Tempatnya terhadap arah: kelanjutan langsung "bisa ditinggal", bukan arah baru; spek ditulis sesudah perubahan Rp1 (jalur issue biasa) mengukur satu rantai nyata, dengan angka dari pilot research, PRD, dan athena.
 
 ## Log permintaan yang chat belum bisa
 
@@ -262,7 +290,7 @@ titik cek.
 ## Pekerjaan operasional (Atha, di luar repo)
 
 - [ ] **Periksa ulang aturan ARB/ARA BEI pada 2 Januari 2027** (research 2026-11-16, `jobs/j20261116_081333_0a18/REPORT.md`): ARB 7% (dan Rp11-14 jadi Rp1) hanya berlaku sampai 31 Desember 2026 menurut OJK; apa yang berlaku mulai 2027 tidak jelas (satu judul Katadata menyebut ARB 35%). `DEFAULT_SLIPPAGE_BUFFER_PCT = 0.15` di athena sengaja tidak diubah sampai itu jelas. Sumber primer (idx.co.id) belum ditemukan; semua angka masih dari media dan sekuritas.
-- [ ] **Firewall mesin ini, port 443 (2026-11-16):** `/etc/iptables/rules.v4` kini memuat `ACCEPT tcp 443` (sebelumnya tidak ada; backend athena tidak terjangkau dari luar sampai itu dibuka, PWA memberi `no-response`). Cadangan berkas lama: `/tmp/claude-1001/rules.v4.bak-20261116` (hilang bila /tmp dibersihkan). Belum diuji lewat boot ulang; security list di konsol Oracle tidak diperiksa.
+- [ ] **Firewall mesin ini, port 443 (2026-11-16):** `/etc/iptables/rules.v4` kini memuat `ACCEPT tcp 443` (sebelumnya tidak ada; backend athena tidak terjangkau dari luar sampai itu dibuka, PWA memberi `no-response`). Cadangan berkas lama: `/tmp/claude-1001/rules.v4.bak-20261116` (hilang bila /tmp dibersihkan; **pindahkan ke tempat yang awet**). Belum diuji lewat boot ulang; security list di konsol Oracle tidak diperiksa.
 
 - [ ] **Kunci HP di `authorized_keys` VM**: baris `iphone-viewer` (`restrict,port-forwarding,permitopen=...`); dicatat agar dicabut
   bila HP hilang. Backup: `~/.ssh/authorized_keys.bak-20261114-chat`.
