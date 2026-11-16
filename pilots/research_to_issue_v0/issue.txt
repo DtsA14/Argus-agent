@@ -1,0 +1,32 @@
+Lower the IDX price floor from Rp50 to Rp1 in the risk manager
+
+Today IDX_MIN_PRICE = 50.0 in risk_management/risk_manager.py treats Rp50 ("gocap") as the absolute floor of the regular market. IDX lowered the minimum price to Rp1 effective 28 September 2026 (Kep-00136/BEI/09-2026). Set the floor to Rp1 and keep the mechanism unchanged: an entry at or below the floor is blocked with size 0, and a stop below the floor is clamped to it.
+
+Rules:
+1. IDX_MIN_PRICE = 1.0 (was 50.0).
+2. Entry at the floor is blocked: compute_position_size(entry_price=1.0, atr=0.1, confidence HIGH, VOL_NORMAL, capital 100_000_000) gives price_floor_blocked True, shares 0, stop_loss_price 1.0, stop_distance_actual 0.0, risk_actual_idr 0, and "gocap" in notes. The same holds with atr=0.5.
+3. Entry at the floor with a wider ATR is still blocked the same way: entry_price=1.0, atr=0.5 gives price_floor_blocked True, stop_distance_actual 0.0 (never negative), shares 0, risk_actual_idr 0.
+4. Entry above the floor is not blocked: entry_price=2.0, atr=0.1 gives price_floor_blocked False, stop_loss_price 1.0, stop_distance_actual 1.0, stop_distance_for_sizing 1.15.
+5. Entry above the floor with a wider ATR: entry_price=2.0, atr=0.5 gives price_floor_blocked False, stop_loss_price 1.0 (model stop 1.25 floors to the Rp1 tick, not clamped), stop_distance_actual 1.0, stop_distance_for_sizing 1.15.
+6. Clamp: entry_price=5.0, atr=5.0, max_position_pct_of_capital=1.0 gives model stop -2.5, which is clamped to the floor: stop_loss_price 1.0, stop_distance_actual 4.0, stop_distance_for_sizing 7.5 * 1.15 = 8.625, price_floor_blocked False, and "floor" in notes (sizing still uses the wider ATR distance).
+7. A price just above the old floor is no longer blocked: entry_price=50.0, atr=3.0 gives price_floor_blocked False, stop_loss_price 45.0, stop_distance_actual 5.0.
+8. Normal price unchanged: entry_price=1000.0, atr=20.0 gives stop_loss_price 970.0 and price_floor_blocked False.
+9. Update the comments and docstrings in risk_manager.py that say Rp50 (module docstring item 4, the comment above IDX_MIN_PRICE, and the comment at the price-floor branch) to say Rp1, effective 28 September 2026, Kep-00136/BEI/09-2026. The note text keeps the format Rp{IDX_MIN_PRICE:,.0f}, so it reads "Rp1" and still contains "gocap".
+10. The ARA/ARB constants and logic are not touched.
+11. explainability_engine.py and decision_intelligence/decision_engine.py only pass the price_floor_blocked flag through; their code stays as it is.
+
+Nothing else changes: tick sizes (get_tick_size, round_to_tick, floor_to_tick, ceil_to_tick), the ATR stop model, the slippage buffer, the caps, the frontend (ScanResultCard.jsx still says Rp50 in its text and its test; that is out of scope), the capital-cap test at 51.0 (it checks only the capital cap), and the changelog docs stay as they are. Old tests that set price_floor_blocked directly (decision_intelligence, explainability, ScanResultCard) keep passing. The three TestIDXPriceFloor tests listed as clashes use prices that are no longer at or below the floor, so they must be loosened by a human first.
+
+Tests:
+- Update test_stock_at_the_floor_is_not_sized to entry_price=1.0, atr=0.1: expect price_floor_blocked True, shares 0, stop_loss_price 1.0, and "gocap" in notes.
+- Update test_stock_below_the_floor_never_returns_a_negative_stop_distance to entry_price=1.0, atr=0.5: expect stop_distance_actual 0.0, shares 0, risk_actual_idr 0.
+- Update test_stop_below_floor_is_clamped_to_it to entry_price=5.0, atr=5.0, max_position_pct_of_capital=1.0: stop_loss_price 1.0, stop_distance_actual approx 4.0, stop_distance_for_sizing approx 8.625, "floor" in notes.
+- Add: entry 2.0 atr 0.1 not blocked with stop 1.0 and stop_distance_for_sizing approx 1.15; entry 2.0 atr 0.5 not blocked with stop 1.0; entry 50.0 atr 3.0 not blocked with stop 45.0 and stop_distance_actual 5.0.
+- Keep test_normal_priced_stock_is_unaffected_by_the_floor (1000.0, 20.0 -> 970.0) and the tick sweep test unchanged.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- tests/test_risk_management.py line 532: test_stock_at_the_floor_is_not_sized uses entry 50.0; with floor Rp1 it is not blocked, so price_floor_blocked/shares/gocap asserts fail.
+- tests/test_risk_management.py line 549: test_stock_below_the_floor... uses entry 30.0; with floor Rp1 it is not blocked, so the floor asserts fail.
+- tests/test_risk_management.py line 562: test_stop_below_floor_is_clamped_to_it uses entry 52, ATR 5; stop 44.5 is no longer clamped to 50, so stop_loss_price 50.0 and sizing asserts fail.
+Environment: athena_py312
