@@ -52,7 +52,8 @@ terbukti, biayanya terkunci."**
      dipilih dari log itu di titik cek.
 - **"Daya saing" untuk siapa (Atha, 2026-11-15: "Portofolio/karier"):** bukti dan angka cukup; production dan pengguna kedua tetap di
   "Ditunda sampai ada bukti kebutuhan". Bisa dibuka lagi di titik cek.
-- **Peninjau jalur ketat (Atha 2026-11-15: "Reviewer pake fable aja 1"):** satu peninjau, Fable, untuk spek dan diff jalur ketat (Opus tidak lagi diminta). Dasarnya tiga sampel Opus dan Fable
+- **Peninjau jalur ketat: sementara Opus sejak 2026-11-16 (Atha: "Ganti reviewer ke opus bro, limit fable gw hampir abis"); kembali ke Fable bila limitnya pulih dan Atha bilang.** Aturan lama di bawah:
+  **Peninjau jalur ketat (Atha 2026-11-15: "Reviewer pake fable aja 1"):** satu peninjau, Fable, untuk spek dan diff jalur ketat (Opus tidak lagi diminta). Dasarnya tiga sampel Opus dan Fable
   atas artefak yang sama (spek VF O1, diff VF O1, spek `argus apply`): hampir semua temuan keduanya nyata dan diverifikasi dengan menjalankan, masing-masing menemukan hal yang tidak ditemukan
   yang lain (n = 3, bukan kesimpulan statistik); Claude menyarankan keduanya, Atha memilih satu. Dikaji lagi di titik cek 2026-11-29 dengan jumlah temuan unik per PR.
 - **Keputusan lain yang berlaku** (rinci di arsip 2026-11-16): `argus apply` K1–K7 (Atha 2026-11-15; `--read-sha` wajib, tanpa push,
