@@ -1,0 +1,8 @@
+Beberapa angka di issue tidak cocok dengan kode asli. Ini hasil compute_position_size yang sebenarnya dengan IDX_MIN_PRICE = 1.0 (confidence HIGH, volatility normal, capital 100_000_000), tolong pakai ini:
+- entry 1.0, atr 0.1 (juga atr 0.5): price_floor_blocked True, shares 0, stop_loss_price 1.0, stop_distance_actual 0.0, ada "gocap" di notes.
+- Aturan 3 (entry 0.5) hapus: harga di bawah Rp1 tidak ada, kodenya malah ZeroDivisionError. Tes lama "below the floor" (entry 30, atr 1.0) diganti jadi entry 1.0, atr 0.5: price_floor_blocked True, stop_distance_actual 0.0 (tidak pernah negatif), shares 0, risk_actual_idr 0.
+- Aturan 4 (entry 1.5) hapus: entry dibulatkan ke tick Rp1. Pakai entry 2.0, atr 0.1: price_floor_blocked False, stop_loss_price 1.0, stop_distance_actual 1.0, stop_distance_for_sizing 1.15.
+- Aturan 5 (clamp) pakai entry 5.0, atr 5.0, max_position_pct_of_capital=1.0 (bentuk sama dengan tes lama 52/5): model stop -2.5, di-clamp: stop_loss_price 1.0, stop_distance_actual 4.0, stop_distance_for_sizing 7.5*1.15 = 8.625, price_floor_blocked False, ada "floor" di notes.
+- Aturan 7 (entry 2.0, atr 0.5) benar: stop 1.0, stop_distance_actual 1.0, stop_distance_for_sizing 1.15, tidak diblok.
+- entry 50.0, atr 3.0 sekarang tidak diblok: stop_loss_price 45.0 (bukan 47.0), stop_distance_actual 5.0.
+- Aturan 6 (entry 1000, atr 20, stop 970.0) benar.
