@@ -813,3 +813,46 @@ def test_a_clash_with_an_unknown_key_or_a_nul_in_its_file_is_refused_for_what_it
     env = Env(tmp_path / "b", [submit(prd_args([item(clashes=[{**base, "file": "src/a\x00b"}])])), submit()])
     env.new()
     assert "is not a file of the repository" in env.rejections()[0] and "malformed" not in env.rejections()[0]
+
+
+# ---- the writer is told the rules the gate enforces (pilot 2 wasted two submits on an unwritten 80-character limit) ----
+
+def test_the_prompt_and_the_schema_state_the_touch_and_creates_rules():
+    fields = pw.Item.model_fields
+    for text in (pw.SYSTEM, fields["touches"].description, fields["creates"].description):
+        assert str(iw.TOUCH_MAX) in text and str(iw.TOUCH_MIN) in text, text[:80]
+    assert "EXACTLY" in pw.SYSTEM and "character for character" in fields["touches"].description
+    assert "short name" in pw.SYSTEM.lower() and "signature" in pw.SYSTEM and "short name" in fields["creates"].description.lower()
+    assert "one line" in pw.SYSTEM.lower() and "one line" in fields["creates"].description.lower()
+    assert "not by substring" in pw.SYSTEM
+    assert "never a signature" in pw.SYSTEM and "never a whole function signature" in pw.SYSTEM
+    assert pw.SYSTEM.count(f"{iw.TOUCH_MIN} to {iw.TOUCH_MAX} characters") == 2        # once for touches, once for creates
+
+
+def test_a_touch_that_contains_a_created_name_is_told_which_string_to_write(tmp_path):
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=["def show_date(entries, week=None):"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    bounce = env.rejections()[0]
+    assert "item 2" in bounce and "an earlier item creates 'show_date'" in bounce and "exactly as that string" in bounce
+
+
+def test_a_touch_inside_a_created_name_is_told_too(tmp_path):
+    wrong = prd_args([item(creates=["show_date_widget"]), item("Two", touches=["show_date"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert "an earlier item creates 'show_date_widget'" in env.rejections()[0]
+
+
+def test_no_creates_hint_when_nothing_resembles_the_touch(tmp_path):
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=["no_such_text"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert "an earlier item creates" not in env.rejections()[0]
+
+
+def test_the_hint_names_only_earlier_creates_not_the_items_own(tmp_path):
+    wrong = prd_args([item(touches=["def own_name(x):"], creates=["own_name"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert "an earlier item creates" not in env.rejections()[0]

@@ -43,10 +43,14 @@ class Item(BaseModel):
                                   "issue's text names, declared.")
     fields: List[str] = Field(default_factory=list, description="Published data fields the issue relies on, "
                               "`<TABLE>.<name>` or `EVENT_FIELDS.<event>.<name>`.")
-    touches: List[str] = Field(description=f"1 to {iw.TOUCHES_MAX} texts the change alters or relies on, exactly as they "
-                               "exist in the code today OR as an EARLIER item creates them (see `creates`).")
-    creates: List[str] = Field(default_factory=list, description="Names (functions, classes, paths, fields) this item "
-                               "brings into existence; a LATER item may then list them in its touches.")
+    touches: List[str] = Field(description=f"1 to {iw.TOUCHES_MAX} texts the change alters or relies on, each ONE line of "
+                               f"{iw.TOUCH_MIN} to {iw.TOUCH_MAX} characters (a name or a short code fragment, never a whole "
+                               "signature or a sentence), exactly as they exist in the code today, OR written "
+                               "character for character as an EARLIER item wrote it in its `creates`.")
+    creates: List[str] = Field(default_factory=list, description=f"Short names ({iw.TOUCH_MIN} to {iw.TOUCH_MAX} characters, "
+                               "one line: `budget_rows`, `/scoreboard/jobs`, never a signature) of the functions, classes, "
+                               "paths or fields this item brings into existence; a LATER item lists the very same string in "
+                               "its touches.")
     clashes: List[iw.Clash] = Field(default_factory=list, description="Old tests this item may break.")
     clash_check: str = Field(default="", description="The code the harness gave this item with its list of old test lines.")
 
@@ -185,6 +189,11 @@ def items_gate(args, *, source, environment, max_items, item_max):
             for t in touches_raw:
                 if isinstance(t, str) and t.strip() in later and f"touch {t.strip()!r}" in p:
                     hint = f" (item {k} uses it, but only a LATER item creates it: put the creating item first)"
+                elif isinstance(t, str) and f"touch {t.strip()!r}" in p:
+                    near = sorted(n for n in known if n and (n in t.strip() or t.strip() in n))
+                    if near:
+                        hint = (f" (an earlier item creates {near[0]!r}: write the touch exactly as that string, "
+                                "character for character, not a longer or shorter text)")
             problems.append(f"item {k}: {p}{hint}")
         created.append(shape["creates"])
         if res is None:
@@ -248,8 +257,12 @@ SYSTEM = "\n".join([
     "",
     "Because the issues run in order and the later code does not exist yet when you read the repository:",
     "- `touches`: 1 to 8 texts the item alters or relies on, exactly as they exist in the code TODAY, or exactly as an EARLIER "
-    "item creates them. `creates`: the names (functions, classes, paths, fields) this item brings into existence, so a LATER "
-    "item may list them in its touches. An item never touches a name only a later item creates: reorder instead.",
+    "item wrote them in its `creates`. Each touch is ONE line of 2 to 80 characters: a name or a short code fragment, never a "
+    "whole function signature, a sentence or a paragraph (a longer text is refused).",
+    "- `creates`: the SHORT NAMES (functions, classes, paths, fields) this item brings into existence, each one line of 2 to 80 "
+    "characters, for example `budget_rows` or `/scoreboard/jobs`, never a signature. A LATER item that uses the name writes the "
+    "very same string in its touches, character for character (the harness matches EXACTLY, not by substring). An item never "
+    "touches a name only a later item creates: reorder instead.",
     "- Search the existing tests for what each item touches; the harness then shows you the old test lines holding your "
     "touches, per item, with a clash_check code for each item: read them, name the real clashes in that item's `clashes`, "
     "and submit again with every item's code and exactly the same touches.",
