@@ -813,3 +813,146 @@ def test_a_clash_with_an_unknown_key_or_a_nul_in_its_file_is_refused_for_what_it
     env = Env(tmp_path / "b", [submit(prd_args([item(clashes=[{**base, "file": "src/a\x00b"}])])), submit()])
     env.new()
     assert "is not a file of the repository" in env.rejections()[0] and "malformed" not in env.rejections()[0]
+
+
+# ---- the writer is told the rules the gate enforces (pilot 2 wasted two submits on an unwritten 80-character limit) ----
+
+def test_the_prompt_and_the_schema_state_the_touch_and_creates_rules():
+    fields = pw.Item.model_fields
+    span = f"{iw.TOUCH_MIN} to {iw.TOUCH_MAX} characters"
+    assert span in fields["touches"].description and span in fields["creates"].description
+    assert pw.SYSTEM.count(span) == 2                                    # once for touches, once for creates
+    assert f"1 to {iw.TOUCHES_MAX} texts" in pw.SYSTEM and f"1 to {iw.TOUCHES_MAX} texts" in fields["touches"].description
+    assert f"at most {pw.CREATES_MAX}" in pw.SYSTEM and f"At most {pw.CREATES_MAX}" in fields["creates"].description
+    assert "EXACTLY" in pw.SYSTEM and "character for character" in fields["touches"].description
+    assert "not by substring" in pw.SYSTEM
+    assert "never a signature" in pw.SYSTEM and "never a whole function signature" in pw.SYSTEM
+    assert "never a whole" in fields["touches"].description and "never a signature" in fields["creates"].description
+    assert "ONE line" in pw.SYSTEM and "one line" in fields["creates"].description and "ONE line" in fields["touches"].description
+    assert "a longer text is refused" in pw.SYSTEM
+
+
+HINT = "that an earlier item creates"
+
+
+def test_a_touch_that_contains_a_created_name_is_told_which_string_to_write(tmp_path):
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=["def show_date(entries, week=None):"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    bounce = env.rejections()[0]
+    assert "item 2" in bounce and f"the 'show_date' {HINT}" in bounce and "exactly as that string" in bounce
+
+
+def test_the_longest_created_name_inside_the_touch_is_the_one_named(tmp_path):
+    # both names stand in the touch as whole words; the shortest is not the first alphabetically either
+    wrong = prd_args([item(creates=["abc", "xyz_long"]), item("Two", touches=["foo(abc, xyz_long)"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert f"the 'xyz_long' {HINT}" in env.rejections()[0]
+
+
+def test_a_name_that_is_only_part_of_a_longer_word_is_not_inside(tmp_path):
+    wrong = prd_args([item(creates=["show", "show_date"]), item("Two", touches=["def show_date(x):"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert f"the 'show_date' {HINT}" in env.rejections()[0]
+
+
+def test_a_name_only_a_later_item_creates_is_not_offered_as_the_near_one(tmp_path):
+    wrong = prd_args([item("One", creates=["other_name"]), item("Two", touches=["def show_date(x):"]),
+                      item("Three", creates=["show_date"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert HINT not in env.rejections()[0]
+
+
+def test_a_touch_inside_a_created_name_is_told_too_with_the_shortest_such_name(tmp_path):
+    wrong = prd_args([item(creates=["show_date_widget", "show_date_widget_extra"]), item("Two", touches=["show_date"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert f"the 'show_date_widget' {HINT}" in env.rejections()[0]
+
+
+def test_a_padded_touch_gets_the_hint(tmp_path):
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=["  def show_date(x):  "])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert f"the 'show_date' {HINT}" in env.rejections()[0]
+
+
+def test_a_padded_abbreviation_gets_the_hint_too(tmp_path):
+    wrong = prd_args([item(creates=["show_date_widget"]), item("Two", touches=["  show_date  "])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert f"the 'show_date_widget' {HINT}" in env.rejections()[0]
+
+
+def test_a_short_created_name_does_not_claim_an_unrelated_typo(tmp_path):
+    wrong = prd_args([item(creates=["id"]), item("Two", touches=["grid_widht"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    bounce = env.rejections()[0]
+    assert "touch 'grid_widht' occurs in no file" in bounce and HINT not in bounce
+
+
+def test_a_very_short_touch_does_not_match_inside_a_longer_name(tmp_path):
+    wrong = prd_args([item(creates=["show_date_widget"]), item("Two", touches=["how"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert HINT not in env.rejections()[0]
+
+
+def test_the_hint_is_worded_as_a_condition_not_an_order(tmp_path):
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=["def show_date(x):"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert "(if you mean the 'show_date' that an earlier item creates, write the touch exactly as that string" in env.rejections()[0]
+
+
+def test_a_name_that_only_a_later_item_creates_still_gets_the_later_hint_not_the_near_one(tmp_path):
+    wrong = prd_args([item("One", creates=["show_date_widget"]), item("Two", touches=["show_date"]),
+                      item("Three", creates=["show_date"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    bounce = env.rejections()[0]
+    assert "only a LATER item creates it" in bounce and HINT not in bounce
+
+
+def test_no_creates_hint_when_nothing_resembles_the_touch(tmp_path):
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=["no_such_text"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert HINT not in env.rejections()[0]
+
+
+def test_the_hint_names_only_earlier_creates_not_the_items_own(tmp_path):
+    wrong = prd_args([item(touches=["def own_name(x):"], creates=["own_name"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    assert HINT not in env.rejections()[0]
+
+
+def test_a_too_long_touch_gets_the_length_message_and_no_hint(tmp_path):
+    long_touch = "show_date" + " " + "x" * 71                          # 81 characters, the pilot's first failure
+    assert len(long_touch) == 81
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=[long_touch])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    env.new()
+    bounce = env.rejections()[0]
+    assert "has 81 characters, more than 80" in bounce and HINT not in bounce
+
+
+def test_a_touch_found_in_todays_code_gets_no_rejection_and_no_hint(tmp_path):
+    ok = prd_args([item(creates=["export"]), item("Two", touches=["export const"])])
+    env = Env(tmp_path, [submit(ok)])
+    env.new()
+    assert env.rejections() == []
+
+
+def test_the_hint_also_comes_with_the_unread_files_message(tmp_path, monkeypatch):
+    wrong = prd_args([item(creates=["show_date"]), item("Two", touches=["def show_date(x):"])])
+    env = Env(tmp_path, [submit(wrong), submit()])
+    monkeypatch.setattr(iw, "SEARCH_MAX_FILE", 30)
+    env.new()
+    bounce = env.rejections()[0]
+    assert "went unread" in bounce and f"the 'show_date' {HINT}" in bounce
