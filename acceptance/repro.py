@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+from contextlib import contextmanager
 from pathlib import Path
 
 MAX_BLOCKS = 3
@@ -191,15 +192,24 @@ PATCHED_SENTENCE = "the example runs agent-written code; compare both outputs ag
 PREFIX = "issue example, base -> patched: "
 
 
+@contextmanager
+def patched_tree(base_dir, patch_file=None):
+    """A temporary copy of base_dir, with the patch applied by `git apply` (what a human would apply) when there is one; the
+    copy is removed on exit. Raises what copying or git raises: the caller decides whether that is "not run" or a refusal."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = Path(tmp) / "tree"
+        shutil.copytree(base_dir, tree, symlinks=True)
+        if patch_file is not None:
+            subprocess.run(["git", "-C", str(tree), "apply", "--whitespace=nowarn", str(Path(patch_file).resolve())],
+                           check=True, capture_output=True, timeout=60)
+        yield tree
+
+
 def run_patched(base_dir, patch_file, issue, sandbox_cfg, runner=None):
     """[result] like run(), on a copy of base_dir with the patch applied by `git apply` (what a human would apply); None
     (not run) when anything goes wrong, the patch not applying included."""
     try:
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = Path(tmp) / "tree"
-            shutil.copytree(base_dir, tree, symlinks=True)
-            subprocess.run(["git", "-C", str(tree), "apply", "--whitespace=nowarn", str(Path(patch_file).resolve())],
-                           check=True, capture_output=True, timeout=60)
+        with patched_tree(base_dir, patch_file) as tree:
             return run(tree, issue, sandbox_cfg, runner)
     except Exception:
         return None

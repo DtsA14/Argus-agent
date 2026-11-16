@@ -349,6 +349,16 @@ def shown(actual):
     return _clean_deep(actual) if len(text) <= ACTUAL_MAX else clean(text)
 
 
+def verdict(example, raw):
+    """{status, actual} of one raw result of one run (no second pass), `actual` as it is stored and shown: for a caller that
+    compares runs itself (does an override change what the example sees?)."""
+    try:
+        status, actual = _verdict(example, raw)
+        return {"status": status, "actual": shown(actual)}
+    except RecursionError:
+        return {"status": INVALID, "actual": "the value nests too deeply"}
+
+
 def _projection(raw):
     """What two passes must agree on: the value, or the type of the exception or of the invalid value; not the message (a
     message may hold an address or a set's order)."""

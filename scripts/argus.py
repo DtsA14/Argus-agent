@@ -78,6 +78,15 @@ def stage_viewer(o, deps):
     return 2 if text.startswith(sv.STATE_PROBLEM) else 0
 
 
+def _ids(text):
+    """--allow-failed-examples: e2,e5 (ids of examples, nothing else)."""
+    import re
+    ids = [t.strip() for t in str(text).split(",") if t.strip()]
+    if not ids or any(not re.fullmatch(r"e[1-9][0-9]?", t) for t in ids):
+        raise argparse.ArgumentTypeError("the ids of examples, like e2,e5")
+    return tuple(ids)
+
+
 def main(argv=None, deps=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config")
@@ -131,10 +140,13 @@ def main(argv=None, deps=None):
     ap_.add_argument("job")
     ap_.add_argument("--read-sha", required=True, help="the patch's sha256 that status prints, at least 12 characters: you read that patch")
     ap_.add_argument("--note")
+    ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
+                     "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
     p = sub.add_parser("applied")
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
     p.add_argument("--note")
+    p.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="as for apply: the ids of the examples that failed on the patch")
     g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md, "
                                      "SPEC_PWA_VIEWER.md): deploy | rollback | status | check | viewer-* | proxy")
     gs = g.add_subparsers(dest="stage_cmd", required=True)
@@ -354,14 +366,15 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "apply":
             from router import apply as ra
-            done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note)
+            done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples)
             print(rj.status(done.id, jobs_dir=o.jobs_dir))
             e = done.data["log"][-1]
             print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}); not pushed, not deployed.\n"
                   f"next: `argus stage deploy {done.id}` needs its PLAN.md and your go live.")
             return 0
         if o.cmd == "applied":
-            print(rj.status(rj.applied(o.job, o.commit, deps=deps, jobs_dir=o.jobs_dir, note=o.note).id,
+            print(rj.status(rj.applied(o.job, o.commit, deps=deps, jobs_dir=o.jobs_dir, note=o.note,
+                                      allow_failed_examples=o.allow_failed_examples).id,
                             jobs_dir=o.jobs_dir))
             return 0
         cfg = load_config(o.config)
