@@ -1,0 +1,18 @@
+{
+  "repo": "athena",
+  "commit": "dc98df136549570471c3835c37942b13e5537656",
+  "max_usd": 1.0,
+  "items": [
+    {
+      "n": 1,
+      "paths": [
+        {
+          "side": "ledger",
+          "path": "/journal/open-summary",
+          "via_proxy": false
+        }
+      ],
+      "fields": []
+    }
+  ]
+}
