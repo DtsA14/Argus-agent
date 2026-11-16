@@ -1,0 +1,28 @@
+{
+  "repo": "argus-ledger",
+  "commit": "88c31e13e60feadae06c30c2bb13a9ba33f80821",
+  "max_usd": 2.0,
+  "items": [
+    {
+      "n": 1,
+      "paths": [],
+      "fields": []
+    },
+    {
+      "n": 2,
+      "paths": [
+        {
+          "side": "ledger",
+          "path": "/budget/jobs",
+          "via_proxy": false
+        },
+        {
+          "side": "ledger",
+          "path": "/jobs",
+          "via_proxy": true
+        }
+      ],
+      "fields": []
+    }
+  ]
+}

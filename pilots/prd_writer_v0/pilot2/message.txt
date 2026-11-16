@@ -1,0 +1,1 @@
+Di ledger gue pengen tahu job mana yang paling boros. Tambahin hitungan biaya per job dibanding batasnya, tandain yang kepake lebih dari 80% dari batas, terus bikin satu endpoint yang ngasih daftar job itu diurutkan dari yang paling boros, bisa difilter per minggu.
