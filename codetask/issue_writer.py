@@ -288,7 +288,7 @@ def touches_problems(args, source, known=frozenset(), strict=False):
     return [], terms, len(hits)
 
 
-def issue_gate(args, *, source, environment):
+def issue_gate(args, *, source, environment, known=frozenset(), strict=False):
     """(problems, result) of a SubmitIssue. result: {reply, issue, clashes, questions, notes} as checked; issue None for
     a reply only (no issue, or an empty one), which may name no clash; notes None when none were given (the job keeps
     its earlier notes), else stripped (amendment 2)."""
@@ -339,7 +339,10 @@ def issue_gate(args, *, source, environment):
             problems.append(f"clash {i} must be {{file, line, why}}")
             continue
         f, line, why = c.get("file"), c.get("line", 0), c.get("why")
-        target = (root / f).resolve() if isinstance(f, str) and f and not Path(f).is_absolute() else None
+        try:
+            target = (root / f).resolve() if isinstance(f, str) and f and not Path(f).is_absolute() else None
+        except (ValueError, OSError):           # a NUL or a name the system refuses: not a file of the repository
+            target = None
         if target is None or root not in target.parents or not target.is_file():
             problems.append(f"clash {i}: {f!r} is not a file of the repository")
         if not isinstance(line, int) or isinstance(line, bool) or line < 0:
@@ -352,7 +355,7 @@ def issue_gate(args, *, source, environment):
     # it may not claim the old tests are untouched, and the harness writes the clashes into it (with_clashes)
     final, touches, test_hits = None, [], 0
     if not only:
-        why, touches, test_hits = touches_problems(args, source)
+        why, touches, test_hits = touches_problems(args, source, known=known, strict=strict)
         problems += why
     if not only and isinstance(issue, str) and issue.strip():
         final = with_clashes(without_clash_list(issue.strip()), kept)

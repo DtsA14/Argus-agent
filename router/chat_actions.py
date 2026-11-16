@@ -606,8 +606,8 @@ class Actions:
         got = self._read_data(job_id)
         if got is None:
             return None
-        if got[0].get("kind") == "issue":
-            return {"id": job_id, "kind": "issue", "state": got[0].get("state")}
+        if got[0].get("kind") in ("issue", "prd"):          # a prd job is terminal-only until the chat page (SPEC_PRD_WRITER D5)
+            return {"id": job_id, "kind": got[0]["kind"], "state": got[0].get("state")}
         return self.decision_row(job_id, *got)
 
     def build_research(self, cfg, params):

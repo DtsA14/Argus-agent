@@ -1413,6 +1413,9 @@ def abandon(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
                 raise Refused(f"job {job.id}: a start was cut off after code job {code.id} was made; run `argus issue "
                               "start` again to settle it, then abandon the code job if it is not wanted")
         extra = _seen(job, sha, via)
+        if job.data.get("kind") == "prd":         # its folders can no longer be approved (SPEC_PRD_WRITER 4.4); marked first, so a
+            from router import prd_job            # cut-off between the two leaves a job that is still open, never an ABANDONED one with approvable folders
+            prd_job.mark_superseded(job)
         job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"), **extra)
         return job
 

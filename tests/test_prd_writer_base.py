@@ -92,7 +92,7 @@ def test_the_issue_gate_passes_neither_known_nor_strict(tmp_path, monkeypatch):
     real = iw.touches_problems
     monkeypatch.setattr(iw, "touches_problems", lambda *a, **k: seen.update(a=a, k=k) or real(*a, **k))
     iw.issue_gate({"reply": "ok", "issue": "x", "touches": ["'share'"]}, source=snap(tmp_path), environment="env")
-    assert seen.get("k", {}) == {} and len(seen.get("a", ())) == 2 or not seen
+    assert seen["k"] == {"known": frozenset(), "strict": False} and len(seen["a"]) == 2
 
 
 def test_the_issue_gate_is_unchanged_by_the_new_parameters(tmp_path):
@@ -120,12 +120,14 @@ def test_settings_read_the_named_section():
 
 def test_settings_without_the_section_fail():
     cfg = load_config(str(ROOT / "config.yaml"))
+    del cfg["prd_writer"]
     with pytest.raises(KeyError):
         iw.settings(cfg, "prd_writer")
 
 
 def test_the_job_settings_name_the_missing_section():
     cfg = load_config(str(ROOT / "config.yaml"))
+    del cfg["prd_writer"]
     assert ri._settings(cfg)["role"] == cfg["issue_writer"]["role"]
     with pytest.raises(rj.Refused, match="no prd_writer section"):
         ri._settings(cfg, "prd_writer")
@@ -207,9 +209,9 @@ def test_resume_of_a_prd_job_goes_to_its_own_module(tmp_path, monkeypatch):
     assert seen == ["jp"]
 
 
-def test_resume_of_a_prd_job_says_the_turn_is_not_built_yet(tmp_path):
-    job = make_job(tmp_path, state=pj.WRITING)
-    with pytest.raises(rj.Refused, match="not built yet"):
+def test_resume_of_a_prd_job_that_is_not_writing_is_refused(tmp_path):
+    job = make_job(tmp_path, state=pj.AWAITING_HUMAN)
+    with pytest.raises(rj.Refused, match="nothing to resume"):
         rj.resume("jp", cfg={}, deps=deps(), jobs_dir=job.dir.parent)
 
 
