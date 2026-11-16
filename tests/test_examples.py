@@ -209,14 +209,14 @@ def test_output_printed_at_import_or_by_setup_is_not_a_result(tmp_path):
 
 def test_a_result_line_without_the_pass_frame_is_ignored():
     got = ex.read_pass('{"id": "e1", "result": {"ok": true, "value": 1}}\n', "@@frame@@", [good()])
-    assert got["e1"]["error"] == "NoResult"
+    assert got["e1"]["error"] == ex.E_NORESULT
     wrong = "?" * len("@@frame@@") + '{"id": "e1", "result": {"ok": true, "value": 9}}\n'
-    assert ex.read_pass(wrong, "@@frame@@", [good()])["e1"]["error"] == "NoResult"      # the right length, not the frame
+    assert ex.read_pass(wrong, "@@frame@@", [good()])["e1"]["error"] == ex.E_NORESULT      # the right length, not the frame
     got = ex.read_pass('@@frame@@{"id": "e1", "result": {"ok": true, "value": 7}}\n@@frame@@{"id": "e1", "result": {"ok": true, "value": 8}}\n',
                        "@@frame@@", [good()])
     assert got["e1"]["value"] == 7                                            # the first line of an id counts
     got = ex.read_pass("@@frame@@not json\n@@frame@@{}\n", "@@frame@@", [good()])
-    assert got["e1"]["error"] == "NoResult"
+    assert got["e1"]["error"] == ex.E_NORESULT
 
 
 def test_a_result_that_differs_between_the_two_passes_is_an_error(tmp_path):
@@ -232,7 +232,7 @@ def test_a_timeout_is_an_error_not_a_hang(tmp_path, monkeypatch):
     argv, frame = ex.build_argv([good(setup="from shop.rules import spin", run="spin()", expect=1)], root=root,
                                 child_timeout=1, python=sys.executable)
     out = ex.read_pass(runner(root)(argv)["stdout"], frame, [good()])
-    assert out["e1"]["error"] == "Timeout" and out["e1"]["ok"] is False
+    assert out["e1"]["error"] == ex.E_TIMEOUT and out["e1"]["ok"] is False
 
 
 def test_overrides_apply_to_a_module_constant_read_at_call_time(tmp_path):
@@ -287,7 +287,7 @@ def test_the_runner_failing_is_raised_not_turned_into_a_result(tmp_path):
 
 def test_a_runner_that_returns_nothing_gives_noresult(tmp_path):
     out = ex.evaluate([good()], lambda argv: {"stdout": ""}, root=make_tree(tmp_path))
-    assert out[0]["status"] == "error" and "NoResult" in out[0]["actual"]
+    assert out[0]["status"] == "error" and ex.E_NORESULT in out[0]["actual"]
     out = ex.evaluate([good()], lambda argv: None, root=make_tree(tmp_path))
     assert out[0]["status"] == "error"
 
@@ -305,10 +305,10 @@ def test_the_argv_is_data_for_python_never_a_shell(tmp_path):
 def test_a_timeout_through_evaluate_is_an_error_result(tmp_path, monkeypatch):
     monkeypatch.setattr(ex, "CHILD_TIMEOUT_S", 1)
     out = evaluate(tmp_path, [good(setup="from shop.rules import spin", run="spin()", expect=1), good(id="e2")])
-    assert statuses(out) == {"e1": "error", "e2": "pass"} and "Timeout" in out[0]["actual"]
+    assert statuses(out) == {"e1": "error", "e2": "pass"} and ex.E_TIMEOUT in out[0]["actual"]
 
 
-def test_the_example_cannot_read_the_payload_from_argv(tmp_path):
+def test_sys_argv_is_cleaned_before_the_example_runs(tmp_path):
     out = evaluate(tmp_path, [good(setup="import sys\nfrom shop.rules import blocked", run="len(sys.argv)", expect=1)])
     assert out[0]["status"] == "pass"                                   # the payload (and its marks) was removed before the code ran
 
@@ -329,3 +329,135 @@ def test_a_file_of_the_tree_cannot_shadow_the_standard_library_in_the_runner(tmp
 @pytest.mark.parametrize("value", [0, 0.0])
 def test_zero_is_compared_exactly(value):
     assert ex.same(value, 0) and not ex.same(value, 1e-300) and not ex.same(1e-300, value)
+
+
+# ---- review fixes (Opus diff review of PR 1) ---------------------------------------------------------------------------
+
+def test_a_huge_int_is_compared_exactly_and_never_overflows():
+    assert ex.same(10 ** 400, 10 ** 400) and not ex.same(10 ** 400, 10 ** 400 + 1)
+    assert not ex.same(10 ** 400, 1.0) and not ex.same(1.0, 10 ** 400)
+    assert ex.same(3, 3.0)
+
+
+def test_a_huge_int_through_evaluate(tmp_path):
+    out = evaluate(tmp_path, [good(setup="from shop.rules import blocked", run="10**400", expect=10 ** 400),
+                              good(id="e2", setup="from shop.rules import blocked", run="10**400", expect=1.0)])
+    assert statuses(out) == {"e1": "pass", "e2": "fail"}
+
+
+def test_a_deeply_nested_expect_is_refused_by_parse():
+    deep = []
+    for _ in range(ex.MAX_DEPTH + 5):
+        deep = [deep]
+    assert any("nests more than" in p for p in ex.parse([good(expect=deep)])[1])
+    ok = []
+    for _ in range(10):
+        ok = [ok]
+    assert ex.parse([good(expect=ok)])[1] == []
+    assert any("nests more than" in p for p in ex.parse([good(tier="whatif", overrides={"shop.rules.FLOOR": deep})])[1])
+
+
+@pytest.mark.parametrize("depth", [1400, 20000])
+def test_a_deep_actual_never_crashes_the_pass(tmp_path, depth):
+    run = f"__import__('functools').reduce(lambda a, _: [a], range({depth}), [])"
+    out = evaluate(tmp_path, [good(setup="from shop.rules import blocked", run=run, expect=1), good(id="e2")])
+    assert out[0]["status"] in ("fail", "invalid", "error") and out[1]["status"] == "pass"      # the next example still ran
+    assert len(json.dumps(out[0]["actual"])) <= ex.ACTUAL_MAX + 10
+
+
+@pytest.mark.parametrize("raw", [[1], "x", 7, None, {"ok": True}, {"ok": False}, {"ok": False, "error": 5},
+                                 {"ok": "yes", "value": 1}, {"ok": False, "invalid": True}])
+def test_a_forged_or_damaged_result_counts_as_no_result(raw):
+    line = "@@f@@" + json.dumps({"id": "e1", "result": raw}) + "\n"
+    assert ex.read_pass(line, "@@f@@", [good()])["e1"]["error"] == ex.E_NORESULT
+
+
+def test_a_well_formed_result_is_kept():
+    for raw in ({"ok": True, "value": None}, {"ok": False, "error": "KeyError", "message": "k"},
+                {"ok": False, "invalid": True, "type": "set"}):
+        line = "@@f@@" + json.dumps({"id": "e1", "result": raw}) + "\n"
+        assert ex.read_pass(line, "@@f@@", [good()])["e1"] == raw
+
+
+def test_a_harness_error_name_cannot_be_the_expected_exception(tmp_path):
+    base = {k: v for k, v in good().items() if k != "expect"}
+    spin = {**base, "setup": "from shop.rules import spin", "run": "spin()"}
+    for name in ("Timeout", "NoResult", "ValueError", "OSError"):
+        assert ex.parse([{**spin, "raises": name}])[1] == []                   # a legal name...
+    for bad in (ex.E_TIMEOUT, ex.E_NORESULT, ex.E_HARNESS):
+        assert any("exception type" in p for p in ex.parse([{**spin, "raises": bad}])[1])
+
+
+def test_a_timeout_never_satisfies_raises_timeout(tmp_path, monkeypatch):
+    monkeypatch.setattr(ex, "CHILD_TIMEOUT_S", 1)
+    base = {k: v for k, v in good().items() if k != "expect"}
+    spin = {**base, "setup": "from shop.rules import spin", "run": "spin()", "raises": "Timeout"}
+    out = evaluate(tmp_path, [spin])
+    assert out[0]["status"] == "fail" and ex.E_TIMEOUT in out[0]["actual"]
+
+
+def test_a_crashed_example_never_satisfies_raises_noresult(tmp_path):
+    base = {k: v for k, v in good().items() if k != "expect"}
+    kill = {**base, "setup": "import os\nfrom shop.rules import blocked", "run": "os._exit(3)", "raises": "NoResult"}
+    out = evaluate(tmp_path, [kill])
+    assert out[0]["status"] == "fail"
+
+
+def test_a_value_over_the_line_limit_is_invalid_and_the_rest_of_the_pass_survives(tmp_path):
+    big = good(setup="from shop.rules import blocked", run="'x' * 20000", expect="y")
+    out = evaluate(tmp_path, [big, good(id="e2")])
+    assert out[0]["status"] == "invalid" and "too large" in out[0]["actual"] and out[1]["status"] == "pass"
+
+
+def test_two_runs_that_differ_only_in_the_message_are_the_same_result(tmp_path):
+    base = {k: v for k, v in good().items() if k != "expect"}
+    raising = {**base, "setup": "from shop.rules import blocked", "run": "(_ for _ in ()).throw(KeyError(object()))",
+               "raises": "KeyError"}
+    out = evaluate(tmp_path, [raising])
+    assert out[0]["status"] == "pass"                                          # the address in the message changes between runs
+
+
+def test_shown_cleans_the_texts_inside_a_short_value():
+    assert ex.shown({"a": "\x1b[31mred\x00"}) == {"a": "[31mred"}
+    assert ex.shown(["a\nb"]) == ["a b"]
+    assert ex.shown({"k": 1.5, "n": None, "b": True}) == {"k": 1.5, "n": None, "b": True}
+
+
+def test_noise_on_the_raw_stdout_does_not_break_the_result_line(tmp_path):
+    noisy = good(setup="import os\nfrom shop.rules import blocked\nos.write(1, b'raw noise without a newline')", run="blocked(50.0)",
+                 expect=True)
+    assert evaluate(tmp_path, [noisy])[0]["status"] == "pass"
+
+
+def test_a_mixed_key_object_does_not_make_parse_raise():
+    out, problems = ex.parse([{**good(), 1: "x", "z": 2}])
+    assert problems and out == []
+
+
+def test_tautology_problem_does_not_raise_on_a_non_example(tmp_path):
+    tree = make_tree(tmp_path)
+    for bad in ({"id": "e1", "setup": 5, "run": "x"}, {"id": "e1"}, {"id": "e1", "setup": "x", "run": None}):
+        assert ex.tautology_problem(bad, tree)
+
+
+def test_a_relative_import_is_not_a_module_of_the_tree(tmp_path):
+    tree = make_tree(tmp_path)
+    assert "imports no module" in ex.tautology_problem(good(setup="from . import rules\nrules.blocked(1)", run="1+1"), tree)
+
+
+def test_the_pass_timeout_leaves_room_for_every_child_and_the_start():
+    assert ex.pass_timeout_s(6) == 6 * ex.CHILD_TIMEOUT_S + ex.PASS_SLACK_S and ex.pass_timeout_s(6) > 6 * ex.CHILD_TIMEOUT_S
+
+
+def test_a_text_actual_is_cleaned_through_evaluate(tmp_path):
+    out = evaluate(tmp_path, [good(setup="from shop.rules import blocked", run="'a\\x1b[0m' + 'b'", expect="z")])
+    assert out[0]["status"] == "fail" and out[0]["actual"] == "a [0mb" and "\x1b" not in out[0]["actual"]
+
+
+def test_shown_cleans_a_text():
+    assert ex.shown("a\x1bb") == "a b" and ex.shown("x" * 400).endswith("...")
+
+
+def test_a_relative_import_of_a_name_that_exists_at_the_root_is_still_not_a_module_of_the_tree(tmp_path):
+    tree = make_tree(tmp_path)
+    assert "imports no module" in ex.tautology_problem(good(setup="from .shop import rules\nrules.blocked(1)", run="1+1"), tree)

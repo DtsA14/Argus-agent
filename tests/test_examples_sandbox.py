@@ -50,14 +50,16 @@ def test_the_tree_is_read_only_inside_the_container(cfg, tree):
                  expect=True)
     out = evaluate(cfg, tree, [write])
     assert out[0]["status"] == "error" and not (tree / "shop" / "NEW.txt").exists()
-    assert "Read-only" in out[0]["actual"] or "Permission" in out[0]["actual"] or "OSError" in out[0]["actual"]
+    assert "Read-only" in out[0]["actual"] or "Errno 30" in out[0]["actual"]            # the mount, not a user id
 
 
 def test_the_network_is_off(cfg, tree):
     net = good(setup="import socket\nfrom shop.rules import blocked\nsocket.create_connection(('1.1.1.1', 53), timeout=3)",
                run="blocked(1.0)", expect=True)
     out = evaluate(cfg, tree, [net])
-    assert out[0]["status"] == "error"
+    assert out[0]["status"] == "error" and any(w in out[0]["actual"].lower() for w in ("unreachable", "errno 101"))
+    nics = good(setup="import os\nfrom shop.rules import blocked", run="sorted(os.listdir('/sys/class/net'))", expect=["lo"])
+    assert evaluate(cfg, tree, [nics])[0]["status"] == "pass"                           # only the loopback exists
 
 
 def test_an_override_works_in_the_container_and_does_not_leak(cfg, tree):
@@ -74,4 +76,19 @@ def test_a_child_timeout_is_a_result_not_a_hung_container(cfg, tree):
                                 child_timeout=1)
     r = sb.run_command(argv, workdir=tree, cfg=cfg)
     got = ex.read_pass(r["stdout"], frame, [good()])
-    assert got["e1"]["error"] == "Timeout" and not r["timed_out"]
+    assert got["e1"]["error"] == ex.E_TIMEOUT and not r["timed_out"]
+
+
+def test_a_huge_value_costs_that_example_only_not_the_pass(cfg, tree):
+    huge = good(setup="from shop.rules import blocked", run="'x' * 200000", expect="y")
+    out = evaluate(cfg, tree, [huge, good(id="e2"), good(id="e3", run="blocked(10.0)", expect=True)])
+    assert [r["status"] for r in out] == ["invalid", "pass", "pass"] and "too large" in out[0]["actual"]
+
+
+def test_the_container_timeout_covers_every_child(cfg, tree):
+    (tree / "shop" / "slow.py").write_text("import time\ndef spin():\n    time.sleep(30)\n    return 1\n")
+    slow = [good(id=f"e{n}", setup="from shop.slow import spin", run="spin()", expect=1) for n in range(1, 4)]
+    argv, frame = ex.build_argv(slow, root="/workspace", child_timeout=2)
+    r = sb.run_command(argv, workdir=tree, cfg={**cfg, "timeout_s": 40})
+    got = ex.read_pass(r["stdout"], frame, slow)
+    assert all(v["error"] == ex.E_TIMEOUT for v in got.values()) and not r["timed_out"]     # each child timed out on its own
