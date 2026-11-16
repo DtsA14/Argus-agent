@@ -8,6 +8,7 @@ injects (`finish`: router.prd.check on the very bytes the folder will hold). Not
 network: the folder is written by the router from what passed.
 """
 import json
+import re
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -47,8 +48,8 @@ class Item(BaseModel):
                                f"{iw.TOUCH_MIN} to {iw.TOUCH_MAX} characters (a name or a short code fragment, never a whole "
                                "signature or a sentence), exactly as they exist in the code today, OR written "
                                "character for character as an EARLIER item wrote it in its `creates`.")
-    creates: List[str] = Field(default_factory=list, description=f"Short names ({iw.TOUCH_MIN} to {iw.TOUCH_MAX} characters, "
-                               "one line: `budget_rows`, `/scoreboard/jobs`, never a signature) of the functions, classes, "
+    creates: List[str] = Field(default_factory=list, description=f"At most {CREATES_MAX} short names ({iw.TOUCH_MIN} to "
+                               f"{iw.TOUCH_MAX} characters, one line: `budget_rows`, `/scoreboard/jobs`, never a signature) of the functions, classes, "
                                "paths or fields this item brings into existence; a LATER item lists the very same string in "
                                "its touches.")
     clashes: List[iw.Clash] = Field(default_factory=list, description="Old tests this item may break.")
@@ -123,6 +124,18 @@ def _item_shape(item, k, problems):
     return {"paths": paths, "fields": fields, "creates": creates}
 
 
+def _created_name_near(touch, known):
+    """The name an EARLIER item creates that a refused touch most likely means, or None: the longest created name that
+    stands inside the touch as a whole word (a signature written around it), else the shortest created name that holds the
+    touch (an abbreviation of it; touches under 4 characters never match this way). Only a hint in a refusal: the gate itself
+    matches exactly."""
+    inside = sorted(n for n in known if re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", touch))
+    if inside:
+        return max(inside, key=len)
+    around = sorted(n for n in known if len(touch) >= 4 and touch in n)
+    return min(around, key=len) if around else None
+
+
 def items_gate(args, *, source, environment, max_items, item_max):
     """(problems, result) of a SubmitPRD: the shape, every item through iw.issue_gate (with `known` = what the items before
     it create, and `strict`), the order rule, the lengths. result: {reply, prd_md, items: [{issue (as stored, with its clash
@@ -190,10 +203,10 @@ def items_gate(args, *, source, environment, max_items, item_max):
                 if isinstance(t, str) and t.strip() in later and f"touch {t.strip()!r}" in p:
                     hint = f" (item {k} uses it, but only a LATER item creates it: put the creating item first)"
                 elif isinstance(t, str) and f"touch {t.strip()!r}" in p:
-                    near = sorted(n for n in known if n and (n in t.strip() or t.strip() in n))
-                    if near:
-                        hint = (f" (an earlier item creates {near[0]!r}: write the touch exactly as that string, "
-                                "character for character, not a longer or shorter text)")
+                    best = _created_name_near(t.strip(), known)
+                    if best:
+                        hint = (f" (if you mean the {best!r} that an earlier item creates, write the touch exactly as that "
+                                "string, character for character, not a longer or shorter text)")
             problems.append(f"item {k}: {p}{hint}")
         created.append(shape["creates"])
         if res is None:
@@ -256,10 +269,12 @@ SYSTEM = "\n".join([
     "- The last line is exactly 'Environment: <environment>' with the environment you are given.",
     "",
     "Because the issues run in order and the later code does not exist yet when you read the repository:",
-    "- `touches`: 1 to 8 texts the item alters or relies on, exactly as they exist in the code TODAY, or exactly as an EARLIER "
-    "item wrote them in its `creates`. Each touch is ONE line of 2 to 80 characters: a name or a short code fragment, never a "
+    f"- `touches`: 1 to {iw.TOUCHES_MAX} texts the item alters or relies on, exactly as they exist in the code TODAY, or exactly as "
+    "an EARLIER item wrote them in its `creates`. "
+    f"Each touch is ONE line of {iw.TOUCH_MIN} to {iw.TOUCH_MAX} characters: a name or a short code fragment, never a "
     "whole function signature, a sentence or a paragraph (a longer text is refused).",
-    "- `creates`: the SHORT NAMES (functions, classes, paths, fields) this item brings into existence, each one line of 2 to 80 "
+    f"- `creates`: at most {CREATES_MAX} SHORT NAMES (functions, classes, paths, fields) this item brings into existence, each one "
+    f"line of {iw.TOUCH_MIN} to {iw.TOUCH_MAX} "
     "characters, for example `budget_rows` or `/scoreboard/jobs`, never a signature. A LATER item that uses the name writes the "
     "very same string in its touches, character for character (the harness matches EXACTLY, not by substring). An item never "
     "touches a name only a later item creates: reorder instead.",
