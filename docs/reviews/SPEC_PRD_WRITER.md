@@ -1,0 +1,110 @@
+# SPEC penulis PRD (B2 antrean PRD): model menulis folder PRD dari percakapan, gerbangnya pemeriksa B1
+
+Status: **rev 1, 2026-11-16; tinjauan Fable atas rev 0: GO WITH FIXES (13 temuan, 2 blocker; semua diterapkan di sini, bagian 11); belum disetujui Atha.** Melanjutkan `docs/reviews/SPEC_PRD_STAGE.md` (B1 ter-merge #559, `argus prd check/approve`) dan `SPEC_ISSUE_WRITER.md` (mesin giliran penulis, amandemen 5: Haiku). D4 (Atha 2026-11-15): B2 menunggu pilot kedua; pilot athena selesai (`pilots/queue_pilot_athena/RESULT.md`, #563). Atha 2026-11-16: "Lanjut spek B2".
+
+## 1. Masalah dan ukuran
+
+Pada dua pilot (ledger, athena) **Claude** menulis semua issue: membaca kode, memilih urutan, menyebut nama yang baru dibuat issue sebelumnya, memutuskan jalur dan field data. Karena itu "tanpa campur tangan Claude" belum terukur. B2 memindahkan penulisan itu ke model di bawah gerbang harness; Atha mulai dari kalimat kasar dan hasilnya diperiksa mesin sebelum ia menyetujui.
+
+**Belum dibuktikan:** model menulis folder PRD sebaik Claude. Pembanding: dua pilot, 6 issue tulisan Claude, 6 draf disetujui percobaan pertama, 6 patch APPLIED (n = 6, satu penulis, **tidak satu pun melewati `issue_gate`**). B2 diukur, tidak diumumkan.
+
+Ukuran, per PRD, dipisah dari papan skor, dihitung dari data yang disimpan (bagian 4.5):
+1. lolos gerbang pada submit pertama; **dipisah**: ditolak karena kode bentrok (`clash_check`, bagian 3.3) vs ditolak karena BLOKIR B1 vs karena gaya;
+2. giliran dan biaya (`w*` stage, `spent_nano`);
+3. item antrean yang drafnya disetujui tanpa `redraft` dan yang `APPLIED` tanpa `retry`, digabung lewat `prd.sha` (sha folder yang dicatat job, bagian 4.5);
+4. PRD dibuang, PRD yang folder-nya diedit tangan (sha folder disetujui ≠ sha folder tercatat), dan "tak disetujui tak dibuang" sebagai kelompok ketiga (tidak ada state terminal "approved").
+Tiga PRD pertama jalan sebagai pilot dengan Atha membaca semuanya; tidak ada klaim "bisa ditinggal".
+
+## 2. Alur (terminal dulu; halaman chat belakangan, D5)
+
+1. `argus prd new --repo <nama> --message-file F [--key-file ...] [--yes]` (tanpa `--via`: `rj.VIA` mencatat keputusan UI, terminal tidak boleh mengklaimnya sampai D5). Job `kind: "prd"`. **Preflight tanpa model dan tanpa uang** (bagian 3.5) sebelum job dibuat. Repo dari `issue_writer.repos` (K2: tidak pernah Argus-agent), commit dibekukan, alat baca melihat salinan snapshot.
+2. Tiap giliran penulis menyerahkan `SubmitPRD` (bagian 3). Harness memeriksa; masalah dikembalikan ke model (batas submit, bagian 3.4).
+3. Giliran lolos: harness menulis folder `jobs/<id>/prd-wN/` (bagian 4.4) dan job menunggu Atha (`AWAITING_HUMAN`).
+4. `argus status <job>` untuk job `prd` mencetak balasan, PRD, tiap issue, touches/creates/clashes, temuan pemeriksa dan **baris persis `argus prd check <jalur mutlak folder>`**. Tidak ada `prd show` atau `prd abandon` terpisah (`argus abandon` dan `status` sudah ada; dua jalur = dua set tes kunci dan LEGAL). `argus prd reply <job> --message-file F [--rebase]` merevisi.
+5. Persetujuan memakai **jalur B1 yang sudah ada, tidak diubah**: `argus prd check`, `argus prd approve <folder> --sha`, `queue go`, tiap draf `approve --sha`, tiap patch `apply --read-sha`. B2 mengurangi penulisan, tidak satu pun gerbang manusia. Folder yang sudah **digantikan atau dibuang** ditandai (4.4) sehingga `prd approve` menolaknya.
+
+## 3. Giliran penulis: `SubmitPRD`
+
+Turunan `codetask/issue_writer.py` (stage `research/loop.py`; alat `ListFiles`/`SearchFiles`/`ReadFile` pada snapshot; tanpa alat tulis, jaringan, sandbox).
+
+### 3.1 Argumen
+`{reply (Indonesia, ≤ 1200), prd_md (Inggris, ≤ 8000, lolos `text_problem`; prompt menyuruh memuat kata "contract" supaya tidak ada PERINGATAN tetap), items: [{issue, paths: [{side, path, via_proxy}], fields: [str], touches: [str], creates: [str], clashes: [{file, line, why}], clash_check: str}] (0..max_items), questions (≤ 5), notes (≤ 1500)}`. Skema menolak kunci tak dikenal **di semua tingkat** (tes memeriksa byte `issues.json`, bukan kepercayaan pada skema). Total karakter semua item dibatasi di teks skema supaya satu submit muat dalam `max_output_tokens`.
+`items: []` = **balasan saja** (pertanyaan balik, saran): tidak ada folder ditulis dan folder terakhir tetap (seperti `issue` kosong pada penulis issue). Giliran pertama yang bebas dari wish yang bisa dinamai tidak memaksa PRD penuh.
+
+### 3.2 Gerbang
+Harness menyusun folder dari argumen dan menjalankan di atasnya **`router.prd.check(files, ...)` yang sama dengan B1**. Gerbang itu **disuntikkan sebagai callable dari `router/prd_job.py`** (seperti `prepare=` di `run_writer`), bukan di-import dari `codetask`, dan membawa `--queues-dir`/`--jobs-dir` yang dipakai CLI (default `prd.py:115` salah di tes dan di instalasi lain). Semua BLOKIR B1 kembali ke model; PERINGATAN ditampilkan ke Atha. `issues.json` yang harness susun memuat tepat `{repo, commit, max_usd, items}` (kunci wajib `check`, `prd.py:128`) dan item hanya `{n, paths, fields}` (`prd.py:142`): **`touches`, `creates`, `clashes` tidak masuk folder** (berkas lain ditolak `read_folder`); mereka disimpan di `job.json` (4.5) dan dicetak `status`.
+`repo`, `commit`, `max_usd` **diisi harness**: repo dan commit dari job; `max_usd = min(QUEUE_MAX_USD, N × issue_writer.code_max_usd)` (bukan "job cap" yang ambigu; `validate_new` menuntut `max_usd >= code_max_usd`, `queue.py:144`). Uang adalah keputusan Atha (D2): angka itu ditampilkan dan baru berlaku saat sha disetujui.
+
+### 3.3 Per item: gaya, touches, creates, clash
+- **Gaya**: `issue_gate` per item (judul satu baris, paragraf `Tests`, baris terakhir tepat `Environment: <env repo>`, tanpa karakter kontrol). **Batas panjang per item = `message_max` (4000) pada teks akhir sesudah daftar bentrok ditambahkan harness** (`issue_writer.py:144-152`), bukan `MAX_ISSUE`; `check` dijalankan atas teks akhir itu.
+- **Bentrok kode**: `touches` 1..8 per item dicari di tes lama snapshot (`scan`); bila ada kena, penolakan **satu pesan yang mendaftar semua item** dengan `clash_check` per item; model mengirim ulang dengan kode itu dan `touches` yang sama, dan `clashes` yang ia nilai (hit "bukan bentrok dengan sendirinya", `issue_writer.py:216-218`). Kode satu item tidak diterima untuk item lain.
+- **`creates`** (nama yang item itu perkenalkan: fungsi, kelas, jalur, field): pencocokan **persis setelah strip** dan hanya atas `touches` (bukan atas teks issue: pemindaian teks akan BLOKIR salah pada kata umum). Sebuah `touch` item k diterima bila ada di snapshot **atau** ada di `creates` item < k (`<`, bukan `<=`). Nama yang ada di `creates` item sesudah k dan dipakai item k: BLOKIR. Ini perubahan di `codetask/issue_writer.py`: parameter `known=frozenset()` pada `touches_problems` (jalur ketat, **versi `SubmitIssue` dan mutan ikut**, bagian 9). Item yang `touches`-nya semuanya dari `creates` sebelumnya tetap sah (minimal 1 touch tetap berlaku, tapi boleh seluruhnya dari `known`).
+- **Berkas tak terbaca**: `touches_problems` melewati pemeriksaan "tidak ada di mana pun" bila ada berkas yang tak terbaca (`issue_writer.py:270`). Untuk PRD aturan ini **ketat**: touch yang tak ditemukan dan ada berkas tak terbaca → BLOKIR "baca atau sebutkan nama yang ada", supaya `creates` tidak jadi lubang.
+
+### 3.4 Batas submit, token
+`max_submits` 6 (sama dengan penulis issue, `config.yaml:238-239`; satu putaran `clash_check` diharapkan). `max_input_tokens` 40000 dan keluaran terpotong (`research/loop.py:79-81`, `output_truncated`: tidak dicoba ulang) adalah batas nyata, bukan jumlah item. Satu giliran revisi membawa folder sebelumnya; karena itu `prd_md` ≤ 8000, `max_items` 5 (D7), dan prompt revisi didefinisikan: **PRD sebelumnya (`prd_md`), daftar issue sebelumnya (teks akhir), notes, percakapan** (padanan `previous_issue`, `issue.py:234-238`). `output_truncated` dan `context_limit` mengakhiri giliran `WRITE_FAILED` dan job tetap bisa di-`reply`.
+
+### 3.5 Preflight tanpa model
+`new`, `reply` dan `resume` menjalankan **`validate_new` dengan satu issue pengganti** sebelum `rj.live` dan sebelum model dipanggil: HEAD sudah bergerak, antrean belum-selesai di repo itu, kesalahan config/cap → `Refused`, tanpa model, tanpa uang, tanpa job yatim. Dalam gerbang, BLOKIR yang berasal dari `validate_new` (keadaan repo, bukan teks) **mengakhiri giliran `BLOCKED`** dan tidak dikembalikan ke model (ia tidak bisa memperbaikinya; kasus nyata: Atha menulis PRD berikutnya saat antrean jalan, atau membalas sesudah menyetujui folder wN).
+
+### 3.6 HEAD yang bergerak
+`argus prd reply <job> --rebase` membekukan ulang commit ke HEAD sekarang, **membuang notes** ("tentang commit yang sama"), mengambil snapshot baru dan menjalankan seluruh gerbang lagi (touches/clash dicari ulang). Tanpa `--rebase`, `prd approve` menolak (aturan `validate_new`) dan job tidak punya jalan lain selain `abandon` + job baru; itu dihitung di ukuran 4. ("update to HEAD" di `SPEC_ISSUE_WRITER.md:48-50` tidak pernah dibangun; B2 tidak mengandalkannya.)
+
+## 4. Job `prd`
+
+4.1 **State**: `NEW → WRITING → AWAITING_HUMAN ⇄ WRITING`, `WRITING → WRITE_FAILED`, `BLOCKED`, `ABANDONED` dari semua yang tak-terminal; tabel `LEGAL` sendiri di `router/prd_job.py`. Tidak ada state "approved": job `prd` tetap bisa di-reply; `status` mencantumkan antrean yang `prd.dir` menunjuk ke foldernya.
+4.2 **`router/job.py` berubah** (jalur ketat, dicantumkan di bagian 9): `Job.move` (`job.py:147-152`) memilih `LEGAL` kind `prd`; `resume` (`job.py:~1215`), `status` (`~1663`) dan `abandon` (`~1397`) mengenal kind `prd`. Tes: gerak ilegal (`AWAITING_HUMAN → HANDED_OFF`) ditolak untuk kind `prd`.
+4.3 **Parametrisasi**: `_settings`, `_preflight`, `iw.settings`, `run_writer` kini terikat ke `cfg["issue_writer"]` (`issue.py:42-45,69-83`; `issue_writer.py:69-78,439`); mereka menerima nama bagian (`issue_writer` atau `prd_writer`). Perilaku `issue_writer` tak berubah (tes yang ada).
+4.4 **Folder**: ditulis ke `prd-wN.part` lalu `os.replace` ke `prd-wN` (seperti `_snapshot`, `issue.py:206-213`), dari byte yang diperiksa gerbang (tidak diserialisasi ulang); crash sebelum `move` lalu `resume` menghasilkan tepat satu folder sah (idempoten). Pada giliran baru dan pada `abandon`, harness menaruh berkas penanda `SUPERSEDED` di folder lama; `read_folder` menolak berkas asing (`prd.py:68-70`), jadi `prd approve` atas folder itu ditolak **tanpa mengubah B1**.
+4.5 **`job.json`**: per giliran `{turn, folder_sha (64 heksa, = sha yang dihitung `folder_sha`), touches, creates, clashes}` dan `submits` per jenis penolakan (ukuran 1). Tidak ada teks percakapan, PRD atau issue di snapshot publik.
+4.6 **Snapshot publik**: job `prd` **diterbitkan seperti job `issue`** dengan kolom allowlist saja (job, kind, state, created_at, max_usd, stages, log yang diizinkan `LOG_WHAT`, biaya ledger); **bukan** "tidak muncul". `TITLE_FROM` tidak diberi `"prd"` (judul `None`, pesan pertama tidak bocor). Tes: tidak satu pun teks percakapan, `PRD.md`, issue, notes, touches, creates muncul di snapshot. Viewer yang ditulis agen harus menoleransi kind baru; dicek sebelum PR terakhir.
+4.7 **Kunci tak dikenal di `job.json`**: tidak ada pemeriksaan serupa untuk jenis job mana pun; ini **pekerjaan baru** (`_load` job `prd` memvalidasi tipe kunci yang ia tulis), bukan "seperti job issue".
+4.8 **CLI**: `psub` di `scripts/argus.py:204` mendapat `new` dan `reply`; dispatch per `prd_cmd` **eksplisit** (kini `check` lalu else `approve`, `argus.py:377-387`: subperintah baru akan jatuh ke `approve` dan memberi `AttributeError`); `--key-file`/`--yes` ditambahkan pada `prd new|reply` sendiri (seperti `issue`, `argus.py:176-178`). Kind dicek: `prd reply` atas job `issue` ditolak, `issue reply|start` atas job `prd` ditolak (`issue.py:142,282`); halaman kontrol dan chat tidak mendaftar job `prd` sebagai issue (`control_issues.py:182`, `chat_actions.py:201`).
+
+## 5. Uang dan batas
+Bagian `prd_writer` di `config.yaml` (angka **tebakan**, diukur pada tiga PRD pertama, D8): role `issue_writer` (Haiku 5.5), `turn.cap_usd` $0,30, `max_usd` job PRD $1,50, `max_items` 5, `max_submits` 6, `max_input_tokens` 40000, `message_max`/`reply_max` seperti penulis issue. Perkiraan biaya terburuk satu giliran 20 langkah sekitar $0,24 pada harga Haiku di `config.yaml` (Fable); uang bukan batas yang mengikat, token yang mengikat. Giliran hanya mulai bila sisa cap job mendanai seluruh cap giliran; konfirmasi lewat `rj.live`/`_screen` yang sama. Biaya PRD terpisah dari biaya antrean (`queue go`). Isi repo dan percakapan dikirim ke provider (tertulis di layar konfirmasi).
+
+## 6. Keamanan
+Teks repo dan percakapan adalah data. Model tidak pernah menulis ke disk; folder dibuat harness dengan nama tetap dari byte yang lolos. Hanya `prd approve` (manusia, sha) membuat antrean `PENDING`. `PRD.md` hanya di-hash dan dibaca manusia.
+
+## 7. Batas jujur (yang tidak dibuktikan)
+- Lolos `prd check` membuktikan jalur/field konsisten dengan kode Argus yang berjalan dan teks tertib; **bukan** bahwa PRD benar, lengkap atau urutannya terbaik.
+- `creates` adalah klaim model; harness hanya memeriksa konsistensi antar item. Pemindaian bentrok **tidak melihat tes yang item sebelum k akan tambahkan**. Penyimpangan tertangkap kemudian oleh red check drafter dan tes.
+- Satu repo per PRD. Haiku sebagai penulis PRD belum diukur (amandemen 5 mengukurnya untuk satu issue, bukan rangkaian).
+- Dasar pembanding n = 6.
+
+## 8. Tes (sebelum kode; model diganti pengganti terkendali, tanpa jaringan)
+`tests/test_prd_writer.py` dan tambahan di tes issue/job/CLI:
+- folder sehat: byte folder = byte yang diperiksa; **menyetujui folder penulis menghasilkan antrean `PENDING` dengan `prd.sha` = sha di `job.json` dan teks issue antrean = teks akhir yang digerbang, di-strip**; `touches/creates/clashes` tidak pernah ada di `issues.json`;
+- gerbang adalah `check` yang berjalan (monkeypatch `API`/tabel mengubah hasil); BLOKIR B1 memantul dan menambah submit; `--queues-dir`/`--jobs-dir` terbawa; `max_submits` ditegakkan → `WRITE_FAILED`;
+- `clash_check`: putaran per item, satu pesan daftar semua item, kode item A tak diterima untuk B, daftar bentrok ikut masuk teks dan `check` dijalankan atas teks akhir (issue > 4000 sesudah daftar → ditolak);
+- `creates`: touch dari `creates` sebelumnya lolos, dari item sesudahnya BLOKIR, `<=` salah, item yang touch-nya seluruhnya dari `creates` sebelumnya lolos, pencocokan persis (bukan substring), berkas tak terbaca + touch hilang → BLOKIR;
+- preflight: HEAD bergerak, antrean lain di repo → `Refused` tanpa model dan tanpa uang; BLOKIR keadaan-repo dalam giliran → `BLOCKED` tanpa pantulan; `--rebase` membekukan ulang, membuang notes, mengulang gerbang;
+- `max_usd`/`commit`/`repo` dari harness walau model menulisnya; `max_items` (6 ditolak), `n` berurutan; `items: []` tidak menulis folder dan folder terakhir tetap;
+- uang: giliran tidak mulai bila sisa cap < cap giliran (model tidak dipanggil); model tanpa harga ditolak; `output_truncated` dan `context_limit` → `WRITE_FAILED` dan masih bisa `reply`;
+- state: `LEGAL` kind `prd` lewat `Job.move`; reply dari `WRITING`/`BLOCKED`/`ABANDONED` ditolak; satu aksi per job (kunci); pesan manusia dicatat sebelum giliran; crash antara tulis folder dan `move` lalu `resume` → tepat satu folder sah, tanpa giliran kedua yang dibeli;
+- folder lama: giliran baru dan `abandon` menaruh `SUPERSEDED`; `prd approve` atas folder itu ditolak; folder diedit tangan → `folder_sha` ≠ tercatat terdeteksi;
+- kind: `prd reply` atas job `issue`, `issue reply|start` atas job `prd` ditolak; `argus abandon|resume|status|list` atas job `prd`; halaman kontrol/chat tidak mendaftarkannya;
+- snapshot publik: tidak ada teks sensitif, judul `None`, kolom log hanya `LOG_WHAT`; kunci job tak dikenal → `Refused`; CLI: tiap `prd_cmd` terdispatch (tak ada jatuh ke `approve`).
+**Mutan** (38 dari tinjauan, ditulis, belum dijalankan): gerbang melewati/mengabaikan `check`; salinan `API`/tabel; folder dari byte lain; `max_usd`/`commit`/`repo` dari model; `creates` terbalik, `<=`, substring; BLOKIR touch-hilang dibuang; `issue_gate` hanya item 1; env salah; `clash_check` tak wajib atau tertukar antar item; daftar bentrok tak masuk teks; `max_items`/`n`; `touches/creates` bocor ke `issues.json`; giliran mulai tanpa cap; preflight dilewati; `max_submits`; model tanpa harga; `Job.move` pakai `LEGAL` kode; reply dari state salah; tanpa kunci; pesan manusia sesudah giliran; `resume` membeli giliran kedua; folder ditulis di tempat; folder lama tak ditandai (giliran/abandon); sha tak dicatat/dari byte lain; kind tak dicek (`prd reply`, `issue start`); gerbang pakai `QUEUES/JOBS` default; kontrol karakter `prd_md`; batas dari `MAX_ISSUE`; log di luar `LOG_WHAT`; `TITLE_FROM` memuat `prd`.
+
+## 9. Rencana kode (jalur ketat; tiap PR: tes, mutan, `verify_at`, tinjauan Fable, merge atas kata Atha)
+1. **PR 1 (prasyarat, perilaku lama tak berubah):** `codetask/issue_writer.py` `known=` pada `touches_problems` + versi `SubmitIssue` + parametrisasi bagian konfigurasi (`_settings`, `_preflight`, `iw.settings`, `run_writer`); `router/job.py` (`move`, `resume`, `status`, `abandon` mengenal kind `prd`). Tes dan mutan untuk keduanya; tes penulis issue yang ada tetap hijau.
+2. **PR 2:** `codetask/prd_writer.py` (skema, system prompt, gerbang yang dipanggil), `router/prd_job.py` (job, `LEGAL`, giliran, folder, preflight, `--rebase`), `argus prd new|reply`, bagian `prd_writer` di config, tes bagian 8.
+3. Tiga PRD pertama sebagai pilot (athena, ledger), hasil di `pilots/prd_writer_v0/`.
+4. (D5) halaman chat, bila ukuran mendukung.
+
+## 10. Keputusan untuk Atha
+| | Pertanyaan | Usul Claude |
+|---|---|---|
+| D5 | Terminal dulu, atau halaman chat sekaligus? | **Terminal dulu**; halaman chat PR terpisah bila PRD tulisan model layak (halaman chat membawa permukaan serangan baru sebelum ada bukti kualitas) |
+| D6 | Model penulis PRD | role `issue_writer` yang ada (Haiku 5.5); ganti hanya bila tiga PRD pertama lemah |
+| D7 | `max_items` | 5 (bukan 8): batas keluaran/token satu submit; naik setelah diukur |
+| D8 | Uang | giliran $0,30, job PRD $1,50 (tebakan; diukur lalu diset ulang) |
+| D9 | Siapa menulis issue selama pilot | selama tiga PRD pertama Claude **tidak** menulis issue antrean sendiri; bila PRD model terlalu buruk, Claude menulis dan itu dicatat sebagai "dibuang" (ukuran 4) |
+
+## 11. Perubahan dari rev 0 (temuan Fable)
+1 (blocker) `clashes`/`clash_check` per item, `max_submits` 6, satu pesan, ukuran 1 dipisah → 3.1, 3.3, 3.4, 1. 2 (blocker) `--rebase` atau abandon → 3.6. 3 preflight tanpa model, BLOKIR keadaan-repo → `BLOCKED` → 3.5. 4 `creates` persis, hanya touches, `known=`, berkas tak terbaca ketat, bentrok tes item sebelumnya → 3.3, 7, 9. 5 `prd_md` ≤ 8000, prompt revisi, `output_truncated`/`context_limit` → 3.1, 3.4. 6 batas per item `message_max` atas teks akhir → 3.3. 7 `SUPERSEDED`, sha/touches/creates di `job.json`, `.part` + rename → 4.4, 4.5. 8 `job.py` dan parametrisasi di rencana → 4.2, 4.3, 9. 9 dispatch eksplisit, tanpa `prd show/abandon`, tanpa `--via` → 2, 4.8. 10 snapshot publik: diterbitkan dengan allowlist → 4.6. 11 skema menolak kunci tak dikenal di semua tingkat dan diuji pada byte; "kunci job.json" = kerja baru; `max_usd` dari `code_max_usd` → 3.1, 3.2, 4.7. 12 `items: []`, gerbang disuntikkan, `text_problem` → 3.1, 3.2. 13 tes diganti dan ditambah → 8. Rencana ukuran → 1, 4.5.
+
+## 12. Tidak dikerjakan
+Penulis PRD untuk Argus-agent, PRD lintas repo, pemecahan otomatis PRD besar, persetujuan otomatis, penilai model atas kualitas PRD, perubahan pada `prd check/approve`/`queue` (B2 hanya menghasilkan folder yang B1 periksa dan menandainya), halaman chat (D5).
