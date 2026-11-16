@@ -64,15 +64,16 @@ def text_problem(text, name, hi, newlines=True):
     return None
 
 
-def settings(cfg):
-    """The turn's limits under its cap (cfg's budget.max_usd)."""
-    iw = cfg["issue_writer"]
+def settings(cfg, section="issue_writer"):
+    """The turn's limits under its cap (cfg's budget.max_usd). `section` is the config section that holds them: the
+    issue writer's own, or the PRD writer's (SPEC_PRD_WRITER 4.3)."""
+    iw = cfg[section]
     d = iw["turn"]
     ref = ModelRef.parse(cfg["roles"][iw["role"]]["model"])
     cap = cfg["budget"].get("max_usd")
     cap = math.inf if cap is None else float(cap)
     max_input = int(d["max_input_tokens"])
-    check_long_context(cfg, ref, max_input, f"issue_writer.turn (role {iw['role']!r})")
+    check_long_context(cfg, ref, max_input, f"{section}.turn (role {iw['role']!r})")
     return {**d, "attempt_tokens": min(int(d["attempt_tokens"]), int(cfg["budget"]["max_tokens"])),
             "attempt_usd": min(float(d["cap_usd"]), cap), "max_input_tokens": max_input,
             "max_steps": int(d["max_steps"]), "max_submits": int(d["max_submits"])}
@@ -246,8 +247,11 @@ def broad_report(hits, per):
     return "\n".join(out)
 
 
-def touches_problems(args, source):
-    """(problems, touches, test_hits) of an issue's touches and clash_check (amendment 4)."""
+def touches_problems(args, source, known=frozenset(), strict=False):
+    """(problems, touches, test_hits) of an issue's touches and clash_check (amendment 4).
+    known: texts that need not exist in the snapshot because an earlier item of the same PRD creates them (SPEC_PRD_WRITER
+    3.3; exact match after strip, never a substring). strict: a touch that is found nowhere is refused even when some
+    file went unread (the issue writer lets it pass, an unread file may hold it; the PRD writer cannot afford that hole)."""
     touches = args.get("touches")
     if not isinstance(touches, list) or not 1 <= len(touches) <= TOUCHES_MAX:
         return [f"touches must list 1 to {TOUCHES_MAX} texts that exist in the code today and that the change alters "
@@ -266,8 +270,8 @@ def touches_problems(args, source):
         return problems, [], 0
     found, hits, unread, per = scan(source, terms)
     tests_unread = [f for f in unread if is_test(f)]
-    missing = [t for t in terms if t not in found]
-    if missing and not unread:              # an unread file may hold it
+    missing = [t for t in terms if t not in found and t not in known]
+    if missing and (strict or not unread):  # an unread file may hold it (unless strict)
         return [f"touch {t!r} occurs in no file of the repository: name texts that exist, exactly as the code has them"
                 for t in missing], [], 0
     if len(hits) > HITS_SHOWN:              # amendment 5: a list too long to read is no check; no code for it
@@ -433,10 +437,11 @@ def prompt(inputs, lim):
     return "\n".join(lines)
 
 
-def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None, crash_at=None, prepare=None):
+def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None, crash_at=None, prepare=None,
+               section="issue_writer"):
     """One turn. prepare(run_dir) -> the snapshot directory the read tools see (made once; a resume finds it)."""
-    lim = settings(cfg)
-    role = cfg["issue_writer"]["role"]
+    lim = settings(cfg, section)
+    role = cfg[section]["role"]
 
     def work(log, memo, crasher, inputs, run_dir):
         if lim["attempt_usd"] <= 0:

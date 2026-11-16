@@ -39,10 +39,11 @@ CODE_MAX_USD = 1.00             # K3: a code job started from an issue job never
 
 
 
-def _settings(cfg):
-    if "issue_writer" not in cfg:
-        raise rj.Refused("the config has no issue_writer section; nothing was started")
-    return cfg["issue_writer"]
+def _settings(cfg, section="issue_writer"):
+    """The config section of the writer (the issue writer's, or the PRD writer's: SPEC_PRD_WRITER 4.3)."""
+    if section not in cfg:
+        raise rj.Refused(f"the config has no {section} section; nothing was started")
+    return cfg[section]
 
 
 def repo_of(cfg, name):
@@ -60,16 +61,16 @@ def message_problem(cfg, text, first):
     return iw.text_problem(text, "the message", hi)
 
 
-def _preflight(cfg, cap):
+def _preflight(cfg, cap, section="issue_writer"):
     """The writer's model is priced and allowed, its limits hold for it, and a whole turn fits the job cap: checked
     before anything is created or paid."""
     from harness.llm import check_priced
     from models import gateway
     from models.registry import ConfigError, ModelRef
-    s = _settings(cfg)
+    s = _settings(cfg, section)
     role = s["role"]
     if role not in cfg.get("roles", {}):
-        raise rj.Refused(f"issue_writer.role {role!r} is not in the config; nothing was started")
+        raise rj.Refused(f"{section}.role {role!r} is not in the config; nothing was started")
     turn = float(s["turn"]["cap_usd"])
     if not (math.isfinite(cap) and cap + 1e-9 >= turn):
         raise rj.Refused(f"the job cap ${cap:.2f} does not fund one turn (${turn:.2f}); nothing was started")
@@ -78,7 +79,7 @@ def _preflight(cfg, cap):
         ref = ModelRef.parse(scfg["roles"][role]["model"])
         check_priced(scfg, ref, f"issue writer (role {role!r})")
         gateway.check_use(scfg, role, ref)
-        iw.settings(scfg)
+        iw.settings(scfg, section)
     except (ConfigError, KeyError, ValueError) as e:
         raise rj.Refused(f"issue writer (role {role!r}): {e}; nothing was started") from e
 
