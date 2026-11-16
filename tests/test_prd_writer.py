@@ -224,7 +224,9 @@ def test_creates_match_exactly_never_as_a_substring(tmp_path):
 def test_creates_are_stripped(tmp_path):
     ok = prd_args([item(creates=["  show_date  "]), item("Two", touches=["show_date"])])
     env = Env(tmp_path, [submit(ok)])
-    assert env.new().data["state"] == pj.AWAITING_HUMAN and env.rejections() == []
+    job = env.new()
+    assert job.data["state"] == pj.AWAITING_HUMAN and env.rejections() == []
+    assert job.data["prd_turns"][0]["creates"] == [["show_date"], []]
 
 
 def test_a_missing_touch_is_refused_even_when_a_file_went_unread(tmp_path, monkeypatch):
@@ -453,8 +455,9 @@ def test_status_names_the_check_line_the_touches_and_the_creates(tmp_path):
     job = env.new()
     text = rj.status("jp", jobs_dir=env.jobs)
     assert f"argus prd check {folder(job)}" in text and "(prd)" in text
-    assert "issue 1: touches ['export const']; creates ['show_date']; 0 clash(es)" in text
-    assert "issue 2: touches ['show_date']; creates ['show_time']" in text and REPLY in text
+    assert "issue 1 'Show the date on the card': touches ['export const']; creates ['show_date']; 0 clash(es)" in text
+    assert "issue 2 'Show the time next to the date': touches ['show_date']; creates ['show_time']" in text and REPLY in text
+    assert "proposed queue money $2.00" in text and f"read: {folder(job).resolve()}/PRD.md" in text
 
 
 def test_the_public_snapshot_publishes_state_and_money_never_the_texts(tmp_path):
@@ -570,3 +573,243 @@ def test_the_human_message_is_on_disk_before_its_turn_starts(tmp_path, monkeypat
         env.reply("Pesan yang tidak boleh hilang")
     job = env.job()
     assert job.data["state"] == pj.WRITING and job.data["conversation"][-1]["text"] == "Pesan yang tidak boleh hilang"
+
+
+# ---- review fixes: the gate never raises, resume, rebase, the post-run check, the measure --------------------------
+
+MALFORMED = [
+    {"touches": 5}, {"touches": True}, {"touches": {"a": 1}}, {"touches": [5]}, {"creates": 5}, {"creates": [["x"]]},
+    {"clashes": "x"}, {"clashes": [5]}, {"clashes": [{"file": "a\x00b", "line": 1, "why": "w"}]},
+    {"clashes": [{"file": "src/list.js", "line": 1, "why": "w", "extra": 1}]}, {"paths": "x"}, {"paths": [{"side": 1}]},
+    {"fields": [{}]}, {"issue": 5}, {"issue": ["x"]}]
+
+
+@pytest.mark.parametrize("bad", MALFORMED, ids=[json.dumps(b)[:40] for b in MALFORMED])
+def test_malformed_arguments_bounce_and_never_stop_the_turn(tmp_path, bad):
+    env = Env(tmp_path, [submit(prd_args([{**item(), **bad}])), submit()])
+    job = env.new()
+    assert job.data["state"] == pj.AWAITING_HUMAN and len(env.rejections()) == 1
+    assert job.data["stages"]["w1"]["rejections"]
+
+
+@pytest.mark.parametrize("bad", [[5], [None], ["x"], [{"issue": None}], "x", 5])
+def test_malformed_items_bounce_too(tmp_path, bad):
+    env = Env(tmp_path, [submit(prd_args(bad)), submit()])
+    assert env.new().data["state"] == pj.AWAITING_HUMAN and len(env.rejections()) == 1
+
+
+def test_an_exception_inside_the_gate_comes_back_as_a_rejection(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit(), submit()])
+    real = pw.items_gate
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RecursionError("deep")
+        return real(*a, **k)
+    monkeypatch.setattr(pw, "items_gate", boom)
+    assert env.new().data["state"] == pj.AWAITING_HUMAN and "malformed (RecursionError)" in env.rejections()[0]
+
+
+def test_via_proxy_null_is_the_same_as_absent(tmp_path):
+    path = {"side": "viewer-api", "path": "/api/summary", "via_proxy": None}
+    text = issue_text(extra=" It reads `GET /api/summary`.")
+    env = Env(tmp_path, [submit(prd_args([item(text=text, paths=[path])]))])
+    job = env.new()
+    assert env.rejections() == [] and json.loads((folder(job) / "issues.json").read_text())["items"][0]["paths"] == [
+        {"side": "viewer-api", "path": "/api/summary"}]
+
+
+def test_a_very_long_path_is_refused(tmp_path):
+    env = Env(tmp_path, [submit(prd_args([item(paths=[{"side": "viewer-api", "path": "/api/" + "a" * 300}])])), submit()])
+    env.new()
+    assert "at most 200 characters" in env.rejections()[0]
+
+
+def test_the_issue_limit_counts_the_newline_the_queue_counts(tmp_path):
+    for length, ok in ((3999, True), (4000, False)):
+        text = issue_text(extra=" " + "x" * (length - len(issue_text()) - 1))
+        assert len(text) == length
+        env = Env(tmp_path / str(length), [submit(prd_args([item(text=text)])), submit()])
+        env.new()
+        assert (env.rejections() == []) is ok
+        if not ok:
+            assert "item 1: the issue with the clash list the harness adds has 4001 characters" in env.rejections()[0]
+
+
+def test_the_gate_checks_with_the_queues_and_jobs_directories_it_was_given(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit()])
+    seen = []
+    real = rp.check
+    monkeypatch.setattr(rp, "check", lambda files, **kw: seen.append(kw) or real(files, **kw))
+    env.new()
+    assert seen and all(kw["queues_dir"] == env.queues and kw["jobs_dir"] == env.jobs for kw in seen)
+
+
+def test_resume_uses_the_queues_directory_the_job_was_made_with_and_asks_the_repository_first(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit()])
+    monkeypatch.setattr(pj, "mark_superseded", lambda job, keep=None: (_ for _ in ()).throw(KeyboardInterrupt("cut off")))
+    with pytest.raises(KeyboardInterrupt):
+        env.new()
+    monkeypatch.undo()
+    assert env.job().data["queues_dir"] == str(env.queues)
+    seen = []
+    real = rp.check
+    monkeypatch.setattr(rp, "check", lambda files, **kw: seen.append(kw["queues_dir"]) or real(files, **kw))
+    env.move_head("moved.js")
+    with pytest.raises(rj.Refused, match="HEAD is"):                      # the preflight, before any key or money
+        rj.resume("jp", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    assert env.job().data["state"] == pj.WRITING and len(env.model.calls) == 1
+
+
+def test_resume_replays_with_the_stored_queues_directory(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit()])
+    monkeypatch.setattr(pj, "mark_superseded", lambda job, keep=None: (_ for _ in ()).throw(KeyboardInterrupt("cut off")))
+    with pytest.raises(KeyboardInterrupt):
+        env.new()
+    monkeypatch.undo()
+    seen = []
+    real = rp.check
+    monkeypatch.setattr(rp, "check", lambda files, **kw: seen.append(kw["queues_dir"]) or real(files, **kw))
+    rj.resume("jp", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    assert seen and set(seen) == {env.queues}
+
+
+def test_a_rebased_job_without_a_new_folder_says_so_and_marks_the_old_one(tmp_path):
+    env = Env(tmp_path, [submit(), submit(prd_args([], reply="Belum jelas."))])
+    env.new()
+    env.move_head()
+    env.reply("update", rebase=True)
+    job = env.job()
+    assert (folder(job) / pj.MARK).exists()
+    text = rj.status("jp", jobs_dir=env.jobs)
+    assert "no folder for this commit yet" in text and "argus prd check" not in text
+    assert "OLDER commit" in env.prompts()[-1]
+
+
+def test_a_folder_that_no_longer_passes_the_check_is_never_written(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit()])
+    real = rp.check
+    calls = []
+
+    def later_blocks(files, **kw):
+        calls.append(1)
+        found, parsed = real(files, **kw)
+        return (found + [(rp.BLOCK, "the world moved")], parsed) if len(calls) > 1 else (found, parsed)
+    monkeypatch.setattr(rp, "check", later_blocks)
+    job = env.new()
+    assert job.data["state"] == pj.WRITE_FAILED and not folder(job).exists() and "the world moved" in json.dumps(job.data["log"])
+    assert job.data["prd_turns"] == []
+
+
+def test_abandon_marks_the_folders_before_it_moves(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit()])
+    job = env.new()
+    real = rj.Job.move
+
+    def cut(self, new, deps, **why):
+        if new == pj.ABANDONED:
+            raise KeyboardInterrupt("cut off at the move")
+        return real(self, new, deps, **why)
+    monkeypatch.setattr(rj.Job, "move", cut)
+    with pytest.raises(KeyboardInterrupt):
+        rj.abandon("jp", "no longer wanted", deps=env.deps, jobs_dir=env.jobs)
+    assert (folder(job) / pj.MARK).exists() and env.job().data["state"] == pj.AWAITING_HUMAN
+
+
+def test_the_stage_records_what_the_gate_refused_by_kind(tmp_path):
+    env = Env(tmp_path, [])
+    a = item("One", touches=["expect(cell)"], creates=["a_name"], text=issue_text("One", clashes=True))
+    code = code_for(env, "expect(cell)")
+    clash = [{"file": "src/list.test.js", "line": 2, "why": "reads the cell"}]
+    blocked = {**item("Two", fields=["JOB_FIELDS.repo"])}
+    env.model = StrictScriptedChatModel(script=[
+        submit(prd_args([a]), "s1"), submit(prd_args([{**a, "clash_check": code, "clashes": clash}, blocked]), "s2"),
+        submit(prd_args([{**a, "clash_check": code, "clashes": clash}]), "s3")])
+    env.deps.models = {"issue_writer": env.model}
+    job = env.new()
+    assert job.data["stages"]["w1"]["rejections"] == {"clash_check": 1, "folder_check": 1}
+    assert job.data["prd_turns"][0]["rejections"] == {"clash_check": 1, "folder_check": 1}
+
+
+def test_a_reply_only_and_a_failed_turn_record_their_rejections_too(tmp_path):
+    bad = prd_args([item(touches=["no_such_text"])])
+    env = Env(tmp_path, [submit(bad, "s1"), submit(bad, "s2")], max_submits=2)
+    job = env.new()
+    assert job.data["state"] == pj.WRITE_FAILED and job.data["stages"]["w1"]["rejections"] == {"other": 2}
+
+
+def test_a_cut_off_or_overfull_reply_ends_the_turn_and_the_job_stays_replyable(tmp_path):
+    from models.fake import reply as fake_reply
+    cut = fake_reply("", tool_calls=[{"name": "SubmitPRD", "args": prd_args(), "id": "s"}], stop_reason="max_tokens")
+    env = Env(tmp_path, [cut, submit()])
+    job = env.new()
+    assert job.data["state"] == pj.WRITE_FAILED and "output_truncated" in json.dumps(job.data["log"])
+    env.reply("coba lagi")
+    assert env.job().data["state"] == pj.AWAITING_HUMAN
+    env2 = Env(tmp_path / "ctx", [submit(), submit()], max_input_tokens=50)
+    job2 = env2.new()
+    assert job2.data["state"] == pj.WRITE_FAILED and "context_limit" in json.dumps(job2.data["log"])
+
+
+@pytest.mark.parametrize("state", [pj.WRITING, pj.BLOCKED])
+def test_a_reply_is_refused_while_writing_or_blocked(tmp_path, state):
+    env = Env(tmp_path, [submit()])
+    env.new()
+    job = env.job()
+    job.data["state"] = state
+    job.save()
+    with pytest.raises(rj.Refused, match=f"is {state}"):
+        env.reply("more")
+
+
+def test_an_unpriced_model_is_refused_before_a_job_exists(tmp_path):
+    env = Env(tmp_path, [submit()])
+    env.cfg["roles"]["prd_role"] = {**env.cfg["roles"]["issue_writer"], "model": "openrouter:anthropic/model-nobody-priced"}
+    env.cfg["prd_writer"]["role"] = "prd_role"
+    with pytest.raises(rj.Refused, match="prd writer"):
+        env.new()
+    assert not (env.jobs / "jp").exists() and env.model.calls == []
+
+
+def test_a_damaged_job_json_is_refused_not_half_read(tmp_path):
+    env = Env(tmp_path, [submit(), submit()])
+    env.new()
+    job = env.job()
+    job.data["prd_turns"] = [{"turn": 5}]
+    job.save()
+    with pytest.raises(rj.Refused, match="not a PRD job's"):
+        env.reply("more")
+    job.data["prd_turns"], job.data["inputs"], job.data["state"] = [], {"repo": 1}, pj.WRITING
+    job.save()
+    with pytest.raises(rj.Refused, match="not a PRD job's"):
+        rj.resume("jp", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+
+
+def test_the_proposed_money_never_falls_below_one_jobs_cap(tmp_path):
+    env = Env(tmp_path, [submit()])
+    env.cfg["issue_writer"]["code_max_usd"] = 0.125
+    assert pj.max_usd_for(env.cfg, 1) == 0.125 and pj.max_usd_for(env.cfg, 40) == rq.QUEUE_MAX_USD
+
+
+def test_the_chat_lists_a_prd_job_neither_as_an_issue_nor_in_the_public_log(tmp_path):
+    from router import chat_actions as ca
+    env = Env(tmp_path, [submit()])
+    job = env.new()
+    ids = "j20261116_120001_abcd"
+    (env.jobs / ids).mkdir()
+    (env.jobs / ids / "job.json").write_text(json.dumps({**json.loads(job.file.read_text()), "job": ids}))
+    assert ca.Actions(env.jobs, env.cfg, state=tmp_path / "state").read_issue(ids) is None
+    published = sd.project_job(json.loads(job.file.read_text()), "jp")
+    assert all(set(e) <= set(sd.LOG_FIELDS) for e in published["log"])
+
+
+def test_a_clash_with_an_unknown_key_or_a_nul_in_its_file_is_refused_for_what_it_is(tmp_path):
+    base = {"file": "src/list.test.js", "line": 2, "why": "reads the cell"}
+    env = Env(tmp_path / "a", [submit(prd_args([item(clashes=[{**base, "extra": 1}])])), submit()])
+    env.new()
+    assert "clash 1: unknown key(s) 'extra'" in env.rejections()[0]
+    env = Env(tmp_path / "b", [submit(prd_args([item(clashes=[{**base, "file": "src/a\x00b"}])])), submit()])
+    env.new()
+    assert "is not a file of the repository" in env.rejections()[0] and "malformed" not in env.rejections()[0]

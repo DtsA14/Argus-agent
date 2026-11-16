@@ -61,7 +61,22 @@ def _repo_state(cfg, repo_name, commit, queues_dir, jobs_dir):
 
 def max_usd_for(cfg, n):
     """The queue's money a PRD of n issues proposes: n jobs' caps, at most the queue ceiling. The harness sets it."""
-    return round(min(rq.QUEUE_MAX_USD, n * float(ri._settings(cfg)["code_max_usd"])), 2)
+    return min(rq.QUEUE_MAX_USD, n * float(ri._settings(cfg)["code_max_usd"]))
+
+
+def _valid(job):
+    """The job.json of a PRD job holds what this module writes, in the types it writes (SPEC_PRD_WRITER 4.7); a damaged one
+    is Refused, never half-read. (No job kind checks its keys today: this one does.)"""
+    d = job.data
+    i = d.get("inputs")
+    ok = (isinstance(i, dict) and all(isinstance(i.get(k), str) for k in ("repo", "repo_name", "commit", "environment"))
+          and isinstance(d.get("conversation"), list) and isinstance(d.get("stages"), dict)
+          and isinstance(d.get("prd_turns", []), list)
+          and all(isinstance(t, dict) and isinstance(t.get("turn"), str) and isinstance(t.get("folder_sha"), str)
+                  and isinstance(t.get("items"), int) for t in d.get("prd_turns", []))
+          and (d.get("repo_notes") is None or isinstance(d.get("repo_notes"), str)))
+    if not ok:
+        raise rj.Refused(f"job {job.id}: job.json is not a PRD job's (a key is missing or of the wrong type); nothing was started")
 
 
 def _screen(job, cfg, what):
@@ -101,7 +116,7 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
         job.data = {"job": job_id, "kind": "prd", "state": NEW, "created_at": deps.clock(), "max_usd": cap,
                     "inputs": {"repo": path, "repo_name": repo, "commit": commit, "environment": env},
                     "conversation": [{"from": "human", "at": deps.clock(), "text": message.strip()}],
-                    "stages": {}, "log": [], "prd_turns": []}
+                    "stages": {}, "log": [], "prd_turns": [], "queues_dir": str(queues_dir)}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
             with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
@@ -122,6 +137,7 @@ def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES,
     with job.lock():
         if job.data.get("kind") != "prd":
             raise rj.Refused(f"job {job.id} is not a PRD job; nothing was started")
+        _valid(job)
         if job.data["state"] not in REPLYABLE:
             raise rj.Refused(f"job {job.id} is {job.data['state']}: a reply is taken when the writer waits for the human "
                              "(AWAITING_HUMAN) or its last turn failed (WRITE_FAILED)")
@@ -149,6 +165,9 @@ def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES,
                 job.data["repo_notes"] = None
             job.data["conversation"].append({"from": "human", "at": deps.clock(), "text": message.strip()})
             job.move(WRITING, deps, stage=ri._next_sid(job), by=os.environ.get("USER"))
+            if rebase:
+                mark_superseded(job)            # the folders of the old commit can no longer be the one to check
+            job.data["queues_dir"] = str(queues_dir)
             _turn(job, cfg, deps, queues_dir)
     return job
 
@@ -157,11 +176,15 @@ def resume(job, cfg, deps, queues_dir=None):
     """Continue the turn a crash interrupted (the caller holds the job's lock)."""
     if job.data["state"] != WRITING:
         raise rj.Refused(f"job {job.id}: {job.data['state']}: nothing to resume")
+    _valid(job)
     s = _settings(cfg)
+    queues = Path(queues_dir or job.data.get("queues_dir") or rq.QUEUES)     # the directory `new` and `reply` were given
     _preflight(cfg, job.data["max_usd"])
+    i = job.data["inputs"]
+    _repo_state(cfg, i["repo_name"], i["commit"], queues, job.dir.parent)    # before the key, the confirmation and the money
     with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                  _screen(job, cfg, "resume the turn"), job=job):
-        _turn(job, cfg, deps, queues_dir or rq.QUEUES)
+        _turn(job, cfg, deps, queues)
     return job
 
 
@@ -200,7 +223,8 @@ def _previous(job):
     try:
         n = turns[-1]["items"]
         return {"prd_md": (d / "PRD.md").read_text("utf-8"),
-                "issues": [(d / f"issue-{k}.md").read_text("utf-8") for k in range(1, n + 1)]}
+                "issues": [(d / f"issue-{k}.md").read_text("utf-8") for k in range(1, n + 1)],
+                "stale": turns[-1].get("commit") != job.data["inputs"]["commit"]}
     except (OSError, UnicodeDecodeError):
         return None
 
@@ -254,7 +278,7 @@ def _turn(job, cfg, deps, queues_dir):
                           prepare=lambda run_dir: source, finish=finish,
                           item_max=int(ri._settings(cfg)["message_max"]))
     deps.echo(f"{sid} finished: {r.get('status')} (${r.get('usd_billed', 0):.4f})")
-    st.update(ended_at=deps.clock(), status=r.get("status"), usd=r.get("usd_billed"))
+    st.update(ended_at=deps.clock(), status=r.get("status"), usd=r.get("usd_billed"), rejections=r.get("rejections") or {})
     if r.get("status") != iw.WRITTEN:
         job.move(BLOCKED if r.get("status") == iw.BLOCKED else WRITE_FAILED, deps, stage=sid,
                  reason=r.get("stop_reason"))
@@ -269,9 +293,18 @@ def _turn(job, cfg, deps, queues_dir):
         return
     files = pw.folder_files(w, repo=i["repo_name"], commit=i["commit"], max_usd=max_usd_for(cfg, len(w["items"])))
     found, _ = rp.check(files, cfg=cfg, queues_dir=queues_dir, jobs_dir=jobs_dir)
+    blocks = [t for level, t in found if level == rp.BLOCK]
+    if blocks:      # a replayed accept (resume) is not gated again: the folder is checked once more before it is written
+        try:
+            _repo_state(cfg, i["repo_name"], i["commit"], queues_dir, jobs_dir)
+            job.move(WRITE_FAILED, deps, stage=sid, reason="the folder no longer passes the check: " + "; ".join(blocks)[:300])
+        except rj.Refused as e:
+            job.move(BLOCKED, deps, stage=sid, reason=str(e)[:300])
+        return
     sha = rp.folder_sha(files)
     _write_folder(job, sid, files)
-    turn = {"turn": sid, "folder_sha": sha, "items": len(w["items"]), "submits": r.get("submits"),
+    turn = {"turn": sid, "folder_sha": sha, "commit": i["commit"], "items": len(w["items"]), "submits": r.get("submits"),
+            "rejections": r.get("rejections") or {}, "max_usd": max_usd_for(cfg, len(w["items"])),
             "touches": [it["touches"] for it in w["items"]], "creates": [it["creates"] for it in w["items"]],
             "clashes": [it["clashes"] for it in w["items"]],
             "warnings": [t for level, t in found if level == rp.WARN]}
@@ -288,22 +321,35 @@ def status_lines(job):
     i = d.get("inputs") or {}
     out = [f"repository {i.get('repo_name')} at {str(i.get('commit'))[:12]}, environment {i.get('environment')}; "
            f"{len(ri._turns(job))} turn(s)"]
+    queues = Path(d.get("queues_dir") or rq.QUEUES)
     writer = [m for m in d.get("conversation") or [] if m["from"] == "writer"]
     if writer:
         out.append("last reply: " + writer[-1]["text"])
     turns = d.get("prd_turns") or []
-    if turns:
+    here = job.dir.resolve()
+    if turns and turns[-1].get("commit") != i.get("commit"):
+        out.append("no folder for this commit yet (the repository was rebased after the last folder): reply to write one")
+    elif turns:
         t = turns[-1]
-        folder = folder_of(job, t["turn"])
-        out += [f"folder {t['folder_sha'][:12]}: {folder} ({t['items']} issue(s), {t.get('submits')} submit(s))",
+        folder = folder_of(job, t["turn"]).resolve()
+        out += [f"folder {t['folder_sha'][:12]}: {folder} ({t['items']} issue(s), {t.get('submits')} submit(s); "
+                f"rejections {t.get('rejections') or {}}); proposed queue money ${t.get('max_usd', 0):.2f}",
+                f"read: {folder}/PRD.md and issue-1.md ... issue-{t['items']}.md",
                 f"check it: argus prd check {folder}"]
         for n, (touch, make, clash) in enumerate(zip(t["touches"], t["creates"], t["clashes"]), 1):
-            out.append(f"  issue {n}: touches {touch}; creates {make}; {len(clash)} clash(es)")
+            title = ""
+            try:
+                title = (folder / f"issue-{n}.md").read_text("utf-8").split("\n", 1)[0]
+            except OSError:
+                pass
+            out.append(f"  issue {n} {title!r}: touches {touch}; creates {make}; {len(clash)} clash(es)"
+                       + "".join(f"\n    clash {c['file']} line {c['line']}: {c['why']}" for c in clash))
         out += [f"  warning: {w}" for w in t.get("warnings") or []]
+    if turns:
         try:
-            for q in rq._all(rq.QUEUES):
+            for q in rq._all(queues):
                 p = (q.get("prd") or {}).get("dir")
-                if p and Path(p).parent == job.dir:
+                if p and Path(p).resolve().parent == here:
                     out.append(f"  queue {q['id']} was made from {Path(p).name}")
         except OSError:
             pass

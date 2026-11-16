@@ -339,7 +339,10 @@ def issue_gate(args, *, source, environment, known=frozenset(), strict=False):
             problems.append(f"clash {i} must be {{file, line, why}}")
             continue
         f, line, why = c.get("file"), c.get("line", 0), c.get("why")
-        target = (root / f).resolve() if isinstance(f, str) and f and not Path(f).is_absolute() else None
+        try:
+            target = (root / f).resolve() if isinstance(f, str) and f and not Path(f).is_absolute() else None
+        except (ValueError, OSError):           # a NUL or a name the system refuses: not a file of the repository
+            target = None
         if target is None or root not in target.parents or not target.is_file():
             problems.append(f"clash {i}: {f!r} is not a file of the repository")
         if not isinstance(line, int) or isinstance(line, bool) or line < 0:

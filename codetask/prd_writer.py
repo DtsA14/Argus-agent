@@ -21,7 +21,8 @@ WRITTEN, FAILED, BLOCKED, FAILED_BUDGET = iw.WRITTEN, iw.FAILED, iw.BLOCKED, iw.
 VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitPRD": "1"}
 PRD_MAX = 8000                      # characters of PRD.md (SPEC 3.4: the revision turn carries the previous folder)
 TOTAL_MAX = 16000                   # characters of all the issues together (one submit must fit max_output_tokens)
-PATHS_MAX, FIELDS_MAX, CREATES_MAX, FIELD_MAX = 10, 20, 12, 120
+PATHS_MAX, FIELDS_MAX, CREATES_MAX, FIELD_MAX, PATH_LEN_MAX = 10, 20, 12, 120, 200
+CLASH_KEYS = {"file", "line", "why"}
 TOP_KEYS = {"reply", "prd_md", "items", "questions", "notes"}
 ITEM_KEYS = {"issue", "paths", "fields", "touches", "creates", "clashes", "clash_check"}
 PATH_KEYS = {"side", "path", "via_proxy"}
@@ -88,8 +89,11 @@ def _item_shape(item, k, problems):
     paths = []
     for j, p in enumerate(_list_of(item.get("paths"), f"{where}: paths", PATHS_MAX, problems), 1):
         if not isinstance(p, dict) or set(p) - PATH_KEYS or not isinstance(p.get("side"), str) \
-                or not isinstance(p.get("path"), str) or not isinstance(p.get("via_proxy", False), bool):
+                or not isinstance(p.get("path"), str) or not (p.get("via_proxy") is None or isinstance(p["via_proxy"], bool)):
             problems.append(f"{where}: path {j} must be {{side, path[, via_proxy true or false]}}")
+            continue
+        if len(p["side"]) > PATH_LEN_MAX or len(p["path"]) > PATH_LEN_MAX:
+            problems.append(f"{where}: path {j}: side and path are at most {PATH_LEN_MAX} characters")
             continue
         paths.append({k2: p[k2] for k2 in ("side", "path", "via_proxy") if k2 in p and p[k2] is not None})
     fields = []
@@ -99,6 +103,10 @@ def _item_shape(item, k, problems):
             problems.append(why)
         else:
             fields.append(f.strip())
+    for j, c in enumerate(item.get("clashes") if isinstance(item.get("clashes"), list) else [], 1):
+        if isinstance(c, dict) and set(c) - CLASH_KEYS:
+            problems.append(f"{where}: clash {j}: unknown key(s) {', '.join(map(repr, sorted(set(c) - CLASH_KEYS)))}; "
+                            f"the keys are {sorted(CLASH_KEYS)}")
     creates = []
     for j, c in enumerate(_list_of(item.get("creates"), f"{where}: creates", CREATES_MAX, problems), 1):
         why = iw.text_problem(c, f"{where}: creates {j}", iw.TOUCH_MAX, newlines=False)
@@ -164,8 +172,9 @@ def items_gate(args, *, source, environment, max_items, item_max):
             created.append(shape["creates"] if shape else [])
             continue
         known = frozenset(n for names in created for n in names)
-        later = {n for rest in items[k:] if isinstance(rest, dict) and isinstance(rest.get("creates"), list)
+        later = {n.strip() for rest in items[k:] if isinstance(rest, dict) and isinstance(rest.get("creates"), list)
                  for n in rest["creates"] if isinstance(n, str)}
+        touches_raw = item.get("touches") if isinstance(item.get("touches"), list) else []
         clashes = item.get("clashes")
         sub = {"reply": reply if isinstance(reply, str) else "x", "issue": item["issue"],
                "clashes": clashes if clashes is not None else [], "questions": [], "touches": item.get("touches"),
@@ -173,7 +182,7 @@ def items_gate(args, *, source, environment, max_items, item_max):
         got, res = iw.issue_gate(sub, source=source, environment=environment, known=known, strict=True)
         for p in got:
             hint = ""
-            for t in (item.get("touches") or []):
+            for t in touches_raw:
                 if isinstance(t, str) and t.strip() in later and f"touch {t.strip()!r}" in p:
                     hint = f" (item {k} uses it, but only a LATER item creates it: put the creating item first)"
             problems.append(f"item {k}: {p}{hint}")
@@ -181,8 +190,8 @@ def items_gate(args, *, source, environment, max_items, item_max):
         if res is None:
             continue
         text = res["issue"]
-        if len(text.strip()) > item_max:
-            problems.append(f"item {k}: the issue with the clash list the harness adds has {len(text.strip())} characters, "
+        if len(text) > item_max:
+            problems.append(f"item {k}: the issue with the clash list the harness adds has {len(text)} characters, "
                             f"more than {item_max}: shorten it")
         total += len(text)
         hits += res["test_hits"]
@@ -194,6 +203,14 @@ def items_gate(args, *, source, environment, max_items, item_max):
         return problems, None
     return [], {"reply": reply.strip(), "prd_md": prd_md.strip() + "\n", "items": out,
                 "questions": [q.strip() for q in questions], "notes": notes, "test_hits": hits}
+
+
+def classify(problem):
+    """The kind of a rejection, for the measure of SPEC_PRD_WRITER 1: a clash code round trip, the folder check (B1), or the
+    rest (style, shape, order)."""
+    if "searched the existing tests" in problem:
+        return "clash_check"
+    return "other"
 
 
 def folder_files(result, *, repo, commit, max_usd):
@@ -263,7 +280,10 @@ def prompt(inputs, lim):
     prev = inputs.get("previous")
     if prev:
         lines += ["", "Your current PRD and issues, from an earlier turn (revise them only when the human's last message "
-                  "asks for a change; else leave them as they are):", "<<<", "PRD.md:", prev["prd_md"].rstrip("\n")]
+                  "asks for a change; else leave them as they are):" if not prev.get("stale") else
+                  "Your PRD and issues from an earlier turn, written for an OLDER commit: the repository has moved. Read the "
+                  "code again and submit the whole PRD again (every item) against this commit:", "<<<", "PRD.md:",
+                  prev["prd_md"].rstrip("\n")]
         for n, text in enumerate(prev["issues"], 1):
             lines += [f"--- issue {n}:", text.rstrip("\n")]
         lines.append(">>>")
@@ -278,8 +298,10 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
     non-empty `blocked` (the repository's state, which the model cannot fix) ends the turn without a rejection."""
     lim = {**iw.settings(cfg, section), "max_items": int(cfg[section]["max_items"])}
     role = cfg[section]["role"]
+    rejections = {}
 
     def work(log, memo, crasher, inputs, run_dir):
+        rejections.clear()
         if lim["attempt_usd"] <= 0:
             return {"status": FAILED_BUDGET, "stop_reason": "the turn cap leaves nothing for the writer"}
         source = prepare(run_dir)
@@ -287,12 +309,20 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
                       (cfg.get("tools") or {}).get(role, []), log, role=role)
 
         def gate_submit(args, n, last_step=False):
-            problems, result = items_gate(args, source=source, environment=inputs["environment"],
-                                          max_items=lim["max_items"], item_max=item_max)
-            blocked = None
-            if not problems and result["items"] and finish is not None:
-                problems, blocked = finish(result)
-            log.emit("prd_checked", submit=n, ok=not problems and not blocked, problems=problems[:20])
+            blocked, kinds = None, []
+            try:
+                problems, result = items_gate(args, source=source, environment=inputs["environment"],
+                                              max_items=lim["max_items"], item_max=item_max)
+                kinds = [classify(p) for p in problems]
+                if not problems and result["items"] and finish is not None:
+                    problems, blocked = finish(result)
+                    kinds = ["folder_check"] * len(problems)
+            except (TypeError, ValueError, KeyError, AttributeError, RecursionError, OSError) as e:
+                problems, result, kinds = [f"the arguments are malformed ({type(e).__name__}): send the shape of SubmitPRD"], \
+                    None, ["other"]
+            for kind in set(kinds):
+                rejections[kind] = rejections.get(kind, 0) + 1
+            log.emit("prd_checked", submit=n, ok=not problems and not blocked, problems=problems[:20], kinds=sorted(set(kinds)))
             if blocked:
                 return {"content": "Stopped: the repository's state refuses this PRD (not something you can change).",
                         "finished": True, "result": {"blocked": blocked}}
@@ -321,7 +351,7 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
                              final_note="Harness: the last {n} steps. Submit now.")
         a = with_fallbacks(cfg, role, log, memo, node="prd_writer", task_id=run_id, models=models, loop=loop)
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
-               "usd_used": a["usd_used"]}
+               "usd_used": a["usd_used"], "rejections": dict(rejections)}
         if a["end"] == "submitted":
             if a["result"].get("blocked"):
                 return {**out, "status": BLOCKED, "stop_reason": a["result"]["blocked"]}

@@ -10,11 +10,9 @@ KILLED  an unknown item key is allowed: ['FAILED tests/test_prd_writer.py::test_
 KILLED  an unknown path key is allowed: ['FAILED tests/test_prd_writer.py::test_an_unknown_key_in_an_item_or_a_path_is_refused']
 KILLED  one more item than the maximum: ['FAILED tests/test_prd_writer.py::test_more_items_than_the_configured_maximum_are_refused']
 KILLED  a reply without items may carry a prd: ['FAILED tests/test_prd_writer.py::test_a_reply_without_items_may_not_carry_a_prd']
-SURVIVED the per-issue limit is not enforced: 251 passed in 30.28s
-SURVIVED the total limit is not enforced: 251 passed in 30.51s
-SURVIVED the notes may close their block: 251 passed in 30.16s
+KILLED  the total limit is not enforced: ['FAILED tests/test_prd_writer.py::test_the_issues_together_may_not_pass_the_total_limit']
+KILLED  the notes may close their block: ['FAILED tests/test_prd_writer.py::test_notes_cannot_close_their_own_data_block']
 KILLED  max_usd is the queue ceiling, not the issues' caps: ['FAILED tests/test_prd_writer.py::test_no_folder_byte_is_reserialised_between_the_gate_and_the_disk']
-KILLED  max_usd takes the larger of the two: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
 KILLED  the folder's commit is not the frozen one: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
 KILLED  rebase does not freeze the commit again: ['FAILED tests/test_prd_writer.py::test_reply_refuses_when_head_moved_unless_rebased']
 KILLED  rebase keeps the notes: ['FAILED tests/test_prd_writer.py::test_reply_refuses_when_head_moved_unless_rebased']
@@ -30,17 +28,36 @@ KILLED  the recorded sha is not the folder's: ['FAILED tests/test_prd_writer.py:
 KILLED  the previous folder is not carried: ['FAILED tests/test_prd_writer.py::test_the_second_turn_carries_the_previous_folder_and_the_notes']
 KILLED  the notes are not kept: ['FAILED tests/test_prd_writer.py::test_the_second_turn_carries_the_previous_folder_and_the_notes']
 KILLED  status drops the check line: ['FAILED tests/test_prd_writer.py::test_status_names_the_check_line_the_touches_and_the_creates']
-KILLED  status drops the touches: ['FAILED tests/test_prd_writer.py::test_status_names_the_check_line_the_touches_and_the_creates']
 KILLED  reply takes a job of another kind: ['FAILED tests/test_prd_writer.py::test_the_issue_and_prd_commands_refuse_each_others_jobs']
 KILLED  reply from any state: ['FAILED tests/test_prd_writer.py::test_a_reply_is_refused_from_a_state_that_does_not_wait_for_the_human']
 KILLED  reply without a whole turn left: ['FAILED tests/test_prd_writer.py::test_a_turn_does_not_start_without_a_whole_turn_left']
 KILLED  the first turn without a whole turn left: ['FAILED tests/test_prd_writer.py::test_the_first_turn_is_blocked_without_a_model_call_when_less_than_a_turn_is_left']
-SURVIVED the message is not screened: 251 passed in 29.91s
-SURVIVED the human's message is recorded after the turn starts: 251 passed in 29.86s
+KILLED  the message is not screened: ['FAILED tests/test_prd_writer.py::test_the_first_and_the_next_message_are_screened[]']
+KILLED  the human's message is recorded after the turn starts: ['FAILED tests/test_prd_writer.py::test_the_human_message_is_on_disk_before_its_turn_starts']
 KILLED  a reply-only turn writes a folder anyway: ['FAILED tests/test_prd_writer.py::test_a_reply_only_writes_no_folder_and_keeps_the_last_one']
 KILLED  the chat opens a prd job as a code job: ['FAILED tests/test_prd_writer.py::test_the_chat_names_a_prd_job_and_shows_nothing_of_it']
 KILLED  prd money has no total: ['FAILED tests/test_prd_writer.py::test_money_of_a_prd_job_is_its_own_total_in_the_scoreboard']
-SURVIVED a rejection says there are more submits than there are: 251 passed in 30.19s
+KILLED  a rejection says there are more submits than there are: ['FAILED tests/test_prd_writer.py::test_the_submit_limit_ends_the_turn_and_the_job_can_be_replied_to']
 KILLED  the submit limit is not enforced: ['FAILED tests/test_prd_writer.py::test_the_submit_limit_ends_the_turn_and_the_job_can_be_replied_to']
-(re-run after the six survivors were closed by tests: all KILLED)
-RESULT: 44/44 killed
+KILLED  the gate checks with the default queues directory: ['FAILED tests/test_prd_writer.py::test_the_gate_checks_with_the_queues_and_jobs_directories_it_was_given']
+KILLED  resume does not ask the repository: ['FAILED tests/test_prd_writer.py::test_resume_uses_the_queues_directory_the_job_was_made_with_and_asks_the_repository_first']
+KILLED  resume forgets the job's queues directory: ['FAILED tests/test_prd_writer.py::test_resume_replays_with_the_stored_queues_directory']
+KILLED  the post-run check's blocks are ignored: ['FAILED tests/test_prd_writer.py::test_a_folder_that_no_longer_passes_the_check_is_never_written']
+KILLED  abandon marks the folders after the move: ['FAILED tests/test_prd_writer.py::test_abandon_marks_the_folders_before_it_moves']
+KILLED  the per-issue limit is the code job's: ['FAILED tests/test_prd_writer.py::test_the_issue_with_its_clash_list_may_not_pass_the_per_issue_limit']
+KILLED  an explicit null via_proxy is refused: ['FAILED tests/test_prd_writer.py::test_via_proxy_null_is_the_same_as_absent - ...']
+KILLED  creates are not stripped: ['FAILED tests/test_prd_writer.py::test_creates_are_stripped - AssertionError: ...']
+KILLED  the proposed money counts one job too many: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
+KILLED  the proposed money is rounded to cents: ['FAILED tests/test_prd_writer.py::test_the_proposed_money_never_falls_below_one_jobs_cap']
+KILLED  a stale folder is not told to the model: ['FAILED tests/test_prd_writer.py::test_a_rebased_job_without_a_new_folder_says_so_and_marks_the_old_one']
+KILLED  rebase leaves the old folders unmarked: ['FAILED tests/test_prd_writer.py::test_a_rebased_job_without_a_new_folder_says_so_and_marks_the_old_one']
+KILLED  status shows a stale folder as the one to check: ['FAILED tests/test_prd_writer.py::test_a_rebased_job_without_a_new_folder_says_so_and_marks_the_old_one']
+KILLED  a damaged job.json is read anyway: ['FAILED tests/test_prd_writer.py::test_a_damaged_job_json_is_refused_not_half_read']
+KILLED  the rejections are not counted: ['FAILED tests/test_prd_writer.py::test_malformed_arguments_bounce_and_never_stop_the_turn[{"touches": 5}]']
+KILLED  an exception in the gate stops the turn: ['FAILED tests/test_prd_writer.py::test_an_exception_inside_the_gate_comes_back_as_a_rejection']
+KILLED  a clash file with a NUL raises: ['FAILED tests/test_prd_writer.py::test_a_clash_with_an_unknown_key_or_a_nul_in_its_file_is_refused_for_what_it_is']
+KILLED  an unknown clash key is allowed: ['FAILED tests/test_prd_writer.py::test_a_clash_with_an_unknown_key_or_a_nul_in_its_file_is_refused_for_what_it_is']
+KILLED  a long path is allowed: ['FAILED tests/test_prd_writer.py::test_a_very_long_path_is_refused - Assertion...']
+KILLED  the per-issue limit ignores the newline: ['FAILED tests/test_prd_writer.py::test_the_issue_limit_counts_the_newline_the_queue_counts']
+(three patterns that the review fixes had made stale were updated and re-run: 3/3 KILLED)
+RESULT: 64/64 killed
