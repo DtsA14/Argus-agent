@@ -1051,12 +1051,13 @@ def test_the_scoreboard_path_reaches_the_live_ledger_without_being_cached(proxy,
     assert got == 405 and len(ledger.upstream.requests) == sent
 
 
-@pytest.mark.parametrize("path,upstream,shape", [("/api/scoreboard/models", "/scoreboard/models", dict),
-                                                 ("/api/budget/jobs", "/budget/jobs", list)])
-def test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached(proxy, ledger, path, upstream, shape):
+@pytest.mark.parametrize("path,upstream,shape,marker", [("/api/scoreboard/models", "/scoreboard/models", dict, "models"),
+                                                        ("/api/budget/jobs", "/budget/jobs", list, "over_80_percent")])
+def test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached(proxy, ledger, path, upstream, shape, marker):
     got, headers, body = request(proxy, "GET", path)
     assert got == 200 and headers["cache-control"] == "no-store" and headers["content-type"].startswith("application/json")
-    assert type(json.loads(body)) is shape                                   # each path got ITS ledger's answer
+    answer = json.loads(body)
+    assert type(answer) is shape and (marker in answer if shape is dict else all(marker in item for item in answer))   # ITS answer
     assert ledger.upstream.requests[-1][:2] == ("GET", upstream)
     got, _, _ = request(proxy, "HEAD", path)
     assert got == 200
@@ -1072,7 +1073,7 @@ def test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached(proxy, 
     "/api/%73coreboard/models", "/api/jobs/scoreboard/models", "/api/scoreboard/jobs", "/api/budget/models",
     "/api/budget/jobs/", "/api/budget/jobs/x", "/api/budget/jobs?week=2026-W44", "/api/budget/jobs?week=", "/api/budget/jobs?x=1",
     "/api/budget", "/api/budget/", "/api/budget/job", "/api/budget/jobss", "/api/Budget/jobs", "/api/budget/Jobs",
-    "/api/budget/jobs%00", "/api/budget//jobs", "/api/budget/jobs.json", "/api/budget/jobs.csv", "/api/budget/jobs%2f",
+    "/api/budget/jobs%00", "/api/budget//jobs", "/api//budget/jobs", "/api/scoreboard/models.csv", "/api/budget/jobs.json", "/api/budget/jobs.csv", "/api/budget/jobs%2f",
     "/api/%62udget/jobs", "/api/jobs/budget", "/api/jobs/budget/jobs",
 ])
 def test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded(proxy, ledger, path):

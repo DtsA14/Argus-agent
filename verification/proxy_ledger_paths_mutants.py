@@ -8,7 +8,8 @@ from pathlib import Path
 WT, PY = Path(sys.argv[1]), sys.argv[2]
 ONLY = sys.argv[3:]
 T = ["-rfEs", "tests/test_stage_viewer.py", "tests/test_prd_stage.py"]
-SV = "router/stage_viewer.py"
+SV, PRD = "router/stage_viewer.py", "router/prd.py"
+NEW = ["-rfEs", "tests/test_stage_viewer.py", "-k", "two_ledger_paths or docstring or line_76"]   # only the new tests: -x must not stop on an old one
 
 
 M = [
@@ -23,12 +24,20 @@ M = [
     ("the docstring forgets budget/jobs", SV, [("and /api/budget/jobs (SPEC_PROXY_LEDGER_PATHS)", "(SPEC_PROXY_LEDGER_PATHS)")]),
     ("the docstring forgets scoreboard/models", SV, [("/api/scoreboard/models and /api/budget/jobs", "and /api/budget/jobs")]),
     ("the regex accepts a query", SV, [("+ r\")(/draft)?)$\")", "+ r\")(/draft)?)(\\?.*)?$\")")]),
-    ("no-store is dropped", SV, [("        self._send(status, body, api=True)", "        self._send(status, body, api=False)")]),
+    ("no-store is dropped (new tests only)", SV, [("        self._send(status, body, api=True)", "        self._send(status, body, api=False)")], NEW),
+    ("the regex accepts a query (new tests only)", SV, [("+ r\")(/draft)?)$\")", "+ r\")(/draft)?)(\\?.*)?$\")")], NEW),
+    ("scoreboard/models with an s? ending", SV, [("scoreboard/models|budget/jobs", "scoreboard/models(s?)|budget/jobs")]),
+    ("budget/jobs with an s? ending", SV, [("scoreboard/models|budget/jobs", "scoreboard/models|budget/jobs(s?)")]),
+    ("the two upstream paths are swapped", SV, [("return self._api(f\"/{m.group(1)}\") if m else", "return self._api(f\"/{m.group(1)}\".replace(\"scoreboard/models\", \"@\").replace(\"budget/jobs\", \"scoreboard/models\").replace(\"@\", \"budget/jobs\")) if m else")], NEW),
+    ("POST is served like GET", SV, [("    def do_HEAD(self):\n        self.do_GET()", "    def do_HEAD(self):\n        self.do_GET()\n\n    def do_POST(self):\n        self.do_GET()")], NEW),
+    ("HEAD is refused", SV, [("    def do_HEAD(self):\n        self.do_GET()", "    def do_HEAD(self):\n        self._refuse()")], NEW),
+    ("the regex moves off line 76", SV, [("# S2, A1: the proxy.\nAPI = re.compile(", "# S2, A1: the proxy.\n#\nAPI = re.compile(")], NEW),
+    ("prd check ignores via_proxy", PRD, [("full = \"/api\" + path if p[\"via_proxy\"] else None", "full = \"/api\" + path")], ["-rfEs", "tests/test_prd_stage.py"]),
 ]
 
 if __name__ == "__main__":
     killed = ran = 0
-    for name, F, edits in M:
+    for name, F, edits, *rest in M:
         if ONLY and not any(o in name for o in ONLY):
             continue
         p = WT / F
@@ -43,7 +52,7 @@ if __name__ == "__main__":
         p.write_text(text)
         ran += 1
         try:
-            r = subprocess.run([PY, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *T], cwd=WT, capture_output=True, text=True, timeout=300)
+            r = subprocess.run([PY, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *(rest[0] if rest else T)], cwd=WT, capture_output=True, text=True, timeout=300)
         except subprocess.TimeoutExpired:
             print(f"TIMEOUT {name}", flush=True)
             continue

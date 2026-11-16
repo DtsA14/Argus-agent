@@ -1,5 +1,5 @@
-KILLED  no scoreboard/models path: ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/scoreboard/models-/scoreboard/models-dict]']
-KILLED  no budget/jobs path: ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/budget/jobs-/budget/jobs-list]']
+KILLED  no scoreboard/models path: ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/scoreboard/models-/scoreboard/models-dict-models]']
+KILLED  no budget/jobs path: ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/budget/jobs-/budget/jobs-list-over_80_percent]']
 KILLED  scoreboard/models with an optional ending: ['FAILED tests/test_stage_viewer.py::test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded[/api/scoreboard/models/]']
 KILLED  budget/jobs with an optional ending: ['FAILED tests/test_stage_viewer.py::test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded[/api/budget/jobs/]']
 KILLED  budget alone is a path: ['FAILED tests/test_stage_viewer.py::test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded[/api/budget]']
@@ -9,5 +9,13 @@ KILLED  the docstring still says five paths: ['FAILED tests/test_stage_viewer.py
 KILLED  the docstring forgets budget/jobs: ['FAILED tests/test_stage_viewer.py::test_the_forwarded_list_in_the_module_docstring_names_the_two_paths']
 KILLED  the docstring forgets scoreboard/models: ['FAILED tests/test_stage_viewer.py::test_the_forwarded_list_in_the_module_docstring_names_the_two_paths']
 KILLED  the regex accepts a query: ['FAILED tests/test_stage_viewer.py::test_any_other_form_of_the_draft_path_is_404_and_never_forwarded[/api/jobs/jabc/draft?x=1]']
-KILLED  no-store is dropped: ['FAILED tests/test_stage_viewer.py::test_a_state_that_cannot_be_saved_leaves_current_where_it_was']
-RESULT: 12/12 killed
+KILLED  no-store is dropped (new tests only): ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/scoreboard/models-/scoreboard/models-dict-models]']
+KILLED  the regex accepts a query (new tests only): ['FAILED tests/test_stage_viewer.py::test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded[/api/scoreboard/models?kind=code]']
+KILLED  scoreboard/models with an s? ending: ['FAILED tests/test_stage_viewer.py::test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded[/api/scoreboard/modelss]']
+KILLED  budget/jobs with an s? ending: ['FAILED tests/test_stage_viewer.py::test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded[/api/budget/jobss]']
+KILLED  the two upstream paths are swapped: ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/scoreboard/models-/scoreboard/models-dict-models]']
+KILLED  POST is served like GET: ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/scoreboard/models-/scoreboard/models-dict-models]']
+KILLED  HEAD is refused: ['FAILED tests/test_stage_viewer.py::test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached[/api/scoreboard/models-/scoreboard/models-dict-models]']
+KILLED  the regex moves off line 76: ['FAILED tests/test_stage_viewer.py::test_the_regex_stays_on_line_76_because_the_prd_check_message_names_it']
+KILLED  prd check ignores via_proxy: ['FAILED tests/test_prd_stage.py::test_a_ledger_path_that_the_viewer_never_calls_passes']
+RESULT: 20/20 killed
