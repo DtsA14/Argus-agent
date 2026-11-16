@@ -1,0 +1,1 @@
+Di athena, tambahin ringkasan jurnal buat posisi yang masih terbuka: berapa jumlahnya, berapa yang preset-nya position dan sudah lewat batas time-stop (pakai compute_time_stop_status yang sudah ada), dan berapa yang mepet (sisa 5 hari kerja atau kurang). Tampilkan lewat satu endpoint baru di API jurnal. Backend aja, frontend nggak usah.
