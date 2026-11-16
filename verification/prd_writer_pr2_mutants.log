@@ -1,0 +1,46 @@
+KILLED  the folder check is skipped: ['FAILED tests/test_prd_writer.py::test_the_gate_is_the_prd_check_that_runs - I...']
+KILLED  the folder check's blocks are ignored: ['FAILED tests/test_prd_writer.py::test_the_gate_is_the_prd_check_that_runs - I...']
+KILLED  known is not passed to the issue gate: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
+KILLED  strict is not passed to the issue gate: ['FAILED tests/test_prd_writer.py::test_a_missing_touch_is_refused_even_when_a_file_went_unread']
+KILLED  an item may excuse its own touch: ['FAILED tests/test_prd_writer.py::test_an_item_cannot_excuse_its_own_touch_by_creating_it']
+KILLED  the order of the items is ignored: ['FAILED tests/test_prd_writer.py::test_a_touch_an_earlier_item_creates_passes_and_the_same_touch_in_the_wrong_order_does_not']
+KILLED  the later-creates hint is dropped: ['FAILED tests/test_prd_writer.py::test_a_touch_an_earlier_item_creates_passes_and_the_same_touch_in_the_wrong_order_does_not']
+KILLED  an unknown top-level key is allowed: ['FAILED tests/test_prd_writer.py::test_money_commit_and_repo_are_never_the_models_to_set[extra0]']
+KILLED  an unknown item key is allowed: ['FAILED tests/test_prd_writer.py::test_an_unknown_key_in_an_item_or_a_path_is_refused']
+KILLED  an unknown path key is allowed: ['FAILED tests/test_prd_writer.py::test_an_unknown_key_in_an_item_or_a_path_is_refused']
+KILLED  one more item than the maximum: ['FAILED tests/test_prd_writer.py::test_more_items_than_the_configured_maximum_are_refused']
+KILLED  a reply without items may carry a prd: ['FAILED tests/test_prd_writer.py::test_a_reply_without_items_may_not_carry_a_prd']
+SURVIVED the per-issue limit is not enforced: 251 passed in 30.28s
+SURVIVED the total limit is not enforced: 251 passed in 30.51s
+SURVIVED the notes may close their block: 251 passed in 30.16s
+KILLED  max_usd is the queue ceiling, not the issues' caps: ['FAILED tests/test_prd_writer.py::test_no_folder_byte_is_reserialised_between_the_gate_and_the_disk']
+KILLED  max_usd takes the larger of the two: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
+KILLED  the folder's commit is not the frozen one: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
+KILLED  rebase does not freeze the commit again: ['FAILED tests/test_prd_writer.py::test_reply_refuses_when_head_moved_unless_rebased']
+KILLED  rebase keeps the notes: ['FAILED tests/test_prd_writer.py::test_reply_refuses_when_head_moved_unless_rebased']
+KILLED  reply does not preflight the repository: ['FAILED tests/test_prd_writer.py::test_reply_refuses_when_head_moved_unless_rebased']
+KILLED  new does not preflight the repository: ['FAILED tests/test_prd_writer.py::test_a_repository_state_refusal_inside_the_turn_blocks_it_without_a_rejection']
+KILLED  a repository-state refusal is sent to the model: ['FAILED tests/test_prd_writer.py::test_a_repository_state_refusal_inside_the_turn_blocks_it_without_a_rejection']
+KILLED  the repository state is never asked: ['FAILED tests/test_prd_writer.py::test_a_repository_state_refusal_inside_the_turn_blocks_it_without_a_rejection']
+KILLED  the new folder is written in place: ['FAILED tests/test_prd_writer.py::test_a_crash_between_the_folder_and_the_move_leaves_one_valid_folder']
+KILLED  an old folder is not marked on a new turn: ['FAILED tests/test_prd_writer.py::test_a_new_turn_marks_the_old_folder_and_approve_refuses_it']
+KILLED  the new folder is marked too: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
+KILLED  abandon does not mark the folders: ['FAILED tests/test_prd_writer.py::test_abandon_marks_every_folder - AssertionE...']
+KILLED  the recorded sha is not the folder's: ['FAILED tests/test_prd_writer.py::test_a_good_turn_writes_a_folder_that_prd_check_passes']
+KILLED  the previous folder is not carried: ['FAILED tests/test_prd_writer.py::test_the_second_turn_carries_the_previous_folder_and_the_notes']
+KILLED  the notes are not kept: ['FAILED tests/test_prd_writer.py::test_the_second_turn_carries_the_previous_folder_and_the_notes']
+KILLED  status drops the check line: ['FAILED tests/test_prd_writer.py::test_status_names_the_check_line_the_touches_and_the_creates']
+KILLED  status drops the touches: ['FAILED tests/test_prd_writer.py::test_status_names_the_check_line_the_touches_and_the_creates']
+KILLED  reply takes a job of another kind: ['FAILED tests/test_prd_writer.py::test_the_issue_and_prd_commands_refuse_each_others_jobs']
+KILLED  reply from any state: ['FAILED tests/test_prd_writer.py::test_a_reply_is_refused_from_a_state_that_does_not_wait_for_the_human']
+KILLED  reply without a whole turn left: ['FAILED tests/test_prd_writer.py::test_a_turn_does_not_start_without_a_whole_turn_left']
+KILLED  the first turn without a whole turn left: ['FAILED tests/test_prd_writer.py::test_the_first_turn_is_blocked_without_a_model_call_when_less_than_a_turn_is_left']
+SURVIVED the message is not screened: 251 passed in 29.91s
+SURVIVED the human's message is recorded after the turn starts: 251 passed in 29.86s
+KILLED  a reply-only turn writes a folder anyway: ['FAILED tests/test_prd_writer.py::test_a_reply_only_writes_no_folder_and_keeps_the_last_one']
+KILLED  the chat opens a prd job as a code job: ['FAILED tests/test_prd_writer.py::test_the_chat_names_a_prd_job_and_shows_nothing_of_it']
+KILLED  prd money has no total: ['FAILED tests/test_prd_writer.py::test_money_of_a_prd_job_is_its_own_total_in_the_scoreboard']
+SURVIVED a rejection says there are more submits than there are: 251 passed in 30.19s
+KILLED  the submit limit is not enforced: ['FAILED tests/test_prd_writer.py::test_the_submit_limit_ends_the_turn_and_the_job_can_be_replied_to']
+(re-run after the six survivors were closed by tests: all KILLED)
+RESULT: 44/44 killed

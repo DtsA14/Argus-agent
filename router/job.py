@@ -1414,6 +1414,9 @@ def abandon(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
                               "start` again to settle it, then abandon the code job if it is not wanted")
         extra = _seen(job, sha, via)
         job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"), **extra)
+        if job.data.get("kind") == "prd":         # its folders can no longer be approved (SPEC_PRD_WRITER 4.4)
+            from router import prd_job
+            prd_job.mark_superseded(job)
         return job
 
 

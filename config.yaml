@@ -239,6 +239,18 @@ issue_writer:
   turn: {cap_usd: 0.10, attempt_tokens: 1200000, max_input_tokens: 40000, max_steps: 20, max_submits: 6}
   code_max_usd: 1.00   # K3: the cap of a code job `argus issue start` makes (router/issue.py refuses more than $1.00)
 
+# SPEC_PRD_WRITER 5: the PRD writer (job kind prd, `argus prd new|reply`). It reads the same repos (issue_writer.repos, K2) and
+# the same role as the issue writer (D6). The numbers are guesses to be measured on the first three PRDs (D8): max_usd is one
+# PRD job, turn one writer turn (a PRD turn writes up to max_items issues); max_items 5 (D7) because one submit must fit
+# the role's max_output_tokens. Changing this block is a strict-lane PR.
+prd_writer:
+  role: issue_writer
+  max_usd: 1.50
+  message_max: 4000
+  reply_max: 2000
+  max_items: 5
+  turn: {cap_usd: 0.30, attempt_tokens: 1200000, max_input_tokens: 40000, max_steps: 24, max_submits: 6}
+
 # SPEC_ISSUE_WRITER 6: the control service on 127.0.0.1:8711 (router/control.py). The key file it passes to the CLI as
 # --key-file comes from the service's environment (ARGUS_CONTROL_KEY_FILE, set by Atha in the unit's drop-in), never
 # from this file or a form; the service never reads the key. Amendment 5: the writer's turns (new, reply) take

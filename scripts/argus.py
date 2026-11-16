@@ -206,6 +206,19 @@ def main(argv=None, deps=None):
     pa = psub.add_parser("approve", help="the same check on the same bytes, then a PENDING queue (the money is still `queue go`)")
     pa.add_argument("dir")
     pa.add_argument("--sha", required=True, help="the folder's sha as `prd check` prints it (12+ hex)")
+    for name in ("new", "reply"):
+        pn = psub.add_parser(name, help="the PRD writer: a conversation that writes a PRD folder (docs/reviews/SPEC_PRD_WRITER.md)")
+        if name == "new":
+            pn.add_argument("--repo", required=True, help="a name of issue_writer.repos in the config")
+            pn.add_argument("--job-id", help="the new job's id")
+        else:
+            pn.add_argument("job")
+            pn.add_argument("--rebase", action="store_true", help="freeze the commit again at the repository's HEAD now (the notes are dropped)")
+        pm = pn.add_mutually_exclusive_group(required=True)
+        pm.add_argument("--message")
+        pm.add_argument("--message-file")
+        pn.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
+        pn.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user); retired at C4b by `chat serve --port 8711`, code removed at C5")
@@ -376,10 +389,23 @@ def main(argv=None, deps=None):
             return 0 if job.data["state"] == ri.AWAITING_HUMAN else 1
         elif o.cmd == "prd":
             from router import prd as rp
+            if o.prd_cmd in ("new", "reply"):
+                from router import prd_job as pj
+                message = o.message if o.message is not None else Path(o.message_file).read_text(encoding="utf-8")
+                if o.prd_cmd == "new":
+                    job = pj.new(repo=o.repo, message=message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir,
+                                 queues_dir=o.queues_dir, job_id=o.job_id)
+                else:
+                    job = pj.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, queues_dir=o.queues_dir,
+                                   rebase=o.rebase)
+                print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
+                return 0 if job.data["state"] == pj.AWAITING_HUMAN else 1
             if o.prd_cmd == "check":
                 text, ok = rp.report(o.dir, cfg=cfg, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir)
                 print(text)
                 return 0 if ok else 1
+            if o.prd_cmd != "approve":
+                raise AssertionError(o.prd_cmd)
             from router import queue as rq
             q = rp.approve(o.dir, o.sha, cfg=cfg, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir)
             print(f"queue {q['id']} PENDING: {len(q['items'])} issues on {q['name']}, up to ${q['max_usd']:.2f}, from the PRD {q['prd']['sha'][:12]}\n"

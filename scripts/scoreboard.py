@@ -145,6 +145,7 @@ def build(jobs_dir):
             "staged": staged(data), "applied_by": applied_by(data), "hands_off": hands_off(data),
         })
     research = sum(nano[d["job"]] for _, d in jobs if d.get("kind") == "research")
+    prd = sum(nano[d["job"]] for _, d in jobs if d.get("kind") == "prd")           # SPEC_PRD_WRITER: its own total
     kinds = Counter(d.get("kind") for _, d in jobs)
     counts = Counter(r["outcome"] for r in rows)
     applied = counts["applied_untouched"] + counts["applied_changed"] + counts["applied_not_compared"]
@@ -168,7 +169,7 @@ def build(jobs_dir):
                              "It becomes exact only when approve is possible from the chat (via=ui) and apply records method=apply (argus apply, from 2026-11-15).",
         "applied": applied, "applied_share_of_code_jobs": round(applied / len(rows), 4) if rows else None,
         "applied_untouched_share": round(counts["applied_untouched"] / applied, 4) if applied else None,
-        "usd_code_jobs": code_total / 1e9, "usd_research_jobs": research / 1e9, "usd_issue_jobs_unattached": orphan_issue / 1e9,
+        "usd_code_jobs": code_total / 1e9, "usd_research_jobs": research / 1e9, "usd_prd_jobs": prd / 1e9, "usd_issue_jobs_unattached": orphan_issue / 1e9,
         "usd_per_applied_change": round(code_total / 1e9 / applied, 4) if applied else None,
         "decisions_per_code_job": round(sum(r["decisions"] for r in rows) / len(rows), 3) if rows else None,
         "human_wait_s_upper_bound": {"n": len(waits), "median": statistics.median(waits) if waits else None,
@@ -199,7 +200,7 @@ def text(report):
              f"{report['hands_off_to_staging_upper_bound']} (hands off and applied: {report['hands_off_applied']})",
              f"ledger vs job.json stage usd: {report['ledger_vs_stage_usd']}",
              "caveat: " + report["caveat"],
-             f"money, code jobs (ledgers, issue jobs attached): ${report['usd_code_jobs']:.4f}; research ${report['usd_research_jobs']:.4f}",
+             f"money, code jobs (ledgers, issue jobs attached): ${report['usd_code_jobs']:.4f}; research ${report['usd_research_jobs']:.4f}; prd writer ${report['usd_prd_jobs']:.4f}",
              f"usd per applied change: {report['usd_per_applied_change']}",
              f"decisions per code job: {report['decisions_per_code_job']}",
              f"human wait upper bound: {report['human_wait_s_upper_bound']}",
