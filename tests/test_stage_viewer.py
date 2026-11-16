@@ -247,6 +247,10 @@ class Upstream:
                 return 200, json.dumps(summary).encode()
             if path == "/scoreboard":
                 return 200, json.dumps({"jobs": len(man["jobs"]), "kinds": {}, "cost_per_applied": {"nano": None, "usd": None}}).encode()
+            if path == "/scoreboard/models":
+                return 200, json.dumps({"models": [], "total": {"calls": 0, "cost_nano": 0, "cost_usd": "0.0000"}}).encode()
+            if path == "/budget/jobs":
+                return 200, json.dumps([{"job": j, "over_80_percent": False} for j in man["jobs"]]).encode()
             if path == "/jobs":
                 return 200, json.dumps([{"job": j} for j in man["jobs"]]).encode()
             if path.startswith("/jobs/") and path[6:] in man["jobs"]:
@@ -1045,6 +1049,49 @@ def test_the_scoreboard_path_reaches_the_live_ledger_without_being_cached(proxy,
     sent = len(ledger.upstream.requests)
     got, _, _ = request(proxy, "POST", "/api/scoreboard", body=b"x")
     assert got == 405 and len(ledger.upstream.requests) == sent
+
+
+@pytest.mark.parametrize("path,upstream,shape,marker", [("/api/scoreboard/models", "/scoreboard/models", dict, "models"),
+                                                        ("/api/budget/jobs", "/budget/jobs", list, "over_80_percent")])
+def test_the_two_ledger_paths_reach_the_live_ledger_without_being_cached(proxy, ledger, path, upstream, shape, marker):
+    got, headers, body = request(proxy, "GET", path)
+    assert got == 200 and headers["cache-control"] == "no-store" and headers["content-type"].startswith("application/json")
+    answer = json.loads(body)
+    assert type(answer) is shape and (marker in answer if shape is dict else all(marker in item for item in answer))   # ITS answer
+    assert ledger.upstream.requests[-1][:2] == ("GET", upstream)
+    got, _, _ = request(proxy, "HEAD", path)
+    assert got == 200
+    sent = len(ledger.upstream.requests)
+    got, _, _ = request(proxy, "POST", path, body=b"x")
+    assert got == 405 and len(ledger.upstream.requests) == sent
+
+
+@pytest.mark.parametrize("path", [
+    "/api/scoreboard/models/", "/api/scoreboard/models/x", "/api/scoreboard/models?kind=code", "/api/scoreboard/models?x=1",
+    "/api/scoreboard/model", "/api/scoreboard/modelss", "/api/Scoreboard/models", "/api/scoreboard/Models", "/api/scoreboard/models%00",
+    "/api/scoreboard//models", "/api//scoreboard/models", "/api/scoreboard/models.json", "/api/scoreboard/models%2f",
+    "/api/%73coreboard/models", "/api/jobs/scoreboard/models", "/api/scoreboard/jobs", "/api/budget/models",
+    "/api/budget/jobs/", "/api/budget/jobs/x", "/api/budget/jobs?week=2026-W44", "/api/budget/jobs?week=", "/api/budget/jobs?x=1",
+    "/api/budget", "/api/budget/", "/api/budget/job", "/api/budget/jobss", "/api/Budget/jobs", "/api/budget/Jobs",
+    "/api/budget/jobs%00", "/api/budget//jobs", "/api//budget/jobs", "/api/scoreboard/models.csv", "/api/budget/jobs.json", "/api/budget/jobs.csv", "/api/budget/jobs%2f",
+    "/api/%62udget/jobs", "/api/jobs/budget", "/api/jobs/budget/jobs",
+])
+def test_any_other_form_of_the_two_ledger_paths_is_404_and_never_forwarded(proxy, ledger, path):
+    got, _, _ = request(proxy, "GET", path)
+    assert got == 404, (path, got)
+    assert ledger.upstream.requests == []
+
+
+def test_the_forwarded_list_in_the_module_docstring_names_the_two_paths():
+    from router import stage_viewer as sv
+    assert "/api/scoreboard/models" in sv.__doc__ and "/api/budget/jobs" in sv.__doc__
+    assert "Seven API paths" in " ".join(sv.__doc__.split())
+    assert sv.API.pattern.startswith("^/api/(summary|scoreboard|scoreboard/models|budget/jobs|jobs|")
+
+
+def test_the_regex_stays_on_line_76_because_the_prd_check_message_names_it():
+    lines = (Path(__file__).resolve().parents[1] / "router" / "stage_viewer.py").read_text().splitlines()
+    assert lines[75].startswith("API = re.compile(")
 
 
 @pytest.mark.parametrize("path", [

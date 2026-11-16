@@ -87,12 +87,18 @@ def test_an_issue_that_names_a_ledger_endpoint_without_declaring_it_is_blocked(f
 
 
 def test_a_ledger_path_the_viewer_will_call_through_the_proxy_is_blocked_with_the_regex_line(fo):
-    with_text(fo, "Add `GET /scoreboard/models`.", items=[{"n": 1, "paths": [{"side": "ledger", "path": "/scoreboard/models", "via_proxy": True}]}, {"n": 2}])
-    assert "stage_viewer.py:76" in blocked(fo, "/api/scoreboard/models is not forwarded")
+    with_text(fo, "Add `GET /scoreboard/kinds`.", items=[{"n": 1, "paths": [{"side": "ledger", "path": "/scoreboard/kinds", "via_proxy": True}]}, {"n": 2}])
+    assert "stage_viewer.py:76" in blocked(fo, "/api/scoreboard/kinds is not forwarded")
+
+
+@pytest.mark.parametrize("path", ["/scoreboard/models", "/budget/jobs"])
+def test_the_two_ledger_paths_the_proxy_now_forwards_pass_with_via_proxy_true(fo, path):
+    with_text(fo, f"Add `GET {path}`.", items=[{"n": 1, "paths": [{"side": "ledger", "path": path, "via_proxy": True}]}, {"n": 2}])
+    assert fo.check()[1]
 
 
 def test_a_ledger_path_that_the_viewer_never_calls_passes(fo):
-    with_text(fo, "Add `GET /scoreboard/models`.", items=[{"n": 1, "paths": [{"side": "ledger", "path": "/scoreboard/models", "via_proxy": False}]}, {"n": 2}])
+    with_text(fo, "Add `GET /scoreboard/kinds`.", items=[{"n": 1, "paths": [{"side": "ledger", "path": "/scoreboard/kinds", "via_proxy": False}]}, {"n": 2}])
     assert fo.check()[1]
 
 
@@ -113,12 +119,13 @@ def vpath(fo, path, line=None):
     return fo.check()
 
 
-@pytest.mark.parametrize("path", ["/api/summary", "/api/scoreboard", "/api/jobs", f"/api/jobs/{JID}", f"/api/jobs/{JID}/draft"])
+@pytest.mark.parametrize("path", ["/api/summary", "/api/scoreboard", "/api/scoreboard/models", "/api/budget/jobs", "/api/jobs",
+                                  f"/api/jobs/{JID}", f"/api/jobs/{JID}/draft"])
 def test_the_paths_the_proxy_forwards_pass(fo, path):
     assert vpath(fo, path)[1]
 
 
-@pytest.mark.parametrize("path", ["/api/scoreboard/models", "/api/scoreboard?kind=code", "/api/jobs?x=1", "/api/summary/", "/API/summary", "/api/summary\n", "/api/sum mary",
+@pytest.mark.parametrize("path", ["/api/scoreboard/kinds", "/api/scoreboard/models?kind=code", "/api/budget/jobs?week=2026-W46", "/api/scoreboard?kind=code", "/api/jobs?x=1", "/api/summary/", "/API/summary", "/api/summary\n", "/api/sum mary",
                                   "/api/jobs/not-an-id"])
 def test_the_paths_the_proxy_does_not_forward_are_blocked(fo, path):
     text, ok = vpath(fo, path)
