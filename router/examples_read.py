@@ -424,8 +424,8 @@ def chain(job, jobs_dir, queues_dir=None):
     Not applicable (and ok): the job is not an item of a queue of this jobs directory, or the queue was not made from a PRD folder, or the PRD item has no
     examples. Otherwise ok only when all of these match, in this order: the job's own issue is the queue item's issue (sha); the queue's PRD folder is the
     folder of the last turn of the PRD job and the turn its directory names; the sha of that folder's issue file (stripped, as a queue stores it) is the
-    item's `issue_sha256`; the examples of the job's issue are the examples of the PRD item (digest; the intake and audit files are keyed on the same digest,
-    and `examples_decision` checks them after this); and the note, read against the bundle as it is NOW, is `ok`. A queue file that names the job and cannot
+    item's `issue_sha256`; the examples of the job's issue are the examples of the PRD item (implied: the job's issue is the item's text by sha, and the PRD folder's
+    issue file is that text; the intake and audit files are keyed on the digest of the same examples, and `examples_decision` checks them after this); and the note, read against the bundle as it is NOW, is `ok`. A queue file that names the job and cannot
     be used (damaged, oversized, another jobs directory) is refused, never skipped. The scan of the queues has no cap: a cap would be a way round it.
     Read only: files through descriptors, no write."""
     try:
@@ -497,8 +497,6 @@ def _chain(job, jobs_dir, queues_dir):
         return bad("the PRD folder is not the one this queue was made from: make a new queue", **more)
     if info["issue_sha256"] != it.get("issue_sha256"):
         return bad("the issue of the PRD folder is not the issue of the queue item", **more)
-    if info["digest"] != eg.digest(parsed):
-        return bad("the examples of the job's issue are not the examples the PRD item had", **more)
     try:
         kind, rec = status(jobs_dir, prd_job, n)
     except rj.Refused as e:

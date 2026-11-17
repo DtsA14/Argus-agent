@@ -366,3 +366,56 @@ def test_a_queue_that_is_a_link_is_unusable_not_skipped(world, tmp_path):
     (tmp_path / "q.json").write_text(body)
     os.symlink(tmp_path / "q.json", f)
     refused(world, "names this job but cannot be used")
+
+
+# ---- the survivors of the first mutant run ----------------------------------------------------------------------------------------
+
+def set_issue(world, text, item_sha=None):
+    job = world.job()
+    with job.lock():
+        job.data["inputs"]["issue"] = text
+        job.save()
+    if item_sha is not None:
+        edit_queue(world, lambda q: q["items"][0].update(issue_sha256=item_sha))
+
+
+def test_a_job_issue_with_a_trailing_newline_is_not_the_queue_items_issue(world):
+    note(world)
+    set_issue(world, world.job().data["inputs"]["issue"] + "\n")
+    refused(world, "not the issue of its queue item")
+
+
+def test_a_queue_item_without_examples_is_not_asked_and_applies(world):
+    plain = "total() never goes below zero\n\nNothing else.\n\nEnvironment: pyenv"
+    set_issue(world, plain, hashlib.sha256(plain.encode()).hexdigest())
+    res = er.chain(world.job(), world.jobs, world.queues)
+    assert res["applicable"] is False and res["ok"] is True and "no examples block" in res["why"]
+    assert apply(world).data["state"] == rj.APPLIED
+
+
+def test_a_queue_item_whose_block_does_not_parse_is_refused(world):
+    broken = "total() never goes below zero\n\n```argus-examples\nnot json\n```\n\nEnvironment: pyenv"
+    set_issue(world, broken, hashlib.sha256(broken.encode()).hexdigest())
+    res = er.chain(world.job(), world.jobs, world.queues)
+    assert res["applicable"] is True and res["ok"] is False and "cannot be read" in res["why"]
+
+
+def test_a_job_issue_that_matches_the_item_but_not_the_prd_folders_issue_is_refused(world):
+    note(world)
+    other = world.job().data["inputs"]["issue"] + "\n\nAn extra line the folder does not have."
+    set_issue(world, other, hashlib.sha256(other.encode()).hexdigest())
+    refused(world, "not the issue of the queue item")
+
+
+def test_any_failure_inside_the_check_closes_the_gate(world, monkeypatch):
+    note(world)
+    monkeypatch.setattr(er, "bundle", lambda *a, **k: (_ for _ in ()).throw(IndexError("boom")))
+    res = er.chain(world.job(), world.jobs, world.queues)
+    assert res["applicable"] is True and res["ok"] is False and "IndexError" in res["why"]
+    refused(world, "check of the domain reader's note failed")
+
+
+def test_only_the_item_that_is_this_job_counts_in_a_queue_of_several(world):
+    note(world)
+    edit_queue(world, lambda q: q["items"].append({"n": 2, "issue_sha256": "0" * 64, "job": None}))
+    assert apply(world).data["state"] == rj.APPLIED
