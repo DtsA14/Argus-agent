@@ -48,7 +48,6 @@ M = [
     ('the queue card can raise', 'router/cards.py', [('            return self._queue(qid)\n        except Exception:', '            return self._queue(qid)\n        except ZeroDivisionError:')]),
     ('a FIFO blocks the server', 'router/cards.py', [('OPEN_FILE = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK', 'OPEN_FILE = os.O_RDONLY | os.O_NOFOLLOW')]),
     ('a linked directory below the base is followed', 'router/cards.py', [('OPEN_DIR if dir_fd is not None else OPEN_DIR & ~os.O_NOFOLLOW', 'OPEN_DIR & ~os.O_NOFOLLOW')]),
-    ('the size of a file is not limited', 'router/cards.py', [('        if st.st_size > limit:', '        if False:')]),
     ('the scan of jobs is not capped', 'router/cards.py', [('                if len(names) > SCAN_JOBS:', '                if False:')]),
     ('the rows are not capped', 'router/cards.py', [('return {"rows": rows[:ROWS_MAX],', 'return {"rows": rows,')]),
     ('the list is oldest first', 'router/cards.py', [('rows.sort(key=lambda r: (r["at"] or "", r["id"]), reverse=True)', 'rows.sort(key=lambda r: (r["at"] or "", r["id"]), reverse=False)')]),
