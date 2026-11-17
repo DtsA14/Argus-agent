@@ -23,15 +23,18 @@ from router import example_gate as eg
 from router import prd as rp
 from router import queue as rq
 from router import stage_data as sd
+from harness.llm import to_nano
 
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TURN = re.compile(r"w[0-9]{1,3}")
 JOB_JSON_MAX = 4 * 1024 * 1024
 DOC_MAX = 64 * 1024                  # PRD.md, issues.json, an examples file
 QUEUE_MAX = 100 * 1024
+QUEUE_ITEMS_MAX = 20
 ISSUE_MAX = sd.TEXT_MAX
 SCAN_JOBS, SCAN_QUEUES, ROWS_MAX, SCAN_BYTES = 200, 200, 50, 32 * 1024 * 1024
 ITEMS_MAX = 8
+DERIVE_ROWS = ROWS_MAX            # the rows of the list whose queue state is derived (each derive reads the jobs of the queue)
 NOT_RUN = "not_run"
 NOT_RUN_WHY = "dijalankan saat job code item ini mulai"
 KINDS = ("none", "stale", "pending", "error", "skipped", "results")
@@ -40,7 +43,9 @@ OPEN_FILE = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 
 
 def _open_dir(name, dir_fd=None):
-    return os.open(name, OPEN_DIR, dir_fd=dir_fd)
+    """A directory by name: every name below a base directory is opened with O_NOFOLLOW; the base directory itself (the jobs or queues
+    directory the operator named) may be a link, as the other chat reads allow."""
+    return os.open(name, OPEN_DIR if dir_fd is not None else OPEN_DIR & ~os.O_NOFOLLOW, dir_fd=dir_fd)
 
 
 def _read(dir_fd, name, limit):
@@ -158,34 +163,54 @@ class Cards:
             return card
         calls, parsed = self._calls(text)
         card["calls"] = calls
+        if self._leaks(calls):
+            return {"withheld": True}
+
+        def not_run():                  # an item the writer did not run (a PRD item after the first): its code job will
+            card["why"] = NOT_RUN_WHY
+            card["results"] = [{"id": c["id"], "tier": c["tier"], "status": NOT_RUN, "where": "belum"} for c in calls]
         if not isinstance(stored, dict):
             if not calls:
                 card["why"] = "tanpa contoh"
-            else:                       # an item the writer did not run (a PRD item after the first): its code job will
-                card["why"] = NOT_RUN_WHY
-                card["results"] = [{"id": c["id"], "tier": c["tier"], "status": NOT_RUN, "where": "belum"} for c in calls]
+            else:
+                not_run()
             return card
         if stored.get("absent"):
             card["why"] = "dari sebelum gerbang contoh"
             return card
         card["no_examples"] = self.s(stored["no_examples"]) if isinstance(stored.get("no_examples"), str) else None
         card["note"] = eg.RUNNER_NOTE if stored.get("note") else None
-        card["tier_moves"] = [{"id": m["id"], "from": m["from"], "to": m["to"]} for m in stored.get("tier_moves") or []
+        moves = stored.get("tier_moves") if isinstance(stored.get("tier_moves"), list) else []
+        card["tier_moves"] = [{"id": m["id"], "from": m["from"], "to": m["to"]} for m in moves
                               if isinstance(m, dict) and isinstance(m.get("id"), str) and ex.ID.fullmatch(m["id"])
                               and m.get("from") in ex.TIERS and m.get("to") in ex.TIERS]
         results = stored.get("results")
         if not isinstance(results, list) or not results:
+            if calls and not card["note"]:
+                not_run()
             return card
         ids = [c["id"] for c in calls]
         same = eg.digest(parsed) == eg.digest(stored.get("examples") if isinstance(stored.get("examples"), list) else [])
         clean = [eg._result(r, set(ids)) for r in results]
+        tiers = {c["id"]: c["tier"] for c in calls}
         if not bound or not same:
             card["why"] = "berkas tidak cocok dengan hasil"
-        elif any(r is None for r in clean) or len({r["id"] for r in clean}) != len(clean) or {r["id"] for r in clean} - set(ids):
+        elif (any(r is None for r in clean) or sorted(r["id"] for r in clean) != sorted(ids)
+              or any(r["tier"] != tiers[r["id"]] for r in clean)):
             card["why"] = "id tidak cocok"
         else:
             card["results"] = self._result_rows(clean, "penulis")
         return card
+
+    @staticmethod
+    def _leaks(calls):
+        """A key pattern in the text of the calls, also when it is split between `setup` and `run` (the separators of code removed)."""
+        for c in calls:
+            joined = "".join(str(c.get(k, "")) for k in ("setup", "run", "expect", "raises", "overrides", "says"))
+            for text in (joined, re.sub(r"[\s\"'+]", "", joined)):
+                if sd.KEY.search(text.encode("utf-8", "replace")):
+                    return True
+        return False
 
     def code_results(self, code_job_id, parsed):
         """{at_base, after_agent} of a code job from its two files, each {kind, why, results}: nothing is read when there is no job."""
@@ -220,7 +245,11 @@ class Cards:
             return {"kind": "none", "why": None, "results": None}
         except OSError:
             return {"kind": "error", "why": None, "results": None}
-        kind, val = eg.parse_stored(raw.decode("utf-8", "replace"), key, parsed)
+        try:
+            text = raw.decode("utf-8")                    # strict, as eg.load reads the file: bad bytes are an error, never a result
+        except UnicodeDecodeError:
+            return {"kind": "error", "why": None, "results": None}
+        kind, val = eg.parse_stored(text, key, parsed)
         return {"kind": kind, "why": self.s(val) if isinstance(val, str) else None,
                 "results": self._result_rows(val, where) if kind == "results" else None}
 
@@ -240,6 +269,12 @@ class Cards:
     # ---- the issue job's examples (a field of GET /api/issues/<job>) ---------------------------------------------------------
 
     def issue_examples(self, data, issue_raw):
+        try:
+            return self._issue_examples(data, issue_raw)
+        except Exception:
+            return None
+
+    def _issue_examples(self, data, issue_raw):
         """The examples card of an issue job: the writer's message whose issue_sha256 is the job's (never conversation[-1]), bound to the
         issue file; None when the job has no issue yet. Sent on to the code job's results once the job is handed off."""
         want = data.get("issue_sha256")
@@ -254,7 +289,7 @@ class Cards:
         handoff = (data.get("handoff") or {}).get("job")
         if isinstance(handoff, str):
             card.update(self.code_results(handoff, self._calls(text)[1]))
-        return self.withhold_keys(card)
+        return card
 
     # ---- PRD jobs -------------------------------------------------------------------------------------------------------------
 
@@ -278,6 +313,12 @@ class Cards:
         return files, None
 
     def prd(self, job_id):
+        try:
+            return self._prd(job_id)
+        except Exception:
+            return None
+
+    def _prd(self, job_id):
         d = self._job_dir(job_id)
         if d is None:
             return None
@@ -337,10 +378,15 @@ class Cards:
 
     @staticmethod
     def _spent(data):
+        """What the finished stages of the job recorded (None when any stage has no number yet: unknown is never 0). Not the ledger."""
+        stages = data.get("stages")
+        if not isinstance(stages, dict):
+            return None
         total = 0.0
-        for st in (data.get("stages") or {}).values():
-            if isinstance(st, dict) and isinstance(st.get("usd"), (int, float)) and not isinstance(st["usd"], bool):
-                total += st["usd"]
+        for st in stages.values():
+            if not isinstance(st, dict) or not isinstance(st.get("usd"), (int, float)) or isinstance(st["usd"], bool):
+                return None
+            total += st["usd"]
         return round(total, 6)
 
     # ---- queues -----------------------------------------------------------------------------------------------------------------
@@ -403,45 +449,92 @@ class Cards:
                 q, dfd = got
                 os.close(dfd)
                 ok = self._same_jobs_dir(q)
-                state = self._derive(q)[0] if ok and derive else None
-                rows.append({"id": qid, "kind": "queue", "title": self.s(q["name"]), "state": state, "repo": self.s(q["repo"]),
+                state = None
+                if ok and derive and len(rows) < DERIVE_ROWS:
+                    try:
+                        state = self._derive(q)[0]
+                    except Exception:
+                        state = None
+                rows.append({"id": qid, "kind": "queue", "title": self.s(q["name"]), "state": state, "repo": self.s(q["name"]),
                              "at": _queue_time(qid), "items": len(q["items"]) if ok else None,
                              **({} if ok else {"why": "jobs dir lain"}), "prd_job": self._prd_job_of(q) if ok else None})
         finally:
             os.close(qfd)
         return rows, truncated
 
+    def _item_job(self, job_id):
+        """(job.json dict or None, status): status "missing" (no such job directory), "bad" (there, but unreadable, too large, not a code
+        job or without an inputs object: `rq.derive` would open it and stop on it), or "ok"."""
+        if not isinstance(job_id, str) or not job_id:
+            return None, "missing"
+        if not UI_ID.fullmatch(job_id):
+            return None, "bad"
+        d = self._job_dir(job_id)
+        if d is None:
+            try:
+                present = os.path.lexists(self.jobs_dir / job_id)
+            except OSError:
+                present = True
+            return None, "bad" if present else "missing"
+        try:
+            data = self._job_json(d[1])
+        finally:
+            for fd in d:
+                os.close(fd)
+        if data is None or data.get("kind") != "code" or not isinstance(data.get("inputs"), dict):
+            return None, "bad"
+        return data, "ok"
+
+    def _committed(self, job):
+        """Nano-dollars a started job holds of the queue's money, as the chat can tell it without the ledger: what its finished stages
+        recorded when it can no longer spend (APPLIED and the like), else its whole cap; an unknown cost counts as the cap."""
+        cap = to_nano(job.get("max_usd")) if isinstance(job.get("max_usd"), (int, float)) and not isinstance(job.get("max_usd"), bool) else 0
+        if job.get("state") in rq.SPENT_ONLY:
+            spent = self._spent(job)
+            return to_nano(spent) if spent is not None else cap
+        return cap
+
     def _derive(self, q):
         """(state, next, per-item facts) of a queue as `rq.derive` would say it, computed here: the item jobs are read through file
-        descriptors from the chat's jobs directory, and nothing runs git, so the HEAD of the repository and the money left are not
-        checked (the card says so). The CLI lines `derive` returns as `actions` are not produced."""
+        descriptors from the chat's jobs directory, nothing runs git, so the HEAD of the repository is not checked (the card says so), and
+        the money is counted from job.json, not from the ledger. The CLI lines `derive` returns as `actions` are not produced."""
+        n_items = len(q["items"])
+        if n_items > QUEUE_ITEMS_MAX:
+            return None, "terlalu banyak item untuk kartu", [None] * n_items
         if q.get("closed"):
-            return "CLOSED", "antrean ditutup", [None] * len(q["items"])
+            return "CLOSED", "antrean ditutup", [None] * n_items
         if not q.get("approved"):
-            return "PENDING", "menunggu persetujuan antrean (di terminal)", [None] * len(q["items"])
-        facts, commit, state, nxt = [], q["base_commit"], None, None
+            return "PENDING", "menunggu persetujuan antrean (di terminal)", [None] * n_items
+        facts, commit, state, nxt, committed = [], q["base_commit"], None, "", 0
         for item in q["items"]:
-            job = self.read_job(item["job"], "code") if isinstance(item.get("job"), str) and item["job"] else None
-            info = {"job": item.get("job") if job is not None else None, "job_state": None, "applied": None, "spent": None}
-            if job is not None:
+            job, status = self._item_job(item.get("job")) if item.get("job") else (None, "missing")
+            info = {"job": item.get("job") if status == "ok" else None, "job_state": None, "applied": None, "spent": None, "bound": False}
+            if status == "ok":
                 i = job.get("inputs") or {}
                 info.update(job_state=self.s(job.get("state")), spent=self._spent(job))
-                bound = (isinstance(i.get("issue"), str) and _sha(i["issue"].encode("utf-8")) == item["issue_sha256"]
-                         and i.get("commit") == commit and i.get("repo") == q["repo"])
-                if not bound:
-                    if state is None:
-                        state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} bukan issue antrean ini di commit ini"
-                    facts.append(info)
-                    continue
+                info["bound"] = (isinstance(i.get("issue"), str) and _sha(i["issue"].encode("utf-8")) == item["issue_sha256"]
+                                 and i.get("commit") == commit and i.get("repo") == q["repo"])
             facts.append(info)
             if state is not None:
                 continue
-            if job is None or (not job.get("stages") and job.get("state") in ("NEW", "ABANDONED", "BLOCKED")):
-                if job is not None and job.get("state") == "BLOCKED":
-                    state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} BLOCKED sebelum tahap pertama"
-                else:
-                    state, nxt = "WAITING", f"item {item['n']} bisa mulai (HEAD dan uang tidak diperiksa dari chat)"
+            if status == "bad":
+                state, nxt = "STOPPED", f"item {item['n']}: job tidak terbaca atau bukan job code"
                 continue
+            if status == "ok" and not info["bound"]:
+                state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} bukan issue antrean ini di commit ini"
+                continue
+            if status == "missing" or (not job.get("stages") and job.get("state") in ("NEW", "ABANDONED", "BLOCKED")):
+                if status == "ok" and job.get("state") == "BLOCKED":
+                    state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} BLOCKED sebelum tahap pertama"
+                    continue
+                left = to_nano(q["max_usd"]) - committed
+                cap = to_nano(q["job_cap_usd"])
+                if cap > left:
+                    state, nxt = "STOPPED", f"item {item['n']}: uang antrean (${q['max_usd']:.2f}) tersisa ${left / 1e9:.4f}, satu job butuh ${cap / 1e9:.2f}"
+                else:
+                    state, nxt = "WAITING", f"item {item['n']} bisa mulai (HEAD tidak diperiksa dari chat; uang dihitung dari job.json)"
+                continue
+            committed += self._committed(job)
             st = job.get("state")
             if st == "APPLIED":
                 commit_new, as_is = None, None
@@ -463,9 +556,15 @@ class Cards:
                 state, nxt = "WAITING", f"item {item['n']}: paket review menunggu dibaca dan di-apply"
             else:
                 state, nxt = "WAITING", f"item {item['n']}: job {self.s(job.get('job'))} {self.s(st)}"
-        return (state or "DONE"), (nxt or ""), facts
+        return (state or "DONE"), nxt, facts
 
     def queue(self, qid):
+        try:
+            return self._queue(qid)
+        except Exception:
+            return None
+
+    def _queue(self, qid):
         qfd = self._queues_fd()
         if qfd is None:
             return None
@@ -476,13 +575,16 @@ class Cards:
             q, dfd = got
             try:
                 ok = self._same_jobs_dir(q)
-                card = {"id": qid, "state": None, "repo": self.s(q["repo"]), "jobs_dir_ok": ok, "items": None, "next": None,
+                card = {"id": qid, "state": None, "repo": self.s(q["name"]), "jobs_dir_ok": ok, "items": None, "next": None,
                         "closed": self.s((q.get("closed") or {}).get("note")) if q.get("closed") else None,
                         "why": None if ok else "jobs dir lain"}
                 if not ok:
                     return card
                 state, nxt, facts = self._derive(q)
                 card.update(state=state, next=self.s(nxt), items=[])
+                if len(q["items"]) > QUEUE_ITEMS_MAX:
+                    card.update(items=None, why="terlalu banyak item untuk kartu")
+                    return card
                 for item, info in zip(q["items"], facts):
                     n = item["n"]
                     text, matches = None, False
@@ -498,7 +600,7 @@ class Cards:
                                "why": NOT_RUN_WHY if not info or not info.get("job") else None, "status": None}
                     if shown is None:
                         ex_card["why"] = "berkas berubah"
-                    code = self.code_results(info.get("job") if info else None, parsed)
+                    code = self.code_results(info.get("job") if info and info.get("bound") else None, parsed)
                     ex_card.update(code)
                     if not info or not info.get("job"):
                         ex_card["results"] = [{"id": c["id"], "tier": c["tier"], "status": NOT_RUN, "where": "belum"} for c in calls]
@@ -516,6 +618,12 @@ class Cards:
     # ---- the list -----------------------------------------------------------------------------------------------------------------
 
     def listing(self):
+        try:
+            return self._listing()
+        except Exception:
+            return {"rows": [], "truncated": True}
+
+    def _listing(self):
         rows, truncated, spent = [], False, 0
         try:
             sfd = _open_dir(str(self.jobs_dir))

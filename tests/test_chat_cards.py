@@ -125,7 +125,7 @@ def test_a_prd_card_has_the_status_from_the_turn_and_the_calls_from_the_block_an
 
 def test_an_item_the_writer_did_not_run_is_not_run_until_its_code_job_ran(svc):
     t1, t2 = issue_text(SAME), issue_text(AFTER, title="Second")
-    write_prd(svc.jobs, [t1, t2], [stored_for([SAME]), None])
+    write_prd(svc.jobs, [t1, t2], [stored_for([SAME]), {"examples": [AFTER], "results": [], "no_examples": None, "note": None, "tier_moves": []}])
     c = card(svc, "prd", PJOB)[1]
     second = c["items"][1]["examples"]
     assert [(r["id"], r["status"]) for r in second["results"]] == [("e2", rcards.NOT_RUN)] and second["why"] == rcards.NOT_RUN_WHY
@@ -268,7 +268,7 @@ def test_a_queue_card_follows_the_jobs_without_git_and_without_a_process(svc, mo
         monkeypatch.setattr(subprocess, name, lambda *a, **k: (_ for _ in ()).throw(AssertionError("a process was started")))
     monkeypatch.setattr(os, "fork", lambda: (_ for _ in ()).throw(AssertionError("a fork")))
     status, c = card(svc, "queue", QID)
-    assert status == 200 and c["state"] == "WAITING" and "HEAD dan uang tidak diperiksa dari chat" in c["next"]
+    assert status == 200 and c["state"] == "WAITING" and "HEAD tidak diperiksa dari chat" in c["next"]
     first, second = c["items"]
     assert (first["n"], first["job_state"], first["applied"], first["text_matches"]) == (1, "APPLIED", "e" * 12, True)
     assert second["job"] is None and [(r["id"], r["status"]) for r in second["examples"]["results"]] == [("e2", rcards.NOT_RUN)]
@@ -417,3 +417,138 @@ def test_the_cards_part_of_the_page_only_reads_and_only_writes_text():
     assert part.count('get("/api/cards') == 2 and "ditulis model" in part and "kode itu ditulis model dan bisa memalsukannya" in part
     html = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "index.html").read_text()
     assert 'data-mode="cards"' in html
+
+
+# ---- the review of the T2 code (Opus) -------------------------------------------------------------------------------------------
+
+def test_no_card_or_row_carries_the_repository_path(svc):
+    write_prd(svc.jobs, [issue_text(SAME)], [stored_for([SAME])])
+    write_queue(svc, [(issue_text(SAME), None)], approved={"sha": "x"})
+    for path in ("/api/cards", f"/api/cards/prd/{PJOB}", f"/api/cards/queue/{QID}"):
+        assert "/secret/path" not in json.dumps(svc.request("GET", path)[1]), path
+
+
+def test_the_queue_money_is_counted_from_the_jobs_and_stops_the_queue_like_derive(svc):
+    t1, t2, t3 = issue_text(SAME, title="1"), issue_text(AFTER, title="2"), issue_text(SAME, title="3")
+    write_queue(svc, [(t1, CJOB1), (t2, CJOB2), (t3, None)], approved={"sha": "x"}, max_usd=1.0, job_cap_usd=0.5)
+    for jid, t, commit in ((CJOB1, t1, "c" * 40), (CJOB2, t2, "e" * 40)):
+        d = code_job(svc, jid, t, state="APPLIED", log=[{"at": "t", "what": "state", "new": "APPLIED", "commit": "e" * 40 if jid == CJOB1 else "f" * 40,
+                                                         "as_is": True}])
+        j = json.loads((d / "job.json").read_text())
+        j["inputs"]["commit"] = commit
+        j["max_usd"] = 0.5
+        (d / "job.json").write_text(json.dumps(j))
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and "uang antrean" in c["next"]
+
+
+def test_an_item_job_that_is_there_but_not_a_code_job_stops_the_queue_and_a_missing_one_waits(svc):
+    t1 = issue_text(SAME)
+    write_queue(svc, [(t1, CJOB1)], approved={"sha": "x"})
+    assert card(svc, "queue", QID)[1]["state"] == "WAITING"                                # the recorded job is not there: start again
+    write_job(svc.jobs, CJOB1, kind="issue")
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and "bukan job code" in c["next"]
+    (svc.jobs / CJOB1 / "job.json").write_text("{" + "x" * 10)
+    assert card(svc, "queue", QID)[1]["state"] == "STOPPED"
+
+
+def test_a_jobs_directory_that_is_a_link_is_still_read(tmp_path):
+    real = tmp_path / "real_jobs"
+    real.mkdir()
+    s = Service(tmp_path)
+    try:
+        s.stop()
+    except Exception:
+        pass
+    os.symlink(real, tmp_path / "linked")
+    c = rcards.Cards(tmp_path / "linked", tmp_path / "queues", lambda x: x)
+    write_job(real, PJOB, kind="prd", prd_turns=[], conversation=[])
+    assert c.prd(PJOB)["why"] == "belum ada folder"
+
+
+def test_the_statuses_of_a_job_bound_to_another_commit_are_not_shown_on_the_item(svc):
+    t1 = issue_text(SAME, AFTER)
+    write_queue(svc, [(t1, CJOB1)], approved={"sha": "x"})
+    d = code_job(svc, CJOB1, t1, state="REVIEW_READY")
+    j = json.loads((d / "job.json").read_text())
+    j["inputs"]["commit"] = "9" * 40                                                          # another base than the queue's
+    (d / "job.json").write_text(json.dumps(j))
+    parsed = eg.extract(t1)[1]
+    (d / eg.INTAKE_FILE).write_text(json.dumps({"key": eg.intake_key("5" * 64, parsed), "results": results_for([SAME, AFTER]), "skipped": None}))
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and c["items"][0]["examples"]["at_base"] is None and c["items"][0]["examples"]["after_agent"] is None
+
+
+def test_a_key_split_between_setup_and_run_withholds_the_examples(svc):
+    # a key cut in two by the fields (the text of setup ends where the text of run goes on); a key built by code (K + "...") cannot be seen
+    split = {**SAME, "setup": "from src.shop import total  # sk-ant-", "run": "api03abcdefghij and total([2, 3], 1)"}
+    write_prd(svc.jobs, [issue_text(split)], [stored_for([split])])
+    c = card(svc, "prd", PJOB)[1]
+    assert c["items"][0]["examples"] == {"withheld": True}
+    text = issue_text(split)
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    d = write_job(svc.jobs, IJOB, kind="issue", issue_sha256=sha, conversation=[
+        {"from": "writer", "text": "w", "issue_sha256": sha, "examples": stored_for([split]), "clashes": [], "questions": []}])
+    (d / "issue.txt").write_text(text)
+    assert svc.request("GET", f"/api/issues/{IJOB}")[1]["examples"] == {"withheld": True}
+
+
+def test_a_card_that_cannot_be_built_is_a_404_and_the_issue_page_still_loads(svc):
+    text = issue_text(SAME)
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    d = write_job(svc.jobs, IJOB, kind="issue", issue_sha256=sha, handoff={"job": CJOB1}, conversation=[
+        {"from": "writer", "text": "w", "issue_sha256": sha, "examples": {"examples": [SAME], "results": [1], "tier_moves": 5}, "clashes": [], "questions": []}])
+    (d / "issue.txt").write_text(text)
+    write_job(svc.jobs, CJOB1, kind="code", intake="a string", stages=[1, 2])
+    status, got = svc.request("GET", f"/api/issues/{IJOB}")
+    assert status == 200 and got["id"] == IJOB
+    write_job(svc.jobs, PJOB, kind="prd", prd_turns=[{"turn": "w1", "items": "x", "folder_sha": 5}], stages=[1], conversation=None)
+    assert card(svc, "prd", PJOB)[0] in (200, 404) and svc.request("GET", "/api/cards")[0] == 200
+    write_queue(svc, [(text, None)], approved={"sha": "x"}, closed=True)
+    assert card(svc, "queue", QID)[0] in (200, 404) and svc.request("GET", "/api/cards")[0] == 200
+
+
+def test_the_money_spent_is_unknown_not_zero_when_a_stage_has_no_number(svc):
+    d, _ = write_prd(svc.jobs, [issue_text(SAME)], [stored_for([SAME])])
+    j = json.loads((d / "job.json").read_text())
+    j["stages"]["w2"] = {"kind": "write", "run_id": "x"}
+    (d / "job.json").write_text(json.dumps(j))
+    assert card(svc, "prd", PJOB)[1]["money"]["spent"] is None
+
+
+def test_results_for_only_some_of_the_calls_or_for_another_tier_are_not_shown(svc):
+    one = stored_for([SAME, AFTER])
+    one["results"] = one["results"][:1]
+    write_prd(svc.jobs, [issue_text(SAME, AFTER)], [one])
+    assert card(svc, "prd", PJOB)[1]["items"][0]["examples"]["results"] is None
+    other = stored_for([SAME, AFTER])
+    other["results"][0]["tier"] = "whatif"
+    write_prd(svc.jobs, [issue_text(SAME, AFTER)], [other])
+    assert card(svc, "prd", PJOB)[1]["items"][0]["examples"]["results"] is None
+
+
+
+
+def test_a_stored_result_file_that_is_not_utf8_is_an_error_not_a_result(svc):
+    text = issue_text(SAME, AFTER)
+    parsed = handed_off(svc, text)
+    raw = json.dumps({"key": eg.audit_key("7" * 64, parsed), "results": results_for([SAME, AFTER]), "skipped": None}).encode()
+    (svc.jobs / CJOB1 / "examples_audit_a1.json").write_bytes(raw + b"\xff\xfe")
+    assert svc.request("GET", f"/api/issues/{IJOB}")[1]["examples"]["after_agent"]["kind"] == "error"
+
+
+def test_the_issue_page_keeps_the_block_when_no_example_can_be_shown(svc):
+    text = ISSUE.replace("Environment: pyenv", "```argus-examples json\n[]\n```\n\nEnvironment: pyenv")       # a block that does not parse
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    d = write_job(svc.jobs, IJOB, kind="issue", issue_sha256=sha, conversation=[
+        {"from": "writer", "text": "w", "issue_sha256": sha, "examples": stored_for([SAME]), "clashes": [], "questions": []}])
+    (d / "issue.txt").write_text(text)
+    assert "argus-examples" in svc.request("GET", f"/api/issues/{IJOB}")[1]["issue"]["text"]
+
+
+def test_the_page_marks_a_stale_folder_item_by_item_and_a_failed_card_has_a_way_back():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    part = js[js.index("// ---- T2: read-only cards"):js.index("  function setMode(m) {")]
+    assert "itemCard(it, d.stale || d.superseded)" in part and 'if (seq !== cardSeq || mode !== "cards") { return; }' in part
+    assert part.count('"Semua kartu"') == 2 and 'r.status === "pass"' in part

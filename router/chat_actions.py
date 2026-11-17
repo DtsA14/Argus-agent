@@ -222,8 +222,8 @@ class Actions:
                                          for c in (m.get("clashes") or []) if isinstance(c, dict)][:10]})
         issue = None
         examples = self.cards.issue_examples(d, v.issue_raw)
-        if v.issue_text is not None:          # with the examples card on screen the block is not shown twice (SPEC_CHAT_CARDS 4.2)
-            shown = eg.without_block(v.issue_text) if examples is not None else v.issue_text
+        if v.issue_text is not None:          # with the examples on screen the block is not shown twice (SPEC_CHAT_CARDS 4.2): only when they show
+            shown = eg.without_block(v.issue_text) if examples and examples.get("calls") else v.issue_text
             issue = {"text": scrub(shown), "sha12": v.issue_sha[:12]}
         return {"id": job_id, "state": d.get("state"), "busy": self.spawner.busy(job_id), "turn": v.turn,
                 "repo": d["inputs"].get("repo_name"), "conversation": conv, "issue": issue,

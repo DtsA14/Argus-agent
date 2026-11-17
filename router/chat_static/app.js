@@ -505,7 +505,7 @@
       var byId = {};
       (ex.calls || []).forEach(function (c) { byId[c.id] = c; });
       ex.results.forEach(function (r) { box.appendChild(statusLine(r, byId[r.id] || null)); });
-      box.appendChild(el("p", "small", PASS_NOTE));
+      if (ex.results.some(function (r) { return r.status === "pass"; })) { box.appendChild(el("p", "small", PASS_NOTE)); }
     } else {
       box.appendChild(el("p", "small", "Status: tidak ada" + (ex.why ? " (" + ex.why + ")" : "")));
       (ex.calls || []).forEach(function (c) {
@@ -532,7 +532,7 @@
     if (r.repo) { row.appendChild(el("span", null, r.repo)); }
     if (r.items !== null && r.items !== undefined) { row.appendChild(el("span", null, r.items + " item")); }
     c.appendChild(row);
-    if (r.title) { modelLine(c, r.title); }
+    if (r.title) { c.appendChild(el("p", "small", r.title)); }                  // the human's own first message (queues: the repo's name)
     if (r.why) { c.appendChild(el("p", "note", r.why)); }
     if (!r.why) { c.addEventListener("click", function () { showCard(r.kind, r.id); }); }
     return c;
@@ -550,8 +550,8 @@
       if (mode === "cards") { renderCards(); }
     }).catch(function () { summary.textContent = "gagal memuat kartu"; });
   }
-  function itemCard(it) {
-    var c = el("article", "card");
+  function itemCard(it, dim) {
+    var c = el("article", "card" + (dim ? " stale" : ""));
     c.appendChild(el("h2", null, "Issue " + it.n));
     if (it.title) { modelLine(c, it.title, "msg"); }
     if (it.text) { var body = el("p", "msg", it.text); c.appendChild(el("span", "tag", MODEL + ":")); c.appendChild(body); }
@@ -579,7 +579,7 @@
       if (d.superseded) { head.appendChild(el("p", "note", "Folder ini sudah digantikan giliran berikutnya.")); }
       if (d.why) { head.appendChild(el("p", "note", d.why)); }
       if (d.next) { head.appendChild(el("p", "msg", d.next)); }
-      if (d.closed) { modelLine(head, "catatan penutup: " + d.closed); }
+      if (d.closed) { head.appendChild(el("p", "small", "catatan penutup: " + d.closed)); }
       if (d.prd_md) { head.appendChild(el("span", "tag", MODEL + ": PRD")); head.appendChild(el("p", "msg", d.prd_md)); }
       (d.questions || []).forEach(function (q) { modelLine(head, "? " + q); });
       (d.warnings || []).forEach(function (w) { head.appendChild(el("p", "note", w)); });
@@ -599,13 +599,21 @@
           q.appendChild(r2);
           if (it.examples) { q.appendChild(exampleBlock(it.examples)); }
           stream.appendChild(q);
-        } else { stream.appendChild(itemCard(it)); }
+        } else { stream.appendChild(itemCard(it, d.stale || d.superseded)); }
       });
       var back = el("button", null, "Semua kartu");
       back.type = "button";
       back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
       stream.appendChild(back);
-    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Kartu tidak dapat dibaca.")); });
+    }).catch(function () {
+      if (seq !== cardSeq || mode !== "cards") { return; }                      // an older answer, or the user moved to another page
+      clear(stream);
+      stream.appendChild(el("p", "muted", "Kartu tidak dapat dibaca."));
+      var back = el("button", null, "Semua kartu");
+      back.type = "button";
+      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
+      stream.appendChild(back);
+    });
   }
   function setMode(m) {
     mode = m;
