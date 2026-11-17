@@ -478,6 +478,23 @@
     if (e.proof) { d.appendChild(el("pre", "code", "Mesin: " + e.proof.wording)); }
     return d;
   }
+  var DOMAIN_LABEL = "";
+  function planReading(card, r) {
+    var box = el("div", "ex");
+    if (!DOMAIN_LABEL) { box.appendChild(el("p", "note", "pembacaan tidak ditampilkan: label 'bukan bukti, bukan manusia' tidak ada")); card.appendChild(box); return; }
+    if (r.fresh && r.verdict === "ok") {
+      box.appendChild(el("p", "small", "Dibaca Claude, " + r.at + ": sesuai permintaan (" + (r.sources || []).join("; ") + ")"));
+      modelLine(box, r.note);
+      box.appendChild(el("p", "small", DOMAIN_LABEL));
+    } else if (r.fresh) {
+      box.appendChild(el("p", "note", "Dibaca Claude, " + r.at + ": ada yang meragukan (" + (r.sources || []).join("; ") + ")"));
+      modelLine(box, r.note);
+      box.appendChild(el("p", "small", DOMAIN_LABEL));
+    } else {
+      box.appendChild(el("p", "note", r.why));
+    }
+    card.appendChild(box);
+  }
   function planItem(it, dim) {
     var c = el("article", "card" + (dim ? " stale" : ""));
     c.appendChild(el("h2", null, "Issue " + it.n));
@@ -492,6 +509,7 @@
       c.appendChild(el("h2", null, TIER_TITLE[tier]));
       group.forEach(function (e) { c.appendChild(planExample(e)); });
     });
+    if (it.domain_read) { planReading(c, it.domain_read); }
     return c;
   }
   function showPlan(id) {
@@ -520,9 +538,12 @@
       if (d.summary) { modelLine(head, d.summary, "msg"); } else if (d.summary_why) { head.appendChild(el("p", "note", d.summary_why)); }
       head.appendChild(el("p", "small", d.issue_count + " issue"));
       if (d.cost) {
-        var ref = d.cost.reference ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
+        var ref = d.cost.reference && d.cost.reference.median !== null && d.cost.reference.median !== undefined ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
+        if (!d.cost.ratio_text) { head.appendChild(el("p", "small", "Rasio batas: belum cukup data job sebelumnya.")); }
+        if (d.cost.ratio_text) { head.appendChild(el("p", "small", "Batas yang diminta " + d.cost.ratio_text + " (1 = biasa; batas itu pagar, bukan perkiraan biaya).")); }
         head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas antrean untuk " + d.issue_count + " issue " + usd(d.cost.proposed) + (d.cost.proposed_each !== null && d.cost.proposed_each !== undefined ? " (" + usd(d.cost.proposed_each) + " per issue)" : "") + ref + " (acuan: satu job)"));
       }
+      DOMAIN_LABEL = d.domain_read_label || "";
       if (d.defects) { head.appendChild(el("p", "note", d.defects + " contoh tidak bisa ditampilkan sebagai angka (kartu cacat)")); }
       head.appendChild(el("p", "small", d.fixed_line));
       stream.appendChild(head);
