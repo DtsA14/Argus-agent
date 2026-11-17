@@ -1,0 +1,38 @@
+Lower the IDX regular-market price floor from Rp50 to Rp1 in the backend
+
+The IDX minimum price (lantai harga, "gocap") is now Rp1 (BEI Kep-00136/BEI/09-2026, effective 28 September 2026), down from Rp50. The backend still hard-codes IDX_MIN_PRICE = 50.0 in risk_management/risk_manager.py, so stocks priced Rp1 to Rp50 are wrongly blocked (size 0, stop forced to Rp50 above entry). Change the floor to Rp1 and keep every path that depends on it consistent.
+
+Rules:
+1. IDX_MIN_PRICE in risk_management/risk_manager.py becomes 1.0. Example: IDX_MIN_PRICE == 1.0.
+2. A stock priced at Rp50 is no longer blocked. compute_position_size(entry_price=50.0, atr=3.0, confidence_level="HIGH", volatility_state="normal") returns price_floor_blocked False, stop_loss_price 45.0, shares 200000.
+3. A stock at or below Rp1 is still blocked: entry_price=1.0, atr=0.1 returns price_floor_blocked True, shares 0, position_value_idr 0, stop_loss_price 1.0.
+4. A stop model below Rp1 is clamped to Rp1, and the note says Rp1 (the note text is built from IDX_MIN_PRICE, so it reads "Rp1" with the same wording).
+5. The blocked note keeps the word "gocap" and says "Rp1" as the floor.
+6. explainability_engine and decision_engine need no logic change: they copy price_floor_blocked from the sizing result and must keep doing so.
+7. Update the comments and docstring text in risk_manager.py that say Rp50 for the floor (module docstring item 4 and the IDX_MIN_PRICE comment) to say Rp1 and cite Kep-00136/BEI/09-2026.
+8. ARA/ARB constants and logic are not touched. The tick size table (get_tick_size, fraksi harga) is not touched.
+9. Frontend files are not touched.
+
+Nothing else changes: tick-size rules, ATR stop logic, slippage buffer, lot size, capital cap and liquidity cap keep their current values and behaviour. Old tests that assert the Rp50 floor (TestIDXPriceFloor cases with entry 50, 30 and 52) are listed in clashes and must be loosened by a human first.
+
+Tests:
+- Add a test that entry_price=50.0 (atr=3.0, HIGH, normal) gives price_floor_blocked False, stop_loss_price 45.0, shares 200000.
+- Add a test that entry_price=1.0 (atr=0.1, HIGH, normal) gives price_floor_blocked True, shares 0, stop_loss_price 1.0.
+- Add a test that the blocked note contains "gocap" and "Rp1" for entry_price=1.0.
+- Keep a test that entry_price=1000.0, atr=20.0 gives stop_loss_price 970.0 and price_floor_blocked False.
+
+
+A human loosens these existing tests first (the issue writer's clash check, added by the harness):
+- tests/test_risk_management.py line 535: test_stock_at_the_floor_is_not_sized uses entry_price=50.0 and expects price_floor_blocked True; with floor Rp1 it is no longer blocked.
+- tests/test_risk_management.py line 552: test_stock_below_the_floor_never_returns_a_negative_stop_distance uses entry_price=30.0 and expects blocked; with floor Rp1 it is not blocked.
+- tests/test_risk_management.py line 565: test_stop_below_floor_is_clamped_to_it uses entry 52, ATR 5 and expects stop 50.0; the model stop 44.5 is above Rp1 so no clamp happens.
+
+```argus-examples
+[
+{"id": "e1", "tier": "whatif", "says": "With floor Rp1, a Rp50 stock is not blocked and gets a normal stop.", "setup": "import risk_management.risk_manager as rm", "run": "(lambda r: {\"blocked\": r.price_floor_blocked, \"shares\": r.shares, \"stop\": r.stop_loss_price})(rm.compute_position_size(ticker='TEST.JK', capital_idr=100_000_000, entry_price=50.0, atr=3.0, confidence_level='HIGH', volatility_state='normal'))", "expect": {"blocked": false, "shares": 200000, "stop": 45}, "overrides": {"risk_management.risk_manager.IDX_MIN_PRICE": 1}},
+{"id": "e2", "tier": "whatif", "says": "With floor Rp1, a stock at Rp1 is still blocked with size 0 and stop at Rp1.", "setup": "import risk_management.risk_manager as rm", "run": "(lambda r: {\"blocked\": r.price_floor_blocked, \"shares\": r.shares, \"stop\": r.stop_loss_price})(rm.compute_position_size(ticker='TEST.JK', capital_idr=100_000_000, entry_price=1.0, atr=0.1, confidence_level='HIGH', volatility_state='normal'))", "expect": {"blocked": true, "shares": 0, "stop": 1}, "overrides": {"risk_management.risk_manager.IDX_MIN_PRICE": 1}},
+{"id": "e3", "tier": "same", "says": "Today (floor Rp50) a Rp50 stock is blocked with size 0 and stop at Rp50.", "setup": "import risk_management.risk_manager as rm", "run": "(lambda r: {\"blocked\": r.price_floor_blocked, \"shares\": r.shares, \"stop\": r.stop_loss_price})(rm.compute_position_size(ticker='TEST.JK', capital_idr=100_000_000, entry_price=50.0, atr=3.0, confidence_level='HIGH', volatility_state='normal'))", "expect": {"blocked": true, "shares": 0, "stop": 50}}
+]
+```
+
+Environment: athena_py312
