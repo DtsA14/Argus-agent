@@ -393,3 +393,27 @@ def test_a_reading_that_is_not_a_file_of_the_chat_is_not_there_without_actions(t
     from router import chat as rc
     chat = rc.Chat(tmp_path)                                                 # no actions: a read-only chat has no card routes
     assert chat.actions is None
+
+
+# ---- the page and the issue page ----------------------------------------------------------------------------------------------
+
+def test_the_issue_page_shows_the_issue_without_its_block_when_the_examples_card_is_there(svc):
+    text = issue_text(SAME)
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    d = write_job(svc.jobs, IJOB, kind="issue", issue_sha256=sha, conversation=[
+        {"from": "writer", "text": "w", "issue_sha256": sha, "examples": stored_for([SAME]), "clashes": [], "questions": []}])
+    (d / "issue.txt").write_text(text)
+    got = svc.request("GET", f"/api/issues/{IJOB}")[1]
+    assert "argus-examples" not in got["issue"]["text"] and got["examples"]["calls"][0]["says"].startswith("Two prices")
+    assert got["issue"]["sha12"] == sha[:12]                                    # the sha is still the whole file's
+
+
+def test_the_cards_part_of_the_page_only_reads_and_only_writes_text():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    part = js[js.index("// ---- T2: read-only cards"):js.index("  function setMode(m) {")]
+    for banned in ("post(", "innerHTML", "outerHTML", "insertAdjacentHTML", "localStorage", "sessionStorage", "document.cookie", "fetch(",
+                   "XMLHttpRequest", "method:", "eval(", "new Function", "document.write"):
+        assert banned not in part, banned
+    assert part.count('get("/api/cards') == 2 and "ditulis model" in part and "kode itu ditulis model dan bisa memalsukannya" in part
+    html = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "index.html").read_text()
+    assert 'data-mode="cards"' in html
