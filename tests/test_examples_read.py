@@ -464,3 +464,33 @@ def test_the_cli_takes_no_note_arguments_with_bundle_or_status(jobs, capsys):
     run_cli(jobs, "--item", "1", "--status")
     out = capsys.readouterr().out
     assert "s1" in out and "permintaan Atha" in out
+
+
+# ---- the survivors of the first mutant run ---------------------------------------------------------------------------------------
+
+def test_the_last_turn_is_the_one_read(jobs):
+    d = make(jobs)
+    data = json.loads((d / "job.json").read_text())
+    older = dict(data["prd_turns"][-1], turn="w0", folder_sha="9" * 64, commit="9" * 40)
+    data["prd_turns"] = [older, data["prd_turns"][-1]]
+    (d / "job.json").write_text(json.dumps(data))
+    info = bundle(jobs)[1]
+    assert info["turn"] == "w1" and info["commit"] == "c" * 40
+
+
+def test_a_fifo_or_a_linked_directory_is_no_document(tmp_path, jobs):
+    d = make(jobs, docs={"CLAUDE.md": "claude\n"})
+    src = d / "runs" / f"{PJOB}-w1" / "source"
+    os.mkfifo(src / "DOMAIN.md")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "DOMAIN.md").write_text("OUTSIDE")
+    os.symlink(outside, src / "docs")
+    text, info = bundle(jobs)
+    assert info["docs"] == ["CLAUDE.md"] and "OUTSIDE" not in text
+
+
+def test_a_deeply_nested_note_file_is_an_error_not_a_crash(jobs):
+    d = make(jobs)
+    note_file(d).write_text('{"entries": ' + "[" * 30000 + "]" * 30000 + "}")
+    assert er.status(jobs, PJOB, 1) == ("error", None)

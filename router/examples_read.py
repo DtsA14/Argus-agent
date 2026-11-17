@@ -73,8 +73,7 @@ def _data(text, limit):
     text = text if isinstance(text, str) else ""
     raw = text
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = "".join((" " if c in LINE_BREAKS else c) for c in text if c in "\n\t" or c in LINE_BREAKS
-                   or (unicodedata.category(c)[0] != "C" and unicodedata.category(c) not in ("Zl", "Zp")))
+    text = "".join((" " if c in LINE_BREAKS else c) for c in text if c in "\n\t" or c in LINE_BREAKS or unicodedata.category(c)[0] != "C")
     for t in (raw, text):                                    # the text as written and the text as it will be shown: a key split by an invisible character is still a key
         if sd.KEY.search(t.encode("utf-8", "replace")):
             return WITHHELD, False
