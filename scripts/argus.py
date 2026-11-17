@@ -411,6 +411,12 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "apply":
             from router import apply as ra
+            from router import examples_read as ers_
+            try:                                # say what the domain reader's note means for this apply, also when it is not asked (a wrong --queues-dir shows here)
+                pre = ers_.chain(rj.open_job(o.job, o.jobs_dir), o.jobs_dir, o.queues_dir)
+                print("domain reader's note: " + (f"{pre['kind']}" if pre["applicable"] else f"not asked ({pre['why']}; queues directory {o.queues_dir})"))
+            except Exception as e:              # a message only: the gate itself is in `apply`
+                print(f"domain reader's note: could not be looked at ({type(e).__name__})")
             done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples,
                             reader=o.reader, queues_dir=o.queues_dir)
             print(rj.status(done.id, jobs_dir=o.jobs_dir))
