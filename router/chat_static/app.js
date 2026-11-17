@@ -537,7 +537,7 @@
       head.appendChild(el("p", "small", d.issue_count + " issue"));
       if (d.cost) {
         var ref = d.cost.reference ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
-        if (d.cost.ratio_text) { head.appendChild(el("p", "small", "Usulan ini " + d.cost.ratio_text + ".")); }
+        if (d.cost.ratio_text) { head.appendChild(el("p", "small", "Batas yang diminta " + d.cost.ratio_text + " (1 = biasa; batas itu pagar, bukan perkiraan biaya).")); }
         head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas antrean untuk " + d.issue_count + " issue " + usd(d.cost.proposed) + (d.cost.proposed_each !== null && d.cost.proposed_each !== undefined ? " (" + usd(d.cost.proposed_each) + " per issue)" : "") + ref + " (acuan: satu job)"));
       }
       DOMAIN_LABEL = d.domain_read_label || "";

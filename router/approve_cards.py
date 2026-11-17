@@ -73,7 +73,7 @@ class Approve:
             sfd = _open_dir(str(self.cards.jobs_dir))
         except OSError:
             return None
-        costs, total = [], 0
+        costs, caps, total = [], [], 0
         try:
             names = sorted((n for n in os.listdir(sfd) if UI_ID.fullmatch(n)), reverse=True)[:SCAN_JOBS]
             for jid in names:
@@ -95,11 +95,15 @@ class Approve:
                     spent = self.cards._spent(data)
                     if spent is not None and math.isfinite(spent):
                         costs.append(spent)
+                    cap = data.get("max_usd")
+                    if isinstance(cap, (int, float)) and not isinstance(cap, bool) and math.isfinite(cap) and cap > 0:
+                        caps.append(cap)
         finally:
             os.close(sfd)
         if len(costs) < REFERENCE_MIN:
             return None
-        return {"median": round(statistics.median(costs), 6), "n": len(costs), "of": REFERENCE_OF}
+        return {"median": round(statistics.median(costs), 6), "n": len(costs), "of": REFERENCE_OF,
+                "cap_median": round(statistics.median(caps), 6) if len(caps) >= REFERENCE_MIN else None, "cap_n": len(caps)}
 
     @staticmethod
     def _source_fd(jfd, run_id):
@@ -253,14 +257,16 @@ class Approve:
 
     @staticmethod
     def _ratio(cost):
-        """The proposal per issue against what one applied code job cost (the median): written by the machine so nobody has to divide."""
+        """The proposal per issue against the limit an applied code job usually carries (the median of their caps): both are settings, so the ratio
+        says whether this plan asks for an unusual amount (about 1 is usual). The money a job really spends is far below its cap, so the cap is
+        never compared with the spending: that ratio would be large for every plan and say nothing."""
         each, ref = cost.get("proposed_each"), cost.get("reference")
-        if each is None or not ref or not isinstance(ref.get("median"), (int, float)) or ref["median"] <= 0:
+        if each is None or not ref or not isinstance(ref.get("cap_median"), (int, float)) or ref["cap_median"] <= 0:
             return
-        ratio = round(each / ref["median"], 1)
+        ratio = round(each / ref["cap_median"], 1)
         cost["ratio"] = ratio
         text = str(int(ratio)) if ratio == int(ratio) else str(ratio).replace(".", ",")
-        cost["ratio_text"] = f"kira-kira {text}× acuan per issue"
+        cost["ratio_text"] = f"kira-kira {text}× batas job biasa per issue"
 
     def _domain_read(self, job_id, n, item):
         """What the domain reader (a Claude session) said about the numbers of this item, against the bundle as it is now (router.examples_read)."""

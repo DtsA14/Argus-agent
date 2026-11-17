@@ -212,7 +212,7 @@ def test_the_cost_is_spent_proposed_and_a_reference_from_earlier_applied_code_jo
     write_job(svc.jobs, "j20261116_100009_aaa9", kind="code", state="BLOCKED", stages={"a1": {"kind": "agent", "usd": 9.0}})
     write_job(svc.jobs, "j20261116_100008_aaa8", kind="code", state="APPLIED", stages={"a1": {"kind": "agent"}})      # unknown cost: left out
     ref = plan(svc)[1]["cost"]["reference"]
-    assert ref == {"median": 0.25, "n": 4, "of": "job code yang sudah di-apply"}
+    assert ref == {"median": 0.25, "n": 4, "of": "job code yang sudah di-apply", "cap_median": 1.0, "cap_n": 5}
 
 
 # ---- state, binding, leaks, safety ---------------------------------------------------------------------------------------------
@@ -393,7 +393,7 @@ def test_the_reference_needs_three_costs_counts_only_applied_code_jobs_and_ignor
     mk(4, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": float("nan")}})
     assert plan(svc)[1]["cost"]["reference"] is None                         # a research job and a NaN do not count
     mk(5, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.2}})
-    assert plan(svc)[1]["cost"]["reference"] == {"median": 0.2, "n": 3, "of": ac.REFERENCE_OF}
+    assert plan(svc)[1]["cost"]["reference"] == {"median": 0.2, "n": 3, "of": ac.REFERENCE_OF, "cap_median": 1.0, "cap_n": 4}
 
 
 def test_a_bool_or_non_finite_proposal_is_not_a_number(svc):
@@ -598,30 +598,30 @@ def test_the_note_text_is_scrubbed_like_all_card_text(svc):
     assert "\u202e" not in json.dumps(plan(svc)[1], ensure_ascii=False)
 
 
-def test_the_cost_ratio_is_written_by_the_machine_per_issue_against_the_reference(svc):
+def test_the_cost_ratio_compares_the_proposal_per_issue_with_the_caps_of_earlier_jobs_not_with_their_spending(svc):
     d, _ = write_prd(svc.jobs, [issue_text(SAME, AFTER), issue_text(AFTER, title="Second")], [stored_for([SAME, AFTER]), stored_for([AFTER])])
     with_tree(d)
     assert plan(svc)[1]["cost"]["ratio"] is None and plan(svc)[1]["cost"]["ratio_text"] is None           # no reference yet
     for n, usd in enumerate((0.10, 0.30, 0.20, 0.50), 1):
         write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": usd}})
     cost = plan(svc)[1]["cost"]
-    assert cost["proposed_each"] == 1.0 and cost["reference"]["median"] == 0.25
-    assert cost["ratio"] == 4.0 and cost["ratio_text"] == "kira-kira 4× acuan per issue"
+    assert cost["proposed_each"] == 1.0 and cost["reference"]["cap_median"] == 1.0 and cost["reference"]["median"] == 0.25
+    assert cost["ratio"] == 1.0 and cost["ratio_text"] == "kira-kira 1× batas job biasa per issue"          # not 4: spending is not the yardstick
     data = json.loads((d / "job.json").read_text())
-    data["prd_turns"][-1]["max_usd"] = 2.6                                              # 1.3 per issue: 5.2 times 0.25
+    data["prd_turns"][-1]["max_usd"] = 6.6                                              # 3.3 per issue
     (d / "job.json").write_text(json.dumps(data))
-    assert plan(svc)[1]["cost"]["ratio_text"] == "kira-kira 5,2× acuan per issue"
-    data["prd_turns"][-1]["max_usd"] = 0.2                                              # 0.1 per issue: below the reference
+    assert plan(svc)[1]["cost"]["ratio_text"] == "kira-kira 3,3× batas job biasa per issue"
+    data["prd_turns"][-1]["max_usd"] = 0.2                                              # 0.1 per issue: below the usual
     (d / "job.json").write_text(json.dumps(data))
-    assert plan(svc)[1]["cost"]["ratio_text"] == "kira-kira 0,4× acuan per issue"
+    assert plan(svc)[1]["cost"]["ratio_text"] == "kira-kira 0,1× batas job biasa per issue"
 
 
-def test_a_reference_of_zero_gives_no_ratio(svc):
+def test_without_three_known_caps_or_with_a_cap_of_zero_there_is_no_ratio(svc):
     one(svc, [SAME, AFTER])
     for n in range(1, 5):
-        write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.0}})
+        write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", max_usd=0, stages={"a1": {"kind": "agent", "usd": 0.1}})
     cost = plan(svc)[1]["cost"]
-    assert cost["reference"]["median"] == 0.0 and cost["ratio"] is None and cost["ratio_text"] is None
+    assert cost["reference"]["median"] == 0.1 and cost["reference"]["cap_median"] is None and cost["ratio"] is None and cost["ratio_text"] is None
 
 
 def test_the_page_shows_the_reading_with_its_label_and_the_ratio():
