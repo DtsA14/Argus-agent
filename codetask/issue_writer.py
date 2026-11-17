@@ -442,8 +442,9 @@ def issue_gate(args, *, source, environment, known=frozenset(), strict=False, ex
                             "unchanged: drop that claim (the harness adds the tests a human loosens first), or change "
                             "the issue so nothing clashes")
         if len(final) > MAX_ISSUE - 1:
-            problems.append(f"the issue with the clash list and the examples block the harness adds has {len(final)} characters, more "
-                            f"than {MAX_ISSUE - 1}: shorten the issue, the clashes' why or the examples")
+            problems.append(f"the issue with the clash list the harness adds has {len(final)} characters, more than "
+                            f"{MAX_ISSUE - 1}: shorten the issue, the clashes' why or the examples (the examples block the harness "
+                            "writes into the issue counts too)")
     questions = args.get("questions") or []
     if not isinstance(questions, list) or len(questions) > QUESTIONS_MAX:
         problems.append(f"questions must be a list of at most {QUESTIONS_MAX}")

@@ -349,11 +349,11 @@ def test_a_half_stripped_block_leaves_no_example_lines_in_the_issue(tmp_path):
 
 
 def test_the_length_message_names_the_examples_block(tmp_path):
-    big = [{**SAME, "id": f"e{i}", "says": "x" * 150, "setup": "from src.shop import total\n" + "# " + "y" * 500} for i in range(1, 6)]
+    big = [{**SAME, "id": f"e{i}", "says": "x" * 100, "setup": "from src.shop import total\n" + "# " + "y" * 250} for i in range(1, 6)]
     long_issue = ISSUE.replace("A discount larger", "z" * 6500 + " A discount larger")
     env = Env(tmp_path, [submit(issue=long_issue, examples=big), submit(id="s2")])
     env.new()
-    assert "examples block the harness adds" in tool_answers(env.model.calls[1])[0]
+    assert "the examples block the harness writes into the issue counts too" in tool_answers(env.model.calls[1])[0]
 
 
 def test_a_pin_that_cannot_be_made_abandons_the_new_job_with_its_own_reason(tmp_path, monkeypatch):

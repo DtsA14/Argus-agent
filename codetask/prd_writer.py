@@ -225,8 +225,8 @@ def items_gate(args, *, source, environment, max_items, item_max, examples=None)
             continue
         text = res["issue"]
         if len(text) > item_max:
-            problems.append(f"item {k}: the issue with the clash list and the examples block the harness adds has {len(text)} characters, "
-                            f"more than {item_max}: shorten it")
+            problems.append(f"item {k}: the issue with the clash list the harness adds has {len(text)} characters, "
+                            f"more than {item_max}: shorten it or its examples (the examples block counts too)")
         total += len(text)
         hits += res["test_hits"]
         out.append({"issue": text, "paths": shape["paths"], "fields": shape["fields"], "touches": res["touches"],
