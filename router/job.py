@@ -1733,7 +1733,16 @@ def _review_lines(job, rv):
     except OSError:
         sha = "unreadable"
     repo, p, q = shlex.quote(job.data["inputs"]["repo"]), shlex.quote(str(patch)), shlex.quote
-    return out + [f"  patch:          {patch} (sha256 {sha})",
+    from router import patch_read as pr          # SPEC_KARTU_SETUJU 5; imported here: patch_read imports this module
+    sid = last_agent(job)[0]
+    kind, note = pr.load(job.dir, sid, sha) if sid and len(sha) == 64 else ("none", None)
+    if kind in ("ok", "concerns"):
+        who = note["reader"]["kind"]
+        read_line = (f"  patch read: {kind} by {who} at {note['at']}: {note['note']} ({pr.LABEL})")
+    else:
+        read_line = (f"  patch read: {kind}: write the note first (apply refuses without an ok note):\n"
+                     f"    argus patch-read {job.id} --sha {sha[:12]} --verdict ok --note \"...\" --reader claude")
+    return out + [f"  patch:          {patch} (sha256 {sha})", read_line,
                   "apply (read the patch first; its sha256 is the --read-sha):",
                   f"  argus apply {job.id} --read-sha {sha[:12]}",
                   "or by hand, in the target repository:",

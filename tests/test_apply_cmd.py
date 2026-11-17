@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_router as tr  # noqa: E402
+from patch_read_util import read_ok  # noqa: E402
 from router import apply as ra  # noqa: E402
 from router import job as rj  # noqa: E402
 
@@ -81,6 +82,7 @@ def edit_shop(extra="# apply\n"):
 
 
 def run_apply(env, sha, **kw):
+    read_ok(env, sha)
     return ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs, **kw)
 
 
@@ -141,6 +143,7 @@ def test_the_cli_applies_and_prints_the_status(env, tmp_path, capsys):
     sys.path.insert(0, str(tr.ROOT / "scripts"))
     import argus
     patch, sha = package(env, tmp_path, edit_shop())
+    read_ok(env, sha)
     assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12]], deps=env.deps) == 0
     assert "applied: commit" in capsys.readouterr().out and env.job().data["state"] == rj.APPLIED
     with pytest.raises(SystemExit):
@@ -603,6 +606,7 @@ def test_the_cli_prints_the_branch_and_says_it_was_not_pushed(env, tmp_path, cap
     import argus
     patch, sha = package(env, tmp_path, edit_shop())
     branch = g(env.repo, "symbolic-ref", "--short", "HEAD")
+    read_ok(env, sha)
     assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12]], deps=env.deps) == 0
     out = capsys.readouterr().out
     assert f"applied on branch {branch}" in out and "not pushed, not deployed" in out and "argus stage deploy jtest" in out
