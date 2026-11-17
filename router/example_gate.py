@@ -21,10 +21,12 @@ from pathlib import Path
 
 from acceptance import contract as ct
 from codetask import examples as ex
+from tools.sandbox import SandboxUnavailable
 
 BOX_ROOT = "/workspace"                      # where the sandbox mounts the tree
 INTAKE_FILE = "examples_intake.json"
-FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*argus-examples[ \t]*\n(.*?)^[ \t]*\1[ \t]*$", re.M | re.S)
+FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*argus-examples[ \t]*\n(.*?)^[ \t]*\1[`~]*[ \t]*$", re.M | re.S | re.I)
+LOOSE = re.compile(r"^[ \t]*(?:`{3,}|~{3,})[^\n]*argus-examples", re.M | re.I)      # any fence that mentions the word
 STATUSES = (ex.PASS, ex.FAIL, ex.ERROR, ex.INVALID, ex.UNCHECKED)
 RUNNER_NOTE = "environment without an example runner"
 HOLDERS_MAX = 3
@@ -42,9 +44,14 @@ def extract(issue):
     raises on what a person or a model wrote."""
     if not isinstance(issue, str):
         return False, [], []
+    issue = issue.replace("\r\n", "\n").replace("\r", "\n")
     found = FENCE.findall(issue)
-    if not found:
+    mentioned = len(LOOSE.findall(issue))
+    if not found and not mentioned:
         return False, [], []
+    if mentioned != len(found):                 # a fence that names the block but is not written exactly: never read as "no block"
+        return True, [], ["a fence mentions argus-examples but is not a well-formed block (the fence line is exactly "
+                          "```argus-examples, and it is closed)"]
     if len(found) > 1:
         return True, [], [f"the issue has {len(found)} argus-examples blocks; it takes one"]
     try:
@@ -159,6 +166,12 @@ def _holders(tree, example):
     return out
 
 
+def _no_pass_ran(results):
+    """True when no example of a pass printed a result at all: the container failed (a missing image, a docker error, a timeout of
+    the whole pass), which says nothing about the examples."""
+    return bool(results) and all(isinstance(r.get("actual"), str) and r["actual"].startswith(ex.E_NORESULT) for r in results)
+
+
 def check_base(examples, tree, runner, root=BOX_ROOT):
     """(results, problems) of the examples run on the base tree (`tree` is the host path, for the tautology check; `root` is
     where the runner sees it). `same` must pass; `whatif` must pass with its overrides and must not give the same result
@@ -174,7 +187,10 @@ def check_base(examples, tree, runner, root=BOX_ROOT):
     results = []
     if not runnable:
         return results, problems
-    got = {r["id"]: r for r in ex.evaluate(runnable, runner, root=root)}
+    evaluated = ex.evaluate(runnable, runner, root=root)
+    if _no_pass_ran(evaluated):
+        raise SandboxUnavailable("the pass printed no result")
+    got = {r["id"]: r for r in evaluated}
     whatif = [e for e in runnable if e["tier"] == "whatif"]
     bare = ex.run_pass(whatif, runner, root=root, with_overrides=False) if whatif else {}
     for e in runnable:
@@ -201,7 +217,10 @@ def check_base(examples, tree, runner, root=BOX_ROOT):
 def audit(examples, runner, root=BOX_ROOT):
     """[{id, tier, status, actual}] of every example on the tree with the patch applied: `whatif` without its overrides (the
     constant has changed now; the example asserts the behaviour), and `after` like any other."""
-    return ex.evaluate(examples, runner, root=root, with_overrides=False)
+    results = ex.evaluate(examples, runner, root=root, with_overrides=False)
+    if _no_pass_ran(results):
+        raise SandboxUnavailable("the pass printed no result")
+    return results
 
 
 # ---- what a human reads -----------------------------------------------------------------------------------------------

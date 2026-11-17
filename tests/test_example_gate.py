@@ -155,6 +155,10 @@ def test_examples_that_hold_let_the_job_reach_the_drafter_and_their_result_is_ke
 def test_the_runner_gets_the_time_the_examples_need_and_the_jobs_environment(env):
     start(env, issue_with(SAME, AFTER))
     assert [c["timeout_s"] for c in env.runs.cfgs] == [ex.pass_timeout_s(2)] and ex.pass_timeout_s(2) == 55
+    job = env.job()
+    job.data["inputs"]["environment"] = "athena_py312"
+    rj.example_runner(job, env.cfg, env.deps, "/t", 1)
+    assert env.runs.cfgs[-1]["environment"] == "athena_py312"
 
 
 def test_a_same_example_that_is_wrong_blocks_the_job_before_the_drafter_and_names_the_real_value(env):
@@ -614,3 +618,131 @@ def test_the_cli_takes_the_flag_on_applied(env):
     assert argus.main(base, deps=env.deps) == 2 and env.job().data["state"] == rj.REVIEW_READY
     assert argus.main([*base, "--allow-failed-examples", "e2"], deps=env.deps) == 0
     assert env.job().data["state"] == rj.APPLIED and env.job().data["log"][-1]["examples_failed"] == ["e2"]
+
+
+# ---- the review of PR 2 (Opus) ---------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("text", [
+    "```argus-examples json\n[]\n```\n",                               # an info string with more than the word
+    "```Argus-Examples\n[]\n```\n",                                    # another case is still a block (read, then judged on its content)
+    "```argus-examples\n[]\n",                                        # never closed
+    "``` argus-examples extra\n[]\n```\n",
+])
+def test_a_fence_that_names_the_block_but_is_not_exact_is_never_read_as_no_block(text):
+    present, examples, problems = eg.extract(td.ISSUE + "\n" + text)
+    assert present and examples == [] and problems
+
+
+def test_crlf_line_ends_and_a_longer_closing_fence_are_the_block():
+    text = (td.ISSUE + "\n\n```argus-examples\n" + json.dumps([SAME]) + "\n````\n").replace("\n", "\r\n")
+    present, examples, problems = eg.extract(text)
+    assert present and problems == [] and [e["id"] for e in examples] == ["e1"]
+
+
+def test_a_block_nested_far_too_deep_is_a_problem_not_a_crash():
+    present, examples, problems = eg.extract("```argus-examples\n" + "[" * 200000 + "\n```\n")
+    assert present and examples == [] and problems
+
+
+def test_a_near_miss_fence_blocks_the_job_at_intake(env):
+    with pytest.raises(rj.Refused, match="not usable"):
+        start(env, td.ISSUE + "\n```argus-examples json\n[]\n```\n")
+    assert env.job().data["state"] == rj.BLOCKED
+
+
+def test_a_pass_that_printed_nothing_is_a_failed_container_not_a_verdict(env, tmp_path):
+    class Silent(Runs):
+        def __call__(self, tree, scfg):
+            return (lambda argv: {"stdout": "", "stderr": "", "exit_code": 125}), str(tree)
+    with pytest.raises(rj.Refused, match="sandbox is not available"):
+        start(env, issue_with(SAME), Silent())
+    assert env.job().data["log"][-1]["reason"].startswith("sandbox_unavailable")
+    runs = Runs()
+    env2 = tr.Env(tmp_path / "two")
+    start(env2, issue_with(SAME), runs)
+    runs.__class__ = Silent                                            # the container fails at the audit: pending, resumable
+    env2.deps.example_runner = Silent()
+    env2.approve()
+    assert json.loads((env2.job().dir / "examples_audit_a1.json").read_text())["results"] is None
+    env2.deps.example_runner = Runs()
+    job, r = rj.resume("jtest", cfg=env2.cfg, deps=env2.deps, jobs_dir=env2.jobs)
+    assert r["status"] == "AUDITED"
+
+
+def test_the_production_runner_turns_a_docker_failure_into_sandbox_unavailable(env, monkeypatch):
+    from tools import sandbox
+    start(env, td.ISSUE)
+    env.deps.example_runner = None
+    answers = [{"exit_code": 125, "stdout": ""}, {"exit_code": 0, "stdout": "ok", "cleanup_failed": True}, {"exit_code": 0, "stdout": "ok"}]
+    monkeypatch.setattr(sandbox, "run_command", lambda argv, workdir, cfg: answers.pop(0))
+    run, root = rj.example_runner(env.job(), env.cfg, env.deps, "/t", 1)
+    assert root == "/workspace"
+    for _ in range(2):
+        with pytest.raises(SandboxUnavailable):
+            run(["python3"])
+    assert run(["python3"])["stdout"] == "ok"
+
+
+def test_the_block_output_in_a_blocked_reason_carries_the_data_label(env):
+    with pytest.raises(rj.Refused) as e:
+        start(env, issue_with({**SAME, "expect": 5}))
+    assert ex.RUN_LABEL in str(e.value) and ex.RUN_LABEL in env.job().data["log"][-1]["reason"]
+
+
+def test_the_audit_is_keyed_on_the_bytes_it_applied(env):
+    review_ready(env, SAME)
+    job = env.job()
+    d = Path(job.data["stages"]["a1"]["review"]["dir"])
+    assert audit_json(env)["key"] == eg.audit_key(hashlib.sha256((d / "changes.patch").read_bytes()).hexdigest(),
+                                                  eg.extract(job.data["inputs"]["issue"])[1])
+
+
+def test_resume_runs_a_missing_stale_or_damaged_audit_again(env):
+    review_ready(env, SAME)
+    good = audit_path(env).read_text()
+    for bad in (None, json.dumps({**json.loads(good), "key": "0" * 64}), "{nope"):
+        audit_path(env).unlink()
+        if bad is not None:
+            audit_path(env).write_text(bad)
+        job, r = rj.resume("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+        assert r["status"] == "AUDITED" and json.loads(audit_path(env).read_text())["key"] == json.loads(good)["key"]
+
+
+def test_apply_and_applied_hand_the_sha_they_hold_to_the_decision(env, monkeypatch):
+    review_ready(env, SAME)
+    seen = []
+    real = rj.examples_decision
+    monkeypatch.setattr(rj, "examples_decision", lambda job, allow=(), sha=None: (seen.append(sha), real(job, allow, sha=sha))[1])
+    job = env.job()
+    sha = hashlib.sha256((Path(job.data["stages"]["a1"]["review"]["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    apply(env)
+    assert seen and all(x == sha for x in seen) and len(seen) == 2          # at apply, and again where it is recorded
+
+
+def test_what_is_read_back_from_a_result_file_is_cleaned_again(env):
+    review_ready(env, SAME)
+    rec = audit_json(env)
+    rec["results"][0]["actual"] = "a\x1b[31mb\x00c"
+    audit_path(env).write_text(json.dumps(rec))
+    kind, val = rj.examples_audit_state(env.job())
+    assert kind == "results" and "\x1b" not in val[0]["actual"] and "\x00" not in val[0]["actual"]
+    audit_path(env).write_text(json.dumps({**rec, "results": None, "reason": "x\x1b[0my"}))
+    assert "\x1b" not in rj.examples_audit_state(env.job())[1]
+    audit_path(env).write_text(json.dumps({**rec, "skipped": "why\x1b[0m"}))
+    assert "\x1b" not in rj.examples_audit_state(env.job())[1]
+
+
+def test_the_ids_of_the_flag_are_e1_to_e99_only():
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    import argparse
+    assert argus._ids("e1, e99") == ("e1", "e99")
+    for bad in ("e0", "e100", "x", "", "e1,", "E1"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            argus._ids(bad)
+
+
+def test_the_modules_named_as_other_holders_never_include_the_modules_own_file(tmp_path):
+    tree = make_tree(tmp_path)
+    holders = eg._holders(tree, whatif(overrides={"shop.consts.FLOOR": 60.0}))
+    assert "shop/consts.py" not in holders and "shop/rules.py" in holders

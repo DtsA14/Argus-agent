@@ -38,6 +38,7 @@ import shlex
 import stat
 import unicodedata
 import subprocess
+import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -667,7 +668,13 @@ def example_runner(job, cfg, deps, tree, n):
     if deps.example_runner:
         return deps.example_runner(tree, scfg)
     from tools import sandbox
-    return (lambda argv: sandbox.run_command(argv, workdir=tree, cfg=scfg)), eg.BOX_ROOT
+
+    def run(argv):
+        r = sandbox.run_command(argv, workdir=tree, cfg=scfg)
+        if r.get("exit_code") in (125, 126, 127) or r.get("cleanup_failed"):         # docker itself failed: not a verdict on the examples
+            raise sandbox.SandboxUnavailable(f"the container did not run (exit {r.get('exit_code')})")
+        return r
+    return run, eg.BOX_ROOT
 
 
 def _example_gate(job, cfg, deps):
@@ -700,7 +707,8 @@ def _example_gate(job, cfg, deps):
     except Exception as e:
         block(f"examples: the check could not run ({type(e).__name__})", f"the examples could not be run ({type(e).__name__})")
     if found:
-        block("examples: " + "; ".join(found), "the issue's examples do not hold on the base commit: " + "; ".join(found))
+        block("examples: " + "; ".join(found) + " " + exl.RUN_LABEL,
+              "the issue's examples do not hold on the base commit: " + "; ".join(found) + " " + exl.RUN_LABEL)
 
 
 def _examples_audit(job, sid, cfg, deps):
@@ -713,15 +721,18 @@ def _examples_audit(job, sid, cfg, deps):
         rv = (job.data["stages"][sid].get("review") or {})
         if not present or problems or not rv.get("valid"):
             return None
-        patch = Path(rv["dir"]) / "changes.patch"
-        path, key = eg.audit_file(job.dir, sid), eg.audit_key(repro.patch_sha(patch), examples)
+        data = (Path(rv["dir"]) / "changes.patch").read_bytes()         # once: what is keyed is what is applied
+        path, key = eg.audit_file(job.dir, sid), eg.audit_key(hashlib.sha256(data).hexdigest(), examples)
         if eg.no_runner(cfg, job.data["inputs"].get("environment")):
             eg.store(path, key, skipped=eg.RUNNER_NOTE)
             return True
         eg.store(path, key)                                   # the marker: a run cut off reads "pending", never "no result"
-        with repro.patched_tree(job.root / "fixtures" / "repos" / BASE, patch) as tree:
-            runner, root = example_runner(job, cfg, deps, tree, len(examples))
-            results = eg.audit(examples, runner, root)
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / "changes.patch"
+            copy.write_bytes(data)
+            with repro.patched_tree(job.root / "fixtures" / "repos" / BASE, copy) as tree:
+                runner, root = example_runner(job, cfg, deps, tree, len(examples))
+                results = eg.audit(examples, runner, root)
         eg.store(path, key, results=results)
         return True
     except Exception as e:
