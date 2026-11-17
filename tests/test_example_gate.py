@@ -611,6 +611,6 @@ def test_the_cli_takes_the_flag_on_applied(env):
     import argus
     review_ready(env, SAME, WRONG_AFTER)
     base = ["--jobs-dir", str(env.jobs), "applied", "jtest", "--commit", head(env)]
-    assert argus.main(base, deps=env.deps) == 2 or env.job().data["state"] == rj.REVIEW_READY
+    assert argus.main(base, deps=env.deps) == 2 and env.job().data["state"] == rj.REVIEW_READY
     assert argus.main([*base, "--allow-failed-examples", "e2"], deps=env.deps) == 0
     assert env.job().data["state"] == rj.APPLIED and env.job().data["log"][-1]["examples_failed"] == ["e2"]
