@@ -100,9 +100,9 @@ class Approve:
                         caps.append(cap)
         finally:
             os.close(sfd)
-        if len(costs) < REFERENCE_MIN:
+        if len(costs) < REFERENCE_MIN and len(caps) < REFERENCE_MIN:
             return None
-        return {"median": round(statistics.median(costs), 6), "n": len(costs), "of": REFERENCE_OF,
+        return {"median": round(statistics.median(costs), 6) if len(costs) >= REFERENCE_MIN else None, "n": len(costs), "of": REFERENCE_OF,
                 "cap_median": round(statistics.median(caps), 6) if len(caps) >= REFERENCE_MIN else None, "cap_n": len(caps)}
 
     @staticmethod
@@ -263,24 +263,29 @@ class Approve:
         each, ref = cost.get("proposed_each"), cost.get("reference")
         if each is None or not ref or not isinstance(ref.get("cap_median"), (int, float)) or ref["cap_median"] <= 0:
             return
-        ratio = round(each / ref["cap_median"], 1)
+        raw = each / ref["cap_median"]
+        ratio = round(raw, 1) if raw >= 1 else round(raw, 2)          # below 1 two digits: 0,04 is not 0
         cost["ratio"] = ratio
         text = str(int(ratio)) if ratio == int(ratio) else str(ratio).replace(".", ",")
         cost["ratio_text"] = f"kira-kira {text}× batas job biasa per issue"
 
     def _domain_read(self, job_id, n, item):
         """What the domain reader (a Claude session) said about the numbers of this item, against the bundle as it is now (router.examples_read)."""
-        if not isinstance(item.get("examples"), list):
+        if item.get("unreadable") or not isinstance(item.get("examples"), list):
             return {"kind": "tidak_terbaca", "fresh": False, "why": "contoh item ini tidak bisa ditampilkan, jadi tidak ada yang dibaca"}
         if not item["counts"]["calls"]:
             return {"kind": "tidak_berlaku", "fresh": False, "why": DOMAIN_NONE}
-        from router import examples_read as er            # imported here: examples_read imports this module
         try:
+            from router import examples_read as er            # imported here: examples_read imports this module
             kind, rec = er.status(self.cards.jobs_dir, job_id, n)
         except rj.Refused as e:
-            return {"kind": "tidak_terbaca", "fresh": False, "why": str(e)}
-        except Exception:
-            return {"kind": "tidak_terbaca", "fresh": False, "why": "catatan pembacaan tidak bisa diperiksa"}
+            text = str(e)
+            why = ("folder digantikan giliran berikutnya (SUPERSEDED): tidak ada yang dibaca" if "SUPERSEDED" in text
+                   else "folder berubah sejak giliran ditulis: tidak ada yang dibaca" if "folder changed" in text
+                   else "bahan pembacaan tidak bisa dibaca: dianggap belum dibaca")
+            return {"kind": "tidak_terbaca", "fresh": False, "why": why}
+        except Exception:                                     # whatever else: never shown as a reading
+            return {"kind": "tidak_terbaca", "fresh": False, "why": "catatan pembacaan tidak bisa diperiksa: dianggap belum dibaca"}
         out = {"kind": kind, "fresh": kind in ("ok", "concerns")}
         if rec:
             out.update(verdict=rec["verdict"], reader=rec["reader"], at=rec["at"], sources=rec["sources"], note=rec["note"])
@@ -300,7 +305,10 @@ class Approve:
         if text is None:
             item["why"] = "teks issue tidak terbaca"
             item["warning"] = NO_NEW_WARNING
+            item["unreadable"] = True
             return item
+        if eg.extract(text)[2]:
+            item["unreadable"] = True                           # a block that does not parse is not "no examples"
         calls, parsed = c._calls(text)
         if c._leaks(calls):
             item["examples"] = {"withheld": True}

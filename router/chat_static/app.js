@@ -481,16 +481,18 @@
   var DOMAIN_LABEL = "";
   function planReading(card, r) {
     var box = el("div", "ex");
+    if (!DOMAIN_LABEL) { box.appendChild(el("p", "note", "pembacaan tidak ditampilkan: label 'bukan bukti, bukan manusia' tidak ada")); card.appendChild(box); return; }
     if (r.fresh && r.verdict === "ok") {
       box.appendChild(el("p", "small", "Dibaca Claude, " + r.at + ": sesuai permintaan (" + (r.sources || []).join("; ") + ")"));
       modelLine(box, r.note);
+      box.appendChild(el("p", "small", DOMAIN_LABEL));
     } else if (r.fresh) {
       box.appendChild(el("p", "note", "Dibaca Claude, " + r.at + ": ada yang meragukan (" + (r.sources || []).join("; ") + ")"));
       modelLine(box, r.note);
+      box.appendChild(el("p", "small", DOMAIN_LABEL));
     } else {
-      box.appendChild(el("p", "note", r.kind === "stale" ? "Dibaca Claude: basi. " + r.why : r.why));
+      box.appendChild(el("p", "note", r.why));
     }
-    if (DOMAIN_LABEL) { box.appendChild(el("p", "small", DOMAIN_LABEL)); }
     card.appendChild(box);
   }
   function planItem(it, dim) {
@@ -536,7 +538,8 @@
       if (d.summary) { modelLine(head, d.summary, "msg"); } else if (d.summary_why) { head.appendChild(el("p", "note", d.summary_why)); }
       head.appendChild(el("p", "small", d.issue_count + " issue"));
       if (d.cost) {
-        var ref = d.cost.reference ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
+        var ref = d.cost.reference && d.cost.reference.median !== null && d.cost.reference.median !== undefined ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
+        if (!d.cost.ratio_text) { head.appendChild(el("p", "small", "Rasio batas: belum cukup data job sebelumnya.")); }
         if (d.cost.ratio_text) { head.appendChild(el("p", "small", "Batas yang diminta " + d.cost.ratio_text + " (1 = biasa; batas itu pagar, bukan perkiraan biaya).")); }
         head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas antrean untuk " + d.issue_count + " issue " + usd(d.cost.proposed) + (d.cost.proposed_each !== null && d.cost.proposed_each !== undefined ? " (" + usd(d.cost.proposed_each) + " per issue)" : "") + ref + " (acuan: satu job)"));
       }

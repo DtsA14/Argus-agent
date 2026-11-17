@@ -391,7 +391,8 @@ def test_the_reference_needs_three_costs_counts_only_applied_code_jobs_and_ignor
     assert plan(svc)[1]["cost"]["reference"] is None                         # two are not enough
     mk(3, kind="research", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 50.0}})
     mk(4, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": float("nan")}})
-    assert plan(svc)[1]["cost"]["reference"] is None                         # a research job and a NaN do not count
+    ref = plan(svc)[1]["cost"]["reference"]
+    assert ref["median"] is None and ref["n"] == 2                           # a research job and a NaN do not count as costs (the NaN job still has its cap)
     mk(5, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.2}})
     assert plan(svc)[1]["cost"]["reference"] == {"median": 0.2, "n": 3, "of": ac.REFERENCE_OF, "cap_median": 1.0, "cap_n": 4}
 
@@ -628,6 +629,75 @@ def test_the_page_shows_the_reading_with_its_label_and_the_ratio():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     part = js[js.index("var DOMAIN_LABEL"):js.index("// ---- T2: read-only cards")]
     assert "it.domain_read" in part and "d.domain_read_label" in part and "d.cost.ratio_text" in part
-    for word in ("Dibaca Claude", "ada yang meragukan", "basi"):
+    for word in ("Dibaca Claude", "ada yang meragukan"):
         assert word in part
     assert "innerHTML" not in part
+
+
+# ---- the fixes of the review of PR 4b ---------------------------------------------------------------------------------------------
+
+def test_a_key_pattern_in_the_readers_note_or_id_never_reaches_the_card(svc):
+    d = one(svc, [SAME, AFTER])
+    text, info = er.bundle(svc.jobs, PJOB, 1)
+    er.record(PJOB, 1, "concerns", info["bundle_sha256"], "sk-ant-" + "b" * 30, ["hanya tulisan penulis"], "see sk-ant-" + "a" * 30, deps=DEPS, jobs_dir=svc.jobs)
+    status, c = plan(svc)
+    dump = json.dumps(c)
+    assert status == 200 and "sk-ant" not in dump and "a" * 30 not in dump and "b" * 30 not in dump
+
+
+def test_an_unreadable_issue_or_a_broken_block_is_not_no_examples(svc):
+    d = one(svc, [SAME, AFTER])
+    (d / "prd-w1" / "issue-1.md").write_text(issue_text(SAME).replace("```argus-examples", "```argus-examples json"))
+    got = plan(svc)[1]["items"][0]["domain_read"]
+    assert got["kind"] == "tidak_terbaca" and got["fresh"] is False
+
+
+def test_the_refusal_texts_are_indonesian_and_do_not_carry_the_internal_wording(svc):
+    d = one(svc, [SAME, AFTER])
+    (d / "prd-w1" / "SUPERSEDED").write_text("x")
+    why = dr(plan(svc)[1])["why"]
+    assert "nothing was written" not in why and "SUPERSEDED" in why and "digantikan" in why
+
+
+def test_a_ratio_below_one_keeps_two_digits(svc):
+    d = one(svc, [SAME, AFTER])
+    for n in range(1, 5):
+        write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.1}})
+    data = json.loads((d / "job.json").read_text())
+    data["prd_turns"][-1]["max_usd"] = 0.04
+    (d / "job.json").write_text(json.dumps(data))
+    assert plan(svc)[1]["cost"]["ratio_text"] == "kira-kira 0,04× batas job biasa per issue"
+
+
+def test_the_cap_reference_does_not_need_the_spending_to_be_known(svc):
+    one(svc, [SAME, AFTER])
+    for n in range(1, 4):
+        write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", stages={"a1": {"kind": "agent"}})      # spending unknown
+    cost = plan(svc)[1]["cost"]
+    assert cost["reference"]["median"] is None and cost["reference"]["cap_median"] == 1.0 and cost["reference"]["cap_n"] == 3
+    assert cost["ratio_text"] == "kira-kira 2× batas job biasa per issue"                      # one issue, proposed 2.0, usual cap 1.0
+
+
+def test_a_bool_infinite_or_zero_cap_is_no_cap_and_two_caps_are_too_few(svc):
+    one(svc, [SAME, AFTER])
+    for n, cap in enumerate((True, float("inf"), 0, 1.0, 1.0), 1):
+        write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", max_usd=cap, stages={"a1": {"kind": "agent", "usd": 0.1}})
+    ref = plan(svc)[1]["cost"]["reference"]
+    assert ref["cap_n"] == 2 and ref["cap_median"] is None                                      # two valid caps: not enough
+    write_job(svc.jobs, "j20261116_100006_aaa6", kind="code", state="APPLIED", max_usd=2.0, stages={"a1": {"kind": "agent", "usd": 0.1}})
+    ref = plan(svc)[1]["cost"]["reference"]
+    assert ref["cap_n"] == 3 and ref["cap_median"] == 1.0                                       # the median of 1, 1, 2
+
+
+def test_the_page_shows_the_label_next_to_every_reading_and_never_a_reading_without_it():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    reading = js[js.index("function planReading"):js.index("function planItem")]
+    assert reading.count('box.appendChild(el("p", "small", DOMAIN_LABEL));') == 2                 # the ok branch and the concerns branch
+    assert reading.index("if (!DOMAIN_LABEL)") < reading.index("Dibaca Claude")                  # no label, no reading
+    assert 'r.fresh && r.verdict === "ok"' in reading and "} else if (r.fresh) {" in reading
+    assert reading.index("ada yang meragukan") > reading.index("sesuai permintaan")
+    assert reading.count("modelLine(box, r.note)") == 2
+    assert "r.note" not in reading.split("} else {")[-1]                                          # a stale or missing reading never shows a note
+    plan_js = js[js.index("function showPlan"):js.index("// ---- T2: read-only cards")]
+    assert plan_js.index("DOMAIN_LABEL = d.domain_read_label") < plan_js.index("(d.items || []).forEach")
+    assert 'el("p", "note", "Dibaca Claude: basi' not in js and "batas itu pagar, bukan perkiraan biaya" in js
