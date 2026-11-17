@@ -83,20 +83,25 @@ def _locked(queues_dir, qid):
         yield d, _load(d, qid)
 
 
-def _load(d, qid):
+def shape_ok(q, qid):
+    """True when q has the shape of a queue.json of queue qid (the checks of `_load`, without any file): the chat reads queues too."""
     try:
-        q = json.loads((d / "queue.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        raise Refused(f"no queue {qid!r}") from None
-    try:
-        ok = (isinstance(q, dict) and q["id"] == qid and isinstance(q["max_usd"], (int, float)) and isinstance(q["job_cap_usd"], (int, float))
+        return (isinstance(q, dict) and q["id"] == qid and isinstance(q["max_usd"], (int, float)) and isinstance(q["job_cap_usd"], (int, float))
               and all(isinstance(q[k], str) for k in ("repo", "name", "base_commit", "jobs_dir"))
               and isinstance(q["items"], list) and q["items"]
               and all(isinstance(i, dict) and isinstance(i.get("issue_sha256"), str) and isinstance(i.get("n"), int) for i in q["items"])
               and (q.get("prd") is None or (isinstance(q["prd"], dict) and isinstance(q["prd"].get("sha"), str)
                                             and re.fullmatch(r"[0-9a-f]{64}", q["prd"]["sha"]) and isinstance(q["prd"].get("dir"), str))))
-    except KeyError:
-        ok = False
+    except (KeyError, TypeError):
+        return False
+
+
+def _load(d, qid):
+    try:
+        q = json.loads((d / "queue.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise Refused(f"no queue {qid!r}") from None
+    ok = shape_ok(q, qid)
     if not ok:
         raise Refused(f"queue {qid}: queue.json is damaged; nothing was changed")
     return q

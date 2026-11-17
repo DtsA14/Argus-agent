@@ -160,7 +160,15 @@ def load(path, key, examples):
         path = Path(path)
         if not path.exists():
             return "none", None
-        rec = json.loads(path.read_text(encoding="utf-8"))
+        return parse_stored(path.read_text(encoding="utf-8"), key, examples)
+    except Exception:
+        return "error", None
+
+
+def parse_stored(text, key, examples):
+    """load() over the text of a stored file (the chat reads it through a file descriptor): the same kinds, the same validation."""
+    try:
+        rec = json.loads(text)
         if rec.get("key") != key:
             return "stale", None
         if rec.get("skipped"):
