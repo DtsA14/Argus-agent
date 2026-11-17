@@ -651,3 +651,36 @@ def test_the_mode_buttons_wrap_instead_of_running_off_the_screen_of_a_phone():
     css = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.css").read_text()
     row = css[css.index("#chips{"):css.index("}", css.index("#chips{"))]
     assert "flex-wrap:wrap" in row                  # five buttons (Status, Issue, Riset, Keputusan, Kartu) do not fit one row of a phone
+
+
+# ---- the polish after the first look on a phone (Atha, 2026-11-17) ------------------------------------------------------------------
+
+def test_the_examples_card_has_a_machine_summary_with_the_count_of_after_examples(svc):
+    write_prd(svc.jobs, [issue_text(SAME, AFTER), issue_text(SAME, title="Only same")],
+              [stored_for([SAME, AFTER]), stored_for([SAME])])
+    one, two = [it["examples"]["summary"] for it in card(svc, "prd", PJOB)[1]["items"]]
+    assert one == {"calls": 2, "after": 1, "whatif": 0, "statuses": {"pass": 1, "unchecked": 1}}
+    assert two == {"calls": 1, "after": 0, "whatif": 0, "statuses": {"pass": 1}}                 # the line that shows a number nobody checked
+
+
+def test_an_item_that_was_not_run_still_counts_its_after_examples(svc):
+    write_prd(svc.jobs, [issue_text(SAME), issue_text(AFTER, title="Two")],
+              [stored_for([SAME]), {"examples": [AFTER], "results": [], "no_examples": None, "note": None, "tier_moves": []}])
+    second = card(svc, "prd", PJOB)[1]["items"][1]["examples"]["summary"]
+    assert second == {"calls": 1, "after": 1, "whatif": 0, "statuses": {rcards.NOT_RUN: 1}}
+
+
+def test_a_long_first_message_is_cut_in_the_list_and_whole_in_the_card(svc):
+    d, _ = write_prd(svc.jobs, [issue_text(SAME)], [stored_for([SAME])])
+    j = json.loads((d / "job.json").read_text())
+    j["conversation"][0]["text"] = "x" * 300
+    (d / "job.json").write_text(json.dumps(j))
+    row = [r for r in svc.request("GET", "/api/cards")[1]["rows"] if r["id"] == PJOB][0]
+    assert len(row["title"]) == 101 and row["title"].endswith("…")
+
+
+def test_the_page_shows_the_summary_once_the_label_once_and_no_title_twice():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    part = js[js.index("// ---- T2: read-only cards"):js.index("  function setMode(m) {")]
+    assert "Ringkasan mesin: " in part and "perilaku baru (after): " in part and "sm.after === 0" in part
+    assert part.count("output of the example's own code") == 1 and "if (it.title && !it.text)" in part
