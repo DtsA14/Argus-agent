@@ -3,24 +3,125 @@
 Agent harness on LangGraph with a budget, a ledger and crash-resume on every model call. The pipelines in use are the
 code job and the research job (`scripts/argus.py code` / `research`); see `AGENTS.md` for their stages.
 
+**Two entry points, do not mix them up.** `scripts/argus.py` runs the real pipelines (the code job, the research job, the PRD
+writer, the chat). `main.py` runs a small demo graph on fake nodes: it is the reference for the budget and crash-resume tests, not a
+production path. Quick start for each is [below](#quick-start).
+
 Direction (2026-11-15): a specialist in its properties, a generalist on its surface. Argus aims to be an agent you can leave
 alone: its work is proven and its cost is locked. The guarantees below are that core; the chat (`scripts/argus.py chat serve`,
 `router/chat.py`) is the one door through which capabilities are added, one at a time. Status: `docs/Reconciliation.md`;
 open work: `PENDING.md`.
 
-The quick start below runs `main.py`: the M1–M3 demo graph (`graph.py`, orchestrator → workers → synthesize → evaluator
-on a sales report), fake nodes by default. It is not a production path. Of the guarantees below, the iteration rule is the demo graph's; the per-request,
-ledger and crash-resume ones hold on every pipeline.
+Of the guarantees below, the iteration rule is the demo graph's; the per-request, ledger and crash-resume ones hold on every
+pipeline.
 
-## Run
+## How it fits together
+
+Every model call of every pipeline passes through one place (`harness/llm.py`), which reserves the budget first and writes the
+ledger around the call. What a stage finished is committed to the memo and never bought twice. Code the model writes runs only in
+the Docker sandbox.
+
+```mermaid
+flowchart LR
+    H([you]) -->|phone| CHAT["chat app<br/>router/chat.py"]
+    H -->|terminal| CLI["scripts/argus.py"]
+    CHAT --> ROUTER["router/<br/>job.json = the job's state"]
+    CLI --> ROUTER
+
+    subgraph CODE["code job"]
+        direction LR
+        R1["research r1<br/>(optional)"] --> DR[drafter] --> AP{{"human<br/>approve"}} --> RUN["setup → agent → acceptance"] --> JG["judge<br/>(advice)"] --> APPLY{{"human<br/>apply"}} --> STG[staging]
+    end
+    subgraph RESEARCH["research job"]
+        direction LR
+        PL[planner] --> WW["web workers"] --> SY[synthesis] --> E1["claim checker e1"]
+    end
+    ROUTER --> CODE
+    ROUTER --> RESEARCH
+
+    CODE --> LLM
+    RESEARCH --> LLM
+    LLM["harness/llm.py<br/>LLMCaller: reserve, refuse, call"] --> LEDGER[("ledger<br/>events.jsonl")]
+    LLM --> MEMO[("memo<br/>memo.sqlite")]
+    RUN -.->|"RunPython, example code,<br/>validation"| BOX["Docker sandbox<br/>no network, read-only"]
+```
+
+The demo graph (`graph.py`, run by `main.py`) is a different, smaller thing: an orchestrator plans, workers run in parallel,
+synthesize writes the report, and the evaluator scores it; the loop stops on pass, budget or stagnation.
+
+```mermaid
+flowchart LR
+    O[orchestrator] --> W["workers<br/>(parallel)"] --> S[synthesize] --> V[evaluator]
+    V -->|"score too low,<br/>budget left"| O
+    V -->|"pass / budget / stagnation"| END([run_end + result.json])
+```
+
+## Quick start
 
     pip install -r requirements.txt
+
+### 1. The demo (`main.py`): no keys, no cost
+
+The M1–M3 demo graph on a sales report, fake nodes by default.
+
     python main.py --scenario fail_then_pass        # pass | fail_then_pass | never_pass | flaky
     python -m pytest -q
 
-Reproducible check from scratch (fresh venv, pinned versions, full suite):
+Reproducible check from scratch (fresh venv, pinned versions, full suite): `bash scripts/verify.sh`
 
-    bash scripts/verify.sh
+### 2. The real pipelines (`scripts/argus.py`): models, money and a sandbox
+
+These need a provider key, a pinned sandbox image (see "Tools, path jail and sandbox") and a budget. Each command shows a
+confirmation screen with the limits before anything is spent.
+
+    # a code job: a drafter writes the tests, you approve, an agent works in the sandbox, you apply the patch
+    python scripts/argus.py code --repo /path/to/repo --commit <sha> --issue-file issue.md --max-usd 1.5 --environment <name>
+    python scripts/argus.py list                    # jobs and their state
+    python scripts/argus.py status <job>
+    python scripts/argus.py approve <job> --sha <draft sha>    # then: judge, apply, stage (--help of each)
+
+    # a research job: planner, web workers, synthesis, claim checker
+    python scripts/argus.py research --question "..." --max-usd 1.0
+
+    # the phone's chat app (127.0.0.1 only)
+    python scripts/argus.py chat serve --port 8711
+
+`python scripts/argus.py --help` lists every command. The stages of each pipeline are in `AGENTS.md`; the specs are in
+`docs/reviews/`.
+
+## What a run leaves behind
+
+Every run writes `events.jsonl` (the ledger) and `result.json`. The result of the demo run `python main.py --scenario pass`:
+
+```json
+{
+  "status": "DONE",
+  "stop_reason": "",
+  "iteration": 1,
+  "tokens_used": 11500,
+  "tokens_spent": 11500,
+  "usd_billed": 0.0,
+  "usd_complete": true,
+  "llm_calls": 0,
+  "llm_calls_unknown": 0,
+  "budget_violations": 0,
+  "events_skipped": 0
+}
+```
+
+`tokens_used` is the accounted figure and `tokens_spent` what really ran (they differ only after a crash). `usd_complete: false`
+means some call had no known price, so `usd_billed` is a lower bound. `llm_calls_unknown` counts calls that were started and never
+answered (the process died mid-request); they are charged at their worst case.
+
+One model call in the ledger of a real run (a PRD writer turn; only the main fields), written in integer nano-dollars:
+
+```json
+{"event": "llm_call_started", "call_id": "3bd961c069b1", "model": "openrouter:anthropic/claude-haiku-5.5", "est_input": 5178, "worst_usd_nano": 8709800}
+{"event": "llm_call", "call_id": "3bd961c069b1", "status": "ok", "input_tokens": 4558, "output_tokens": 182, "usd_nano": 546800, "charged": "actual", "stop_reason": "tool_calls"}
+```
+
+The first line is written before the request with the worst case the reservation must cover; the second after it, with what
+the provider billed. The same `call_id` ties them together.
 
 ## Budget guarantees
 
