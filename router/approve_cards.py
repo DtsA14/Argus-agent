@@ -24,14 +24,21 @@ import statistics
 from codetask import examples as ex
 from router import card_numbers as cn
 from router import example_gate as eg
+from router import job as rj
 from router import prd as rp
 from router.cards import (DOC_MAX, ISSUE_MAX, ITEMS_MAX, JOB_JSON_MAX, NOT_RUN_WHY, OPEN_DIR, SCAN_BYTES, SCAN_JOBS, TURN, UI_ID, _open_dir,
                           _read)
 
 TIER_ORDER = {"same": 0, "whatif": 1, "after": 2}
 NO_NEW_WARNING = "Tidak ada contoh untuk perilaku yang baru; angka baru di teks issue tidak diperiksa mesin"
-FIXED_LINE = ("Mesin memeriksa: kode memberi angka ini. Tidak diperiksa mesin: apakah angkanya benar menurut aturan bisnis (Anda); "
-              "perubahan di luar contoh (pembaca patch: Claude); angka di teks issue.")
+FIXED_LINE = ("Mesin memeriksa: kode memberi angka ini. Dibaca Claude, bukan mesin dan bukan Anda: apakah angkanya sesuai permintaan. "
+              "Tidak diperiksa siapa pun: aturan bisnis yang tidak tertulis; perubahan di luar contoh (pembaca patch: Claude); angka di teks issue.")
+DOMAIN_LABEL = ("Ini pernyataan sesi Claude (model), bukan bukti angkanya benar, dan bukan manusia; Claude tidak tahu aturan yang tidak tertulis "
+                "di permintaan, PRD dan dokumen repo.")
+DOMAIN_UNREAD = "belum dibaca: angka domain belum dinilai siapa pun"
+DOMAIN_STALE = "pembacaan Claude basi: bahan yang dibacanya berubah sejak itu (folder, contoh, dokumen atau templat); dianggap belum dibaca"
+DOMAIN_ERROR = "catatan pembacaan rusak: dianggap belum dibaca"
+DOMAIN_NONE = "tidak ada angka baru yang dibaca"
 TREE_WHY = "pohon sumber penulis tidak terbaca: nama parameter tidak bisa diambil dari definisi; kartu ini cacat"
 REQUEST_MAX, SUMMARY_MAX = 3000, 4000
 REFERENCE_MIN = 3
@@ -192,7 +199,8 @@ class Approve:
             card = {"kind": "plan", "id": job_id, "state": data.get("state"), "repo": i.get("repo_name"), "turn": None, "stale": None,
                     "superseded": None, "folder_sha12": None, "why": None, "request": request, "request_truncated": cut,
                     "request_by": "chat" if via_ui else "tidak_tercatat", "summary": summary, "summary_by": "model", "issue_count": 0,
-                    "cost": {"spent": None, "proposed": None, "proposed_each": None, "reference": None}, "items": [], "defects": 0, "fixed_line": FIXED_LINE}
+                    "cost": {"spent": None, "proposed": None, "proposed_each": None, "reference": None, "ratio": None, "ratio_text": None},
+                    "items": [], "defects": 0, "fixed_line": FIXED_LINE, "domain_read_label": DOMAIN_LABEL}
             spent = c._spent(data)
             card["cost"]["spent"] = spent if spent is not None and math.isfinite(spent) else None
             if not turns:
@@ -212,6 +220,7 @@ class Approve:
             if card["cost"]["proposed"] is not None and n_items:
                 card["cost"]["proposed_each"] = round(card["cost"]["proposed"] / n_items, 6)
             card["cost"]["reference"] = self._reference()
+            self._ratio(card["cost"])
             files, why = c._folder(jfd, t.get("turn"), n_items)
             if files is None:
                 card["why"] = why
@@ -231,6 +240,7 @@ class Approve:
                 if stored is None and "examples" not in t:
                     stored = {"absent": True}
                 item = self._item(n, text, stored, bound, source_of, src_fd is not None)
+                item["domain_read"] = self._domain_read(job_id, n, item)
                 card["items"].append(item)
                 if isinstance(item["examples"], list):
                     card["defects"] += item["defects"]
@@ -240,6 +250,37 @@ class Approve:
                 os.close(src_fd)
             os.close(jfd)
             os.close(sfd)
+
+    @staticmethod
+    def _ratio(cost):
+        """The proposal per issue against what one applied code job cost (the median): written by the machine so nobody has to divide."""
+        each, ref = cost.get("proposed_each"), cost.get("reference")
+        if each is None or not ref or not isinstance(ref.get("median"), (int, float)) or ref["median"] <= 0:
+            return
+        ratio = round(each / ref["median"], 1)
+        cost["ratio"] = ratio
+        text = str(int(ratio)) if ratio == int(ratio) else str(ratio).replace(".", ",")
+        cost["ratio_text"] = f"kira-kira {text}× acuan per issue"
+
+    def _domain_read(self, job_id, n, item):
+        """What the domain reader (a Claude session) said about the numbers of this item, against the bundle as it is now (router.examples_read)."""
+        if not isinstance(item.get("examples"), list):
+            return {"kind": "tidak_terbaca", "fresh": False, "why": "contoh item ini tidak bisa ditampilkan, jadi tidak ada yang dibaca"}
+        if not item["counts"]["calls"]:
+            return {"kind": "tidak_berlaku", "fresh": False, "why": DOMAIN_NONE}
+        from router import examples_read as er            # imported here: examples_read imports this module
+        try:
+            kind, rec = er.status(self.cards.jobs_dir, job_id, n)
+        except rj.Refused as e:
+            return {"kind": "tidak_terbaca", "fresh": False, "why": str(e)}
+        except Exception:
+            return {"kind": "tidak_terbaca", "fresh": False, "why": "catatan pembacaan tidak bisa diperiksa"}
+        out = {"kind": kind, "fresh": kind in ("ok", "concerns")}
+        if rec:
+            out.update(verdict=rec["verdict"], reader=rec["reader"], at=rec["at"], sources=rec["sources"], note=rec["note"])
+        else:
+            out["why"] = {"none": DOMAIN_UNREAD, "stale": DOMAIN_STALE, "error": DOMAIN_ERROR}.get(kind, DOMAIN_UNREAD)
+        return out
 
     def _finish(self, card):
         out = self.cards.withhold_keys(self._deep(card))

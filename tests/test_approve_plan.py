@@ -164,12 +164,14 @@ def test_positional_names_that_the_tree_cannot_give_are_a_defect_not_a_guess(svc
     assert e["showable"] is False and [i["name"] for i in e["inputs"]] == ["argumen 1", "argumen 2"] and c["defects"] == 1
 
 
-def test_the_fixed_line_is_always_there_and_says_what_the_machine_does_not_check(svc):
+def test_the_fixed_line_is_always_there_and_says_who_checks_what(svc):
     one(svc, [SAME, AFTER])
     c = plan(svc)[1]
     assert c["fixed_line"] == ac.FIXED_LINE
-    for part in ("Mesin memeriksa", "Tidak diperiksa mesin", "aturan bisnis", "pembaca patch", "angka di teks issue"):
+    for part in ("Mesin memeriksa: kode memberi angka ini", "Dibaca Claude, bukan mesin dan bukan Anda: apakah angkanya sesuai permintaan",
+                 "Tidak diperiksa siapa pun: aturan bisnis yang tidak tertulis", "pembaca patch: Claude", "angka di teks issue"):
         assert part in c["fixed_line"]
+    assert "(Anda)" not in c["fixed_line"] and "tugas Atha" not in c["fixed_line"]
     assert "aman" not in json.dumps(c, ensure_ascii=False).lower().replace("amankan", "")
 
 
@@ -509,3 +511,123 @@ def test_an_item_with_no_stored_entry_is_not_run_yet_unlike_a_turn_from_before_t
     with_tree(d)
     second = plan(svc)[1]["items"][1]
     assert second["why"] == NOT_RUN_WHY and "dijalankan saat job code item ini mulai" in second["examples"][0]["proof"]["wording"]
+
+
+# ---- PR 4b: what the domain reader said, and the cost as a ratio ------------------------------------------------------------------
+
+from types import SimpleNamespace  # noqa: E402
+from router import examples_read as er  # noqa: E402
+
+DEPS = SimpleNamespace(clock=lambda: "2026-11-17T10:00:00Z")
+
+
+def reader_note(svc, item=1, verdict="ok", sources=("permintaan Atha",), note="the numbers fit the request"):
+    text, info = er.bundle(svc.jobs, PJOB, item)
+    return er.record(PJOB, item, verdict, info["bundle_sha256"], "opus-7", list(sources), note, deps=DEPS, jobs_dir=svc.jobs)
+
+
+def dr(c, item=0):
+    return c["items"][item]["domain_read"]
+
+
+def test_the_card_says_the_domain_is_unread_until_a_reader_wrote_a_note(svc):
+    one(svc, [SAME, AFTER])
+    c = plan(svc)[1]
+    assert c["domain_read_label"] == ac.DOMAIN_LABEL and "bukan manusia" in ac.DOMAIN_LABEL and "bukan bukti" in ac.DOMAIN_LABEL
+    assert dr(c) == {"kind": "none", "fresh": False, "why": ac.DOMAIN_UNREAD}
+    assert "belum dibaca" in ac.DOMAIN_UNREAD and "belum dinilai siapa pun" in ac.DOMAIN_UNREAD
+
+
+def test_an_ok_and_a_concerns_note_are_shown_with_who_when_sources_and_the_note_as_model_text(svc):
+    d = one(svc, [SAME, AFTER])
+    (d / "runs" / f"{PJOB}-w1" / "source" / "README.md").write_text("The floor of a total is 0.\n")
+    reader_note(svc, sources=("permintaan Atha", "dokumen repo: README.md"))
+    d = dr(plan(svc)[1])
+    assert d["kind"] == "ok" and d["fresh"] is True and d["verdict"] == "ok" and d["reader"] == {"kind": "claude", "id": "opus-7"}
+    assert d["at"] == "2026-11-17T10:00:00Z" and d["sources"] == ["permintaan Atha", "dokumen repo: README.md"] and d["note"] == "the numbers fit the request"
+    reader_note(svc, verdict="concerns", sources=("hanya tulisan penulis",), note="the 3% is only in the PRD")
+    d = dr(plan(svc)[1])
+    assert d["kind"] == "concerns" and d["fresh"] is True and d["note"] == "the 3% is only in the PRD"
+
+
+def test_a_note_is_stale_when_anything_it_was_bound_to_changed(svc):
+    d = one(svc, [SAME, AFTER])
+    reader_note(svc)
+    with_tree(d, "def total(a, b):\n    return 0\n")                                   # the numbers card changes: another bundle
+    got = dr(plan(svc)[1])
+    assert got["kind"] == "stale" and got["fresh"] is False and "note" not in got and "reader" not in got and got["why"] == ac.DOMAIN_STALE
+
+
+def test_a_damaged_note_file_is_an_error_and_counts_as_unread(svc):
+    d = one(svc, [SAME, AFTER])
+    reader_note(svc)
+    (d / "examples_read_w1.json").write_text("{")
+    got = dr(plan(svc)[1])
+    assert got["kind"] == "error" and got["fresh"] is False and got["why"] == ac.DOMAIN_ERROR
+
+
+def test_an_item_without_examples_has_nothing_to_read_and_says_so(svc):
+    stored = {"examples": [], "results": [], "no_examples": "the text is the contract", "note": None, "tier_moves": []}
+    d, _ = write_prd(svc.jobs, [issue_text()], [stored])
+    with_tree(d)
+    got = dr(plan(svc)[1])
+    assert got == {"kind": "tidak_berlaku", "fresh": False, "why": ac.DOMAIN_NONE}
+    assert "tidak ada angka baru yang dibaca" in ac.DOMAIN_NONE
+
+
+def test_a_folder_that_cannot_be_read_by_the_reader_is_said_not_hidden(svc):
+    d = one(svc, [SAME, AFTER])
+    reader_note(svc)
+    (d / "prd-w1" / "SUPERSEDED").write_text("x")
+    got = dr(plan(svc)[1])
+    assert got["kind"] == "tidak_terbaca" and got["fresh"] is False and "SUPERSEDED" in got["why"]
+
+
+def test_a_withheld_item_has_no_reading(svc):
+    leak = {**SAME, "setup": "from src.shop import total; k1 = 'sk-ant-'", "run": "'abcdefghij1234' and total([2, 3], 1)"}
+    d, _ = write_prd(svc.jobs, [issue_text(leak)], [stored_for([leak])])
+    with_tree(d)
+    item = plan(svc)[1]["items"][0]
+    assert item["examples"] == {"withheld": True} and item["domain_read"]["kind"] == "tidak_terbaca"
+
+
+def test_the_note_text_is_scrubbed_like_all_card_text(svc):
+    one(svc, [SAME, AFTER])
+    text, info = er.bundle(svc.jobs, PJOB, 1)
+    reader_note(svc, note="fine\u202e end")
+    assert "\u202e" not in json.dumps(plan(svc)[1], ensure_ascii=False)
+
+
+def test_the_cost_ratio_is_written_by_the_machine_per_issue_against_the_reference(svc):
+    d, _ = write_prd(svc.jobs, [issue_text(SAME, AFTER), issue_text(AFTER, title="Second")], [stored_for([SAME, AFTER]), stored_for([AFTER])])
+    with_tree(d)
+    assert plan(svc)[1]["cost"]["ratio"] is None and plan(svc)[1]["cost"]["ratio_text"] is None           # no reference yet
+    for n, usd in enumerate((0.10, 0.30, 0.20, 0.50), 1):
+        write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": usd}})
+    cost = plan(svc)[1]["cost"]
+    assert cost["proposed_each"] == 1.0 and cost["reference"]["median"] == 0.25
+    assert cost["ratio"] == 4.0 and cost["ratio_text"] == "kira-kira 4× acuan per issue"
+    data = json.loads((d / "job.json").read_text())
+    data["prd_turns"][-1]["max_usd"] = 2.6                                              # 1.3 per issue: 5.2 times 0.25
+    (d / "job.json").write_text(json.dumps(data))
+    assert plan(svc)[1]["cost"]["ratio_text"] == "kira-kira 5,2× acuan per issue"
+    data["prd_turns"][-1]["max_usd"] = 0.2                                              # 0.1 per issue: below the reference
+    (d / "job.json").write_text(json.dumps(data))
+    assert plan(svc)[1]["cost"]["ratio_text"] == "kira-kira 0,4× acuan per issue"
+
+
+def test_a_reference_of_zero_gives_no_ratio(svc):
+    one(svc, [SAME, AFTER])
+    for n in range(1, 5):
+        write_job(svc.jobs, f"j20261116_10000{n}_aaa{n}", kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.0}})
+    cost = plan(svc)[1]["cost"]
+    assert cost["reference"]["median"] == 0.0 and cost["ratio"] is None and cost["ratio_text"] is None
+
+
+def test_the_page_shows_the_reading_with_its_label_and_the_ratio():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    part = js[js.index("var DOMAIN_LABEL"):js.index("// ---- T2: read-only cards")]
+    assert "it.domain_read" in part and "d.domain_read_label" in part and "d.cost.ratio_text" in part
+    for word in ("Dibaca Claude", "ada yang meragukan", "basi"):
+        assert word in part
+    assert "innerHTML" not in part
