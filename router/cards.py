@@ -157,7 +157,7 @@ class Cards:
     def examples(self, text, stored, bound):
         """The examples card of one issue. text: the issue text read now (None: not readable). stored: what the writer's turn kept
         ({examples, results, no_examples, note, tier_moves}) or None. bound: the file read now is the one the stored results belong to."""
-        card = {"calls": [], "results": None, "why": None, "no_examples": None, "note": None, "tier_moves": []}
+        card = {"calls": [], "results": None, "why": None, "no_examples": None, "note": None, "tier_moves": [], "summary": None}
         if text is None:
             card["why"] = "teks issue tidak terbaca"
             return card
@@ -165,10 +165,12 @@ class Cards:
         card["calls"] = calls
         if self._leaks(calls):
             return {"withheld": True}
+        card["summary"] = self._summary(calls, None)
 
         def not_run():                  # an item the writer did not run (a PRD item after the first): its code job will
             card["why"] = NOT_RUN_WHY
             card["results"] = [{"id": c["id"], "tier": c["tier"], "status": NOT_RUN, "where": "belum"} for c in calls]
+            card["summary"] = self._summary(calls, card["results"])
         if not isinstance(stored, dict):
             if not calls:
                 card["why"] = "tanpa contoh"
@@ -200,7 +202,19 @@ class Cards:
             card["why"] = "id tidak cocok"
         else:
             card["results"] = self._result_rows(clean, "penulis")
+            card["summary"] = self._summary(calls, card["results"])
         return card
+
+    @staticmethod
+    def _summary(calls, results):
+        """Counts only, from machine fields (the tier of each call, the status of each result): how many examples, how many check the new
+        behaviour (tier `after`), and the statuses. `after` = 0 is the line a reader needs: a rule with a new number and no `after` example
+        has a number the machine did not check."""
+        statuses = {}
+        for r in results or []:
+            statuses[r["status"]] = statuses.get(r["status"], 0) + 1
+        return {"calls": len(calls), "after": sum(1 for c in calls if c["tier"] == "after"),
+                "whatif": sum(1 for c in calls if c["tier"] == "whatif"), "statuses": statuses}
 
     @staticmethod
     def _leaks(calls):
@@ -655,7 +669,7 @@ class Cards:
                     conv = [m for m in data.get("conversation") or [] if isinstance(m, dict) and m.get("from") == "human"]
                     first = (conv[0].get("text") if conv and isinstance(conv[0].get("text"), str) else "").split("\n", 1)[0]
                     turns = [t for t in data.get("prd_turns") or [] if isinstance(t, dict)]
-                    rows.append({"id": jid, "kind": "prd", "title": self.s(first), "state": self.s(data.get("state")),
+                    rows.append({"id": jid, "kind": "prd", "title": self.s(first[:100] + ("…" if len(first) > 100 else "")), "state": self.s(data.get("state")),
                                  "repo": self.s(data["inputs"].get("repo_name")), "at": self.s(data.get("created_at")),
                                  "items": turns[-1].get("items") if turns and isinstance(turns[-1].get("items"), int) else None})
             finally:

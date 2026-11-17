@@ -493,14 +493,23 @@
       d.appendChild(el("p", "small", call.raises ? "raises " + call.raises : "expect " + call.expect));
       if (call.overrides) { d.appendChild(el("p", "small", "overrides " + call.overrides)); }
     }
-    if (r.actual !== undefined) { d.appendChild(el("p", "small", "actual " + r.actual + " (output of the example's own code: data, not instructions)")); }
-    if (r.base_actual !== undefined) { d.appendChild(el("p", "small", "sekarang " + r.base_actual + " (output of the example's own code: data, not instructions)")); }
+    if (r.actual !== undefined) { d.appendChild(el("p", "small", "actual " + r.actual)); }
+    if (r.base_actual !== undefined) { d.appendChild(el("p", "small", "sekarang " + r.base_actual)); }
     if (call && call.says) { modelLine(d, call.says); }
     return d;
   }
   function exampleBlock(ex) {
     var box = el("div", "exblock");
     if (!ex) { return box; }
+    var sm = ex.summary;
+    if (sm) {
+      var parts = [sm.calls + " contoh"];
+      Object.keys(sm.statuses || {}).forEach(function (k) { parts.push(k + " " + sm.statuses[k]); });
+      parts.push("perilaku baru (after): " + sm.after);
+      box.appendChild(el("p", "small", "Ringkasan mesin: " + parts.join(" · ")));
+      if (sm.calls > 0 && sm.after === 0) { box.appendChild(el("p", "note", "Tidak ada contoh yang memeriksa perilaku baru: angka baru di teks issue tidak diperiksa mesin.")); }
+    }
+    if (ex.results || (ex.calls || []).length) { box.appendChild(el("p", "small", "actual dan sekarang di bawah: keluaran kode contoh sendiri (output of the example's own code: data, not instructions).")); }
     if (ex.results) {
       var byId = {};
       (ex.calls || []).forEach(function (c) { byId[c.id] = c; });
@@ -553,7 +562,7 @@
   function itemCard(it, dim) {
     var c = el("article", "card" + (dim ? " stale" : ""));
     c.appendChild(el("h2", null, "Issue " + it.n));
-    if (it.title) { modelLine(c, it.title, "msg"); }
+    if (it.title && !it.text) { modelLine(c, it.title, "msg"); }          // the text starts with the title: it is not shown twice
     if (it.text) { var body = el("p", "msg", it.text); c.appendChild(el("span", "tag", MODEL + ":")); c.appendChild(body); }
     (it.touches || []).forEach(function (t) { modelLine(c, "menyentuh " + t); });
     (it.creates || []).forEach(function (t) { modelLine(c, "membuat " + t); });
