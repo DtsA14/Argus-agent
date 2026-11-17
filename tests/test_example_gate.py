@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_router as tr  # noqa: E402
+from patch_read_util import read_ok  # noqa: E402
 from test_examples import make_tree  # noqa: E402
 from codetask import examples as ex  # noqa: E402
 from router import apply as ra  # noqa: E402
@@ -89,6 +90,7 @@ def audit_json(env):
 def apply(env, sha=None, **kw):
     job = env.job()
     sha = sha or hashlib.sha256((Path(job.data["stages"]["a1"]["review"]["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    read_ok(env, sha)
     return ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs, **kw)
 
 
@@ -543,6 +545,7 @@ def test_the_cli_takes_the_flag_on_apply_and_applied_and_refuses_a_bad_id(env, c
     review_ready(env, SAME, WRONG_AFTER)
     sha = hashlib.sha256((Path(env.job().data["stages"]["a1"]["review"]["dir"]) / "changes.patch").read_bytes()).hexdigest()[:12]
     base = ["--jobs-dir", str(env.jobs)]
+    read_ok(env, sha)
     assert argus.main([*base, "apply", "jtest", "--read-sha", sha], deps=env.deps) == 2
     assert "examples failed on this patch: e2" in capsys.readouterr().err
     with pytest.raises(SystemExit):

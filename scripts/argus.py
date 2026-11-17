@@ -140,8 +140,16 @@ def main(argv=None, deps=None):
     ap_.add_argument("job")
     ap_.add_argument("--read-sha", required=True, help="the patch's sha256 that status prints, at least 12 characters: you read that patch")
     ap_.add_argument("--note")
+    ap_.add_argument("--reader", choices=("claude",), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
     ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
                      "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
+    pr_ = sub.add_parser("patch-read", help="the note of a patch reader before `apply` (SPEC_KARTU_SETUJU 5): a Claude session's statement, not a proof and not a human")
+    pr_.add_argument("job")
+    pr_.add_argument("--sha", required=True, help="the sha256 of the patch you read (status prints it), at least 12 characters")
+    pr_.add_argument("--verdict", required=True, choices=("ok", "concerns"))
+    pr_.add_argument("--note", required=True, help="what you read and what you found")
+    pr_.add_argument("--reader", required=True, choices=("claude",))
+    pr_.add_argument("--reader-id", help="the model or session that read it")
     p = sub.add_parser("applied")
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
@@ -365,9 +373,15 @@ def main(argv=None, deps=None):
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
             return 0
+        if o.cmd == "patch-read":
+            from router import patch_read as prd_
+            rec = prd_.record(o.job, o.sha, o.verdict, o.note, o.reader, o.reader_id, deps=deps, jobs_dir=o.jobs_dir)
+            print(f"patch-read note for {o.job} {rec['sid']} {rec['patch_sha256'][:12]}: {rec['verdict']} by {rec['reader']['kind']}: {prd_.LABEL}")
+            return 0
         if o.cmd == "apply":
             from router import apply as ra
-            done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples)
+            done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples,
+                            reader=o.reader)
             print(rj.status(done.id, jobs_dir=o.jobs_dir))
             e = done.data["log"][-1]
             print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}); not pushed, not deployed.\n"

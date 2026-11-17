@@ -1,0 +1,23 @@
+"""For the tests of `argus apply`: since SPEC_KARTU_SETUJU 5 an apply needs an `ok` patch-read note for the patch on disk. `read_ok` writes it through the
+real command. It writes nothing only when the test has made the job one that cannot take a note (not REVIEW_READY, no package, a patch changed after the
+review recorded it): that test meets its own refusal first. Any other refusal of the command is a real failure and is raised."""
+import hashlib
+from pathlib import Path
+
+from router import job as rj
+from router import patch_read as pr
+
+
+def read_ok(env, sha=None, verdict="ok"):
+    job = env.job()
+    if job.data["state"] != rj.REVIEW_READY:
+        return
+    sid, stage = rj.last_agent(job)
+    review = (stage or {}).get("review") or {}
+    try:
+        disk = hashlib.sha256((Path(review["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    except (KeyError, OSError):
+        return
+    if review.get("patch_sha256") != disk or (sha is not None and not disk.startswith(sha[:12])):
+        return
+    pr.record(job.id, disk[:12], verdict, "test note", "claude", deps=env.deps, jobs_dir=env.jobs)

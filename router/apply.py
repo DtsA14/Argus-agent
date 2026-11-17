@@ -18,6 +18,7 @@ from pathlib import Path
 
 from acceptance.contract import matches
 from router import job as rj
+from router import patch_read as pr
 
 ROOT = Path(__file__).resolve().parent.parent
 LOCAL_OK = re.compile(r"^(core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase)|user\..+|remote\..+|branch\..+)$")
@@ -93,12 +94,12 @@ def raw_entries(out):
     return entries
 
 
-def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=()):
+def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None):
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
         repo = job.data["inputs"]["repo"]
         with lock_repo(jobs_dir, repo):
-            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()))
+            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader)
 
 
 def _title(review_dir, job_id):
@@ -113,7 +114,7 @@ def _title(review_dir, job_id):
     return f"job {job_id}"
 
 
-def _apply(job, read_sha, *, deps, note, allow=()):
+def _apply(job, read_sha, *, deps, note, allow=(), reader=None):
     def refuse(why):
         raise rj.Refused(f"job {job.id}: {why}; nothing was changed")
 
@@ -135,6 +136,11 @@ def _apply(job, read_sha, *, deps, note, allow=()):
         refuse(f"--read-sha is not the sha of the patch on disk ({sha[:12]}...): read that patch and give its sha")
     if recorded != sha or (prov.get("patch") or {}).get("sha256") != sha:
         refuse("the patch on disk is not the one the review recorded (job.json and provenance.json must both name it)")
+    try:                                    # SPEC_KARTU_SETUJU 5: an `ok` note of a patch reader for these very bytes, before anything is touched
+        pr.require_ok(job, rj.last_agent(job)[0], sha, reader)
+    except rj.Refused as e:
+        refuse(str(e).split(": ", 1)[1] if ": " in str(e) else str(e))
+    extra = {"reader": reader} if reader else {}
     listed = sorted(f["path"] for f in (prov.get("patch") or {}).get("files") or [])
     globs = (job.data.get("protected_repo") or {}).get("globs") or []
     hit = [p for p in listed if matches(p, globs)]
@@ -164,7 +170,7 @@ def _apply(job, read_sha, *, deps, note, allow=()):
             refuse(f"the repository's local git configuration has keys this command does not accept ({', '.join(bad[:5])}); apply by hand")
         head = run_git(repo, "rev-parse", "HEAD").decode().strip()
         started = [e for e in job.data.get("log") or [] if e.get("what") == "apply_started"]
-        if started and _recovered(job, repo, head, started[-1], sha, patch, deps, note, read_sha, allow):
+        if started and _recovered(job, repo, head, started[-1], sha, patch, deps, note, read_sha, allow, extra):
             return job
         identity = _identity(repo)
         if identity is None:
@@ -208,7 +214,7 @@ def _apply(job, read_sha, *, deps, note, allow=()):
         refuse("the files the patch changes are not the files the package lists")
     # 6. the change itself: logged first, applied to the tree and the index, committed
     title = _title(review_dir, job.id)
-    job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha, **({"examples_failed": failed} if failed else {}))
+    job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha, **extra, **({"examples_failed": failed} if failed else {}))
     commit = None
     try:
         run_git(repo, "apply", "--index", "--whitespace=nowarn", data=patch)
@@ -233,7 +239,7 @@ def _apply(job, read_sha, *, deps, note, allow=()):
     if parent != head:
         raise rj.Refused(f"job {job.id}: HEAD moved while the patch went in: the commit {commit[:12]} was made on {str(parent)[:12]}, not on {head[:12]}; "
                          "it stays and the job is not recorded: look at it, then `argus applied` if it is right")
-    return _record(job, commit, deps, note, head, ref[11:], read_sha, allow=allow)
+    return _record(job, commit, deps, note, head, ref[11:], read_sha, allow=allow, **extra)
 
 
 def _undo(repo, patch):
@@ -260,7 +266,7 @@ def _record(job, commit, deps, note, head_before, branch, read_sha, allow=(), **
         raise rj.Refused(f"{e} (the commit {commit[:12]} was made and stays; record it by hand with `argus applied {job.id} --commit {commit[:12]}`)") from None
 
 
-def _recovered(job, repo, head, started, sha, patch, deps, note, read_sha, allow=()):
+def _recovered(job, repo, head, started, sha, patch, deps, note, read_sha, allow=(), extra=None):
     """A crash after the commit and before the job moved: HEAD is a child of the HEAD before, made by this job from this patch. Records it, makes no second commit."""
     if head == started.get("head_before"):
         return False
@@ -272,5 +278,5 @@ def _recovered(job, repo, head, started, sha, patch, deps, note, read_sha, allow
     trailers = dict(TRAILER.findall(message))
     if parent != started.get("head_before") or trailers.get("Argus-Job") != job.id or trailers.get("Argus-Patch-Sha256") != sha:
         return False
-    _record(job, head, deps, note, started["head_before"], started.get("branch"), read_sha, allow=allow, recovered=True)
+    _record(job, head, deps, note, started["head_before"], started.get("branch"), read_sha, allow=allow, recovered=True, **(extra or {}))
     return True
