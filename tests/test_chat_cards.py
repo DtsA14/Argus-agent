@@ -552,3 +552,96 @@ def test_the_page_marks_a_stale_folder_item_by_item_and_a_failed_card_has_a_way_
     part = js[js.index("// ---- T2: read-only cards"):js.index("  function setMode(m) {")]
     assert "itemCard(it, d.stale || d.superseded)" in part and 'if (seq !== cardSeq || mode !== "cards") { return; }' in part
     assert part.count('"Semua kartu"') == 2 and 'r.status === "pass"' in part
+
+
+# ---- the survivors of the first mutant run --------------------------------------------------------------------------------------
+
+def test_a_key_split_between_quoted_pieces_is_withheld(svc):
+    split = {**SAME, "setup": "from src.shop import total; k1 = 'sk-ant-'", "run": "'abcdefghij1234' and total([2, 3], 1)"}   # quotes between the halves
+    write_prd(svc.jobs, [issue_text(split)], [stored_for([split])])
+    assert card(svc, "prd", PJOB)[1]["items"][0]["examples"] == {"withheld": True}
+
+
+def test_an_item_with_no_stored_entry_at_all_is_not_run_and_a_bad_tier_move_is_dropped(svc):
+    write_prd(svc.jobs, [issue_text(SAME), issue_text(AFTER, title="Two")], [stored_for([SAME]), None])
+    second = card(svc, "prd", PJOB)[1]["items"][1]["examples"]
+    assert [r["status"] for r in second["results"]] == [rcards.NOT_RUN]
+    bad = stored_for([SAME])
+    bad["tier_moves"] = [{"id": "e1", "from": "same", "to": "bogus"}, {"id": "zz", "from": "same", "to": "after"},
+                         {"id": "e1", "from": "after", "to": "same"}, "x"]
+    write_prd(svc.jobs, [issue_text(SAME)], [bad])
+    assert card(svc, "prd", PJOB)[1]["items"][0]["examples"]["tier_moves"] == [{"id": "e1", "from": "after", "to": "same"}]
+
+
+def test_a_result_file_with_bytes_that_are_not_utf8_inside_a_value_is_an_error(svc):
+    text = issue_text(SAME, AFTER)
+    parsed = handed_off(svc, text)
+    raw = json.dumps({"key": eg.audit_key("7" * 64, parsed), "results": None, "skipped": "ZZ"}).encode()
+    (svc.jobs / CJOB1 / "examples_audit_a1.json").write_bytes(raw.replace(b"ZZ", b"a\xffb"))
+    assert svc.request("GET", f"/api/issues/{IJOB}")[1]["examples"]["after_agent"]["kind"] == "error"
+
+
+def test_a_folder_that_changed_in_another_file_shows_no_status_even_when_the_examples_are_the_same(svc):
+    d, _ = write_prd(svc.jobs, [issue_text(SAME)], [stored_for([SAME])])
+    (d / "prd-w1" / "PRD.md").write_text("Goal: edited after the turn.\n")
+    item = card(svc, "prd", PJOB)[1]["items"][0]["examples"]
+    assert item["results"] is None and item["why"] == "berkas tidak cocok dengan hasil"
+
+
+def test_a_queue_directory_that_is_not_a_queue_id_or_has_the_wrong_shape_is_a_404(svc):
+    (svc.queues / "weird").mkdir()
+    (svc.queues / "weird" / "queue.json").write_text(json.dumps({"id": "weird", "repo": "r", "name": "n", "base_commit": "c", "jobs_dir": str(svc.jobs),
+                                                                  "max_usd": 1, "job_cap_usd": 1, "items": [{"n": 1, "issue_sha256": "x"}]}))
+    assert card(svc, "queue", "weird")[0] == 404
+    write_queue(svc, [(issue_text(SAME), None)], approved={"sha": "x"}, prd={"sha": "short", "dir": "/x/y/z"})
+    assert card(svc, "queue", QID)[0] == 404
+
+
+def test_a_queue_only_points_at_a_prd_job_of_this_jobs_directory(svc, tmp_path):
+    write_prd(svc.jobs, [issue_text(SAME)], [stored_for([SAME])])
+    write_queue(svc, [(issue_text(SAME), None)], approved={"sha": "x"}, prd={"sha": "a" * 64, "dir": str(tmp_path / "elsewhere" / PJOB / "prd-w1")})
+    assert card(svc, "prd", PJOB)[1]["queues"] == []
+
+
+def test_an_applied_job_that_is_not_the_patch_and_a_blocked_one_stop_the_queue(svc):
+    t1 = issue_text(SAME)
+    write_queue(svc, [(t1, CJOB1)], approved={"sha": "x"})
+    d = code_job(svc, CJOB1, t1, state="APPLIED", log=[{"at": "t", "what": "state", "new": "APPLIED", "commit": "e" * 40, "as_is": False}])
+    assert card(svc, "queue", QID)[1]["state"] == "STOPPED" and "tidak tercatat sebagai patch" in card(svc, "queue", QID)[1]["next"]
+    j = json.loads((d / "job.json").read_text())
+    j.update(state="BLOCKED", stages={}, log=[])
+    (d / "job.json").write_text(json.dumps(j))
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and "BLOCKED sebelum tahap pertama" in c["next"]
+
+
+def test_a_prd_card_with_an_odd_shape_that_raises_is_a_404_not_a_dropped_connection(svc):
+    d, _ = write_prd(svc.jobs, [issue_text(SAME)], [stored_for([SAME])])
+    j = json.loads((d / "job.json").read_text())
+    j["prd_turns"][0]["touches"] = 5                                       # a list is expected: indexing it raises
+    (d / "job.json").write_text(json.dumps(j))
+    assert card(svc, "prd", PJOB)[0] in (200, 404) and svc.request("GET", "/api/cards")[0] == 200
+
+
+def test_a_folder_file_over_its_limit_is_not_read(svc):
+    d, _ = write_prd(svc.jobs, [issue_text(SAME)], [stored_for([SAME])])
+    (d / "prd-w1" / "PRD.md").write_bytes(b"x" * (rcards.DOC_MAX + 1))
+    c = card(svc, "prd", PJOB)[1]
+    assert c["items"] == [] and c["why"] == "berkas folder tidak terbaca atau terlalu besar"
+
+
+def test_the_list_returns_at_most_the_row_cap_and_says_it_was_cut(svc, monkeypatch):
+    monkeypatch.setattr(rcards, "ROWS_MAX", 3)
+    for i in range(5):
+        write_job(svc.jobs, f"j20261117_10000{i}_aaaa", kind="prd", prd_turns=[], conversation=[])
+    got = svc.request("GET", "/api/cards")[1]
+    assert len(got["rows"]) == 3 and got["truncated"] is True
+
+
+def test_the_issue_page_keeps_the_block_when_there_is_no_examples_card(svc):
+    text = issue_text(SAME)
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    d = write_job(svc.jobs, IJOB, kind="issue", issue_sha256=sha, conversation=[{"from": "human", "text": "a"}])    # no writer message of this issue
+    (d / "issue.txt").write_text(text)
+    got = svc.request("GET", f"/api/issues/{IJOB}")[1]
+    assert got["examples"] is None and "argus-examples" in got["issue"]["text"]
