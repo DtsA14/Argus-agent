@@ -412,7 +412,7 @@ def main(argv=None, deps=None):
         if o.cmd == "apply":
             from router import apply as ra
             done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples,
-                            reader=o.reader)
+                            reader=o.reader, queues_dir=o.queues_dir)
             print(rj.status(done.id, jobs_dir=o.jobs_dir))
             e = done.data["log"][-1]
             print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}); not pushed, not deployed.\n"

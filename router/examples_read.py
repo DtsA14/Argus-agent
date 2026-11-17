@@ -24,6 +24,7 @@ from router import card_numbers as cn
 from router import example_gate as eg
 from router import job as rj
 from router import prd as rp
+from router import queue as rq
 from router import stage_data as sd
 from router.approve_cards import RUN_ID, TIER_ORDER, Approve
 from router.cards import ITEMS_MAX, TURN, Cards, OPEN_DIR, OPEN_FILE, _open_dir
@@ -174,7 +175,7 @@ def gather(jobs_dir, job_id, item):
                 body, cut = body[:DOCS_MAX - total], True
             total += len(body)
             docs.append((name, body, cut))
-        return {"job": job_id, "turn": turn, "folder_sha": folder_sha, "commit": commit, "item": item, "digest": eg.digest(parsed),
+        return {"job": job_id, "turn": turn, "folder_sha": folder_sha, "commit": commit, "item": item, "digest": eg.digest(parsed), "issue_sha256": hashlib.sha256(files[f"issue-{item}.md"]).hexdigest(),
                 "request": human, "tree": src_fd is not None, "prd": files["PRD.md"].decode("utf-8", "replace"), "issue": eg.without_block(text),
                 "cards": cards, "docs": docs, "dropped": dropped}
     finally:
@@ -238,7 +239,7 @@ def bundle(jobs_dir, job_id, item):
     return text, {"request_ok": any(m.strip() and not _data(m, REQUEST_MAX)[0].startswith(WITHHELD) for m in g["request"]),
                   "examples_ok": not _data("\n\n".join(_card_lines(c) for c in g["cards"]), CARDS_MAX)[0].startswith(WITHHELD),
                   "docs_ok": usable, "job": job_id, "turn": g["turn"], "folder_sha": g["folder_sha"], "commit": g["commit"], "item": item, "digest": g["digest"],
-                  "bundle_sha256": sha(text), "template_sha256": TEMPLATE_SHA256, "docs": [d[0] for d in g["docs"]]}
+                  "issue_sha256": g["issue_sha256"], "bundle_sha256": sha(text), "template_sha256": TEMPLATE_SHA256, "docs": [d[0] for d in g["docs"]]}
 
 
 # ---- the note -----------------------------------------------------------------------------------------------------------------------
@@ -375,3 +376,71 @@ def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps,
             os.fsync(f.fileno())
         os.replace(tmp, target)
     return entry
+
+
+# ---- the chain from a code job back to the note (SPEC_KARTU_SETUJU 5, "Rantai ikatan ke job code") --------------------------------------
+
+def _chain_result(applicable, ok, kind, why, **more):
+    return {"applicable": applicable, "ok": ok, "kind": kind, "why": why, "rec": None, "prd_job": None, "item": None, **more}
+
+
+def chain(job, jobs_dir, queues_dir=None):
+    """Whether the domain reader's note holds for this code job, as `argus apply` and the install card both need it: {applicable, ok, kind, why, rec,
+    prd_job, item}. Not applicable (and ok) for a job whose issue has no examples block or that is not an item of a queue made from a PRD folder.
+    Otherwise ok only when all of these match: the queue's PRD folder sha is the folder of the last turn of the PRD job and the turn named by its
+    directory; the sha of that folder's issue file is the item's `issue_sha256`; the examples of the job's own issue are exactly the ones the note
+    was written for (their digest); and the note, read against the bundle as it is NOW, is `ok`. Read only: files through descriptors, no write."""
+    present, parsed, problems = eg.extract((job.data.get("inputs") or {}).get("issue"))
+    if not present or problems or not parsed:
+        return _chain_result(False, True, "tidak_berlaku", "the issue has no examples")
+    c = Cards(jobs_dir, queues_dir if queues_dir else rq.QUEUES, lambda t: t)
+    qfd = c._queues_fd()
+    if qfd is None:
+        return _chain_result(False, True, "tidak_berlaku", "there is no queues directory: the job is not an item of a PRD queue")
+    matches = []
+    try:
+        for name in sorted(n for n in os.listdir(qfd) if rq.QUEUE_ID.fullmatch(n)):
+            got = c._queue_json(qfd, name)
+            if got is None:
+                continue
+            q, dfd = got
+            os.close(dfd)
+            if not c._same_jobs_dir(q):
+                continue
+            matches += [(name, q, it) for it in q["items"] if it.get("job") == job.id]
+    finally:
+        os.close(qfd)
+    if not matches:
+        return _chain_result(False, True, "tidak_berlaku", "the job is not an item of a queue of this jobs directory")
+    if len(matches) > 1:
+        return _chain_result(True, False, "tidak_terbaca", "the job is an item of more than one queue")
+    _, q, it = matches[0]
+    if not q.get("prd"):
+        return _chain_result(False, True, "tidak_berlaku", "the queue was not made from a PRD folder")
+
+    def bad(why, **more):
+        return _chain_result(True, False, more.pop("kind", "tidak_terbaca"), why, **more)
+    prd_job = c._prd_job_of(q)
+    turn = Path(q["prd"]["dir"]).name
+    if prd_job is None or not turn.startswith("prd-") or not TURN.fullmatch(turn[4:]):
+        return bad("the PRD folder of the queue is not in this jobs directory")
+    n = it.get("n")
+    try:
+        _, info = bundle(jobs_dir, prd_job, n)
+    except rj.Refused as e:
+        return bad(f"the PRD folder of this item cannot be read now ({str(e).split(': ', 1)[-1].split('; nothing')[0]})", prd_job=prd_job, item=n)
+    more = {"prd_job": prd_job, "item": n}
+    if info["turn"] != turn[4:] or info["folder_sha"] != q["prd"]["sha"]:
+        return bad("the PRD folder is not the one this queue was made from", **more)
+    if info["issue_sha256"] != it.get("issue_sha256"):
+        return bad("the issue of the PRD folder is not the issue of the queue item", **more)
+    if info["digest"] != eg.digest(parsed):
+        return bad("the examples of the job's issue are not the examples the PRD item had", **more)
+    try:
+        kind, rec = status(jobs_dir, prd_job, n)
+    except rj.Refused as e:
+        return bad(f"the note cannot be checked ({str(e).split(': ', 1)[-1].split('; nothing')[0]})", **more)
+    why = {"none": "no domain reader's note for this item", "stale": "the domain reader's note is stale: what it read has changed",
+           "error": "the domain reader's note cannot be read", "concerns": "the domain reader recorded concerns"}.get(kind)
+    out = _chain_result(True, kind == "ok", kind, why, rec=rec, **more)
+    return out

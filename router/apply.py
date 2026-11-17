@@ -18,6 +18,7 @@ from pathlib import Path
 
 from acceptance.contract import matches
 from router import job as rj
+from router import examples_read as er
 from router import patch_read as pr
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -94,12 +95,12 @@ def raw_entries(out):
     return entries
 
 
-def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None):
+def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None, queues_dir=None):
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
         repo = job.data["inputs"]["repo"]
         with lock_repo(jobs_dir, repo):
-            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader)
+            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader, queues_dir=queues_dir)
 
 
 def _title(review_dir, job_id):
@@ -114,7 +115,7 @@ def _title(review_dir, job_id):
     return f"job {job_id}"
 
 
-def _apply(job, read_sha, *, deps, note, allow=(), reader=None):
+def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None):
     def refuse(why):
         raise rj.Refused(f"job {job.id}: {why}; nothing was changed")
 
@@ -140,6 +141,10 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None):
         pr.require_ok(job, rj.last_agent(job)[0], sha, reader)
     except rj.Refused as e:
         refuse(str(e).split(": ", 1)[1] if ": " in str(e) else str(e))
+    res = er.chain(job, job.dir.parent, queues_dir)            # SPEC_KARTU_SETUJU 5: an item of a PRD queue needs a fresh `ok` note on the numbers
+    if res["applicable"] and not res["ok"]:
+        how = f" (argus examples-read {res['prd_job']} --item {res['item']} --bundle, then --verdict ok ...)" if res["prd_job"] else ""
+        refuse(f"{res['why']}; apply needs an ok note of the domain reader for an item of a PRD queue{how}")
     extra = {"reader": reader} if reader else {}
     listed = sorted(f["path"] for f in (prov.get("patch") or {}).get("files") or [])
     globs = (job.data.get("protected_repo") or {}).get("globs") or []
