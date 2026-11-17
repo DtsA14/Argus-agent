@@ -21,6 +21,39 @@ Every model call of every pipeline passes through one place (`harness/llm.py`), 
 ledger around the call. What a stage finished is committed to the memo and never bought twice. Code the model writes runs only in
 the Docker sandbox.
 
+```text
+you --phone----> chat app (router/chat.py) --+
+you --terminal-> scripts/argus.py -----------+
+                                             v
+                      router/  (job.json = the state of the job)
+             +-----------------+-------------------+
+             v                                     v
+   CODE JOB                                 RESEARCH JOB
+   research r1 (optional)                   planner
+        v                                        v
+   drafter                                  web workers
+        v                                        v
+   [you approve]                            synthesis
+        v                                        v
+   setup > agent > acceptance               claim checker e1
+        v
+   judge (advice)
+        v
+   [you apply]
+        v
+   staging
+
+every model call of every stage:
+   harness/llm.py  LLMCaller: reserve > refuse if it does not fit > call
+        |-----> ledger  events.jsonl (before and after each call)
+        '-----> memo    memo.sqlite   (a committed result is never bought twice)
+
+code the model writes (RunPython, example code, validation)
+   '-----> Docker sandbox: no network, read-only
+```
+
+<details><summary>The same as a Mermaid diagram (GitHub's web page draws it; the phone app shows the code)</summary>
+
 ```mermaid
 flowchart LR
     H([you]) -->|phone| CHAT["chat app<br/>router/chat.py"]
@@ -46,8 +79,19 @@ flowchart LR
     RUN -.->|"RunPython, example code,<br/>validation"| BOX["Docker sandbox<br/>no network, read-only"]
 ```
 
+</details>
+
 The demo graph (`graph.py`, run by `main.py`) is a different, smaller thing: an orchestrator plans, workers run in parallel,
 synthesize writes the report, and the evaluator scores it; the loop stops on pass, budget or stagnation.
+
+```text
+orchestrator > workers (parallel) > synthesize > evaluator
+      ^                                              |
+      '------ score too low, budget left ------------'
+evaluator: pass, budget or stagnation > run_end + result.json
+```
+
+<details><summary>Mermaid version</summary>
 
 ```mermaid
 flowchart LR
@@ -56,6 +100,7 @@ flowchart LR
     V -->|"pass / budget / stagnation"| FIN([run_end + result.json])
 ```
 
+</details>
 ## Quick start
 
     pip install -r requirements.txt
