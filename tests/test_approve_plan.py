@@ -701,3 +701,17 @@ def test_the_page_shows_the_label_next_to_every_reading_and_never_a_reading_with
     plan_js = js[js.index("function showPlan"):js.index("// ---- T2: read-only cards")]
     assert plan_js.index("DOMAIN_LABEL = d.domain_read_label") < plan_js.index("(d.items || []).forEach")
     assert 'el("p", "note", "Dibaca Claude: basi' not in js and "batas itu pagar, bukan perkiraan biaya" in js
+
+
+def test_an_unexpected_failure_of_the_reading_never_breaks_the_card_or_shows_a_reading(svc, monkeypatch):
+    one(svc, [SAME, AFTER])
+    reader_note(svc)
+    monkeypatch.setattr(er, "status", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    status, c = plan(svc)
+    got = c["items"][0]["domain_read"]
+    assert status == 200 and got["kind"] == "tidak_terbaca" and got["fresh"] is False and "note" not in got and "boom" not in json.dumps(c)
+
+
+def test_the_page_guards_a_card_without_a_reading():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    assert "    if (it.domain_read) { planReading(c, it.domain_read); }" in js
