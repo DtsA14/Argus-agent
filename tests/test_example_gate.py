@@ -554,12 +554,9 @@ def test_the_cli_takes_the_flag_on_apply_and_applied_and_refuses_a_bad_id(env, c
 # ---- the public snapshot and what a model can reach --------------------------------------------------------------------------
 
 def test_a_job_with_example_data_projects_to_the_public_snapshot_as_any_other(env):
-    """`repro` and `repro_patched` entries exclude a job from the snapshot today (they are not in stage_data.LOG_WHAT; reported, not
-    changed here): they are left out of the log below so that what this PR adds is what is tested."""
     review_ready(env, SAME, WRONG_AFTER)
     raw = json.loads(json.dumps(apply(env, allow_failed_examples=("e2",)).data))
-    raw["log"] = [e for e in raw["log"] if e["what"] in stage_data.LOG_WHAT]
-    plain = stage_data.project_job(raw, "jtest")
+    plain = stage_data.project_job(raw, "jtest")                         # the whole log: repro and apply_started are known kinds now
     assert plain["state"] == rj.APPLIED and "examples" not in json.dumps(plain)
 
 
