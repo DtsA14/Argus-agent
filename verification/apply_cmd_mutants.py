@@ -44,11 +44,11 @@ M = [
     ("the file list not compared", A, [off("    if sorted(p for _, _, _, p in entries) != listed:")]),
     ("the staged change not compared byte for byte", A, [off("    if staged != patch:")]),
     ("a failed apply is not undone", A, [("        undone = _undo(repo, patch)", "        undone = True")]),
-    ("apply_started not logged", A, [('    job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha)\n', "")]),
+    ("apply_started not logged", A, [('    job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha, **({"examples_failed": failed} if failed else {}))\n', "")]),
     ("a recovered commit of another job accepted", A, [('trailers.get("Argus-Job") != job.id or ', "")]),
     ("a recovered commit of another patch accepted", A, [(' or trailers.get("Argus-Patch-Sha256") != sha', "")]),
     ("a recovered commit with another parent accepted", A, [('if parent != started.get("head_before") or ', "if ")]),
-    ("as_is not required", A, [("read_sha=read_sha, require_as_is=True, **extra)", "read_sha=read_sha, **extra)")]),
+    ("as_is not required", A, [("require_as_is=True, allow_failed_examples=allow, **extra)", "allow_failed_examples=allow, **extra)")]),
     ("as_is not required by the recorder", J, [("    if require_as_is and as_is is not True:", "    if False:")]),
     ("a failure after the commit is undone as if there was none", A, [off("        if now and now != head:")]),
     ("only git failures are undone (a bad title leaves the patch staged)", A, [("    except Exception as e:                                  # not BaseException", "    except GitFail as e:                                    # not BaseException")]),
@@ -57,9 +57,9 @@ M = [
     ("the repository lock is by path, not by real path", A, [("key = hashlib.sha256(os.path.realpath(repo).encode()).hexdigest()[:16]\n    path = Path(jobs_dir)", "key = hashlib.sha256(str(repo).encode()).hexdigest()[:16]\n    path = Path(jobs_dir)")]),
     ("no global isolation and no fsmonitor pin", A, [('        env["GIT_CONFIG_GLOBAL"] = os.devnull', "        pass"), ('"-c", "core.fsmonitor=false", ', "")]),
     ("no global isolation, no gpg pin and no --no-gpg-sign", A, [('        env["GIT_CONFIG_GLOBAL"] = os.devnull', "        pass"), ('"-c", "commit.gpgsign=false", ', ""), ('"--no-verify", "--no-gpg-sign", ', '"--no-verify", ')]),
-    ("the repository lock not taken", A, [("        with lock_repo(jobs_dir, repo):\n            return _apply(job, read_sha, deps=deps, note=note)", "        if True:\n            return _apply(job, read_sha, deps=deps, note=note)")]),
+    ("the repository lock not taken", A, [("        with lock_repo(jobs_dir, repo):\n            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()))", "        if True:\n            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()))")]),
     ("the status prints no command", J, [('                  f"  argus apply {job.id} --read-sha {sha[:12]}",\n', "")]),
-    ("the CLI does not apply", "scripts/argus.py", [("done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note)", "done = rj.open_job(o.job, o.jobs_dir)")]),
+    ("the CLI does not apply", "scripts/argus.py", [("done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples)", "done = rj.open_job(o.job, o.jobs_dir)")]),
 ]
 
 if __name__ == "__main__":

@@ -38,6 +38,7 @@ import shlex
 import stat
 import unicodedata
 import subprocess
+import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,6 +52,8 @@ from harness import redact
 from harness.redact import scrub_value
 from harness.events import parse_lines
 from harness.llm import reconcile_ledger, to_nano
+from codetask import examples as exl
+from router import example_gate as eg
 from tools.web import problem as web_problem
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -108,7 +111,7 @@ class Deps:
 
     def __init__(self, *, confirm=None, get_key=None, isatty=None, models=None, validate=None, preflight=None,
                  env_preflight=None, clock=now, echo=print, red=None, key_file=None, assume_yes=False,
-                 key_forbidden=(ROOT,), web_spawn=None, conflict_red=None):
+                 key_forbidden=(ROOT,), web_spawn=None, conflict_red=None, example_runner=None):
         import getpass
         import sys
         self.confirm = confirm or (lambda text: input(text + "\nLanjut? [y/N] ").strip().lower() == "y")
@@ -121,6 +124,7 @@ class Deps:
         self.key_file, self.assume_yes, self.key_forbidden = key_file, assume_yes, tuple(key_forbidden)
         self.web_spawn = web_spawn                 # ReadDocs's downloader, injected by tests (default: a child process)
         self.conflict_red = conflict_red           # SPEC_REPORT_CONFLICT's red check, injected by tests (default: the sandbox)
+        self.example_runner = example_runner       # SPEC_EXAMPLE_GATE: (tree, sandbox cfg) -> (runner, root), injected by tests
 
 
 # ---- the job file and its lock -----------------------------------------------------------------------------------
@@ -565,6 +569,7 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
         job.data["protected_repo"] = rec.get("protected")           # SPEC_PROTECTED_FILES P2: the list, frozen
         job.note(deps, "intaken", files=rec["files"])
         _repro(job, cfg, deps)
+        _example_gate(job, cfg, deps)           # SPEC_EXAMPLE_GATE 4(2): a wrong example BLOCKS the job before any drafter money
         if research:
             _research(job, cfg, deps)
         else:
@@ -649,6 +654,161 @@ def repro_patched_lines(job):
         base = repro.load(job.dir / REPRO, issue, job.data["intake"]["snapshot_sha256"])
         line = repro.patched_line(base, state)
         return [line] if line else []
+    except Exception:
+        return []
+
+
+# ---- the example gate (docs/reviews/SPEC_EXAMPLE_GATE.md 4(2), 4(3); router/example_gate.py) --------------------------
+
+def example_runner(job, cfg, deps, tree, n):
+    """(runner, root) for n examples on `tree`: the sandbox with the tree read-only at /workspace (no network), one container
+    per pass with the time n examples need; tests inject deps.example_runner."""
+    name = job.data["inputs"].get("environment")
+    scfg = {**(cfg.get("sandbox") or {}), **({"environment": name} if name else {}), "timeout_s": exl.pass_timeout_s(n)}
+    if deps.example_runner:
+        return deps.example_runner(tree, scfg)
+    from tools import sandbox
+
+    def run(argv):
+        r = sandbox.run_command(argv, workdir=tree, cfg=scfg)
+        if r.get("exit_code") in (125, 126, 127) or r.get("cleanup_failed"):         # docker itself failed: not a verdict on the examples
+            raise sandbox.SandboxUnavailable(f"the container did not run (exit {r.get('exit_code')})")
+        return r
+    return run, eg.BOX_ROOT
+
+
+def _example_gate(job, cfg, deps):
+    """The issue's examples run on the base tree before the drafter (a `same` that is wrong, a `whatif` whose override changes
+    nothing, an `after` that already passes). A problem BLOCKS the job; an unavailable sandbox BLOCKS it as sandbox_unavailable,
+    never as a verdict on the examples. An issue without the block is not touched."""
+    present, examples, problems = eg.extract(job.data["inputs"]["issue"])
+    if not present:
+        return
+
+    def block(reason, what):
+        job.move(BLOCKED, deps, reason=clean(reason)[:700])
+        raise Refused(f"job {job.id}: {clean(what)[:1500]}; no model was called (BLOCKED)")
+
+    if problems:
+        block("examples: " + "; ".join(problems), "the argus-examples block of the issue is not usable: " + "; ".join(problems))
+    path = job.dir / eg.INTAKE_FILE
+    key = eg.intake_key(job.data["intake"]["snapshot_sha256"], examples)
+    if eg.no_runner(cfg, job.data["inputs"].get("environment")):
+        eg.store(path, key, skipped=eg.RUNNER_NOTE)
+        return
+    from tools.sandbox import SandboxUnavailable
+    try:
+        with repro.patched_tree(job.root / "fixtures" / "repos" / BASE) as tree:
+            runner, root = example_runner(job, cfg, deps, tree, len(examples))
+            results, found = eg.check_base(examples, tree, runner, root)
+        eg.store(path, key, results=results)
+    except SandboxUnavailable as e:
+        block(f"sandbox_unavailable: {e}", f"the sandbox is not available, so the examples could not be run ({e})")
+    except Exception as e:
+        block(f"examples: the check could not run ({type(e).__name__})", f"the examples could not be run ({type(e).__name__})")
+    if found:
+        block("examples: " + "; ".join(found) + " " + exl.RUN_LABEL,
+              "the issue's examples do not hold on the base commit: " + "; ".join(found) + " " + exl.RUN_LABEL)
+
+
+def _examples_audit(job, sid, cfg, deps):
+    """The examples on the patched tree for agent stage sid, kept bound to the patch's sha256 and the examples. True: a result
+    (or "no runner here") is stored. False: it did not finish and the pending marker stays (fail closed: `argus apply` refuses
+    it, `argus resume` runs it again). None: nothing to audit (no block, or no valid review package). Never raises."""
+    path = key = None
+    try:
+        present, examples, problems = eg.extract(job.data["inputs"]["issue"])
+        rv = (job.data["stages"][sid].get("review") or {})
+        if not present or problems or not rv.get("valid"):
+            return None
+        data = (Path(rv["dir"]) / "changes.patch").read_bytes()         # once: what is keyed is what is applied
+        path, key = eg.audit_file(job.dir, sid), eg.audit_key(hashlib.sha256(data).hexdigest(), examples)
+        if eg.no_runner(cfg, job.data["inputs"].get("environment")):
+            eg.store(path, key, skipped=eg.RUNNER_NOTE)
+            return True
+        eg.store(path, key)                                   # the marker: a run cut off reads "pending", never "no result"
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / "changes.patch"
+            copy.write_bytes(data)
+            with repro.patched_tree(job.root / "fixtures" / "repos" / BASE, copy) as tree:
+                runner, root = example_runner(job, cfg, deps, tree, len(examples))
+                results = eg.audit(examples, runner, root)
+        eg.store(path, key, results=results)
+        return True
+    except Exception as e:
+        from tools.sandbox import SandboxUnavailable
+        reason = ("the sandbox is not available" if isinstance(e, SandboxUnavailable)
+                  else "the patch does not apply to the base" if isinstance(e, subprocess.CalledProcessError)
+                  else f"{type(e).__name__}")
+        try:
+            if path is not None:
+                eg.store(path, key, reason=reason)
+            deps.echo(f"examples audit did not finish ({reason}); `argus apply` refuses until `argus resume {job.id}` finishes it")
+        except Exception:
+            pass
+        return False if path is not None else None
+
+
+def examples_audit_state(job, sha=None):
+    """(kind, value) of the examples audit of the stage under review: ('nogate', None) the issue has no block;
+    ('malformed', problems); else eg.load()'s kinds (none, stale, pending, error, skipped, results). sha: the sha256 of the
+    patch the caller holds (default: the patch on disk now)."""
+    present, examples, problems = eg.extract(job.data["inputs"]["issue"])
+    if not present:
+        return "nogate", None
+    if problems:
+        return "malformed", problems
+    sid, st = last_agent(job)
+    rv = (st or {}).get("review")
+    if not rv:
+        return "error", None
+    sha = sha or repro.patch_sha(Path(rv["dir"]) / "changes.patch")
+    return eg.load(eg.audit_file(job.dir, sid), eg.audit_key(sha, examples), examples)
+
+
+def examples_decision(job, allow=(), sha=None):
+    """The ids of the failed examples a human knowingly applies (the same as `allow`, exactly), [] when there is nothing to
+    allow. Raises Refused(why) when the issue has examples and the audit for this patch is not a finished result, when an
+    example failed and `allow` is not exactly its id list, or when `allow` names an id that did not fail."""
+    kind, val = examples_audit_state(job, sha)
+    allow = sorted(set(allow or ()))
+    if kind == "malformed":
+        raise Refused("the argus-examples block of the issue is not usable (" + "; ".join(val)[:300] + ")")
+    if kind not in ("nogate", "skipped", "results"):
+        raise Refused({"none": "the issue has examples and they were not run on this patch", "stale": "the issue's examples were run on "
+                       "another patch or other examples", "pending": "the audit of the issue's examples did not finish"
+                       + (f" ({val})" if val else ""), "error": "the stored result of the issue's examples cannot be read"}[kind]
+                      + f"; run `argus resume {job.id}` first")
+    failed = eg.failing(val) if kind == "results" else []
+    if allow != failed:
+        if failed:
+            raise Refused(f"examples failed on this patch: {', '.join(failed)}; to apply it anyway name exactly these: "
+                          f"--allow-failed-examples {','.join(failed)}")
+        raise Refused(f"--allow-failed-examples names {', '.join(allow)}, but no example failed on this patch")
+    return failed
+
+
+def example_lines(job):
+    """The approve and status lines for the examples on the base; none for an issue without the block."""
+    try:
+        present, examples, problems = eg.extract(job.data["inputs"]["issue"])
+        if not present or problems:
+            return []
+        key = eg.intake_key(job.data["intake"]["snapshot_sha256"], examples)
+        return eg.intake_lines(eg.load(job.dir / eg.INTAKE_FILE, key, examples))
+    except Exception:
+        return []
+
+
+def example_audit_lines(job):
+    """The status lines for the examples on the patch under review."""
+    try:
+        kind, val = examples_audit_state(job)
+        if kind == "nogate":
+            return []
+        if kind == "malformed":
+            return ["examples after the agent: the argus-examples block of the issue is not usable; `argus apply` refuses it"]
+        return eg.audit_lines((kind, val), job.id)
     except Exception:
         return []
 
@@ -948,6 +1108,7 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
                  *changed_lines(job, draft),
                  *leak_lines(job, draft),
                  *repro_lines(job),
+                 *example_lines(job),
                  *call_path_lines(path, draft),
                  f"tools added: {c.get('tools') or 'none'}; profile {profile}; one attempt ${need:.2f}",
                  *([f"network: ReadDocs on {len(cfg['web']['hosts'])} allowlisted hosts "
@@ -1043,6 +1204,7 @@ def _agent(job, cfg, deps, sandbox_cfg=None, resume=False, sid="a1", cap=None, c
     st["review"] = {"valid": out["valid"], "problems": out["problems"], "dir": str(out["dir"]), "patch_sha256": patch_sha}
     job.move(REVIEW_READY if out["valid"] else REVIEW_INVALID, deps, stage=sid)
     _repro_patched(job, sid, out, cfg, deps)      # after the state is saved: nothing here can hold the job
+    _examples_audit(job, sid, cfg, deps)          # SPEC_EXAMPLE_GATE 4(3): fail closed, `argus apply` decides from it
     return r
 
 
@@ -1244,6 +1406,13 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
                                                           *environment_lines(job)])
             with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
                 return job, _agent(job, cfg, deps, sandbox_cfg, resume=True, sid=sid)
+        if state == REVIEW_READY and examples_audit_state(job)[0] in ("none", "stale", "pending", "error"):
+            done = _examples_audit(job, last_agent(job)[0], cfg, deps)      # SPEC_EXAMPLE_GATE 4(3): the audit again
+            if not done:
+                why = examples_audit_state(job)[1]
+                raise Refused(f"job {job.id}: the examples audit did not finish" + (f" ({why})" if why else "")
+                              + "; the job is as it was, `argus resume` tries again")
+            return job, {"kind": "examples", "status": "AUDITED"}
         raise Refused(f"job {job.id} is {state}: nothing to resume")
 
 
@@ -1447,20 +1616,20 @@ SHOW_AS_PACKAGED = ("-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=fals
                     "show", "--no-color", "--no-ext-diff", "--no-textconv", "--binary", "--full-index", "--no-renames", "--format=")
 
 
-def applied(job_id, commit, *, deps, jobs_dir=JOBS, note=None):
+def applied(job_id, commit, *, deps, jobs_dir=JOBS, note=None, allow_failed_examples=()):
     """Record that the human applied the review package in `commit` of the target repository: the commit as git
     resolves it, the patch's sha256 as it is on disk now, and whether the commit's changes are the patch's as they
     are (git patch-id), so a patch rewritten before it was committed is told apart from one applied as it was."""
     job = open_job(job_id, jobs_dir)
     with job.lock():
-        return _record_applied(job, commit, deps=deps, note=note)
+        return _record_applied(job, commit, deps=deps, note=note, allow_failed_examples=allow_failed_examples)
 
 
-def _record_applied(job, commit, *, deps, note=None, require_as_is=False, **extra):
+def _record_applied(job, commit, *, deps, note=None, require_as_is=False, allow_failed_examples=(), **extra):
     """applied() without the lock: the caller holds job.lock() (`argus apply` holds it across its git work). extra: more fields for the log entry."""
     if job.data["state"] != REVIEW_READY:
         raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
-    reserved = sorted(set(extra) & {"at", "what", "old", "new", "commit", "patch_sha256", "as_is", "by", "note"})
+    reserved = sorted(set(extra) & {"at", "what", "old", "new", "commit", "patch_sha256", "as_is", "by", "note", "examples_failed"})
     if reserved:
         raise ValueError(f"_record_applied: {reserved} are fields of the log entry itself")
     repo = job.data["inputs"]["repo"]
@@ -1472,12 +1641,16 @@ def _record_applied(job, commit, *, deps, note=None, require_as_is=False, **extr
         theirs = patch_id(repo, intake.git(repo, *SHOW_AS_PACKAGED, sha, clean=True))
     except (OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:
         raise Refused(f"job {job.id}: {e}") from None
+    try:                                    # SPEC_EXAMPLE_GATE: the same rule as `argus apply`, for the patch whose bytes were read here
+        failed = examples_decision(job, allow_failed_examples, sha=hashlib.sha256(data).hexdigest())
+    except Refused as e:
+        raise Refused(f"job {job.id}: {e}") from None
     as_is = None if mine is None or theirs is None else mine == theirs
     if require_as_is and as_is is not True:             # `argus apply`: a commit that is not the patch is not recorded as the job's
         raise Refused(f"job {job.id}: the commit's changes are not the package's patch (as_is {as_is})")
     job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(data).hexdigest(),
              as_is=as_is, by=os.environ.get("USER"),
-             **({"note": note} if note else {}), **extra)
+             **({"note": note} if note else {}), **({"examples_failed": failed} if failed else {}), **extra)
     return job
 
 
@@ -1708,6 +1881,7 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                 *changed_lines(job, draft),
                 *leak_lines(job, draft),
                 *repro_lines(job),
+                *example_lines(job),
                 *call_path_lines(path, draft),
                 f"approve: argus approve {job.id} --sha {sha[:12]}"]
     if d["state"] in (AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE):
@@ -1718,6 +1892,8 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
     if d["state"] in (REVIEW_READY, REVIEW_INVALID):
         out += _review_lines(job, last_agent(job)[1]["review"])
         out += repro_patched_lines(job)
+        if d["state"] == REVIEW_READY:
+            out += example_audit_lines(job)
     out += judge_lines(job)
     if d["state"] == APPLIED:
         why = _why(job)
