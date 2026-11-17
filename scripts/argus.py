@@ -140,7 +140,7 @@ def main(argv=None, deps=None):
     ap_.add_argument("job")
     ap_.add_argument("--read-sha", required=True, help="the patch's sha256 that status prints, at least 12 characters: you read that patch")
     ap_.add_argument("--note")
-    ap_.add_argument("--reader", choices=("claude",), help="who read the patch, as the patch-read note says: recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
+    ap_.add_argument("--reader", choices=("claude",), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
     ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
                      "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
     pr_ = sub.add_parser("patch-read", help="the note of a patch reader before `apply` (SPEC_KARTU_SETUJU 5): a Claude session's statement, not a proof and not a human")

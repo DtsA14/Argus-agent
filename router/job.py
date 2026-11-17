@@ -1740,7 +1740,7 @@ def _review_lines(job, rv):
         who = note["reader"]["kind"]
         read_line = (f"  patch read: {kind} by {who} at {note['at']}: {note['note']} ({pr.LABEL})")
     else:
-        read_line = (f"  patch read: {kind}: write the note first (apply refuses without an ok note):\n"
+        read_line = (f"  patch read: {kind}{' (the note cannot be read)' if kind == 'error' else ''}: write the note first (apply refuses without an ok note):\n"
                      f"    argus patch-read {job.id} --sha {sha[:12]} --verdict ok --note \"...\" --reader claude")
     return out + [f"  patch:          {patch} (sha256 {sha})", read_line,
                   "apply (read the patch first; its sha256 is the --read-sha):",

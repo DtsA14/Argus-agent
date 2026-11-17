@@ -119,24 +119,70 @@ def test_load_says_none_stale_or_error_never_ok_for_anything_else(env, tmp_path)
     d = env.job().dir
     assert pr.load(d, "a1", sha) == ("none", None)
     read(env, sha)
-    assert pr.load(d, "a1", "0" * 64)[0] == "stale"                                  # another patch
-    assert pr.load(d, "a2", sha)[0] == "none"                                        # another stage has its own file
+    assert pr.load(d, "a1", "0" * 64) == ("stale", None)                              # another patch
+    assert pr.load(d, "a2", sha) == ("none", None)                                    # another stage has its own file
     rec = json.loads(file_of(env).read_text())
     bad = [
-        b"not json", b"[]", b"\xff\xfe", json.dumps({**rec, "verdict": "fine"}).encode(), json.dumps({**rec, "reader": "claude"}).encode(),
-        json.dumps({**rec, "reader": {"kind": "human"}}).encode(), json.dumps({**rec, "note": 5}).encode(), json.dumps({**rec, "key": "x"}).encode(),
-        json.dumps({k: v for k, v in rec.items() if k != "at"}).encode(), json.dumps({**rec, "sid": "a2"}).encode(),
-        json.dumps({**rec, "patch_sha256": "0" * 64}).encode(),
+        (b"not json", "error"), (b"[]", "error"), (b"\xff\xfe", "error"), (json.dumps({**rec, "verdict": "fine"}).encode(), "error"),
+        (json.dumps({**rec, "reader": "claude"}).encode(), "error"), (json.dumps({**rec, "reader": {"kind": "human"}}).encode(), "error"),
+        (json.dumps({**rec, "note": 5}).encode(), "error"), (json.dumps({**rec, "note": ""}).encode(), "error"),
+        (json.dumps({**rec, "key": "x"}).encode(), "error"), (json.dumps({k: v for k, v in rec.items() if k != "at"}).encode(), "error"),
+        (json.dumps({**rec, "sid": "a2"}).encode(), "error"), (json.dumps({**rec, "patch_sha256": "0" * 64}).encode(), "error"),    # the key no longer fits
+        (json.dumps({**rec, "note": "x" * (pr.NOTE_MAX + 1)}).encode(), "error"), (json.dumps({**rec, "note": "a\x1b[2Jb"}).encode(), "error"),
+        (json.dumps({**rec, "at": "\x1b[31m"}).encode(), "error"), (json.dumps({**rec, "at": "yesterday"}).encode(), "error"),
+        (json.dumps({**rec, "reader": {"kind": "claude", "id": "y" * (pr.ID_MAX + 1)}}).encode(), "error"),
+        (json.dumps({**rec, "reader": {"kind": "claude", "id": 5}}).encode(), "error"),
+        (json.dumps({**rec, "key": pr.key("a1", "0" * 64), "patch_sha256": "0" * 64}).encode(), "stale"),    # a good note of another patch
     ]
-    for raw in bad:
+    for raw, kind in bad:
         file_of(env).write_bytes(raw)
-        assert pr.load(d, "a1", sha)[0] in ("error", "stale"), raw
+        assert pr.load(d, "a1", sha)[0] == kind, raw
     os.remove(file_of(env))
     os.symlink(d / "job.json", file_of(env))                                         # a link is never followed
     assert pr.load(d, "a1", sha)[0] == "error"
     os.remove(file_of(env))
+    os.mkfifo(file_of(env))                                                           # a FIFO neither blocks nor counts
+    assert pr.load(d, "a1", sha)[0] == "error"
+    os.remove(file_of(env))
     file_of(env).write_bytes(b"x" * (pr.FILE_MAX + 1))
     assert pr.load(d, "a1", sha)[0] == "error"
+
+
+def test_a_planted_temporary_name_is_never_followed(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    victim = tmp_path / "victim.txt"
+    victim.write_text("precious")
+    os.symlink(victim, file_of(env).with_name(file_of(env).name + ".tmp"))
+    read(env, sha)
+    assert victim.read_text() == "precious" and pr.load(env.job().dir, "a1", sha)[0] == "ok"
+    assert not list(env.job().dir.glob("patch_read_*.tmp"))
+
+
+def test_a_note_of_the_first_stage_does_not_open_the_apply_of_a_later_one(env, tmp_path):
+    import copy
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha)
+    job = env.job()
+    with job.lock():
+        job.data["stages"]["a2"] = copy.deepcopy(job.data["stages"]["a1"])
+        job.save()
+    assert rj.last_agent(env.job())[0] == "a2"
+    before = head(env)
+    with pytest.raises(rj.Refused, match="patch-read"):
+        apply(env, sha)
+    untouched(env, before)
+    assert "patch read: none" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_a_note_never_reaches_the_public_snapshot(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha, reader_id="session-7")
+    out = tmp_path / "published"
+    out.mkdir()
+    stage_data.build(env.jobs, out)
+    names = [p.name for p in out.rglob("*")]
+    text = "".join(p.read_text(errors="replace") for p in out.rglob("*") if p.is_file())
+    assert not any(n.startswith("patch_read") for n in names) and "session-7" not in text and "only the shop line changes" not in text
 
 
 def test_the_stage_name_of_a_note_is_checked(env, tmp_path):
@@ -282,3 +328,53 @@ def test_the_note_is_checked_before_the_repository_is_touched_even_for_a_second_
     os.remove(file_of(env))                                                          # the note is gone: even the healing call refuses
     with pytest.raises(rj.Refused, match="patch-read"):
         apply(env, sha)
+
+
+# ---- the survivors of the first mutant run ---------------------------------------------------------------------------------------
+
+def test_a_link_to_a_good_note_is_not_followed_and_a_padded_file_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha)
+    good = file_of(env).read_bytes()
+    d = env.job().dir
+    os.remove(file_of(env))
+    elsewhere = tmp_path / "good.json"
+    elsewhere.write_bytes(good)
+    os.symlink(elsewhere, file_of(env))                                              # valid content, but through a link
+    assert pr.load(d, "a1", sha)[0] == "error"
+    os.remove(file_of(env))
+    file_of(env).write_bytes(good + b" " * pr.FILE_MAX)                                # valid JSON, too big a file
+    assert pr.load(d, "a1", sha)[0] == "error"
+
+
+def test_the_limits_are_the_numbers_the_spec_shows(env, tmp_path):
+    assert (pr.NOTE_MAX, pr.ID_MAX, pr.FILE_MAX) == (500, 80, 16 * 1024)
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha, note="n" * 2000, reader_id="i" * 400)
+    rec = json.loads(file_of(env).read_text())
+    assert len(rec["note"]) == 500 and len(rec["reader"]["id"]) == 80
+
+
+def test_the_key_depends_on_the_stage_and_the_patch():
+    assert len({pr.key("a1", "0" * 64), pr.key("a2", "0" * 64), pr.key("a1", "1" * 64)}) == 3
+
+
+def test_a_note_of_a_later_stage_is_its_own_file_and_opens_its_own_apply(env, tmp_path):
+    import copy
+    patch, sha = package(env, tmp_path, edit_shop())
+    job = env.job()
+    with job.lock():
+        job.data["stages"]["a2"] = copy.deepcopy(job.data["stages"]["a1"])
+        job.save()
+    read(env, sha)
+    assert file_of(env, "a2").exists() and not file_of(env, "a1").exists()
+    assert json.loads(file_of(env, "a2").read_text())["sid"] == "a2"
+    assert apply(env, sha).data["state"] == rj.APPLIED
+
+
+def test_the_cli_keeps_the_reader_id(env, tmp_path, capsys):
+    import argus
+    patch, sha = package(env, tmp_path, edit_shop())
+    argus.main(["--jobs-dir", str(env.jobs), "patch-read", "jtest", "--sha", sha[:12], "--verdict", "ok", "--note", "n", "--reader", "claude",
+                "--reader-id", "session-9"], deps=env.deps)
+    assert json.loads(file_of(env).read_text())["reader"] == {"kind": "claude", "id": "session-9"}

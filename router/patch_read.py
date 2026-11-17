@@ -20,6 +20,7 @@ READERS = ("claude",)
 NOTE_MAX, ID_MAX, FILE_MAX = 500, 80, 16 * 1024
 SID = re.compile(r"a[0-9]{1,3}")
 SHA = re.compile(r"[0-9a-f]{64}")
+AT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z")
 LABEL = "a statement of a Claude session, not a proof that the patch was read, and not a human"
 
 
@@ -68,7 +69,15 @@ def record(job_id, sha, verdict, note, reader, reader_id=None, *, deps, jobs_dir
                "reader": {"kind": reader, **({"id": rid} if rid else {})}, "at": deps.clock()}
         target = path(job.dir, sid)
         tmp = target.with_name(target.name + ".tmp")
-        tmp.write_text(json.dumps(rec), encoding="utf-8")
+        try:                                                  # a stale or planted name is removed, never followed
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(rec))
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, target)
     return rec
 
@@ -110,6 +119,10 @@ def load(job_dir, sid, patch_sha256):
                 or not isinstance(rec.get("reader"), dict) or rec["reader"].get("kind") not in READERS
                 or not SHA.fullmatch(rec["patch_sha256"])):
             return "error", None
+        rid = rec["reader"].get("id")
+        if (not rec["note"] or ex.clean(rec["note"], NOTE_MAX) != rec["note"] or not AT.fullmatch(rec["at"])
+                or (rid is not None and (not isinstance(rid, str) or ex.clean(rid, ID_MAX) != rid))):
+            return "error", None                              # what is shown later is what `record` would have written: clean and short
     except (ValueError, UnicodeDecodeError, RecursionError, TypeError):
         return "error", None
     if rec["patch_sha256"] != patch_sha256:
