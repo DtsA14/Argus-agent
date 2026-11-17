@@ -19,13 +19,13 @@ from . import issue_writer as iw
 from .tools import ListFiles, ReadFile, SearchFiles, Toolbox
 
 WRITTEN, FAILED, BLOCKED, FAILED_BUDGET = iw.WRITTEN, iw.FAILED, iw.BLOCKED, iw.FAILED_BUDGET
-VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitPRD": "1"}
+VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitPRD": "2", "RunExample": "1"}
 PRD_MAX = 8000                      # characters of PRD.md (SPEC 3.4: the revision turn carries the previous folder)
 TOTAL_MAX = 16000                   # characters of all the issues together (one submit must fit max_output_tokens)
 PATHS_MAX, FIELDS_MAX, CREATES_MAX, FIELD_MAX, PATH_LEN_MAX = 10, 20, 12, 120, 200
 CLASH_KEYS = {"file", "line", "why"}
 TOP_KEYS = {"reply", "prd_md", "items", "questions", "notes"}
-ITEM_KEYS = {"issue", "paths", "fields", "touches", "creates", "clashes", "clash_check"}
+ITEM_KEYS = {"issue", "paths", "fields", "touches", "creates", "clashes", "clash_check", "examples", "no_examples"}
 PATH_KEYS = {"side", "path", "via_proxy"}
 
 
@@ -54,6 +54,11 @@ class Item(BaseModel):
                                "its touches.")
     clashes: List[iw.Clash] = Field(default_factory=list, description="Old tests this item may break.")
     clash_check: str = Field(default="", description="The code the harness gave this item with its list of old test lines.")
+    examples: List[dict] = Field(default_factory=list, description=f"In an environment that runs examples: 1 to {iw.ex.MAX_EXAMPLES} examples "
+                                 "{id e1.., tier same|whatif|after, says, setup, run, expect | raises, overrides (whatif only)}. The "
+                                 "harness runs the FIRST item's on the code and writes them into its issue. An example of a LATER item "
+                                 "that uses a name an earlier item creates is tier `after`.")
+    no_examples: str = Field(default="", description=f"Only when the item has no examples: why (one line, at most {iw.NO_EXAMPLES_MAX} characters).")
 
 
 class SubmitPRD(BaseModel):
@@ -136,7 +141,7 @@ def _created_name_near(touch, known):
     return min(around, key=len) if around else None
 
 
-def items_gate(args, *, source, environment, max_items, item_max):
+def items_gate(args, *, source, environment, max_items, item_max, examples=None):
     """(problems, result) of a SubmitPRD: the shape, every item through iw.issue_gate (with `known` = what the items before
     it create, and `strict`), the order rule, the lengths. result: {reply, prd_md, items: [{issue (as stored, with its clash
     list), paths, fields, touches, creates, clashes}], questions, notes, test_hits}; items == [] for a reply only."""
@@ -196,7 +201,14 @@ def items_gate(args, *, source, environment, max_items, item_max):
         sub = {"reply": reply if isinstance(reply, str) else "x", "issue": item["issue"],
                "clashes": clashes if clashes is not None else [], "questions": [], "touches": item.get("touches"),
                "clash_check": item.get("clash_check"), "notes": None}
-        got, res = iw.issue_gate(sub, source=source, environment=environment, known=known, strict=True)
+        sub.update(examples=item.get("examples"), no_examples=item.get("no_examples"))
+        got, res = iw.issue_gate(sub, source=source, environment=environment, known=known, strict=True,
+                                 examples_check=examples(k) if examples else None)
+        for e in ((res or {}).get("examples") or {}).get("examples") or []:      # a later item's example that uses a name made before it
+            used = sorted(n for n in known if n in e["setup"] + " " + e["run"])      # a created name has at least TOUCH_MIN characters already
+            if e["tier"] != "after" and used:
+                got.append(f"example {e['id']} uses {used[0]!r}, which an earlier item creates: its tier is `after` (the code it "
+                           "needs does not exist when this item starts)")
         for p in got:
             hint = ""
             for t in touches_raw:
@@ -214,11 +226,12 @@ def items_gate(args, *, source, environment, max_items, item_max):
         text = res["issue"]
         if len(text) > item_max:
             problems.append(f"item {k}: the issue with the clash list the harness adds has {len(text)} characters, "
-                            f"more than {item_max}: shorten it")
+                            f"more than {item_max}: shorten it or its examples (the examples block counts too)")
         total += len(text)
         hits += res["test_hits"]
         out.append({"issue": text, "paths": shape["paths"], "fields": shape["fields"], "touches": res["touches"],
-                    "creates": shape["creates"], "clashes": res["clashes"]})
+                    "creates": shape["creates"], "clashes": res["clashes"],
+                    **({"examples": res["examples"]} if res.get("examples") else {})})
     if total > TOTAL_MAX:
         problems.append(f"the issues together have {total} characters, more than {TOTAL_MAX}: shorten them")
     if problems:
@@ -295,6 +308,22 @@ SYSTEM = "\n".join([
 ])
 
 
+EXAMPLES_RULES = "\n".join([
+    "- `examples` (this environment runs them): give each item concrete examples, as for a single issue (tiers same, whatif, after).{TRY} The harness RUNS the first item's examples on the code, and the others when that item's code job "
+    "starts, on the code the items before it left. So an example of a later item that uses a name an earlier item `creates` is "
+    "tier `after`; a `same` example of a later item must be true on today's code. Never write a number you did not see.",
+    "Every item with its examples block and clash list must fit item_max characters (the examples take up to 3000 of them): keep the "
+    "issue text short when you give many examples.",
+])
+
+
+def system_for(runs, run_example):
+    """The PRD writer's system prompt: the rules, plus how to write examples only where the environment runs them."""
+    if not runs:
+        return SYSTEM + "\n" + iw.NO_RUNNER_RULES
+    return SYSTEM + "\n" + EXAMPLES_RULES.replace("{TRY}", " Try them with RunExample." if run_example else "")
+
+
 def prompt(inputs, lim):
     lines = [f"Repository: {inputs['repo']} at commit {inputs['commit'][:12]}; environment: {inputs['environment']}.",
              f"At most {lim['max_items']} issues.", "", f"The conversation so far {iw.DATA}:"]
@@ -320,7 +349,7 @@ def prompt(inputs, lim):
 
 
 def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None, crash_at=None, prepare=None,
-                   finish=None, item_max=4000, section="prd_writer"):
+                   finish=None, item_max=4000, section="prd_writer", example_runner=None):
     """One turn. prepare(run_dir) -> the snapshot directory the read tools see (made once; a resume finds it).
     finish(result) -> (problems, blocked): the router's check of the folder this result would make (None = no check); a
     non-empty `blocked` (the repository's state, which the model cannot fix) ends the turn without a rejection."""
@@ -335,16 +364,23 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
         source = prepare(run_dir)
         box = Toolbox(str(source), iw.READ_ONLY, cfg.get("sandbox") or {},
                       (cfg.get("tools") or {}).get(role, []), log, role=role)
+        sup = iw.ExampleSupport(cfg, role, inputs["environment"], source, run_id, log, memo, example_runner)
 
         def gate_submit(args, n, last_step=False):
+            from tools.sandbox import SandboxUnavailable
             blocked, kinds = None, []
             try:
                 problems, result = items_gate(args, source=source, environment=inputs["environment"],
-                                              max_items=lim["max_items"], item_max=item_max)
+                                              max_items=lim["max_items"], item_max=item_max,
+                                              examples=lambda k: (lambda a: sup.hook(a, scope=str(k), execute=(k == 1))))
                 kinds = [classify(p) for p in problems]
                 if not problems and result["items"] and finish is not None:
                     problems, blocked = finish(result)
                     kinds = ["folder_check"] * len(problems)
+            except SandboxUnavailable as e:
+                log.emit("prd_checked", submit=n, ok=False, problems=["sandbox_unavailable"], kinds=["sandbox"])
+                return {"content": "Stopped: the sandbox is not available, so the examples cannot be run.", "finished": True,
+                        "result": {"sandbox_unavailable": f"sandbox_unavailable: {iw.ex.clean(str(e), 200)}"}}
             except (TypeError, ValueError, KeyError, AttributeError, RecursionError, OSError) as e:
                 problems, result, kinds = [f"the arguments are malformed ({type(e).__name__}): send the shape of SubmitPRD"], \
                     None, ["other"]
@@ -365,15 +401,18 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
                     "exhausted": left <= 0}
 
         def run_tool(name, args, key, res):
+            if name == "RunExample":
+                log.emit("writer_step", tool=name, target=str((args or {}).get("run", ""))[:iw.TARGET_MAX] if isinstance(args, dict) else "")
+                return sup.run_example(args)
             target = next((args[k] for k in ("text", "path") if isinstance(args, dict)
                            and isinstance(args.get(k), str) and args[k]), "")
             log.emit("writer_step", tool=name, target=target[:iw.TARGET_MAX])
             return box.run({"name": name, "args": args}, step_key=key)["content"]
 
         def loop(caller):
-            return tool_loop(caller, memo, log, node="prd_writer", task_id=run_id, lim=lim, system=SYSTEM,
-                             prompt=prompt(inputs, lim), tools=[ListFiles, SearchFiles, ReadFile, SubmitPRD],
-                             submit=SubmitPRD, versions=VERSIONS, run_tool=run_tool, gate_submit=gate_submit,
+            return tool_loop(caller, memo, log, node="prd_writer", task_id=run_id, lim=lim, system=system_for(sup.runs, bool(sup.tools())),
+                             prompt=prompt(inputs, lim), tools=[ListFiles, SearchFiles, ReadFile, *sup.tools(), SubmitPRD],
+                             submit=SubmitPRD, versions={**VERSIONS, **sup.versions}, run_tool=run_tool, gate_submit=gate_submit,
                              crasher=crasher, nudge="Read what you need (maybe nothing), then call SubmitPRD.",
                              steps_note="Harness: {n} steps left of {max}. Submit soon.",
                              final_note="Harness: the last {n} steps. Submit now.")
@@ -381,6 +420,8 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
                "usd_used": a["usd_used"], "rejections": dict(rejections)}
         if a["end"] == "submitted":
+            if a["result"].get("sandbox_unavailable"):          # Atha 2026-11-17: replyable, as the issue writer's turn
+                return {**out, "status": FAILED, "stop_reason": a["result"]["sandbox_unavailable"]}
             if a["result"].get("blocked"):
                 return {**out, "status": BLOCKED, "stop_reason": a["result"]["blocked"]}
             why = "a PRD passed the gate" if a["result"]["items"] else "a reply without a PRD"

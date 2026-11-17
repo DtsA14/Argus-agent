@@ -32,6 +32,19 @@ RUNNER_NOTE = "environment without an example runner"
 HOLDERS_MAX = 3
 
 
+def sandbox_runner(tree, scfg):
+    """(runner, root) of the sandbox for `tree`: the tree read-only at /workspace, no network; docker itself failing (exit 125 to
+    127, a container that could not be cleaned up) is SandboxUnavailable, never an example's result."""
+    from tools import sandbox
+
+    def run(argv):
+        r = sandbox.run_command(argv, workdir=tree, cfg=scfg)
+        if r.get("exit_code") in (125, 126, 127) or r.get("cleanup_failed"):
+            raise sandbox.SandboxUnavailable(f"the container did not run (exit {r.get('exit_code')})")
+        return r
+    return run, BOX_ROOT
+
+
 def audit_file(job_dir, sid):
     return Path(job_dir) / f"examples_audit_{sid}.json"
 
@@ -60,6 +73,37 @@ def extract(issue):
         return True, [], ["the argus-examples block is not JSON"]
     examples, problems = ex.parse(raw)
     return True, ([] if problems else examples), problems
+
+
+def block_text(examples):
+    """The block as the harness writes it into an issue: one example per line, so a human reads them one by one."""
+    return "```argus-examples\n[\n" + ",\n".join(json.dumps(e, ensure_ascii=False) for e in examples) + "\n]\n```"
+
+
+def with_block(issue, examples):
+    """The issue as stored: with the block put before its last line (the Environment line), after any clash list; without
+    examples, the issue as it is."""
+    if not examples:
+        return issue
+    lines = issue.split("\n")
+    if len(lines) < 2:
+        return issue
+    body = lines[:-1]
+    while body and not body[-1].strip():
+        body.pop()
+    return "\n".join(body + [""] + block_text(examples).split("\n") + ["", lines[-1]])
+
+
+def without_block(issue):
+    """The issue without a block the harness wrote into it (and the blank line before it): a writer that gives back its stored
+    issue does not get the block twice, and one that wrote its own gets it taken out."""
+    text = issue.replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r"\n*" + FENCE.pattern + r"\n*", "\n\n", text, flags=FENCE.flags)
+
+
+def mentions(issue):
+    """True when the text has a fence that names the block, written exactly or not."""
+    return bool(LOOSE.search(issue.replace("\r\n", "\n").replace("\r", "\n"))) if isinstance(issue, str) else False
 
 
 def digest(examples):
@@ -166,6 +210,12 @@ def _holders(tree, example):
     return out
 
 
+class NoResult(SandboxUnavailable):
+    """A pass in which no example printed anything: the container failed, OR the code of an example killed its own process. The
+    intake and the audit treat it as an unavailable sandbox; a writer's gate turns it into a rejection (a model cannot end its own
+    job by writing an example that kills the pass)."""
+
+
 def _no_pass_ran(results):
     """True when no example of a pass printed a result at all: the container failed (a missing image, a docker error, a timeout of
     the whole pass), which says nothing about the examples."""
@@ -189,10 +239,12 @@ def check_base(examples, tree, runner, root=BOX_ROOT):
         return results, problems
     evaluated = ex.evaluate(runnable, runner, root=root)
     if _no_pass_ran(evaluated):
-        raise SandboxUnavailable("the pass printed no result")
+        raise NoResult("the pass printed no result")
     got = {r["id"]: r for r in evaluated}
     whatif = [e for e in runnable if e["tier"] == "whatif"]
     bare = ex.run_pass(whatif, runner, root=root, with_overrides=False) if whatif else {}
+    if whatif and _no_pass_ran([{"actual": r.get("error", "") + ""} for r in bare.values()]):
+        raise NoResult("the pass without overrides printed no result")
     for e in runnable:
         r = got[e["id"]]
         if e["tier"] == "after":
@@ -219,7 +271,7 @@ def audit(examples, runner, root=BOX_ROOT):
     constant has changed now; the example asserts the behaviour), and `after` like any other."""
     results = ex.evaluate(examples, runner, root=root, with_overrides=False)
     if _no_pass_ran(results):
-        raise SandboxUnavailable("the pass printed no result")
+        raise NoResult("the pass printed no result")
     return results
 
 

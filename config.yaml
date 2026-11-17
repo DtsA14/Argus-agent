@@ -296,7 +296,7 @@ tools:
   coder: [list_files, read_file, write_file, run_validation, report_conflict]   # code tasks (codetask/); Finish is not gated; report_conflict: SPEC_REPORT_CONFLICT
   drafter: [list_files, search_files, read_file]   # W2b; read-only. SubmitDraft is not gated (it ends the run, as Finish)
   researcher: [list_files, search_files, read_file, read_docs]   # SPEC_RESEARCH_STAGE r1: never a tool that writes or runs
-  issue_writer: [list_files, search_files, read_file]   # SPEC_ISSUE_WRITER: read-only, on a copy of a frozen commit
+  issue_writer: [list_files, search_files, read_file, run_example]   # SPEC_ISSUE_WRITER: read tools on a copy of a frozen commit; run_example (SPEC_EXAMPLE_GATE 4(1)): the model's example code runs in the sandbox, no network, tree read-only
 
 # ReadDocs (docs/reviews/SPEC_WEB_TOOLS.md): documentation pages for the coder, granted only by the human at approve
 # (argus approve --web) and only for jobs whose validations all run in one of `environments` (never the SWE images).

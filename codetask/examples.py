@@ -359,6 +359,19 @@ def verdict(example, raw):
         return {"status": INVALID, "actual": "the value nests too deeply"}
 
 
+def observed(raw):
+    """One raw result of one run as a short text for a model that is trying an example (RunExample): what the code gave, with no
+    expectation to compare. Cleaned and cut like every `actual`; the caller labels it as data (RUN_LABEL)."""
+    try:
+        if raw.get("invalid"):
+            return f"not JSON (a {clean(raw.get('type', '?'), 40)}): the value of `run` must be JSON"
+        if raw.get("ok"):
+            return "value " + clean(json.dumps(shown(raw["value"]), sort_keys=True))
+        return "raised " + clean(f"{raw.get('error', 'Error')}: {raw.get('message', '')}")
+    except (TypeError, ValueError, RecursionError):
+        return "not shown (the value cannot be written as JSON)"
+
+
 def _projection(raw):
     """What two passes must agree on: the value, or the type of the exception or of the invalid value; not the message (a
     message may hold an address or a set's order)."""

@@ -87,7 +87,10 @@ def _screen(job, cfg, what):
         f"repository {i['repo_name']} at {i['commit'][:12]} (read-only copy), environment {i['environment']}",
         f"model {cfg['roles'][s['role']]['model']}; turn cap ${float(s['turn']['cap_usd']):.2f}; "
         f"job cap ${job.data['max_usd']:.2f}, spent ${rj.spent_nano(job) / 1e9:.4f}",
-        "the repository's files and the conversation go to the model provider"])
+        "the repository's files and the conversation go to the model provider",
+        *(["example code written by the model RUNS in the sandbox (RunExample and the gate of the first issue: no network, the "
+           f"repository read-only, image {str(job.data.get('environment_image'))[:19]}); the turn is no longer read-only"]
+          if iw.has_runner(cfg, i["environment"]) else [])])
 
 
 def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job_id=None):
@@ -119,6 +122,11 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
                     "stages": {}, "log": [], "prd_turns": [], "queues_dir": str(queues_dir)}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
+            try:
+                ri._pin_environment(job, cfg)
+            except rj.Refused as e:
+                job.move(ABANDONED, deps, reason=f"not started: {str(e)[:200]}")
+                raise
             with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                          _screen(job, cfg, "first turn"), job=job):
                 job.move(WRITING, deps, stage=ri._next_sid(job))
@@ -158,6 +166,7 @@ def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES,
         if left + 1e-12 < float(s["turn"]["cap_usd"]):
             raise rj.Refused(f"job {job.id}: ${left:.4f} of the job cap is left, less than one turn "
                              f"(${float(s['turn']['cap_usd']):.2f}); nothing was started")
+        ri._pin_environment(job, cfg)
         with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                      _screen(job, cfg, "next turn"), job=job):
             if rebase:
@@ -182,6 +191,7 @@ def resume(job, cfg, deps, queues_dir=None):
     _preflight(cfg, job.data["max_usd"])
     i = job.data["inputs"]
     _repo_state(cfg, i["repo_name"], i["commit"], queues, job.dir.parent)    # before the key, the confirmation and the money
+    ri._pin_environment(job, cfg)
     with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                  _screen(job, cfg, "resume the turn"), job=job):
         _turn(job, cfg, deps, queues)
@@ -276,7 +286,7 @@ def _turn(job, cfg, deps, queues_dir):
     scfg = rj.stage_config(cfg, st["cap_usd"])
     r = pw.run_prd_writer(run_id=run_id, runs_dir=job.runs, cfg=scfg, inputs=inputs, resume=again, models=deps.models,
                           prepare=lambda run_dir: source, finish=finish,
-                          item_max=int(ri._settings(cfg)["message_max"]))
+                          item_max=int(ri._settings(cfg)["message_max"]), example_runner=deps.example_runner)
     deps.echo(f"{sid} finished: {r.get('status')} (${r.get('usd_billed', 0):.4f})")
     st.update(ended_at=deps.clock(), status=r.get("status"), usd=r.get("usd_billed"), rejections=r.get("rejections") or {})
     if r.get("status") != iw.WRITTEN:
@@ -307,6 +317,7 @@ def _turn(job, cfg, deps, queues_dir):
             "rejections": r.get("rejections") or {}, "max_usd": max_usd_for(cfg, len(w["items"])),
             "touches": [it["touches"] for it in w["items"]], "creates": [it["creates"] for it in w["items"]],
             "clashes": [it["clashes"] for it in w["items"]],
+            "examples": [it.get("examples") for it in w["items"]],          # the cards' data (T2): per item, what each example did
             "warnings": [t for level, t in found if level == rp.WARN]}
     job.data["prd_turns"] = [t for t in job.data.get("prd_turns", []) if t["turn"] != sid] + [turn]
     mark_superseded(job, keep=sid)
@@ -343,7 +354,8 @@ def status_lines(job):
             except OSError:
                 pass
             out.append(f"  issue {n} {title!r}: touches {touch}; creates {make}; {len(clash)} clash(es)"
-                       + "".join(f"\n    clash {c['file']} line {c['line']}: {c['why']}" for c in clash))
+                       + "".join(f"\n    clash {c['file']} line {c['line']}: {c['why']}" for c in clash)
+                       + "".join(f"\n    {line}" for line in ri.example_lines((t.get("examples") or [None] * n)[n - 1])))
         out += [f"  warning: {w}" for w in t.get("warnings") or []]
     if turns:
         try:
