@@ -143,6 +143,16 @@ def main(argv=None, deps=None):
     ap_.add_argument("--reader", choices=("claude",), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
     ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
                      "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
+    er_ = sub.add_parser("examples-read", help="the domain reader's bundle and note for one item of a PRD (SPEC_KARTU_SETUJU 5 rev 2): a Claude session's statement, not a proof and not a human")
+    er_.add_argument("job", help="the PRD job")
+    er_.add_argument("--item", required=True, type=int)
+    er_.add_argument("--bundle", action="store_true", help="print exactly what the reader sees, then its sha")
+    er_.add_argument("--status", action="store_true", help="the note of the item against the bundle as it is now")
+    er_.add_argument("--verdict", choices=("ok", "concerns"))
+    er_.add_argument("--bundle-sha", help="the sha `--bundle` printed")
+    er_.add_argument("--reader-id", help="the model or session that read it")
+    er_.add_argument("--source", action="append", default=[], help="where a rule comes from: 'permintaan Atha', 'dokumen repo: <file>' or 'hanya tulisan penulis' (repeat)")
+    er_.add_argument("--note", help="what you checked and what you found")
     pr_ = sub.add_parser("patch-read", help="the note of a patch reader before `apply` (SPEC_KARTU_SETUJU 5): a Claude session's statement, not a proof and not a human")
     pr_.add_argument("job")
     pr_.add_argument("--sha", required=True, help="the sha256 of the patch you read (status prints it), at least 12 characters")
@@ -372,6 +382,25 @@ def main(argv=None, deps=None):
             q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir) if o.queue_cmd == "go"
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
+            return 0
+        if o.cmd == "examples-read":
+            from router import examples_read as ers
+            modes = [bool(o.bundle), bool(o.status), o.verdict is not None]
+            if sum(modes) != 1:
+                ap.error("examples-read takes exactly one of --bundle, --status or --verdict (with --bundle-sha, --reader-id, --source and --note)")
+            if o.bundle:
+                text, info = ers.bundle(o.jobs_dir, o.job, o.item)
+                sys.stdout.write(text)
+                print(f"=== end of bundle ===\nbundle_sha256: {info['bundle_sha256']}")
+                return 0
+            if o.status:
+                kind, rec = ers.status(o.jobs_dir, o.job, o.item)
+                print(f"examples-read note for {o.job} item {o.item}: {kind}" + (f" by {rec['reader']['kind']}: {rec['note']} ({ers.LABEL})" if rec else ""))
+                return 0
+            if not (o.bundle_sha and o.reader_id and o.note):
+                ap.error("a note needs --bundle-sha, --reader-id and --note")
+            rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir)
+            print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}")
             return 0
         if o.cmd == "patch-read":
             from router import patch_read as prd_
