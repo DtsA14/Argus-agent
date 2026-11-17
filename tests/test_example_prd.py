@@ -131,10 +131,13 @@ def test_run_example_is_offered_to_the_prd_writer_and_the_screen_and_the_pin_say
     assert job.data["environment_image"] == IMAGE
 
 
-def test_an_unavailable_sandbox_blocks_the_prd_turn_as_sandbox_unavailable(tmp_path):
-    env = Env(tmp_path, [submit()], runs=Runs(fail=SandboxUnavailable("docker is down")))
+def test_an_unavailable_sandbox_ends_the_prd_turn_replyable_as_sandbox_unavailable(tmp_path):
+    env = Env(tmp_path, [submit(), submit(id="s2")], runs=Runs(fail=SandboxUnavailable("docker is down")))
     job = env.new()
-    assert job.data["state"] == pj.BLOCKED and job.data["log"][-1]["reason"].startswith("sandbox_unavailable")
+    assert job.data["state"] == pj.WRITE_FAILED and job.data["log"][-1]["reason"].startswith("sandbox_unavailable")
+    env.runs.fail = None
+    job = pj.reply("jp", "coba lagi", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs, queues_dir=env.queues)
+    assert job.data["state"] == pj.AWAITING_HUMAN and job.data["prd_turns"]
 
 
 def test_an_environment_without_a_runner_needs_no_examples_in_a_prd(tmp_path):

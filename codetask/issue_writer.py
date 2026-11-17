@@ -655,7 +655,7 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
             except SandboxUnavailable as e:
                 log.emit("issue_checked", submit=n, ok=False, problems=["sandbox_unavailable"])
                 return {"content": "Stopped: the sandbox is not available, so the examples cannot be run.", "finished": True,
-                        "result": {"blocked": f"sandbox_unavailable: {ex.clean(str(e), 200)}"}}
+                        "result": {"sandbox_unavailable": f"sandbox_unavailable: {ex.clean(str(e), 200)}"}}
             log.emit("issue_checked", submit=n, ok=not problems, problems=problems[:20])
             if not problems:
                 said = "the issue passed the harness gate" if result["issue"] is not None else \
@@ -688,8 +688,10 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
         a = with_fallbacks(cfg, role, log, memo, node="issue_writer", task_id=run_id, models=models, loop=loop)
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
                "usd_used": a["usd_used"]}
-        if a["end"] == "submitted" and a["result"].get("blocked"):
-            return {**out, "status": BLOCKED, "stop_reason": a["result"]["blocked"]}
+        if a["end"] == "submitted" and a["result"].get("sandbox_unavailable"):
+            # Atha 2026-11-17: a writer's turn ends WRITE_FAILED here, not BLOCKED: the human replies and the next turn tries again
+            # (a writer job has no retry for BLOCKED, and the conversation and its money would be lost with it)
+            return {**out, "status": FAILED, "stop_reason": a["result"]["sandbox_unavailable"]}
         if a["end"] == "submitted":
             why = "an issue passed the gate" if a["result"]["issue"] is not None else "a reply without an issue"
             return {**out, "status": WRITTEN, "stop_reason": why, "written": a["result"]}

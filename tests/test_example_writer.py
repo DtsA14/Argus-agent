@@ -165,7 +165,7 @@ def test_an_unavailable_sandbox_at_a_try_is_said_and_the_submit_then_blocks_the_
     env = Env(tmp_path, [try_it("total([1], 5)"), submit()], runs=Runs(fail=SandboxUnavailable("docker is down")))
     job = env.new()
     assert "the sandbox is not available" in tool_answers(env.model.calls[1])[0]
-    assert job.data["state"] == ri.BLOCKED and job.data["log"][-1]["reason"].startswith("sandbox_unavailable")
+    assert job.data["state"] == ri.WRITE_FAILED and job.data["log"][-1]["reason"].startswith("sandbox_unavailable")
 
 
 # ---- the gate ----------------------------------------------------------------------------------------------------------
@@ -254,12 +254,15 @@ def test_a_reply_without_an_issue_needs_no_examples(tmp_path):
     assert env.new().data["state"] == ri.AWAITING_HUMAN and env.runs.calls == 0
 
 
-def test_an_unavailable_sandbox_at_the_gate_blocks_the_turn_as_sandbox_unavailable(tmp_path):
-    env = Env(tmp_path, [submit()], runs=Runs(fail=SandboxUnavailable("docker is down")))
+def test_an_unavailable_sandbox_at_the_gate_ends_the_turn_replyable_and_a_reply_tries_again(tmp_path):
+    env = Env(tmp_path, [submit(), submit(id="s2")], runs=Runs(fail=SandboxUnavailable("docker is down")))
     job = env.new()
     st = job.data["stages"]["w1"]
-    assert job.data["state"] == ri.BLOCKED and st["status"] == iw.BLOCKED
+    assert job.data["state"] == ri.WRITE_FAILED and st["status"] == iw.FAILED          # Atha 2026-11-17: not BLOCKED
     assert job.data["log"][-1]["reason"].startswith("sandbox_unavailable: docker is down") and not (job.dir / ri.ISSUE).exists()
+    env.runs.fail = None                                                               # docker is back
+    job = env.reply()
+    assert job.data["state"] == ri.AWAITING_HUMAN and eg.extract((job.dir / ri.ISSUE).read_text())[1] == [SAME, AFTER]
 
 
 def test_a_pass_that_prints_nothing_is_a_rejection_for_the_writer_not_the_end_of_its_job(tmp_path):

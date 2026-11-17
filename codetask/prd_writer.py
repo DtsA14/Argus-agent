@@ -380,7 +380,7 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
             except SandboxUnavailable as e:
                 log.emit("prd_checked", submit=n, ok=False, problems=["sandbox_unavailable"], kinds=["sandbox"])
                 return {"content": "Stopped: the sandbox is not available, so the examples cannot be run.", "finished": True,
-                        "result": {"blocked": f"sandbox_unavailable: {iw.ex.clean(str(e), 200)}"}}
+                        "result": {"sandbox_unavailable": f"sandbox_unavailable: {iw.ex.clean(str(e), 200)}"}}
             except (TypeError, ValueError, KeyError, AttributeError, RecursionError, OSError) as e:
                 problems, result, kinds = [f"the arguments are malformed ({type(e).__name__}): send the shape of SubmitPRD"], \
                     None, ["other"]
@@ -420,6 +420,8 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
                "usd_used": a["usd_used"], "rejections": dict(rejections)}
         if a["end"] == "submitted":
+            if a["result"].get("sandbox_unavailable"):          # Atha 2026-11-17: replyable, as the issue writer's turn
+                return {**out, "status": FAILED, "stop_reason": a["result"]["sandbox_unavailable"]}
             if a["result"].get("blocked"):
                 return {**out, "status": BLOCKED, "stop_reason": a["result"]["blocked"]}
             why = "a PRD passed the gate" if a["result"]["items"] else "a reply without a PRD"
