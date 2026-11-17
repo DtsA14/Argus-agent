@@ -14,21 +14,24 @@ import stat
 import unicodedata
 from collections import Counter
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
 from acceptance import contract as ct
+from codetask import examples as ex
 from harness.llm import check_long_context
 from models.registry import ModelRef
 from research.loop import run_stage, tool_loop, with_fallbacks
+from router import example_gate as eg
 from tools.fs import PathEscape, PathJail
 
 from .tools import (SEARCH_MAX_BYTES, SEARCH_MAX_FILE, SEARCH_MAX_FILES, SEARCH_MAX_LINE, ListFiles, ReadFile,
                     SearchFiles, Toolbox)
 
 WRITTEN, FAILED, BLOCKED, FAILED_BUDGET = "WRITTEN", "WRITE_FAILED", "BLOCKED", "FAILED_BUDGET"
-VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "5"}
+VERSIONS = {"ListFiles": "2", "SearchFiles": "2", "ReadFile": "3", "SubmitIssue": "6", "RunExample": "1"}
+RUN_EXAMPLE_MAX, NO_EXAMPLES_MAX = 16, 160      # SPEC_EXAMPLE_GATE 4(1): tries per turn (counted from the memo), the reason for none
 READ_ONLY = {"scope": {"writable": [], "protected": ["**"]}, "validation": []}
 MAX_ISSUE = ct.MAX_ISSUE
 REPLY_MAX, TITLE_MAX, WHY_MAX, CLASHES_MAX, QUESTIONS_MAX = 1200, 120, 300, 10, 5
@@ -85,6 +88,17 @@ class Clash(BaseModel):
     why: str = Field(description=f"What in it the change touches, and why it may fail (at most {WHY_MAX} characters).")
 
 
+class RunExample(BaseModel):
+    """Try an example on the repository's code before you write it (the sandbox runs it, no network, the tree read-only):
+    `setup` is Python that imports a module of the repository and calls it; `run` is ONE expression whose value is JSON.
+    You get what the code really gave. With `overrides` ({"module.NAME": json value}) the constant is set first (a whatif
+    example). Costs no money; at most 16 tries in a turn."""
+    setup: str = Field(description=f"Python, at most {ex.SETUP_MAX} characters: imports a module of the repository and calls it.")
+    run: str = Field(description=f"One expression, at most {ex.RUN_MAX} characters, whose value is JSON (a number, text, bool, list or "
+                                 "object; write attribute projections in the expression).")
+    overrides: Dict[str, Any] = Field(default_factory=dict, description='Optional: {"module.NAME": value} set before `setup`.')
+
+
 class SubmitIssue(BaseModel):
     """Submit your reply to the human and, when they asked for a change, the issue with its possible clashes, and your
     questions. The harness checks it; the human reads it before anything is built from it. Call it alone in its
@@ -110,6 +124,13 @@ class SubmitIssue(BaseModel):
     clash_check: str = Field(default="", description="The code the harness gave you with its list of old test lines "
                                                      "holding your touches; empty until then. Send it with exactly "
                                                      "the touches that list was made from.")
+    examples: List[dict] = Field(default_factory=list,
+                                 description=f"With an issue, in an environment that runs examples: 1 to {ex.MAX_EXAMPLES} examples, each "
+                                             "{id: e1.., tier: same|whatif|after, says, setup, run, expect | raises, overrides (whatif "
+                                             "only)}. The harness RUNS them on the code and writes them into the issue; send them "
+                                             "again whenever you revise the issue.")
+    no_examples: str = Field(default="", description=f"Only when you give no examples: why there are none (one line, at most "
+                                                     f"{NO_EXAMPLES_MAX} characters).")
 
 
 def unchanged_paragraph(issue):
@@ -288,7 +309,48 @@ def touches_problems(args, source, known=frozenset(), strict=False):
     return [], terms, len(hits)
 
 
-def issue_gate(args, *, source, environment, known=frozenset(), strict=False):
+def has_runner(cfg, name):
+    """True when the environment is a configured Python one: the harness can run examples there. An environment that runs
+    something else (vitest), or is not configured, has no example runner; the gate then neither asks for examples nor runs any."""
+    env = (((cfg or {}).get("sandbox") or {}).get("environments") or {}).get(name) if name else None
+    return bool(env) and ct.runner(env) == "pytest"
+
+
+def check_examples(raw, no_examples, *, source, factory, runs, execute=True):
+    """(problems, info) of the examples of one issue (SPEC_EXAMPLE_GATE 4(1)): the form (codetask/examples.parse), then every
+    example run on `source`, the frozen commit (router/example_gate.check_base). info: {examples, no_examples, results, note}.
+    factory(n) -> (runner, root) for a pass over n examples. execute False: the form only (an item of a PRD after the first, whose
+    base commit is not the one the writer sees: its real gate is the code job's intake). SandboxUnavailable is not caught."""
+    problems = []
+    given = isinstance(raw, list) and bool(raw)
+    if raw not in (None, [], "") and not isinstance(raw, list):
+        problems.append("examples must be a list")
+    reason = no_examples.strip() if isinstance(no_examples, str) else ""
+    if not runs:
+        if given:
+            problems.append("this environment has no example runner: leave examples empty")
+        return problems, {"examples": [], "no_examples": None, "results": [], "note": eg.RUNNER_NOTE}
+    if given and reason:
+        problems.append("give examples or no_examples, not both")
+    if not given:
+        if not reason:
+            problems.append("an issue needs examples, or no_examples with the reason there are none (one line)")
+        else:
+            why = text_problem(reason, "no_examples", NO_EXAMPLES_MAX, newlines=False)
+            if why:
+                problems.append(why)
+        return problems, {"examples": [], "no_examples": reason or None, "results": [], "note": None}
+    parsed, found = ex.parse(raw)
+    problems += found
+    results = []
+    if not found and execute:
+        runner, root = factory(len(parsed))
+        results, why = eg.check_base(parsed, source, runner, root)
+        problems += why
+    return problems, {"examples": [] if found else parsed, "no_examples": None, "results": results, "note": None}
+
+
+def issue_gate(args, *, source, environment, known=frozenset(), strict=False, examples_check=None):
     """(problems, result) of a SubmitIssue. result: {reply, issue, clashes, questions, notes} as checked; issue None for
     a reply only (no issue, or an empty one), which may name no clash; notes None when none were given (the job keeps
     its earlier notes), else stripped (amendment 2)."""
@@ -297,6 +359,11 @@ def issue_gate(args, *, source, environment, known=frozenset(), strict=False):
         return ["the arguments must be an object"], None
     reply, issue = args.get("reply"), args.get("issue")
     only = issue is None or (isinstance(issue, str) and not issue.strip())
+    if examples_check is not None and not only and isinstance(issue, str):
+        issue = eg.without_block(issue.strip())              # a block the harness wrote earlier is not written twice
+        if eg.mentions(issue):
+            problems.append("the issue text must not hold an argus-examples fence: give the examples in `examples` and the harness "
+                            "writes them")
     # the issue is stored with one final newline, and a code job takes at most MAX_ISSUE characters
     for why in (text_problem(reply, "reply", REPLY_MAX),
                 None if only else text_problem(issue.strip() if isinstance(issue, str) else issue, "issue",
@@ -354,11 +421,17 @@ def issue_gate(args, *, source, environment, known=frozenset(), strict=False):
     # amendment 3: an issue that clashes says so in its own text, so the drafter and the human read the same thing:
     # it may not claim the old tests are untouched, and the harness writes the clashes into it (with_clashes)
     final, touches, test_hits = None, [], 0
+    info = None
     if not only:
         why, touches, test_hits = touches_problems(args, source, known=known, strict=strict)
         problems += why
+        if examples_check is not None:
+            why, info = examples_check(args)
+            problems += why
     if not only and isinstance(issue, str) and issue.strip():
         final = with_clashes(without_clash_list(issue.strip()), kept)
+        if info is not None:
+            final = eg.with_block(final, info["examples"])
         if kept and UNCHANGED.search(unchanged_paragraph(issue)):
             problems.append(f"you named {len(kept)} clash(es), so the issue cannot say the existing tests keep passing "
                             "unchanged: drop that claim (the harness adds the tests a human loosens first), or change "
@@ -378,7 +451,7 @@ def issue_gate(args, *, source, environment, known=frozenset(), strict=False):
         return problems, None
     return [], {"reply": reply.strip(), "issue": None if only else final + "\n", "clashes": kept,
                 "questions": [q.strip() for q in questions], "notes": notes, "touches": touches,
-                "test_hits": test_hits}
+                "test_hits": test_hits, **({"examples": info} if info is not None else {})}
 
 
 SYSTEM = "\n".join([
@@ -414,6 +487,14 @@ SYSTEM = "\n".join([
     "that test's own fixtures and data, is a clash: put each one in `clashes` with its file and line, and say in the "
     "reply that a human must loosen that test first, or change the issue so it does not clash. A test that only might "
     "fail, or would fail only with data it does not have (e.g. a field its fixtures lack), is no clash: leave it out.",
+    "- Give `examples` (the environment runs them): 1 to 6 concrete cases {id e1.., tier, says, setup, run, expect | raises, overrides}. "
+    "`setup` is Python that imports a module of the repository and calls it; `run` is ONE expression whose value is JSON. "
+    "Tiers: `same` = behaviour that must NOT change (true on today's code); `whatif` = behaviour when a module-level constant has "
+    "another value (give `overrides`: {\"module.NAME\": value}; it cannot simulate changed logic, a default argument or a name "
+    "imported by value); `after` = new behaviour that today's code cannot show. Try each one with RunExample before you write it: "
+    "the harness runs every example on the real code, and a wrong number is rejected with the real value. Never write a number "
+    "you did not see. The harness writes the examples into the issue; do not write the block yourself, and send `examples` again "
+    "whenever you revise the issue. With no examples, give `no_examples` and the reason.",
     "- Name in `touches` the existing texts, selectors, classes, keys and names the change alters or relies on. The "
     "harness then shows you every line of the old tests that holds one, with a clash_check code: read the lines that "
     "may break, add each to `clashes`, and submit again with that code and exactly the same touches (changing the "
@@ -446,9 +527,19 @@ def prompt(inputs, lim):
     return "\n".join(lines)
 
 
+def _tool_version(cfg, environment):
+    """The image part of the memo keys of RunExample and SubmitIssue: a changed image never reuses an old result."""
+    try:
+        from tools.sandbox import tool_version
+        return tool_version(cfg.get("sandbox") or {}, [environment])
+    except Exception:
+        return f"unresolved:{environment}"
+
+
 def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None, crash_at=None, prepare=None,
-               section="issue_writer"):
-    """One turn. prepare(run_dir) -> the snapshot directory the read tools see (made once; a resume finds it)."""
+               section="issue_writer", example_runner=None):
+    """One turn. prepare(run_dir) -> the snapshot directory the read tools see (made once; a resume finds it).
+    example_runner(tree, sandbox cfg) -> (runner, root): tests inject it; the default is the sandbox."""
     lim = settings(cfg, section)
     role = cfg[section]["role"]
 
@@ -456,11 +547,38 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
         if lim["attempt_usd"] <= 0:
             return {"status": FAILED_BUDGET, "stop_reason": "the turn cap leaves nothing for the writer"}
         source = prepare(run_dir)
-        box = Toolbox(str(source), READ_ONLY, cfg.get("sandbox") or {},
-                      (cfg.get("tools") or {}).get(role, []), log, role=role)
+        allowed = (cfg.get("tools") or {}).get(role, [])
+        box = Toolbox(str(source), READ_ONLY, cfg.get("sandbox") or {}, allowed, log, role=role)
+        env = inputs["environment"]
+        runs = has_runner(cfg, env)
+        versions = {**VERSIONS, **({"SubmitIssue": f"6:{_tool_version(cfg, env)}", "RunExample": f"1:{_tool_version(cfg, env)}"}
+                                   if runs else {})}
+
+        def factory(n):
+            scfg = {**(cfg.get("sandbox") or {}), "environment": env, "timeout_s": ex.pass_timeout_s(n)}
+            return (example_runner or eg.sandbox_runner)(source, scfg)
+
+        def examples_hook(args):
+            problems, info = check_examples(args.get("examples"), args.get("no_examples"), source=source, factory=factory, runs=runs)
+            tiers = {e["id"]: e["tier"] for e in info["examples"]}
+            kt, km = f"tiers:{run_id}", f"moves:{run_id}"
+            prev, moves = memo.get(kt) or {}, memo.get(km) or []
+            fresh = [{"id": i, "from": prev[i], "to": t} for i, t in tiers.items() if i in prev and prev[i] != t]
+            if fresh:                                  # an example that changed tier between two submits is shown on the card
+                memo.put(km, moves + fresh)
+            if tiers:
+                memo.put(kt, {**prev, **tiers})
+            info["tier_moves"] = moves + fresh
+            return problems, info
 
         def gate_submit(args, n, last_step=False):
-            problems, result = issue_gate(args, source=source, environment=inputs["environment"])
+            from tools.sandbox import SandboxUnavailable
+            try:
+                problems, result = issue_gate(args, source=source, environment=env, examples_check=examples_hook)
+            except SandboxUnavailable as e:
+                log.emit("issue_checked", submit=n, ok=False, problems=["sandbox_unavailable"])
+                return {"content": "Stopped: the sandbox is not available, so the examples cannot be run.", "finished": True,
+                        "result": {"blocked": f"sandbox_unavailable: {ex.clean(str(e), 200)}"}}
             log.emit("issue_checked", submit=n, ok=not problems, problems=problems[:20])
             if not problems:
                 said = "the issue passed the harness gate" if result["issue"] is not None else \
@@ -472,7 +590,37 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
             return {"content": "\n".join([head, *[f"- {p}" for p in problems]]), "finished": False,
                     "exhausted": left <= 0}
 
+        def run_example(args):
+            from tools.sandbox import SandboxUnavailable
+            if "run_example" not in allowed or not runs:
+                log.emit("tool_denied", role=role, tool="run_example")
+                return "Denied: RunExample is not allowed here."
+            if not isinstance(args, dict):
+                return "Rejected: the arguments of RunExample must be an object."
+            n = 0
+            while memo.get(f"runexample:{run_id}:{n}") is not None:      # counted from the memo: a resume does not start again at 0
+                n += 1
+            if n >= RUN_EXAMPLE_MAX:
+                return f"Refused: at most {RUN_EXAMPLE_MAX} RunExample tries in a turn; write the examples you have seen."
+            memo.put(f"runexample:{run_id}:{n}", 1)
+            ov = args.get("overrides") or {}
+            one = {"id": "e1", "tier": "whatif" if ov else "same", "says": "a try", "setup": args.get("setup"),
+                   "run": args.get("run"), "expect": 0, **({"overrides": ov} if ov else {})}
+            parsed, problems = ex.parse([one])
+            if problems:
+                return "Rejected: " + "; ".join(problems)
+            log.emit("tool_call", role=role, tool="run_example")
+            try:
+                runner, root = factory(1)
+                raw = ex.run_pass(parsed, runner, root=root)["e1"]
+            except SandboxUnavailable:
+                return "RunExample cannot run now: the sandbox is not available."
+            return f"RunExample result {ex.RUN_LABEL}: {ex.observed(raw)}"
+
         def run_tool(name, args, key, res):
+            if name == "RunExample":
+                log.emit("writer_step", tool=name, target=str((args or {}).get("run", ""))[:TARGET_MAX] if isinstance(args, dict) else "")
+                return run_example(args)
             target = next((args[k] for k in ("text", "path") if isinstance(args, dict)
                            and isinstance(args.get(k), str) and args[k]), "")      # a search's text, else a path
             # what the page shows while the turn runs (SPEC_ISSUE_WRITER amendment 1, A2); model text, escaped there
@@ -481,14 +629,18 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
 
         def loop(caller):
             return tool_loop(caller, memo, log, node="issue_writer", task_id=run_id, lim=lim, system=SYSTEM,
-                             prompt=prompt(inputs, lim), tools=[ListFiles, SearchFiles, ReadFile, SubmitIssue],
-                             submit=SubmitIssue, versions=VERSIONS, run_tool=run_tool, gate_submit=gate_submit,
+                             prompt=prompt(inputs, lim),
+                             tools=[ListFiles, SearchFiles, ReadFile, *([RunExample] if runs and "run_example" in allowed else []),
+                                    SubmitIssue],
+                             submit=SubmitIssue, versions=versions, run_tool=run_tool, gate_submit=gate_submit,
                              crasher=crasher, nudge="Read what you need (maybe nothing), then call SubmitIssue.",
                              steps_note="Harness: {n} steps left of {max}. Submit soon.",
                              final_note="Harness: the last {n} steps. Submit now.")
         a = with_fallbacks(cfg, role, log, memo, node="issue_writer", task_id=run_id, models=models, loop=loop)
         out = {"end": a["end"], "steps": a["steps"], "submits": a["submits"], "tokens_used": a["tokens_used"],
                "usd_used": a["usd_used"]}
+        if a["end"] == "submitted" and a["result"].get("blocked"):
+            return {**out, "status": BLOCKED, "stop_reason": a["result"]["blocked"]}
         if a["end"] == "submitted":
             why = "an issue passed the gate" if a["result"]["issue"] is not None else "a reply without an issue"
             return {**out, "status": WRITTEN, "stop_reason": why, "written": a["result"]}

@@ -667,14 +667,7 @@ def example_runner(job, cfg, deps, tree, n):
     scfg = {**(cfg.get("sandbox") or {}), **({"environment": name} if name else {}), "timeout_s": exl.pass_timeout_s(n)}
     if deps.example_runner:
         return deps.example_runner(tree, scfg)
-    from tools import sandbox
-
-    def run(argv):
-        r = sandbox.run_command(argv, workdir=tree, cfg=scfg)
-        if r.get("exit_code") in (125, 126, 127) or r.get("cleanup_failed"):         # docker itself failed: not a verdict on the examples
-            raise sandbox.SandboxUnavailable(f"the container did not run (exit {r.get('exit_code')})")
-        return r
-    return run, eg.BOX_ROOT
+    return eg.sandbox_runner(tree, scfg)
 
 
 def _example_gate(job, cfg, deps):
