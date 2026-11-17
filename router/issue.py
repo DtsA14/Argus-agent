@@ -26,6 +26,7 @@ from acceptance import intake
 from codetask import issue_writer as iw
 from codetask.drafter import _write
 
+from . import example_gate as eg
 from . import job as rj
 
 WRITING, AWAITING_HUMAN, WRITE_FAILED, HANDED_OFF = "WRITING", "AWAITING_HUMAN", "WRITE_FAILED", "HANDED_OFF"
@@ -88,12 +89,34 @@ def _preflight(cfg, cap, section="issue_writer"):
 def _screen(job, cfg, what):
     s = _settings(cfg)
     i = job.data["inputs"]
+    runs = iw.has_runner(cfg, i["environment"])
     return "\n".join([
         f"issue writer: {what} for job {job.id}",
         f"repository {i['repo_name']} at {i['commit'][:12]} (read-only copy), environment {i['environment']}",
         f"model {cfg['roles'][s['role']]['model']}; turn cap ${float(s['turn']['cap_usd']):.2f}; "
         f"job cap ${job.data['max_usd']:.2f}, spent ${rj.spent_nano(job) / 1e9:.4f}",
-        "the repository's files and the conversation go to the model provider"])
+        "the repository's files and the conversation go to the model provider",
+        *(["example code written by the model RUNS in the sandbox (RunExample and the gate: no network, the repository read-only, "
+           f"image {str(job.data.get('environment_image'))[:19]}); the turn is no longer read-only"] if runs else [])])
+
+
+def _pin_environment(job, cfg):
+    """Before every turn in an environment that runs examples (SPEC_EXAMPLE_GATE 4(1)): its image is pinned in the job (a job from
+    before the gate is pinned at its next turn) and a turn on another image is refused, as a code job's `environment_changed`
+    refuses it: a gate result of one image is not a result of another."""
+    env = job.data["inputs"]["environment"]
+    if not iw.has_runner(cfg, env):
+        return
+    if "environment_image" not in job.data:
+        image, problem = rj.environment_pin(cfg, env)
+        if problem:
+            raise rj.Refused(f"{problem}; nothing was started")
+        job.data["environment_image"] = image
+        job.save()
+        return
+    why = rj.environment_changed(job, cfg)
+    if why:
+        raise rj.Refused(f"job {job.id}: {why}; nothing was started")
 
 
 def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, job_id=None, via=None):
@@ -126,6 +149,7 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, job_id=None, via=None):
                     "stages": {}, "log": []}
         job.note(deps, "created", by=os.environ.get("USER"), **({"via": via} if via else {}))
         try:
+            _pin_environment(job, cfg)
             with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                          _screen(job, cfg, "first turn"), job=job):
                 job.move(WRITING, deps, stage=_next_sid(job))
@@ -161,6 +185,7 @@ def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, via=None):
         if left + 1e-12 < float(s["turn"]["cap_usd"]):        # before the limits, the confirmation and the key
             raise rj.Refused(f"job {job.id}: ${left:.4f} of the job cap is left, less than one turn "
                              f"(${float(s['turn']['cap_usd']):.2f}); nothing was started")
+        _pin_environment(job, cfg)
         with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                      _screen(job, cfg, "next turn"), job=job):
             job.data["conversation"].append({"from": "human", "at": deps.clock(), "text": message.strip()})
@@ -175,6 +200,7 @@ def resume(job, cfg, deps):
         raise rj.Refused(f"job {job.id} is {job.data['state']}: nothing to resume")
     s = _settings(cfg)
     _preflight(cfg, job.data["max_usd"])
+    _pin_environment(job, cfg)
     with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                  _screen(job, cfg, "resume the turn"), job=job):
         _turn(job, cfg, deps)
@@ -248,7 +274,7 @@ def _turn(job, cfg, deps):
     deps.echo(rj.running(job, f"issue writer {sid}", run_id))
     scfg = rj.stage_config(cfg, st["cap_usd"])
     r = iw.run_writer(run_id=run_id, runs_dir=job.runs, cfg=scfg, inputs=inputs, resume=again, models=deps.models,
-                      prepare=lambda run_dir: source)
+                      prepare=lambda run_dir: source, example_runner=deps.example_runner)
     deps.echo(f"{sid} finished: {r.get('status')} (${r.get('usd_billed', 0):.4f})")
     # The turn's end is ONE save (the move): the stage's status, the issue and the reply together. A crash before it
     # leaves the stage open, and a resume replays the run from its committed result, never buying a turn again.
@@ -269,7 +295,8 @@ def _turn(job, cfg, deps):
     _write(job.dir / ISSUE, w["issue"])
     sha = hashlib.sha256(w["issue"].encode("utf-8")).hexdigest()
     job.data["conversation"].append({"from": "writer", "at": deps.clock(), "stage": sid, "text": w["reply"],
-                                     "issue_sha256": sha, "clashes": w["clashes"], "questions": w["questions"]})
+                                     "issue_sha256": sha, "clashes": w["clashes"], "questions": w["questions"],
+                                     **({"examples": w["examples"]} if w.get("examples") else {})})     # the card's data (T2)
     job.data["issue_sha256"] = sha
     job.move(AWAITING_HUMAN, deps, stage=sid)
 
@@ -370,6 +397,24 @@ def moved(job):
         return None
 
 
+def example_lines(info):
+    """The lines for the examples of an issue the writer wrote (the card's data, T2): what each did on the frozen commit, the tier
+    moves between submits, the reason for none, or the note that the environment has no runner. Text the code of an example
+    printed is cleaned and labelled as data."""
+    if not isinstance(info, dict):
+        return []
+    out = []
+    if info.get("results"):
+        out += eg.intake_lines(("results", info["results"]))
+    if info.get("no_examples"):
+        out.append(f"no examples: {iw.ex.clean(info['no_examples'], 160)} (the writer's reason)")
+    if info.get("note"):
+        out.append(f"examples: not run ({iw.ex.clean(info['note'], 160)})")
+    out += [f"example {m['id']}: written as {m['from']}, sent again as {m['to']}" for m in info.get("tier_moves") or []
+            if isinstance(m, dict)]
+    return out
+
+
 def status_lines(job):
     """The issue job for `argus status`: the last reply, the issue file, the clashes and questions, what comes next."""
     d = job.data
@@ -384,6 +429,7 @@ def status_lines(job):
         # the clashes of the issue a start would use: a reply without an issue after it names none of its own
         wrote = next((m for m in reversed(writer) if m.get("issue_sha256") == d.get("issue_sha256")), last)
         out += [f"clash: {c['file']}:{c['line']} {c['why']}" for c in wrote["clashes"]]
+        out += example_lines(wrote.get("examples"))
         out += [f"question: {q}" for q in last["questions"]]
     if d["state"] == HANDED_OFF and d.get("handoff"):
         out.append(f"handed off to code job {d['handoff']['job']}: argus status {d['handoff']['job']}")

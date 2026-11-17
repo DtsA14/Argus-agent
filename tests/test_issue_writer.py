@@ -338,7 +338,7 @@ def test_without_clashes_the_issue_is_stored_as_written_and_may_say_the_old_test
 
 def test_the_writer_is_told_to_name_the_tests_to_loosen():
     assert "never claim the old tests keep passing: the harness adds to the issue the list" in iw.SYSTEM
-    assert iw.VERSIONS["SubmitIssue"] == "5"
+    assert iw.VERSIONS["SubmitIssue"] == "6"
 
 
 @pytest.mark.parametrize("kw, why", [
@@ -385,7 +385,7 @@ def test_no_tool_that_writes_runs_or_reaches_the_network_is_offered(tmp_path):
     assert {t.__name__ for t in env.model.bound_tools} == {"ListFiles", "SearchFiles", "ReadFile", "SubmitIssue"}
     answers = tool_answers(env.model.calls[1])
     assert answers[0].startswith("Refused: WriteFile is not offered") and not (env.repo / "src" / "x.js").exists()
-    assert env.cfg["tools"]["issue_writer"] == ["list_files", "search_files", "read_file"]
+    assert env.cfg["tools"]["issue_writer"] == ["list_files", "search_files", "read_file", "run_example"]       # offered only where the environment runs examples
 
 
 # ---- what the job shows, and what it never publishes ------------------------------------------------------------
