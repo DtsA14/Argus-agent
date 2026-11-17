@@ -536,6 +536,71 @@ def _tool_version(cfg, environment):
         return f"unresolved:{environment}"
 
 
+class ExampleSupport:
+    """What a writer turn needs to run examples (SPEC_EXAMPLE_GATE 4(1)), shared by the issue writer and the PRD writer: whether the
+    environment runs examples at all, the RunExample tool (at most RUN_EXAMPLE_MAX tries a turn, counted from the memo), the gate's
+    check with the tier moves between submits, and the memo versions that carry the image. example_runner(tree, sandbox cfg) ->
+    (runner, root): tests inject it; the default is the sandbox."""
+
+    def __init__(self, cfg, role, env, source, run_id, log, memo, example_runner=None):
+        self.cfg, self.role, self.env, self.source, self.run_id = cfg, role, env, source, run_id
+        self.log, self.memo, self.example_runner = log, memo, example_runner
+        self.allowed = (cfg.get("tools") or {}).get(role, [])
+        self.runs = has_runner(cfg, env)
+        tv = _tool_version(cfg, env) if self.runs else None
+        self.versions = {"SubmitIssue": f"6:{tv}", "SubmitPRD": f"2:{tv}", "RunExample": f"1:{tv}"} if self.runs else {}
+
+    def tools(self):
+        return [RunExample] if self.runs and "run_example" in self.allowed else []
+
+    def factory(self, n):
+        scfg = {**(self.cfg.get("sandbox") or {}), "environment": self.env, "timeout_s": ex.pass_timeout_s(n)}
+        return (self.example_runner or eg.sandbox_runner)(self.source, scfg)
+
+    def hook(self, args, scope="", execute=True):
+        """(problems, info) of the examples of one submit (or of one item of a PRD: scope names it). info gets `tier_moves`: the
+        examples that changed tier between two submits of this turn, kept in the memo so a resume does not lose them."""
+        problems, info = check_examples(args.get("examples"), args.get("no_examples"), source=self.source,
+                                        factory=self.factory, runs=self.runs, execute=execute)
+        tiers = {e["id"]: e["tier"] for e in info["examples"]}
+        kt, km = f"tiers:{self.run_id}:{scope}", f"moves:{self.run_id}:{scope}"
+        prev, moves = self.memo.get(kt) or {}, self.memo.get(km) or []
+        fresh = [{"id": i, "from": prev[i], "to": t} for i, t in tiers.items() if i in prev and prev[i] != t]
+        if fresh:
+            self.memo.put(km, moves + fresh)
+        if tiers:
+            self.memo.put(kt, {**prev, **tiers})
+        info["tier_moves"] = moves + fresh
+        return problems, info
+
+    def run_example(self, args):
+        from tools.sandbox import SandboxUnavailable
+        if "run_example" not in self.allowed or not self.runs:
+            self.log.emit("tool_denied", role=self.role, tool="run_example")
+            return "Denied: RunExample is not allowed here."
+        if not isinstance(args, dict):
+            return "Rejected: the arguments of RunExample must be an object."
+        n = 0
+        while self.memo.get(f"runexample:{self.run_id}:{n}") is not None:      # counted from the memo: a resume does not restart at 0
+            n += 1
+        if n >= RUN_EXAMPLE_MAX:
+            return f"Refused: at most {RUN_EXAMPLE_MAX} RunExample tries in a turn; write the examples you have seen."
+        self.memo.put(f"runexample:{self.run_id}:{n}", 1)
+        ov = args.get("overrides") or {}
+        one = {"id": "e1", "tier": "whatif" if ov else "same", "says": "a try", "setup": args.get("setup"),
+               "run": args.get("run"), "expect": 0, **({"overrides": ov} if ov else {})}
+        parsed, problems = ex.parse([one])
+        if problems:
+            return "Rejected: " + "; ".join(problems)
+        self.log.emit("tool_call", role=self.role, tool="run_example")
+        try:
+            runner, root = self.factory(1)
+            raw = ex.run_pass(parsed, runner, root=root)["e1"]
+        except SandboxUnavailable:
+            return "RunExample cannot run now: the sandbox is not available."
+        return f"RunExample result {ex.RUN_LABEL}: {ex.observed(raw)}"
+
+
 def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None, crash_at=None, prepare=None,
                section="issue_writer", example_runner=None):
     """One turn. prepare(run_dir) -> the snapshot directory the read tools see (made once; a resume finds it).
@@ -550,31 +615,13 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
         allowed = (cfg.get("tools") or {}).get(role, [])
         box = Toolbox(str(source), READ_ONLY, cfg.get("sandbox") or {}, allowed, log, role=role)
         env = inputs["environment"]
-        runs = has_runner(cfg, env)
-        versions = {**VERSIONS, **({"SubmitIssue": f"6:{_tool_version(cfg, env)}", "RunExample": f"1:{_tool_version(cfg, env)}"}
-                                   if runs else {})}
-
-        def factory(n):
-            scfg = {**(cfg.get("sandbox") or {}), "environment": env, "timeout_s": ex.pass_timeout_s(n)}
-            return (example_runner or eg.sandbox_runner)(source, scfg)
-
-        def examples_hook(args):
-            problems, info = check_examples(args.get("examples"), args.get("no_examples"), source=source, factory=factory, runs=runs)
-            tiers = {e["id"]: e["tier"] for e in info["examples"]}
-            kt, km = f"tiers:{run_id}", f"moves:{run_id}"
-            prev, moves = memo.get(kt) or {}, memo.get(km) or []
-            fresh = [{"id": i, "from": prev[i], "to": t} for i, t in tiers.items() if i in prev and prev[i] != t]
-            if fresh:                                  # an example that changed tier between two submits is shown on the card
-                memo.put(km, moves + fresh)
-            if tiers:
-                memo.put(kt, {**prev, **tiers})
-            info["tier_moves"] = moves + fresh
-            return problems, info
+        sup = ExampleSupport(cfg, role, env, source, run_id, log, memo, example_runner)
+        versions, runs = {**VERSIONS, **sup.versions}, sup.runs
 
         def gate_submit(args, n, last_step=False):
             from tools.sandbox import SandboxUnavailable
             try:
-                problems, result = issue_gate(args, source=source, environment=env, examples_check=examples_hook)
+                problems, result = issue_gate(args, source=source, environment=env, examples_check=sup.hook)
             except SandboxUnavailable as e:
                 log.emit("issue_checked", submit=n, ok=False, problems=["sandbox_unavailable"])
                 return {"content": "Stopped: the sandbox is not available, so the examples cannot be run.", "finished": True,
@@ -590,37 +637,10 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
             return {"content": "\n".join([head, *[f"- {p}" for p in problems]]), "finished": False,
                     "exhausted": left <= 0}
 
-        def run_example(args):
-            from tools.sandbox import SandboxUnavailable
-            if "run_example" not in allowed or not runs:
-                log.emit("tool_denied", role=role, tool="run_example")
-                return "Denied: RunExample is not allowed here."
-            if not isinstance(args, dict):
-                return "Rejected: the arguments of RunExample must be an object."
-            n = 0
-            while memo.get(f"runexample:{run_id}:{n}") is not None:      # counted from the memo: a resume does not start again at 0
-                n += 1
-            if n >= RUN_EXAMPLE_MAX:
-                return f"Refused: at most {RUN_EXAMPLE_MAX} RunExample tries in a turn; write the examples you have seen."
-            memo.put(f"runexample:{run_id}:{n}", 1)
-            ov = args.get("overrides") or {}
-            one = {"id": "e1", "tier": "whatif" if ov else "same", "says": "a try", "setup": args.get("setup"),
-                   "run": args.get("run"), "expect": 0, **({"overrides": ov} if ov else {})}
-            parsed, problems = ex.parse([one])
-            if problems:
-                return "Rejected: " + "; ".join(problems)
-            log.emit("tool_call", role=role, tool="run_example")
-            try:
-                runner, root = factory(1)
-                raw = ex.run_pass(parsed, runner, root=root)["e1"]
-            except SandboxUnavailable:
-                return "RunExample cannot run now: the sandbox is not available."
-            return f"RunExample result {ex.RUN_LABEL}: {ex.observed(raw)}"
-
         def run_tool(name, args, key, res):
             if name == "RunExample":
                 log.emit("writer_step", tool=name, target=str((args or {}).get("run", ""))[:TARGET_MAX] if isinstance(args, dict) else "")
-                return run_example(args)
+                return sup.run_example(args)
             target = next((args[k] for k in ("text", "path") if isinstance(args, dict)
                            and isinstance(args.get(k), str) and args[k]), "")      # a search's text, else a path
             # what the page shows while the turn runs (SPEC_ISSUE_WRITER amendment 1, A2); model text, escaped there
@@ -630,8 +650,7 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
         def loop(caller):
             return tool_loop(caller, memo, log, node="issue_writer", task_id=run_id, lim=lim, system=SYSTEM,
                              prompt=prompt(inputs, lim),
-                             tools=[ListFiles, SearchFiles, ReadFile, *([RunExample] if runs and "run_example" in allowed else []),
-                                    SubmitIssue],
+                             tools=[ListFiles, SearchFiles, ReadFile, *sup.tools(), SubmitIssue],
                              submit=SubmitIssue, versions=versions, run_tool=run_tool, gate_submit=gate_submit,
                              crasher=crasher, nudge="Read what you need (maybe nothing), then call SubmitIssue.",
                              steps_note="Harness: {n} steps left of {max}. Submit soon.",
