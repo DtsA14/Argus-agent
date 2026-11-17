@@ -45,8 +45,11 @@ CALL_ID = re.compile(r"^[0-9a-z]{1,40}$")
 # provider:model, an OpenRouter model as vendor/name with an optional :variant (#357: the judge and research jobs
 # use openrouter:z-ai/glm-5.3, openrouter:nvidia/...:free; 36 of 112 jobs were left out before)
 MODEL = re.compile(r"^[a-z0-9_.-]{1,30}:[a-z0-9][a-z0-9_.-]{0,59}(/[a-z0-9][a-z0-9_.-]{0,79})?(:[a-z0-9][a-z0-9_.-]{0,19})?$")
+# repro, repro_patched, apply_started: the router writes them into every code job's log; only the kind is published (LOG_FIELDS holds no
+# payload field), and a kind missing from this set excludes the whole job (2026-11-17: 45 of 66 jobs of a CLI jobs directory).
 LOG_WHAT = {"created", "intaken", "state", "approved", "limits_shown", "confirmed", "confirmed_by_flag", "key_typed",
-            "key_from_file", "retry", "redraft", "staged", "research_ok", "applied", "stage_started"}
+            "key_from_file", "retry", "redraft", "staged", "research_ok", "applied", "stage_started",
+            "repro", "repro_patched", "apply_started", "not_confirmed"}
 # A second layer over the projection (A1): nothing like a key may be in what is published.
 KEY = re.compile(rb"sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|(?i:api[_-]?key|secret|password|token)\"?\s*[:=]\s*\"")
 
