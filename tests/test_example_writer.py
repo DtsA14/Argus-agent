@@ -266,7 +266,7 @@ def test_a_pass_that_prints_nothing_is_a_rejection_for_the_writer_not_the_end_of
     class Silent(Runs):
         def __call__(self, tree, scfg):
             return (lambda argv: {"stdout": "", "stderr": "", "exit_code": 1}), str(tree)      # an example that ends its own process
-    env = Env(tmp_path, [submit(), submit(id="s2")], runs=Silent())
+    env = Env(tmp_path, [submit(id=f"s{i}") for i in range(6)], runs=Silent())
     job = env.new()
     assert "no example printed a result: the pass was cut off" in tool_answers(env.model.calls[1])[0]
     assert job.data["state"] == ri.WRITE_FAILED and job.data["stages"]["w1"]["status"] == iw.FAILED       # replyable, never BLOCKED
