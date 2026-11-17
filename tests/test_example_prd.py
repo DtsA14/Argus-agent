@@ -142,3 +142,68 @@ def test_an_environment_without_a_runner_needs_no_examples_in_a_prd(tmp_path):
     env.cfg["sandbox"]["environments"][ENV]["runner"] = "vitest"
     job = env.new()
     assert job.data["state"] == pj.AWAITING_HUMAN and env.runs.calls == 0 and "RUNS in the sandbox" not in env.screens[0]
+
+
+# ---- the review of PR 3 (Opus) -----------------------------------------------------------------------------------------------
+
+def test_the_prd_prompt_names_examples_and_run_example_only_where_they_apply(tmp_path):
+    env = Env(tmp_path, [submit()])
+    env.new()
+    system = tew.text(env.model.calls[0]["messages"][0])
+    assert "`examples` (this environment runs them)" in system and "Try them with RunExample" in system
+    node = Env(tmp_path / "n", [submit(args([item("one", ["def total"], [], []), item("two", ["def total"], [], [])]))])
+    node.cfg["sandbox"]["environments"][ENV]["runner"] = "vitest"
+    node.new()
+    assert "no example runner" in tew.text(node.model.calls[0]["messages"][0])
+
+
+def test_a_whatif_or_a_short_name_rule_of_a_later_item(tmp_path):
+    whatif = {**LATER, "tier": "whatif", "overrides": {"src.shop.NOPE": 1}}
+    env = Env(tmp_path, [submit(args([item("one", ["def total"], ["show_floor"], [SAME]), item("two", ["show_floor"], [], [whatif])])),
+                         submit(id="s2")])
+    env.new()
+    assert "uses 'show_floor', which an earlier item creates: its tier is `after`" in tool_answers(env.model.calls[1])[0]
+    short = {**LATER, "setup": "from src.shop import total", "run": "total([2, 3], 1)"}          # uses no created name
+    env2 = Env(tmp_path / "s", [submit(args([item("one", ["def total"], ["ab"], [SAME]), item("two", ["ab"], [], [short])]))])
+    assert env2.new().data["state"] == pj.AWAITING_HUMAN                                      # a name of under 2 characters never matches
+
+
+def test_the_prd_tier_records_are_kept_per_item(tmp_path):
+    moved = {**SAME, "tier": "after", "run": "total([2, 3], 1)", "expect": 4}
+    first = args([item("one", ["def total"], [], [SAME]), item("two", ["def total"], [], [], "none")])
+    first["prd_md"] = PRD.replace("show_floor", "x") + "x" * 0
+    second = args([item("one", ["def total"], [], [SAME]), item("two", ["def total"], [], [SAME])])
+    rejected = args([item("one", ["def total"], [], [moved]), item("two", ["def total"], [], [SAME])])
+    bad_form = {**args([item("one", ["def total"], [], [SAME]), item("two", ["def total"], [], [SAME])]), "reply": ""}
+    env = Env(tmp_path, [submit(bad_form), submit(rejected, id="s2"), submit(second, id="s3")])
+    job = env.new()
+    turn = job.data["prd_turns"][0]
+    moves = turn["examples"][0]["tier_moves"]
+    assert {"id": "e1", "from": "same", "to": "after"} in moves and turn["examples"][1]["tier_moves"] == []
+
+
+def test_a_prd_reply_and_resume_pin_the_image_too(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit(), submit(id="s2")])
+    env.new()
+    monkeypatch.setattr(rj, "environment_changed", lambda job, cfg: "the image changed")
+    with pytest.raises(rj.Refused, match="the image changed"):
+        pj.reply("jp", "lagi", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs, queues_dir=env.queues)
+    job = env.job()
+    job.data["state"] = pj.WRITING
+    job.save()
+    with pytest.raises(rj.Refused, match="the image changed"):
+        with job.lock():
+            pj.resume(job, env.cfg, env.deps, env.queues)
+
+
+def test_the_sandbox_runner_turns_every_docker_failure_code_into_unavailable(monkeypatch):
+    from tools import sandbox
+    answers = []
+    monkeypatch.setattr(sandbox, "run_command", lambda argv, workdir, cfg: answers.pop(0))
+    run, root = eg.sandbox_runner("/t", {})
+    for code in (125, 126, 127):
+        answers.append({"exit_code": code, "stdout": ""})
+        with pytest.raises(SandboxUnavailable):
+            run(["x"])
+    answers.append({"exit_code": 1, "stdout": "ok"})
+    assert run(["x"])["stdout"] == "ok" and root == "/workspace"

@@ -21,7 +21,7 @@ import unicodedata
 from pathlib import Path
 
 from router import issue as ri
-from codetask.issue_writer import text_problem
+from codetask.issue_writer import has_runner, text_problem
 from harness.events import parse_lines
 from models.registry import ConfigError
 from research.stages import QUESTION_MAX, QUESTION_MIN
@@ -382,6 +382,13 @@ class Actions:
         if self.key_file(writer) is None:
             raise Refusal(409, "key", f"{WRITER_KEY_ENV if writer else KEY_ENV} (or {KEY_ENV}) is not set for the service")
 
+    @staticmethod
+    def runs_code(cfg, environment):
+        """SPEC_EXAMPLE_GATE 4(1), D5: the writer's turn is no longer read-only where the environment runs examples; the card says so."""
+        if not has_runner(cfg, environment):
+            return {}
+        return {"runs_code": "kode contoh buatan model dijalankan di sandbox (tanpa jaringan, repo hanya-baca); giliran ini tidak lagi hanya-baca"}
+
     def build(self, action, params):
         """(card, argv builder inputs) for an action, from live data; Refusal when it cannot be run."""
         if action not in ACTIONS:
@@ -406,7 +413,8 @@ class Actions:
             self._need_key(True)
             card = {"action": action, "title": "Ask the writer", "repo": repo,
                     "environment": repos[repo].get("environment"), "message": text,
-                    "turn_cap_usd": turn_cap, "job_cap_usd": float(w.get("max_usd") or 0)}
+                    "turn_cap_usd": turn_cap, "job_cap_usd": float(w.get("max_usd") or 0),
+                    **self.runs_code(cfg, repos[repo].get("environment"))}
             return card, {"repo": repo, "message": text}
         v = self.read_issue(params.get("job"))
         if v is None:
@@ -425,7 +433,8 @@ class Actions:
                 raise Refusal(400, "form", why)
             self._need_key(True)
             return ({**base, "title": "Reply to the writer", "message": text, "turn_cap_usd": turn_cap,
-                     "counted": self.created_from_ui_in_window(v)}, {"job": v.id, "message": text})
+                     "counted": self.created_from_ui_in_window(v), **self.runs_code(cfg, v.data["inputs"].get("environment"))},
+                    {"job": v.id, "message": text})
         if action == "issue_start":
             if state != ri.AWAITING_HUMAN or v.issue_text is None:
                 raise Refusal(409, "state", f"job {v.id} is {state}: an issue is started when the writer waits for the human")

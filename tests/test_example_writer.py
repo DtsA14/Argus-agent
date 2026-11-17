@@ -262,12 +262,21 @@ def test_an_unavailable_sandbox_at_the_gate_blocks_the_turn_as_sandbox_unavailab
     assert job.data["log"][-1]["reason"].startswith("sandbox_unavailable: docker is down") and not (job.dir / ri.ISSUE).exists()
 
 
-def test_a_pass_that_prints_nothing_is_an_unavailable_sandbox_not_a_wrong_example(tmp_path):
+def test_a_pass_that_prints_nothing_is_a_rejection_for_the_writer_not_the_end_of_its_job(tmp_path):
     class Silent(Runs):
         def __call__(self, tree, scfg):
-            return (lambda argv: {"stdout": "", "stderr": "", "exit_code": 125}), str(tree)
-    env = Env(tmp_path, [submit()], runs=Silent())
-    assert env.new().data["state"] == ri.BLOCKED
+            return (lambda argv: {"stdout": "", "stderr": "", "exit_code": 1}), str(tree)      # an example that ends its own process
+    env = Env(tmp_path, [submit(), submit(id="s2")], runs=Silent())
+    job = env.new()
+    assert "no example printed a result: the pass was cut off" in tool_answers(env.model.calls[1])[0]
+    assert job.data["state"] == ri.WRITE_FAILED and job.data["stages"]["w1"]["status"] == iw.FAILED       # replyable, never BLOCKED
+
+
+def test_what_the_code_printed_is_labelled_as_data_in_a_rejection(tmp_path):
+    env = Env(tmp_path, [submit(examples=({**SAME, "expect": 5},)), submit(id="s2")])
+    env.new()
+    first = tool_answers(env.model.calls[1])[0]
+    assert "the code gave 4" in first and ex.RUN_LABEL in first
 
 
 # ---- the screen, the pinned image, the versions -----------------------------------------------------------------------------
@@ -301,3 +310,97 @@ def test_the_versions_of_the_gate_and_the_tool_carry_the_image(monkeypatch):
     monkeypatch.setattr("tools.sandbox.tool_version", lambda cfg, envs=(): f"1:img;{envs[0]}=ID1")
     assert iw._tool_version({}, "pyenv") == "1:img;pyenv=ID1"
     assert iw.VERSIONS["SubmitIssue"] == "6" and iw.VERSIONS["RunExample"] == "1"
+
+
+# ---- the review of PR 3 (Opus) -----------------------------------------------------------------------------------------------
+
+def system_text(env):
+    return text(env.model.calls[0]["messages"][0])
+
+
+def test_the_prompt_asks_for_examples_and_names_run_example_only_where_they_apply(tmp_path):
+    py = Env(tmp_path, [submit()])
+    py.new()
+    assert "Give `examples` (this environment runs them)" in system_text(py) and "Try each one with RunExample" in system_text(py)
+    nope = Env(tmp_path / "np", [submit()], tools=("list_files", "search_files", "read_file"))
+    nope.new()
+    assert "Give `examples`" in system_text(nope) and "RunExample" not in system_text(nope)
+    node = Env(tmp_path / "node", [submit(examples=())], runner="vitest")
+    node.new()
+    assert "no example runner: leave `examples` and `no_examples` empty" in system_text(node) and "Give `examples`" not in system_text(node)
+
+
+def test_an_example_renamed_after_a_rejection_is_still_a_tier_move(tmp_path):
+    wrong = {**SAME, "id": "e2", "expect": 47}
+    dodge = {**SAME, "id": "e3", "tier": "after", "expect": 47}               # the same call, another id, another tier
+    env = Env(tmp_path, [submit(examples=(SAME, wrong)), submit(id="s2", examples=(SAME, dodge))])
+    job = env.new()
+    card = [m for m in job.data["conversation"] if m["from"] == "writer"][0]["examples"]
+    assert {"id": "e3", "from": "same", "to": "after"} in card["tier_moves"]
+
+
+def test_a_half_stripped_block_leaves_no_example_lines_in_the_issue(tmp_path):
+    env = Env(tmp_path, [submit(), submit(id="s2")])
+    stored = (env.new().dir / ri.ISSUE).read_text()
+    broken = stored.replace("[\n", "[\n```\n", 1)                              # a stray fence inside the stored block
+    env2 = Env(tmp_path / "two", [submit(issue=broken.strip()), submit(id="s2")])
+    env2.new()
+    assert "must not hold an argus-examples fence or example lines" in tool_answers(env2.model.calls[1])[0]
+
+
+def test_the_length_message_names_the_examples_block(tmp_path):
+    big = [{**SAME, "id": f"e{i}", "says": "x" * 150, "setup": "from src.shop import total\n" + "# " + "y" * 500} for i in range(1, 6)]
+    long_issue = ISSUE.replace("A discount larger", "z" * 6500 + " A discount larger")
+    env = Env(tmp_path, [submit(issue=long_issue, examples=big), submit(id="s2")])
+    env.new()
+    assert "examples block the harness adds" in tool_answers(env.model.calls[1])[0]
+
+
+def test_a_pin_that_cannot_be_made_abandons_the_new_job_with_its_own_reason(tmp_path, monkeypatch):
+    monkeypatch.setattr(rj, "environment_pin", lambda cfg, name, root=None: (None, "sandbox environment 'pyenv' has no image"))
+    env = Env(tmp_path, [submit()])
+    with pytest.raises(rj.Refused, match="has no image"):
+        env.new()
+    assert env.job().data["state"] == ri.ABANDONED and "has no image" in env.job().data["log"][-1]["reason"]
+
+
+def test_the_memo_versions_carry_the_image_into_the_loop_and_the_permission_is_checked_in_the_tool(tmp_path, monkeypatch):
+    seen = {}
+    real = iw.tool_loop
+    monkeypatch.setattr(iw, "tool_loop", lambda *a, **k: (seen.update(k["versions"]), real(*a, **k))[1])
+    monkeypatch.setattr("tools.sandbox.tool_version", lambda cfg, envs=(): "1:img;pyenv=ID1")
+    env = Env(tmp_path, [submit()])
+    env.new()
+    assert seen["SubmitIssue"] == "6:1:img;pyenv=ID1" and seen["RunExample"] == "1:1:img;pyenv=ID1"
+    sup = iw.ExampleSupport(env.cfg, "issue_writer", ENV, env.repo, "r", type("L", (), {"emit": lambda *a, **k: None})(),
+                            type("M", (), {"get": lambda s, k: None, "put": lambda s, k, v: None})())
+    assert sup.versions["SubmitPRD"] == "2:1:img;pyenv=ID1"
+    sup.allowed = []
+    assert sup.run_example({"setup": "x", "run": "1"}).startswith("Denied")
+
+
+def test_the_count_of_tries_continues_in_a_new_support_object_on_the_same_memo(tmp_path):
+    store = {}
+
+    class Memo:
+        def get(self, k):
+            return store.get(k)
+
+        def put(self, k, v):
+            store[k] = v
+    log = type("L", (), {"emit": lambda *a, **k: None})()
+    repo = make_repo(tmp_path)
+    c = cfg(repo)
+    first = iw.ExampleSupport(c, "issue_writer", ENV, repo, "r1", log, Memo(), Runs())
+    for i in range(16):
+        assert first.run_example({"setup": "from src.shop import total", "run": f"total([{i}], 0)"}).startswith("RunExample result")
+    resumed = iw.ExampleSupport(c, "issue_writer", ENV, repo, "r1", log, Memo(), Runs())            # a resume: a new object, the same memo
+    assert resumed.run_example({"setup": "from src.shop import total", "run": "total([1], 0)"}).startswith("Refused: at most 16")
+
+
+def test_the_block_counts_toward_the_issue_limit_and_the_chat_card_says_the_code_runs(tmp_path):
+    from router import chat_actions as ca
+    c = cfg(make_repo(tmp_path))
+    assert "kode contoh buatan model dijalankan di sandbox" in ca.Actions.runs_code(c, ENV)["runs_code"]
+    c["sandbox"]["environments"][ENV]["runner"] = "vitest"
+    assert ca.Actions.runs_code(c, ENV) == {} and ca.Actions.runs_code(c, "unknown") == {}

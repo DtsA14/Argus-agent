@@ -210,6 +210,12 @@ def _holders(tree, example):
     return out
 
 
+class NoResult(SandboxUnavailable):
+    """A pass in which no example printed anything: the container failed, OR the code of an example killed its own process. The
+    intake and the audit treat it as an unavailable sandbox; a writer's gate turns it into a rejection (a model cannot end its own
+    job by writing an example that kills the pass)."""
+
+
 def _no_pass_ran(results):
     """True when no example of a pass printed a result at all: the container failed (a missing image, a docker error, a timeout of
     the whole pass), which says nothing about the examples."""
@@ -233,10 +239,12 @@ def check_base(examples, tree, runner, root=BOX_ROOT):
         return results, problems
     evaluated = ex.evaluate(runnable, runner, root=root)
     if _no_pass_ran(evaluated):
-        raise SandboxUnavailable("the pass printed no result")
+        raise NoResult("the pass printed no result")
     got = {r["id"]: r for r in evaluated}
     whatif = [e for e in runnable if e["tier"] == "whatif"]
     bare = ex.run_pass(whatif, runner, root=root, with_overrides=False) if whatif else {}
+    if whatif and _no_pass_ran([{"actual": r.get("error", "") + ""} for r in bare.values()]):
+        raise NoResult("the pass without overrides printed no result")
     for e in runnable:
         r = got[e["id"]]
         if e["tier"] == "after":
@@ -263,7 +271,7 @@ def audit(examples, runner, root=BOX_ROOT):
     constant has changed now; the example asserts the behaviour), and `after` like any other."""
     results = ex.evaluate(examples, runner, root=root, with_overrides=False)
     if _no_pass_ran(results):
-        raise SandboxUnavailable("the pass printed no result")
+        raise NoResult("the pass printed no result")
     return results
 
 

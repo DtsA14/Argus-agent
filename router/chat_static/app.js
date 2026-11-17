@@ -137,7 +137,7 @@
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Lingkungan"], ["commit", "Commit"],
     ["turn", "Giliran"], ["turn_cap_usd", "Batas giliran"], ["job_cap_usd", "Batas job"], ["reason", "Alasan"],
     ["profile", "Profil"], ["stage_models", "Model"], ["stage_caps", "Batas tahap"], ["web", "Web"], ["data_sent", "Data keluar"],
-    ["free_models", "Model gratis"], ["kind", "Jenis"], ["job_title", "Judul"], ["sha12", "Draf"], ["spent_usd", "Biaya"], ["cap_usd", "Batas"]];
+    ["free_models", "Model gratis"], ["runs_code", "Kode contoh"], ["kind", "Jenis"], ["job_title", "Judul"], ["sha12", "Draf"], ["spent_usd", "Biaya"], ["cap_usd", "Batas"]];
   var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1 };
   function fact(parent, label, value) {
     var p = el("p", "fact");

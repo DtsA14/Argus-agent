@@ -122,7 +122,11 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
                     "stages": {}, "log": [], "prd_turns": [], "queues_dir": str(queues_dir)}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
-            ri._pin_environment(job, cfg)
+            try:
+                ri._pin_environment(job, cfg)
+            except rj.Refused as e:
+                job.move(ABANDONED, deps, reason=f"not started: {str(e)[:200]}")
+                raise
             with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                          _screen(job, cfg, "first turn"), job=job):
                 job.move(WRITING, deps, stage=ri._next_sid(job))

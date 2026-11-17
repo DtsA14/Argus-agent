@@ -149,7 +149,11 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, job_id=None, via=None):
                     "stages": {}, "log": []}
         job.note(deps, "created", by=os.environ.get("USER"), **({"via": via} if via else {}))
         try:
-            _pin_environment(job, cfg)
+            try:
+                _pin_environment(job, cfg)
+            except rj.Refused as e:
+                job.move(ABANDONED, deps, reason=f"not started: {str(e)[:200]}")
+                raise
             with rj.live(deps, rj.stage_config(cfg, float(s["turn"]["cap_usd"])), [s["role"]],
                          _screen(job, cfg, "first turn"), job=job):
                 job.move(WRITING, deps, stage=_next_sid(job))
