@@ -407,3 +407,49 @@ def test_the_block_counts_toward_the_issue_limit_and_the_chat_card_says_the_code
     assert "kode contoh buatan model dijalankan di sandbox" in ca.Actions.runs_code(c, ENV)["runs_code"]
     c["sandbox"]["environments"][ENV]["runner"] = "vitest"
     assert ca.Actions.runs_code(c, ENV) == {} and ca.Actions.runs_code(c, "unknown") == {}
+
+
+# ---- the five survivors of the PR 3 mutant run ---------------------------------------------------------------------------------
+
+def test_an_example_line_left_in_the_issue_text_is_refused_even_with_balanced_fences(tmp_path):
+    line = '{"id": "e9", "tier": "same", "says": "x", "setup": "from src.shop import total", "run": "total([1], 1)", "expect": 7}'
+    env = Env(tmp_path, [submit(issue=ISSUE.replace("1. `total([1], 5)` is `0`.", line)), submit(id="s2")])
+    env.new()
+    assert "must not hold an argus-examples fence or example lines" in tool_answers(env.model.calls[1])[0]
+
+
+def test_an_example_that_changes_tier_under_the_same_id_with_other_content_is_a_move(tmp_path):
+    no_tests = "\n".join(["total() never goes below zero", "Nothing else changes: x", f"Environment: {ENV}"])
+    other = {**AFTER, "id": "e1"}                                         # e1 was SAME, now another call and another tier
+    env = Env(tmp_path, [submit(examples=(SAME,), issue=no_tests), submit(id="s2", examples=(other,))])
+    job = env.new()
+    card = [m for m in job.data["conversation"] if m["from"] == "writer"][0]["examples"]
+    assert card["tier_moves"] == [{"id": "e1", "from": "same", "to": "after"}]
+
+
+def test_a_resumed_issue_turn_pins_the_image_too(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit(), submit(id="s2")])
+    env.new()
+    job = env.job()
+    job.data["state"] = ri.WRITING
+    job.save()
+    monkeypatch.setattr(rj, "environment_changed", lambda j, c: "the image changed")
+    with pytest.raises(rj.Refused, match="the image changed"):
+        with job.lock():
+            ri.resume(job, env.cfg, env.deps)
+
+
+def test_a_bare_pass_that_prints_nothing_is_not_an_override_without_effect(tmp_path):
+    from test_examples import make_tree
+    tree = make_tree(tmp_path)
+    whatif = {"id": "e1", "tier": "whatif", "says": "With a floor of 60 a price of 55 is blocked", "setup": "from shop.rules import blocked",
+              "run": "blocked(55.0)", "expect": True, "overrides": {"shop.rules.FLOOR": 60.0}}
+
+    def run(argv):
+        items = json.loads(argv[-1])["items"]
+        if all(not it["overrides"] for it in items):                    # the pass without overrides: the process dies
+            return {"stdout": "", "stderr": "", "exit_code": 1}
+        r = subprocess.run([sys.executable, *argv[1:]], capture_output=True, text=True, timeout=120, cwd=tree)
+        return {"stdout": r.stdout, "stderr": r.stderr, "exit_code": r.returncode}
+    with pytest.raises(eg.NoResult):
+        eg.check_base([whatif], tree, run, root=tree)

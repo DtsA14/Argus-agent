@@ -205,7 +205,7 @@ def items_gate(args, *, source, environment, max_items, item_max, examples=None)
         got, res = iw.issue_gate(sub, source=source, environment=environment, known=known, strict=True,
                                  examples_check=examples(k) if examples else None)
         for e in ((res or {}).get("examples") or {}).get("examples") or []:      # a later item's example that uses a name made before it
-            used = sorted(n for n in known if len(n) >= iw.TOUCH_MIN and n in e["setup"] + " " + e["run"])
+            used = sorted(n for n in known if n in e["setup"] + " " + e["run"])      # a created name has at least TOUCH_MIN characters already
             if e["tier"] != "after" and used:
                 got.append(f"example {e['id']} uses {used[0]!r}, which an earlier item creates: its tier is `after` (the code it "
                            "needs does not exist when this item starts)")
