@@ -23,6 +23,7 @@ from pathlib import Path
 from router import example_gate as eg
 from router import issue as ri
 from router import queue as rq
+from router.approve_cards import Approve
 from router.cards import Cards
 from codetask.issue_writer import has_runner, text_problem
 from harness.events import parse_lines
@@ -135,6 +136,7 @@ class Actions:
         card shows what the CLI will read (it reads config.yaml on every run); config_path is passed to the CLI as --config."""
         self.jobs_dir, self._cfg, self.clock, self.environ = Path(jobs_dir), cfg, clock, environ
         self.cards = Cards(self.jobs_dir, Path(queues_dir) if queues_dir else rq.QUEUES, scrub)     # SPEC_CHAT_CARDS: read only
+        self.approve = Approve(self.cards)                                                       # SPEC_KARTU_SETUJU: the plan card, read only
         self.config_path = config_path
         self.state = Path(state)
         self.spawner = spawner or Spawner(self.state, clock)
