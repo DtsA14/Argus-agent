@@ -196,7 +196,7 @@ def test_an_after_that_already_passes_is_refused_and_a_tier_move_is_shown_on_the
     moved = {**AFTER, "id": "e1", "tier": "after", "run": "total([2, 3], 1)", "expect": 4}      # the same example, as `after`
     env = Env(tmp_path, [submit(examples=(SAME,)), submit(id="s2", examples=(moved,)), submit(id="s3", examples=(SAME, AFTER))])
     job = env.new()
-    assert "already passes on the base: it is a `same`" in tool_answers(env.model.calls[2])[0]
+    assert "already passes on the base: it is a `same`" in tool_answers(env.model.calls[2])[-1]
     card = [m for m in job.data["conversation"] if m["from"] == "writer"][0]["examples"]
     assert card["tier_moves"] == [{"id": "e1", "from": "same", "to": "after"}]
     assert "example e1: written as same, sent again as after" in rj.status("ji", jobs_dir=env.jobs)
@@ -213,7 +213,7 @@ def test_no_examples_needs_a_reason_and_is_kept_on_the_card(tmp_path):
 def test_examples_and_no_examples_together_and_a_long_reason_are_refused(tmp_path):
     env = Env(tmp_path, [submit(no_examples="both"), submit(id="s2", examples=(), no_examples="x" * 161), submit(id="s3")])
     env.new()
-    assert "not both" in tool_answers(env.model.calls[1])[0] and "no_examples has 161 characters" in tool_answers(env.model.calls[2])[0]
+    assert "not both" in tool_answers(env.model.calls[1])[0] and "no_examples has 161 characters" in tool_answers(env.model.calls[2])[-1]
 
 
 def test_an_example_of_the_wrong_form_or_that_calls_nothing_is_refused_before_running(tmp_path):
@@ -221,18 +221,21 @@ def test_an_example_of_the_wrong_form_or_that_calls_nothing_is_refused_before_ru
                          submit(id="s3")])
     env.new()
     assert "unknown key" in tool_answers(env.model.calls[1])[0]
-    assert "imports no module of the repository" in tool_answers(env.model.calls[2])[0]
+    assert "imports no module of the repository" in tool_answers(env.model.calls[2])[-1]
 
 
-def test_the_writer_cannot_write_the_block_itself_and_a_stored_issue_given_back_is_not_doubled(tmp_path):
+def test_a_block_the_writer_wrote_is_replaced_by_the_harnesss_and_a_malformed_fence_is_refused(tmp_path):
     own = ISSUE.replace("Tests:", "```argus-examples\n[]\n```\n\nTests:")
-    env = Env(tmp_path, [submit(issue=own), submit(id="s2")])
+    env = Env(tmp_path, [submit(issue=own)])
     job = env.new()
-    assert "must not hold an argus-examples fence" in tool_answers(env.model.calls[1])[0]
     stored = (job.dir / ri.ISSUE).read_text()
-    env2 = Env(tmp_path / "again", [submit(issue=stored.strip())])
-    again = env2.new()
+    assert stored.count("```argus-examples") == 1 and eg.extract(stored)[1] == [SAME, AFTER]       # the fields, never the writer's own
+    again = Env(tmp_path / "again", [submit(issue=stored.strip())]).new()                            # a stored issue given back
     assert (again.dir / ri.ISSUE).read_text().count("```argus-examples") == 1
+    broken = ISSUE.replace("Tests:", "```argus-examples json\n[]\n```\n\nTests:")
+    env3 = Env(tmp_path / "three", [submit(issue=broken), submit(id="s2")])
+    env3.new()
+    assert "must not hold an argus-examples fence" in tool_answers(env3.model.calls[1])[0]
 
 
 def test_an_environment_without_an_example_runner_asks_for_none_and_refuses_some(tmp_path):
@@ -282,7 +285,7 @@ def test_a_changed_image_refuses_the_next_turn_and_a_job_from_before_the_gate_is
     monkeypatch.setattr(rj, "environment_changed", lambda job, cfg: "the image changed")
     with pytest.raises(rj.Refused, match="the image changed"):
         env.reply()
-    assert env.job().data["state"] == ri.AWAITING_HUMAN and len(env.model.calls) == 2
+    assert env.job().data["state"] == ri.AWAITING_HUMAN and len(env.model.calls) == 1
     old = env.job()
     del old.data["environment_image"]
     old.save()
