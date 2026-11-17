@@ -53,7 +53,7 @@ synthesize writes the report, and the evaluator scores it; the loop stops on pas
 flowchart LR
     O[orchestrator] --> W["workers<br/>(parallel)"] --> S[synthesize] --> V[evaluator]
     V -->|"score too low,<br/>budget left"| O
-    V -->|"pass / budget / stagnation"| END([run_end + result.json])
+    V -->|"pass / budget / stagnation"| FIN([run_end + result.json])
 ```
 
 ## Quick start
