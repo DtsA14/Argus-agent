@@ -746,3 +746,29 @@ def test_the_modules_named_as_other_holders_never_include_the_modules_own_file(t
     tree = make_tree(tmp_path)
     holders = eg._holders(tree, whatif(overrides={"shop.consts.FLOOR": 60.0}))
     assert "shop/consts.py" not in holders and "shop/rules.py" in holders
+
+
+# ---- the three mutants that survived the first run -----------------------------------------------------------------------
+
+def test_a_block_in_capitals_is_read_as_the_block_and_gated():
+    text = td.ISSUE + "\n```ARGUS-EXAMPLES\n" + json.dumps([SAME]) + "\n```\n"
+    present, examples, problems = eg.extract(text)
+    assert present and problems == [] and [e["id"] for e in examples] == ["e1"]
+
+
+def test_the_result_file_is_written_through_a_temporary_file_and_a_rename(tmp_path, monkeypatch):
+    calls = []
+    real = os.replace
+    monkeypatch.setattr(eg.os, "replace", lambda a, b: (calls.append((Path(a).name, Path(b).name)), real(a, b))[1])
+    eg.store(tmp_path / "r.json", "k", results=[])
+    assert calls == [("r.json.tmp", "r.json")] and not (tmp_path / "r.json.tmp").exists()
+
+
+def test_the_audit_key_is_the_sha_of_the_bytes_that_were_applied_not_of_a_second_read(env, monkeypatch):
+    review_ready(env, SAME)
+    job = env.job()
+    d = Path(job.data["stages"]["a1"]["review"]["dir"])
+    want = eg.audit_key(hashlib.sha256((d / "changes.patch").read_bytes()).hexdigest(), eg.extract(job.data["inputs"]["issue"])[1])
+    audit_path(env).unlink()
+    monkeypatch.setattr(rj.repro, "patch_sha", lambda p: "f" * 64)              # a second read that sees something else
+    assert rj._examples_audit(job, "a1", env.cfg, env.deps) is True and audit_json(env)["key"] == want
