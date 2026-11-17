@@ -645,3 +645,9 @@ def test_the_issue_page_keeps_the_block_when_there_is_no_examples_card(svc):
     (d / "issue.txt").write_text(text)
     got = svc.request("GET", f"/api/issues/{IJOB}")[1]
     assert got["examples"] is None and "argus-examples" in got["issue"]["text"]
+
+
+def test_the_mode_buttons_wrap_instead_of_running_off_the_screen_of_a_phone():
+    css = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.css").read_text()
+    row = css[css.index("#chips{"):css.index("}", css.index("#chips{"))]
+    assert "flex-wrap:wrap" in row                  # five buttons (Status, Issue, Riset, Keputusan, Kartu) do not fit one row of a phone
