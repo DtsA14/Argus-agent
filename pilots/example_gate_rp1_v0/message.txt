@@ -1,0 +1,1 @@
+Harga minimum saham di BEI sekarang Rp1 (turun dari Rp50 sejak 28 September 2026, Kep-00136/BEI/09-2026). Ubah lantai Rp50 di backend athena (IDX_MIN_PRICE dan semua yang mengasumsikannya: risk_manager, explainability, decision_engine) jadi Rp1. Backend aja, frontend nggak usah. Jangan ubah ARA/ARB.
