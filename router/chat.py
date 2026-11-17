@@ -42,7 +42,7 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "b29744dcf8d6858a67121c7bbb28f3f557198fc807c79d99bbfcfc6a5b512dec",
-    "app.js": "87e37e76d17cb8ba7e5283b269b31d80723e641db76ce912021c1478fc0aae9e",
+    "app.js": "9a9cb270b2423f84df8a66b21c880ea157b5fda2131a861ff3e3025207a06a98",
     "app.css": "155a15c93b313f222239ce7fb7858bbe1c46b0e1c3a0a6aecb6f3df291befbee",
 }
 
@@ -271,6 +271,10 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/cards/queue/([^/?#%]+)", path)
         if a is not None and m:
             got = a.cards.queue(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        m = re.fullmatch(r"/api/approve/prd/([^/?#%]+)", path)         # SPEC_KARTU_SETUJU: the plan card, read only, GET only
+        if a is not None and m:
+            got = a.approve.plan(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if a is not None and path == "/api/research":
             return self._json(200, a.research_list())

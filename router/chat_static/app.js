@@ -463,6 +463,88 @@
       stream.appendChild(back);
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Job tidak dapat dibaca.")); });
   }
+  // ---- T3: the plan card (SPEC_KARTU_SETUJU), read only
+  var TIER_TITLE = { same: "Yang tidak boleh berubah", whatif: "Kalau ... maka", after: "Yang berubah" };
+  function planExample(e) {
+    var d = el("div", "ex");
+    d.appendChild(el("p", "small", e.id));
+    if (e.says) { modelLine(d, e.says); }
+    if (!e.showable) { d.appendChild(el("p", "note", e.why || "contoh ini tidak bisa ditampilkan sebagai angka")); }
+    if (e.call) { d.appendChild(el("p", "small", "fungsi: " + e.call)); }
+    (e.assumptions || []).forEach(function (a) { d.appendChild(el("pre", "code", "Andaikan: " + a.name + " = " + a.shown)); });
+    (e.inputs || []).forEach(function (i) { d.appendChild(el("pre", "code", "masukan " + i.name + " = " + i.shown)); });
+    if (e.output && e.output.raises) { d.appendChild(el("pre", "code", "keluaran: " + e.output.shown)); }
+    else if (e.output) { e.output.forEach(function (o) { d.appendChild(el("pre", "code", "keluaran" + (o.label ? " " + o.label : "") + " = " + o.shown)); }); }
+    if (e.proof) { d.appendChild(el("pre", "code", "Mesin: " + e.proof.wording)); }
+    return d;
+  }
+  function planItem(it, dim) {
+    var c = el("article", "card" + (dim ? " stale" : ""));
+    c.appendChild(el("h2", null, "Issue " + it.n));
+    if (it.title) { modelLine(c, it.title, "msg"); }
+    if (it.warning) { c.appendChild(el("p", "note", it.warning)); }
+    if (it.no_examples) { modelLine(c, "tanpa contoh: " + it.no_examples); }
+    if (it.why) { c.appendChild(el("p", "small", it.why)); }
+    if (it.examples && it.examples.withheld) { c.appendChild(el("p", "note", "contoh ditahan harness")); return c; }
+    ["same", "whatif", "after"].forEach(function (tier) {
+      var group = (it.examples || []).filter(function (e) { return e.tier === tier; });
+      if (!group.length) { return; }
+      c.appendChild(el("h2", null, TIER_TITLE[tier]));
+      group.forEach(function (e) { c.appendChild(planExample(e)); });
+    });
+    return c;
+  }
+  function showPlan(id) {
+    var seq = ++cardSeq;
+    openCard = id;
+    get("/api/approve/prd/" + encodeURIComponent(id)).then(function (d) {
+      if (seq !== cardSeq || mode !== "cards") { return; }
+      clear(stream);
+      var dim = !!(d.stale || d.superseded);
+      var head = el("article", "card" + (dim ? " stale" : ""));
+      head.appendChild(el("h2", null, "Kartu rencana"));
+      var row = el("div", "row");
+      row.appendChild(el("span", "mono", d.id));
+      row.appendChild(el("span", "state " + stateClass(d.state), String(d.state)));
+      if (d.repo) { row.appendChild(el("span", null, d.repo)); }
+      if (d.turn) { row.appendChild(el("span", null, "giliran " + d.turn)); }
+      head.appendChild(row);
+      if (d.stale) { head.appendChild(el("p", "note", "Hasil di commit lama: repo bergeser sejak folder ini ditulis.")); }
+      if (d.superseded) { head.appendChild(el("p", "note", "Folder ini sudah digantikan giliran berikutnya.")); }
+      if (d.why) { head.appendChild(el("p", "note", d.why)); }
+      if (d.request) {
+        head.appendChild(el("span", "tag", d.request_by === "chat" ? "permintaan, ditulis lewat chat:" : "permintaan (pembuat tidak tercatat):"));
+        head.appendChild(el("p", "msg", d.request));
+        if (d.request_truncated) { head.appendChild(el("p", "note", "permintaan dipotong")); }
+      }
+      if (d.summary) { modelLine(head, d.summary, "msg"); } else if (d.summary_why) { head.appendChild(el("p", "note", d.summary_why)); }
+      head.appendChild(el("p", "small", d.issue_count + " issue"));
+      if (d.cost) {
+        var ref = d.cost.reference ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
+        head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas antrean untuk " + d.issue_count + " issue " + usd(d.cost.proposed) + (d.cost.proposed_each !== null && d.cost.proposed_each !== undefined ? " (" + usd(d.cost.proposed_each) + " per issue)" : "") + ref + " (acuan: satu job)"));
+      }
+      if (d.defects) { head.appendChild(el("p", "note", d.defects + " contoh tidak bisa ditampilkan sebagai angka (kartu cacat)")); }
+      head.appendChild(el("p", "small", d.fixed_line));
+      stream.appendChild(head);
+      (d.items || []).forEach(function (it) { stream.appendChild(planItem(it, dim)); });
+      var tech = el("button", null, "Kartu teknis");
+      tech.type = "button";
+      tech.addEventListener("click", function () { showCard("prd", id); });
+      stream.appendChild(tech);
+      var back = el("button", null, "Semua kartu");
+      back.type = "button";
+      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
+      stream.appendChild(back);
+    }).catch(function () {
+      if (seq !== cardSeq || mode !== "cards") { return; }
+      clear(stream);
+      stream.appendChild(el("p", "muted", "Kartu rencana tidak dapat dibaca."));
+      var back = el("button", null, "Semua kartu");
+      back.type = "button";
+      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
+      stream.appendChild(back);
+    });
+  }
   // ---- T2: read-only cards (docs/reviews/SPEC_CHAT_CARDS.md). Every string is put on the page as text; model text carries its tag, and the
   // status line is built from the machine's fields only (id, tier, status, where). No button, no storage, no request but GET. ----------------
   var cardRows = [];
@@ -594,6 +676,12 @@
       (d.warnings || []).forEach(function (w) { head.appendChild(el("p", "note", w)); });
       if (d.money) { head.appendChild(el("p", "small", "biaya job " + usd(d.money.spent) + " dari " + usd(d.money.job_cap) + (d.money.queue_usd !== null && d.money.queue_usd !== undefined ? "; antrean diusulkan " + usd(d.money.queue_usd) : ""))); }
       (d.queues || []).forEach(function (q) { head.appendChild(el("p", "small", "antrean " + q)); });
+      if (kind === "prd") {
+        var plan = el("button", null, "Kartu rencana (angka)");
+        plan.type = "button";
+        plan.addEventListener("click", function () { showPlan(id); });
+        head.appendChild(plan);
+      }
       stream.appendChild(head);
       (d.items || []).forEach(function (it) {
         if (kind === "queue") {
@@ -626,6 +714,7 @@
   }
   function setMode(m) {
     mode = m;
+    cardSeq++;
     dropPending();
     Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
       b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");
