@@ -272,7 +272,8 @@ def main(argv=None, deps=None):
         except (OSError, ValueError) as e:             # the config cannot be read: the chat still serves the jobs, read only
             print(f"argus chat: the config cannot be read ({type(e).__name__}); read only", file=sys.stderr, flush=True)
             cfg = None
-        rchat.serve(Path(o.jobs_dir), cfg=cfg, config_path=o.config, load=(lambda: load_config(o.config)), port=o.port)
+        rchat.serve(Path(o.jobs_dir), cfg=cfg, config_path=o.config, load=(lambda: load_config(o.config)), port=o.port,
+                    queues_dir=Path(o.queues_dir))
         return 0
     if o.cmd == "stage":
         from router import stage as sg

@@ -20,7 +20,10 @@ import time
 import unicodedata
 from pathlib import Path
 
+from router import example_gate as eg
 from router import issue as ri
+from router import queue as rq
+from router.cards import Cards
 from codetask.issue_writer import has_runner, text_problem
 from harness.events import parse_lines
 from models.registry import ConfigError
@@ -127,10 +130,11 @@ class IssueView:
 
 class Actions:
     def __init__(self, jobs_dir, cfg, *, state=STATE, clock=time.time, environ=os.environ, spawner=None, run=None,
-                 config_path=None):
+                 config_path=None, queues_dir=None):
         """cfg: the config as a dict, or a function that loads it. A function is called for every prepare and confirm, so the
         card shows what the CLI will read (it reads config.yaml on every run); config_path is passed to the CLI as --config."""
         self.jobs_dir, self._cfg, self.clock, self.environ = Path(jobs_dir), cfg, clock, environ
+        self.cards = Cards(self.jobs_dir, Path(queues_dir) if queues_dir else rq.QUEUES, scrub)     # SPEC_CHAT_CARDS: read only
         self.config_path = config_path
         self.state = Path(state)
         self.spawner = spawner or Spawner(self.state, clock)
@@ -217,10 +221,13 @@ class Actions:
                              "clashes": [{"file": scrub(str(c.get("file"))), "line": c.get("line"), "why": scrub(str(c.get("why")))}
                                          for c in (m.get("clashes") or []) if isinstance(c, dict)][:10]})
         issue = None
-        if v.issue_text is not None:
-            issue = {"text": scrub(v.issue_text), "sha12": v.issue_sha[:12]}
+        examples = self.cards.issue_examples(d, v.issue_raw)
+        if v.issue_text is not None:          # with the examples card on screen the block is not shown twice (SPEC_CHAT_CARDS 4.2)
+            shown = eg.without_block(v.issue_text) if examples is not None else v.issue_text
+            issue = {"text": scrub(shown), "sha12": v.issue_sha[:12]}
         return {"id": job_id, "state": d.get("state"), "busy": self.spawner.busy(job_id), "turn": v.turn,
                 "repo": d["inputs"].get("repo_name"), "conversation": conv, "issue": issue,
+                "examples": examples,
                 "handoff": (d.get("handoff") or {}).get("job") if UI_ID.fullmatch(str((d.get("handoff") or {}).get("job"))) else None,
                 "last_run": None if out is None else {"code": out["code"], "line": scrub(out["line"] or "")}}
 

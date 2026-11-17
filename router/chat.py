@@ -41,9 +41,9 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
                 "app.css": "text/css; charset=utf-8"}
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
-    "index.html": "aa26869a7e6ecd3f4c23f2a00ab962d5e55610fa35fc2277862eb4bbdf8421c3",
-    "app.js": "7e486c7a7ddb097b08ea2103f6fe03c10c0bb6ff0659f29300b41376b687a9bd",
-    "app.css": "7eb379db9ccbd5440667702d5150eb7a97cb7ab4591162fe8761653e68c0ed53",
+    "index.html": "b29744dcf8d6858a67121c7bbb28f3f557198fc807c79d99bbfcfc6a5b512dec",
+    "app.js": "1222e9c5c286b694c3657dc5efc6002ccd6ee6db35438419db46c05d8c7b5e05",
+    "app.css": "c52408d9edca2810f1ac1e1d28a0331a929b83740f79a19f41afcd6e0ad8661d",
 }
 
 
@@ -262,6 +262,16 @@ class Handler(BaseHTTPRequestHandler):
         if a is not None and m:
             got = a.decision(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        if a is not None and path == "/api/cards":                  # SPEC_CHAT_CARDS: read only, GET only
+            return self._json(200, a.cards.listing())
+        m = re.fullmatch(r"/api/cards/prd/([^/?#%]+)", path)
+        if a is not None and m:
+            got = a.cards.prd(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        m = re.fullmatch(r"/api/cards/queue/([^/?#%]+)", path)
+        if a is not None and m:
+            got = a.cards.queue(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if a is not None and path == "/api/research":
             return self._json(200, a.research_list())
         m = re.fullmatch(r"/api/research/([^/?#%]+)", path)
@@ -388,12 +398,12 @@ def server(chat, port=PORT, public=PORT):
     return HTTPServer((BIND, port), handler)
 
 
-def serve(jobs_dir, cfg=None, config_path=None, load=None, port=PORT):
+def serve(jobs_dir, cfg=None, config_path=None, load=None, port=PORT, queues_dir=None):
     """cfg: the config at start, only to decide whether the issue writer's actions are on; they read the config again for every
     prepare and confirm (load, or the file of config_path), so a card shows what the CLI will read. A config that cannot be
     read at start leaves the chat read only (C1), it does not stop it."""
     from router.chat_actions import Actions
-    actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path)   # always (13.7 item 5): reject and abandon need no config
+    actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path, queues_dir=queues_dir)   # always (13.7 item 5): reject and abandon need no config
     chat = Chat(jobs_dir, actions=actions)
     srv = server(chat, port=port, public=port)
     print(f"argus chat on http://{BIND}:{port} (jobs {jobs_dir})", flush=True)

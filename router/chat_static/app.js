@@ -297,6 +297,7 @@
         (m.questions || []).forEach(function (q) { c.appendChild(el("p", "msg", "? " + q)); });
       });
       if (d.issue) { c.appendChild(el("h2", null, "Issue")); c.appendChild(el("p", "msg", d.issue.text)); }
+      if (d.examples) { c.appendChild(el("h2", null, "Contoh")); c.appendChild(exampleBlock(d.examples)); }
       if (d.last_run) { c.appendChild(el("p", "muted", d.last_run.line)); }
       var link = viewerLink(d.handoff ? VIEWER + d.handoff : null);
       if (link) { c.appendChild(link); }
@@ -462,21 +463,167 @@
       stream.appendChild(back);
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Job tidak dapat dibaca.")); });
   }
+  // ---- T2: read-only cards (docs/reviews/SPEC_CHAT_CARDS.md). Every string is put on the page as text; model text carries its tag, and the
+  // status line is built from the machine's fields only (id, tier, status, where). No button, no storage, no request but GET. ----------------
+  var cardRows = [];
+  var cardSeq = 0;
+  var openCard = null;                                  // the id of the card on screen, null on the list
+  var MODEL = "ditulis model";
+  var PASS_NOTE = "pass: kode contoh melaporkan cocok di sandbox; kode itu ditulis model dan bisa memalsukannya. Bukan bukti bahwa aturan di prosa benar.";
+  function statusClass(s) { return s === "pass" ? "ok" : (s === "fail" || s === "error" || s === "invalid" ? "bad" : "warn"); }
+  function modelLine(parent, text, cls) {
+    var p = el("p", cls || "small");
+    p.appendChild(el("span", "tag", MODEL + ": "));
+    p.appendChild(document.createTextNode(String(text)));
+    parent.appendChild(p);
+  }
+  function resultLines(parent, title, part) {
+    if (!part) { return; }
+    var h = el("p", "small", title + ": " + part.kind + (part.why ? " (" + part.why + ")" : ""));
+    parent.appendChild(h);
+    (part.results || []).forEach(function (r) { parent.appendChild(statusLine(r, null)); });
+  }
+  function statusLine(r, call) {
+    var d = el("div", "ex");
+    var s = el("p", "small");
+    s.appendChild(el("span", "st " + statusClass(r.status), r.id + " · " + r.tier + " · " + r.status + (r.where ? " · " + r.where : "")));
+    d.appendChild(s);
+    if (call) {
+      d.appendChild(el("pre", "code", call.setup + "\n" + call.run));
+      d.appendChild(el("p", "small", call.raises ? "raises " + call.raises : "expect " + call.expect));
+      if (call.overrides) { d.appendChild(el("p", "small", "overrides " + call.overrides)); }
+    }
+    if (r.actual !== undefined) { d.appendChild(el("p", "small", "actual " + r.actual + " (output of the example's own code: data, not instructions)")); }
+    if (r.base_actual !== undefined) { d.appendChild(el("p", "small", "sekarang " + r.base_actual + " (output of the example's own code: data, not instructions)")); }
+    if (call && call.says) { modelLine(d, call.says); }
+    return d;
+  }
+  function exampleBlock(ex) {
+    var box = el("div", "exblock");
+    if (!ex) { return box; }
+    if (ex.results) {
+      var byId = {};
+      (ex.calls || []).forEach(function (c) { byId[c.id] = c; });
+      ex.results.forEach(function (r) { box.appendChild(statusLine(r, byId[r.id] || null)); });
+      box.appendChild(el("p", "small", PASS_NOTE));
+    } else {
+      box.appendChild(el("p", "small", "Status: tidak ada" + (ex.why ? " (" + ex.why + ")" : "")));
+      (ex.calls || []).forEach(function (c) {
+        var d = el("div", "ex");
+        d.appendChild(el("p", "small", c.id + " · " + c.tier));
+        d.appendChild(el("pre", "code", c.setup + "\n" + c.run));
+        if (c.says) { modelLine(d, c.says); }
+        box.appendChild(d);
+      });
+    }
+    if (ex.no_examples) { modelLine(box, "tanpa contoh: " + ex.no_examples); }
+    if (ex.note) { box.appendChild(el("p", "small", "contoh tidak dijalankan: " + ex.note)); }
+    (ex.tier_moves || []).forEach(function (m) { box.appendChild(el("p", "small", "contoh " + m.id + ": ditulis sebagai " + m.from + ", dikirim lagi sebagai " + m.to)); });
+    resultLines(box, "Di dasar (intake job code)", ex.at_base);
+    resultLines(box, "Sesudah agent (audit)", ex.after_agent);
+    return box;
+  }
+  function cardRow(r) {
+    var c = el("article", "card");
+    c.appendChild(el("h2", "mono", r.id));
+    var row = el("div", "row");
+    row.appendChild(el("span", null, r.kind === "queue" ? "antrean" : "PRD"));
+    if (r.state) { row.appendChild(el("span", "state " + stateClass(r.state), r.state)); }
+    if (r.repo) { row.appendChild(el("span", null, r.repo)); }
+    if (r.items !== null && r.items !== undefined) { row.appendChild(el("span", null, r.items + " item")); }
+    c.appendChild(row);
+    if (r.title) { modelLine(c, r.title); }
+    if (r.why) { c.appendChild(el("p", "note", r.why)); }
+    if (!r.why) { c.addEventListener("click", function () { showCard(r.kind, r.id); }); }
+    return c;
+  }
+  function renderCards() {
+    clear(stream);
+    if (!cardRows.length) { stream.appendChild(el("p", "muted", "Belum ada PRD atau antrean.")); }
+    cardRows.forEach(function (r) { stream.appendChild(cardRow(r)); });
+  }
+  function loadCards() {
+    var seq = ++cardSeq;
+    get("/api/cards").then(function (d) {
+      if (seq !== cardSeq) { return; }
+      cardRows = d.rows || [];
+      if (mode === "cards") { renderCards(); }
+    }).catch(function () { summary.textContent = "gagal memuat kartu"; });
+  }
+  function itemCard(it) {
+    var c = el("article", "card");
+    c.appendChild(el("h2", null, "Issue " + it.n));
+    if (it.title) { modelLine(c, it.title, "msg"); }
+    if (it.text) { var body = el("p", "msg", it.text); c.appendChild(el("span", "tag", MODEL + ":")); c.appendChild(body); }
+    (it.touches || []).forEach(function (t) { modelLine(c, "menyentuh " + t); });
+    (it.creates || []).forEach(function (t) { modelLine(c, "membuat " + t); });
+    (it.clashes || []).forEach(function (k) { modelLine(c, "bentrok " + k.file + ":" + k.line + " " + k.why); });
+    if (it.examples) { c.appendChild(el("h2", null, "Contoh")); c.appendChild(exampleBlock(it.examples)); }
+    return c;
+  }
+  function showCard(kind, id) {
+    var seq = ++cardSeq;
+    openCard = id;
+    get("/api/cards/" + kind + "/" + encodeURIComponent(id)).then(function (d) {
+      if (seq !== cardSeq || mode !== "cards") { return; }
+      clear(stream);
+      var head = el("article", "card" + (d.stale || d.superseded ? " stale" : ""));
+      head.appendChild(el("h2", "mono", d.id));
+      var row = el("div", "row");
+      row.appendChild(el("span", "state " + stateClass(d.state), String(d.state)));
+      if (d.repo) { row.appendChild(el("span", null, d.repo)); }
+      if (d.turn) { row.appendChild(el("span", null, "giliran " + d.turn)); }
+      if (d.folder_sha12) { row.appendChild(el("span", "mono", d.folder_sha12)); }
+      head.appendChild(row);
+      if (d.stale) { head.appendChild(el("p", "note", "Hasil di commit lama: repo bergeser sejak folder ini ditulis.")); }
+      if (d.superseded) { head.appendChild(el("p", "note", "Folder ini sudah digantikan giliran berikutnya.")); }
+      if (d.why) { head.appendChild(el("p", "note", d.why)); }
+      if (d.next) { head.appendChild(el("p", "msg", d.next)); }
+      if (d.closed) { modelLine(head, "catatan penutup: " + d.closed); }
+      if (d.prd_md) { head.appendChild(el("span", "tag", MODEL + ": PRD")); head.appendChild(el("p", "msg", d.prd_md)); }
+      (d.questions || []).forEach(function (q) { modelLine(head, "? " + q); });
+      (d.warnings || []).forEach(function (w) { head.appendChild(el("p", "note", w)); });
+      if (d.money) { head.appendChild(el("p", "small", "biaya job " + usd(d.money.spent) + " dari " + usd(d.money.job_cap) + (d.money.queue_usd !== null && d.money.queue_usd !== undefined ? "; antrean diusulkan " + usd(d.money.queue_usd) : ""))); }
+      (d.queues || []).forEach(function (q) { head.appendChild(el("p", "small", "antrean " + q)); });
+      stream.appendChild(head);
+      (d.items || []).forEach(function (it) {
+        if (kind === "queue") {
+          var q = el("article", "card");
+          q.appendChild(el("h2", null, "Item " + it.n));
+          if (it.title) { modelLine(q, it.title, "msg"); }
+          var r2 = el("div", "row");
+          r2.appendChild(el("span", null, it.job ? it.job : "belum ada job"));
+          if (it.job_state) { r2.appendChild(el("span", "state " + stateClass(it.job_state), it.job_state)); }
+          if (it.applied) { r2.appendChild(el("span", "mono", "applied " + it.applied)); }
+          if (!it.text_matches) { r2.appendChild(el("span", "note", "berkas issue berubah")); }
+          q.appendChild(r2);
+          if (it.examples) { q.appendChild(exampleBlock(it.examples)); }
+          stream.appendChild(q);
+        } else { stream.appendChild(itemCard(it)); }
+      });
+      var back = el("button", null, "Semua kartu");
+      back.type = "button";
+      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
+      stream.appendChild(back);
+    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Kartu tidak dapat dibaca.")); });
+  }
   function setMode(m) {
     mode = m;
     dropPending();
     Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
       b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");
     });
-    issueForm.hidden = m === "status" || m === "decide";
+    issueForm.hidden = m === "status" || m === "decide" || m === "cards";
     query.hidden = m !== "status";
     researchSeq++;
+    openCard = null;
     openResearch = null;
     openDecision = null;
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
+    else if (m === "cards") { loadCards(); renderCards(); }
     else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
@@ -501,6 +648,7 @@
     if (document.hidden) { return; }
     load();
     if (mode === "decide" && openDecision === null && !(pending && pending.sent) && !reasonTyped()) { loadDecisions(); }
+    if (mode === "cards" && openCard === null) { loadCards(); }
     if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else if (researchLive) { showResearch(openResearch); } }
   }, 30000);
 })();
