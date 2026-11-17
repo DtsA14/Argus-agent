@@ -475,7 +475,7 @@
     (e.inputs || []).forEach(function (i) { d.appendChild(el("pre", "code", "masukan " + i.name + " = " + i.shown)); });
     if (e.output && e.output.raises) { d.appendChild(el("pre", "code", "keluaran: " + e.output.shown)); }
     else if (e.output) { e.output.forEach(function (o) { d.appendChild(el("pre", "code", "keluaran" + (o.label ? " " + o.label : "") + " = " + o.shown)); }); }
-    if (e.proof) { d.appendChild(el("p", "small", "Mesin: " + e.proof.wording)); }
+    if (e.proof) { d.appendChild(el("pre", "code", "Mesin: " + e.proof.wording)); }
     return d;
   }
   function planItem(it, dim) {
@@ -517,11 +517,11 @@
         head.appendChild(el("p", "msg", d.request));
         if (d.request_truncated) { head.appendChild(el("p", "note", "permintaan dipotong")); }
       }
-      if (d.summary) { modelLine(head, d.summary, "msg"); }
+      if (d.summary) { modelLine(head, d.summary, "msg"); } else if (d.summary_why) { head.appendChild(el("p", "note", d.summary_why)); }
       head.appendChild(el("p", "small", d.issue_count + " issue"));
       if (d.cost) {
         var ref = d.cost.reference ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
-        head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; antrean diusulkan " + usd(d.cost.proposed) + ref));
+        head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas antrean untuk " + d.issue_count + " issue " + usd(d.cost.proposed) + (d.cost.proposed_each !== null && d.cost.proposed_each !== undefined ? " (" + usd(d.cost.proposed_each) + " per issue)" : "") + ref + " (acuan: satu job)"));
       }
       if (d.defects) { head.appendChild(el("p", "note", d.defects + " contoh tidak bisa ditampilkan sebagai angka (kartu cacat)")); }
       head.appendChild(el("p", "small", d.fixed_line));
@@ -714,6 +714,7 @@
   }
   function setMode(m) {
     mode = m;
+    cardSeq++;
     dropPending();
     Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
       b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");

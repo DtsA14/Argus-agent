@@ -16,6 +16,7 @@ example is shown without any proof.
 Names of positional arguments come from the writer's frozen copy of the repository (runs/<turn run>/source) at the commit the turn read.
 """
 import json
+import math
 import os
 import re
 import statistics
@@ -31,6 +32,7 @@ TIER_ORDER = {"same": 0, "whatif": 1, "after": 2}
 NO_NEW_WARNING = "Tidak ada contoh untuk perilaku yang baru; angka baru di teks issue tidak diperiksa mesin"
 FIXED_LINE = ("Mesin memeriksa: kode memberi angka ini. Tidak diperiksa mesin: apakah angkanya benar menurut aturan bisnis (Anda); "
               "perubahan di luar contoh (pembaca patch: Claude); angka di teks issue.")
+TREE_WHY = "pohon sumber penulis tidak terbaca: nama parameter tidak bisa diambil dari definisi; kartu ini cacat"
 REQUEST_MAX, SUMMARY_MAX = 3000, 4000
 REFERENCE_MIN = 3
 REFERENCE_OF = "job code yang sudah di-apply"
@@ -84,7 +86,7 @@ class Approve:
                     os.close(jfd)
                 if isinstance(data, dict) and data.get("kind") == "code" and data.get("state") == "APPLIED":
                     spent = self.cards._spent(data)
-                    if spent is not None:
+                    if spent is not None and math.isfinite(spent):
                         costs.append(spent)
         finally:
             os.close(sfd)
@@ -118,10 +120,15 @@ class Approve:
         status = res["status"]
 
         def value(v):
+            """(json text or None, shown): a NaN or an infinity has no JSON text but is still shown as what it is; never the word None."""
             try:
-                return json.dumps(v, ensure_ascii=False, allow_nan=False), cn.fmt(v)
+                shown = cn.fmt(v)
             except (TypeError, ValueError, RecursionError):
-                return None, None
+                return None, "nilai tidak bisa ditulis"
+            try:
+                return json.dumps(v, ensure_ascii=False, allow_nan=False), shown
+            except (TypeError, ValueError, RecursionError):
+                return None, shown
         if tier == "after":
             if "base_actual" in res:
                 raw, shown = value(res["base_actual"])
@@ -179,21 +186,31 @@ class Approve:
             turns = [t for t in data.get("prd_turns") or [] if isinstance(t, dict)]
             human = [m for m in data.get("conversation") or [] if isinstance(m, dict) and m.get("from") == "human" and isinstance(m.get("text"), str)]
             writer = [m for m in data.get("conversation") or [] if isinstance(m, dict) and m.get("from") == "writer" and isinstance(m.get("text"), str)]
-            request, cut = self._cut(human[0]["text"], REQUEST_MAX) if human else (None, False)
-            summary = self._cut(writer[-1]["text"], SUMMARY_MAX)[0] if writer else None
+            request, cut = self._cut(c.s(human[0]["text"]), REQUEST_MAX) if human else (None, False)       # scrubbed whole, then cut: no key prefix survives
+            summary = None
             via_ui = any(isinstance(e, dict) and e.get("what") == "created" and e.get("via") == "ui" for e in data.get("log") or [])
             card = {"kind": "plan", "id": job_id, "state": data.get("state"), "repo": i.get("repo_name"), "turn": None, "stale": None,
                     "superseded": None, "folder_sha12": None, "why": None, "request": request, "request_truncated": cut,
                     "request_by": "chat" if via_ui else "tidak_tercatat", "summary": summary, "summary_by": "model", "issue_count": 0,
-                    "cost": {"spent": c._spent(data), "proposed": None, "reference": None}, "items": [], "defects": 0, "fixed_line": FIXED_LINE}
+                    "cost": {"spent": None, "proposed": None, "proposed_each": None, "reference": None}, "items": [], "defects": 0, "fixed_line": FIXED_LINE}
+            spent = c._spent(data)
+            card["cost"]["spent"] = spent if spent is not None and math.isfinite(spent) else None
             if not turns:
                 card["why"] = "belum ada folder"
                 return self._finish(card)
             t = turns[-1]
             n_items = t["items"] if isinstance(t.get("items"), int) and 0 < t["items"] <= ITEMS_MAX else 0
-            card.update(turn=t.get("turn"), stale=t.get("commit") != i.get("commit"), folder_sha12=str(t.get("folder_sha"))[:12],
-                        issue_count=n_items)
-            card["cost"]["proposed"] = t.get("max_usd") if isinstance(t.get("max_usd"), (int, float)) and not isinstance(t.get("max_usd"), bool) else None
+            card.update(turn=t.get("turn"), stale=(not t.get("commit")) or t.get("commit") != i.get("commit"),
+                        folder_sha12=t["folder_sha"][:12] if isinstance(t.get("folder_sha"), str) else None, issue_count=n_items)
+            mine = [m for m in writer if m.get("stage") == t.get("turn") and isinstance(t.get("folder_sha"), str) and m.get("folder_sha") == t["folder_sha"]]
+            if mine:                                                  # the reply of THIS folder, never the last message of the conversation
+                card["summary"] = self._cut(c.s(mine[-1]["text"]), SUMMARY_MAX)[0]
+            else:
+                card["summary_why"] = "tidak ada balasan penulis yang terikat pada folder ini"
+            prop = t.get("max_usd")
+            card["cost"]["proposed"] = prop if isinstance(prop, (int, float)) and not isinstance(prop, bool) and math.isfinite(prop) else None
+            if card["cost"]["proposed"] is not None and n_items:
+                card["cost"]["proposed_each"] = round(card["cost"]["proposed"] / n_items, 6)
             card["cost"]["reference"] = self._reference()
             files, why = c._folder(jfd, t.get("turn"), n_items)
             if files is None:
@@ -213,7 +230,7 @@ class Approve:
                 stored = per_item[n - 1] if n - 1 < len(per_item) and per_item[n - 1] else None
                 if stored is None and "examples" not in t:
                     stored = {"absent": True}
-                item = self._item(n, text, stored, bound, source_of)
+                item = self._item(n, text, stored, bound, source_of, src_fd is not None)
                 card["items"].append(item)
                 if isinstance(item["examples"], list):
                     card["defects"] += item["defects"]
@@ -228,17 +245,19 @@ class Approve:
         out = self.cards.withhold_keys(self._deep(card))
         return out
 
-    def _item(self, n, text, stored, bound, source_of):
+    def _item(self, n, text, stored, bound, source_of, tree_ok):
         c = self.cards
         title = c.s(text.split("\n", 1)[0]) if text is not None else ""
         item = {"n": n, "title": title, "counts": {"calls": 0, "same": 0, "whatif": 0, "after": 0}, "warning": None, "no_examples": None,
                 "defects": 0, "examples": [], "why": None}
         if text is None:
             item["why"] = "teks issue tidak terbaca"
+            item["warning"] = NO_NEW_WARNING
             return item
         calls, parsed = c._calls(text)
         if c._leaks(calls):
             item["examples"] = {"withheld": True}
+            item["warning"] = NO_NEW_WARNING
             return item
         if isinstance(stored, dict) and isinstance(stored.get("no_examples"), str):
             item["no_examples"] = stored["no_examples"]
@@ -247,6 +266,8 @@ class Approve:
         cards = []
         for e in parsed:
             card = cn.derive(e, source_of)
+            if not tree_ok and card["why"] and "nama parameter tidak ditemukan" in card["why"]:
+                card["why"] = TREE_WHY
             card["says"] = e.get("says")
             card["proof"] = self._proof(e["tier"], results.get(e["id"]), why or "berkas tidak cocok dengan hasil")
             cards.append(card)
@@ -255,6 +276,6 @@ class Approve:
         counts = {t: sum(1 for e in parsed if e["tier"] == t) for t in ex.TIERS}
         item["counts"] = {"calls": len(parsed), **counts}
         item["defects"] = sum(1 for x in cards if not x["showable"])
-        if counts["after"] + counts["whatif"] == 0:
+        if counts["after"] + counts["whatif"] == 0 or item["no_examples"]:
             item["warning"] = NO_NEW_WARNING
         return item

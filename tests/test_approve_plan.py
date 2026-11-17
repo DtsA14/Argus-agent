@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_chat_cards import (AFTER, PJOB, SAME, issue_text, stored_for, svc, write_job, write_prd)  # noqa: E402,F401
 
 from router import approve_cards as ac  # noqa: E402
+from router.cards import NOT_RUN_WHY  # noqa: E402
 
 SHOP = "def total(prices, discount):\n    return 0\n"
 WHATIF = {"id": "e3", "tier": "whatif", "says": "With a floor of 5 a total of 2 is 5", "setup": "import src.shop as shop",
@@ -35,7 +36,14 @@ def one(s, examples, stored=None, **kw):
     text = issue_text(*examples)
     d, files = write_prd(s.jobs, [text], [stored if stored is not None else stored_for(examples)], **kw)
     with_tree(d)
+    bind_reply(d)
     return d
+
+
+def bind_reply(d, text="ok", stage="w1"):
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"][1].update(text=text, stage=stage, folder_sha=data["prd_turns"][-1]["folder_sha"])
+    (d / "job.json").write_text(json.dumps(data))
 
 
 def ex_by_id(c, eid, item=0):
@@ -82,13 +90,31 @@ def test_an_after_example_without_a_base_value_and_a_failed_status_are_worded_wi
     assert w.startswith("kode sekarang memberi angka ini: 4") and "gerbang menandai: fail" in w and "cocok" not in w.lower()
 
 
-def test_no_proof_is_claimed_when_the_status_is_not_for_these_files(svc):
+def no_proof(c):
+    ex_ = c["items"][0]["examples"]
+    assert ex_ and all(x["proof"]["status"] is None and "belum diperiksa mesin" in x["proof"]["wording"] for x in ex_)
+    assert all(x["proof"]["actual_json"] is None for x in ex_)
+
+
+def test_no_proof_when_only_the_prd_file_changed_so_the_folder_sha_differs(svc):
+    d = one(svc, [SAME])
+    assert plan(svc)[1]["items"][0]["examples"][0]["proof"]["status"] == "pass"
+    (d / "prd-w1" / "PRD.md").write_text("Goal: changed.\n")
+    no_proof(plan(svc)[1])
+
+
+def test_no_proof_when_only_the_stored_examples_changed_so_the_digest_differs(svc):
+    d = one(svc, [SAME])
+    data = json.loads((d / "job.json").read_text())
+    data["prd_turns"][-1]["examples"][0]["examples"][0]["expect"] = 5
+    (d / "job.json").write_text(json.dumps(data))
+    no_proof(plan(svc)[1])
+
+
+def test_no_proof_when_the_issue_file_changed(svc):
     d = one(svc, [SAME])
     (d / "prd-w1" / "issue-1.md").write_text(issue_text({**SAME, "expect": 5}))
-    c = plan(svc)[1]
-    e = c["items"][0]["examples"]
-    assert all(x["proof"]["status"] is None and "belum diperiksa mesin" in x["proof"]["wording"] for x in e) or e == []
-    assert c["why"] is None or isinstance(c["why"], str)
+    no_proof(plan(svc)[1])
 
 
 def test_an_item_the_writer_did_not_run_has_no_proof_yet(svc):
@@ -116,7 +142,7 @@ def test_an_issue_with_no_examples_shows_the_writers_reason_as_model_text_and_th
     d, _ = write_prd(svc.jobs, [issue_text()], [stored])
     with_tree(d)
     item = plan(svc)[1]["items"][0]
-    assert item["examples"] == [] and item["warning"] == ac.NO_NEW_WARNING
+    assert item["examples"] == [] and item["warning"] == ac.NO_NEW_WARNING and item["why"] is None
     assert item["no_examples"] == "the text is the contract" and item["counts"]["calls"] == 0
 
 
@@ -281,3 +307,205 @@ def test_the_chat_serves_the_pinned_files():
     from router import chat as rc
     for name, sha in rc.STATIC_SHA256.items():
         assert hashlib.sha256((rc.STATIC_DIR / name).read_bytes()).hexdigest() == sha
+
+
+# ---- the fixes of the review ---------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_a_non_finite_value_is_shown_as_what_it_is_never_as_none(bad):
+    for tier, key in (("same", "actual"), ("after", "base_actual")):
+        p = ac.Approve._proof(tier, {"status": "pass", key: bad}, None)
+        assert "None" not in p["wording"] and ("nan" in p["wording"] or "inf" in p["wording"])
+
+
+def test_the_summary_is_the_reply_of_this_folder_not_the_last_message(svc):
+    d = one(svc, [SAME, AFTER])
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"].append({"from": "writer", "text": "a later reply about something else", "stage": "w2", "folder_sha": "f" * 64})
+    (d / "job.json").write_text(json.dumps(data))
+    c = plan(svc)[1]
+    assert c["summary"] == "ok"
+    data["conversation"][1].pop("folder_sha")
+    data["conversation"][1]["stage"] = "w0"
+    (d / "job.json").write_text(json.dumps(data))
+    c = plan(svc)[1]
+    assert c["summary"] is None and "terikat" in c["summary_why"]
+
+
+def test_the_cost_says_the_proposal_is_a_cap_for_all_issues_and_gives_it_per_issue(svc):
+    t1, t2 = issue_text(SAME, AFTER), issue_text(AFTER, title="Second")
+    d, _ = write_prd(svc.jobs, [t1, t2], [stored_for([SAME, AFTER]), stored_for([AFTER])])
+    with_tree(d)
+    cost = plan(svc)[1]["cost"]
+    assert cost["proposed"] == 2.0 and cost["proposed_each"] == 1.0
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    assert '"; batas antrean untuk "' in js and "(acuan: satu job)" in js
+
+
+def test_a_key_prefix_never_survives_the_cut_of_the_request(svc):
+    d = one(svc, [SAME, AFTER])
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"][0]["text"] = "x" * (ac.REQUEST_MAX - 12) + "sk-proj-" + "a" * 40
+    (d / "job.json").write_text(json.dumps(data))
+    c = plan(svc)[1]
+    assert "sk-" not in c["request"] and "sk-" not in json.dumps(c)
+
+
+def test_a_missing_or_linked_or_foreign_source_tree_gets_its_own_reason(svc, tmp_path):
+    d = one(svc, [SAME])
+    import shutil
+    src = d / "runs" / f"{PJOB}-w1" / "source"
+    real = tmp_path / "elsewhere"
+    shutil.move(str(src), str(real))
+    os.symlink(real, src)                                              # a link: never followed
+    e = ex_by_id(plan(svc)[1], "e1")
+    assert e["showable"] is False and e["why"] == ac.TREE_WHY and [i["name"] for i in e["inputs"]] == ["argumen 1", "argumen 2"]
+    os.remove(src)
+    shutil.move(str(real), str(src))
+    assert ex_by_id(plan(svc)[1], "e1")["showable"] is True
+    data = json.loads((d / "job.json").read_text())
+    data["stages"]["w1"]["run_id"] = "j20261117_100000_aaaa-w2"        # not the run of this turn
+    (d / "job.json").write_text(json.dumps(data))
+    assert ex_by_id(plan(svc)[1], "e1")["why"] == ac.TREE_WHY
+
+
+def test_the_warning_also_comes_with_a_no_examples_reason_and_when_the_item_cannot_be_read(svc):
+    stored = stored_for([SAME, AFTER])
+    stored["no_examples"] = "because"
+    one(svc, [SAME, AFTER], stored=stored)
+    assert plan(svc)[1]["items"][0]["warning"] == ac.NO_NEW_WARNING
+    leak = {**SAME, "setup": "from src.shop import total; k1 = 'sk-ant-'", "run": "'abcdefghij1234' and total([2, 3], 1)"}
+    d, _ = write_prd(svc.jobs, [issue_text(leak)], [stored_for([leak])])
+    with_tree(d)
+    item = plan(svc)[1]["items"][0]
+    assert item["examples"] == {"withheld": True} and item["warning"] == ac.NO_NEW_WARNING
+
+
+def test_the_reference_needs_three_costs_counts_only_applied_code_jobs_and_ignores_non_finite(svc):
+    one(svc, [SAME, AFTER])
+    mk = lambda n, **kw: write_job(svc.jobs, f"j20261116_10{n:04d}_aaa{n % 10}", **kw)
+    mk(1, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.1}})
+    mk(2, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.3}})
+    assert plan(svc)[1]["cost"]["reference"] is None                         # two are not enough
+    mk(3, kind="research", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 50.0}})
+    mk(4, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": float("nan")}})
+    assert plan(svc)[1]["cost"]["reference"] is None                         # a research job and a NaN do not count
+    mk(5, kind="code", state="APPLIED", stages={"a1": {"kind": "agent", "usd": 0.2}})
+    assert plan(svc)[1]["cost"]["reference"] == {"median": 0.2, "n": 3, "of": ac.REFERENCE_OF}
+
+
+def test_a_bool_or_non_finite_proposal_is_not_a_number(svc):
+    for bad in (True, float("nan"), float("inf")):
+        d = one(svc, [SAME, AFTER])
+        data = json.loads((d / "job.json").read_text())
+        data["prd_turns"][-1]["max_usd"] = bad
+        (d / "job.json").write_text(json.dumps(data))
+        c = plan(svc)
+        assert c[0] == 200 and c[1]["cost"]["proposed"] is None and c[1]["cost"]["proposed_each"] is None
+
+
+def test_the_request_is_cut_at_exactly_the_limit_and_is_the_first_human_message(svc):
+    d = one(svc, [SAME, AFTER])
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"].insert(1, {"from": "human", "text": "a second human message"})
+    data["conversation"][0]["text"] = "y" * ac.REQUEST_MAX
+    (d / "job.json").write_text(json.dumps(data))
+    c = plan(svc)[1]
+    assert c["request"] == "y" * ac.REQUEST_MAX and c["request_truncated"] is False
+    data["conversation"][0]["text"] = "y" * (ac.REQUEST_MAX + 1)
+    (d / "job.json").write_text(json.dumps(data))
+    c = plan(svc)[1]
+    assert c["request"] == "y" * ac.REQUEST_MAX and c["request_truncated"] is True
+
+
+def test_the_missing_folder_sha_and_commit_are_not_the_word_none(svc):
+    d = one(svc, [SAME, AFTER])
+    data = json.loads((d / "job.json").read_text())
+    data["prd_turns"][-1].pop("folder_sha")
+    data["prd_turns"][-1].pop("commit")
+    data["inputs"].pop("commit")
+    (d / "job.json").write_text(json.dumps(data))
+    c = plan(svc)[1]
+    assert c["folder_sha12"] is None and c["stale"] is True
+
+
+def test_the_plan_page_guards_old_answers_and_marks_the_author_honestly():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    part = js[js.index("function showPlan"):js.index("// ---- T2: read-only cards")]
+    assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2
+    assert "if (d.defects) {" in part and 'el("p", "note", it.warning)' in js
+    assert 'd.request_by === "chat" ? "permintaan, ditulis lewat chat:" : "permintaan (pembuat tidak tercatat):"' in part
+    assert "d.defects" in part and 'modelLine(head, d.summary, "msg")' in part and 'el("pre", "code", "Mesin: " + e.proof.wording)' in js
+    assert 'function planItem' in js and '["same", "whatif", "after"].forEach' in js
+    assert "function setMode(m) {\n    mode = m;\n    cardSeq++;" in js
+
+
+def test_a_value_too_deep_to_write_is_worded_as_such(svc):
+    deep = []
+    for _ in range(3000):
+        deep = [deep]
+    p = ac.Approve._proof("same", {"status": "pass", "actual": deep}, None)
+    assert p["wording"] == "kode sekarang memberi angka ini: nilai tidak bisa ditulis" and p["actual_json"] is None
+
+
+def test_the_author_is_chat_only_for_the_created_entry(svc):
+    d = one(svc, [SAME, AFTER])
+    data = json.loads((d / "job.json").read_text())
+    data["log"] = [{"what": "state", "via": "ui"}]
+    (d / "job.json").write_text(json.dumps(data))
+    assert plan(svc)[1]["request_by"] == "tidak_tercatat"
+
+
+def test_the_summary_needs_both_the_stage_and_the_folder_sha(svc):
+    d = one(svc, [SAME, AFTER])
+    base = json.loads((d / "job.json").read_text())
+    for patch in ({"stage": "w9"}, {"folder_sha": "e" * 64}):
+        data = json.loads(json.dumps(base))
+        data["conversation"][1].update(patch)
+        (d / "job.json").write_text(json.dumps(data))
+        assert plan(svc)[1]["summary"] is None, patch
+
+
+def test_the_tree_of_another_run_is_never_used(svc):
+    d = one(svc, [SAME])
+    other = d / "runs" / f"{PJOB}-w2" / "source" / "src"
+    other.mkdir(parents=True)
+    (other / "__init__.py").write_text("")
+    (other / "shop.py").write_text("def total(zzz, yyy):\n    return 0\n")
+    data = json.loads((d / "job.json").read_text())
+    data["stages"]["w1"]["run_id"] = f"{PJOB}-w2"
+    (d / "job.json").write_text(json.dumps(data))
+    e = ex_by_id(plan(svc)[1], "e1")
+    assert [i["name"] for i in e["inputs"]] == ["argumen 1", "argumen 2"]
+
+
+def test_a_turn_from_before_the_example_gate_says_so(svc):
+    d = one(svc, [SAME])
+    data = json.loads((d / "job.json").read_text())
+    data["prd_turns"][-1].pop("examples")
+    (d / "job.json").write_text(json.dumps(data))
+    item = plan(svc)[1]["items"][0]
+    assert item["why"] == "dari sebelum gerbang contoh" and "belum diperiksa mesin (dari sebelum gerbang contoh)" in item["examples"][0]["proof"]["wording"]
+
+
+def test_a_tree_that_reads_but_lacks_the_definition_keeps_the_real_reason(svc):
+    d = one(svc, [SAME])
+    with_tree(d, "def other():\n    pass\n")
+    e = ex_by_id(plan(svc)[1], "e1")
+    assert e["showable"] is False and "nama parameter tidak ditemukan" in e["why"] and e["why"] != ac.TREE_WHY
+
+
+def test_a_non_finite_spent_is_not_a_number(svc):
+    d = one(svc, [SAME, AFTER])
+    data = json.loads((d / "job.json").read_text())
+    data["stages"]["w1"]["usd"] = float("nan")
+    (d / "job.json").write_text(json.dumps(data))
+    status, c = plan(svc)
+    assert status == 200 and c["cost"]["spent"] is None
+
+
+def test_an_item_with_no_stored_entry_is_not_run_yet_unlike_a_turn_from_before_the_gate(svc):
+    d, _ = write_prd(svc.jobs, [issue_text(SAME), issue_text(AFTER, title="Two")], [stored_for([SAME]), None])
+    with_tree(d)
+    second = plan(svc)[1]["items"][1]
+    assert second["why"] == NOT_RUN_WHY and "dijalankan saat job code item ini mulai" in second["examples"][0]["proof"]["wording"]
