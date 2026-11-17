@@ -390,24 +390,29 @@ def _chain_result(applicable, ok, kind, why, **more):
 
 
 def _queue_raw(qfd, name):
-    """The bytes of queue.json of queue `name` (never through a symlink, a regular file, at most QUEUE_MAX), or None."""
+    """(bytes, False) of queue.json of queue `name` (never through a symlink, a regular file, at most QUEUE_MAX); (None, False) when there is none;
+    (None, True) when something is there that cannot be read (a link, not a regular file, no permission): that is not the same as nothing."""
     try:
         dfd = _open_dir(name, qfd)
+    except FileNotFoundError:
+        return None, False
     except OSError:
-        return None
+        return None, True
     try:
         fd = os.open("queue.json", OPEN_FILE, dir_fd=dfd)
+    except FileNotFoundError:
+        return None, False
     except OSError:
-        return None
+        return None, True
     finally:
         os.close(dfd)
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
-            return None
+            return None, True
         with os.fdopen(fd, "rb", closefd=False) as f:
-            return f.read(QUEUE_MAX)
+            return f.read(QUEUE_MAX), False
     except OSError:
-        return None
+        return None, True
     finally:
         os.close(fd)
 
@@ -425,7 +430,7 @@ def chain(job, jobs_dir, queues_dir=None):
     Read only: files through descriptors, no write."""
     try:
         return _chain(job, jobs_dir, queues_dir)
-    except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError, MemoryError) as e:
+    except Exception as e:                                      # whatever it is: the gate never opens by accident
         return _chain_result(True, False, "tidak_terbaca", f"the check of the domain reader's note failed ({type(e).__name__}): not applied")
 
 
@@ -438,7 +443,10 @@ def _chain(job, jobs_dir, queues_dir):
     me = job.id.encode("utf-8")
     try:
         for name in sorted(n for n in os.listdir(qfd) if rq.QUEUE_ID.fullmatch(n)):
-            raw = _queue_raw(qfd, name)
+            raw, unreadable = _queue_raw(qfd, name)
+            if unreadable:
+                unusable.append(name)
+                continue
             if raw is None:
                 continue
             try:
@@ -467,6 +475,11 @@ def _chain(job, jobs_dir, queues_dir):
     own = (job.data.get("inputs") or {}).get("issue")
     if not isinstance(own, str) or hashlib.sha256(own.encode("utf-8")).hexdigest() != it.get("issue_sha256"):
         return bad("the job's issue is not the issue of its queue item")
+    present, parsed, problems = eg.extract(own)           # the issue IS the queue item's (sha): whether it has examples is decided here, not by a PRD that may have changed
+    if not present:
+        return _chain_result(False, True, "tidak_berlaku", "the queue item's issue has no examples block")
+    if problems or not parsed:
+        return bad("the examples block of the job's issue cannot be read")
     prd_job = c._prd_job_of(q)
     turn = Path(q["prd"]["dir"]).name
     if prd_job is None or not turn.startswith("prd-") or not TURN.fullmatch(turn[4:]):
@@ -475,8 +488,8 @@ def _chain(job, jobs_dir, queues_dir):
     more = {"prd_job": prd_job, "item": n}
     try:
         _, info = bundle(jobs_dir, prd_job, n)
-    except NoExamples:
-        return _chain_result(False, True, "tidak_berlaku", "the PRD item has no examples", **more)
+    except NoExamples:                                  # the job's issue has a block (checked above), so a PRD that has none now was revised after the queue
+        return bad("the PRD was revised after the queue was made (its item has no examples now): make a new queue", **more)
     except rj.Refused as e:
         return bad(f"the queue was made from an older folder of the PRD, or the folder cannot be read now: make a new queue or read the numbers again "
                    f"({str(e).split(': ', 1)[-1].split('; nothing')[0]})", **more)
@@ -484,8 +497,7 @@ def _chain(job, jobs_dir, queues_dir):
         return bad("the PRD folder is not the one this queue was made from: make a new queue", **more)
     if info["issue_sha256"] != it.get("issue_sha256"):
         return bad("the issue of the PRD folder is not the issue of the queue item", **more)
-    present, parsed, problems = eg.extract(own)
-    if not present or problems or info["digest"] != eg.digest(parsed):
+    if info["digest"] != eg.digest(parsed):
         return bad("the examples of the job's issue are not the examples the PRD item had", **more)
     try:
         kind, rec = status(jobs_dir, prd_job, n)

@@ -255,7 +255,7 @@ def test_the_order_of_the_refusals_keeps_the_patch_read_first(world):
         ra.apply("jtest", sha[:12], deps=world.deps, jobs_dir=world.jobs, queues_dir=world.queues)       # no patch-read note yet
 
 
-def test_a_second_call_that_heals_a_crash_does_not_ask_again_but_a_first_call_does(world, monkeypatch):
+def test_a_second_call_that_heals_a_crash_does_not_ask_again(world, monkeypatch):
     note(world)
     monkeypatch.setattr(rj, "_record_applied", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt))
     with pytest.raises(KeyboardInterrupt):
@@ -315,3 +315,54 @@ def test_the_cli_says_when_the_note_is_not_asked_and_where_it_looked(tmp_path, c
     assert argus.main(["--jobs-dir", str(env.jobs), "--queues-dir", str(qdir), "apply", "jtest", "--read-sha", sha[:12]], deps=env.deps) == 0
     out = capsys.readouterr().out
     assert "domain reader's note: not asked" in out and str(qdir) in out
+
+
+def test_a_prd_revised_after_the_queue_without_examples_does_not_open_the_gate(world):
+    from router import prd as rp
+    note(world)
+    d = world.prd_dir
+    w2 = d / "prd-w2"
+    w2.mkdir()
+    files = {"PRD.md": b"Goal: revised.\n", "issues.json": (d / "prd-w1" / "issues.json").read_bytes(), "issue-1.md": b"total() never goes below zero\n\nNo block.\n"}
+    for name, data in files.items():
+        (w2 / name).write_bytes(data)
+    data = json.loads((d / "job.json").read_text())
+    data["prd_turns"].append(dict(data["prd_turns"][-1], turn="w2", folder_sha=rp.folder_sha(files), examples=[{"examples": [], "results": [], "no_examples": "none", "note": None, "tier_moves": []}]))
+    data["stages"]["w2"] = {"kind": "write", "run_id": f"{PJOB}-w2", "usd": 0.01}
+    (d / "job.json").write_text(json.dumps(data))
+    (d / "prd-w1" / "SUPERSEDED").write_text("x")
+    refused(world, "revised after the queue|older folder")
+
+
+def test_an_attempt_that_failed_before_the_commit_gets_no_pass_from_its_log_entry(world, monkeypatch):
+    from router import apply as ra_mod
+    note(world)
+    real = ra_mod.run_git
+
+    def failing(repo, *args, **k):
+        if args and args[0] == "commit":
+            raise ra_mod.GitFail("boom")
+        return real(repo, *args, **k)
+    monkeypatch.setattr(ra_mod, "run_git", failing)
+    with pytest.raises(rj.Refused):
+        apply(world)
+    monkeypatch.undo()
+    assert any(e.get("what") == "apply_started" for e in world.job().data["log"]) and world.job().data["state"] == rj.REVIEW_READY
+    note(world, verdict="concerns", sources=("hanya tulisan penulis",), text="a rule only the writer states")
+    refused(world, "recorded concerns")                                                  # the rerun with the same bytes is asked again
+
+
+def test_a_queue_that_is_a_link_is_unusable_not_skipped(world, tmp_path):
+    note(world)
+    real = tmp_path / "realq"
+    shutil.move(str(world.qdir), str(real))
+    os.symlink(real, world.qdir)
+    refused(world, "names this job but cannot be used")
+    os.remove(world.qdir)
+    shutil.move(str(real), str(world.qdir))
+    f = world.qdir / "queue.json"
+    body = f.read_text()
+    os.remove(f)
+    (tmp_path / "q.json").write_text(body)
+    os.symlink(tmp_path / "q.json", f)
+    refused(world, "names this job but cannot be used")

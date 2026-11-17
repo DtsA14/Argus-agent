@@ -141,14 +141,6 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None)
         pr.require_ok(job, rj.last_agent(job)[0], sha, reader)
     except rj.Refused as e:
         refuse(str(e).split(": ", 1)[1] if ": " in str(e) else str(e))
-    earlier = [e for e in job.data.get("log") or [] if e.get("what") == "apply_started" and isinstance(e.get("read_sha"), str) and sha.startswith(e["read_sha"])]
-    # SPEC_KARTU_SETUJU 5: an item of a PRD queue needs a fresh `ok` note on the numbers. A call that heals an earlier apply of these very bytes (the commit
-    # is already in the repository, only the record is missing) does not ask again: the earlier call passed this gate, and a note gone stale since must not
-    # leave the job with a commit and no record.
-    res = er.chain(job, job.dir.parent, queues_dir) if not earlier else {"applicable": False, "ok": True}
-    if res["applicable"] and not res["ok"]:
-        how = f" (argus examples-read {res['prd_job']} --item {res['item']} --bundle, then --verdict ok ...)" if res["prd_job"] else ""
-        refuse(f"{res['why']}; apply needs an ok note of the domain reader for an item of a PRD queue{how}")
     extra = {"reader": reader} if reader else {}
     listed = sorted(f["path"] for f in (prov.get("patch") or {}).get("files") or [])
     globs = (job.data.get("protected_repo") or {}).get("globs") or []
@@ -180,7 +172,13 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None)
         head = run_git(repo, "rev-parse", "HEAD").decode().strip()
         started = [e for e in job.data.get("log") or [] if e.get("what") == "apply_started"]
         if started and _recovered(job, repo, head, started[-1], sha, patch, deps, note, read_sha, allow, extra):
-            return job
+            return job                          # the commit is already in the repository: only the record was missing, nothing is asked again
+        # SPEC_KARTU_SETUJU 5: an item of a PRD queue needs a fresh `ok` note on the numbers. Here, after the healing path and before anything is written
+        # (only reads of git were made): an earlier attempt that did not commit gets no pass from its `apply_started` entry.
+        res = er.chain(job, job.dir.parent, queues_dir)
+        if res["applicable"] and not res["ok"]:
+            how = f" (argus examples-read {res['prd_job']} --item {res['item']} --bundle, then --verdict ok ...)" if res["prd_job"] else ""
+            refuse(f"{res['why']}; apply needs an ok note of the domain reader for an item of a PRD queue{how}")
         identity = _identity(repo)
         if identity is None:
             refuse("no git identity (user.name and user.email): set them in the repository or globally; none is made up")
