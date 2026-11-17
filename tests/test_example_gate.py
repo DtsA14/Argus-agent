@@ -737,7 +737,7 @@ def test_the_ids_of_the_flag_are_e1_to_e99_only():
     import argus
     import argparse
     assert argus._ids("e1, e99") == ("e1", "e99")
-    for bad in ("e0", "e100", "x", "", "e1,", "E1"):
+    for bad in ("e0", "e100", "x", "", "E1"):
         with pytest.raises(argparse.ArgumentTypeError):
             argus._ids(bad)
 

@@ -24,14 +24,14 @@ M = [
     ("rev-parse not clean", J, [("f\"{commit}^{{commit}}\", clean=True).decode()", "f\"{commit}^{{commit}}\").decode()")]),
     ("show not clean", J, [("*SHOW_AS_PACKAGED, sha, clean=True)", "*SHOW_AS_PACKAGED, sha)")]),
     ("patch sha not recorded in job.json", J, [("\"dir\": str(out[\"dir\"]), \"patch_sha256\": patch_sha}", "\"dir\": str(out[\"dir\"]), \"patch_sha256\": None}")]),
-    ("applied() without the lock", J, [("    with job.lock():\n        return _record_applied(job, commit, deps=deps, note=note)", "    return _record_applied(job, commit, deps=deps, note=note)")]),
-    ("extra fields dropped from the log entry", J, [("**({\"note\": note} if note else {}), **extra)", "**({\"note\": note} if note else {}))")]),
+    ("applied() without the lock", J, [("    with job.lock():\n        return _record_applied(job, commit, deps=deps, note=note, allow_failed_examples=allow_failed_examples)", "    return _record_applied(job, commit, deps=deps, note=note, allow_failed_examples=allow_failed_examples)")]),
+    ("extra fields dropped from the log entry", J, [("**({\"examples_failed\": failed} if failed else {}), **extra)", "**({\"examples_failed\": failed} if failed else {}))")]),
     ("reserved log fields allowed", J, [("    if reserved:\n        raise ValueError(", "    if False:\n        raise ValueError(")]),
-    ("the patch read twice", J, [("hashlib.sha256(data).hexdigest()", "hashlib.sha256(patch.read_bytes()).hexdigest()")]),
+    ("the patch read twice", J, [("patch_sha256=hashlib.sha256(data).hexdigest(),", "patch_sha256=hashlib.sha256(patch.read_bytes()).hexdigest(),")]),
     ("a missing patch is not a refusal", J, [("except (OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:", "except (intake.IntakeError, subprocess.TimeoutExpired) as e:")]),
     ("a git timeout is not a refusal", J, [("except (OSError, intake.IntakeError, subprocess.TimeoutExpired) as e:", "except (OSError, intake.IntakeError) as e:")]),
     ("state not checked in the recorder", J, [("    if job.data[\"state\"] != REVIEW_READY:\n        raise Refused(f\"job {job.id} is {job.data['state']}: only a valid review package is applied\")\n    reserved =", "    reserved =")]),
-    ("as_is always True", J, [("as_is=None if mine is None or theirs is None else mine == theirs, by=os.environ.get(\"USER\"),\n             **({\"note\"", "as_is=True, by=os.environ.get(\"USER\"),\n             **({\"note\"")]),
+    ("as_is always True", J, [("    as_is = None if mine is None or theirs is None else mine == theirs\n", "    as_is = True\n")]),
 ]
 
 if __name__ == "__main__":
