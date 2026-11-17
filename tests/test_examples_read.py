@@ -138,9 +138,9 @@ def test_the_documents_are_a_fixed_list_cut_capped_and_never_followed_through_a_
     secret.write_text("TOP SECRET")
     os.symlink(secret, src / "AGENTS.md")
     text, info = bundle(jobs)
-    assert info["docs"] == ["README.md", "CLAUDE.md", "docs/DOMAIN.md"]                    # the fixed order; NOTES.md is not on the list
+    assert info["docs"] == ["docs/DOMAIN.md", "README.md", "CLAUDE.md"]                    # the fixed order, domain first; NOTES.md is not on the list
     assert "TOP SECRET" not in text and "not on the list" not in text and "cut at" in text
-    assert text.count("r") < 20000 and len(text) < er.DOCS_MAX + 40000
+    assert "(cut at 8192 characters)" in text and len(text) < er.DOCS_MAX + 40000
 
 
 def test_an_item_without_examples_or_a_bad_item_or_a_bad_job_is_refused(tmp_path, jobs):
@@ -273,15 +273,13 @@ def test_status_is_none_ok_concerns_and_stale_when_anything_it_was_bound_to_chan
 
 
 @pytest.mark.parametrize("field", ["folder_sha", "commit", "digest", "item"])
-def test_a_note_whose_key_differs_is_stale(jobs, field):
+def test_a_note_whose_key_differs_is_stale(jobs, field):  # noqa: D401
     d = make(jobs)
     read(jobs)
     f = json.loads(note_file(d).read_text())
     f["entries"]["1"][field] = 9 if field == "item" else "f" * (40 if field == "commit" else 64)
     note_file(d).write_text(json.dumps(f))
-    assert er.status(jobs, PJOB, 1)[0] in ("stale", "error")
-    if field != "item":
-        assert er.status(jobs, PJOB, 1)[0] == "stale"
+    assert er.status(jobs, PJOB, 1) == ("stale", None)
 
 
 def test_a_damaged_note_file_is_an_error_never_ok(tmp_path, jobs):
@@ -346,3 +344,123 @@ def test_the_cli_requires_a_whole_request(jobs, args, capsys):
         code = e.code
     assert code not in (0, None)
     assert not note_file(jobs / PJOB).exists()
+
+
+# ---- the fixes of the review ---------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("piece", [
+    "sk-ant-ab\x01cdefghijklmn", "sk-ant-ab\u200bcdefghijklmn", "sk-ant-ab\u202ecdefghijklmn", "password\u200b=\"hunter2\"",
+])
+def test_a_key_split_by_an_invisible_character_is_still_withheld(jobs, piece):
+    d = make(jobs)
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"][0]["text"] = "here: " + piece
+    (d / "job.json").write_text(json.dumps(data))
+    text = bundle(jobs)[0]
+    assert "ant-ab" not in text and "hunter2" not in text and "withheld" in text
+
+
+def test_line_separators_of_other_programs_become_a_space_not_a_line(jobs):
+    d = make(jobs)
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"][0]["text"] = "a\u2028b\u2029c\x0bd\x0ce\x85f"
+    (d / "job.json").write_text(json.dumps(data))
+    text = bundle(jobs)[0]
+    assert "  a b c d e f" in text and not any(c in text for c in "\u2028\u2029\x0b\x0c\x85")
+
+
+def test_every_human_message_the_writer_of_the_turn_had_is_shown_and_a_later_one_is_not(jobs):
+    d = make(jobs)
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"] = [{"from": "human", "text": "first: use the lot rule"}, {"from": "writer", "text": "w", "stage": "w0"},
+                            {"from": "human", "text": "second: drop the lot rule"}, {"from": "writer", "text": "ok", "stage": "w1"},
+                            {"from": "human", "text": "third: for a later turn"}]
+    (d / "job.json").write_text(json.dumps(data))
+    text, info = bundle(jobs)
+    assert "message 1 of 2" in text and "message 2 of 2" in text and "  first: use the lot rule" in text and "  second: drop the lot rule" in text
+    assert "third" not in text
+    data["conversation"][2]["text"] = "second: keep it"                                # a changed message is another bundle
+    (d / "job.json").write_text(json.dumps(data))
+    assert bundle(jobs)[1]["bundle_sha256"] != info["bundle_sha256"]
+
+
+def test_the_documents_are_capped_in_total_the_dropped_are_listed_and_the_cut_is_told_truly(jobs):
+    full = "d" * er.DOC_MAX
+    d = make(jobs, docs={"DOMAIN.md": full, "docs/DOMAIN.md": full, "README.md": full, "CLAUDE.md": "claude\n"})
+    text, info = bundle(jobs)
+    assert info["docs"] == ["DOMAIN.md", "docs/DOMAIN.md", "README.md"]
+    assert "repo documents not included (size cap): CLAUDE.md" in text
+    assert "(cut at" not in text                                                          # three documents of exactly the limit: none is cut
+    d2 = make(jobs, docs={"DOMAIN.md": full, "docs/DOMAIN.md": full, "README.md": "r" * 20000})
+    text = bundle(jobs)[0]
+    assert "DATA repo doc: README.md (cut at 8192 characters)" in text
+    d3 = make(jobs, docs={"DOMAIN.md": full, "docs/DOMAIN.md": full, "README.md": full, "CLAUDE.md": "c" * 100})
+    assert "(cut at" not in bundle(jobs)[0]
+    shutil_docs = d3 / "runs" / f"{PJOB}-w1" / "source"
+    (shutil_docs / "README.md").write_text("r" * 5000)
+    (shutil_docs / "CLAUDE.md").write_text("c" * 5000)
+    text = bundle(jobs)[0]
+    assert "DATA repo doc: CLAUDE.md (cut at 3192 characters)" in text                      # 24576 - 2 * 8192 - 5000: cut by what is left of the total, with the true number
+
+
+def test_a_missing_frozen_copy_is_said(jobs):
+    d = make(jobs)
+    import shutil
+    shutil.rmtree(d / "runs")
+    text = bundle(jobs)[0]
+    assert "repo documents: none (the writer's frozen copy of the repository was not found" in text and "DATA repo doc" not in text
+
+
+def test_a_source_that_is_empty_or_withheld_is_refused_and_so_is_an_ok_on_a_withheld_section(jobs):
+    d = make(jobs, docs={"README.md": "key sk-ant-" + "a" * 30})
+    with pytest.raises(rj.Refused, match="source"):
+        read(jobs, sources=("dokumen repo: README.md",))
+    data = json.loads((d / "job.json").read_text())
+    data["conversation"][0]["text"] = "   "
+    (d / "job.json").write_text(json.dumps(data))
+    with pytest.raises(rj.Refused, match="request"):
+        read(jobs, sources=("permintaan Atha",))
+    d = make(jobs, examples=({**SAME, "says": "token: \"" + "x" * 20}, AFTER))
+    with pytest.raises(rj.Refused, match="withheld"):
+        read(jobs, sources=("hanya tulisan penulis",))
+    read(jobs, verdict="concerns", sources=("hanya tulisan penulis",), note="withheld, so concerns only")
+
+
+def test_a_damaged_note_file_is_not_silently_replaced(jobs):
+    d = make(jobs)
+    note_file(d).write_text("{")
+    with pytest.raises(rj.Refused, match="damaged"):
+        read(jobs)
+    assert note_file(d).read_text() == "{"
+
+
+def test_a_second_writer_is_turned_away_while_the_job_is_locked(jobs):
+    d = make(jobs)
+    job = rj.open_job(PJOB, jobs)
+    with job.lock():
+        with pytest.raises(Exception, match="in use by another command"):
+            read(jobs)
+    assert not note_file(d).exists()
+
+
+def test_a_changed_folder_has_no_status_at_all(jobs):
+    d = make(jobs)
+    read(jobs)
+    (d / "prd-w1" / "PRD.md").write_text("changed\n")
+    with pytest.raises(rj.Refused, match="folder"):
+        er.status(jobs, PJOB, 1)
+
+
+def test_the_cli_takes_no_note_arguments_with_bundle_or_status(jobs, capsys):
+    make(jobs)
+    for args in (["--bundle", "--note", "x"], ["--status", "--source", "permintaan Atha"], ["--bundle", "--bundle-sha", "a" * 64]):
+        with pytest.raises(SystemExit):
+            run_cli(jobs, "--item", "1", *args)
+    run_cli(jobs, "--item", "1", "--bundle")
+    sha = re.search(r"bundle_sha256: ([0-9a-f]{64})", capsys.readouterr().out).group(1)
+    run_cli(jobs, "--item", "1", "--verdict", "ok", "--bundle-sha", sha, "--reader-id", "s1", "--source", "permintaan Atha", "--note", "fits")
+    out = capsys.readouterr().out
+    assert "not the bundle was read" not in out and "not that the bundle was read" in out
+    run_cli(jobs, "--item", "1", "--status")
+    out = capsys.readouterr().out
+    assert "s1" in out and "permintaan Atha" in out

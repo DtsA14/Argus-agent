@@ -148,7 +148,7 @@ def main(argv=None, deps=None):
     er_.add_argument("--item", required=True, type=int)
     er_.add_argument("--bundle", action="store_true", help="print exactly what the reader sees, then its sha")
     er_.add_argument("--status", action="store_true", help="the note of the item against the bundle as it is now")
-    er_.add_argument("--verdict", choices=("ok", "concerns"))
+    er_.add_argument("--verdict", choices=("ok", "concerns"), help="the note is a statement: nothing proves the reader read the bundle")
     er_.add_argument("--bundle-sha", help="the sha `--bundle` printed")
     er_.add_argument("--reader-id", help="the model or session that read it")
     er_.add_argument("--source", action="append", default=[], help="where a rule comes from: 'permintaan Atha', 'dokumen repo: <file>' or 'hanya tulisan penulis' (repeat)")
@@ -388,6 +388,8 @@ def main(argv=None, deps=None):
             modes = [bool(o.bundle), bool(o.status), o.verdict is not None]
             if sum(modes) != 1:
                 ap.error("examples-read takes exactly one of --bundle, --status or --verdict (with --bundle-sha, --reader-id, --source and --note)")
+            if (o.bundle or o.status) and (o.bundle_sha or o.reader_id or o.source or o.note):
+                ap.error("--bundle and --status take no note arguments")
             if o.bundle:
                 text, info = ers.bundle(o.jobs_dir, o.job, o.item)
                 sys.stdout.write(text)
@@ -395,12 +397,12 @@ def main(argv=None, deps=None):
                 return 0
             if o.status:
                 kind, rec = ers.status(o.jobs_dir, o.job, o.item)
-                print(f"examples-read note for {o.job} item {o.item}: {kind}" + (f" by {rec['reader']['kind']}: {rec['note']} ({ers.LABEL})" if rec else ""))
+                print(f"examples-read note for {o.job} item {o.item}: {kind}" + (f" by {rec['reader']['kind']} {rec['reader'].get('id') or ''}, sources {', '.join(rec['sources']) or 'none'}: {rec['note']} ({ers.LABEL})" if rec else ""))
                 return 0
             if not (o.bundle_sha and o.reader_id and o.note):
                 ap.error("a note needs --bundle-sha, --reader-id and --note")
             rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir)
-            print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}")
+            print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}; the note says who wrote it and what bundle it saw, not that the bundle was read")
             return 0
         if o.cmd == "patch-read":
             from router import patch_read as prd_

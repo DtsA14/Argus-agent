@@ -45,10 +45,12 @@ Answer with a verdict (ok or concerns), the sources, and a note of at most 500 c
 """
 TEMPLATE_SHA256 = hashlib.sha256(TEMPLATE.encode("utf-8")).hexdigest()
 SECTION_RE = re.compile(r"=== (FACTS|DATA|END)( [^=\n]*)? ===")
-DOCS = ("README.md", "CLAUDE.md", "AGENTS.md", "VALIDATION.md", "DOMAIN.md", "docs/DOMAIN.md")      # the repo documents a reader gets, in this order
-DOC_MAX, DOCS_MAX, REQUEST_MAX, PRD_MAX, ISSUE_MAX = 8 * 1024, 24 * 1024, 6000, 16000, 8000
+DOCS = ("DOMAIN.md", "docs/DOMAIN.md", "README.md", "CLAUDE.md", "AGENTS.md", "VALIDATION.md")      # the repo documents a reader gets, in this order: the domain ones first
+DOC_MAX, DOCS_MAX, REQUEST_MAX, PRD_MAX, ISSUE_MAX, CARDS_MAX = 8 * 1024, 24 * 1024, 6000, 16000, 8000, 12000
 NOTE_MAX, ID_MAX, FILE_MAX = 500, 80, 64 * 1024
 VERDICTS = ("ok", "concerns")
+LINE_BREAKS = "\u2028\u2029\x0b\x0c\x85"                     # line separators of other programs: a space here, never a second line
+WITHHELD = "[withheld by the harness: a key pattern]"
 SRC_REQUEST, SRC_WRITER = "permintaan Atha", "hanya tulisan penulis"
 SRC_DOC = re.compile(r"dokumen repo: [A-Za-z0-9_./-]{1,100}")
 HEX64, HEX40 = re.compile(r"[0-9a-f]{64}"), re.compile(r"[0-9a-f]{40}")
@@ -69,10 +71,13 @@ def _refuse(job_id, why):
 def _data(text, limit):
     """(text, cut): control and invisible characters removed, a key pattern withholds the whole text, cut at `limit` characters."""
     text = text if isinstance(text, str) else ""
-    if sd.KEY.search(text.encode("utf-8", "replace")):
-        return "[withheld by the harness: a key pattern]", False
+    raw = text
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = "".join(c for c in text if c in "\n\t" or (unicodedata.category(c)[0] != "C" and unicodedata.category(c) not in ("Zl", "Zp")))
+    text = "".join((" " if c in LINE_BREAKS else c) for c in text if c in "\n\t" or c in LINE_BREAKS
+                   or (unicodedata.category(c)[0] != "C" and unicodedata.category(c) not in ("Zl", "Zp")))
+    for t in (raw, text):                                    # the text as written and the text as it will be shown: a key split by an invisible character is still a key
+        if sd.KEY.search(t.encode("utf-8", "replace")):
+            return WITHHELD, False
     return text[:limit], len(text) > limit
 
 
@@ -143,25 +148,36 @@ def gather(jobs_dir, job_id, item):
         present, parsed, problems = eg.extract(text)
         if problems or not parsed:
             _refuse(job_id, "this item has no examples to read")
-        human = [m for m in data.get("conversation") or [] if isinstance(m, dict) and m.get("from") == "human" and isinstance(m.get("text"), str)]
+        human = []                                            # every human message the writer of THIS turn had read, in order (later ones are for a later turn)
+        for m in data.get("conversation") or []:
+            if not isinstance(m, dict):
+                continue
+            if m.get("from") == "writer" and m.get("stage") == turn:
+                break
+            if m.get("from") == "human" and isinstance(m.get("text"), str):
+                human.append(m["text"])
         stage = (data.get("stages") or {}).get(turn) if isinstance(data.get("stages"), dict) else None
         run_id = stage.get("run_id") if isinstance(stage, dict) else None
         if isinstance(run_id, str) and RUN_ID.fullmatch(run_id) and run_id == f"{job_id}-{turn}":
             src_fd = Approve._source_fd(jfd, run_id)
         source_of = cn.tree_source_of(f"/proc/self/fd/{src_fd}") if src_fd is not None else (lambda module: None)
         cards = sorted((dict(cn.derive(e, source_of), says=e.get("says")) for e in parsed), key=lambda x: TIER_ORDER.get(x["tier"], 9))
-        docs, total = [], 0
+        docs, dropped, total = [], [], 0
         for name in DOCS:
             got = _doc(src_fd, name) if src_fd is not None else None
-            if got is None or total >= DOCS_MAX:
+            if got is None:
+                continue
+            if total >= DOCS_MAX:
+                dropped.append(name)
                 continue
             body, cut = got
-            body = body[:DOCS_MAX - total]
+            if len(body) > DOCS_MAX - total:
+                body, cut = body[:DOCS_MAX - total], True
             total += len(body)
-            docs.append((name, body, cut or total >= DOCS_MAX))
+            docs.append((name, body, cut))
         return {"job": job_id, "turn": turn, "folder_sha": folder_sha, "commit": commit, "item": item, "digest": eg.digest(parsed),
-                "request": human[0]["text"] if human else "", "prd": files["PRD.md"].decode("utf-8", "replace"), "issue": eg.without_block(text),
-                "cards": cards, "docs": docs}
+                "request": human, "tree": src_fd is not None, "prd": files["PRD.md"].decode("utf-8", "replace"), "issue": eg.without_block(text),
+                "cards": cards, "docs": docs, "dropped": dropped}
     finally:
         if src_fd is not None:
             os.close(src_fd)
@@ -191,17 +207,26 @@ def render(g):
     """The bundle text, deterministic for the same facts and texts."""
     def section(head, body):
         return f"=== {head} ===\n{_indent(body)}\n"
-    parts = [TEMPLATE, "\n",
-             section("FACTS (machine)", f"job: {g['job']}\nprd turn: {g['turn']}\nfolder_sha: {g['folder_sha']}\ncommit: {g['commit']}\nitem: {g['item']}\ndigest: {g['digest']}")]
-    for head, text, limit in (("DATA request (the human's words, verbatim)", g["request"], REQUEST_MAX),
-                              ("DATA PRD (written by the model writer)", g["prd"], PRD_MAX),
+    facts = (f"job: {g['job']}\nprd turn: {g['turn']}\nfolder_sha: {g['folder_sha']}\ncommit: {g['commit']}\nitem: {g['item']}\ndigest: {g['digest']}\n"
+             + ("" if g["tree"] else "repo documents: none (the writer's frozen copy of the repository was not found; parameter names may be missing)\n")
+             + (f"repo documents not included (size cap): {', '.join(g['dropped'])}\n" if g["dropped"] else ""))
+    parts = [TEMPLATE, "\n", section("FACTS (machine)", facts.rstrip("\n"))]
+    msgs = g["request"]
+    for n, text in enumerate(msgs, 1):
+        body, cut = _data(text, REQUEST_MAX)
+        head = "DATA request (the human's words, verbatim" + (f", message {n} of {len(msgs)}" if len(msgs) > 1 else "") + ")"
+        parts.append(section(head + (f" (cut at {REQUEST_MAX} characters)" if cut else ""), body))
+    if not msgs:
+        parts.append(section("DATA request (the human's words, verbatim)", "(none recorded)"))
+    for head, text, limit in (("DATA PRD (written by the model writer)", g["prd"], PRD_MAX),
                               ("DATA issue text (written by the model writer; the examples block is removed)", g["issue"], ISSUE_MAX)):
         body, cut = _data(text, limit)
         parts.append(section(head + (f" (cut at {limit} characters)" if cut else ""), body))
-    body, _ = _data("\n\n".join(_card_lines(c) for c in g["cards"]), 12000)
-    parts.append(section("DATA examples as numbers (derived from the example code by the machine; the expected numbers were written by the model writer)", body))
+    body, cut = _data("\n\n".join(_card_lines(c) for c in g["cards"]), CARDS_MAX)
+    parts.append(section("DATA examples as numbers (derived from the example code by the machine; the expected numbers were written by the model writer)"
+                         + (f" (cut at {CARDS_MAX} characters)" if cut else ""), body))
     for name, text, cut in g["docs"]:
-        parts.append(section(f"DATA repo doc: {name}" + (f" (cut at {DOC_MAX} characters)" if cut else ""), text))
+        parts.append(section(f"DATA repo doc: {name}" + (f" (cut at {len(text)} characters)" if cut else ""), text))
     parts.append("=== END ===\n")
     return "".join(parts)
 
@@ -210,7 +235,10 @@ def bundle(jobs_dir, job_id, item):
     """(text, info): the bundle a reader sees for one item, and the facts the note is bound to."""
     g = gather(jobs_dir, job_id, item)
     text = render(g)
-    return text, {"job": job_id, "turn": g["turn"], "folder_sha": g["folder_sha"], "commit": g["commit"], "item": item, "digest": g["digest"],
+    usable = [d[0] for d in g["docs"] if not d[1].startswith(WITHHELD) and d[1].strip()]
+    return text, {"request_ok": any(m.strip() and not _data(m, REQUEST_MAX)[0].startswith(WITHHELD) for m in g["request"]),
+                  "examples_ok": not _data("\n\n".join(_card_lines(c) for c in g["cards"]), CARDS_MAX)[0].startswith(WITHHELD),
+                  "docs_ok": usable, "job": job_id, "turn": g["turn"], "folder_sha": g["folder_sha"], "commit": g["commit"], "item": item, "digest": g["digest"],
                   "bundle_sha256": sha(text), "template_sha256": TEMPLATE_SHA256, "docs": [d[0] for d in g["docs"]]}
 
 
@@ -316,10 +344,14 @@ def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps,
             _refuse(job_id, "the bundle is not the one you were given: the folder, the examples, the documents or the template changed; read the new bundle")
         clean = []
         for s in sources:
-            if not (isinstance(s, str) and (s in (SRC_REQUEST, SRC_WRITER) or (SRC_DOC.fullmatch(s) and s[len("dokumen repo: "):] in info["docs"]))):
-                _refuse(job_id, f"a source is '{SRC_REQUEST}', '{SRC_WRITER}' or 'dokumen repo: <a document of the bundle: {', '.join(info['docs']) or 'none'}>'")
+            if not (isinstance(s, str) and (s in (SRC_REQUEST, SRC_WRITER) or (SRC_DOC.fullmatch(s) and s[len("dokumen repo: "):] in info["docs_ok"]))):
+                _refuse(job_id, f"a source is '{SRC_REQUEST}', '{SRC_WRITER}' or 'dokumen repo: <a readable document of the bundle: {', '.join(info['docs_ok']) or 'none'}>'")
+            if s == SRC_REQUEST and not info["request_ok"]:
+                _refuse(job_id, "the request is empty or withheld: it cannot be a source")
             if s not in clean:
                 clean.append(s)
+        if verdict == "ok" and not info["examples_ok"]:
+            _refuse(job_id, "the examples section was withheld (a key pattern): nothing can be ok")
         if verdict == "ok" and (not clean or SRC_WRITER in clean):
             _refuse(job_id, "an ok needs a source and none of them may be the writer's own text alone (a rule only the writer states is concerns)")
         entry = {"item": item, "folder_sha": info["folder_sha"], "commit": info["commit"], "digest": info["digest"], "bundle_sha256": info["bundle_sha256"],
@@ -327,6 +359,8 @@ def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps,
                  "note": text}
         name = f"examples_read_{info['turn']}.json"
         old, _kind = _read_file(job.dir, name)
+        if _kind == "error" or (old is not None and _entries(old) is None):
+            _refuse(job_id, f"the existing {name} is damaged: move it away, then write the note again (the other items' notes would be lost)")
         entries = (_entries(old) if old is not None else None) or {}
         entries[str(item)] = entry
         target = job.dir / name
