@@ -564,3 +564,53 @@ def test_what_the_examples_printed_is_cleaned_before_it_is_stored_and_shown(env)
     with pytest.raises(rj.Refused) as e:
         start(env, issue_with(SAME, evil))
     assert "\x1b" not in str(e.value) and "\x00" not in str(e.value) and "\x1b" not in env.job().data["log"][-1]["reason"]
+
+
+# ---- gaps the mutants found -----------------------------------------------------------------------------------------------
+
+def test_a_block_with_one_good_and_one_bad_example_gives_no_examples_at_all():
+    present, examples, problems = eg.extract(td.ISSUE + "\n" + block(SAME, {**AFTER, "tier": "now"}))
+    assert present and examples == [] and problems
+
+
+def test_failing_counts_every_status_but_pass():
+    rs = [{"id": f"e{i}", "tier": "same", "status": s} for i, s in enumerate(("pass", "fail", "error", "invalid", "unchecked"), 1)]
+    assert eg.failing(rs) == ["e2", "e3", "e4", "e5"]
+
+
+def test_a_result_for_other_examples_or_another_base_is_stale(env):
+    review_ready(env, SAME)
+    job = env.job()
+    job.data["inputs"]["issue"] = issue_with({**SAME, "expect": 5})              # the examples changed after the audit
+    with pytest.raises(rj.Refused, match="another patch or other examples"):
+        rj.examples_decision(job)
+    job = env.job()
+    job.data["intake"]["snapshot_sha256"] = "0" * 64                              # the base changed after the intake
+    assert "not run for this issue or base" in "\n".join(rj.example_lines(job))
+
+
+def test_an_audit_result_of_error_refuses_apply(env):
+    review_ready(env, SAME)
+    rec = audit_json(env)
+    rec["results"][0].update(status="error", actual="<no result>")
+    audit_path(env).write_text(json.dumps(rec))
+    with pytest.raises(rj.Refused, match="examples failed on this patch: e1"):
+        apply(env)
+
+
+def test_a_package_that_is_not_valid_is_not_audited(env):
+    review_ready(env, SAME)
+    job = env.job()
+    audit_path(env).unlink()
+    job.data["stages"]["a1"]["review"]["valid"] = False
+    assert rj._examples_audit(job, "a1", env.cfg, env.deps) is None and not audit_path(env).exists()
+
+
+def test_the_cli_takes_the_flag_on_applied(env):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    review_ready(env, SAME, WRONG_AFTER)
+    base = ["--jobs-dir", str(env.jobs), "applied", "jtest", "--commit", head(env)]
+    assert argus.main(base, deps=env.deps) == 2 or env.job().data["state"] == rj.REVIEW_READY
+    assert argus.main([*base, "--allow-failed-examples", "e2"], deps=env.deps) == 0
+    assert env.job().data["state"] == rj.APPLIED and env.job().data["log"][-1]["examples_failed"] == ["e2"]
