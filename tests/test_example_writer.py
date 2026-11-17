@@ -122,7 +122,7 @@ def test_run_example_gives_the_real_value_labelled_as_data(tmp_path):
 def test_run_example_shows_a_raise_a_non_json_value_and_a_form_error(tmp_path):
     env = Env(tmp_path, [call("RunExample", {"setup": "from src.shop import total", "run": "total([1, 'x'], 1)"}, "a"),
                          call("RunExample", {"setup": "from src.shop import total", "run": "{total}"}, "b"),
-                         call("RunExample", {"setup": "x = 1", "run": "x"}, "c"), submit()])
+                         call("RunExample", {"setup": "x = 1", "run": "x" * 500}, "c"), submit()])
     env.new()
     a, b, c = tool_answers(env.model.calls[3])[:3]
     assert "raised TypeError" in a and "not JSON (a set)" in b and a.startswith("RunExample result") and c.startswith("Rejected")
@@ -142,7 +142,7 @@ def test_at_most_sixteen_tries_in_a_turn_and_the_count_comes_from_the_memo(tmp_p
     env.new()
     answers = tool_answers(env.model.calls[-1])
     assert answers[15].startswith("RunExample result") and answers[16].startswith("Refused: at most 16")
-    assert env.runs.calls == 16 + 4                    # 16 tries, then the gate: two passes of the examples and one without overrides
+    assert env.runs.calls == 16 + 2                    # 16 tries (the 17th is refused before it runs), then the gate's two passes
 
 
 def test_run_example_is_not_offered_or_run_without_its_permission_or_without_a_runner(tmp_path):
@@ -194,12 +194,15 @@ def test_a_wrong_number_is_one_rejection_with_the_real_value_and_the_static_prob
 
 def test_an_after_that_already_passes_is_refused_and_a_tier_move_is_shown_on_the_card(tmp_path):
     moved = {**AFTER, "id": "e1", "tier": "after", "run": "total([2, 3], 1)", "expect": 4}      # the same example, as `after`
-    env = Env(tmp_path, [submit(examples=(SAME,)), submit(id="s2", examples=(moved,)), submit(id="s3", examples=(SAME, AFTER))])
+    no_tests = "\n".join(["total() never goes below zero", "Nothing else changes: x", f"Environment: {ENV}"])
+    env = Env(tmp_path, [submit(examples=(SAME,), issue=no_tests), submit(id="s2", examples=(moved,)),
+                         submit(id="s3", examples=(SAME, AFTER))])
     job = env.new()
     assert "already passes on the base: it is a `same`" in tool_answers(env.model.calls[2])[-1]
     card = [m for m in job.data["conversation"] if m["from"] == "writer"][0]["examples"]
-    assert card["tier_moves"] == [{"id": "e1", "from": "same", "to": "after"}]
-    assert "example e1: written as same, sent again as after" in rj.status("ji", jobs_dir=env.jobs)
+    assert card["tier_moves"] == [{"id": "e1", "from": "same", "to": "after"}, {"id": "e1", "from": "after", "to": "same"}]
+    text_ = rj.status("ji", jobs_dir=env.jobs)
+    assert "example e1: written as same, sent again as after" in text_ and "example e1: written as after, sent again as same" in text_
 
 
 def test_no_examples_needs_a_reason_and_is_kept_on_the_card(tmp_path):
