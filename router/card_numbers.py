@@ -72,7 +72,7 @@ def _scalar(value):
         return ("-" if value < 0 else "") + f"{abs(value):,}".replace(",", ".")
     if isinstance(value, float):
         r = repr(value)
-        return r if ("e" in r or "inf" in r or "nan" in r) else r.replace(".", ",")
+        return r.replace(".", ",")                          # also in exponent form: 1.5e-05 is shown 1,5e-05 (a dot means thousands on a card)
     return json.dumps(value, ensure_ascii=False)
 
 
