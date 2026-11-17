@@ -75,7 +75,10 @@ baru. Field lain tidak pernah ditulis. Pemindaian pola key tetap dijalankan atas
 - `job.json`: `job` (pola id Argus), `kind`, `state` (`^[A-Z_]{1,30}$`), `created_at` (timestamp UTC), `max_usd`
   (angka/string desimal); `stages`: nama `^[a-z][a-z0-9_]{0,20}$` → {`kind`, `run_id` (pola run), `status`,
   `started_at`, `ended_at`, `usd`}; `log`: daftar {`at`, `what` (∈ himpunan tetap: created, intaken, state, approved,
-  limits_shown, confirmed, confirmed_by_flag, key_typed, key_from_file, retry, redraft, staged, research_ok, applied),
+  limits_shown, confirmed, not_confirmed, confirmed_by_flag, key_typed, key_from_file, retry, redraft, staged, research_ok, applied,
+  stage_started, repro, repro_patched, apply_started; amandemen 2026-11-17: tiga yang terakhir dan `not_confirmed` ditambah karena router
+  menulisnya ke tiap job dan satu jenis yang tak dikenal membuang seluruh job; hanya jenisnya yang terbit, tidak ada muatannya
+  (status, head, sha). Catatan: `apply_started` tanpa `state` APPLIED sesudahnya memperlihatkan apply yang gagal atau terputus),
   `old`, `new`, `stage`}. **Dibuang:** `inputs` (issue, repo, path), `approval`, `intake`, `environment_image`, catatan
   bebas (`reason`, `note`, `screen`, `path`, `files`, `commit`, sha), semua field lain.
 - `events.jsonl`: hanya `llm_call_started` {`call_id`, `worst_usd_nano`, `worst_tokens`, `model`, `node`, `role`, `ts`},

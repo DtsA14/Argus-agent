@@ -26,8 +26,10 @@ def test_a_job_with_repro_and_apply_entries_is_projected_and_only_the_kind_is_pu
     out = sd.project_job(json.loads(json.dumps(RAW)), "jx")
     assert [e["what"] for e in out["log"]] == ["created", "repro", "repro_patched", "apply_started", "state"]
     text = json.dumps(out)
-    for private in ("ok", "raised", "head_before", "read_sha", "examples_failed", "e2", "main", "a" * 40, "b" * 12):
-        assert private not in text.replace('"what"', ""), private
+    assert out["log"] == [{"at": AT, "what": "created"}, {"at": AT, "what": "repro"}, {"at": AT, "what": "repro_patched"},
+                          {"at": AT, "what": "apply_started"}, {"at": AT, "what": "state", "old": "REVIEW_READY", "new": "APPLIED"}]
+    for private in ("raised", "head_before", "read_sha", "examples_failed", "e2", "a1", "main", "a" * 40, "b" * 12, "blocks", "sid"):
+        assert private not in text, private
 
 
 def test_an_unknown_kind_still_excludes_the_job():
@@ -42,9 +44,11 @@ def test_an_unknown_kind_still_excludes_the_job():
 
 def test_every_kind_the_code_writes_into_a_job_log_is_in_the_allowlist():
     """A new `job.note(deps, "kind", ...)` without its entry in LOG_WHAT would hide every job that carries it: this fails at once."""
-    found = set()
+    found, scanned = set(), 0
     for sub in ("router", "scripts", "codetask", "research", "harness", "acceptance", "tools"):
         for p in (ROOT / sub).rglob("*.py"):
-            found |= set(re.findall(r'\.note\([A-Za-z_.]+,\s*"([a-z_]+)"', p.read_text(encoding="utf-8")))
-    assert found, "the scan found no log kinds: the pattern is wrong"
+            scanned += 1
+            for arg in re.findall(r"\.note\(\s*[A-Za-z_.]+,\s*([^,)\n]*)", p.read_text(encoding="utf-8")):
+                found |= set(re.findall(r'"([a-z_]+)"', arg))              # also the two kinds of `"a" if ok else "b"`
+    assert scanned > 50 and {"created", "repro", "apply_started", "not_confirmed"} <= found, sorted(found)
     assert found <= sd.LOG_WHAT, sorted(found - sd.LOG_WHAT)
