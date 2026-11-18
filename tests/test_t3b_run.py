@@ -290,3 +290,50 @@ def test_the_human_message_is_exactly_the_bundle(root, cfg):
     s, model = run(root, cfg, lambda m: reply(), limit=3)
     ids = sorted(p.name for p in (root / "jobs").iterdir())[:3]
     assert [c["messages"][1].content for c in model.calls] == [t3.bundle(root, j)[0] for j in ids]
+
+
+def spy_params(monkeypatch):
+    seen = []
+    real = tr.LLMCaller
+
+    def spy(c, role, log, model=None):
+        seen.append(c["roles"][role].get("params"))
+        return real(c, role, log, model=model)
+    monkeypatch.setattr(tr, "LLMCaller", spy)
+    return seen
+
+
+@pytest.mark.parametrize("effort", ["low", "medium", "high"])
+def test_the_effort_goes_into_the_copy_of_the_config_as_the_providers_reasoning_effort(root, cfg, monkeypatch, effort):
+    seen = spy_params(monkeypatch)
+    run(root, cfg, lambda m: reply(), limit=1, effort=effort)
+    assert seen == [{"extra_body": {"reasoning": {"effort": effort}}}]
+    assert "params" not in cfg["roles"][tr.ROLE]                                  # config.yaml's role is untouched
+
+
+def test_without_effort_the_role_keeps_its_own_params_and_adds_none(root, cfg, monkeypatch):
+    seen = spy_params(monkeypatch)
+    run(root, cfg, lambda m: reply(), limit=1)
+    assert seen == [cfg["roles"][tr.ROLE].get("params")]
+
+
+def test_an_effort_keeps_the_other_params_and_extra_body_of_the_role(root, cfg, monkeypatch):
+    cfg["roles"][tr.ROLE]["params"] = {"temperature": 0.2, "extra_body": {"foo": 1}}
+    seen = spy_params(monkeypatch)
+    run(root, cfg, lambda m: reply(), limit=1, effort="low")
+    assert seen == [{"temperature": 0.2, "extra_body": {"foo": 1, "reasoning": {"effort": "low"}}}]
+    assert cfg["roles"][tr.ROLE]["params"] == {"temperature": 0.2, "extra_body": {"foo": 1}}
+
+
+def test_an_unknown_effort_is_refused_before_anything_is_sent(root, cfg):
+    model = CallableChatModel(respond=lambda m: reply())
+    with pytest.raises(rj.Refused, match="--effort"):
+        tr.run(root, 1, cfg=cfg, deps=deps(), model=model, effort="max")
+    assert model.calls == []
+
+
+def test_the_screen_names_the_effort_or_says_the_provider_default(root, cfg):
+    shown = []
+    run(root, cfg, lambda m: reply(), limit=1, deps=deps(shown), effort="low")
+    run(root, cfg, lambda m: reply(), limit=1, deps=deps(shown), run_no=2)
+    assert "reasoning effort: low" in shown[0] and "the provider default" in shown[1]

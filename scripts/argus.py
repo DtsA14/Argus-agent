@@ -149,6 +149,7 @@ def main(argv=None, deps=None):
     t3b.add_argument("--limit", type=int, help="read at most this many sets (a measuring call first)")
     t3b.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of this T3b directory (run 1 and run 2 share one ledger): a call starts only if billed so far + its worst case fits")
     t3b.add_argument("--max-output", type=int, default=6000, help="output tokens a call may use (a reasoning model spends them on thinking first)")
+    t3b.add_argument("--effort", choices=("low", "medium", "high"), help="the provider's reasoning effort for this run (OpenRouter reasoning.effort, set in a copy of the config; default: the provider's)")
     er_ = sub.add_parser("examples-read", help="the domain reader's bundle and note for one item of a PRD (SPEC_KARTU_SETUJU 5 rev 2): a Claude session's statement, not a proof and not a human")
     er_.add_argument("job", help="the PRD job")
     er_.add_argument("--item", required=True, type=int)
@@ -391,7 +392,7 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "t3b-run":
             from router import t3b_run
-            summary = t3b_run.run(o.root, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, limit=o.limit)
+            summary = t3b_run.run(o.root, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, limit=o.limit, effort=o.effort)
             print(json.dumps(summary, indent=1))
             return 0
         if o.cmd == "examples-read":
