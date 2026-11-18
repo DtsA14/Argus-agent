@@ -85,11 +85,15 @@ class Install:
             if not stat.S_ISREG(os.fstat(fd).st_mode) or os.fstat(fd).st_size > limit:
                 return None, None
             h, parts = hashlib.sha256(), []
+            total = 0
             with os.fdopen(fd, "rb", closefd=False) as f:
                 while True:
                     block = f.read(1 << 16)
                     if not block:
                         break
+                    total += len(block)
+                    if total > limit:                       # it grew after the size check
+                        return None, None
                     h.update(block)
                     parts.append(block)
             return h.hexdigest(), b"".join(parts)
@@ -178,10 +182,14 @@ class Install:
 
             # (c) the review package, (d) and (e) the approval of the draft
             state = data.get("state")
+            globs = [g for g in ((data.get("protected_repo") or {}).get("globs") or []) if isinstance(g, str)]
+            protected = [p for p in listed if self._protected(p, globs)]
             if state != "REVIEW_READY":
                 checks["c"] = _chk("c", False, f"job ada di keadaan {state}, bukan REVIEW_READY: belum ada paket review yang siap")
             elif rv.get("valid") is not True or rv.get("problems"):
                 checks["c"] = _chk("c", False, "paket review tidak valid (tes yang dijalankan ulang atau must_pass gagal)")
+            elif protected:
+                checks["c"] = _chk("c", False, f"patch mengubah file yang dilindungi repo (.argus/protected): {', '.join(protected[:3])}; `argus apply` menolaknya")
             else:
                 checks["c"] = _chk("c", True, "paket review valid")
             appr = data.get("approval") if isinstance(data.get("approval"), dict) else None
@@ -192,8 +200,9 @@ class Install:
                 checks["e"] = _chk("e", False, "draf tes belum disetujui")
             else:
                 nc = any(isinstance(s, dict) and isinstance(s.get("carry"), dict) and s["carry"].get("not_a_conflict") for s in stages.values())
-                checks["d"] = _chk("d", True, "tidak ada bentrokan yang masih ditandai saat draf disetujui" + (
-                    "; ada tahap yang dinilai 'bukan bentrokan' oleh seseorang (" + APPROVAL_NOTE + ")" if nc else ""))
+                checks["d"] = _chk("d", None, "tidak tercatat terpisah: draf yang bentrok tidak bisa disetujui, jadi persetujuan ada berarti tidak ada bentrokan yang masih ditandai; "
+                                   "siapa yang melonggarkan tes lama, bila ada, tidak dicatat" + (
+                                       "; ada tahap yang dinilai 'bukan bentrokan' oleh seseorang" if nc else ""))
                 same = isinstance(last_draft, str) and appr.get("draft_sha256") == last_draft
                 checks["e"] = _chk("e", same, (f"draf disetujui {appr.get('at')} oleh {appr.get('by')} ({APPROVAL_NOTE})" if same
                                                else "persetujuan itu untuk draf lain dari draf terakhir"))
@@ -205,7 +214,9 @@ class Install:
                 "none": "belum ada catatan pembaca patch", "stale": "catatan pembaca patch untuk patch lain",
                 "error": "catatan pembaca patch rusak atau tidak bisa dibaca"}[pr_kind])
             same_sha = rsha is not None and rsha == patch.get("sha256") == disk_sha
-            checks["g"] = _chk("g", same_sha, "review, provenance dan patch di disk menyebut sha yang sama" if same_sha else
+            empty = patch_bytes is not None and (not patch_bytes.strip() or not listed)
+            checks["g"] = _chk("g", same_sha and not empty, "review, provenance dan patch di disk menyebut sha yang sama" if same_sha and not empty else
+                               "patch kosong atau tanpa daftar file; `argus apply` menolaknya" if same_sha else
                                "sha patch tidak sama di review (job.json), provenance dan berkas patch, atau salah satunya tidak terbaca")
 
             # (h) at least one example of the new behaviour (a stated "no numbers checked by the machine" is not recorded anywhere yet)
@@ -220,19 +231,20 @@ class Install:
             res = er.chain(SimpleNamespace(id=job_id, data=data), c.jobs_dir, c.queues_dir)
             if not res["applicable"]:
                 checks["i"] = _chk("i", None, f"tidak berlaku: {res['why']}")
-                item["domain_read"] = {"kind": "tidak_berlaku", "fresh": False, "why": "tidak berlaku: bukan dari PRD"}
+                item["domain_read"] = {"kind": "tidak_berlaku", "fresh": False, "why": f"tidak berlaku: {res['why']}"}
             else:
                 checks["i"] = _chk("i", res["ok"], "angka domain dibaca (Claude, bukan manusia)" if res["ok"] else (res["why"] or "angka domain belum dibaca"))
                 item["domain_read"] = (self.approve._domain_read(res["prd_job"], res["item"], item) if res.get("prd_job") else
                                        {"kind": "tidak_terbaca", "fresh": False, "why": res["why"] or "tidak terbaca"})
-            files = self._files(listed, patch_bytes, data, res)
+            files, scope_note, cut = self._files(listed, patch_bytes, globs, res)
             repo = i.get("repo_name")
             cost = {"spent": c._spent(data), "cap": data.get("max_usd") if isinstance(data.get("max_usd"), (int, float)) and not isinstance(data.get("max_usd"), bool) else None,
                     "reference": self.approve._reference()}
             card = {"kind": "install", "id": job_id, "state": state, "repo": repo, "sid": sid, "patch_sha12": rsha[:12] if rsha else None,
                     "purpose": {"title": c.s(issue.split("\n", 1)[0])[:200], "text": self.approve._cut(c.s(self.approve_text(issue)), ISSUE_MAX)[0],
-                                "by": "tulisan di issue (bukan permintaan Atha kata demi kata)"},
-                    "cost": cost, "item": item, "checks": [checks[k] for k in "abcdefghi"],
+                                "by": "ditulis model (issue dari PRD, bukan permintaan Atha kata demi kata)" if res["applicable"] else
+                                      "teks issue; pembuatnya tidak tercatat (bukan permintaan Atha kata demi kata)"},
+                    "scope_note": scope_note, "files_cut": cut, "cost": cost, "item": item, "checks": [checks[k] for k in "abcdefghi"],
                     "open": all(v["ok"] is not False for v in checks.values()), "files": files,
                     "scope_marks": [f"{f['path']}: {m}" for f in files for m in f["marks"]],
                     "patch_read": None, "patch_read_label": PATCH_LABEL, "fixed_line": FIXED_LINE, "domain_read_label": DOMAIN_LABEL,
@@ -268,7 +280,8 @@ class Install:
         if kind != "results":
             return _chk("a", False, {"none": "contoh di dasar belum dijalankan", "stale": "hasil contoh di dasar untuk issue atau dasar lain",
                                      "pending": "contoh di dasar belum selesai dijalankan", "error": "hasil contoh di dasar rusak"}[kind])
-        bad = sorted(r["id"] for r in val if r["tier"] != "after" and r["status"] != ex.PASS)
+        tiers = {e["id"]: e["tier"] for e in parsed}                                      # the tier is the issue's, never the stored file's
+        bad = sorted(r["id"] for r in val if tiers.get(r["id"]) != "after" and r["status"] != ex.PASS)
         if bad:
             return _chk("a", False, f"contoh gagal di dasar: {', '.join(bad)}")
         return _chk("a", True, "contoh yang harus benar di dasar memang benar")
@@ -343,8 +356,16 @@ class Install:
                 out += [x.strip() for x in rows[n - 1] if isinstance(x, str) and len(x.strip()) >= 3]
         return out
 
-    def _files(self, listed, patch_bytes, data, res):
-        globs = [g for g in ((data.get("protected_repo") or {}).get("globs") or []) if isinstance(g, str)]
+    @staticmethod
+    def _protected(path, globs):
+        try:
+            return bool(matches(path, globs))
+        except Exception:
+            return True                                           # a glob that cannot be read protects
+
+    def _files(self, listed, patch_bytes, globs, res):
+        """([{path, marks}], note, how many files were cut): the marks are hints of the machine, not a judgement; the note says when the issue's own
+        anchors could not be compared (no anchors, no readable patch)."""
         anchors = self._anchors(res)
         sections = {}
         if patch_bytes is not None and anchors:
@@ -356,15 +377,17 @@ class Install:
         out = []
         for p in sorted(listed)[:FILES_MAX]:
             marks = []
-            try:
-                if matches(p, globs):
-                    marks.append(PROTECTED_MARK)
-            except Exception:
+            if self._protected(p, globs):
                 marks.append(PROTECTED_MARK)
             if anchors and p in sections and not any(a in sections[p] for a in anchors):
                 marks.append(OUTSIDE_MARK)
             out.append({"path": p, "marks": marks})
-        return out
+        note = None
+        if not anchors:
+            note = "cakupan terhadap issue tidak diperiksa: issue ini tidak punya potongan touches/creates dari PRD"
+        elif patch_bytes is None or any(p not in sections for p in listed[:FILES_MAX]):
+            note = "cakupan terhadap issue hanya diperiksa untuk file yang bisa dibaca dari patch; sisanya tidak ditandai"
+        return out, note, max(0, len(listed) - FILES_MAX)
 
     # ---- the readers have not been tested -----------------------------------------------------------------------------------------
 

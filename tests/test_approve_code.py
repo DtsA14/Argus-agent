@@ -37,18 +37,18 @@ KEYS = "abcdefghi"
 
 def make(s, jid=CJOB, examples=(SAME, AFTER), *, base="pass", audit="pass", review_valid=True, state="REVIEW_READY", approval=True,
          read="ok", prov_sha=None, read_sha=None, files=("src/shop.py",), protected=(), text=None, approved_draft="d" * 64, patch_sha=None, cap=0.5,
-         note="read the diff: only the floor changed", by_reader="claude", bodies=None):
+         note="read the diff: only the floor changed", by_reader="claude", bodies=None, sid="a1", base_fail=()):
     """A code job as the files of a real one: job.json, the review package, the examples intake and audit, the patch reader's note."""
     text = text if text is not None else issue_text(*examples)
     patch = build_patch(files, bodies)
     parsed = eg.extract(text)[1] if examples else []
     psha = patch_sha or hashlib.sha256(patch).hexdigest()
-    run = f"{jid}-a1"
+    run = f"{jid}-{sid}"
     d = write_job(s.jobs, jid, kind="code", state=state, max_usd=cap,
                   inputs={"repo": "/secret/path", "repo_name": "athena", "commit": "c" * 40, "issue": text, "environment": "athena_py312"},
                   intake={"snapshot_sha256": SNAP, "commit": "c" * 40},
                   stages={"d1": {"kind": "draft", "status": "DRAFTED", "run_id": f"{jid}-d1", "draft_sha256": "d" * 64, "usd": 0.01},
-                          "a1": {"kind": "agent", "status": "DONE", "run_id": run, "usd": 0.04,
+                          sid: {"kind": "agent", "status": "DONE", "run_id": run, "usd": 0.04,
                                  "review": {"valid": review_valid, "problems": [], "dir": f"/x/{run}/review", "patch_sha256": psha}}},
                   approval=({"draft_sha256": approved_draft, "contract_sha256": "e" * 64, "max_usd": cap, "at": "2026-11-18T01:00:00Z", "by": "ubuntu"}
                             if approval else None),
@@ -68,14 +68,14 @@ def make(s, jid=CJOB, examples=(SAME, AFTER), *, base="pass", audit="pass", revi
                                                                "files": [{"path": p} for p in files]}}))
     if parsed:
         base_rows = [{"id": e["id"], "tier": e["tier"], "status": "unchecked", "base_actual": -4} if e["tier"] == "after"
-                     else {"id": e["id"], "tier": e["tier"], "status": "fail" if base == "fail" else "pass", "actual": e["expect"]} for e in parsed]
+                     else {"id": e["id"], "tier": e["tier"], "status": "fail" if base == "fail" or e["id"] in base_fail else "pass", "actual": e["expect"]} for e in parsed]
         eg.store(d / eg.INTAKE_FILE, eg.intake_key(SNAP, parsed), results=base_rows)
         rows = [{"id": e["id"], "tier": e["tier"], "status": "fail" if audit == "fail" and e["tier"] == "after" else "pass",
                  "actual": 7 if audit == "fail" and e["tier"] == "after" else e["expect"]} for e in parsed]
-        eg.store(eg.audit_file(d, "a1"), eg.audit_key(psha, parsed), results=rows)
+        eg.store(eg.audit_file(d, sid), eg.audit_key(psha, parsed), results=rows)
     if read:
-        (d / "patch_read_a1.json").write_text(json.dumps({
-            "key": pr.key("a1", read_sha or psha), "sid": "a1", "patch_sha256": read_sha or psha, "verdict": read, "note": note,
+        (d / f"patch_read_{sid}.json").write_text(json.dumps({
+            "key": pr.key(sid, read_sha or psha), "sid": sid, "patch_sha256": read_sha or psha, "verdict": read, "note": note,
             "at": "2026-11-18T01:30:00Z", "reader": {"kind": by_reader, "id": "opus-1"}}))
     return d
 
@@ -204,6 +204,7 @@ def test_a_protected_file_is_marked_and_listed(svc):
     assert c["files"][1] == {"path": "src/shop.py", "marks": []}
     assert c["files"][0]["path"] == "config/secret.yaml" and c["files"][0]["marks"] == ["dilindungi repo (.argus/protected)"]
     assert c["scope_marks"] == ["config/secret.yaml: dilindungi repo (.argus/protected)"]
+    assert checks(c)["c"]["ok"] is False and c["open"] is False                  # `argus apply` refuses a patch that touches a protected path
 
 
 def test_the_purpose_cost_and_scope_are_there_for_the_human(svc):
@@ -351,3 +352,154 @@ def test_the_page_has_an_install_view_reached_from_a_review_ready_queue_item_and
     assert "pembaca patch belum diuji" in part and "pembaca angka belum diuji" in part and "TIDAK" in part
     assert "aman" not in part.replace("Ini bukan jaminan aman", "")              # the one place the word is, to deny it
     assert "fetch(" not in part and "XMLHttpRequest" not in part and "localStorage" not in part
+
+
+# ---- what the review of the card found --------------------------------------------------------------------------------------------------
+
+def edit_job(d, fn):
+    f = d / "job.json"
+    j = json.loads(f.read_text())
+    fn(j)
+    f.write_text(json.dumps(j))
+
+
+def test_an_empty_patch_closes_g_because_apply_refuses_it(svc):
+    c = good(svc, files=())
+    assert checks(c)["g"]["ok"] is False and c["open"] is False
+
+
+def test_a_whatif_that_fails_on_the_base_closes_a_with_the_tier_from_the_issue(svc):
+    c = good(svc, examples=(SAME, AFTER, WHATIF), base_fail=("e3",))
+    assert checks(c)["a"]["ok"] is False and "e3" in checks(c)["a"]["why"] and c["open"] is False
+
+
+def test_the_tier_of_a_stored_row_does_not_decide_what_may_fail(svc):
+    d = make(svc, examples=(SAME, AFTER))
+    f = d / "examples_intake.json"
+    doc = json.loads(f.read_text())
+    for r in doc["results"]:
+        if r["id"] == "e1":
+            r["tier"], r["status"] = "after", "fail"                    # a `same` example that fails, relabelled in the file
+    f.write_text(json.dumps(doc))
+    c = get(svc)[1]
+    assert checks(c)["a"]["ok"] is False and c["open"] is False
+
+
+@pytest.mark.parametrize("name,kw", [("skipped", {"skipped": "no runner"}), ("pending", {"reason": "died"})])
+@pytest.mark.parametrize("key,file", [("a", "examples_intake.json"), ("b", "examples_audit_a1.json")])
+def test_a_skipped_or_unfinished_run_closes_the_condition(svc, name, kw, key, file):
+    d = make(svc)
+    doc = json.loads((d / file).read_text())
+    eg.store(d / file, doc["key"], **kw)
+    c = get(svc)[1]
+    assert checks(c)[key]["ok"] is False and c["open"] is False
+
+
+def test_d_is_not_claimed_as_a_record_and_does_not_close_c(svc):
+    c = good(svc)
+    d = checks(c)["d"]
+    assert d["ok"] is None and "tidak tercatat" in d["why"] and c["open"] is True
+
+
+def test_review_problems_close_c_even_when_valid_is_true(svc):
+    d = make(svc)
+    edit_job(d, lambda j: j["stages"]["a1"]["review"].update(problems=["a rerun test failed"]))
+    c = get(svc)[1]
+    assert checks(c)["c"]["ok"] is False and c["open"] is False
+
+
+def test_the_last_agent_stage_is_by_number_not_by_text(svc):
+    d = make(svc, sid="a10")
+    edit_job(d, lambda j: j["stages"].update(a2={"kind": "agent", "status": "DONE", "run_id": f"{CJOB}-a2", "review": {"valid": False, "problems": []}}))
+    c = get(svc)[1]
+    assert c["sid"] == "a10" and c["open"] is True
+
+
+def test_the_approval_must_be_for_the_last_drafted_draft(svc):
+    d = make(svc)
+    edit_job(d, lambda j: j["stages"].update(d1={"kind": "draft", "status": "DRAFTED", "run_id": f"{CJOB}-d1", "draft_sha256": "1" * 64},
+                                             d2={"kind": "draft", "status": "DRAFTED", "run_id": f"{CJOB}-d2", "draft_sha256": "d" * 64}))
+    assert checks(get(svc)[1])["e"]["ok"] is True
+    edit_job(d, lambda j: j["stages"].update(d1={"kind": "draft", "status": "DRAFTED", "run_id": f"{CJOB}-d1", "draft_sha256": "d" * 64},
+                                             d2={"kind": "draft", "status": "DRAFTED", "run_id": f"{CJOB}-d2", "draft_sha256": "1" * 64}))
+    assert checks(get(svc)[1])["e"]["ok"] is False
+
+
+def test_a_stage_whose_run_id_names_another_job_is_not_read(svc):
+    d = make(svc)
+    edit_job(d, lambda j: j["stages"]["a1"].update(run_id="j20261117_999999_ffff-a1"))
+    c = get(svc)[1]
+    assert checks(c)["g"]["ok"] is False and c["open"] is False and c["files"] == []
+
+
+def test_a_patch_that_is_a_pipe_or_too_large_or_a_link_is_not_read(svc, monkeypatch):
+    import os
+    d = make(svc)
+    p = d / "runs" / f"{CJOB}-a1" / "review" / "changes.patch"
+    p.unlink()
+    os.mkfifo(p)
+    assert checks(get(svc)[1])["g"]["ok"] is False                          # returns, does not wait for a writer
+    p.unlink()
+    p.write_bytes(PATCH)
+    assert checks(get(svc)[1])["g"]["ok"] is True
+    monkeypatch.setattr(acode, "PATCH_MAX", 10)
+    assert checks(get(svc)[1])["g"]["ok"] is False
+
+
+def test_a_job_directory_that_is_a_link_gives_no_card(svc):
+    make(svc)
+    (svc.jobs / "j20261117_100300_dddd").symlink_to(svc.jobs / CJOB)
+    assert get(svc, "j20261117_100300_dddd")[0] == 404
+
+
+def test_more_files_than_the_card_shows_are_counted_not_dropped_silently(svc):
+    files = tuple(f"src/f{i:03d}.py" for i in range(acode.FILES_MAX + 5))
+    c = good(svc, files=files)
+    assert len(c["files"]) == acode.FILES_MAX and c["files_cut"] == 5
+
+
+def test_the_card_says_when_the_scope_could_not_be_compared_with_the_issue(svc):
+    c = good(svc)
+    assert c["scope_note"] and "tidak diperiksa" in c["scope_note"]
+
+
+def test_the_anchors_of_a_prd_item_ignore_lines_shorter_than_three_characters(svc):
+    prd_world(svc)
+    d = svc.jobs / PJOB
+    edit_job(d, lambda j: j["prd_turns"][-1].update(touches=[["ab", "  ", "def total"]], creates=[["", "show_floor"]]))
+    assert svc.actions.approve_code._anchors({"prd_job": PJOB, "item": 1}) == ["def total", "show_floor"]
+
+
+def test_the_issue_is_marked_as_model_text_when_it_comes_from_a_prd(svc):
+    prd_world(svc)
+    assert "ditulis model" in get(svc)[1]["purpose"]["by"]
+
+
+def test_an_issue_of_unknown_origin_says_the_maker_is_not_recorded(svc):
+    assert "tidak tercatat" in good(svc)["purpose"]["by"]
+
+
+def test_the_patch_reader_note_is_marked_as_model_text(svc):
+    assert good(svc)["patch_read"]["by"] == "model"
+
+
+def test_a_reader_test_entry_without_a_template_hash_is_not_a_pass(svc, tmp_path, monkeypatch):
+    f = tmp_path / "reader_tests.json"
+    monkeypatch.setattr(acode, "READER_TESTS", f)
+    f.write_text(json.dumps({"athena": {"patch": {"template_sha256": None}, "domain": {"template_sha256": None}}}))
+    c = good(svc)
+    assert c["patch_reader_tested"] is False and c["domain_reader_tested"] is False
+
+
+def test_an_audit_row_without_a_number_says_so_and_does_not_match(svc):
+    d = make(svc)
+    f = d / "examples_audit_a1.json"
+    doc = json.loads(f.read_text())
+    for r in doc["results"]:
+        if r["tier"] == "after":
+            r.pop("actual")
+            r["status"] = "error"
+    f.write_text(json.dumps(doc))
+    c = get(svc)[1]
+    after = [e for e in c["item"]["examples"] if e["tier"] == "after"][0]["proof"]
+    assert after["wording"] == "kode akhir tidak memberi angka (gerbang menandai: error); TIDAK cocok dengan yang diharapkan"

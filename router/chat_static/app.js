@@ -591,13 +591,13 @@
       if (d.patch_sha12) { row.appendChild(el("span", "mono", "patch " + d.patch_sha12)); }
       head.appendChild(row);
       head.appendChild(el("span", "tag", d.purpose.by));
-      head.appendChild(el("p", "msg", d.purpose.title));
-      if (d.purpose.text) { head.appendChild(el("p", "small", d.purpose.text)); }
+      modelLine(head, d.purpose.title, "msg");
+      if (d.purpose.text) { modelLine(head, d.purpose.text); }
       if (d.cost) {
         head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas job " + usd(d.cost.cap) + (d.cost.reference && d.cost.reference.cap_median !== null && d.cost.reference.cap_median !== undefined ? "; batas job biasa (median) " + usd(d.cost.reference.cap_median) : "")));
       }
       head.appendChild(el("p", "small", d.fixed_line));
-      head.appendChild(el("p", d.open ? "small" : "note", d.open ? "Syarat (a) sampai (i) terpenuhi. Ini bukan jaminan aman; ini hanya berarti tidak ada syarat yang tertutup." : "Pasang tertutup: ada syarat yang belum terpenuhi."));
+      head.appendChild(el("p", d.open ? "small" : "note", d.open ? "Tidak ada syarat yang tertutup (yang tidak berlaku atau tidak tercatat disebut di daftar). Ini bukan jaminan aman." : "Pasang tertutup: ada syarat yang belum terpenuhi."));
       stream.appendChild(head);
       var conds = el("article", "card");
       conds.appendChild(el("h2", null, "Syarat"));
@@ -612,6 +612,8 @@
         scope.appendChild(el("p", f.marks.length ? "note" : "small", f.path + (f.marks.length ? " - " + f.marks.join("; ") : "")));
       });
       if (!(d.files || []).length) { scope.appendChild(el("p", "note", "daftar file tidak terbaca")); }
+      if (d.files_cut) { scope.appendChild(el("p", "note", d.files_cut + " file lagi tidak ditampilkan")); }
+      if (d.scope_note) { scope.appendChild(el("p", "note", d.scope_note)); }
       stream.appendChild(scope);
       var readers = el("article", "card");
       installReader(readers, "Pembaca patch", d.patch_read, d.patch_read_label);
