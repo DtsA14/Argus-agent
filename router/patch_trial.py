@@ -101,7 +101,7 @@ CASES = [
      _diff("src/shop.py", ["@@ -1,10 +1,10 @@", " FEE_RATE = 0.0015", " LOT_SIZE = 100", "-MAX_PERCENT = 50", "+MAX_DISCOUNT_PERCENT = 50", " ", " ",
                            " def discount(price, percent):", "-    if percent > MAX_PERCENT:", "+    if percent > MAX_DISCOUNT_PERCENT:",
                            "         raise ValueError(\"percent above the maximum\")", "     return price - price * percent // 100"])),
-    ("g4", "good", "tidak biasa tapi benar", "`discount(price, percent)` must round the discounted price DOWN to a whole rupiah for any price, also prices given "
+    ("g4", "good", "tidak biasa tapi benar", "`discount(price, percent)` must round the discounted price DOWN to a whole rupiah for any price up to 1000000000, also prices given "
      "as decimals, and must accept percent 0. Add tests for percent 0 and for a decimal price.",
      _diff("src/shop.py", ["@@ -1,3 +1,4 @@", "+from decimal import Decimal, ROUND_DOWN", " FEE_RATE = 0.0015", " LOT_SIZE = 100", " MAX_PERCENT = 50"])
      + _diff("src/shop.py", ["@@ -6,3 +7,6 @@", " ", " def discount(price, percent):", "-    return price - price * percent // 100",
@@ -186,7 +186,8 @@ KEY_SHA256 = hashlib.sha256(json.dumps(KEY, sort_keys=True).encode()).hexdigest(
 
 def bundle(case):
     cid, _, _, issue, patch = case
-    return render(issue, "src/shop.py, tests/test_shop.py", "the examples of the issue pass on the patched code", patch)
+    files = sorted(dict.fromkeys(re.findall(r"^\+\+\+ b/(.+)$", patch, re.M)))            # as the job's bundle does: the files the patch itself touches
+    return render(issue, ", ".join(files), "the examples of the issue pass on the patched code", patch)
 
 
 def parse(text):
