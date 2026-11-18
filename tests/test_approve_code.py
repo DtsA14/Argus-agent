@@ -231,10 +231,13 @@ def prd_world(s, **kw):
     return d, code
 
 
-def reader_note(s, verdict="ok", sources=("permintaan Atha",), note="the numbers fit the request"):
+def reader_note(s, verdict="ok", sources=("permintaan Atha",), note="the numbers fit the request", twice=True):
     _, info = er.bundle(s.jobs, PJOB, 1)
-    return er.record(PJOB, 1, verdict, info["bundle_sha256"], "opus-7", list(sources), note, deps=SimpleNamespace(clock=lambda: "2026-11-18T01:10:00Z"),
-                     jobs_dir=s.jobs)
+    deps = SimpleNamespace(clock=lambda: "2026-11-18T01:10:00Z")
+    out = er.record(PJOB, 1, verdict, info["bundle_sha256"], "opus-7", list(sources), note, deps=deps, jobs_dir=s.jobs)
+    if twice and verdict == "ok":                                         # rev 3: an ok is two independent readings
+        er.record(PJOB, 1, verdict, info["bundle_sha256"], "opus-8", list(sources), note, deps=deps, jobs_dir=s.jobs, second=True)
+    return out
 
 
 def test_an_item_of_a_prd_queue_needs_the_domain_note_to_open_c(svc):
@@ -259,11 +262,11 @@ def test_concerns_and_a_stale_domain_note_close_i(svc):
     reader_note(svc, verdict="concerns", sources=("hanya tulisan penulis",), note="the 3% is only in the PRD")
     c = get(svc)[1]
     assert checks(c)["i"]["ok"] is False and c["open"] is False and c["item"]["domain_read"]["kind"] == "concerns"
-    reader_note(svc)
-    assert checks(get(svc)[1])["i"]["ok"] is True
     (d / "runs" / f"{PJOB}-w1" / "source" / "README.md").write_text("The floor is 5.\n")       # what the reader read changed
     c = get(svc)[1]
     assert checks(c)["i"]["ok"] is False and c["item"]["domain_read"]["kind"] == "stale"
+    reader_note(svc)                                                                          # a new reading of the new bundle: the concerns was of the old one
+    assert checks(get(svc)[1])["i"]["ok"] is True
 
 
 def test_a_queue_that_names_the_job_but_cannot_be_used_closes_i(svc):
@@ -286,11 +289,17 @@ def test_scope_marks_flag_a_file_outside_what_the_issue_said_it_touches_or_creat
 def test_the_readers_are_untested_unless_the_record_holds_the_current_template_hash(svc, tmp_path, monkeypatch):
     f = tmp_path / "reader_tests.json"
     monkeypatch.setattr(acode, "READER_TESTS", f)
-    c = good(svc)
-    assert c["patch_reader_tested"] is False and c["domain_reader_tested"] is False
-    f.write_text(json.dumps({"athena": {"domain": {"template_sha256": er.TEMPLATE_SHA256, "passed_at": "2026-11-18", "evidence": "x"}}}))
+    prd_world(svc)
+    reader_note(svc)
     c = get(svc)[1]
-    assert c["domain_reader_tested"] is True and c["patch_reader_tested"] is False
+    assert c["patch_reader_tested"] is False and c["domain_reader_tested"] is False
+    f.write_text(json.dumps({"athena": {"domain": {"template_sha256": er.TEMPLATE_SHA256, "model": "opus", "effort": "high", "passed_at": "2026-11-18", "evidence": "x"}}}))
+    c = get(svc)[1]
+    assert c["domain_reader_tested"] is True and c["patch_reader_tested"] is False        # the readers of the card are opus-7 and opus-8
+    f.write_text(json.dumps({"athena": {"domain": {"template_sha256": er.TEMPLATE_SHA256, "model": "argus:z-ai/glm", "effort": "high"}}}))
+    assert get(svc)[1]["domain_reader_tested"] is False                                     # a test of another model is not a test of these readers (13.3)
+    f.write_text(json.dumps({"athena": {"domain": {"template_sha256": er.TEMPLATE_SHA256, "model": "opus"}}}))
+    assert get(svc)[1]["domain_reader_tested"] is False                                     # no effort recorded
     f.write_text(json.dumps({"athena": {"domain": {"template_sha256": "0" * 64, "passed_at": "2026-11-18", "evidence": "x"}}}))
     assert get(svc)[1]["domain_reader_tested"] is False
     f.write_text("{")
@@ -533,3 +542,11 @@ def test_a_glob_that_cannot_be_read_protects(svc, monkeypatch):
     monkeypatch.setattr(acode, "matches", boom)
     c = good(svc, protected=("x/*",))
     assert c["files"][0]["marks"] == [acode.PROTECTED_MARK] and c["open"] is False
+
+
+def test_a_test_record_is_not_a_pass_for_a_card_without_a_reading(svc, tmp_path, monkeypatch):
+    f = tmp_path / "reader_tests.json"
+    monkeypatch.setattr(acode, "READER_TESTS", f)
+    f.write_text(json.dumps({"athena": {"domain": {"template_sha256": er.TEMPLATE_SHA256, "model": "opus", "effort": "high"}}}))
+    c = good(svc)
+    assert c["item"]["domain_read"]["kind"] != "ok" and c["domain_reader_tested"] is False

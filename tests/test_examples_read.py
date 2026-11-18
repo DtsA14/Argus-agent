@@ -47,9 +47,14 @@ def bundle(jobs, item=1):
     return er.bundle(jobs, PJOB, item)
 
 
-def read(jobs, item=1, verdict="ok", sources=("permintaan Atha",), note="the numbers fit the request", **kw):
+def read(jobs, item=1, verdict="ok", sources=("permintaan Atha",), note="the numbers fit the request", twice=True, **kw):
+    """The first reading, and (an `ok` that is meant to open the numbers) the independent second one by another reader id (rev 3)."""
     text, info = bundle(jobs, item)
-    return er.record(PJOB, item, verdict, kw.pop("bundle_sha", info["bundle_sha256"]), "opus-1", list(sources), note, deps=DEPS, jobs_dir=jobs, **kw)
+    sha = kw.pop("bundle_sha", info["bundle_sha256"])
+    out = er.record(PJOB, item, verdict, sha, "opus-1", list(sources), note, deps=DEPS, jobs_dir=jobs, **kw)
+    if twice and verdict == "ok":
+        er.record(PJOB, item, verdict, sha, "opus-2", list(sources), note, deps=DEPS, jobs_dir=jobs, second=True)
+    return out
 
 
 def note_file(d, turn="w1"):
@@ -190,13 +195,13 @@ def test_a_note_is_written_bound_to_the_folder_commit_item_digest_bundle_and_tem
 
 def test_a_note_of_another_item_stays_and_the_same_item_is_replaced(jobs):
     d = make(jobs, extra_items=0)
-    read(jobs, note="first")
-    read(jobs, verdict="concerns", sources=("hanya tulisan penulis",), note="second")
+    read(jobs, note="first", twice=False)
+    read(jobs, note="second", twice=False)
     f = json.loads(note_file(d).read_text())
-    assert list(f["entries"]) == ["1"] and f["entries"]["1"]["note"] == "second" and f["entries"]["1"]["verdict"] == "concerns"
+    assert list(f["entries"]) == ["1"] and f["entries"]["1"]["note"] == "second"
     f["entries"]["2"] = {"keep": "me"}
     note_file(d).write_text(json.dumps(f))
-    read(jobs, note="third")
+    read(jobs, note="third", twice=False)
     assert json.loads(note_file(d).read_text())["entries"]["2"] == {"keep": "me"}
 
 
@@ -494,3 +499,133 @@ def test_a_deeply_nested_note_file_is_an_error_not_a_crash(jobs):
     d = make(jobs)
     note_file(d).write_text('{"entries": ' + "[" * 30000 + "]" * 30000 + "}")
     assert er.status(jobs, PJOB, 1) == ("error", None)
+
+
+# ---- rev 3: ok needs two independent readings -----------------------------------------------------------------------------------
+
+def second(jobs, verdict="ok", rid="opus-2", item=1, **kw):
+    text, info = bundle(jobs, item)
+    return er.record(PJOB, item, verdict, kw.pop("bundle_sha", info["bundle_sha256"]), rid, ["permintaan Atha"], "the second reading", deps=DEPS, jobs_dir=jobs,
+                     second=True, **kw)
+
+
+def test_one_ok_is_not_enough_and_two_independent_oks_are(jobs):
+    d = make(jobs)
+    read(jobs, twice=False)
+    kind, rec = er.status(jobs, PJOB, 1)
+    assert kind == "one" and rec["reader"]["id"] == "opus-1"
+    second(jobs)
+    kind, rec = er.status(jobs, PJOB, 1)
+    assert kind == "ok" and rec["reader"]["id"] == "opus-1"
+    assert set(json.loads(note_file(d).read_text())["entries"]) == {"1", "1#2"}
+
+
+def test_a_second_reading_needs_a_first_one_and_another_reader_id(jobs):
+    d = make(jobs)
+    with pytest.raises(rj.Refused, match="first"):
+        second(jobs)
+    assert not note_file(d).exists()
+    read(jobs, twice=False)
+    with pytest.raises(rj.Refused, match="another reader id"):
+        second(jobs, rid="opus-1")
+    assert "1#2" not in json.loads(note_file(d).read_text())["entries"]
+    assert er.status(jobs, PJOB, 1)[0] == "one"
+
+
+def test_one_concerns_among_the_readings_is_concerns_whichever_comes_first(jobs):
+    make(jobs)
+    read(jobs, twice=False)
+    second(jobs, verdict="concerns")
+    assert er.status(jobs, PJOB, 1)[0] == "concerns"
+    make2 = jobs
+    read(make2, verdict="concerns", sources=("hanya tulisan penulis",), note="only the writer says so", twice=False)
+    assert er.status(jobs, PJOB, 1)[0] == "concerns"                      # the first is now concerns, the old second ok is stale or ignored: still concerns
+
+
+def test_the_second_reading_is_stale_when_the_bundle_changes_and_the_two_ids_must_differ_in_the_file_too(jobs):
+    d = make(jobs)
+    read(jobs)
+    f = json.loads(note_file(d).read_text())
+    f["entries"]["1#2"]["reader"]["id"] = "opus-1"                       # the file says it is the same reader: not two readers
+    note_file(d).write_text(json.dumps(f))
+    assert er.status(jobs, PJOB, 1)[0] == "one"
+    f["entries"]["1#2"]["reader"]["id"] = "opus-2"
+    f["entries"]["1#2"]["digest"] = "e" * 64                             # the second reading is of other examples
+    note_file(d).write_text(json.dumps(f))
+    assert er.status(jobs, PJOB, 1) == ("stale", None)
+    f["entries"]["1#2"] = {"keep": "me"}                                 # a damaged second reading is an error, never ok
+    note_file(d).write_text(json.dumps(f))
+    assert er.status(jobs, PJOB, 1) == ("error", None)
+
+
+def test_a_second_ok_alone_is_not_a_reading(jobs):
+    d = make(jobs)
+    read(jobs, twice=False)
+    second(jobs)
+    f = json.loads(note_file(d).read_text())
+    del f["entries"]["1"]
+    note_file(d).write_text(json.dumps(f))
+    assert er.status(jobs, PJOB, 1)[0] == "one"
+
+
+def test_the_template_tells_the_reader_it_is_one_of_two(jobs):
+    assert "one of two readers" in er.TEMPLATE and "--second" in er.TEMPLATE
+
+
+def test_the_command_records_a_second_reading(jobs, tmp_path):
+    d = make(jobs)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import argus
+    src = Path(argus.__file__).read_text()
+    assert '"--second"' in src and "second=o.second" in src
+
+
+def test_a_fresh_concerns_is_not_written_over_and_ids_differ_by_more_than_case(jobs):
+    d = make(jobs)
+    read(jobs, verdict="concerns", sources=("hanya tulisan penulis",), note="only the writer says so", twice=False)
+    with pytest.raises(rj.Refused, match="not written over"):
+        read(jobs, twice=False)
+    assert er.status(jobs, PJOB, 1)[0] == "concerns"
+    assert json.loads(note_file(d).read_text())["entries"]["1"]["verdict"] == "concerns"
+
+
+def test_a_concerns_in_the_second_slot_is_not_written_over_either(jobs):
+    make(jobs)
+    read(jobs, twice=False)
+    second(jobs, verdict="concerns")
+    with pytest.raises(rj.Refused, match="not written over"):
+        second(jobs)
+    assert er.status(jobs, PJOB, 1)[0] == "concerns"
+
+
+def test_reader_ids_that_differ_only_by_case_or_space_are_one_reader_and_a_missing_id_is_none(jobs):
+    d = make(jobs)
+    read(jobs, twice=False)                                                   # opus-1
+    with pytest.raises(rj.Refused, match="another reader id"):
+        second(jobs, rid=" OPUS-1 ")
+    second(jobs)
+    f = json.loads(note_file(d).read_text())
+    f["entries"]["1#2"]["reader"] = {"kind": "claude", "id": None}
+    note_file(d).write_text(json.dumps(f))
+    assert er.status(jobs, PJOB, 1)[0] == "one"
+
+
+def test_an_ok_gives_the_second_reader_too(jobs):
+    make(jobs)
+    read(jobs)
+    kind, rec = er.status(jobs, PJOB, 1)
+    assert kind == "ok" and rec["reader"]["id"] == "opus-1" and rec["reader2"]["id"] == "opus-2"
+
+
+def test_a_second_reading_of_a_stale_first_is_refused_and_ids_compare_without_case(jobs):
+    d = make(jobs)
+    read(jobs, twice=False)
+    (d / "runs" / f"{PJOB}-w1" / "source" / "README.md").write_text("The floor is 5.\n")
+    with pytest.raises(rj.Refused, match="first"):
+        second(jobs)                                                       # the first reading is of an older bundle
+    (d / "runs" / f"{PJOB}-w1" / "source" / "README.md").write_text("The floor of a total is 0.\n")
+    second(jobs)
+    f = json.loads(note_file(d).read_text())
+    f["entries"]["1"]["reader"]["id"], f["entries"]["1#2"]["reader"]["id"] = "Opus-X", "opus-x"        # the file holds two spellings of one reader
+    note_file(d).write_text(json.dumps(f))
+    assert er.status(jobs, PJOB, 1)[0] == "one"

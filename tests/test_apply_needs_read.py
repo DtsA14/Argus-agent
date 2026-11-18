@@ -76,9 +76,12 @@ def edit_queue(env, fn):
     f.write_text(json.dumps(q))
 
 
-def note(env, verdict="ok", sources=("permintaan Atha",), text="fits"):
+def note(env, verdict="ok", sources=("permintaan Atha",), text="fits", twice=True):
     _, info = er.bundle(env.jobs, PJOB, 1)
-    return er.record(PJOB, 1, verdict, info["bundle_sha256"], "opus-1", list(sources), text, deps=env.deps, jobs_dir=env.jobs)
+    out = er.record(PJOB, 1, verdict, info["bundle_sha256"], "opus-1", list(sources), text, deps=env.deps, jobs_dir=env.jobs)
+    if verdict == "ok" and twice:                                         # rev 3: an ok is two independent readings
+        er.record(PJOB, 1, verdict, info["bundle_sha256"], "opus-2", list(sources), text, deps=env.deps, jobs_dir=env.jobs, second=True)
+    return out
 
 
 def apply(env, **kw):
@@ -104,6 +107,11 @@ def refused(env, match):
 
 def test_apply_of_a_queue_item_refuses_without_a_note_and_says_how_to_write_one(world):
     refused(world, f"no domain reader's note.*examples-read {PJOB} --item 1 --bundle")
+
+
+def test_apply_refuses_one_ok_reading_and_says_a_second_is_needed(world):
+    note(world, twice=False)
+    refused(world, "only one fresh .ok. reading")
 
 
 def test_apply_refuses_when_the_reader_has_concerns(world):

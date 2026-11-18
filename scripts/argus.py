@@ -160,6 +160,7 @@ def main(argv=None, deps=None):
     er_.add_argument("--reader-id", help="the model or session that read it")
     er_.add_argument("--source", action="append", default=[], help="where a rule comes from: 'permintaan Atha', 'dokumen repo: <file>' or 'hanya tulisan penulis' (repeat)")
     er_.add_argument("--note", help="what you checked and what you found")
+    er_.add_argument("--second", action="store_true", help="the second, independent reading (another --reader-id than the first): `ok` needs two")
     pr_ = sub.add_parser("patch-read", help="the note of a patch reader before `apply` (SPEC_KARTU_SETUJU 5): a Claude session's statement, not a proof and not a human")
     pr_.add_argument("job")
     pr_.add_argument("--sha", required=True, help="the sha256 of the patch you read (status prints it), at least 12 characters")
@@ -413,7 +414,7 @@ def main(argv=None, deps=None):
                 return 0
             if not (o.bundle_sha and o.reader_id and o.note):
                 ap.error("a note needs --bundle-sha, --reader-id and --note")
-            rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir)
+            rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir, second=o.second)
             print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}; the note says who wrote it and what bundle it saw, not that the bundle was read")
             return 0
         if o.cmd == "patch-read":

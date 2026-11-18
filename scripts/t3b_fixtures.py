@@ -12,9 +12,10 @@ Sets live in a separate jobs directory (never pilot3a_live/jobs). The key (which
 (`<root>.key`), not next to the jobs; the key's sha256 is printed by `build` and must be given to `score` (`--hash`): that proves the key was not changed after the
 readings, not that it was hidden: the readings are made by readers that are given the bundle text only and no file tools, and the session that runs them records
 what they answer (`record --bundle-sha` is the sha the reader was shown; the real `examples-read` path refuses a bundle that is not the current one).
-Do not use `--seed` in a real run (a seed, the printed order and the folders reveal the key). Pass: every defect set is `concerns` on both readings and each note
-names the right reason (NEED: the right number, the writer-only source, the sentence aimed at the reader), and at most one good set is flagged `concerns`; the
-spec's two sets of real history must be present (`score` prints INCOMPLETE without them, even when everything else is right).
+Do not use `--seed` in a real run (a seed, the printed order and the folders reveal the key). Pass (spec section 13, a stochastic reader): every defect set has at least one
+reading `concerns` for the right reason (NEED: the right number, the writer-only source, the sentence aimed at the reader), at most 5% of the defect readings miss,
+at most one good set is flagged `concerns`, and the two defect and two good sets of real history are present (`score` prints INCOMPLETE without them).
+`write-tests` records a pass in verification/reader_tests.json, with the model and the effort.
 What it cannot show: the builder and the reader are the same model family; the defects are planted by Claude, one example each, not natural ones; passing is a smoke
 test of the defects we planted, not an error rate. The two sets from real history (the Rp1 case, a bug fix of athena's git log) are added when someone has mined
 them: SETS below marks the slot (keys starting with `h`).
@@ -255,48 +256,104 @@ def record(root, jid, run, bundle_sha, verdict, sources, note, reader_id):
     jobs = Path(root) / "jobs"
     if any(r["job"] == jid and r["run"] == run for r in read_all(root)):
         raise SystemExit(f"reading {run} of {jid} is already recorded; each run is recorded once")
-    er.record(jid, 1, verdict, bundle_sha, reader_id, list(sources), note, deps=DEPS, jobs_dir=jobs)
+    er.record(jid, 1, verdict, bundle_sha, reader_id, list(sources), note, deps=DEPS, jobs_dir=jobs, overwrite_concerns=True)
     with open(keydir(root) / READS, "a") as f:
         f.write(json.dumps({"job": jid, "run": run, "verdict": verdict, "sources": list(sources), "note": note, "reader": reader_id}) + "\n")
 
 
+MISS_RATE_MAX = 0.05                 # SPEC_KARTU_SETUJU 13: per defect reading
+GOOD_HISTORY = ("g9", "g10")
+
+
+def _right_reason(set_id, r):
+    need = NEED.get(set_id)
+    return r["verdict"] == "concerns" and (not need or any(t in " ".join(r["sources"] + [r["note"]]).lower().replace(".", "") for t in need))
+
+
 def score(root, printed_hash, min_history=HISTORY_MIN):
-    """(passed, lines): the key must hash to `printed_hash` (what `build` printed before any reading); every set read twice; the history sets present."""
+    """(passed, lines), the rule of SPEC_KARTU_SETUJU 13 (a stochastic reader): the key must hash to `printed_hash` (what `build` printed before any
+    reading); every set read twice; (a) each defect set has at least one reading `concerns` for the right reason (what the card needs: it opens only when both
+    readings are ok); (b) at most 5% of the defect readings miss; (c) at most one good set flagged in either reading; (d) at least `min_history` defect and
+    good sets from real history. Every condition is printed."""
     root = Path(root)
     body = (keydir(root) / KEY_FILE).read_text()
     if hashlib.sha256(body.encode()).hexdigest() != printed_hash:
         return False, ["the key file is not the one whose hash was printed before the readings"]
     key = json.loads(body)["sets"]
     reads = read_all(root)
-    lines, missed, flagged = [], 0, 0
+    lines, unread, defect_sets_missed, defect_readings, readings_missed, flagged = [], 0, 0, 0, 0, 0
     for jid, k in sorted(key.items(), key=lambda kv: kv[1]["set"]):
         mine = [r for r in reads if r["job"] == jid]
         runs = sorted({r["run"] for r in mine})
         if runs != [1, 2]:
             lines.append(f"{k['set']}: needs two readings (has {runs})")
-            missed += 1
+            unread += 1
             continue
-        verdicts = [next(r["verdict"] for r in mine if r["run"] == n) for n in (1, 2)]
+        by_run = [next(r for r in mine if r["run"] == n) for n in (1, 2)]
+        verdicts = [r["verdict"] for r in by_run]
         if k["kind"] == "defect":
-            ok = verdicts == ["concerns", "concerns"]
-            need = NEED.get(k["set"])
-            if ok and need:
-                ok = all(any(t in " ".join(r["sources"] + [r["note"]]).lower().replace(".", "") for t in need) for r in mine)
-            if not ok:
-                missed += 1
-            lines.append(f"{k['set']} ({k['class']}): defect, readings {verdicts}" + ("" if ok else "  MISSED"))
+            good = [_right_reason(k["set"], r) for r in by_run]
+            defect_readings += 2
+            readings_missed += good.count(False)
+            if not any(good):
+                defect_sets_missed += 1
+            lines.append(f"{k['set']} ({k['class']}): defect, readings {verdicts}" + ("" if all(good) else "  one reading missed" if any(good) else "  MISSED"))
         else:
             if "concerns" in verdicts:
                 flagged += 1
             lines.append(f"{k['set']} ({k['class']}): good, readings {verdicts}" + ("  flagged" if "concerns" in verdicts else ""))
-    passed = missed == 0 and flagged <= 1
-    history = sum(1 for k in key.values() if k["set"].startswith("h"))
-    lines.append(f"defect sets missed: {missed}; good sets flagged: {flagged} (at most 1)")
-    if passed and history < min_history:
-        lines.append(f"INCOMPLETE: {history} of {min_history} sets from real history; not a pass")
+    hist_defect = sum(1 for k in key.values() if k["set"].startswith("h"))
+    hist_good = sum(1 for k in key.values() if k["set"] in GOOD_HISTORY)
+    conds = [("(a) sets not read twice, or defect sets with no right-reason concerns reading: 0", defect_sets_missed == 0 and unread == 0, defect_sets_missed + unread),
+             (f"(b) defect readings missed: at most {int(MISS_RATE_MAX * 100)}% of {defect_readings}", readings_missed * 20 <= defect_readings and defect_readings > 0, readings_missed),
+             ("(c) good sets flagged: at most 1", flagged <= 1, flagged),
+             (f"(d) real-history sets: at least {min_history} defect and {min_history} good", hist_defect >= min_history and hist_good >= min_history, f"{hist_defect} defect, {hist_good} good")]
+    for text, ok, got in conds:
+        lines.append(f"{'ok  ' if ok else 'FAIL'} {text} (got {got})")
+    passed = all(c[1] for c in conds)
+    if not passed and defect_sets_missed == 0 and unread == 0 and readings_missed * 20 <= defect_readings and defect_readings > 0 and flagged <= 1:
+        lines.append(f"INCOMPLETE: {hist_defect} defect and {hist_good} good sets from real history; not a pass")
         return False, lines
     lines.append("PASS" if passed else "FAIL")
     return passed, lines
+
+
+def write_tests(root, printed_hash, out, repo, model, effort, today):
+    """Record a pass of `score` (the real rule, min_history as the spec says) in `out` for `repo`: Refused unless it passed, every reading is by `argus:<model>`
+    and the notes of the sets were written for the current template. The entry says model and effort: it holds for them only (spec 13.3)."""
+    root = Path(root)
+    passed, lines = score(root, printed_hash)
+    if not passed:
+        raise SystemExit("not written: the score is not a pass:\n" + "\n".join(lines))
+    if not all(isinstance(x, str) and x.strip() for x in (repo, model, effort)):
+        raise SystemExit("not written: --repo, --model and --effort are needed")
+    reads = read_all(root)
+    if any(r.get("reader") != f"argus:{model}" for r in reads):
+        raise SystemExit(f"not written: a reading is not by argus:{model}")
+    for jid in sorted(p.name for p in (root / "jobs").iterdir()):
+        for f in (root / "jobs" / jid).glob("examples_read_*.json"):
+            try:
+                entries = json.loads(f.read_text())["entries"].values()
+            except (ValueError, KeyError, TypeError, AttributeError):
+                raise SystemExit(f"not written: {f.name} of {jid} is damaged")
+            for e in entries:
+                if e.get("template_sha256") != er.TEMPLATE_SHA256:
+                    raise SystemExit("not written: a note was written for another template than the current one")
+    out = Path(out)
+    try:
+        doc = json.loads(out.read_text()) if out.exists() else {}
+    except ValueError:
+        raise SystemExit("not written: the file is not JSON")
+    if not isinstance(doc, dict):
+        raise SystemExit("not written: the file is not an object")
+    rec = doc.get(repo) if isinstance(doc.get(repo), dict) else {}
+    rec["domain"] = {"template_sha256": er.TEMPLATE_SHA256, "model": model, "effort": effort, "key_sha256": printed_hash, "passed_at": today, "spec": "rev 3 section 13",
+                     "evidence": "; ".join(l for l in lines if l.startswith("ok  "))}
+    doc[repo] = rec
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, out)
+    return rec["domain"]
 
 
 def main(argv=None):
@@ -321,7 +378,17 @@ def main(argv=None):
     c.add_argument("root")
     c.add_argument("--hash", required=True, help="the key hash `build` printed before any reading")
     c.add_argument("--min-history", type=int, default=HISTORY_MIN, help="for a dry run only: the sets of real history required (a lower number is not a pass)")
+    w = sub.add_parser("write-tests")
+    w.add_argument("root")
+    w.add_argument("--hash", required=True)
+    w.add_argument("--out", default=str(ROOT / "verification" / "reader_tests.json"))
+    w.add_argument("--repo", required=True)
+    w.add_argument("--model", required=True)
+    w.add_argument("--effort", required=True)
     o = ap.parse_args(argv)
+    if o.cmd == "write-tests":
+        print(json.dumps(write_tests(o.root, o.hash, o.out, o.repo, o.model, o.effort, __import__("time").strftime("%Y-%m-%d")), indent=1))
+        return 0
     if o.cmd == "build":
         ids, h = build(o.root, o.seed)
         print(f"key hash (written before any reading; give it to `score --hash`): {h}")

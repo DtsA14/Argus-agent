@@ -252,7 +252,9 @@ class Install:
                     "patch_reader_tested": False, "domain_reader_tested": False}
             if pr_kind in ("ok", "concerns") and pr_rec:
                 card["patch_read"] = {"verdict": pr_rec["verdict"], "reader": pr_rec["reader"], "at": pr_rec["at"], "note": pr_rec["note"], "by": "model"}
-            card["patch_reader_tested"], card["domain_reader_tested"] = self._tested(repo)
+            dr = item.get("domain_read") if isinstance(item, dict) else None
+            ids = [r.get("id") for r in (dr.get("reader"), dr.get("reader2")) if isinstance(r, dict)] if isinstance(dr, dict) else []
+            card["patch_reader_tested"], card["domain_reader_tested"] = self._tested(repo, ids)
             return c.withhold_keys(self.approve._deep(card))
         finally:
             os.close(jfd)
@@ -392,7 +394,17 @@ class Install:
     # ---- the readers have not been tested -----------------------------------------------------------------------------------------
 
     @staticmethod
-    def _tested(repo):
+    def _same_reader(dom, ids):
+        """The test holds for the model and effort it names (spec 13.3): the readers of this card are that model (`argus:<model>`, or a session id that starts
+        with the model name); no readers or any other reader is untested."""
+        model, effort = dom.get("model"), dom.get("effort")
+        if not (isinstance(model, str) and model.strip() and isinstance(effort, str) and effort.strip()) or not ids:
+            return False
+        m = model.strip().casefold()
+        return all(isinstance(i, str) and (i.strip().casefold() in (m, f"argus:{m}") or i.strip().casefold().startswith(m + "-")) for i in ids)
+
+    @staticmethod
+    def _tested(repo, domain_ids=()):
         """(patch reader tested, domain reader tested): true only when verification/reader_tests.json holds an entry for this repo whose template hash is
         the current one; a missing or damaged file, another repo or another hash is untested. The patch reader has no template yet: never tested."""
         try:
@@ -402,6 +414,6 @@ class Install:
             patch = rec.get("patch") if isinstance(rec, dict) else None
             cur_patch = getattr(pr, "TEMPLATE_SHA256", None)
             return (bool(cur_patch and isinstance(patch, dict) and patch.get("template_sha256") == cur_patch),
-                    bool(isinstance(dom, dict) and dom.get("template_sha256") == er.TEMPLATE_SHA256))
+                    bool(isinstance(dom, dict) and dom.get("template_sha256") == er.TEMPLATE_SHA256 and Install._same_reader(dom, domain_ids)))
         except Exception:
             return False, False
