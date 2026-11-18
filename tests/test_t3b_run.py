@@ -49,10 +49,10 @@ def run(root, cfg, respond, **kw):
 
 def test_every_set_gets_one_call_and_one_reading_recorded_through_the_real_path(root, cfg):
     s, model = run(root, cfg, lambda m: reply())
-    assert (s["planned"], s["calls"], s["recorded"], s["unusable"], s["refused"]) == (16, 16, 16, 0, 0) and s["stopped"] is None and s["billed_usd"] > 0
+    assert (s["planned"], s["calls"], s["recorded"], s["unusable"], s["refused"]) == (20, 20, 20, 0, 0) and s["stopped"] is None and s["billed_usd"] > 0
     reads = t3.read_all(root)
-    assert len(reads) == 16 and {r["run"] for r in reads} == {1} and all(r["reader"].startswith("argus:openrouter:z-ai/glm") for r in reads)
-    assert len(model.calls) == 16 and (t3.keydir(root) / tr.LEDGER).exists()
+    assert len(reads) == 20 and {r["run"] for r in reads} == {1} and all(r["reader"].startswith("argus:openrouter:z-ai/glm") for r in reads)
+    assert len(model.calls) == 20 and (t3.keydir(root) / tr.LEDGER).exists()
 
 
 def test_the_reader_is_given_the_instruction_and_one_bundle_and_nothing_about_the_key(root, cfg):
@@ -66,7 +66,7 @@ def test_the_reader_is_given_the_instruction_and_one_bundle_and_nothing_about_th
 
 def test_the_cap_is_never_passed_a_call_starts_only_if_billed_plus_its_worst_case_fits(root, cfg):
     s, model = run(root, cfg, lambda m: reply(), cap_usd=0.05, max_output=6000)
-    assert s["stopped"] and "cost cap" in s["stopped"] and s["calls"] < 16 and s["billed_usd"] <= 0.05
+    assert s["stopped"] and "cost cap" in s["stopped"] and s["calls"] < 20 and s["billed_usd"] <= 0.05
     worst = tr.worst_usd(cfg, tr.ModelRef.parse(cfg["roles"][tr.ROLE]["model"]), 15000, 6000)
     assert 0.03 < worst < 0.06                                          # a reasoning model's output limit is what makes a call expensive
 
@@ -109,7 +109,7 @@ def test_three_failed_calls_in_a_row_stop_the_run(root, cfg):
 def test_a_set_with_a_reading_of_this_run_is_not_read_again(root, cfg):
     run(root, cfg, lambda m: reply(), limit=5)
     s, model = run(root, cfg, lambda m: reply())
-    assert s["planned"] == 11 and len(t3.read_all(root)) == 16
+    assert s["planned"] == 15 and len(t3.read_all(root)) == 20
     s, model = run(root, cfg, lambda m: reply(), run_no=2, limit=1)
     assert s["planned"] == 1 and {r["run"] for r in t3.read_all(root)} == {1, 2}
 
