@@ -21,7 +21,14 @@ from dataset import CSV_PATH
 from harness.events import EventLog
 from tools import sandbox as sb
 
-CFG = {"kind": "docker", "memory": "256m", "cpus": "1", "pids": 64, "timeout_s": 20, "max_output_bytes": 4096}
+# The limit counts from before `docker run` until the container is removed (tools/sandbox.py), so a pause of the Docker daemon (about
+# 30 s, once in every full verify run, seen on 2026-11-17/18) makes a probe with a correct answer look timed out. 60 s covers it; the
+# isolation checks read the container's output, not how long it took, and the tests of the timeout itself set their own `timeout_s`.
+CFG = {"kind": "docker", "memory": "256m", "cpus": "1", "pids": 64, "timeout_s": 60, "max_output_bytes": 4096}
+
+
+def test_the_default_limit_outlasts_a_pause_of_the_docker_daemon():
+    assert CFG["timeout_s"] >= 60                       # verify runs of PR 5a failed 3 of 3 with 20 s (daemon paused about 30 s)
 
 
 @pytest.fixture(scope="module")
