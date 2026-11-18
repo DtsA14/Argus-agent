@@ -566,6 +566,75 @@
       stream.appendChild(back);
     });
   }
+  // ---- T3 5b: the install card, read only: purpose and cost, the examples with the audit's words, the files with the machine's marks, the two Claude
+  // readers (always labelled), and the conditions of block C. No button here: the decision "install" is a later change.
+  function installReader(box, title, r, label) {
+    box.appendChild(el("h2", null, title));
+    if (!r) { box.appendChild(el("p", "note", "belum ada catatan")); return; }
+    box.appendChild(el("p", r.verdict === "ok" ? "small" : "note", "Claude, " + r.at + ": " + (r.verdict === "ok" ? "ok" : "ada yang meragukan")));
+    modelLine(box, r.note);
+    box.appendChild(el("p", "small", label));
+  }
+  function showInstall(id) {
+    var seq = ++cardSeq;
+    openCard = id;
+    get("/api/approve/code/" + encodeURIComponent(id)).then(function (d) {
+      if (seq !== cardSeq || mode !== "cards") { return; }
+      clear(stream);
+      DOMAIN_LABEL = d.domain_read_label || "";
+      var head = el("article", "card");
+      head.appendChild(el("h2", null, "Kartu pasang"));
+      var row = el("div", "row");
+      row.appendChild(el("span", "mono", d.id));
+      row.appendChild(el("span", "state " + stateClass(d.state), String(d.state)));
+      if (d.repo) { row.appendChild(el("span", null, d.repo)); }
+      if (d.patch_sha12) { row.appendChild(el("span", "mono", "patch " + d.patch_sha12)); }
+      head.appendChild(row);
+      head.appendChild(el("span", "tag", d.purpose.by));
+      modelLine(head, d.purpose.title, "msg");
+      if (d.purpose.text) { modelLine(head, d.purpose.text); }
+      if (d.cost) {
+        head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas job " + usd(d.cost.cap) + (d.cost.reference && d.cost.reference.cap_median !== null && d.cost.reference.cap_median !== undefined ? "; batas job biasa (median) " + usd(d.cost.reference.cap_median) : "")));
+      }
+      head.appendChild(el("p", "small", d.fixed_line));
+      head.appendChild(el("p", d.open ? "small" : "note", d.open ? "Tidak ada syarat yang tertutup (yang tidak berlaku atau tidak tercatat disebut di daftar). Ini bukan jaminan aman." : "Pasang tertutup: ada syarat yang belum terpenuhi."));
+      stream.appendChild(head);
+      var conds = el("article", "card");
+      conds.appendChild(el("h2", null, "Syarat"));
+      (d.checks || []).forEach(function (c) {
+        conds.appendChild(el("p", c.ok === false ? "note" : "small", "(" + c.key + ") " + (c.ok === true ? "ya" : c.ok === false ? "TIDAK" : "tidak berlaku") + ": " + c.label + (c.why ? " - " + c.why : "")));
+      });
+      stream.appendChild(conds);
+      if (d.item) { stream.appendChild(planItem(d.item, false)); }
+      var scope = el("article", "card");
+      scope.appendChild(el("h2", null, "File yang disentuh patch"));
+      (d.files || []).forEach(function (f) {
+        scope.appendChild(el("p", f.marks.length ? "note" : "small", f.path + (f.marks.length ? " - " + f.marks.join("; ") : "")));
+      });
+      if (!(d.files || []).length) { scope.appendChild(el("p", "note", "daftar file tidak terbaca")); }
+      if (d.files_cut) { scope.appendChild(el("p", "note", d.files_cut + " file lagi tidak ditampilkan")); }
+      if (d.scope_note) { scope.appendChild(el("p", "note", d.scope_note)); }
+      stream.appendChild(scope);
+      var readers = el("article", "card");
+      installReader(readers, "Pembaca patch", d.patch_read, d.patch_read_label);
+      readers.appendChild(el("p", "small", d.patch_reader_tested ? "pembaca patch sudah diuji" : "pembaca patch belum diuji"));
+      readers.appendChild(el("p", "small", d.domain_reader_tested ? "pembaca angka sudah diuji" : "pembaca angka belum diuji"));
+      if (d.approval) { readers.appendChild(el("p", "small", "persetujuan draf: " + d.approval.at + " oleh " + d.approval.by + " (" + d.approval.note + ")")); }
+      stream.appendChild(readers);
+      var back = el("button", null, "Semua kartu");
+      back.type = "button";
+      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
+      stream.appendChild(back);
+    }).catch(function () {
+      if (seq !== cardSeq || mode !== "cards") { return; }
+      clear(stream);
+      stream.appendChild(el("p", "muted", "Kartu pasang tidak dapat dibaca."));
+      var back = el("button", null, "Semua kartu");
+      back.type = "button";
+      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
+      stream.appendChild(back);
+    });
+  }
   // ---- T2: read-only cards (docs/reviews/SPEC_CHAT_CARDS.md). Every string is put on the page as text; model text carries its tag, and the
   // status line is built from the machine's fields only (id, tier, status, where). No button, no storage, no request but GET. ----------------
   var cardRows = [];
@@ -715,6 +784,12 @@
           if (it.applied) { r2.appendChild(el("span", "mono", "applied " + it.applied)); }
           if (!it.text_matches) { r2.appendChild(el("span", "note", "berkas issue berubah")); }
           q.appendChild(r2);
+          if (it.job && it.job_state === "REVIEW_READY") {
+            var inst = el("button", null, "Kartu pasang (angka)");
+            inst.type = "button";
+            inst.addEventListener("click", function () { showInstall(it.job); });
+            q.appendChild(inst);
+          }
           if (it.examples) { q.appendChild(exampleBlock(it.examples)); }
           stream.appendChild(q);
         } else { stream.appendChild(itemCard(it, d.stale || d.superseded)); }

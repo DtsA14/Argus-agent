@@ -247,9 +247,10 @@ def decide_part():
 def test_the_decisions_chip_is_on_and_there_is_no_approve_anywhere_in_the_page():
     assert re.search(r'data-mode="decide"[^>]*>Keputusan<', HTML)
     assert not re.search(r'data-mode="decide"[^>]*disabled', HTML)
-    # the one allowed use: the address of the READ-ONLY plan card (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else
-    assert JS.count("/api/approve/") == 1 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
-    js = JS.replace('get("/api/approve/prd/" + encodeURIComponent(id))', "")
+    # the only allowed uses: the addresses of the READ-ONLY plan and install cards (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else
+    assert JS.count("/api/approve/") == 2 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
+    assert 'get("/api/approve/code/" + encodeURIComponent(id))' in JS
+    js = JS.replace('get("/api/approve/prd/" + encodeURIComponent(id))', "").replace('get("/api/approve/code/" + encodeURIComponent(id))', "")
     for text in ("approve", "Approve", "job_approve", "setujui"):
         assert text not in js and text not in HTML
 

@@ -298,7 +298,7 @@ def test_the_page_has_a_plan_view_reached_from_the_prd_card_and_writes_only_text
     assert 'plan.addEventListener("click", function () { showPlan(id); });' in js and '"Kartu rencana (angka)"' in js
     for title in ("Yang tidak boleh berubah", "Kalau ... maka", "Yang berubah"):
         assert title in js
-    part = js[js.index("function planExample"):js.index("// ---- T2: read-only cards")]
+    part = js[js.index("function planExample"):js.index("// ---- T3 5b: the install card")]
     assert "innerHTML" not in part and "insertAdjacentHTML" not in part and "document.write" not in part
     assert 'modelLine(d, e.says)' in part and "e.proof.wording" in part and "it.warning" in part
     assert part.count('"Semua kartu"') == 2
@@ -434,7 +434,7 @@ def test_the_missing_folder_sha_and_commit_are_not_the_word_none(svc):
 
 def test_the_plan_page_guards_old_answers_and_marks_the_author_honestly():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
-    part = js[js.index("function showPlan"):js.index("// ---- T2: read-only cards")]
+    part = js[js.index("function showPlan"):js.index("// ---- T3 5b: the install card")]
     assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2
     assert "if (d.defects) {" in part and 'el("p", "note", it.warning)' in js
     assert 'd.request_by === "chat" ? "permintaan, ditulis lewat chat:" : "permintaan (pembuat tidak tercatat):"' in part
@@ -698,7 +698,7 @@ def test_the_page_shows_the_label_next_to_every_reading_and_never_a_reading_with
     assert reading.index("ada yang meragukan") > reading.index("sesuai permintaan")
     assert reading.count("modelLine(box, r.note)") == 2
     assert "r.note" not in reading.split("} else {")[-1]                                          # a stale or missing reading never shows a note
-    plan_js = js[js.index("function showPlan"):js.index("// ---- T2: read-only cards")]
+    plan_js = js[js.index("function showPlan"):js.index("// ---- T3 5b: the install card")]
     assert plan_js.index("DOMAIN_LABEL = d.domain_read_label") < plan_js.index("(d.items || []).forEach")
     assert 'el("p", "note", "Dibaca Claude: basi' not in js and "batas itu pagar, bukan perkiraan biaya" in js
 
