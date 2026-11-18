@@ -393,6 +393,7 @@ def test_a_skipped_or_unfinished_run_closes_the_condition(svc, name, kw, key, fi
     eg.store(d / file, doc["key"], **kw)
     c = get(svc)[1]
     assert checks(c)[key]["ok"] is False and c["open"] is False
+    assert ("belum selesai" in checks(c)[key]["why"]) == (name == "pending") and ("tidak dijalankan" in checks(c)[key]["why"]) == (name == "skipped")
 
 
 def test_d_is_not_claimed_as_a_record_and_does_not_close_c(svc):
@@ -426,7 +427,10 @@ def test_the_approval_must_be_for_the_last_drafted_draft(svc):
 
 
 def test_a_stage_whose_run_id_names_another_job_is_not_read(svc):
+    import shutil
     d = make(svc)
+    other = d / "runs" / "j20261117_999999_ffff-a1"
+    shutil.copytree(d / "runs" / f"{CJOB}-a1", other)                       # a complete package of another job, one that would open C if it were read
     edit_job(d, lambda j: j["stages"]["a1"].update(run_id="j20261117_999999_ffff-a1"))
     c = get(svc)[1]
     assert checks(c)["g"]["ok"] is False and c["open"] is False and c["files"] == []
@@ -503,3 +507,29 @@ def test_an_audit_row_without_a_number_says_so_and_does_not_match(svc):
     c = get(svc)[1]
     after = [e for e in c["item"]["examples"] if e["tier"] == "after"][0]["proof"]
     assert after["wording"] == "kode akhir tidak memberi angka (gerbang menandai: error); TIDAK cocok dengan yang diharapkan"
+
+
+def test_a_review_without_a_valid_field_is_not_valid(svc):
+    d = make(svc)
+    edit_job(d, lambda j: j["stages"]["a1"]["review"].pop("valid"))
+    c = get(svc)[1]
+    assert checks(c)["c"]["ok"] is False and c["open"] is False
+
+
+def test_a_whatif_alone_is_an_example_of_the_new_behaviour(svc):
+    c = good(svc, examples=(SAME, WHATIF))
+    assert checks(c)["h"]["ok"] is True
+
+
+def test_an_example_outside_the_grammar_closes_h(svc):
+    odd = {"id": "e4", "tier": "after", "says": "odd", "setup": "x = 1", "run": "x", "expect": 1}
+    c = good(svc, examples=(SAME, odd))
+    assert checks(c)["h"]["ok"] is False and "tidak bisa ditampilkan" in checks(c)["h"]["why"] and c["open"] is False
+
+
+def test_a_glob_that_cannot_be_read_protects(svc, monkeypatch):
+    def boom(path, globs):
+        raise ValueError("bad glob")
+    monkeypatch.setattr(acode, "matches", boom)
+    c = good(svc, protected=("x/*",))
+    assert c["files"][0]["marks"] == [acode.PROTECTED_MARK] and c["open"] is False
