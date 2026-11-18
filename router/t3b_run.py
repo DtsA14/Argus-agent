@@ -1,10 +1,13 @@
 """`argus t3b-run`: one round of the T3b test of the domain reader (docs/reviews/SPEC_KARTU_SETUJU.md section 8) with an Argus model as the reader, outside the
 approval card: the spec is unchanged (the reader of the card is still a Claude session); this only measures how a model of Argus's own reads the sets that
-scripts/t3b_fixtures.py planted. The model is the role `code_judge` of the config (GLM-5.3 through OpenRouter, Baidu fp8 pin) with its output limit cut to
+scripts/t3b_fixtures.py planted. The model is the role `code_judge` of the config (GLM-5.3 through OpenRouter, pinned to the upstreams of `gateway_models` in config.yaml, tried in that order: novita/fp8, tenstorrent/fp8, baidu/fp8) with its output limit cut to
 `--max-output` for this run, in a copy of the config: config.yaml is not changed.
 
-Every call goes through LLMCaller (a reservation before sending, an entry in the ledger before and after, money in integer nano-dollars). The run has its own
-cap (`--cap-usd`): a call starts only if the money already billed plus its worst case fits in the cap, so the cap is never passed. The bundle is data: the
+Every call goes through LLMCaller (a reservation before sending, an entry in the ledger before and after, money in integer nano-dollars). The cap
+(`--cap-usd`) is TOTAL for the T3b directory: the ledger sits beside the sets and holds run 1, run 2 and any call a crash cut off (charged at its worst case), so a
+second run starts with what the first spent. A call starts only if the money already billed plus its worst case fits in the cap. The worst case is an estimate
+(the input is counted as characters / 2.5 per token, the output is held to `--max-output`): one call can pass it by the error of that estimate, so the cap is
+bounded by a heuristic, not absolute (AGENTS.md); the run also stops when the ledger is not complete (`usd_complete` false). The bundle is data: the
 reply is parsed as one JSON object {verdict, sources, note} and nothing else is done with its text. A reply that is not usable, or that the `examples-read` path
 refuses (an `ok` that rests on the writer's text alone), is written to the errors file and is not a reading: `score` then says the set has no second reading.
 
@@ -19,9 +22,9 @@ from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from harness.errors import LLMCallFailed
+from harness.errors import LLMCallFailed, ReservationExhausted
 from harness.events import EventLog
-from harness.llm import LLMCaller, Reservation, reconcile_ledger
+from harness.llm import LLMCaller, Reservation, is_truncated, reconcile_ledger
 from models.registry import ModelRef, price_for
 from router import job as rj
 
@@ -31,7 +34,7 @@ import t3b_fixtures as t3  # noqa: E402
 ROLE = "code_judge"
 ERRORS = "t3b_errors.jsonl"
 LEDGER = "t3b_ledger.jsonl"
-INSTRUCTION = ("You are the domain reader in a test. Follow the instructions inside the bundle you are given (they are your task) and check each example by "
+INSTRUCTION = ("You are the domain reader in a test. Follow the rules at the top of the bundle you are given, before its first DATA header (they are your task), and check each example by "
                "arithmetic yourself. Do not run any command and do not use the `argus` command the bundle mentions: the program that started you records your "
                "answer. Reply with ONLY one JSON object on one line: {\"verdict\": \"ok\" or \"concerns\", \"sources\": [\"permintaan Atha\" | "
                "\"dokumen repo: <file>\" | \"hanya tulisan penulis\", ...one per rule behind a number], \"note\": \"at most 500 characters: what you checked and "
@@ -71,6 +74,11 @@ def worst_usd(cfg, ref, in_chars, max_output):
     return (in_chars / CHARS_PER_TOKEN) * p["input"] / 1e6 + max_output * p["output"] / 1e6
 
 
+def reservation(bundle_chars, max_output, usd):
+    """The reservation of one call: tokens for the input (as counted above), the output limit and a margin for the instruction; the money is the worst case."""
+    return Reservation(tokens=int(bundle_chars / CHARS_PER_TOKEN) + max_output + 2000, usd=usd)
+
+
 def _error(kd, **fields):
     with open(kd / ERRORS, "a", encoding="utf-8") as f:
         f.write(json.dumps(fields, ensure_ascii=False) + "\n")
@@ -99,7 +107,7 @@ def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, m
     biggest = max(worst.values(), default=0.0)
     text = "\n".join([f"T3b reader run {run_no} with {ref} (role {ROLE}), outside the approval card; the spec is unchanged",
                       f"{len(todo)} call(s); output limit {max_output} tokens; worst case per call up to ${biggest:.4f}",
-                      f"cap for this run: ${cap_usd:.2f} (a call starts only if billed so far + its worst case fits)",
+                      f"cap TOTAL for this T3b directory (run 1 and run 2 share the ledger): ${cap_usd:.2f}; a call starts only if billed so far + its worst case fits",
                       f"ledger: {kd / LEDGER}"])
     summary = {"model": str(ref), "run": run_no, "planned": len(todo), "calls": 0, "recorded": 0, "unusable": 0, "refused": 0, "billed_usd": 0.0,
                "stopped": None}
@@ -110,15 +118,19 @@ def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, m
         caller = LLMCaller(cfg, ROLE, log, model=model)
         fails = 0
         for jid in todo:
-            billed = reconcile_ledger(log.read())[1]["usd"]
+            totals = reconcile_ledger(log.read())[1]
+            billed = totals["usd"]
+            if not totals["usd_complete"]:
+                summary["stopped"] = "the ledger is not complete (a call without a price): stopped"
+                break
             if billed + worst[jid] > cap_usd:
                 summary["stopped"] = f"cost cap: billed ${billed:.6f} + worst case ${worst[jid]:.6f} > ${cap_usd:.2f}"
                 break
-            res = Reservation(tokens=int(len(bundles[jid][0]) / CHARS_PER_TOKEN) + max_output + 2000, usd=worst[jid])
+            res = reservation(len(bundles[jid][0]), max_output, worst[jid])
             try:
                 reply = caller.call([SystemMessage(INSTRUCTION), HumanMessage(bundles[jid][0])], res,
                                     meta={"node": "t3b_reader", "task": jid, "iteration": run_no, "step": 0})
-            except LLMCallFailed as e:
+            except (LLMCallFailed, ReservationExhausted) as e:        # a retry after a timeout finds the reservation used up: that is a failed call too
                 fails += 1
                 summary["calls"] += 1
                 _error(kd, job=jid, run=run_no, why=f"call failed: {type(e).__name__}")
@@ -128,6 +140,12 @@ def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, m
                 continue
             fails = 0
             summary["calls"] += 1
+            if is_truncated(reply):                                    # cut at the output limit: nothing in it may be accepted
+                summary["unusable"] += 1
+                md = getattr(reply, "response_metadata", None) or {}
+                _error(kd, job=jid, run=run_no, why="the reply was cut at the output limit", finish_reason=md.get("finish_reason") or md.get("stop_reason"),
+                       output_tokens=(getattr(reply, "usage_metadata", None) or {}).get("output_tokens"))
+                continue
             got = parse_answer(text_of(reply))
             if got is None:
                 summary["unusable"] += 1

@@ -156,3 +156,137 @@ def test_the_command_is_one_of_the_live_commands_with_key_file_and_yes():
     import argus
     with pytest.raises(SystemExit):
         argus.main(["t3b-run", "--help"])
+
+
+def test_a_timeout_that_uses_up_the_reservation_is_a_failed_call_not_a_crash(root, cfg):
+    from harness.errors import TransientError
+    s, model = run(root, cfg, lambda m: TransientError("timeout"), limit=5)
+    assert s["calls"] >= 1 and s["recorded"] == 0
+    errs = (t3.keydir(root) / tr.ERRORS).read_text()
+    assert "call failed" in errs and "Traceback" not in errs
+
+
+def test_a_reply_cut_at_the_output_limit_is_not_a_reading_and_says_so(root, cfg):
+    cut = AIMessage(content=json.dumps({"verdict": "concerns", "sources": ["permintaan Atha"], "note": "x"}),
+                    usage_metadata={"input_tokens": 3000, "output_tokens": 6000, "total_tokens": 9000},
+                    response_metadata={"finish_reason": "length", "token_usage": {"prompt_tokens": 3000, "completion_tokens": 6000, "cost": 0.03}})
+    s, model = run(root, cfg, lambda m: cut, limit=2)
+    assert s["unusable"] == 2 and s["recorded"] == 0 and t3.read_all(root) == []
+    e = json.loads((t3.keydir(root) / tr.ERRORS).read_text().splitlines()[0])
+    assert e["why"] == "the reply was cut at the output limit" and e["finish_reason"] == "length" and e["output_tokens"] == 6000
+
+
+def test_the_worst_case_of_a_call_is_input_at_the_input_price_plus_the_output_limit_at_the_output_price(cfg):
+    ref = tr.ModelRef.parse(cfg["roles"][tr.ROLE]["model"])
+    p = cfg["prices"][str(ref)]
+    assert tr.worst_usd(cfg, ref, 2500, 6000) == pytest.approx(1000 * p["input"] / 1e6 + 6000 * p["output"] / 1e6)
+    assert tr.worst_usd(cfg, ref, 0, 0) == 0 and tr.CHARS_PER_TOKEN == 2.5
+
+
+def test_the_cap_is_total_across_the_two_runs(root, cfg):
+    s1, _ = run(root, cfg, lambda m: reply(tokens=(3000, 5000)), limit=2, cap_usd=0.10)
+    spent = s1["billed_usd"]
+    assert spent > 0
+    s2, model = run(root, cfg, lambda m: reply(tokens=(3000, 5000)), run_no=2, cap_usd=spent + 0.001)
+    assert s2["calls"] == 0 and "cost cap" in s2["stopped"] and s2["billed_usd"] == pytest.approx(spent)
+
+
+def test_a_call_that_just_fits_is_sent_and_one_that_does_not_is_not(root, cfg):
+    ref = tr.ModelRef.parse(cfg["roles"][tr.ROLE]["model"])
+    first = sorted(p.name for p in (root / "jobs").iterdir())[0]
+    w = tr.worst_usd(cfg, ref, len(tr.INSTRUCTION) + len(t3.bundle(root, first)[0]), 6000)
+    s, model = run(root, cfg, lambda m: reply(), limit=1, cap_usd=w)
+    assert s["calls"] == 1                                                  # exactly equal to the cap: allowed (billed 0 + worst == cap)
+    root2 = root.parent / "t3b_b"
+    t3.build(root2, seed=1)
+    first2 = sorted(p.name for p in (root2 / "jobs").iterdir())[0]
+    w2 = tr.worst_usd(cfg, ref, len(tr.INSTRUCTION) + len(t3.bundle(root2, first2)[0]), 6000)
+    s, model = run(root2, cfg, lambda m: reply(), limit=1, cap_usd=w2 - 0.0005)
+    assert s["calls"] == 0
+
+
+def test_the_instruction_points_at_the_rules_before_the_first_data_header_and_the_template_keeps_rule_1():
+    from router import examples_read as er
+    assert "before its first DATA header" in tr.INSTRUCTION
+    assert "Rules 1 to 4 still hold." in er.TEMPLATE and "6. Numbers are written in the Indonesian style" in er.TEMPLATE
+
+
+def test_a_reply_as_a_list_of_text_parts_is_read():
+    class M:
+        content = [{"type": "text", "text": "{\"verdict\": \"ok\", "}, {"type": "text", "text": "\"sources\": [], \"note\": \"n\"}"}]
+    assert tr.text_of(M()) == '{"verdict": "ok", "sources": [], "note": "n"}'
+
+
+def test_a_success_between_failures_resets_the_count_of_failures_in_a_row(root, cfg):
+    calls = []
+
+    def respond(m):
+        calls.append(1)
+        return RuntimeError("down") if len(calls) % 3 != 0 else reply()
+    s, model = run(root, cfg, respond, limit=9)
+    assert s["calls"] == 9 and s["recorded"] == 3 and s["stopped"] is None
+
+
+def test_the_head_of_an_unusable_reply_is_cut_at_200_characters(root, cfg):
+    run(root, cfg, lambda m: AIMessage(content="x" * 1000, usage_metadata={"input_tokens": 3000, "output_tokens": 300, "total_tokens": 3300}), limit=1)
+    assert len(json.loads((t3.keydir(root) / tr.ERRORS).read_text().splitlines()[0])["head"]) == 200
+
+
+def test_the_last_fenced_object_of_a_reply_is_the_answer():
+    text = ('```json\n{"verdict": "ok", "sources": [], "note": "first"}\n```\nI changed my mind:\n'
+            '```json\n{"verdict": "concerns", "sources": [], "note": "last"}\n```')
+    assert tr.parse_answer(text) == ("concerns", [], "last")
+
+
+@pytest.mark.parametrize("kw,ok", [({"cap_usd": 5}, True), ({"cap_usd": 6}, False), ({"max_output": 500}, True), ({"max_output": 499}, False),
+                                   ({"max_output": 32000}, True), ({"max_output": 32001}, False)])
+def test_the_limits_of_the_numbers(root, cfg, kw, ok):
+    if ok:
+        run(root, cfg, lambda m: reply(), limit=1, **kw)
+    else:
+        with pytest.raises(rj.Refused):
+            run(root, cfg, lambda m: reply(), limit=1, **kw)
+
+
+def test_the_reservation_of_a_call_covers_the_input_the_output_limit_and_a_margin():
+    r = tr.reservation(2500, 6000, 0.03)
+    assert r.tokens == 1000 + 6000 + 2000 and r.usd == 0.03
+
+
+def test_the_run_stops_when_the_ledger_is_not_complete(root, cfg, monkeypatch):
+    real = tr.reconcile_ledger
+    monkeypatch.setattr(tr, "reconcile_ledger", lambda ev: (real(ev)[0], {**real(ev)[1], "usd_complete": False}))
+    s, model = run(root, cfg, lambda m: reply())
+    assert s["calls"] == 0 and "not complete" in s["stopped"]
+
+
+def test_an_error_line_holds_the_type_of_the_exception_never_its_text(root, cfg):
+    run(root, cfg, lambda m: RuntimeError("boom sk-or-v1-testkey1234567890abcdef"), limit=1)
+    line = (t3.keydir(root) / tr.ERRORS).read_text()
+    assert "LLMCallFailed" in line and "boom" not in line and "sk-or-v1" not in line
+
+
+def test_the_copy_of_the_config_carries_the_output_limit_and_the_cap_into_the_caller(root, cfg, monkeypatch):
+    seen = []
+    real = tr.LLMCaller
+
+    def spy(c, role, log, model=None):
+        seen.append((c["roles"][role]["max_output_tokens"], c["budget"]["max_usd"], role))
+        return real(c, role, log, model=model)
+    monkeypatch.setattr(tr, "LLMCaller", spy)
+    run(root, cfg, lambda m: reply(), limit=1, max_output=3000, cap_usd=0.37)
+    assert seen == [(3000, 0.37, "code_judge")]
+
+
+def test_a_reading_the_path_refuses_with_a_system_exit_is_counted_as_refused(root, cfg, monkeypatch):
+    def refuse(*a, **k):
+        raise SystemExit("already recorded")
+    monkeypatch.setattr(tr.t3, "record", refuse)
+    s, model = run(root, cfg, lambda m: reply(), limit=2)
+    assert s["refused"] == 2 and s["recorded"] == 0
+
+
+def test_the_human_message_is_exactly_the_bundle(root, cfg):
+    s, model = run(root, cfg, lambda m: reply(), limit=3)
+    ids = sorted(p.name for p in (root / "jobs").iterdir())[:3]
+    assert [c["messages"][1].content for c in model.calls] == [t3.bundle(root, j)[0] for j in ids]

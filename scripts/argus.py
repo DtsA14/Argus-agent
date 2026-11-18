@@ -147,7 +147,7 @@ def main(argv=None, deps=None):
     t3b.add_argument("root", help="the directory built by scripts/t3b_fixtures.py build")
     t3b.add_argument("--run", type=int, choices=(1, 2), required=True, help="which of the two readings of every set")
     t3b.add_argument("--limit", type=int, help="read at most this many sets (a measuring call first)")
-    t3b.add_argument("--cap-usd", type=float, default=0.50, help="the cap of this run: a call starts only if billed so far + its worst case fits")
+    t3b.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of this T3b directory (run 1 and run 2 share one ledger): a call starts only if billed so far + its worst case fits")
     t3b.add_argument("--max-output", type=int, default=6000, help="output tokens a call may use (a reasoning model spends them on thinking first)")
     er_ = sub.add_parser("examples-read", help="the domain reader's bundle and note for one item of a PRD (SPEC_KARTU_SETUJU 5 rev 2): a Claude session's statement, not a proof and not a human")
     er_.add_argument("job", help="the PRD job")
