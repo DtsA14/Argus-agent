@@ -105,6 +105,8 @@ def test_models_that_config_does_not_know_are_added_to_a_copy_only(tmp_path, cfg
     assert "openrouter:qwen/qwen3-coder-next" not in cfg["prices"] and "openrouter:qwen/qwen3-coder-next" not in cfg["gateway_models"]
     s, model = go(tmp_path / "u", cfg, lambda m: reply(), name="kimi27", limit=1)
     assert s["recorded"] == 1
+    s, model = go(tmp_path / "v", cfg, lambda m: reply(), name="hy4flash", limit=1)
+    assert s["recorded"] == 1 and s["model"] == "openrouter:tencent/hy4-flash"
 
 
 def test_an_unknown_model_and_bad_numbers_are_refused(tmp_path, cfg):

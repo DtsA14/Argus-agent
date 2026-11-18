@@ -36,6 +36,7 @@ MODELS = {
     "dsflash": ("openrouter:deepseek/deepseek-v4.1-flash", None, None),
     "glm53": ("openrouter:z-ai/glm-5.3", None, None),
     "qwen3c": ("openrouter:qwen/qwen3-coder-next", {"input": 0.12, "output": 0.80}, ["parasail/bf16"]),
+    "hy4flash": ("openrouter:tencent/hy4-flash", {"input": 0.04, "output": 0.15}, ["tencent/fp8"]),
     "kimi27": ("openrouter:moonshotai/kimi-k2.7-code", {"input": 0.75, "output": 3.75}, ["coreweave/int4", "inceptron/int4"]),
 }
 
