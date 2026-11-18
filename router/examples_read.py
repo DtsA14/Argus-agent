@@ -41,6 +41,9 @@ Rules of this reading:
 3. A rule that only the writer's text states is not confirmed: your verdict is concerns, not ok.
 4. You know only what is written here. If a number depends on a rule that is written nowhere here, say so: concerns.
 5. Check each example by arithmetic yourself. The machine only shows what the code returns; it does not know whether that is right.
+6. Numbers are written in the Indonesian style: a dot separates thousands and a comma marks decimals, so "1.000" is one thousand and "0,03" is three hundredths.
+7. Judge only the numbers that are shown and the rules behind them. How many examples there are, whether they cover every case, and filler text in the issue
+   (such as "x" or "y") are not your task and are not reasons for concerns.
 Answer with a verdict (ok or concerns), the sources, and a note of at most 500 characters. Record it with:
   argus examples-read <job> --item N --verdict ok|concerns --bundle-sha <the sha of this bundle> --reader-id <you> --source "<source>" (repeat) --note "..."
 """
