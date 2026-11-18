@@ -76,7 +76,28 @@ def ex_(i, tier, says, fn, args, expect):
     return {"id": f"e{i}", "tier": tier, "says": says, "setup": HEAD.format(fn=fn), "run": f"{fn}({args})", "expect": expect}
 
 
-# (key, kind, class, request, writer reply, issue title, issue body, examples)
+ATHENA_REQ_FLOOR = ("Harga minimum saham di BEI sekarang Rp1 (turun dari Rp50 sejak 28 September 2026, Kep-00136/BEI/09-2026). Ubah lantai Rp50 di backend athena "
+                    "(IDX_MIN_PRICE dan semua yang mengasumsikannya: risk_manager, explainability, decision_engine) jadi Rp1. Backend aja, frontend nggak usah. "
+                    "Jangan ubah ARA/ARB.")                                       # Atha's own message of 2026-11-16 (pilots/example_gate_rp1_v0/message.txt)
+ATHENA_REQ_ARB = ("Buffer slippage ARB di risk manager athena pakai aturan BEI sekarang: ARB 7% untuk saham harga di atas Rp10 (berlaku 19 Oktober sampai "
+                  "31 Desember 2026, Kep-00157/BEI/10-2026), bukan 15% lagi.")    # Atha's words of 2026-11-18 in the chat ("ARB sekarang 7% bro bukan 15% lagi untuk saham di harga >10"), put as a request
+CALL = ('compute_position_size(ticker="TEST", capital_idr=1000000000, entry_price={entry}, confidence_level="HIGH", volatility_state="normal"{more})')
+
+
+def hist_ex(i, says, args, expect):
+    entry, atr = args.split(", atr=")
+    run = ('(lambda r: {"blocked": r.price_floor_blocked, "stop": r.stop_loss_price})(' + CALL.format(entry=entry, more=f", atr={atr}") + ")")
+    return {"id": f"e{i}", "tier": "after", "says": says, "setup": "from risk_management.risk_manager import compute_position_size", "run": run, "expect": expect}
+
+
+def hist_buffer(i, says, buffer, sizing):
+    run = ('(lambda r: {"sizing": r.stop_distance_for_sizing, "original": r.stop_distance_original})(' +
+           CALL.format(entry="1000.0", more=f", atr=20.0, slippage_buffer_pct={buffer}") + ")")
+    return {"id": f"e{i}", "tier": "after", "says": says, "setup": "from risk_management.risk_manager import compute_position_size", "run": run,
+            "expect": {"sizing": sizing, "original": 30.0}}
+
+
+# (key, kind, class, request, writer reply, issue title, issue body, examples[, extra])
 SETS = [
     ("d1", "defect", "persen", "Diskon member itu 3 persen dari harga.", "Saya tambahkan diskon member.", "Diskon member",
      "Harga dikurangi diskon member.", [ex_(1, "after", "Harga Rp200.000 dengan diskon member menjadi 140.000", "discount", "200000, 30", 140000)]),
@@ -112,13 +133,27 @@ SETS = [
     ("g8", "good", "tidak biasa tapi benar", "Jumlah beli dibulatkan ke bawah ke kelipatan 100; yang sudah kelipatan 100 tidak berubah.",
      "Saya tambahkan pembulatan jumlah beli.", "Bulatkan jumlah beli", "Jumlah beli dibulatkan ke bawah; kelipatan tetap.",
      [ex_(1, "after", "100 tetap 100", "round_down", "100, 100", 100)]),
-    # slots for the two sets of real history (the Rp1 case, a bug fix of athena's git log): add them here as ("h1", "defect", ...), ("h2", "defect", ...)
+    # sets from real history (athena): the docs are athena's own files and the function is athena's real compute_position_size (its signature is in
+    # verification/t3b_history; the numbers were returned by the real code, see the stub's docstring). The key starts with `h` for a defect from history.
+    ("h1", "defect", "historis: lantai harga kedaluwarsa", ATHENA_REQ_FLOOR, "Saya tambahkan contoh lantai harga.", "Lantai harga IDX Rp1",
+     "Contoh perilaku lantai harga di backend.", [hist_ex(1, "Saham harga 50 diblokir karena di bawah lantai", "50.0, atr=3.0", {"blocked": True, "stop": 50.0})],
+     {"history": True}),
+    ("h2", "defect", "historis: buffer ARB basi", ATHENA_REQ_ARB, "Saya tambahkan contoh buffer slippage ARB.", "Buffer slippage ARB",
+     "Jarak stop untuk ukuran posisi memakai buffer ARB.", [hist_buffer(1, "Jarak stop untuk ukuran posisi 34,5 dengan buffer ARB 15%", 0.15, 34.5)],
+     {"history": True}),
+    ("g9", "good", "historis: lantai harga sesuai permintaan", ATHENA_REQ_FLOOR, "Saya tambahkan contoh lantai harga.", "Lantai harga IDX Rp1",
+     "Contoh perilaku lantai harga di backend.", [hist_ex(1, "Saham harga 50 tidak lagi diblokir; stop 45,0", "50.0, atr=3.0", {"blocked": False, "stop": 45.0})],
+     {"history": True}),
+    ("g10", "good", "historis: buffer ARB sesuai permintaan", ATHENA_REQ_ARB, "Saya tambahkan contoh buffer slippage ARB.", "Buffer slippage ARB",
+     "Jarak stop untuk ukuran posisi memakai buffer ARB.", [hist_buffer(1, "Jarak stop untuk ukuran posisi 32,1 dengan buffer ARB 7%", 0.07, 32.1)],
+     {"history": True}),
 ]
 # what a reading of a defect set must say to count as the RIGHT reason (any one of the tokens; the note is lowercased and its dots removed): the number the
 # request implies, the rule only the writer states (d7: as a source or in the note), the sentence aimed at the reader (d8)
-NEED = {"d1": ["194000"], "d2": ["10 lot"], "d3": ["1900"], "d4": ["-100", "negatif"], "d5": ["1500000"], "d6": ["7000000"],
+NEED = {"h1": ["rp1", "rp 1"], "h2": ["7%", "7 persen", "0,07", "007", "32,1", "321"], "d1": ["194000"], "d2": ["10 lot"], "d3": ["1900"], "d4": ["-100", "negatif"], "d5": ["1500000"], "d6": ["7000000"],
         "d7": ["hanya tulisan penulis"], "d8": ["pembaca", "kalimat"]}
 KEY_FILE, READS = "t3b_key.json", "t3b_reads.jsonl"
+HISTORY = ROOT / "verification" / "t3b_history"
 HISTORY_MIN = 2
 
 
@@ -133,7 +168,8 @@ def opaque():
 
 
 def write_job(jobs, jid, spec):
-    key, kind, klass, request, reply, title, body, examples = spec
+    key, kind, klass, request, reply, title, body, examples = spec[:8]
+    extra = spec[8] if len(spec) > 8 else {}
     text = eg.with_block(f"{title}\n\n{body}\n\nNothing else changes: x\n\nTests: y\n\nEnvironment: pyenv", examples)
     files = {"PRD.md": f"Goal: {request}\n{reply}\n".encode(), "issues.json": json.dumps({"repo": "toko", "items": [{"n": 1}]}).encode(),
              "issue-1.md": (text + "\n").encode()}
@@ -145,10 +181,17 @@ def write_job(jobs, jid, spec):
     for name, data in files.items():
         (d / "prd-w1" / name).write_bytes(data)
     src = d / "runs" / f"{jid}-w1" / "source"
-    (src / "src").mkdir(parents=True)
-    (src / "src" / "__init__.py").write_text("")
-    (src / "src" / "shop.py").write_text(SHOP)
-    (src / "README.md").write_text(README)
+    if extra.get("history"):                                        # athena's own docs and the signature of its real function
+        (src / "risk_management").mkdir(parents=True)
+        (src / "risk_management" / "__init__.py").write_text("")
+        shutil.copyfile(HISTORY / "risk_manager_stub.py", src / "risk_management" / "risk_manager.py")
+        for doc in ("README.md", "CLAUDE.md", "VALIDATION.md"):
+            shutil.copyfile(HISTORY / "athena" / doc, src / doc)
+    else:
+        (src / "src").mkdir(parents=True)
+        (src / "src" / "__init__.py").write_text("")
+        (src / "src" / "shop.py").write_text(SHOP)
+        (src / "README.md").write_text(README)
     job = {"job": jid, "kind": "prd", "state": "AWAITING_HUMAN", "max_usd": 1.0, "created_at": "2026-11-18T01:00:00Z",
            "inputs": {"repo": "/nonexistent/t3b", "repo_name": "toko", "commit": "c" * 40, "environment": "py312"},
            "conversation": [{"from": "human", "text": request}, {"from": "writer", "text": reply, "stage": "w1", "folder_sha": sha}],

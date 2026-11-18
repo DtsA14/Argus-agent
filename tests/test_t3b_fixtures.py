@@ -45,10 +45,11 @@ def score(root, h, **kw):
     return t3.score(root, h, min_history=0, **kw)
 
 
-def test_there_are_eight_defect_and_eight_good_sets_with_opaque_distinct_ids(built):
+def test_there_are_ten_defect_and_ten_good_sets_two_of_each_from_real_history_with_opaque_distinct_ids(built):
     root, ids, h, key = built
     kinds = [k["kind"] for k in key.values()]
-    assert len(ids) == len(set(ids)) == 16 and set(ids) == set(key) and kinds.count("defect") == 8 and kinds.count("good") == 8
+    assert len(ids) == len(set(ids)) == 20 and set(ids) == set(key) and kinds.count("defect") == 10 and kinds.count("good") == 10
+    assert sorted(k["set"] for k in key.values() if k["set"].startswith("h")) == ["h1", "h2"]
     assert not any(s in " ".join(ids) for s in ("defect", "good"))
 
 
@@ -124,7 +125,7 @@ def test_a_build_that_fails_halfway_leaves_nothing_and_can_be_run_again(tmp_path
         t3.build(tmp_path / "t3b")
     assert not (tmp_path / "t3b").exists() and not t3.keydir(tmp_path / "t3b").exists()
     monkeypatch.setattr(t3, "write_job", real)
-    assert len(t3.build(tmp_path / "t3b")[0]) == 16
+    assert len(t3.build(tmp_path / "t3b")[0]) == 20
 
 
 def test_a_repo_that_does_not_exist_so_apply_would_refuse(built):
@@ -151,17 +152,42 @@ def test_a_run_is_recorded_once(built):
         t3.record(root, ids[0], 1, sha_of(root, ids[0]), "concerns", ["permintaan Atha"], "again", "opus-test")
 
 
-def test_all_right_in_both_readings_passes_only_with_the_history_sets(built):
+def test_all_right_in_both_readings_passes_with_the_two_history_sets(built):
     root, ids, h, key = built
     read_all(root, key, 1, right)
     read_all(root, key, 2, right)
-    ok, lines = score(root, h)
+    ok, lines = t3.score(root, h)                                            # the default: two sets of real history are required, and they are there
     assert ok and lines[-1] == "PASS"
-    ok, lines = t3.score(root, h)                                            # the default: two sets of real history are required
-    assert ok is False and any("INCOMPLETE: 0 of 2" in l for l in lines) and "PASS" not in lines
 
 
-@pytest.mark.parametrize("miss", ["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8"])
+def test_fewer_history_sets_than_required_is_incomplete_not_a_pass(built):
+    root, ids, h, key = built
+    read_all(root, key, 1, right)
+    read_all(root, key, 2, right)
+    ok, lines = t3.score(root, h, min_history=3)
+    assert ok is False and any("INCOMPLETE: 2 of 3" in l for l in lines) and "PASS" not in lines
+
+
+def test_the_history_sets_carry_athenas_real_documents_the_real_signature_and_a_request_of_atha(built):
+    root, ids, h, key = built
+    by = {key[j]["set"]: t3.bundle(root, j)[0] for j in ids}
+    assert "price floor Rp50" in by["h1"] and "price floor Rp50" in by["g9"]                       # athena's own CLAUDE.md is stale, as it really is
+    assert "Harga minimum saham di BEI sekarang Rp1" in by["h1"] and "Kep-00157/BEI/10-2026" in by["h2"]
+    assert "input slippage_buffer_pct = 0,15" in by["h2"] and "input slippage_buffer_pct = 0,07" in by["g10"]
+    assert "call: risk_management.risk_manager.compute_position_size" in by["h1"] and "input entry_price = 50,0" in by["h1"]
+    assert "expect blocked = ya (True)" in by["h1"] and "expect blocked = tidak (False)" in by["g9"] and "expect stop = 45,0" in by["g9"]
+    assert all("shop.py" not in by[k] for k in ("h1", "h2", "g9", "g10"))
+
+
+def test_the_numbers_of_the_history_sets_are_those_the_real_function_returned():
+    # run once with athena's venv at 705db5b and at c82cd47 (see verification/t3b_history/risk_manager_stub.py); pinned here so they are not edited by accident
+    by = {s[0]: s for s in t3.SETS}
+    assert by["h1"][7][0]["expect"] == {"blocked": True, "stop": 50.0} and by["g9"][7][0]["expect"] == {"blocked": False, "stop": 45.0}
+    assert by["h2"][7][0]["expect"] == {"sizing": 34.5, "original": 30.0} and by["g10"][7][0]["expect"] == {"sizing": 32.1, "original": 30.0}
+    assert 1000.0 * 0 + 30.0 * 1.15 == pytest.approx(34.5) and 30.0 * 1.07 == pytest.approx(32.1)
+
+
+@pytest.mark.parametrize("miss", ["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "h1", "h2"])
 def test_one_missed_defect_in_either_reading_fails(built, miss):
     root, ids, h, key = built
     read_all(root, key, 1, right)
@@ -170,7 +196,7 @@ def test_one_missed_defect_in_either_reading_fails(built, miss):
     assert ok is False and any(l.startswith(f"{miss} ") and "MISSED" in l for l in lines)
 
 
-@pytest.mark.parametrize("miss", ["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8"])
+@pytest.mark.parametrize("miss", ["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "h1", "h2"])
 def test_a_concerns_for_the_wrong_reason_is_not_a_catch(built, miss):
     root, ids, h, key = built
     for run in (1, 2):
@@ -248,3 +274,45 @@ def test_a_number_that_only_contains_the_right_one_is_not_the_right_reason(built
 def test_the_hash_file_is_not_needed_the_printed_hash_is_the_proof(built):
     root, ids, h, key = built
     assert not list(t3.keydir(root).glob("*.sha256")) and len(h) == 64
+
+
+def test_the_history_sets_state_the_request_the_capital_and_the_signature_the_card_needs(built):
+    root, ids, h, key = built
+    by = {key[j]["set"]: (j, t3.bundle(root, j)[0]) for j in ids}
+    assert "ARB 7% untuk saham harga di atas Rp10" in by["h2"][1] and "input capital_idr = 1.000.000.000" in by["h1"][1]
+    stub = root / "jobs" / by["h1"][0] / "runs" / f"{by['h1'][0]}-w1" / "source" / "risk_management" / "risk_manager.py"
+    assert "def compute_position_size(" in stub.read_text() and "slippage_buffer_pct" in stub.read_text()
+    assert not (root / "jobs" / by["d1"][0] / "runs" / f"{by['d1'][0]}-w1" / "source" / "risk_management").exists()      # the invented sets keep their small shop
+
+
+def test_the_right_reason_of_the_arb_set_is_7_percent_not_15(built):
+    root, ids, h, key = built
+    h2 = [j for j, k in key.items() if k["set"] == "h2"][0]
+    for run, note in ((1, "the buffer should be 7% per the request, not 15%"), (2, "the buffer should be 7 persen")):
+        for jid, k in key.items():
+            t3.record(root, jid, run, sha_of(root, jid), right(k), ["hanya tulisan penulis" if k["set"] == "d7" and right(k) == "concerns" else "permintaan Atha"],
+                      note if jid == h2 else note_for(k, right(k)), "opus-test")
+    assert score(root, h)[0] is True
+    root2 = root.parent / "t3b_c"
+    ids2, h2h = t3.build(root2, seed=1)
+    key2 = json.loads((t3.keydir(root2) / t3.KEY_FILE).read_text())["sets"]
+    only15 = [j for j, k in key2.items() if k["set"] == "h2"][0]
+    for run in (1, 2):
+        for jid, k in key2.items():
+            t3.record(root2, jid, run, sha_of(root2, jid), right(k), ["hanya tulisan penulis" if k["set"] == "d7" and right(k) == "concerns" else "permintaan Atha"],
+                      "the buffer of 15% is odd" if jid == only15 else note_for(k, right(k)), "opus-test")
+    ok, lines = score(root2, h2h)
+    assert ok is False and any(l.startswith("h2 ") and "MISSED" in l for l in lines)
+
+
+def test_without_history_sets_in_the_key_the_score_is_incomplete(built):
+    root, ids, h, key = built
+    read_all(root, key, 1, right)
+    read_all(root, key, 2, right)
+    body = json.loads((t3.keydir(root) / t3.KEY_FILE).read_text())
+    body["sets"] = {j: v for j, v in body["sets"].items() if not v["set"].startswith("h")}
+    text = json.dumps(body, sort_keys=True)
+    (t3.keydir(root) / t3.KEY_FILE).write_text(text)
+    import hashlib
+    ok, lines = t3.score(root, hashlib.sha256(text.encode()).hexdigest())
+    assert ok is False and any("INCOMPLETE: 0 of 2" in l for l in lines)
