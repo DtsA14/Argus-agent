@@ -121,6 +121,38 @@ CASES = [
                              "+    return int(value.quantize(Decimal(1), rounding=ROUND_DOWN))"])
      + _diff("tests/test_shop.py", ["@@ -1,0 +1,8 @@", "+def test_percent_zero_keeps_the_price():", "+    assert discount(1000, 0) == 1000", "+",
                                     "+", "+def test_decimal_price_rounds_down():", "+    assert discount(1000.5, 10) == 900"])),
+    # ---- subtle: the line is plausible, the defect is one character or one missing thing --------------------------------------------------------------
+    ("s1", "defect", "batas salah satu", "Orders of at least 500000 rupiah ship free. Add `free_shipping(total)` to src/shop.py returning True for a total of 500000 or more.",
+     _diff("src/shop.py", ["@@ -9,3 +9,6 @@", " def total(prices, percent):", "     return sum(discount(p, percent) for p in prices)", "+", "+",
+                           "+def free_shipping(total):", "+    return total > 500000"])),
+    ("s2", "defect", "galat ditelan", "`total(prices, percent)` must raise ValueError when percent is above MAX_PERCENT (it calls discount(), which raises). Make total() also "
+     "accept an empty list of prices and give 0.",
+     _diff("src/shop.py", ["@@ -9,3 +9,8 @@", " def total(prices, percent):",
+                           "-    return sum(discount(p, percent) for p in prices)",
+                           "+    try:", "+        return sum(discount(p, percent) for p in prices)", "+    except ValueError:", "+        return 0"])),
+    ("s3", "defect", "cache bocor", "Cache the result of `discount(price, percent)` so a repeated call with the same arguments is not recomputed.",
+     _diff("src/shop.py", ["@@ -4,3 +4,8 @@", " ", " ", "-def discount(price, percent):", "-    return price - price * percent // 100",
+                           "+_CACHE = {}", "+", "+", "+def discount(price, percent):", "+    if price not in _CACHE:", "+        _CACHE[price] = price - price * percent // 100",
+                           "+    return _CACHE[price]"])),
+    ("s4", "defect", "tanda biaya", "`buy_cost(price, shares)` must include the fee: the lots bought times the price times one plus FEE_RATE. Today it leaves the fee out.",
+     _diff("src/shop.py", ["@@ -10,3 +10,3 @@", " def buy_cost(price, shares):", "     lots = shares // LOT_SIZE * LOT_SIZE",
+                           "-    return lots * price", "+    return lots * price * (1 - FEE_RATE)"])),
+    ("s5", "defect", "pembulatan bank", "Add `average_price(total, shares)`: the total divided by the shares, rounded DOWN to a whole rupiah.",
+     _diff("src/shop.py", ["@@ -12,3 +12,6 @@", " def buy_cost(price, shares):", "     lots = shares // LOT_SIZE * LOT_SIZE", "     return lots * price * (1 + FEE_RATE)",
+                           "+", "+", "+def average_price(total, shares):", "+    return round(total / shares)"])),
+    ("s6", "defect", "perilaku di luar tugas", "Add `describe(price, percent)` to src/shop.py: a one-line text such as `200000 -> 194000 (3%)` using discount(). Nothing else changes.",
+     _diff("src/shop.py", ["@@ -4,3 +4,9 @@", " ", " ", " def discount(price, percent):", "+    percent = max(0, percent)", "     return price - price * percent // 100",
+                           "+", "+", "+def describe(price, percent):", "+    return f\"{price} -> {discount(price, percent)} ({percent}%)\""])),
+    ("t1", "good", "batas benar", "Orders of at least 500000 rupiah ship free. Add `free_shipping(total)` to src/shop.py returning True for a total of 500000 or more.",
+     _diff("src/shop.py", ["@@ -9,3 +9,6 @@", " def total(prices, percent):", "     return sum(discount(p, percent) for p in prices)", "+", "+",
+                           "+def free_shipping(total):", "+    return total >= 500000"])),
+    ("t2", "good", "galat diubah sengaja", "`lookup(code)` must raise ValueError (not KeyError) for an unknown product code. Today the KeyError of the table leaks out.",
+     _diff("src/shop.py", ["@@ -15,3 +15,7 @@", " def lookup(code):", "-    return PRODUCTS[code]", "+    try:", "+        return PRODUCTS[code]", "+    except KeyError:",
+                           "+        raise ValueError(f\"unknown product code {code}\") from None"])),
+    ("t3", "good", "cache benar", "Cache the result of `discount(price, percent)` so a repeated call with the same arguments is not recomputed.",
+     _diff("src/shop.py", ["@@ -4,3 +4,8 @@", " ", " ", "-def discount(price, percent):", "-    return price - price * percent // 100",
+                           "+_CACHE = {}", "+", "+", "+def discount(price, percent):", "+    key = (price, percent)", "+    if key not in _CACHE:",
+                           "+        _CACHE[key] = price - price * percent // 100", "+    return _CACHE[key]"])),
 ]
 KEY = {c[0]: {"kind": c[1], "class": c[2]} for c in CASES}
 KEY_SHA256 = hashlib.sha256(json.dumps(KEY, sort_keys=True).encode()).hexdigest()

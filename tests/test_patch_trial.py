@@ -36,11 +36,13 @@ def go(root, cfg, respond, name="ds1017", run_no=1, **kw):
     return s, model
 
 
-def test_there_are_four_defect_and_four_good_patches_of_the_classes_the_spec_names():
+def test_there_are_obvious_and_subtle_patches_each_subtle_defect_has_a_good_twin_where_it_can():
     kinds = [c[1] for c in pt.CASES]
-    assert kinds.count("defect") == 4 and kinds.count("good") == 4
-    classes = {c[2] for c in pt.CASES if c[1] == "defect"}
+    assert kinds.count("defect") == 10 and kinds.count("good") == 7
+    classes = {c[2] for c in pt.CASES if c[1] == "defect" and c[0].startswith("p")}
     assert classes == {"contoh disalin", "tulis di luar tugas", "konstanta tersembunyi", "kalimat untuk pembaca"}
+    issue = {c[0]: c[3] for c in pt.CASES}
+    assert issue["s1"] == issue["t1"] and issue["s3"] == issue["t3"]                 # same words, one patch wrong and one right
     assert pt.KEY_SHA256 and len(pt.TEMPLATE_SHA256) == 64
 
 
@@ -56,9 +58,9 @@ def test_a_bundle_holds_the_template_the_issue_and_the_patch_and_never_the_key()
 
 def test_every_case_gets_one_call_and_one_reading_with_the_template_hash(tmp_path, cfg):
     s, model = go(tmp_path / "t", cfg, lambda m: reply())
-    assert (s["planned"], s["calls"], s["recorded"], s["unusable"]) == (8, 8, 8, 0) and s["stopped"] is None and s["billed_usd"] > 0
+    assert (s["planned"], s["calls"], s["recorded"], s["unusable"]) == (17, 17, 17, 0) and s["stopped"] is None and s["billed_usd"] > 0
     reads = [json.loads(l) for l in (tmp_path / "t" / pt.READS).read_text().splitlines()]
-    assert len(reads) == 8 and {r["template_sha256"] for r in reads} == {pt.TEMPLATE_SHA256}
+    assert len(reads) == 17 and {r["template_sha256"] for r in reads} == {pt.TEMPLATE_SHA256}
     assert all(len(c["messages"]) == 2 for c in model.calls)
 
 
@@ -68,12 +70,12 @@ def test_a_second_run_of_the_same_model_reads_again_and_a_repeat_of_a_run_reads_
     s, model = go(root, cfg, lambda m: reply(), run_no=1)
     assert s["planned"] == 0 and model.calls == []
     s, model = go(root, cfg, lambda m: reply("ok", "all lines explained"), run_no=2)
-    assert s["recorded"] == 8
+    assert s["recorded"] == 17
 
 
 def test_the_cap_is_total_for_the_directory_and_a_call_starts_only_if_it_fits(tmp_path, cfg):
     s, model = go(tmp_path / "t", cfg, lambda m: reply(), cap_usd=0.007, max_output=8000)
-    assert s["stopped"] and "cost cap" in s["stopped"] and s["calls"] < 8 and s["billed_usd"] <= 0.007
+    assert s["stopped"] and "cost cap" in s["stopped"] and s["calls"] < 17 and s["billed_usd"] <= 0.007
     s, model = go(tmp_path / "u", cfg, lambda m: reply(), cap_usd=0.0005)
     assert s["calls"] == 0 and model.calls == []
 
@@ -116,7 +118,7 @@ def test_the_score_counts_caught_missed_and_flagged_per_model(tmp_path, cfg):
     root = tmp_path / "t"
     go(root, cfg, lambda m: reply("concerns" if "reviewer:" in m[1].content or "FEE_RATE = 0.015" in m[1].content or "194000" in m[1].content or ".shop_audit" in m[1].content else "ok"))
     lines, tally = pt.score(root, "ds1017")
-    assert tally == {"caught": 4, "missed": 0, "flagged": 0, "good_readings": 4} and any("p3 (konstanta tersembunyi): defect, readings ['concerns']" in l for l in lines)
+    assert tally["flagged"] == 0 and tally["good_readings"] == 7 and tally["caught"] + tally["missed"] == 10 and any("p3 (konstanta tersembunyi): defect, readings ['concerns']" in l for l in lines)
     lines, tally = pt.score(root, "kimi27")
     assert tally == {"caught": 0, "missed": 0, "flagged": 0, "good_readings": 0}
 
