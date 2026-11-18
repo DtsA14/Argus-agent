@@ -21,8 +21,13 @@ pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="posix")
 sys.path.insert(0, str(tr.ROOT / "scripts"))
 
 
-def read(env, sha, verdict="ok", note="only the shop line changes", **kw):
-    return pr.record("jtest", sha[:12], verdict, note, "claude", deps=env.deps, jobs_dir=env.jobs, **kw)
+def read(env, sha, verdict="ok", note="only the shop line changes", twice=True, **kw):
+    """The first reading, and (an `ok` that is meant to open the patch) the second one by another reader id (SPEC_KARTU_SETUJU 13.5)."""
+    kw.setdefault("reader_id", "reader-a")
+    out = pr.record("jtest", sha[:12], verdict, note, "claude", deps=env.deps, jobs_dir=env.jobs, **kw)
+    if twice and verdict == "ok":
+        pr.record("jtest", sha[:12], verdict, note, "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    return out
 
 
 def file_of(env, sid="a1"):
@@ -272,6 +277,10 @@ def test_the_cli_writes_the_note_and_apply_takes_the_reader_flag(env, tmp_path, 
                        "--reader-id", "s1"], deps=env.deps) == 0
     out = capsys.readouterr().out
     assert "ok" in out and sha[:12] in out and "not a human" in out
+    assert argus.main([*base, "apply", "jtest", "--read-sha", sha[:12], "--reader", "claude"], deps=env.deps) != 0      # one reading is not an ok (rev 3)
+    assert env.job().data["state"] == rj.REVIEW_READY
+    assert argus.main([*base, "patch-read", "jtest", "--sha", sha[:12], "--verdict", "ok", "--note", "same line", "--reader", "claude", "--reader-id", "s2", "--second"],
+                      deps=env.deps) == 0
     assert argus.main([*base, "apply", "jtest", "--read-sha", sha[:12], "--reader", "claude"], deps=env.deps) == 0
     assert env.job().data["state"] == rj.APPLIED and env.job().data["log"][-1]["reader"] == "claude"
 
@@ -378,3 +387,61 @@ def test_the_cli_keeps_the_reader_id(env, tmp_path, capsys):
     argus.main(["--jobs-dir", str(env.jobs), "patch-read", "jtest", "--sha", sha[:12], "--verdict", "ok", "--note", "n", "--reader", "claude",
                 "--reader-id", "session-9"], deps=env.deps)
     assert json.loads(file_of(env).read_text())["reader"] == {"kind": "claude", "id": "session-9"}
+
+
+# ---- rev 3 (SPEC_KARTU_SETUJU 13.5): an ok is two readings by two different readers ------------------------------------------------
+
+def test_one_ok_is_one_and_two_by_two_ids_are_ok_and_apply_refuses_the_first(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha, twice=False)
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert kind == "one" and rec["reader"]["id"] == "reader-a"
+    with pytest.raises(rj.Refused, match="only one patch reading"):
+        apply(env, sha)
+    pr.record("jtest", sha[:12], "ok", "same", "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert kind == "ok" and rec["second"]["reader"]["id"] == "reader-b"
+
+
+def test_a_second_reading_needs_a_first_ok_and_another_id_and_a_concerns_is_not_written_over(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    with pytest.raises(rj.Refused, match="needs a first one"):
+        pr.record("jtest", sha[:12], "ok", "n", "claude", "b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    read(env, sha, twice=False)
+    for rid in ("reader-a", " READER-A ", None):
+        with pytest.raises(rj.Refused, match="another reader id"):
+            pr.record("jtest", sha[:12], "ok", "n", "claude", rid, deps=env.deps, jobs_dir=env.jobs, second=True)
+    assert "second" not in json.loads(file_of(env).read_text())
+    read(env, sha, verdict="concerns", note="it writes a file")                      # replaces the single ok: not a concerns yet
+    with pytest.raises(rj.Refused, match="not written over"):
+        read(env, sha, twice=False)
+    with pytest.raises(rj.Refused, match="not written over"):
+        pr.record("jtest", sha[:12], "ok", "n", "claude", "b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    assert pr.load(env.job().dir, "a1", sha)[0] == "concerns"
+
+
+def test_a_concerns_of_the_second_reading_closes_and_is_the_note_that_is_shown(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha, twice=False)
+    pr.record("jtest", sha[:12], "concerns", "the second sees a write", "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert kind == "concerns" and rec["note"] == "the second sees a write" and rec["reader"]["id"] == "reader-b"
+    with pytest.raises(rj.Refused, match="recorded concerns"):
+        apply(env, sha)
+
+
+def test_a_damaged_or_same_id_second_reading_in_the_file_is_never_ok(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha)
+    good = json.loads(file_of(env).read_text())
+    for second in ({**good["second"], "reader": {"kind": "claude", "id": "Reader-A"}}, {**good["second"], "verdict": "fine"}, {**good["second"], "note": ""},
+                   {**good["second"], "at": "yesterday"}, {**good["second"], "reader": {"kind": "human"}}, "x", {**good["second"], "note": "a\x1b[2J"}):
+        file_of(env).write_text(json.dumps({**good, "second": second}))
+        assert pr.load(env.job().dir, "a1", sha)[0] in ("one", "error"), second
+    file_of(env).write_text(json.dumps({**good, "reader": {"kind": "claude"}}))              # the first reader has no id: not two readers
+    assert pr.load(env.job().dir, "a1", sha)[0] == "one"
+
+
+def test_the_model_reader_is_a_reader_kind_and_the_template_is_the_tested_one():
+    assert "argus" in pr.READERS and "claude" in pr.READERS
+    assert pr.TEMPLATE_SHA256 == "aad60608789a4a76b8a1a31ab8e99d2853b15565ae06de4b78a9acc39de7db0b"       # what the planted-patch trial tested; a change is a new trial

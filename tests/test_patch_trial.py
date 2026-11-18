@@ -143,3 +143,92 @@ def test_each_harder_defect_has_a_good_twin_with_the_same_issue_and_a_different_
     for n in range(1, 8):
         x, y = by[f"x{n}"], by[f"y{n}"]
         assert x[1] == "defect" and y[1] == "good" and x[3] == y[3] and x[4] != y[4]
+
+
+# ---- the pass rule of the pair and the record of a pass (SPEC_KARTU_SETUJU 13.5) -------------------------------------------------------------------------
+
+def fill(root, first_says, second_says, drop=()):
+    """Write the readings of the pair: `first_says(case, run)` and `second_says(case, run)` give the verdicts; (model, case, run) in `drop` are left out."""
+    root.mkdir(parents=True, exist_ok=True)
+    with open(root / pt.READS, "w") as f:
+        for c in pt.CASES:
+            for n in (1, 2):
+                for model, says in (("hy4flash", first_says), ("ds1017", second_says)):
+                    if (model, c[0], n) in drop:
+                        continue
+                    f.write(json.dumps({"model": model, "case": c[0], "run": n, "verdict": says(c[0], n), "note": "n", "template_sha256": pt.TEMPLATE_SHA256}) + "\n")
+
+
+def right(cid, n):
+    return "concerns" if pt.KEY[cid]["kind"] == "defect" else "ok"
+
+
+def test_a_pair_that_reads_everything_right_passes_and_prints_every_condition(tmp_path):
+    fill(tmp_path / "r", right, right)
+    ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
+    assert ok and lines[-1] == "PASS" and sum(l.startswith("ok  ") for l in lines) == 5
+
+
+def test_the_second_model_decides_only_when_the_first_says_ok(tmp_path):
+    # the first misses x1 in both runs, the second catches it in run 2 only: the pair misses one run of the case and still catches the case
+    fill(tmp_path / "r", lambda c, n: "ok" if c == "x1" else right(c, n), lambda c, n: ("concerns" if n == 2 else "ok") if c == "x1" else right(c, n))
+    ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
+    assert ok and any(l.startswith("x1 ") and "a run missed" in l and "MISSED" not in l for l in lines)
+    # the second says concerns on a good case that the first says ok: the pair flags it (one is allowed, two are not)
+    fill(tmp_path / "s", right, lambda c, n: "concerns" if c in ("g1",) else right(c, n))
+    assert pt.pair_score(tmp_path / "s", "hy4flash", "ds1017")[0] is True
+    fill(tmp_path / "t", right, lambda c, n: "concerns" if c in ("g1", "g2") else right(c, n))
+    assert pt.pair_score(tmp_path / "t", "hy4flash", "ds1017")[0] is False
+    # the second model's concerns on a defect after a first ok is a catch; the second's ok after a first concerns changes nothing
+    fill(tmp_path / "u", lambda c, n: "concerns" if pt.KEY[c]["kind"] == "defect" and c != "s6" else "ok", lambda c, n: "concerns" if c == "s6" else right(c, n))
+    assert pt.pair_score(tmp_path / "u", "hy4flash", "ds1017")[0] is True
+
+
+def test_a_defect_case_missed_in_every_run_fails_and_so_do_too_many_missed_runs(tmp_path):
+    fill(tmp_path / "r", lambda c, n: "ok" if c == "s1" else right(c, n), lambda c, n: "ok" if c == "s1" else right(c, n))
+    ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
+    assert ok is False and any(l.startswith("s1 ") and "MISSED" in l for l in lines) and any(l.startswith("FAIL (a)") for l in lines)
+    # 17 defect cases x 2 runs = 34 runs; 2 missed runs of different cases (each caught in its other run) is 5.9%: over 5%
+    fill(tmp_path / "s", lambda c, n: "ok" if (c, n) in (("s1", 1), ("s2", 2)) else right(c, n), lambda c, n: "ok" if (c, n) in (("s1", 1), ("s2", 2)) else right(c, n))
+    ok, lines = pt.pair_score(tmp_path / "s", "hy4flash", "ds1017")
+    assert ok is False and any(l.startswith("FAIL (b)") for l in lines) and not any("MISSED" in l for l in lines)
+    fill(tmp_path / "t", lambda c, n: "ok" if (c, n) == ("s1", 1) else right(c, n), lambda c, n: "ok" if (c, n) == ("s1", 1) else right(c, n))
+    assert pt.pair_score(tmp_path / "t", "hy4flash", "ds1017")[0] is True                      # one of 34 is 2.9%
+
+
+def test_runs_that_are_not_usable_are_not_readings_and_too_many_fail(tmp_path):
+    fill(tmp_path / "r", right, right, drop={("hy4flash", "s1", 1), ("ds1017", "s2", 2)})
+    ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
+    assert ok and any(l.startswith("s1 ") and "None" in l for l in lines)
+    drop = {("hy4flash", c[0], 1) for c in pt.CASES[:8]}
+    fill(tmp_path / "s", right, right, drop=drop)
+    ok, lines = pt.pair_score(tmp_path / "s", "hy4flash", "ds1017")
+    assert ok is False and any(l.startswith("FAIL (d)") for l in lines)
+
+
+def test_readings_made_with_another_template_fail_the_pair(tmp_path):
+    fill(tmp_path / "r", right, right)
+    rows = [json.loads(l) for l in (tmp_path / "r" / pt.READS).read_text().splitlines()]
+    rows[0]["template_sha256"] = "0" * 64
+    (tmp_path / "r" / pt.READS).write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
+    assert ok is False and any(l.startswith("FAIL (e)") for l in lines)
+
+
+def test_write_tests_records_the_pair_the_template_and_the_key_and_refuses_anything_else(tmp_path):
+    fill(tmp_path / "r", right, right)
+    out = tmp_path / "reader_tests.json"
+    out.write_text(json.dumps({"athena": {"domain": {"x": 1}}, "other": {}}))
+    rec = pt.write_tests(tmp_path / "r", pt.KEY_SHA256, out, "athena", "hy4flash", "ds1017", "2026-11-19")
+    doc = json.loads(out.read_text())
+    assert doc["athena"]["domain"] == {"x": 1} and doc["athena"]["patch"] == rec and doc["other"] == {}
+    assert rec["models"] == ["argus:openrouter:tencent/hy4-flash", "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"]
+    assert rec["template_sha256"] == pt.TEMPLATE_SHA256 and rec["key_sha256"] == pt.KEY_SHA256 and rec["effort"] == "default"
+    with pytest.raises(SystemExit, match="key hash"):
+        pt.write_tests(tmp_path / "r", "0" * 64, tmp_path / "x.json", "athena", "hy4flash", "ds1017", "2026-11-19")
+    fill(tmp_path / "bad", lambda c, n: "ok", lambda c, n: "ok")
+    with pytest.raises(SystemExit, match="did not pass"):
+        pt.write_tests(tmp_path / "bad", pt.KEY_SHA256, tmp_path / "x.json", "athena", "hy4flash", "ds1017", "2026-11-19")
+    with pytest.raises(SystemExit, match="--repo"):
+        pt.write_tests(tmp_path / "r", pt.KEY_SHA256, tmp_path / "x.json", " ", "hy4flash", "ds1017", "2026-11-19")
+    assert not (tmp_path / "x.json").exists()

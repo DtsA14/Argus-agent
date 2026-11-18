@@ -37,7 +37,7 @@ KEYS = "abcdefghi"
 
 def make(s, jid=CJOB, examples=(SAME, AFTER), *, base="pass", audit="pass", review_valid=True, state="REVIEW_READY", approval=True,
          read="ok", prov_sha=None, read_sha=None, files=("src/shop.py",), protected=(), text=None, approved_draft="d" * 64, patch_sha=None, cap=0.5,
-         note="read the diff: only the floor changed", by_reader="claude", bodies=None, sid="a1", base_fail=()):
+         note="read the diff: only the floor changed", by_reader="claude", bodies=None, sid="a1", base_fail=(), one_reading=False):
     """A code job as the files of a real one: job.json, the review package, the examples intake and audit, the patch reader's note."""
     text = text if text is not None else issue_text(*examples)
     patch = build_patch(files, bodies)
@@ -76,7 +76,8 @@ def make(s, jid=CJOB, examples=(SAME, AFTER), *, base="pass", audit="pass", revi
     if read:
         (d / f"patch_read_{sid}.json").write_text(json.dumps({
             "key": pr.key(sid, read_sha or psha), "sid": sid, "patch_sha256": read_sha or psha, "verdict": read, "note": note,
-            "at": "2026-11-18T01:30:00Z", "reader": {"kind": by_reader, "id": "opus-1"}}))
+            "at": "2026-11-18T01:30:00Z", "reader": {"kind": by_reader, "id": "opus-1"},
+            **({"second": {"verdict": read, "note": note, "at": "2026-11-18T01:31:00Z", "reader": {"kind": by_reader, "id": "opus-2"}}} if read == "ok" and not one_reading else {})}))
     return d
 
 
@@ -104,6 +105,7 @@ def test_a_complete_job_opens_c_with_every_condition_true_and_says_who_read(svc)
     assert all(k[x]["ok"] in (True, None) for x in KEYS) and k["f"]["ok"] is True and k["i"]["ok"] is None            # (i) does not apply: not from a PRD
     assert c["kind"] == "install" and c["id"] == CJOB and c["sid"] == "a1" and c["patch_sha12"] == PSHA[:12]
     assert c["patch_read"]["verdict"] == "ok" and c["patch_read"]["reader"] == {"kind": "claude", "id": "opus-1"}
+    assert c["patch_read"]["second"]["reader"] == {"kind": "claude", "id": "opus-2"} and c["patch_read"]["second"]["verdict"] == "ok"
     assert "bukan dibaca manusia" in c["patch_read_label"] and "bukan manusia" in c["domain_read_label"]
     assert c["purpose"]["title"] == "total() never goes below zero" and c["files"] == [{"path": "src/shop.py", "marks": []}]
 
@@ -550,3 +552,40 @@ def test_a_test_record_is_not_a_pass_for_a_card_without_a_reading(svc, tmp_path,
     f.write_text(json.dumps({"athena": {"domain": {"template_sha256": er.TEMPLATE_SHA256, "model": "opus", "effort": "high"}}}))
     c = good(svc)
     assert c["item"]["domain_read"]["kind"] != "ok" and c["domain_reader_tested"] is False
+
+
+def test_one_patch_reading_is_not_an_ok_and_two_by_the_same_id_are_not_two(svc):
+    make(svc, one_reading=True)
+    c = get(svc)[1]
+    assert checks(c)["f"]["ok"] is False and "baru satu bacaan" in checks(c)["f"]["why"] and c["open"] is False and c["patch_read"] is None
+    d = svc.jobs / CJOB
+    f = d / "patch_read_a1.json"
+    rec = json.loads(f.read_text())
+    rec["second"] = {"verdict": "ok", "note": rec["note"], "at": "2026-11-18T01:31:00Z", "reader": {"kind": "claude", "id": " OPUS-1 "}}
+    f.write_text(json.dumps(rec))
+    c = get(svc)[1]
+    assert checks(c)["f"]["ok"] is False                                                     # the same id, spelled otherwise: not a second reader
+    rec["second"]["reader"]["id"] = "opus-2"
+    rec["second"]["verdict"] = "concerns"
+    f.write_text(json.dumps(rec))
+    c = get(svc)[1]
+    assert checks(c)["f"]["ok"] is False and c["patch_read"]["verdict"] == "concerns"        # a concerns of the second closes it and is what is shown
+
+
+def test_the_patch_reader_is_tested_only_for_the_pair_of_models_and_the_template_that_were_tested(svc, tmp_path, monkeypatch):
+    f = tmp_path / "reader_tests.json"
+    monkeypatch.setattr(acode, "READER_TESTS", f)
+    make(svc, by_reader="argus")
+    rec = json.loads((svc.jobs / CJOB / "patch_read_a1.json").read_text())
+    rec["reader"]["id"], rec["second"]["reader"]["id"] = "argus:openrouter:tencent/hy4-flash", "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"
+    (svc.jobs / CJOB / "patch_read_a1.json").write_text(json.dumps(rec))
+    entry = {"template_sha256": pr.TEMPLATE_SHA256, "effort": "default", "models": ["argus:openrouter:tencent/hy4-flash", "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"]}
+    f.write_text(json.dumps({"athena": {"patch": entry}}))
+    assert get(svc)[1]["patch_reader_tested"] is True
+    for bad in ({**entry, "models": entry["models"][::-1]}, {**entry, "models": entry["models"][:1]}, {**entry, "template_sha256": "0" * 64}, {**entry, "effort": None},
+                {k: v for k, v in entry.items() if k != "models"}):
+        f.write_text(json.dumps({"athena": {"patch": bad}}))
+        assert get(svc)[1]["patch_reader_tested"] is False
+    f.write_text(json.dumps({"athena": {"patch": entry}}))
+    make(svc, by_reader="claude")                                                            # the readers of this card are Claude sessions: not the tested pair
+    assert get(svc)[1]["patch_reader_tested"] is False
