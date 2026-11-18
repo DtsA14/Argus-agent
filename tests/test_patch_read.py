@@ -469,3 +469,12 @@ def test_a_second_reading_without_an_id_is_not_a_second_reader_and_a_model_readi
 def test_the_model_reader_is_a_reader_kind_and_the_template_is_the_tested_one():
     assert "argus" in pr.READERS and "claude" in pr.READERS
     assert pr.TEMPLATE_SHA256 == "aad60608789a4a76b8a1a31ab8e99d2853b15565ae06de4b78a9acc39de7db0b"       # what the planted-patch trial tested; a change is a new trial
+
+
+def test_when_both_readings_say_concerns_the_first_is_what_is_shown(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha)
+    good = json.loads(file_of(env).read_text())
+    file_of(env).write_text(json.dumps({**good, "verdict": "concerns", "note": "first sees a write", "second": {**good["second"], "verdict": "concerns", "note": "second sees a default"}}))
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert kind == "concerns" and rec["note"] == "first sees a write" and rec["reader"]["id"] == "reader-a"

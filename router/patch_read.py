@@ -109,7 +109,7 @@ def record(job_id, sha, verdict, note, reader, reader_id=None, *, deps, jobs_dir
         if kind0 == "concerns":
             _refuse(job_id, "a fresh `concerns` of this very patch is not written over: it closes the patch until the patch changes (fix it, then read again)")
         if second:
-            if kind0 not in ("one", "ok") or not isinstance(old, dict):
+            if not isinstance(old, dict):                          # load gives a note only for a fresh first reading
                 _refuse(job_id, "a second reading needs a first one: a fresh `ok` of this very patch, recorded before it")
             if rid is None or _rid(old["reader"]) in (None, rid.strip().casefold()):
                 _refuse(job_id, "the second reading is by another reader id than the first (and both have an id): the same id is not a second reader")

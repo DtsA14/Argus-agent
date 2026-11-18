@@ -414,7 +414,7 @@ class Install:
         by exactly that pair (the first and the second); anything else, or no readings, is untested."""
         models = patch.get("models")
         return (isinstance(models, list) and len(models) == 2 and all(isinstance(m, str) and m for m in models) and patch.get("effort") == "default"
-                and patch.get("instruction_sha256") == pr.INSTRUCTION_SHA256 and len(ids) == 2 and all(k == "argus" for k, _ in ids)
+                and patch.get("instruction_sha256") == pr.INSTRUCTION_SHA256 and all(k == "argus" for k, _ in ids)
                 and [i.strip().casefold() if isinstance(i, str) else None for _, i in ids] == [m.strip().casefold() for m in models])
 
     @staticmethod

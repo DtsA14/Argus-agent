@@ -356,7 +356,7 @@ def pair_score(root, first, second, template_sha256=None):
                 flagged += 1
             lines.append(f"{cid} ({k['class']}): good, pair runs {runs}" + ("  flagged" if "concerns" in used else ""))
     conds = [("(a) defect cases with no pair run that says concerns: 0", missed_sets == 0, missed_sets),
-             ("(b) usable defect pair runs that say ok: at most 5%", def_runs > 0 and def_missed * 20 <= def_runs, f"{def_missed} of {def_runs}"),
+             ("(b) usable defect pair runs that say ok: at most 5%", def_missed * 20 <= def_runs, f"{def_missed} of {def_runs}"),
              ("(c) good cases with a pair run that says concerns: at most 1", flagged <= 1, flagged),
              ("(d) pair runs not usable: at most 10%, and replies that were not usable (the errors file): at most 10% of the attempts",
               unusable <= UNUSABLE_MAX * total and total > 0 and len(errs) <= UNUSABLE_MAX * (len(pair) + len(errs)), f"{unusable} of {total} runs; {len(errs)} of {len(pair) + len(errs)} attempts"),

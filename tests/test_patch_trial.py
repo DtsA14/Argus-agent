@@ -277,3 +277,12 @@ def test_write_tests_records_the_pair_the_template_and_the_key_and_refuses_anyth
     with pytest.raises(SystemExit, match="--repo"):
         pt.write_tests(tmp_path / "r", pt.KEY_SHA256, tmp_path / "x.json", " ", "hy4flash", "ds1017", "2026-11-19")
     assert not (tmp_path / "x.json").exists()
+
+
+def test_readings_of_other_models_in_the_same_directory_are_not_the_pairs(tmp_path):
+    fill(tmp_path / "r", right, right)
+    with open(tmp_path / "r" / pt.READS, "a") as f:
+        for c in pt.CASES:
+            f.write(json.dumps(row("kimi27", c, 1, "ok", template_sha256="0" * 64, effort="high")) + "\n")
+    ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
+    assert ok and any("(e)" in l and "(got 0)" in l for l in lines)

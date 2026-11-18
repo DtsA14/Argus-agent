@@ -178,3 +178,27 @@ def test_the_status_line_says_how_to_get_the_readings_and_that_one_is_not_enough
     pr.record("jtest", sha, "ok", "n", "claude", "a", deps=env.deps, jobs_dir=env.jobs)
     out = str(rj.status("jtest", jobs_dir=env.jobs))
     assert "a second reading is needed" in out
+
+
+def test_a_file_with_a_second_reading_of_the_same_id_is_not_resumed_and_the_first_is_asked_again(world):
+    env, sha = world
+    go(env, models(reply(), reply()))
+    f = env.job().dir / "patch_read_a1.json"
+    rec = json.loads(f.read_text())
+    rec["second"]["reader"]["id"] = rec["reader"]["id"]                                      # one id twice: `one`, with a second reading present
+    f.write_text(json.dumps(rec))
+    assert pr.load(env.job().dir, "a1", sha)[0] == "one"
+    ms = models(reply(), reply())
+    s = go(env, ms)
+    assert len(ms["hy4flash"].calls) == 1 and s["final"] == "ok"
+
+
+def test_a_ledger_that_holds_a_call_without_a_price_stops_the_run(world):
+    env, sha = world
+    with open(env.job().dir / prr.LEDGER, "w") as f:
+        f.write(json.dumps({"ts": 0.5, "event": "llm_call_started", "call_id": "abc", "worst_tokens": 100, "worst_usd_nano": 1000}) + "\n")
+        f.write(json.dumps({"ts": 1.0, "event": "llm_call", "node": "patch_reader", "task": "x", "iteration": 1, "step": 0, "role": "code_judge",
+                            "model": "openrouter:tencent/hy4-flash", "call_id": "abc", "status": "ok", "attempt": 1, "input_tokens": 10, "output_tokens": 5, "tokens": 15}) + "\n")
+    ms = models(reply(), reply())
+    s = go(env, ms)
+    assert "not complete" in (s["stopped"] or "") and ms["hy4flash"].calls == [] and s["final"] == "none"

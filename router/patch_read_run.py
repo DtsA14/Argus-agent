@@ -93,7 +93,7 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.10, max_output=12000, 
         log = EventLog(job.dir / LEDGER)
         verdicts = []
         for name, cfg_n, ref, worst in plan:
-            n = 1 if (name == second or resume) else 0
+            n = 1 if name == second else 0
             totals = reconcile_ledger(log.read())[1]
             if not totals["usd_complete"]:
                 summary["stopped"] = "the ledger is not complete (a call without a price): stopped"
