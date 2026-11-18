@@ -150,6 +150,14 @@ def main(argv=None, deps=None):
     t3b.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of this T3b directory (run 1 and run 2 share one ledger): a call starts only if billed so far + its worst case fits")
     t3b.add_argument("--max-output", type=int, default=6000, help="output tokens a call may use (a reasoning model spends them on thinking first)")
     t3b.add_argument("--effort", choices=("low", "medium", "high"), help="the provider's reasoning effort for this run (OpenRouter reasoning.effort, set in a copy of the config; default: the provider's)")
+    pt = sub.add_parser("patch-trial", help="a trial of one model as the PATCH reader on eight planted patches (SPEC_KARTU_SETUJU 5), outside the approval card: costs money, own cap, writes nothing to a job")
+    pt.add_argument("root", help="the trial directory (created); ledger and readings of all models live here")
+    pt.add_argument("--model", required=True, help="a name of router/patch_trial.MODELS")
+    pt.add_argument("--run", type=int, choices=(1, 2), required=True)
+    pt.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of the directory (all models share the ledger)")
+    pt.add_argument("--max-output", type=int, default=8000)
+    pt.add_argument("--effort", choices=("low", "medium", "high"))
+    pt.add_argument("--limit", type=int)
     er_ = sub.add_parser("examples-read", help="the domain reader's bundle and note for one item of a PRD (SPEC_KARTU_SETUJU 5 rev 2): a Claude session's statement, not a proof and not a human")
     er_.add_argument("job", help="the PRD job")
     er_.add_argument("--item", required=True, type=int)
@@ -280,7 +288,7 @@ def main(argv=None, deps=None):
         r.add_argument("--sha", help="the draft the human saw (12+ hex): refused when the job's last draft is another")
         r.add_argument("--via", choices=rj.VIA, help="where the decision was made (SPEC_CONTROL_UI F4)")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run", "patch-trial"):   # the live commands
             p.add_argument("--key-file", action="append",
                            help="read the API key from this 0600 file instead of typing it; for a stage that needs "
                                 "keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
@@ -390,6 +398,12 @@ def main(argv=None, deps=None):
             q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir) if o.queue_cmd == "go"
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
+            return 0
+        if o.cmd == "patch-trial":
+            from router import patch_trial
+            summary = patch_trial.run(o.root, o.model, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, effort=o.effort, limit=o.limit)
+            print(json.dumps(summary, indent=1))
+            print("\n".join(patch_trial.score(o.root, o.model)[0]))
             return 0
         if o.cmd == "t3b-run":
             from router import t3b_run
