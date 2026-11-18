@@ -84,7 +84,7 @@ def _entry_scripts_that_can_hold_a_key():
 
 
 # read job files and print them; they never build a client, so no key is ever registered in their process
-DISPLAY_ONLY = {"pin_status.py", "scoreboard.py", "swe_grade.py", "build_review.py"}
+DISPLAY_ONLY = {"pin_status.py", "scoreboard.py", "swe_grade.py", "build_review.py", "t3b_fixtures.py"}   # t3b_fixtures: builds and scores job files, no client
 
 
 def test_every_entry_script_that_can_hold_a_key_installs_the_terminal_filter():
