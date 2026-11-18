@@ -128,3 +128,9 @@ def test_the_ledger_is_shared_so_a_second_model_starts_with_what_the_first_spent
     s1, _ = go(root, cfg, lambda m: reply(), name="ds1017")
     s2, _ = go(root, cfg, lambda m: reply(), name="dsflash", cap_usd=s1["billed_usd"] + 0.0001)
     assert s2["calls"] == 0 and "cost cap" in s2["stopped"]
+
+
+def test_the_two_cases_that_were_flawed_in_the_first_trial_are_fixed():
+    by = {c[0]: c for c in pt.CASES}
+    assert "out of `buy_cost`" in by["g2"][3] and by["g2"][3] == by["p3"][3] and "the functions" not in by["g2"][3]     # one function, as the patch changes
+    assert "+from src.shop import discount" in by["g4"][4]                                                           # the tests it adds can run
