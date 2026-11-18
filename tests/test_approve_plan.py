@@ -522,9 +522,12 @@ from router import examples_read as er  # noqa: E402
 DEPS = SimpleNamespace(clock=lambda: "2026-11-17T10:00:00Z")
 
 
-def reader_note(svc, item=1, verdict="ok", sources=("permintaan Atha",), note="the numbers fit the request"):
+def reader_note(svc, item=1, verdict="ok", sources=("permintaan Atha",), note="the numbers fit the request", twice=True):
     text, info = er.bundle(svc.jobs, PJOB, item)
-    return er.record(PJOB, item, verdict, info["bundle_sha256"], "opus-7", list(sources), note, deps=DEPS, jobs_dir=svc.jobs)
+    out = er.record(PJOB, item, verdict, info["bundle_sha256"], "opus-7", list(sources), note, deps=DEPS, jobs_dir=svc.jobs)
+    if twice and verdict == "ok":                                         # rev 3: an ok is two independent readings
+        er.record(PJOB, item, verdict, info["bundle_sha256"], "opus-8", list(sources), note, deps=DEPS, jobs_dir=svc.jobs, second=True)
+    return out
 
 
 def dr(c, item=0):
@@ -715,3 +718,12 @@ def test_an_unexpected_failure_of_the_reading_never_breaks_the_card_or_shows_a_r
 def test_the_page_guards_a_card_without_a_reading():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     assert "    if (it.domain_read) { planReading(c, it.domain_read); }" in js
+
+
+def test_one_reading_is_shown_as_one_not_as_a_reading(svc):
+    one(svc, [SAME, AFTER])
+    reader_note(svc, twice=False)
+    d = dr(plan(svc)[1])
+    assert d == {"kind": "one", "fresh": False, "why": ac.DOMAIN_ONE} and "dua bacaan" in ac.DOMAIN_ONE
+    reader_note(svc, twice=True)
+    assert dr(plan(svc)[1])["kind"] == "ok"

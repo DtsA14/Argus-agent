@@ -44,8 +44,11 @@ Rules of this reading:
 6. Numbers are written in the Indonesian style: a dot separates thousands and a comma marks decimals, so "1.000" is one thousand and "0,03" is three hundredths.
 7. Judge only the numbers that are shown and the rules behind them. How many examples there are, whether they cover every case, and filler text in the issue
    (such as "x" or "y") are not your task and are not reasons for concerns. Rules 1 to 4 still hold.
+8. You are one of two readers. The other reads the same bundle on its own and you do not see its answer: the numbers are open for approval only when both
+   say ok, so do not soften a doubt on the expectation that the other will catch it.
 Answer with a verdict (ok or concerns), the sources, and a note of at most 500 characters. Record it with:
   argus examples-read <job> --item N --verdict ok|concerns --bundle-sha <the sha of this bundle> --reader-id <you> --source "<source>" (repeat) --note "..."
+(the second reader adds --second and an id that differs from the first reader's)
 """
 TEMPLATE_SHA256 = hashlib.sha256(TEMPLATE.encode("utf-8")).hexdigest()
 SECTION_RE = re.compile(r"=== (FACTS|DATA|END)( [^=\n]*)? ===")
@@ -308,9 +311,25 @@ def _entries(raw):
     return doc["entries"] if isinstance(doc, dict) and isinstance(doc.get("entries"), dict) else None
 
 
+def _fresh(e, item, info):
+    return (e["item"], e["folder_sha"], e["commit"], e["digest"], e["bundle_sha256"], e["template_sha256"]) == (
+        item, info["folder_sha"], info["commit"], info["digest"], info["bundle_sha256"], TEMPLATE_SHA256)
+
+
+def _rid(e):
+    """The reader id as compared: trimmed and case-folded; None when there is none (such a reading is never one of two)."""
+    rid = e["reader"].get("id")
+    return rid.strip().casefold() if isinstance(rid, str) and rid.strip() else None
+
+
+def second_key(item):
+    return f"{item}#2"
+
+
 def status(jobs_dir, job_id, item):
-    """('none', None) | ('stale', None) | ('error', None) | ('ok' | 'concerns', entry): the note of one item against what the bundle is NOW.
-    Refused when the item cannot be read at all (see `gather`)."""
+    """('none', None) | ('one', entry) | ('stale', None) | ('error', None) | ('ok' | 'concerns', entry): the notes of one item against what the bundle is NOW.
+    SPEC rev 3: `ok` needs two readings, each fresh and each `ok`, by two different reader ids; one `concerns` among the fresh ones is `concerns`; a single
+    `ok` (or two by the same id) is `one`: not enough. Refused when the item cannot be read at all (see `gather`)."""
     _, info = bundle(jobs_dir, job_id, item)
     raw, kind = _read_file(Path(jobs_dir) / job_id, f"examples_read_{info['turn']}.json")
     if raw is None:
@@ -320,19 +339,28 @@ def status(jobs_dir, job_id, item):
     entries = _entries(raw)
     if entries is None:
         return "error", None
-    e = entries.get(str(item))
-    if e is None:
+    first, second = entries.get(str(item)), entries.get(second_key(item))
+    if first is None and second is None:
         return "none", None
-    if not _entry_ok(e):
+    found = [e for e in (first, second) if e is not None]
+    if not all(_entry_ok(e) for e in found):
         return "error", None
-    if (e["item"], e["folder_sha"], e["commit"], e["digest"], e["bundle_sha256"], e["template_sha256"]) != (
-            item, info["folder_sha"], info["commit"], info["digest"], info["bundle_sha256"], TEMPLATE_SHA256):
+    if not all(_fresh(e, item, info) for e in found):
         return "stale", None
-    return e["verdict"], e
+    for e in found:
+        if e["verdict"] == "concerns":
+            return "concerns", e
+    if first is None or second is None:
+        return "one", found[0]
+    ids = [_rid(first), _rid(second)]
+    if None in ids or ids[0] == ids[1]:
+        return "one", found[0]
+    return "ok", dict(first, reader2=second["reader"])
 
 
-def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps, jobs_dir=rj.JOBS):
-    """Write the note of one item: Refused for anything that is not exactly the bundle as it is now, with nothing written."""
+def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps, jobs_dir=rj.JOBS, second=False, overwrite_concerns=False):
+    """Write the note of one item: Refused for anything that is not exactly the bundle as it is now, with nothing written. `second` is the second reading
+    (rev 3): it needs a first one for the same bundle by another reader id, and is kept under its own key."""
     if verdict not in VERDICTS:
         _refuse(job_id, f"the verdict is one of {', '.join(VERDICTS)}")
     text = ex.clean(note, NOTE_MAX) if isinstance(note, str) else ""
@@ -370,7 +398,18 @@ def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps,
         if _kind == "error" or (old is not None and _entries(old) is None):
             _refuse(job_id, f"the existing {name} is damaged: move it away, then write the note again (the other items' notes would be lost)")
         entries = (_entries(old) if old is not None else None) or {}
-        entries[str(item)] = entry
+        if second:
+            first = entries.get(str(item))
+            if not (isinstance(first, dict) and _entry_ok(first) and _fresh(first, item, info)):
+                _refuse(job_id, "a second reading needs a first one for this very bundle: record the first reading before it")
+            if _rid(first) == rid.strip().casefold():
+                _refuse(job_id, "the second reading is by another reader id than the first: the same id is not a second reader")
+        slot = second_key(item) if second else str(item)
+        old_entry = entries.get(slot)
+        if (not overwrite_concerns and isinstance(old_entry, dict) and _entry_ok(old_entry) and _fresh(old_entry, item, info)
+                and old_entry["verdict"] == "concerns"):
+            _refuse(job_id, "a fresh `concerns` of this very bundle is not written over: it closes the numbers until the bundle changes (fix the issue, then read again)")
+        entries[slot] = entry
         target = job.dir / name
         tmp = target.with_name(target.name + ".tmp")
         try:                                                  # a stale or planted name is removed, never followed
@@ -505,5 +544,6 @@ def _chain(job, jobs_dir, queues_dir):
     except rj.Refused as e:
         return bad(f"the note cannot be checked ({str(e).split(': ', 1)[-1].split('; nothing')[0]})", **more)
     why = {"none": "no domain reader's note for this item", "stale": "the domain reader's note is stale: what it read has changed",
-           "error": "the domain reader's note cannot be read", "concerns": "the domain reader recorded concerns"}.get(kind)
+           "error": "the domain reader's note cannot be read", "one": "only one fresh `ok` reading: the numbers need a second, independent reading",
+           "concerns": "the domain reader recorded concerns"}.get(kind)
     return _chain_result(True, kind == "ok", kind, why, rec=rec, **more)

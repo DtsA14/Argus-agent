@@ -37,6 +37,7 @@ DOMAIN_LABEL = ("Ini pernyataan sesi Claude (model), bukan bukti angkanya benar,
                 "di permintaan, PRD dan dokumen repo.")
 DOMAIN_UNREAD = "belum dibaca: angka domain belum dinilai siapa pun"
 DOMAIN_STALE = "pembacaan Claude basi: bahan yang dibacanya berubah sejak itu (folder, contoh, dokumen atau templat); dianggap belum dibaca"
+DOMAIN_ONE = "baru satu bacaan: angka domain butuh dua bacaan independen yang sama-sama ok"
 DOMAIN_ERROR = "catatan pembacaan rusak: dianggap belum dibaca"
 DOMAIN_NONE = "tidak ada angka baru yang dibaca"
 TREE_WHY = "pohon sumber penulis tidak terbaca: nama parameter tidak bisa diambil dari definisi; kartu ini cacat"
@@ -287,10 +288,10 @@ class Approve:
         except Exception:                                     # whatever else: never shown as a reading
             return {"kind": "tidak_terbaca", "fresh": False, "why": "catatan pembacaan tidak bisa diperiksa: dianggap belum dibaca"}
         out = {"kind": kind, "fresh": kind in ("ok", "concerns")}
-        if rec:
-            out.update(verdict=rec["verdict"], reader=rec["reader"], at=rec["at"], sources=rec["sources"], note=rec["note"])
+        if rec and kind != "one":
+            out.update(verdict=rec["verdict"], reader=rec["reader"], reader2=rec.get("reader2"), at=rec["at"], sources=rec["sources"], note=rec["note"])
         else:
-            out["why"] = {"none": DOMAIN_UNREAD, "stale": DOMAIN_STALE, "error": DOMAIN_ERROR}.get(kind, DOMAIN_UNREAD)
+            out["why"] = {"none": DOMAIN_UNREAD, "stale": DOMAIN_STALE, "error": DOMAIN_ERROR, "one": DOMAIN_ONE}.get(kind, DOMAIN_UNREAD)
         return out
 
     def _finish(self, card):
