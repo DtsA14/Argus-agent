@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import t3b_fixtures as t3  # noqa: E402
 
 ROLE = "code_judge"
+EFFORTS = ("low", "medium", "high")
 ERRORS = "t3b_errors.jsonl"
 LEDGER = "t3b_ledger.jsonl"
 INSTRUCTION = ("You are the domain reader in a test. Follow the rules at the top of the bundle you are given, before its first DATA header (they are your task), and check each example by "
@@ -84,7 +85,7 @@ def _error(kd, **fields):
         f.write(json.dumps(fields, ensure_ascii=False) + "\n")
 
 
-def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, model=None):
+def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, model=None, effort=None):
     """Read the sets of `root` that have no reading `run_no` yet, one call each. Returns a summary dict."""
     root = Path(root)
     kd = t3.keydir(root)
@@ -100,6 +101,13 @@ def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, m
         todo = todo[:int(limit)]
     cfg = copy.deepcopy(cfg)
     cfg["roles"][ROLE]["max_output_tokens"] = max_output
+    if effort is not None:                                      # the provider's reasoning effort for this run, in the copy of the config only
+        if effort not in EFFORTS:
+            raise rj.Refused(f"--effort is one of {', '.join(EFFORTS)}")
+        params = dict(cfg["roles"][ROLE].get("params") or {})
+        extra = dict(params.get("extra_body") or {})
+        extra["reasoning"] = {"effort": effort}
+        cfg["roles"][ROLE]["params"] = {**params, "extra_body": extra}
     cfg["budget"]["max_usd"] = cap_usd
     ref = ModelRef.parse(cfg["roles"][ROLE]["model"])
     bundles = {j: t3.bundle(root, j) for j in todo}
@@ -107,6 +115,7 @@ def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, m
     biggest = max(worst.values(), default=0.0)
     text = "\n".join([f"T3b reader run {run_no} with {ref} (role {ROLE}), outside the approval card; the spec is unchanged",
                       f"{len(todo)} call(s); output limit {max_output} tokens; worst case per call up to ${biggest:.4f}",
+                      f"reasoning effort: {effort or 'the provider default (the role sets none)'}",
                       f"cap TOTAL for this T3b directory (run 1 and run 2 share the ledger): ${cap_usd:.2f}; a call starts only if billed so far + its worst case fits",
                       f"ledger: {kd / LEDGER}"])
     summary = {"model": str(ref), "run": run_no, "planned": len(todo), "calls": 0, "recorded": 0, "unusable": 0, "refused": 0, "billed_usd": 0.0,
