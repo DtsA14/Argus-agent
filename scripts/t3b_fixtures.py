@@ -133,7 +133,9 @@ SETS = [
     ("g8", "good", "tidak biasa tapi benar", "Jumlah beli dibulatkan ke bawah ke kelipatan 100; yang sudah kelipatan 100 tidak berubah.",
      "Saya tambahkan pembulatan jumlah beli.", "Bulatkan jumlah beli", "Jumlah beli dibulatkan ke bawah; kelipatan tetap.",
      [ex_(1, "after", "100 tetap 100", "round_down", "100, 100", 100)]),
-    # sets from real history (athena): the docs are athena's own files and the function is athena's real compute_position_size (its signature is in
+    # sets from real history (athena): the docs are athena's own files (README.md, CLAUDE.md, VALIDATION.md as they are at 705db5b, CLAUDE.md still saying Rp50) plus a DRAFT DOMAIN.md
+    # that Claude wrote from the code on 2026-11-18 (the first official run, without it, flagged both good history sets for an unwritten rule: the stop formula and the sizing
+    # formula only lived in the code; this version is the second official run, changed after seeing that result) and the function is athena's real compute_position_size (its signature is in
     # verification/t3b_history; the numbers were returned by the real code, see the stub's docstring). The key starts with `h` for a defect from history.
     ("h1", "defect", "historis: lantai harga kedaluwarsa", ATHENA_REQ_FLOOR, "Saya tambahkan contoh lantai harga.", "Lantai harga IDX Rp1",
      "Contoh perilaku lantai harga di backend.", [hist_ex(1, "Saham harga 50 diblokir karena di bawah lantai", "50.0, atr=3.0", {"blocked": True, "stop": 50.0})],
@@ -185,7 +187,7 @@ def write_job(jobs, jid, spec):
         (src / "risk_management").mkdir(parents=True)
         (src / "risk_management" / "__init__.py").write_text("")
         shutil.copyfile(HISTORY / "risk_manager_stub.py", src / "risk_management" / "risk_manager.py")
-        for doc in ("README.md", "CLAUDE.md", "VALIDATION.md"):
+        for doc in ("DOMAIN.md", "README.md", "CLAUDE.md", "VALIDATION.md"):
             shutil.copyfile(HISTORY / "athena" / doc, src / doc)
     else:
         (src / "src").mkdir(parents=True)

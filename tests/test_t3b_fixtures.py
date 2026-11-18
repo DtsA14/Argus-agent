@@ -316,3 +316,22 @@ def test_without_history_sets_in_the_key_the_score_is_incomplete(built):
     import hashlib
     ok, lines = t3.score(root, hashlib.sha256(text.encode()).hexdigest())
     assert ok is False and any("INCOMPLETE: 0 of 2" in l for l in lines)
+
+
+def test_the_history_sets_carry_the_draft_domain_document_first_and_the_invented_sets_do_not(built):
+    root, ids, h, key = built
+    by = {key[j]["set"]: t3.bundle(root, j)[0] for j in ids}
+    for k in ("h1", "h2", "g9", "g10"):
+        assert "=== DATA repo doc: DOMAIN.md ===" in by[k] and by[k].index("repo doc: DOMAIN.md") < by[k].index("repo doc: README.md")
+        assert "Jarak stop dasar = 1,5 x ATR" in by[k] and "DRAFT ditulis Claude" in by[k]
+    assert "repo doc: DOMAIN.md" not in by["d1"] and "repo doc: DOMAIN.md" not in by["g1"]
+    assert "price floor Rp50" in by["h1"]                                                      # athena's own stale CLAUDE.md is still there, after the domain document
+
+
+def test_the_rules_of_the_draft_domain_document_give_the_numbers_of_the_four_history_sets():
+    import math
+    text = (t3.HISTORY / "athena" / "DOMAIN.md").read_text()
+    for needle in ("tick Rp1", "Rp1** sejak 28 September 2026", "1,5 x ATR", "dibulatkan ke BAWAH ke tick", "30 x 1,15 = 34,5", "30 x 1,07 = 32,1", "1 lot = 100 lembar"):
+        assert needle in text
+    stop = math.floor((50 - 1.5 * 3) / 1) * 1                                                  # g9: entry 50, ATR 3, tick Rp1
+    assert stop == 45 and 1000 - 1.5 * 20 == 970 and 30 * 1.15 == pytest.approx(34.5) and 30 * 1.07 == pytest.approx(32.1)
