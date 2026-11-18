@@ -294,3 +294,11 @@ def test_the_touched_files_of_a_bundle_are_those_of_its_patch_and_g4_does_not_as
     assert touches("y1") == "tests/test_shop.py" and touches("x1") == "tests/test_shop.py"                      # a test-only patch does not list src/shop.py
     assert touches("p2") == "src/shop.py" and touches("g4") == "src/shop.py, tests/test_shop.py"
     assert "any price up to 1000000000" in by["g4"][3]                                                           # Decimal's default precision fails beyond 28 digits
+
+
+def test_a_patch_that_uses_a_module_imports_it_so_that_only_the_planted_fault_is_in_it():
+    by = {c[0]: c for c in pt.CASES}
+    for cid in ("p2", "x7", "y7"):
+        assert "+import os" in by[cid][4], cid                                          # rule 2(f): a name the patch uses is imported by the patch
+    assert "+import shutil" in by["x7"][4] and "shutil" not in by["y7"][4]
+    assert "(f) adds a test or code that calls or uses a name" in pt.TEMPLATE and "must import what its tests call" in pt.TEMPLATE
