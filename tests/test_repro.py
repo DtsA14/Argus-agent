@@ -46,10 +46,10 @@ def test_only_python_fences_are_taken_in_order_and_at_most_three():
 @pytest.mark.parametrize("code,word", [(">>> a = 1  # doctest: +SKIP\n", "no runnable"), ("x = 1\n...\ny = 2", "bare"),
                                        ("$ pip install x\nimport x", "shell"), ("x = 1\n" * 3000, "bytes"),
                                        ("\n\n", "empty")])
-def test_a_block_that_is_not_a_script_is_skipped_with_the_reason(code, word):
+def test_a_block_that_is_not_a_script_is_skipped_with_the_reason(code, word, tmp_path):
     assert word in rp.skip_reason(code)
     box = Box()
-    (r,) = rp.run(Path("."), issue(code), {}, runner=box)
+    (r,) = rp.run(tmp_path, issue(code), {}, runner=box)
     assert r["status"] == "skipped" and word in r["reason"] and box.calls == []
 
 
@@ -82,9 +82,9 @@ def test_the_code_runs_on_a_copy_and_the_base_is_never_written(tmp_path):
     assert box.calls[0]["workdir"] != base
 
 
-def test_output_is_cut_and_the_last_line_of_the_error_is_kept():
+def test_output_is_cut_and_the_last_line_of_the_error_is_kept(tmp_path):
     big = {"exit_code": 0, "stdout": "x" * 5000, "stderr": "", "timed_out": False}
-    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=Box(big))
+    (r,) = rp.run(tmp_path, issue("print(1)"), {}, runner=Box(big))
     assert len(r["stdout"]) == rp.MAX_OUT
 
 
@@ -180,12 +180,12 @@ def test_a_fence_info_string_with_more_than_the_language_is_still_python(info):
     assert rp.blocks("```pythonista\nx = 1\n```") == [] and rp.blocks("```json\n{}\n```") == []
 
 
-def test_output_is_cut_in_bytes_not_characters_and_never_in_half_a_character():
+def test_output_is_cut_in_bytes_not_characters_and_never_in_half_a_character(tmp_path):
     big = {"exit_code": 0, "stdout": "é" * 3000, "stderr": "", "timed_out": False}   # 6000 bytes
-    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=Box(big))
+    (r,) = rp.run(tmp_path, issue("print(1)"), {}, runner=Box(big))
     assert len(r["stdout"].encode("utf-8")) <= rp.MAX_OUT and r["stdout"] == "é" * (rp.MAX_OUT // 2)
     bad = {"exit_code": 1, "stdout": "", "stderr": "ValueError: " + "é" * 400, "timed_out": False}
-    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=Box(bad))
+    (r,) = rp.run(tmp_path, issue("print(1)"), {}, runner=Box(bad))
     assert len(r["stderr_last_line"].encode("utf-8")) <= 300
 
 
@@ -211,18 +211,18 @@ def test_repro_lines_never_raise_on_a_broken_job():
     assert rj.repro_lines(object()) == [] and rj.repro_lines(None) == []
 
 
-def test_control_characters_in_what_the_code_prints_never_reach_the_screen():
+def test_control_characters_in_what_the_code_prints_never_reach_the_screen(tmp_path):
     evil = "ValueError: \x1b[2K\r\x1b[1Ahidden\x07\x9b31m ok\n"
     box = Box({"exit_code": 1, "stdout": "a\x1b[2Jb\tc\nd", "stderr": evil, "timed_out": False})
-    (r,) = rp.run(Path("."), issue("raise ValueError"), {}, runner=box)
+    (r,) = rp.run(tmp_path, issue("raise ValueError"), {}, runner=box)
     for text in (r["stdout"], r["stderr_last_line"], rp.line([r])):
         assert not rp.CONTROL.search(text) and "\x1b" not in text and "\r" not in text
     assert r["stdout"] == "a?[2Jb\tc\nd" and r["stderr_last_line"] == "?[1Ahidden??31m ok"
 
 
-def test_a_clean_run_keeps_no_error_line_and_a_long_error_is_cut_in_the_line():
+def test_a_clean_run_keeps_no_error_line_and_a_long_error_is_cut_in_the_line(tmp_path):
     noisy = {"exit_code": 0, "stdout": "x", "stderr": "DeprecationWarning: old\n", "timed_out": False}
-    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=Box(noisy))
+    (r,) = rp.run(tmp_path, issue("print(1)"), {}, runner=Box(noisy))
     assert r["status"] == "ok" and r["stderr_last_line"] == ""
     long = rp.line([{"status": "raised", "stderr_last_line": "E" * 500}])
     assert long == "issue example at base: raised " + "E" * 80
@@ -250,24 +250,24 @@ def test_the_line_shows_the_last_line_of_what_a_clean_run_printed():
 
 def test_the_output_shown_on_the_line_comes_from_the_cleaned_run(tmp_path):
     box = Box({"exit_code": 0, "stdout": "fine\n\x1b[2Jgone", "stderr": "", "timed_out": False})
-    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=box)
+    (r,) = rp.run(tmp_path, issue("print(1)"), {}, runner=box)
     assert "\x1b" not in rp.line([r]) and 'last output "?[2Jgone"' in rp.line([r])
 
 
 @pytest.mark.parametrize("mark", ["\u202e", "\u202a", "\u2066", "\u200f", "\u200b", "\u2028", "\u2029", "\u061c", "\ufeff"])
-def test_unicode_marks_that_reorder_or_hide_text_are_replaced(mark):
+def test_unicode_marks_that_reorder_or_hide_text_are_replaced(mark, tmp_path):
     box = Box({"exit_code": 1, "stdout": f"a{mark}b", "stderr": f"ValueError: x{mark}y", "timed_out": False})
-    (r,) = rp.run(Path("."), issue("raise ValueError"), {}, runner=box)
+    (r,) = rp.run(tmp_path, issue("raise ValueError"), {}, runner=box)
     assert mark not in r["stdout"] and mark not in r["stderr_last_line"] and mark not in rp.line([r])
 
 
-def test_a_future_import_stays_first_and_the_prelude_follows():
+def test_a_future_import_stays_first_and_the_prelude_follows(tmp_path):
     code = "# a comment\nfrom __future__ import annotations\nx = 1\n   from __future__ import division\nprint(x)\n"
     prog = rp.program(code)
     assert prog.startswith("from __future__ import annotations\nfrom __future__ import division\n" + rp.PRELUDE)
     compile(prog, "x", "exec")                                   # a future import after another statement would not
     box = Box(OK)
-    rp.run(Path("."), issue("from __future__ import annotations\nprint(1)"), {}, runner=box)
+    rp.run(tmp_path, issue("from __future__ import annotations\nprint(1)"), {}, runner=box)
     compile(box.calls[0]["code"], "x", "exec")
     assert rp.program("print(1)\n") == rp.PRELUDE + "print(1)\n"
 
@@ -278,9 +278,9 @@ def test_a_label_that_only_starts_with_python_is_not_python(info):
 
 
 @pytest.mark.parametrize("mark", ["\u00ad", "\u180e", "\u2800", "\U000e0041", "\U000e007f"])
-def test_invisible_format_characters_are_replaced_too(mark):
+def test_invisible_format_characters_are_replaced_too(mark, tmp_path):
     box = Box({"exit_code": 0, "stdout": f"a{mark}b", "stderr": "", "timed_out": False})
-    (r,) = rp.run(Path("."), issue("print(1)"), {}, runner=box)
+    (r,) = rp.run(tmp_path, issue("print(1)"), {}, runner=box)
     assert mark not in r["stdout"] and mark not in rp.line([r])
 
 
@@ -306,3 +306,10 @@ def test_a_failing_event_note_never_replaces_the_stored_result(tmp_path, monkeyp
     assert job.data["state"] == rj.AWAITING_APPROVAL
     assert json.loads((job.dir / rj.REPRO).read_text())["results"][0]["status"] == "ok"
     assert "issue example at base: ran clean" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_no_run_of_this_file_uses_the_checkout_as_its_base_directory():
+    # `run` copies its base directory for every block: the checkout (about 100 MB) as the base wrote 2 GB in this file alone, and on the verify machine that
+    # saturates the disk for about a minute and times out the Docker tests that happen to run then (2026-11-18). A small temporary directory is enough.
+    text = Path(__file__).read_text()
+    assert "rp.run(" + "Path(" + '".")' not in text and "rp.run(" + "Path(" + "'.')" not in text
