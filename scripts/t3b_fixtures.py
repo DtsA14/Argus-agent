@@ -65,7 +65,8 @@ def remaining(limit, spent):
     return limit - spent
 '''
 README = ("# Toko\n\nSatuan harga: rupiah penuh, bukan ribuan.\n1 lot saham = 100 lembar.\nKerugian dicatat sebagai angka negatif.\n"
-          "Persen ditulis sebagai angka persen (3 berarti 3 persen), bukan pecahan.\n")
+          "Persen ditulis sebagai angka persen (3 berarti 3 persen), bukan pecahan.\n"
+          "Untung rugi = (harga jual - harga beli) x jumlah lembar.\n")
 README_NO_ROUND = README                                   # the rounding up of D7 is deliberately in no document
 
 HEAD = "from src.shop import {fn}"

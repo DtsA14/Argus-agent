@@ -143,6 +143,12 @@ def main(argv=None, deps=None):
     ap_.add_argument("--reader", choices=("claude",), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
     ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
                      "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
+    t3b = sub.add_parser("t3b-run", help="one round of the T3b test of the domain reader with an Argus model (GLM, role code_judge) as the reader, outside the approval card: costs money, has its own cap (SPEC_KARTU_SETUJU 8)")
+    t3b.add_argument("root", help="the directory built by scripts/t3b_fixtures.py build")
+    t3b.add_argument("--run", type=int, choices=(1, 2), required=True, help="which of the two readings of every set")
+    t3b.add_argument("--limit", type=int, help="read at most this many sets (a measuring call first)")
+    t3b.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of this T3b directory (run 1 and run 2 share one ledger): a call starts only if billed so far + its worst case fits")
+    t3b.add_argument("--max-output", type=int, default=6000, help="output tokens a call may use (a reasoning model spends them on thinking first)")
     er_ = sub.add_parser("examples-read", help="the domain reader's bundle and note for one item of a PRD (SPEC_KARTU_SETUJU 5 rev 2): a Claude session's statement, not a proof and not a human")
     er_.add_argument("job", help="the PRD job")
     er_.add_argument("--item", required=True, type=int)
@@ -272,7 +278,7 @@ def main(argv=None, deps=None):
         r.add_argument("--sha", help="the draft the human saw (12+ hex): refused when the job's last draft is another")
         r.add_argument("--via", choices=rj.VIA, help="where the decision was made (SPEC_CONTROL_UI F4)")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run"):   # the live commands
             p.add_argument("--key-file", action="append",
                            help="read the API key from this 0600 file instead of typing it; for a stage that needs "
                                 "keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
@@ -382,6 +388,11 @@ def main(argv=None, deps=None):
             q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir) if o.queue_cmd == "go"
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
+            return 0
+        if o.cmd == "t3b-run":
+            from router import t3b_run
+            summary = t3b_run.run(o.root, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, limit=o.limit)
+            print(json.dumps(summary, indent=1))
             return 0
         if o.cmd == "examples-read":
             from router import examples_read as ers
