@@ -39,6 +39,11 @@ def test_there_are_eight_defect_and_eight_good_sets_with_opaque_distinct_ids(bui
     assert not any(s in " ".join(ids) for s in ("defect", "good"))
 
 
+def test_the_order_in_which_the_sets_are_shown_is_shuffled_by_the_seed(built):
+    root, ids, h, key = built
+    assert [key[j]["set"] for j in ids] != [spec[0] for spec in t3.SETS]
+
+
 def test_the_key_hash_is_printed_and_the_file_is_checked_against_it_before_scoring(built):
     root, ids, h, key = built
     assert h == hashlib.sha256((root / t3.KEY_FILE).read_text().encode()).hexdigest() == (root / t3.KEY_HASH).read_text().strip()
