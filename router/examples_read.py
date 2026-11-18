@@ -24,9 +24,10 @@ from router import card_numbers as cn
 from router import example_gate as eg
 from router import job as rj
 from router import prd as rp
+from router import queue as rq
 from router import stage_data as sd
 from router.approve_cards import RUN_ID, TIER_ORDER, Approve
-from router.cards import ITEMS_MAX, TURN, Cards, OPEN_DIR, OPEN_FILE, _open_dir
+from router.cards import ITEMS_MAX, QUEUE_MAX, TURN, Cards, OPEN_DIR, OPEN_FILE, _open_dir
 
 TEMPLATE = """You are the domain reader of an Argus plan. You judge ONLY whether the numbers of the examples below fit the request and the rules that the
 request, the PRD and the repo documents state. You are not asked to review code, style or cost.
@@ -56,6 +57,10 @@ SRC_DOC = re.compile(r"dokumen repo: [A-Za-z0-9_./-]{1,100}")
 HEX64, HEX40 = re.compile(r"[0-9a-f]{64}"), re.compile(r"[0-9a-f]{40}")
 AT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z")
 LABEL = "a statement of a Claude session (a model), not a proof that the numbers are right, and not a human"
+
+
+class NoExamples(rj.Refused):
+    """The item has no examples to read (a different case from a folder that cannot be read)."""
 
 
 def sha(text):
@@ -146,7 +151,7 @@ def gather(jobs_dir, job_id, item):
         text = files[f"issue-{item}.md"].decode("utf-8", "replace")
         present, parsed, problems = eg.extract(text)
         if problems or not parsed:
-            _refuse(job_id, "this item has no examples to read")
+            raise NoExamples(f"job {job_id}: this item has no examples to read; nothing was written")
         human = []                                            # every human message the writer of THIS turn had read, in order (later ones are for a later turn)
         for m in data.get("conversation") or []:
             if not isinstance(m, dict):
@@ -174,7 +179,8 @@ def gather(jobs_dir, job_id, item):
                 body, cut = body[:DOCS_MAX - total], True
             total += len(body)
             docs.append((name, body, cut))
-        return {"job": job_id, "turn": turn, "folder_sha": folder_sha, "commit": commit, "item": item, "digest": eg.digest(parsed),
+        return {"job": job_id, "turn": turn, "folder_sha": folder_sha, "commit": commit, "item": item, "digest": eg.digest(parsed), "issue_sha256": rq._sha(text.strip()),          # a queue hashes the text it stores: stripped (queue.validate_new)
+                
                 "request": human, "tree": src_fd is not None, "prd": files["PRD.md"].decode("utf-8", "replace"), "issue": eg.without_block(text),
                 "cards": cards, "docs": docs, "dropped": dropped}
     finally:
@@ -238,7 +244,7 @@ def bundle(jobs_dir, job_id, item):
     return text, {"request_ok": any(m.strip() and not _data(m, REQUEST_MAX)[0].startswith(WITHHELD) for m in g["request"]),
                   "examples_ok": not _data("\n\n".join(_card_lines(c) for c in g["cards"]), CARDS_MAX)[0].startswith(WITHHELD),
                   "docs_ok": usable, "job": job_id, "turn": g["turn"], "folder_sha": g["folder_sha"], "commit": g["commit"], "item": item, "digest": g["digest"],
-                  "bundle_sha256": sha(text), "template_sha256": TEMPLATE_SHA256, "docs": [d[0] for d in g["docs"]]}
+                  "issue_sha256": g["issue_sha256"], "bundle_sha256": sha(text), "template_sha256": TEMPLATE_SHA256, "docs": [d[0] for d in g["docs"]]}
 
 
 # ---- the note -----------------------------------------------------------------------------------------------------------------------
@@ -375,3 +381,126 @@ def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps,
             os.fsync(f.fileno())
         os.replace(tmp, target)
     return entry
+
+
+# ---- the chain from a code job back to the note (SPEC_KARTU_SETUJU 5, "Rantai ikatan ke job code") --------------------------------------
+
+def _chain_result(applicable, ok, kind, why, **more):
+    return {"applicable": applicable, "ok": ok, "kind": kind, "why": why, "rec": None, "prd_job": None, "item": None, **more}
+
+
+def _queue_raw(qfd, name):
+    """(bytes, False) of queue.json of queue `name` (never through a symlink, a regular file, at most QUEUE_MAX); (None, False) when there is none;
+    (None, True) when something is there that cannot be read (a link, not a regular file, no permission): that is not the same as nothing."""
+    try:
+        dfd = _open_dir(name, qfd)
+    except FileNotFoundError:
+        return None, False
+    except OSError:
+        return None, True
+    try:
+        fd = os.open("queue.json", OPEN_FILE, dir_fd=dfd)
+    except FileNotFoundError:
+        return None, False
+    except OSError:
+        return None, True
+    finally:
+        os.close(dfd)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None, True
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            return f.read(QUEUE_MAX), False
+    except OSError:
+        return None, True
+    finally:
+        os.close(fd)
+
+
+def chain(job, jobs_dir, queues_dir=None):
+    """Whether the domain reader's note holds for this code job, as `argus apply` and the install card both need it: {applicable, ok, kind, why, rec,
+    prd_job, item}. Fails closed: anything unexpected is `tidak_terbaca`, applicable and not ok.
+
+    Not applicable (and ok): the job is not an item of a queue of this jobs directory, or the queue was not made from a PRD folder, or the PRD item has no
+    examples. Otherwise ok only when all of these match, in this order: the job's own issue is the queue item's issue (sha); the queue's PRD folder is the
+    folder of the last turn of the PRD job and the turn its directory names; the sha of that folder's issue file (stripped, as a queue stores it) is the
+    item's `issue_sha256`; the examples of the job's issue are the examples of the PRD item (implied: the job's issue is the item's text by sha, and the PRD folder's
+    issue file is that text; the intake and audit files are keyed on the digest of the same examples, and `examples_decision` checks them after this); and the note, read against the bundle as it is NOW, is `ok`. A queue file that names the job and cannot
+    be used (damaged, oversized, another jobs directory) is refused, never skipped. The scan of the queues has no cap: a cap would be a way round it.
+    Read only: files through descriptors, no write."""
+    try:
+        return _chain(job, jobs_dir, queues_dir)
+    except Exception as e:                                      # whatever it is: the gate never opens by accident
+        return _chain_result(True, False, "tidak_terbaca", f"the check of the domain reader's note failed ({type(e).__name__}): not applied")
+
+
+def _chain(job, jobs_dir, queues_dir):
+    c = Cards(jobs_dir, queues_dir if queues_dir else rq.QUEUES, lambda t: t)
+    qfd = c._queues_fd()
+    if qfd is None:
+        return _chain_result(False, True, "tidak_berlaku", "there is no queues directory: the job is not an item of a PRD queue")
+    matches, unusable = [], []
+    me = job.id.encode("utf-8")
+    try:
+        for name in sorted(n for n in os.listdir(qfd) if rq.QUEUE_ID.fullmatch(n)):
+            raw, unreadable = _queue_raw(qfd, name)
+            if unreadable:
+                unusable.append(name)
+                continue
+            if raw is None:
+                continue
+            try:
+                q = json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError, RecursionError):
+                q = None
+            usable = q is not None and rq.shape_ok(q, name) and c._same_jobs_dir(q)
+            if usable:
+                matches += [(name, q, it) for it in q["items"] if it.get("job") == job.id]
+            elif me in raw or len(raw) >= QUEUE_MAX:
+                unusable.append(name)                          # it names this job (or is too large to tell) and cannot be used: not a reason to skip the gate
+    finally:
+        os.close(qfd)
+
+    def bad(why, **more):
+        return _chain_result(True, False, more.pop("kind", "tidak_terbaca"), why, **more)
+    if unusable:
+        return bad(f"queue {unusable[0]} names this job but cannot be used (damaged, too large, or of another jobs directory)")
+    if not matches:
+        return _chain_result(False, True, "tidak_berlaku", "the job is not an item of a queue of this jobs directory")
+    if len(matches) > 1:
+        return bad("the job is an item of more than one queue")
+    _, q, it = matches[0]
+    if not q.get("prd"):
+        return _chain_result(False, True, "tidak_berlaku", "the queue was not made from a PRD folder")
+    own = (job.data.get("inputs") or {}).get("issue")
+    if not isinstance(own, str) or hashlib.sha256(own.encode("utf-8")).hexdigest() != it.get("issue_sha256"):
+        return bad("the job's issue is not the issue of its queue item")
+    present, parsed, problems = eg.extract(own)           # the issue IS the queue item's (sha): whether it has examples is decided here, not by a PRD that may have changed
+    if not present:
+        return _chain_result(False, True, "tidak_berlaku", "the queue item's issue has no examples block")
+    if problems or not parsed:
+        return bad("the examples block of the job's issue cannot be read")
+    prd_job = c._prd_job_of(q)
+    turn = Path(q["prd"]["dir"]).name
+    if prd_job is None or not turn.startswith("prd-") or not TURN.fullmatch(turn[4:]):
+        return bad("the PRD folder of the queue is not in this jobs directory")
+    n = it.get("n")
+    more = {"prd_job": prd_job, "item": n}
+    try:
+        _, info = bundle(jobs_dir, prd_job, n)
+    except NoExamples:                                  # the job's issue has a block (checked above), so a PRD that has none now was revised after the queue
+        return bad("the PRD was revised after the queue was made (its item has no examples now): make a new queue", **more)
+    except rj.Refused as e:
+        return bad(f"the queue was made from an older folder of the PRD, or the folder cannot be read now: make a new queue or read the numbers again "
+                   f"({str(e).split(': ', 1)[-1].split('; nothing')[0]})", **more)
+    if info["turn"] != turn[4:] or info["folder_sha"] != q["prd"]["sha"]:
+        return bad("the PRD folder is not the one this queue was made from: make a new queue", **more)
+    if info["issue_sha256"] != it.get("issue_sha256"):
+        return bad("the issue of the PRD folder is not the issue of the queue item", **more)
+    try:
+        kind, rec = status(jobs_dir, prd_job, n)
+    except rj.Refused as e:
+        return bad(f"the note cannot be checked ({str(e).split(': ', 1)[-1].split('; nothing')[0]})", **more)
+    why = {"none": "no domain reader's note for this item", "stale": "the domain reader's note is stale: what it read has changed",
+           "error": "the domain reader's note cannot be read", "concerns": "the domain reader recorded concerns"}.get(kind)
+    return _chain_result(True, kind == "ok", kind, why, rec=rec, **more)
