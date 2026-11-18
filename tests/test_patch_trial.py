@@ -286,3 +286,11 @@ def test_readings_of_other_models_in_the_same_directory_are_not_the_pairs(tmp_pa
             f.write(json.dumps(row("kimi27", c, 1, "ok", template_sha256="0" * 64, effort="high")) + "\n")
     ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
     assert ok and any("(e)" in l and "(got 0)" in l for l in lines)
+
+
+def test_the_touched_files_of_a_bundle_are_those_of_its_patch_and_g4_does_not_ask_for_the_impossible():
+    by = {c[0]: c for c in pt.CASES}
+    touches = lambda cid: pt.bundle(by[cid]).split("=== DATA touches ===")[1].split("===")[0].strip()          # noqa: E731
+    assert touches("y1") == "tests/test_shop.py" and touches("x1") == "tests/test_shop.py"                      # a test-only patch does not list src/shop.py
+    assert touches("p2") == "src/shop.py" and touches("g4") == "src/shop.py, tests/test_shop.py"
+    assert "any price up to 1000000000" in by["g4"][3]                                                           # Decimal's default precision fails beyond 28 digits
