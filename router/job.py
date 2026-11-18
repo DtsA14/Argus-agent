@@ -1740,8 +1740,10 @@ def _review_lines(job, rv):
         who = note["reader"]["kind"]
         read_line = (f"  patch read: {kind} by {who} at {note['at']}: {note['note']} ({pr.LABEL})")
     else:
-        read_line = (f"  patch read: {kind}{' (the note cannot be read)' if kind == 'error' else ''}: write the note first (apply refuses without an ok note):\n"
-                     f"    argus patch-read {job.id} --sha {sha[:12]} --verdict ok --note \"...\" --reader claude")
+        read_line = (f"  patch read: {kind}{' (the note cannot be read)' if kind == 'error' else ''}: {'a second reading is needed' if kind == 'one' else 'write the note first'} "
+                     f"(apply refuses without an ok of two readings by two different readers):\n"
+                     f"    argus patch-read-run {job.id}      (Hy4 Flash, then DeepSeek 1017 if it says ok; costs money)\n"
+                     f"    or: argus patch-read {job.id} --sha {sha[:12]} --verdict ok --note \"...\" --reader claude --reader-id <id> [--second]")
     return out + [f"  patch:          {patch} (sha256 {sha})", read_line,
                   "apply (read the patch first; its sha256 is the --read-sha):",
                   f"  argus apply {job.id} --read-sha {sha[:12]}",

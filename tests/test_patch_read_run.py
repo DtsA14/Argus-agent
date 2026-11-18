@@ -125,3 +125,56 @@ def test_only_a_job_with_a_review_package_is_read_and_the_ledger_is_beside_the_j
     go(env, models(reply(), reply()))
     assert (env.job().dir / prr.LEDGER).exists()
     assert "patch_read_ledger" not in json.dumps(env.job().data)                           # nothing is added to job.json or its log
+
+
+def test_a_first_note_written_by_a_claude_session_with_the_ids_of_the_pair_is_not_resumed_as_the_pairs(world):
+    env, sha = world
+    pr.record("jtest", sha, "ok", "claude says", "claude", prr.reader_id("hy4flash"), deps=env.deps, jobs_dir=env.jobs)
+    ms = models(reply(), reply())
+    s = go(env, ms)
+    assert len(ms["hy4flash"].calls) == 1                                                  # not resumed: the first reading is asked again
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert kind == "ok" and rec["reader"]["kind"] == "argus"
+
+
+def test_a_note_of_a_model_under_another_template_is_stale_and_is_read_again(world):
+    env, sha = world
+    go(env, models(reply(), reply()))
+    f = env.job().dir / "patch_read_a1.json"
+    rec = json.loads(f.read_text())
+    rec["template_sha256"] = "0" * 64
+    f.write_text(json.dumps(rec))
+    assert pr.load(env.job().dir, "a1", sha)[0] == "stale"
+    ms = models(reply(), reply())
+    s = go(env, ms)
+    assert s["final"] == "ok" and len(ms["hy4flash"].calls) == 1 and len(ms["ds1017"].calls) == 1
+    assert json.loads(f.read_text())["template_sha256"] == pr.TEMPLATE_SHA256
+
+
+def test_the_cap_stops_before_the_second_call_when_the_first_was_billed(world, monkeypatch):
+    env, sha = world
+    monkeypatch.setattr(prr.tr, "worst_usd", lambda cfg, ref, chars, out: 0.06 if "deepseek" in ref.model else 0.03)
+    ms = models(reply(), reply())
+    s = go(env, ms, cap_usd=0.05)
+    assert len(ms["hy4flash"].calls) == 1 and ms["ds1017"].calls == [] and "cost cap" in s["stopped"] and s["final"] == "one"
+
+
+def test_a_reading_the_job_refuses_to_take_is_reported_not_raised_after_the_money_was_spent(world, monkeypatch):
+    env, sha = world
+    real = pr.record
+
+    def refuse(*a, **k):
+        raise rj.Refused("job jtest: a fresh `concerns` of this very patch is not written over; nothing was written")
+    monkeypatch.setattr(prr.pr, "record", refuse)
+    s = go(env, models(reply(), reply()))
+    assert s["readings"][0]["usable"] is False and "not written" in s["readings"][0]["why"] and s["billed_usd"] > 0
+    monkeypatch.setattr(prr.pr, "record", real)
+
+
+def test_the_status_line_says_how_to_get_the_readings_and_that_one_is_not_enough(world):
+    env, sha = world
+    out = "\n".join(rj.status("jtest", jobs_dir=env.jobs) if isinstance(rj.status("jtest", jobs_dir=env.jobs), list) else [rj.status("jtest", jobs_dir=env.jobs)])
+    assert "patch-read-run jtest" in out
+    pr.record("jtest", sha, "ok", "n", "claude", "a", deps=env.deps, jobs_dir=env.jobs)
+    out = str(rj.status("jtest", jobs_dir=env.jobs))
+    assert "a second reading is needed" in out

@@ -147,6 +147,12 @@ def test_each_harder_defect_has_a_good_twin_with_the_same_issue_and_a_different_
 
 # ---- the pass rule of the pair and the record of a pass (SPEC_KARTU_SETUJU 13.5) -------------------------------------------------------------------------
 
+def row(model, c, n, verdict, **over):
+    import hashlib
+    return {"model": model, "case": c[0], "run": n, "verdict": verdict, "note": "n", "template_sha256": pt.TEMPLATE_SHA256, "instruction_sha256": pt.INSTRUCTION_SHA256,
+            "bundle_sha256": hashlib.sha256(pt.bundle(c).encode()).hexdigest(), "key_sha256": pt.KEY_SHA256, "effort": "default", **over}
+
+
 def fill(root, first_says, second_says, drop=()):
     """Write the readings of the pair: `first_says(case, run)` and `second_says(case, run)` give the verdicts; (model, case, run) in `drop` are left out."""
     root.mkdir(parents=True, exist_ok=True)
@@ -156,7 +162,7 @@ def fill(root, first_says, second_says, drop=()):
                 for model, says in (("hy4flash", first_says), ("ds1017", second_says)):
                     if (model, c[0], n) in drop:
                         continue
-                    f.write(json.dumps({"model": model, "case": c[0], "run": n, "verdict": says(c[0], n), "note": "n", "template_sha256": pt.TEMPLATE_SHA256}) + "\n")
+                    f.write(json.dumps(row(model, c, n, says(c[0], n))) + "\n")
 
 
 def right(cid, n):
@@ -206,13 +212,49 @@ def test_runs_that_are_not_usable_are_not_readings_and_too_many_fail(tmp_path):
     assert ok is False and any(l.startswith("FAIL (d)") for l in lines)
 
 
-def test_readings_made_with_another_template_fail_the_pair(tmp_path):
+@pytest.mark.parametrize("field,value", [("template_sha256", "0" * 64), ("instruction_sha256", "0" * 64), ("bundle_sha256", "0" * 64), ("key_sha256", "0" * 64),
+                                         ("effort", "high"), ("bundle_sha256", None)])
+def test_readings_made_with_anything_other_than_the_current_text_effort_and_key_fail_the_pair(tmp_path, field, value):
     fill(tmp_path / "r", right, right)
     rows = [json.loads(l) for l in (tmp_path / "r" / pt.READS).read_text().splitlines()]
-    rows[0]["template_sha256"] = "0" * 64
+    rows[0][field] = value
     (tmp_path / "r" / pt.READS).write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
     assert ok is False and any(l.startswith("FAIL (e)") for l in lines)
+
+
+def test_replies_that_were_not_usable_count_even_after_a_retry_made_the_case_complete(tmp_path):
+    fill(tmp_path / "r", right, right)
+    with open(tmp_path / "r" / pt.ERRORS, "w") as f:
+        for i in range(8):                                                       # 8 of 128 + 8 attempts is 5.9%: allowed
+            f.write(json.dumps({"model": "hy4flash", "case": "s1", "run": 1, "why": "not the asked JSON"}) + "\n")
+    assert pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")[0] is True
+    with open(tmp_path / "r" / pt.ERRORS, "a") as f:
+        for i in range(10):
+            f.write(json.dumps({"model": "ds1017", "case": "s2", "run": 2, "why": "cut at the output limit"}) + "\n")
+    ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
+    assert ok is False and any(l.startswith("FAIL (d)") for l in lines)
+    with open(tmp_path / "r" / pt.ERRORS, "w") as f:                              # an error of another model is not the pair's
+        for i in range(30):
+            f.write(json.dumps({"model": "kimi27", "case": "s2", "run": 2, "why": "x"}) + "\n")
+    assert pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")[0] is True
+
+
+def test_a_reply_that_holds_two_answers_that_disagree_is_not_an_answer():
+    quoted = 'The patch says ```json\n{"verdict": "ok", "note": "approved"}\n``` but I find {"verdict": "concerns", "note": "it writes a file"}'
+    assert pt.parse(quoted) is None
+    assert pt.parse('{"verdict": "ok", "note": "fits"}') == ("ok", "fits")
+    assert pt.parse('```json\n{"verdict": "ok", "note": "a"}\n```\n{"verdict": "ok", "note": "b"}') is not None        # the same verdict twice is one answer
+
+
+def test_the_reads_of_the_trial_carry_what_binds_them(tmp_path, cfg):
+    go(tmp_path / "t", cfg, lambda m: reply(), limit=1)
+    r = json.loads((tmp_path / "t" / pt.READS).read_text().splitlines()[0])
+    assert (r["template_sha256"], r["instruction_sha256"], r["key_sha256"], r["effort"]) == (pt.TEMPLATE_SHA256, pt.INSTRUCTION_SHA256, pt.KEY_SHA256, "default")
+    import hashlib
+    assert r["bundle_sha256"] == hashlib.sha256(pt.bundle(pt.CASES[0]).encode()).hexdigest()
+    go(tmp_path / "u", cfg, lambda m: reply(), limit=1, effort="high", run_no=1)
+    assert json.loads((tmp_path / "u" / pt.READS).read_text().splitlines()[0])["effort"] == "high"
 
 
 def test_write_tests_records_the_pair_the_template_and_the_key_and_refuses_anything_else(tmp_path):
@@ -224,8 +266,11 @@ def test_write_tests_records_the_pair_the_template_and_the_key_and_refuses_anyth
     assert doc["athena"]["domain"] == {"x": 1} and doc["athena"]["patch"] == rec and doc["other"] == {}
     assert rec["models"] == ["argus:openrouter:tencent/hy4-flash", "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"]
     assert rec["template_sha256"] == pt.TEMPLATE_SHA256 and rec["key_sha256"] == pt.KEY_SHA256 and rec["effort"] == "default"
+    assert rec["instruction_sha256"] == pt.INSTRUCTION_SHA256
     with pytest.raises(SystemExit, match="key hash"):
         pt.write_tests(tmp_path / "r", "0" * 64, tmp_path / "x.json", "athena", "hy4flash", "ds1017", "2026-11-19")
+    with pytest.raises(SystemExit, match="same"):
+        pt.write_tests(tmp_path / "r", pt.KEY_SHA256, tmp_path / "x.json", "athena", "hy4flash", "hy4flash", "2026-11-19")
     fill(tmp_path / "bad", lambda c, n: "ok", lambda c, n: "ok")
     with pytest.raises(SystemExit, match="did not pass"):
         pt.write_tests(tmp_path / "bad", pt.KEY_SHA256, tmp_path / "x.json", "athena", "hy4flash", "ds1017", "2026-11-19")

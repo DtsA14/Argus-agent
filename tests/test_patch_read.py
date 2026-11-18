@@ -442,6 +442,30 @@ def test_a_damaged_or_same_id_second_reading_in_the_file_is_never_ok(env, tmp_pa
     assert pr.load(env.job().dir, "a1", sha)[0] == "one"
 
 
+def test_a_second_reading_without_an_id_is_not_a_second_reader_and_a_model_reading_of_another_template_is_stale(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha)
+    good = json.loads(file_of(env).read_text())
+    file_of(env).write_text(json.dumps({**good, "second": {**good["second"], "reader": {"kind": "claude"}}}))
+    assert pr.load(env.job().dir, "a1", sha)[0] == "one"
+    # a model reading carries the hash of the template it was given
+    file_of(env).write_text(json.dumps(good))
+    assert pr.load(env.job().dir, "a1", sha)[0] == "ok"                                      # Claude readings have no template to be stale against
+    for which in ("first", "second"):
+        m = json.loads(json.dumps(good))
+        part = m if which == "first" else m["second"]
+        part["reader"] = {"kind": "argus", "id": "argus:x" if which == "first" else "argus:y"}
+        part["template_sha256"] = pr.TEMPLATE_SHA256
+        file_of(env).write_text(json.dumps(m))
+        assert pr.load(env.job().dir, "a1", sha)[0] == "ok", which                         # the pair of models under the current template
+        part["template_sha256"] = "0" * 64
+        file_of(env).write_text(json.dumps(m))
+        assert pr.load(env.job().dir, "a1", sha)[0] == "stale", which
+        del part["template_sha256"]
+        file_of(env).write_text(json.dumps(m))
+        assert pr.load(env.job().dir, "a1", sha)[0] == "stale", which
+
+
 def test_the_model_reader_is_a_reader_kind_and_the_template_is_the_tested_one():
     assert "argus" in pr.READERS and "claude" in pr.READERS
     assert pr.TEMPLATE_SHA256 == "aad60608789a4a76b8a1a31ab8e99d2853b15565ae06de4b78a9acc39de7db0b"       # what the planted-patch trial tested; a change is a new trial

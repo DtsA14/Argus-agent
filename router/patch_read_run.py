@@ -80,12 +80,12 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.10, max_output=12000, 
         summary["stopped"] = f"the patch already has a final reading ({kind0}); nothing is read again"
         return summary
     plan = []
-    resume = kind0 == "one" and isinstance(rec0, dict) and rec0["reader"].get("id") == reader_id(first) and "second" not in rec0   # the first reading stands
+    resume = kind0 == "one" and isinstance(rec0, dict) and rec0["reader"].get("kind") == "argus" and rec0["reader"].get("id") == reader_id(first) and "second" not in rec0   # the first reading stands
     for n, name in enumerate((first, second)):
         if n == 0 and resume:
             continue
         cfg_n, ref = pt._prepare(cfg, name, cap_usd, max_output, None)
-        plan.append((name, cfg_n, ref, tr.worst_usd(cfg_n, ref, len(pt.INSTRUCTION) + len(text), max_output)))
+        plan.append((name, cfg_n, ref, tr.worst_usd(cfg_n, ref, len(pr.INSTRUCTION) + len(text), max_output)))
     msg = "\n".join([f"patch reading of {job_id} ({sha[:12]}) by {reader_id(first)}, then (only if it says ok) {reader_id(second)}; the readings are notes of the job (patch_read_<sid>.json)",
                      f"worst case per call up to ${max(p[3] for p in plan):.4f}; cap TOTAL for this job's patch readings ${cap_usd:.2f}",
                      f"template {pr.TEMPLATE_SHA256[:12]}; ledger {job.dir / LEDGER}"])
@@ -104,7 +104,7 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.10, max_output=12000, 
             caller = LLMCaller(cfg_n, pt.ROLE, log, model=(models or {}).get(name))
             res = tr.reservation(len(text), max_output, worst)
             try:
-                reply = caller.call([SystemMessage(pt.INSTRUCTION), HumanMessage(text)], res,
+                reply = caller.call([SystemMessage(pr.INSTRUCTION), HumanMessage(text)], res,
                                     meta={"node": "patch_reader", "task": f"{job_id}-{sid}", "iteration": n + 1, "step": 0})
             except (LLMCallFailed, ReservationExhausted) as e:
                 summary["readings"].append({"reader": reader_id(name), "usable": False, "why": f"call failed: {type(e).__name__}"})
@@ -117,7 +117,11 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.10, max_output=12000, 
                 summary["readings"].append({"reader": reader_id(name), "usable": False, "why": "the reply is not the asked JSON"})
                 break
             verdict, note = got
-            pr.record(job_id, sha[:12], verdict, note, "argus", reader_id(name), deps=deps, jobs_dir=jobs_dir, second=(n == 1))
+            try:
+                pr.record(job_id, sha, verdict, note, "argus", reader_id(name), deps=deps, jobs_dir=jobs_dir, second=(n == 1))
+            except rj.Refused as e:                           # the job changed while the model read (a manual note, a new patch): the reading is not written
+                summary["readings"].append({"reader": reader_id(name), "usable": False, "why": f"not written: {str(e).split(': ', 1)[-1].split('; nothing')[0]}"})
+                break
             summary["readings"].append({"reader": reader_id(name), "usable": True, "verdict": verdict})
             verdicts.append(verdict)
             if verdict == "concerns":

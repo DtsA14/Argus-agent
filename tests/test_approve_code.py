@@ -76,8 +76,9 @@ def make(s, jid=CJOB, examples=(SAME, AFTER), *, base="pass", audit="pass", revi
     if read:
         (d / f"patch_read_{sid}.json").write_text(json.dumps({
             "key": pr.key(sid, read_sha or psha), "sid": sid, "patch_sha256": read_sha or psha, "verdict": read, "note": note,
-            "at": "2026-11-18T01:30:00Z", "reader": {"kind": by_reader, "id": "opus-1"},
-            **({"second": {"verdict": read, "note": note, "at": "2026-11-18T01:31:00Z", "reader": {"kind": by_reader, "id": "opus-2"}}} if read == "ok" and not one_reading else {})}))
+            "at": "2026-11-18T01:30:00Z", "reader": {"kind": by_reader, "id": "opus-1"}, **({"template_sha256": pr.TEMPLATE_SHA256} if by_reader == "argus" else {}),
+            **({"second": {"verdict": read, "note": note, "at": "2026-11-18T01:31:00Z", "reader": {"kind": by_reader, "id": "opus-2"},
+                           **({"template_sha256": pr.TEMPLATE_SHA256} if by_reader == "argus" else {})}} if read == "ok" and not one_reading else {})}))
     return d
 
 
@@ -579,7 +580,7 @@ def test_the_patch_reader_is_tested_only_for_the_pair_of_models_and_the_template
     rec = json.loads((svc.jobs / CJOB / "patch_read_a1.json").read_text())
     rec["reader"]["id"], rec["second"]["reader"]["id"] = "argus:openrouter:tencent/hy4-flash", "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"
     (svc.jobs / CJOB / "patch_read_a1.json").write_text(json.dumps(rec))
-    entry = {"template_sha256": pr.TEMPLATE_SHA256, "effort": "default", "models": ["argus:openrouter:tencent/hy4-flash", "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"]}
+    entry = {"template_sha256": pr.TEMPLATE_SHA256, "instruction_sha256": pr.INSTRUCTION_SHA256, "effort": "default", "models": ["argus:openrouter:tencent/hy4-flash", "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"]}
     f.write_text(json.dumps({"athena": {"patch": entry}}))
     assert get(svc)[1]["patch_reader_tested"] is True
     for bad in ({**entry, "models": entry["models"][::-1]}, {**entry, "models": entry["models"][:1]}, {**entry, "template_sha256": "0" * 64}, {**entry, "effort": None},
@@ -587,5 +588,15 @@ def test_the_patch_reader_is_tested_only_for_the_pair_of_models_and_the_template
         f.write_text(json.dumps({"athena": {"patch": bad}}))
         assert get(svc)[1]["patch_reader_tested"] is False
     f.write_text(json.dumps({"athena": {"patch": entry}}))
-    make(svc, by_reader="claude")                                                            # the readers of this card are Claude sessions: not the tested pair
+    # a Claude session that writes the ids of the pair is not the pair (the kind is checked), and so is a record without the instruction hash or at another effort
+    rec = json.loads((svc.jobs / CJOB / "patch_read_a1.json").read_text())
+    rec["reader"]["kind"] = "claude"
+    (svc.jobs / CJOB / "patch_read_a1.json").write_text(json.dumps(rec))
     assert get(svc)[1]["patch_reader_tested"] is False
+    rec["reader"]["kind"] = "argus"
+    (svc.jobs / CJOB / "patch_read_a1.json").write_text(json.dumps(rec))
+    for bad in ({**entry, "instruction_sha256": "0" * 64}, {**entry, "effort": "high"}):
+        f.write_text(json.dumps({"athena": {"patch": bad}}))
+        assert get(svc)[1]["patch_reader_tested"] is False
+    f.write_text(json.dumps({"athena": {"patch": entry}}))
+    assert get(svc)[1]["patch_reader_tested"] is True

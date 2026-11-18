@@ -41,6 +41,10 @@ Rules of this reading:
 4. You know only what is written here. Reply with ONLY one JSON object on one line: {"verdict": "ok" or "concerns", "note": "at most 500 characters: the
    line or hunk you rely on, and why"}."""
 TEMPLATE_SHA256 = hashlib.sha256(TEMPLATE.encode("utf-8")).hexdigest()
+# The system message of every model reading: part of what was tested, so it has its own hash in the record of a pass.
+INSTRUCTION = ("You are the patch reader in a test. Follow the rules at the top of the bundle (before its first DATA header). Do not run any command. "
+               "Reply with ONLY one JSON object on one line: {\"verdict\": \"ok\" or \"concerns\", \"note\": \"at most 500 characters\"}.")
+INSTRUCTION_SHA256 = hashlib.sha256(INSTRUCTION.encode("utf-8")).hexdigest()
 
 
 def render(issue, touches, fact, patch):
@@ -99,7 +103,7 @@ def record(job_id, sha, verdict, note, reader, reader_id=None, *, deps, jobs_dir
         if review.get("patch_sha256") != full or (prov.get("patch") or {}).get("sha256") != full:
             _refuse(job_id, "the patch on disk is not the one the review recorded (job.json and provenance.json must both name it)")
         rec = {"key": key(sid, full), "sid": sid, "patch_sha256": full, "verdict": verdict, "note": text,
-               "reader": {"kind": reader, **({"id": rid} if rid else {})}, "at": deps.clock()}
+               "reader": {"kind": reader, **({"id": rid} if rid else {})}, "at": deps.clock(), "template_sha256": TEMPLATE_SHA256}
         target = path(job.dir, sid)
         kind0, old = load(job.dir, sid, full)
         if kind0 == "concerns":
@@ -109,8 +113,8 @@ def record(job_id, sha, verdict, note, reader, reader_id=None, *, deps, jobs_dir
                 _refuse(job_id, "a second reading needs a first one: a fresh `ok` of this very patch, recorded before it")
             if rid is None or _rid(old["reader"]) in (None, rid.strip().casefold()):
                 _refuse(job_id, "the second reading is by another reader id than the first (and both have an id): the same id is not a second reader")
-            rec = {**{k: old[k] for k in ("key", "sid", "patch_sha256", "verdict", "note", "reader", "at")},
-                   "second": {"verdict": verdict, "note": text, "reader": rec["reader"], "at": rec["at"]}}
+            rec = {**{k: old[k] for k in ("key", "sid", "patch_sha256", "verdict", "note", "reader", "at", "template_sha256") if k in old},
+                   "second": {"verdict": verdict, "note": text, "reader": rec["reader"], "at": rec["at"], "template_sha256": TEMPLATE_SHA256}}
         tmp = target.with_name(target.name + ".tmp")
         try:                                                  # a stale or planted name is removed, never followed
             os.unlink(tmp)
@@ -171,6 +175,8 @@ def load(job_dir, sid, patch_sha256):
     if rec["patch_sha256"] != patch_sha256:
         return "stale", None
     sec = rec.get("second")
+    if _model_stale(rec) or (isinstance(sec, dict) and _model_stale(sec)):
+        return "stale", None                                  # a reading of a model made under another template is not a reading under this one
     if sec is None:
         return ("concerns" if rec["verdict"] == "concerns" else "one"), rec
     if not _second_ok(sec):
@@ -179,9 +185,14 @@ def load(job_dir, sid, patch_sha256):
         return "concerns", rec
     if sec["verdict"] == "concerns":
         return "concerns", {**rec, "verdict": "concerns", "note": sec["note"], "reader": sec["reader"], "at": sec["at"]}
-    if _rid(rec["reader"]) is None or _rid(rec["reader"]) == _rid(sec["reader"]):
+    if _rid(rec["reader"]) is None or _rid(sec["reader"]) is None or _rid(rec["reader"]) == _rid(sec["reader"]):
         return "one", rec
     return "ok", rec
+
+
+def _model_stale(r):
+    """A reading by a model of Argus carries the hash of the template it was given; without it, or with another, it is stale. A Claude session has no template."""
+    return isinstance(r, dict) and isinstance(r.get("reader"), dict) and r["reader"].get("kind") == "argus" and r.get("template_sha256") != TEMPLATE_SHA256
 
 
 def _second_ok(sec):

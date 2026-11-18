@@ -256,7 +256,7 @@ class Install:
                 if isinstance(pr_rec.get("second"), dict):
                     s2 = pr_rec["second"]
                     card["patch_read"]["second"] = {"verdict": s2["verdict"], "reader": s2["reader"], "at": s2["at"], "note": s2["note"]}
-            pids = [r.get("id") for r in ((pr_rec or {}).get("reader"), ((pr_rec or {}).get("second") or {}).get("reader")) if isinstance(r, dict)] if pr_kind == "ok" else []
+            pids = [(r.get("kind"), r.get("id")) for r in ((pr_rec or {}).get("reader"), ((pr_rec or {}).get("second") or {}).get("reader")) if isinstance(r, dict)] if pr_kind == "ok" else []
             dr = item.get("domain_read") if isinstance(item, dict) else None
             ids = [r.get("id") for r in (dr.get("reader"), dr.get("reader2")) if isinstance(r, dict)] if isinstance(dr, dict) else []
             card["patch_reader_tested"], card["domain_reader_tested"] = self._tested(repo, ids, pids)
@@ -413,8 +413,9 @@ class Install:
         """The patch reader test holds for the pair of models it names (`models`: reader ids `argus:<ref>`, in order) and this template: the two readings of the card are
         by exactly that pair (the first and the second); anything else, or no readings, is untested."""
         models = patch.get("models")
-        return (isinstance(models, list) and len(models) == 2 and all(isinstance(m, str) and m for m in models) and isinstance(patch.get("effort"), str)
-                and [i.strip().casefold() if isinstance(i, str) else None for i in ids] == [m.strip().casefold() for m in models])
+        return (isinstance(models, list) and len(models) == 2 and all(isinstance(m, str) and m for m in models) and patch.get("effort") == "default"
+                and patch.get("instruction_sha256") == pr.INSTRUCTION_SHA256 and len(ids) == 2 and all(k == "argus" for k, _ in ids)
+                and [i.strip().casefold() if isinstance(i, str) else None for _, i in ids] == [m.strip().casefold() for m in models])
 
     @staticmethod
     def _tested(repo, domain_ids=(), patch_ids=()):
