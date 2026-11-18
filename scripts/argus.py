@@ -140,7 +140,7 @@ def main(argv=None, deps=None):
     ap_.add_argument("job")
     ap_.add_argument("--read-sha", required=True, help="the patch's sha256 that status prints, at least 12 characters: you read that patch")
     ap_.add_argument("--note")
-    ap_.add_argument("--reader", choices=("claude",), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
+    ap_.add_argument("--reader", choices=("claude", "argus"), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
     ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
                      "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
     t3b = sub.add_parser("t3b-run", help="one round of the T3b test of the domain reader with an Argus model (GLM, role code_judge) as the reader, outside the approval card: costs money, has its own cap (SPEC_KARTU_SETUJU 8)")
@@ -150,6 +150,14 @@ def main(argv=None, deps=None):
     t3b.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of this T3b directory (run 1 and run 2 share one ledger): a call starts only if billed so far + its worst case fits")
     t3b.add_argument("--max-output", type=int, default=6000, help="output tokens a call may use (a reasoning model spends them on thinking first)")
     t3b.add_argument("--effort", choices=("low", "medium", "high"), help="the provider's reasoning effort for this run (OpenRouter reasoning.effort, set in a copy of the config; default: the provider's)")
+    pt = sub.add_parser("patch-trial", help="a trial of one model as the PATCH reader on eight planted patches (SPEC_KARTU_SETUJU 5), outside the approval card: costs money, own cap, writes nothing to a job")
+    pt.add_argument("root", help="the trial directory (created); ledger and readings of all models live here")
+    pt.add_argument("--model", required=True, help="a name of router/patch_trial.MODELS")
+    pt.add_argument("--run", type=int, choices=(1, 2), required=True)
+    pt.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of the directory (all models share the ledger)")
+    pt.add_argument("--max-output", type=int, default=8000)
+    pt.add_argument("--effort", choices=("low", "medium", "high"))
+    pt.add_argument("--limit", type=int)
     er_ = sub.add_parser("examples-read", help="the domain reader's bundle and note for one item of a PRD (SPEC_KARTU_SETUJU 5 rev 2): a Claude session's statement, not a proof and not a human")
     er_.add_argument("job", help="the PRD job")
     er_.add_argument("--item", required=True, type=int)
@@ -167,7 +175,12 @@ def main(argv=None, deps=None):
     pr_.add_argument("--verdict", required=True, choices=("ok", "concerns"))
     pr_.add_argument("--note", required=True, help="what you read and what you found")
     pr_.add_argument("--reader", required=True, choices=("claude",))
-    pr_.add_argument("--reader-id", help="the model or session that read it")
+    pr_.add_argument("--reader-id", help="the model or session that read it (an `ok` needs two readings by two different ids: the second with --second)")
+    pr_.add_argument("--second", action="store_true", help="the second reading, by another --reader-id than the first (SPEC_KARTU_SETUJU 13.5)")
+    prr = sub.add_parser("patch-read-run", help="the patch reader of an Argus job: Tencent Hy4 Flash, then (only if it says ok) DeepSeek V4.1 Flash 1017, outside a Claude session; costs money, has its own cap")
+    prr.add_argument("job")
+    prr.add_argument("--cap-usd", type=float, default=0.10, help="the TOTAL cap of this job's patch readings (a call starts only if billed so far + its worst case fits)")
+    prr.add_argument("--max-output", type=int, default=12000)
     p = sub.add_parser("applied")
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
@@ -280,7 +293,7 @@ def main(argv=None, deps=None):
         r.add_argument("--sha", help="the draft the human saw (12+ hex): refused when the job's last draft is another")
         r.add_argument("--via", choices=rj.VIA, help="where the decision was made (SPEC_CONTROL_UI F4)")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run", "patch-trial", "patch-read-run"):   # the live commands
             p.add_argument("--key-file", action="append",
                            help="read the API key from this 0600 file instead of typing it; for a stage that needs "
                                 "keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
@@ -391,6 +404,12 @@ def main(argv=None, deps=None):
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
             return 0
+        if o.cmd == "patch-trial":
+            from router import patch_trial
+            summary = patch_trial.run(o.root, o.model, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, effort=o.effort, limit=o.limit)
+            print(json.dumps(summary, indent=1))
+            print("\n".join(patch_trial.score(o.root, o.model)[0]))
+            return 0
         if o.cmd == "t3b-run":
             from router import t3b_run
             summary = t3b_run.run(o.root, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, limit=o.limit, effort=o.effort)
@@ -417,9 +436,14 @@ def main(argv=None, deps=None):
             rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir, second=o.second)
             print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}; the note says who wrote it and what bundle it saw, not that the bundle was read")
             return 0
+        if o.cmd == "patch-read-run":
+            from router import patch_read_run
+            summary = patch_read_run.run(o.job, cfg=load_config(o.config), deps=deps, jobs_dir=o.jobs_dir, cap_usd=o.cap_usd, max_output=o.max_output)
+            print(json.dumps(summary, indent=1))
+            return 0
         if o.cmd == "patch-read":
             from router import patch_read as prd_
-            rec = prd_.record(o.job, o.sha, o.verdict, o.note, o.reader, o.reader_id, deps=deps, jobs_dir=o.jobs_dir)
+            rec = prd_.record(o.job, o.sha, o.verdict, o.note, o.reader, o.reader_id, deps=deps, jobs_dir=o.jobs_dir, second=o.second)
             print(f"patch-read note for {o.job} {rec['sid']} {rec['patch_sha256'][:12]}: {rec['verdict']} by {rec['reader']['kind']}: {prd_.LABEL}")
             return 0
         if o.cmd == "apply":

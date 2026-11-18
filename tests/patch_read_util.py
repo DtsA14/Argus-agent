@@ -20,4 +20,6 @@ def read_ok(env, sha=None, verdict="ok"):
         return
     if review.get("patch_sha256") != disk or (sha is not None and not disk.startswith(sha[:12])):
         return
-    pr.record(job.id, disk[:12], verdict, "test note", "claude", deps=env.deps, jobs_dir=env.jobs)
+    pr.record(job.id, disk[:12], verdict, "test note", "claude", "reader-a", deps=env.deps, jobs_dir=env.jobs)
+    if verdict == "ok":                                                       # rev 3 (SPEC_KARTU_SETUJU 13.5): an ok is two readings by two ids
+        pr.record(job.id, disk[:12], verdict, "test note", "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True)

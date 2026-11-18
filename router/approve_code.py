@@ -29,7 +29,7 @@ from router.approve_cards import DOMAIN_LABEL, FIXED_LINE
 from router.cards import DOC_MAX, ISSUE_MAX, OPEN_FILE, _open_dir, _read
 
 READER_TESTS = Path(__file__).resolve().parent.parent / "verification" / "reader_tests.json"
-PATCH_LABEL = "Ini pernyataan sesi Claude, bukan bukti bahwa patch dibaca, dan bukan dibaca manusia."
+PATCH_LABEL = "Ini pernyataan pembaca patch (dua model Argus atau sesi Claude), bukan bukti bahwa patch dibaca, dan bukan dibaca manusia."
 PATCH_MAX = 16 * 1024 * 1024
 FILES_MAX = 60
 RUN_A = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}-a[0-9]{1,3}")
@@ -210,7 +210,8 @@ class Install:
             # (f) the patch reader's note, (g) one sha
             pr_kind, pr_rec = pr.load(f"/proc/self/fd/{jfd}", sid, rsha) if sid and rsha else ("error", None)
             checks["f"] = _chk("f", pr_kind == "ok", {
-                "ok": "pembaca patch (Claude) mencatat ok untuk patch ini", "concerns": "pembaca patch mencatat ada yang meragukan",
+                "ok": "dua pembaca patch sama-sama mencatat ok untuk patch ini", "concerns": "pembaca patch mencatat ada yang meragukan",
+                "one": "baru satu bacaan patch: ok butuh dua bacaan oleh dua pembaca berbeda",
                 "none": "belum ada catatan pembaca patch", "stale": "catatan pembaca patch untuk patch lain",
                 "error": "catatan pembaca patch rusak atau tidak bisa dibaca"}[pr_kind])
             same_sha = rsha is not None and rsha == patch.get("sha256") == disk_sha
@@ -252,9 +253,13 @@ class Install:
                     "patch_reader_tested": False, "domain_reader_tested": False}
             if pr_kind in ("ok", "concerns") and pr_rec:
                 card["patch_read"] = {"verdict": pr_rec["verdict"], "reader": pr_rec["reader"], "at": pr_rec["at"], "note": pr_rec["note"], "by": "model"}
+                if isinstance(pr_rec.get("second"), dict):
+                    s2 = pr_rec["second"]
+                    card["patch_read"]["second"] = {"verdict": s2["verdict"], "reader": s2["reader"], "at": s2["at"], "note": s2["note"]}
+            pids = [(r.get("kind"), r.get("id")) for r in ((pr_rec or {}).get("reader"), ((pr_rec or {}).get("second") or {}).get("reader")) if isinstance(r, dict)] if pr_kind == "ok" else []
             dr = item.get("domain_read") if isinstance(item, dict) else None
             ids = [r.get("id") for r in (dr.get("reader"), dr.get("reader2")) if isinstance(r, dict)] if isinstance(dr, dict) else []
-            card["patch_reader_tested"], card["domain_reader_tested"] = self._tested(repo, ids)
+            card["patch_reader_tested"], card["domain_reader_tested"] = self._tested(repo, ids, pids)
             return c.withhold_keys(self.approve._deep(card))
         finally:
             os.close(jfd)
@@ -404,7 +409,16 @@ class Install:
         return all(isinstance(i, str) and (i.strip().casefold() in (m, f"argus:{m}") or i.strip().casefold().startswith(m + "-")) for i in ids)
 
     @staticmethod
-    def _tested(repo, domain_ids=()):
+    def _same_pair(patch, ids):
+        """The patch reader test holds for the pair of models it names (`models`: reader ids `argus:<ref>`, in order) and this template: the two readings of the card are
+        by exactly that pair (the first and the second); anything else, or no readings, is untested."""
+        models = patch.get("models")
+        return (isinstance(models, list) and len(models) == 2 and all(isinstance(m, str) and m for m in models) and patch.get("effort") == "default"
+                and patch.get("instruction_sha256") == pr.INSTRUCTION_SHA256 and all(k == "argus" for k, _ in ids)
+                and [i.strip().casefold() if isinstance(i, str) else None for _, i in ids] == [m.strip().casefold() for m in models])
+
+    @staticmethod
+    def _tested(repo, domain_ids=(), patch_ids=()):
         """(patch reader tested, domain reader tested): true only when verification/reader_tests.json holds an entry for this repo whose template hash is
         the current one; a missing or damaged file, another repo or another hash is untested. The patch reader has no template yet: never tested."""
         try:
@@ -413,7 +427,7 @@ class Install:
             dom = rec.get("domain") if isinstance(rec, dict) else None
             patch = rec.get("patch") if isinstance(rec, dict) else None
             cur_patch = getattr(pr, "TEMPLATE_SHA256", None)
-            return (bool(cur_patch and isinstance(patch, dict) and patch.get("template_sha256") == cur_patch),
+            return (bool(cur_patch and isinstance(patch, dict) and patch.get("template_sha256") == cur_patch and Install._same_pair(patch, patch_ids)),
                     bool(isinstance(dom, dict) and dom.get("template_sha256") == er.TEMPLATE_SHA256 and Install._same_reader(dom, domain_ids)))
         except Exception:
             return False, False
