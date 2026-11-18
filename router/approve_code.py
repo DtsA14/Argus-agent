@@ -29,7 +29,7 @@ from router.approve_cards import DOMAIN_LABEL, FIXED_LINE
 from router.cards import DOC_MAX, ISSUE_MAX, OPEN_FILE, _open_dir, _read
 
 READER_TESTS = Path(__file__).resolve().parent.parent / "verification" / "reader_tests.json"
-PATCH_LABEL = "Ini pernyataan sesi Claude, bukan bukti bahwa patch dibaca, dan bukan dibaca manusia."
+PATCH_LABEL = "Ini pernyataan pembaca patch (dua model Argus atau sesi Claude), bukan bukti bahwa patch dibaca, dan bukan dibaca manusia."
 PATCH_MAX = 16 * 1024 * 1024
 FILES_MAX = 60
 RUN_A = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}-a[0-9]{1,3}")
