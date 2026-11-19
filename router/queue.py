@@ -4,6 +4,7 @@
   argus queue go      the human approves the list and the money (its sha)
   argus queue step    at most one drafter run (the next issue's code job), or what waits for a human; never approve, apply or push
   argus queue status  read only
+  argus queue retry   a new job of an item whose job was REJECTED on the patch readers' concerns; their findings go to its drafter as data (at most twice)
   argus queue close   the human closes a queue that is stuck (no job is touched)
 
 The queue's status is never stored: it is derived from the items' job.json each time (PENDING, WAITING, STOPPED, DONE,
@@ -26,10 +27,13 @@ from harness.llm import to_nano
 
 from . import issue as ri
 from . import job as rj
+from . import patch_read as pr
 
 QUEUES = rj.ROOT / "queues"
 QUEUE_MAX_USD = 5.00            # D2 (Atha 2026-11-15): the ceiling of one queue's money
 QUEUE_MAX_ITEMS = 8
+MAX_RETRIES = 2                 # per item: a rejected attempt is retried at most twice, each with the readers' findings (2026-11-19)
+FINDINGS_MAX = 3000             # characters of findings handed to a drafter
 QUEUE_ID = re.compile(r"^q[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}$")
 PENDING, WAITING, STOPPED, DONE, CLOSED = "PENDING", "WAITING", "STOPPED", "DONE", "CLOSED"
 RUNNING_NEXT = "NEXT"           # derive's answer when the next item can start (shown as WAITING for `step`)
@@ -91,9 +95,19 @@ def shape_ok(q, qid):
               and isinstance(q["items"], list) and q["items"]
               and all(isinstance(i, dict) and isinstance(i.get("issue_sha256"), str) and isinstance(i.get("n"), int) for i in q["items"])
               and (q.get("prd") is None or (isinstance(q["prd"], dict) and isinstance(q["prd"].get("sha"), str)
-                                            and re.fullmatch(r"[0-9a-f]{64}", q["prd"]["sha"]) and isinstance(q["prd"].get("dir"), str))))
+                                            and re.fullmatch(r"[0-9a-f]{64}", q["prd"]["sha"]) and isinstance(q["prd"].get("dir"), str)))
+              and all(_retries_ok(i) for i in q["items"]))
     except (KeyError, TypeError):
         return False
+
+
+def _retries_ok(item):
+    """The fields `retry` adds to an item are outside the approved list: they are checked like the rest (a negative spend would add money, a missing list would reset the count)."""
+    r, note = item.get("retries"), item.get("retry_note")
+    return ((r is None or (isinstance(r, list) and len(r) <= MAX_RETRIES and all(
+                isinstance(x, dict) and isinstance(x.get("job"), str) and isinstance(x.get("spent_nano"), int) and not isinstance(x.get("spent_nano"), bool)
+                and x["spent_nano"] >= 0 and isinstance(x.get("findings"), str) for x in r)))
+            and (note is None or (isinstance(note, str) and len(note) <= FINDINGS_MAX)))
 
 
 def _load(d, qid):
@@ -233,6 +247,42 @@ def close(qid, note, *, deps, queues_dir=QUEUES):
         return q
 
 
+def retry(qid, n, *, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
+    """The human asks for a new job of an item whose job was REJECTED on the patch readers' findings (2026-11-19). The findings of the readers (what the
+    note of the rejected patch holds, both readers') are kept in the item and handed to the next drafter as data, labelled as models' statements; the rejected
+    job stays as it is, what it spent stays counted, and the next `step` starts the new job. At most MAX_RETRIES per item. Refused for any other state
+    (a job rejected for another reason is redone from the PRD), for an item that is not the one the queue stopped at, and for a note with no findings."""
+    with _locked(queues_dir, qid) as (d, q):
+        if q.get("closed"):
+            raise Refused(f"queue {qid} is closed")
+        if not q.get("approved") or q["approved"].get("sha") != list_sha(q):
+            raise Refused(f"queue {qid} is not approved, or its list changed since; nothing was changed")
+        if Path(jobs_dir).resolve() != Path(q["jobs_dir"]):
+            raise Refused(f"queue {qid} belongs to the jobs directory {q['jobs_dir']}, not {Path(jobs_dir).resolve()}; nothing was changed")
+        items = [i for i in q["items"] if i.get("n") == n]
+        if len(items) != 1:
+            raise Refused(f"queue {qid} has no item {n}; nothing was changed")
+        item = items[0]
+        status, detail, _, _, _ = derive(q)
+        job = _open(item, jobs_dir) if item.get("job") else None
+        if job is None or status != STOPPED or not detail.startswith(f"item {n}: job {job.id} is {rj.REJECTED}"):
+            raise Refused(f"queue {qid}: item {n} is not the item the queue stopped at on a REJECTED job ({status}: {detail}); nothing was changed")
+        if len(item.get("retries") or []) >= MAX_RETRIES:
+            raise Refused(f"queue {qid}: item {n} was retried {MAX_RETRIES} times already: redo it from the PRD; nothing was changed")
+        sid, stage = rj.last_agent(job)
+        sha = ((stage or {}).get("review") or {}).get("patch_sha256")
+        kind, rec = pr.load(job.dir, sid, sha) if isinstance(sid, str) and isinstance(sha, str) else ("none", None)
+        found = pr.findings(rec) if kind == "concerns" and isinstance(rec, dict) else []
+        if not found:
+            raise Refused(f"queue {qid}: job {job.id} was not rejected on a patch reader's concerns (its note is {kind}): there is nothing to hand to a new drafter; nothing was changed")
+        text = "\n".join(f"- [{who}] {note}" for who, note in found)
+        text = text if len(text) <= FINDINGS_MAX else text[:FINDINGS_MAX - 12] + " [cut]"
+        item.setdefault("retries", []).append({"job": job.id, "spent_nano": rj.spent_nano(job), "findings": text, "at": deps.clock(), "by": os.environ.get("USER")})
+        item["retry_note"], item["job"] = text, None
+        _save(d, q)
+        return q
+
+
 # ---- the derived state --------------------------------------------------------------------------------------------
 
 def _applied_commit(job):
@@ -265,7 +315,8 @@ def derive(q, *, jobs_dir=None):
     if not q.get("approved"):
         return PENDING, f"approve with `argus queue go {q['id']} --sha {list_sha(q)[:12]}`", [], [], None
     jobs_dir = q["jobs_dir"]                            # the queue's own: a step on another jobs directory cannot see its jobs
-    commit, forget, committed = q["base_commit"], [], 0
+    commit, forget = q["base_commit"], []
+    committed = retired_nano(q)                         # what the retired attempts spent (read live from their jobs) stays spent
     for item in q["items"]:
         job = _open(item, jobs_dir) if item["job"] else None
         if job is not None and not _bound(job, q, item, commit):
@@ -286,7 +337,9 @@ def derive(q, *, jobs_dir=None):
             commit = nxt
             continue
         if state in FAILED:
-            return STOPPED, f"item {item['n']}: job {job.id} is {state}", [f"argus status {job.id}"], forget, None
+            hint = ([f"argus queue retry {q['id']} --item {item['n']}   (a new job of this issue; the patch readers' findings go to its drafter)"]
+                    if state == rj.REJECTED and len(item.get("retries") or []) < MAX_RETRIES else [])
+            return STOPPED, f"item {item['n']}: job {job.id} is {state}", [f"argus status {job.id}", *hint], forget, None
         if state == rj.AWAITING_APPROVAL:
             sha = rj.draft_sha(rj._last_draft(job)[1])[:12]
             return WAITING, f"item {item['n']}: draft of {job.id} waits for approval", [f"argus approve {job.id} --sha {sha}"], forget, None
@@ -295,6 +348,17 @@ def derive(q, *, jobs_dir=None):
                 [f"argus status {job.id}   (patch sha)", f"argus apply {job.id} --read-sha <patch sha>"], forget, None
         return WAITING, f"item {item['n']}: job {job.id} is {state}", [f"argus resume {job.id}"], forget, None
     return DONE, "", [], forget, None
+
+
+def retired_nano(q, jobs_dir=None):
+    """What the retired attempts of the items (`retry`) spent, read from their jobs now (the number recorded at the retry only when a job cannot be opened).
+    A retired job is REJECTED and holds no more of the queue's money than it spent: a judge run on it later is a separate act of the human with the job's own cap."""
+    total = 0
+    for it in q["items"]:
+        for r in it.get("retries") or []:
+            job = _open({"job": r["job"]}, jobs_dir or q["jobs_dir"])
+            total += rj.spent_nano(job) if job is not None else int(r["spent_nano"])
+    return total
 
 
 def committed_nano(job):
@@ -362,9 +426,10 @@ def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
         item["job"], item["at"] = job_id, deps.clock()  # recorded before the job exists: a start cut off never starts a second one
         _save(d, q)
         try:
+            note = item.get("retry_note") if isinstance(item.get("retry_note"), str) and item.get("retry_note") else None
             rj.start_code(repo=q["repo"], commit=nxt["commit"], issue=_issue_text(d, item), cfg=cfg, deps=deps,
                           max_usd=q["job_cap_usd"], jobs_dir=jobs_dir, job_id=job_id,
-                          environment=q["environment"])
+                          environment=q["environment"], **({"note": note, "note_by": "reader"} if note else {}))
         except rj.Refused:
             raise                                       # the id stays recorded: the next step settles it (forget, abandon NEW)
         return status_lines(q)

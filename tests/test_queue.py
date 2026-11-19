@@ -480,3 +480,211 @@ def test_a_forgotten_id_is_saved_even_when_the_queue_then_stops(qe):
     git(qe.repo, "commit", "-q", "--allow-empty", "-m", "someone else")          # HEAD moved: nothing starts after the forgetting
     assert "HEAD moved" in qe.step(q)
     assert qe.q(q)["items"][0]["job"] is None and qe.calls == []
+
+
+# ---- queue retry (2026-11-19): a rejected item gets a new job whose drafter is handed the patch readers' findings ---------------------------------
+
+from router import patch_read as pr  # noqa: E402
+
+
+def reject_on_findings(qe, q, i, notes=(("argus:hy4", "web.py: TRACE still gives 501"), ("argus:ds", "isdigit passes a unicode digit that int() refuses"))):
+    """The item's job rejected, with an agent stage whose patch carries a `concerns` note (both readers' findings)."""
+    job = qe.job(q, i)
+    sha = "ab" * 32
+    with job.lock():
+        job.data["stages"]["a1"] = {"kind": "agent", "status": "DONE", "usd": 0.02, "run_id": f"{job.id}-a1", "review": {"patch_sha256": sha, "dir": "/x"}}
+        job.save()
+    first, second = notes
+    rec = {"key": pr.key("a1", sha), "sid": "a1", "patch_sha256": sha, "verdict": "concerns", "note": first[1], "at": "2026-11-19T10:00:00Z",
+           "reader": {"kind": "argus", "id": first[0]}, "template_sha256": pr.TEMPLATE_SHA256,
+           "second": {"verdict": "concerns", "note": second[1], "at": "2026-11-19T10:01:00Z", "reader": {"kind": "argus", "id": second[0]}, "template_sha256": pr.TEMPLATE_SHA256}}
+    (job.dir / "patch_read_a1.json").write_text(json.dumps(rec))
+    qe.set_state(job, rj.REJECTED)
+    return job
+
+
+def retry(qe, q, n=1, **kw):
+    return rq.retry(q["id"], n, deps=qe.env.deps, queues_dir=qe.queues, jobs_dir=qe.jobs, **kw)
+
+
+def test_a_rejected_item_is_retried_with_both_readers_findings_handed_to_the_new_drafter_as_data(qe):
+    q = qe.ready()
+    qe.step(q)
+    old = reject_on_findings(qe, q, 0)
+    assert qe.status(q) == "STOPPED" and "argus queue retry" in rq.status_lines(qe.q(q), jobs_dir=qe.jobs)
+    got = retry(qe, q)
+    item = got["items"][0]
+    assert item["job"] is None and "TRACE still gives 501" in item["retry_note"] and "isdigit passes" in item["retry_note"]
+    assert item["retries"][0]["job"] == old.id and item["retries"][0]["spent_nano"] > 0 and qe.status(q) == "WAITING"
+    qe.step(q)
+    new = qe.job(q, 0)
+    assert new.id != old.id and new.data["inputs"]["issue"] == old.data["inputs"]["issue"]          # the same issue, byte for byte
+    assert qe.calls[-1]["note"] == item["retry_note"] and qe.calls[-1]["note_by"] == "reader"
+    st = new.data["stages"]["d1"]
+    assert st["note"] == item["retry_note"] and st["note_by"] == "reader" and new.data.get("reader_steered") and not new.data.get("human_steered")
+    assert rj.open_job(old.id, qe.jobs).data["state"] == rj.REJECTED                               # the rejected job is untouched
+
+
+def test_what_the_retired_attempt_spent_stays_counted_in_the_queues_money(qe):
+    q = qe.ready(n=2, max_usd=2.0)
+    qe.step(q)
+    old = reject_on_findings(qe, q, 0)
+    retry(qe, q)
+    qe.step(q)
+    st = qe.q(q)
+    spent = st["items"][0]["retries"][0]["spent_nano"]
+    status, detail, *_ = rq.derive(st)
+    assert spent > 0 and rj.spent_nano(old) == spent
+    assert rq.retired_nano(st) == spent and spent > 0
+    assert status == rq.WAITING and "the money" not in detail and qe.job(q, 0).data["state"] == rj.AWAITING_APPROVAL    # two items, $2.00: the new job started beside what was spent
+
+
+def test_a_retired_attempt_counts_what_it_spent_NOW_not_what_it_had_spent_when_it_was_retried(qe, monkeypatch):
+    q = qe.ready()
+    qe.step(q)
+    old = reject_on_findings(qe, q, 0)
+    retry(qe, q)
+    st = qe.q(q)
+    real = rj.spent_nano
+    monkeypatch.setattr(rq.rj, "spent_nano", lambda job: 777_000_000 if job.id == old.id else real(job))
+    assert rq.retired_nano(st) == 777_000_000
+    st["items"][0]["retries"][0]["job"] = "j20200101_000000_dead"                                     # a job that cannot be opened: the recorded number
+    assert rq.retired_nano(st) == st["items"][0]["retries"][0]["spent_nano"]
+
+
+@pytest.mark.parametrize("bad", [{"retries": [{"job": "j1", "spent_nano": -5, "findings": "x"}]}, {"retries": [{"job": "j1", "spent_nano": None, "findings": "x"}]},
+                                 {"retries": [{"job": "j1", "spent_nano": True, "findings": "x"}]}, {"retries": "x"},
+                                 {"retries": [{"job": "j1", "spent_nano": 1, "findings": "x"}] * 3}, {"retry_note": 5}, {"retry_note": "x" * 3001}])
+def test_a_queue_json_with_bad_retry_fields_is_damaged_not_a_traceback_or_a_bypass(qe, bad):
+    q = qe.ready()
+    st = qe.q(q)
+    st["items"][0].update(bad)
+    assert rq.shape_ok(st, q["id"]) is False
+    (qe.queues / q["id"] / "queue.json").write_text(json.dumps(st))
+    with pytest.raises(rq.Refused, match="damaged"):
+        rq.status(q["id"], queues_dir=qe.queues, jobs_dir=qe.jobs)
+    with pytest.raises(rq.Refused, match="damaged"):
+        qe.step(q)
+
+
+def test_a_step_on_an_item_that_was_never_retried_hands_no_note_and_marks_nothing(qe):
+    q = qe.ready()
+    qe.step(q)
+    assert "note" not in qe.calls[0] and "note_by" not in qe.calls[0]
+    assert not qe.job(q, 0).data.get("reader_steered") and not qe.job(q, 0).data.get("human_steered")
+    assert "reader-steered" not in rj.status(qe.job(q, 0).id, jobs_dir=qe.jobs)
+
+
+def test_the_new_job_of_a_retry_says_in_its_status_that_the_readers_findings_steered_its_draft(qe):
+    q = qe.ready()
+    qe.step(q)
+    reject_on_findings(qe, q, 0)
+    retry(qe, q)
+    qe.step(q)
+    assert "reader-steered" in rj.status(qe.job(q, 0).id, jobs_dir=qe.jobs)
+
+
+def test_a_retry_needs_an_approved_unchanged_list_and_the_queues_own_jobs_directory(qe, tmp_path):
+    q = qe.new()
+    with pytest.raises(rq.Refused, match="not approved"):
+        retry(qe, q)
+    q = qe.go(q)
+    qe.step(q)
+    reject_on_findings(qe, q, 0)
+    with pytest.raises(rq.Refused, match="jobs directory"):
+        rq.retry(q["id"], 1, deps=qe.env.deps, queues_dir=qe.queues, jobs_dir=tmp_path / "elsewhere")
+    st = qe.q(q)
+    st["max_usd"] = 4.0                                                                              # the list changed after go
+    (qe.queues / q["id"] / "queue.json").write_text(json.dumps(st))
+    with pytest.raises(rq.Refused, match="not approved|list changed"):
+        retry(qe, q)
+
+
+def test_the_new_job_of_a_retry_must_fit_the_queues_money_beside_what_the_old_attempt_spent(qe):
+    q = qe.ready(n=1, max_usd=1.0)                                                                   # money for one job only
+    qe.step(q)
+    reject_on_findings(qe, q, 0)
+    retry(qe, q)
+    out = qe.step(q)
+    assert "the money" in out and qe.status(q) == "STOPPED" and len(qe.calls) == 1
+
+
+@pytest.mark.parametrize("what", ["not rejected", "no findings", "other item", "closed", "third retry"])
+def test_a_retry_is_refused_unless_the_item_is_the_stopped_one_rejected_on_a_concerns_and_has_retries_left(qe, what):
+    q = qe.ready()
+    qe.step(q)
+    if what == "not rejected":
+        with pytest.raises(rq.Refused, match="stopped at"):
+            retry(qe, q)
+        return
+    if what == "no findings":
+        job = qe.job(q, 0)
+        qe.set_state(job, rj.REJECTED)                                                               # rejected by hand: no reader note
+        with pytest.raises(rq.Refused, match="nothing to hand"):
+            retry(qe, q)
+        return
+    reject_on_findings(qe, q, 0)
+    if what == "other item":
+        with pytest.raises(rq.Refused, match="no item 5|stopped at"):
+            retry(qe, q, 5)
+        with pytest.raises(rq.Refused, match="stopped at"):
+            retry(qe, q, 2)
+    elif what == "closed":
+        rq.close(q["id"], "stop", deps=qe.env.deps, queues_dir=qe.queues)
+        with pytest.raises(rq.Refused, match="closed"):
+            retry(qe, q)
+    else:
+        for _ in range(rq.MAX_RETRIES):
+            retry(qe, q)
+            qe.step(q)
+            reject_on_findings(qe, q, 0)
+        with pytest.raises(rq.Refused, match="retried 2 times"):
+            retry(qe, q)
+        assert "argus queue retry" not in rq.status_lines(qe.q(q), jobs_dir=qe.jobs)
+    assert qe.q(q)["items"][1]["job"] is None
+
+
+def test_the_findings_are_bounded_and_a_retry_changes_neither_the_approved_list_nor_the_issue_files(qe, monkeypatch):
+    q = qe.ready()
+    qe.step(q)
+    reject_on_findings(qe, q, 0, notes=(("argus:a", "x" * (pr.NOTE_MAX - 5)), ("argus:b", "y" * (pr.NOTE_MAX - 5))))
+    before = rq.list_sha(qe.q(q))
+    monkeypatch.setattr(rq, "FINDINGS_MAX", 300)
+    got = retry(qe, q)
+    note = got["items"][0]["retry_note"]
+    assert len(note) <= 300 and note.endswith("[cut]") and note.startswith("- [argus:a] xxx")
+    assert rq.list_sha(got) == before and qe.status(q) == "WAITING"
+    for i in range(1, 4):
+        assert (qe.queues / q["id"] / f"issue-{i}.md").exists()
+
+
+def test_the_findings_of_both_readers_fit_the_bound_as_they_are(qe):
+    q = qe.ready()
+    qe.step(q)
+    reject_on_findings(qe, q, 0, notes=(("argus:a", "x" * (pr.NOTE_MAX - 5)), ("argus:b", "y" * (pr.NOTE_MAX - 5))))
+    note = retry(qe, q)["items"][0]["retry_note"]
+    assert "[cut]" not in note and "x" * 400 in note and "y" * 400 in note
+
+
+def test_retry_works_from_the_command_line(qe, capsys):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    q = qe.ready()
+    qe.step(q)
+    reject_on_findings(qe, q, 0)
+    base = ["--jobs-dir", str(qe.jobs), "--queues-dir", str(qe.queues), "queue"]
+    assert argus.main([*base, "retry", q["id"], "--item", "1"], deps=qe.env.deps) == 0
+    assert "WAITING" in capsys.readouterr().out and qe.q(q)["items"][0]["retries"]
+    assert argus.main([*base, "retry", q["id"], "--item", "1"], deps=qe.env.deps) == 2                # nothing to retry now
+
+
+def test_a_retry_names_the_item_the_queue_stopped_at_not_another_item_that_happens_to_hold_a_rejected_job(qe):
+    q = qe.ready(n=2, max_usd=2.0)
+    qe.step(q)
+    job = reject_on_findings(qe, q, 0)
+    st = qe.q(q)
+    st["items"][1]["job"] = job.id                                                                   # a hand-edited queue.json: item 2 points at the same rejected job
+    (qe.queues / q["id"] / "queue.json").write_text(json.dumps(st))
+    with pytest.raises(rq.Refused, match="stopped at"):
+        retry(qe, q, 2)
+    assert "retries" not in qe.q(q)["items"][1]

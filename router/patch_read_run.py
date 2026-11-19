@@ -67,7 +67,7 @@ def bundle(job_id, jobs_dir):
     return pr.render(issue, touches, "the job is REVIEW_READY: a review package exists; passing examples do not prove the patch is clean", text), sid, sha
 
 
-def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=32000, first=FIRST, second=SECOND, models=None):
+def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=64000, first=FIRST, second=SECOND, models=None):
     """Read the patch of the job with the pair; returns a summary dict. `models` is for tests: {name: scripted chat model}."""
     if not (isinstance(cap_usd, (int, float)) and 0 < cap_usd <= 2) or not (isinstance(max_output, int) and 500 <= max_output <= 100000):
         raise rj.Refused("--cap-usd is above 0 and at most 2; --max-output is 500 to 100000")
@@ -75,18 +75,19 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=32000, 
     job = rj.open_job(job_id, jobs_dir)
     summary = {"job": job_id, "sha12": sha[:12], "readings": [], "final": None, "billed_usd": 0.0, "stopped": None, "template_sha256": pr.TEMPLATE_SHA256}
     kind0, rec0 = pr.load(job.dir, sid, sha)
-    if kind0 in ("ok", "concerns"):
+    resume = (kind0 in ("one", "concerns") and isinstance(rec0, dict) and rec0["reader"].get("kind") == "argus"
+              and rec0["reader"].get("id") == reader_id(first) and "second" not in rec0)      # the first reading stands (ok or concerns): only the second is asked
+    if kind0 == "ok" or (kind0 == "concerns" and not resume):
         summary["final"] = kind0
         summary["stopped"] = f"the patch already has a final reading ({kind0}); nothing is read again"
         return summary
     plan = []
-    resume = kind0 == "one" and isinstance(rec0, dict) and rec0["reader"].get("kind") == "argus" and rec0["reader"].get("id") == reader_id(first) and "second" not in rec0   # the first reading stands
     for n, name in enumerate((first, second)):
         if n == 0 and resume:
             continue
         cfg_n, ref = pt._prepare(cfg, name, cap_usd, max_output, None)
         plan.append((name, cfg_n, ref, tr.worst_usd(cfg_n, ref, len(pr.INSTRUCTION) + len(text), max_output)))
-    msg = "\n".join([f"patch reading of {job_id} ({sha[:12]}) by {reader_id(first)}, then (only if it says ok) {reader_id(second)}; the readings are notes of the job (patch_read_<sid>.json)",
+    msg = "\n".join([f"patch reading of {job_id} ({sha[:12]}) by {reader_id(first)}, then {reader_id(second)} (both read, whatever the first says); the readings are notes of the job (patch_read_<sid>.json)",
                      f"worst case per call up to ${max(p[3] for p in plan):.4f}; cap TOTAL for this job's patch readings ${cap_usd:.2f}",
                      f"template {pr.TEMPLATE_SHA256[:12]}; ledger {job.dir / LEDGER}"])
     with rj.live(deps, plan[0][1], [pt.ROLE], msg):
@@ -123,9 +124,7 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=32000, 
                 summary["readings"].append({"reader": reader_id(name), "usable": False, "why": f"not written: {str(e).split(': ', 1)[-1].split('; nothing')[0]}"})
                 break
             summary["readings"].append({"reader": reader_id(name), "usable": True, "verdict": verdict})
-            verdicts.append(verdict)
-            if verdict == "concerns":
-                break
+            verdicts.append(verdict)                           # a `concerns` of the first reader does not stop the second: both readers' findings are wanted in one note
         summary["billed_usd"] = reconcile_ledger(log.read())[1]["usd"]
     kind, _ = pr.load(job.dir, sid, sha)
     summary["final"] = kind

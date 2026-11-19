@@ -58,11 +58,55 @@ def test_both_say_ok_and_the_patch_is_ok_with_two_argus_readers(world):
     assert len(ms["hy4flash"].calls) == 1 and len(ms["ds1017"].calls) == 1
 
 
-def test_a_concerns_of_the_first_needs_no_second_call_and_closes(world):
+def cut():
+    return AIMessage(content='{"verdict": "ok", "no', response_metadata={"finish_reason": "length"},
+                     usage_metadata={"input_tokens": 2000, "output_tokens": 200, "total_tokens": 2200})
+
+
+def test_a_concerns_of_the_first_does_not_stop_the_second_and_both_findings_are_kept(world):
+    """2026-11-19, a real patch: the first reader found one thing, the second found a second, real bug that the first had missed."""
+    env, sha = world
+    ms = models(reply("concerns", "it writes ~/.shop_audit"), reply("concerns", "int() of a unicode digit raises"))
+    s = go(env, ms)
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert s["final"] == "concerns" and kind == "concerns" and len(ms["ds1017"].calls) == 1
+    assert [n for _, n in pr.findings(rec)] == ["it writes ~/.shop_audit", "int() of a unicode digit raises"]
+    with pytest.raises(rj.Refused, match="shop_audit.*unicode digit"):
+        pr.require_ok(env.job(), "a1", sha)
+
+
+def test_the_second_is_asked_after_a_concerns_of_the_first_even_when_it_says_ok_and_the_patch_stays_closed(world):
     env, sha = world
     ms = models(reply("concerns", "it writes ~/.shop_audit"), reply())
     s = go(env, ms)
-    assert s["final"] == "concerns" and ms["ds1017"].calls == [] and pr.load(env.job().dir, "a1", sha)[0] == "concerns"
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert s["final"] == "concerns" and len(ms["ds1017"].calls) == 1 and [n for _, n in pr.findings(rec)] == ["it writes ~/.shop_audit"]
+
+
+def test_an_unusable_first_reading_ends_the_run_and_the_second_is_not_asked(world):
+    env, sha = world
+    ms = models(cut(), reply())
+    s = go(env, ms)
+    assert s["readings"][0]["usable"] is False and ms["ds1017"].calls == [] and s["final"] == "none"
+
+
+def test_a_first_concerns_with_no_second_is_resumed_with_the_second_only(world):
+    env, sha = world
+    first = models(reply("concerns", "it writes ~/.shop_audit"), cut())
+    s = go(env, first)
+    assert s["final"] == "concerns" and s["readings"][1]["usable"] is False                   # the second was cut: only the first is on record
+    again = models(reply("ok"), reply("concerns", "default changed"))
+    s = go(env, again)
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert again["hy4flash"].calls == [] and len(again["ds1017"].calls) == 1 and kind == "concerns"
+    assert [n for _, n in pr.findings(rec)] == ["it writes ~/.shop_audit", "default changed"]
+    s = go(env, models(reply(), reply()))
+    assert "nothing is read again" in s["stopped"]                                              # both readings are there now
+
+
+def test_the_default_output_limit_leaves_room_for_a_reasoning_model():
+    import inspect
+    assert inspect.signature(prr.run).parameters["max_output"].default == 64000
 
 
 def test_a_concerns_of_the_second_closes_and_both_are_kept(world):
@@ -124,7 +168,7 @@ def test_a_reasoning_model_may_be_given_up_to_100000_output_tokens_and_the_defau
     """The second reader (a reasoning model) spent 29,993 and 31,993 tokens on thinking alone on a 27 KB patch (2026-11-19): the ceiling is 100,000."""
     env, sha = world
     import inspect
-    assert inspect.signature(prr.run).parameters["max_output"].default == 32000
+    assert inspect.signature(prr.run).parameters["max_output"].default == 64000
     assert inspect.signature(prr.run).parameters["cap_usd"].default == 0.20
     s = go(env, models(reply(), reply()), max_output=100000, cap_usd=0.5)
     assert s["final"] == "ok" and s["stopped"] is None
@@ -214,17 +258,39 @@ def test_a_ledger_that_holds_a_call_without_a_price_stops_the_run(world):
     assert "not complete" in (s["stopped"] or "") and ms["hy4flash"].calls == [] and s["final"] == "none"
 
 
-def test_the_readers_can_be_chosen_and_a_concerns_of_the_first_reader_still_stops_the_second(world):
-    """`--first ds1017 --second hy4flash` (a measurement: the pair is then not the tested one): the model named first is asked first, and its concerns ends the run."""
+def test_the_readers_can_be_chosen_and_the_model_named_first_is_asked_first(world):
+    """`--first ds1017 --second hy4flash` (a measurement: the pair is then not the tested one): the model named first is asked first; the other is asked after it."""
     env, sha = world
     ms = models(reply(), reply("concerns", "web.py: methods other than the five named still give 501"))
     ms = {prr.FIRST: ms[prr.FIRST], prr.SECOND: ms[prr.SECOND]}
     s = go(env, {"ds1017": ms[prr.SECOND], "hy4flash": ms[prr.FIRST]}, first="ds1017", second="hy4flash")
-    assert s["final"] == "concerns" and [r["reader"] for r in s["readings"]] == [prr.reader_id("ds1017")]
-    assert len(ms[prr.FIRST].calls) == 0 and len(ms[prr.SECOND].calls) == 1
+    assert s["final"] == "concerns" and [r["reader"] for r in s["readings"]] == [prr.reader_id("ds1017"), prr.reader_id("hy4flash")]
+    assert len(ms[prr.FIRST].calls) == 1 and len(ms[prr.SECOND].calls) == 1
 
 
 def test_an_unknown_reader_name_is_refused(world):
     env, sha = world
     with pytest.raises(KeyError):
         go(env, models(reply(), reply()), first="nope")
+
+
+def test_a_concerns_with_a_second_reading_is_final_and_a_claude_first_concerns_is_not_resumed(world):
+    env, sha = world
+    s = go(env, models(reply("concerns", "a"), reply("concerns", "b")))
+    assert s["final"] == "concerns"
+    again = models(reply(), reply())
+    s = go(env, again)
+    assert "nothing is read again" in s["stopped"] and again["hy4flash"].calls == [] and again["ds1017"].calls == []
+    pr.path(env.job().dir, "a1").unlink()
+    pr.record("jtest", sha[:12], "concerns", "a Claude session found a write", "claude", "claude:sess-1", deps=env.deps, jobs_dir=env.jobs)
+    again = models(reply(), reply())
+    s = go(env, again)
+    assert "nothing is read again" in s["stopped"] and again["ds1017"].calls == [] and s["billed_usd"] == 0.0
+
+
+def test_a_first_concerns_by_another_reader_is_not_resumed_with_a_second_reading(world):
+    env, sha = world
+    pr.record("jtest", sha[:12], "concerns", "another model found a write", "argus", "argus:openrouter:someone/else", deps=env.deps, jobs_dir=env.jobs)
+    again = models(reply(), reply())
+    s = go(env, again)
+    assert "nothing is read again" in s["stopped"] and again["hy4flash"].calls == [] and again["ds1017"].calls == []

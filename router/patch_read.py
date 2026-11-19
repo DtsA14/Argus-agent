@@ -75,7 +75,8 @@ def _rid(r):
 def record(job_id, sha, verdict, note, reader, reader_id=None, *, deps, jobs_dir=rj.JOBS, second=False):
     """Write the note for the patch of the job's last agent stage; Refused for anything that is not exactly that patch, with nothing written.
     SPEC_KARTU_SETUJU 13.5: an `ok` is two readings by two different reader ids. The first reading is the note itself; `second=True` adds the second reading to
-    it (the first must be a fresh `ok` of this very patch). A fresh `concerns` of this very patch is not written over."""
+    it (the first must be a fresh reading of this very patch, `ok` or `concerns`: a second reading of a `concerns` is added, so that the findings of both
+    readers are in the note; the first reading and its `concerns` are never changed). A fresh `concerns` of this very patch is not written over."""
     if verdict not in VERDICTS:
         _refuse(job_id, f"the verdict is one of {', '.join(VERDICTS)}")
     if reader not in READERS:
@@ -107,11 +108,11 @@ def record(job_id, sha, verdict, note, reader, reader_id=None, *, deps, jobs_dir
                "reader": {"kind": reader, **({"id": rid} if rid else {})}, "at": deps.clock(), "template_sha256": TEMPLATE_SHA256}
         target = path(job.dir, sid)
         kind0, old = load(job.dir, sid, full)
-        if kind0 == "concerns":
+        if kind0 == "concerns" and not (second and isinstance(old, dict) and "second" not in old):
             _refuse(job_id, "a fresh `concerns` of this very patch is not written over: it closes the patch until the patch changes (fix it, then read again)")
         if second:
             if not isinstance(old, dict):                          # load gives a note only for a fresh first reading
-                _refuse(job_id, "a second reading needs a first one: a fresh `ok` of this very patch, recorded before it")
+                _refuse(job_id, "a second reading needs a first one: a fresh reading of this very patch, recorded before it")
             if rid is None or _rid(old["reader"]) in (None, rid.strip().casefold()):
                 _refuse(job_id, "the second reading is by another reader id than the first (and both have an id): the same id is not a second reader")
             rec = {**{k: old[k] for k in ("key", "sid", "patch_sha256", "verdict", "note", "reader", "at", "template_sha256") if k in old},
@@ -176,19 +177,33 @@ def load(job_dir, sid, patch_sha256):
     if rec["patch_sha256"] != patch_sha256:
         return "stale", None
     sec = rec.get("second")
-    if _model_stale(rec) or (isinstance(sec, dict) and _model_stale(sec)):
+    if _model_stale(rec):
         return "stale", None                                  # a reading of a model made under another template is not a reading under this one
+    if rec["verdict"] == "concerns":
+        return "concerns", rec                                # a fresh, valid `concerns` closes the patch whatever the second reading holds
+    if isinstance(sec, dict) and _model_stale(sec):
+        return "stale", None
     if sec is None:
-        return ("concerns" if rec["verdict"] == "concerns" else "one"), rec
+        return "one", rec
     if not _second_ok(sec):
         return "error", None
-    if rec["verdict"] == "concerns":
-        return "concerns", rec
     if sec["verdict"] == "concerns":
         return "concerns", {**rec, "verdict": "concerns", "note": sec["note"], "reader": sec["reader"], "at": sec["at"]}
     if _rid(rec["reader"]) is None or _rid(sec["reader"]) is None or _rid(rec["reader"]) == _rid(sec["reader"]):
         return "one", rec
     return "ok", rec
+
+
+def findings(rec):
+    """[(reader id or kind, note)] of every reading of the note that says `concerns`: the first and the second, in that order. This is what a retry hands to the next drafter."""
+    out = []
+    for r in (rec, rec.get("second") if isinstance(rec, dict) else None):
+        if isinstance(r, dict) and r.get("verdict") == "concerns" and isinstance(r.get("note"), str):
+            rd = r.get("reader") if isinstance(r.get("reader"), dict) else {}
+            one = (rd.get("id") or rd.get("kind") or "reader", r["note"])
+            if one not in out:                               # `load` merges a second `concerns` into the note: it must not be listed twice
+                out.append(one)
+    return out
 
 
 def _model_stale(r):
@@ -218,7 +233,7 @@ def require_ok(job, sid, sha, reader=None):
     if kind == "error":
         raise rj.Refused(f"job {job.id}: the patch-read note cannot be read: write it again ({how})")
     if kind == "concerns":
-        raise rj.Refused(f"job {job.id}: the patch reader recorded concerns: {rec['note']}")
+        raise rj.Refused(f"job {job.id}: the patch reader recorded concerns: " + " | ".join(f"{who}: {note}" for who, note in findings(rec)))
     if kind == "one":
         raise rj.Refused(f"job {job.id}: only one patch reading: an `ok` needs two readings by two different readers (`argus patch-read-run {job.id}`, or a second "
                          f"`argus patch-read {job.id} --sha {sha[:12]} --verdict ok --second --reader-id <another id> --note \"...\"`)")
