@@ -117,6 +117,21 @@ def test_expect_must_be_json():
 
 # ---- the tautology check ----------------------------------------------------------------------------------------------
 
+def test_a_module_under_src_counts_as_the_repository_s_own(tmp_path):
+    """A repository with the src layout keeps its package in src/<name>: an example that imports it runs repository code (the ledger-cli pilot, 2026-11-19)."""
+    (tmp_path / "src" / "ledger_cli").mkdir(parents=True)
+    (tmp_path / "src" / "ledger_cli" / "__init__.py").write_text("")
+    (tmp_path / "src" / "single.py").write_text("")
+    ok = good(setup="from ledger_cli.report import build_report", run="build_report([])")
+    assert ex.tautology_problem(ok, str(tmp_path)) is None
+    assert ex.tautology_problem(good(setup="import single", run="single.f()"), str(tmp_path)) is None
+    assert "imports no module of the repository" in ex.tautology_problem(good(setup="import math", run="math.sqrt(4)"), str(tmp_path))
+    assert "imports no module of the repository" in ex.tautology_problem(good(setup="from other import f", run="f(1)"), str(tmp_path))
+    (tmp_path / "src" / "ledger_cli").rename(tmp_path / "src" / "ledger_cli_gone")
+    assert "imports no module" in ex.tautology_problem(ok, str(tmp_path))      # a package that is not there is still refused
+
+
+
 def test_an_example_that_runs_no_repository_code_proves_nothing(tmp_path):
     tree = make_tree(tmp_path)
     assert ex.tautology_problem(good(), tree) is None
