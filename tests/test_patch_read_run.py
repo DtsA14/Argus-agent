@@ -115,9 +115,19 @@ def test_the_cap_is_total_for_the_job_and_a_call_starts_only_if_it_fits(world):
     ms = models(reply(), reply())
     s = go(env, ms, cap_usd=0.0001)
     assert s["stopped"] and "cost cap" in s["stopped"] and ms["hy4flash"].calls == [] and ms["ds1017"].calls == []
-    for kw in ({"cap_usd": 0}, {"cap_usd": 3}, {"max_output": 10}):
+    for kw in ({"cap_usd": 0}, {"cap_usd": 3}, {"max_output": 10}, {"max_output": 100001}):
         with pytest.raises(rj.Refused):
             go(env, ms, **kw)
+
+
+def test_a_reasoning_model_may_be_given_up_to_100000_output_tokens_and_the_defaults_leave_room(world):
+    """The second reader (a reasoning model) spent 29,993 and 31,993 tokens on thinking alone on a 27 KB patch (2026-11-19): the ceiling is 100,000."""
+    env, sha = world
+    import inspect
+    assert inspect.signature(prr.run).parameters["max_output"].default == 32000
+    assert inspect.signature(prr.run).parameters["cap_usd"].default == 0.20
+    s = go(env, models(reply(), reply()), max_output=100000, cap_usd=0.5)
+    assert s["final"] == "ok" and s["stopped"] is None
 
 
 def test_only_a_job_with_a_review_package_is_read_and_the_ledger_is_beside_the_job(world, env):
