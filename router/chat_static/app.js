@@ -475,6 +475,7 @@
     parent.appendChild(p);
     return p;
   }
+  function who_(r) { return r && typeof r === "object" && r.kind && r.id ? r.kind + " " + r.id : ""; }   // a reader that is not {kind, id} is not named
   function sec(card, title) {
     var s = el("section", "sec");
     s.appendChild(el("h3", null, title));
@@ -518,7 +519,7 @@
     var box = el("div", "reader");
     if (!DOMAIN_LABEL) { box.appendChild(el("p", "note", "pembacaan tidak ditampilkan: label 'bukan bukti, bukan manusia' tidak ada")); card.appendChild(box); return; }
     if (r.fresh) {
-      var by = r.reader ? " (" + r.reader.kind + " " + r.reader.id + (r.reader2 ? " dan " + r.reader2.kind + " " + r.reader2.id : "") + ")" : "";
+      var by = who_(r.reader) ? " (" + who_(r.reader) + (who_(r.reader2) ? " dan " + who_(r.reader2) : "") + ")" : "";
       say(box, "pembaca", "pembaca angka", "Dibaca Claude, " + r.at + ": " + (r.verdict === "ok" ? "sesuai permintaan" : "ada yang meragukan") + " (" + (r.sources || []).join("; ") + ")" + by, r.verdict === "ok" ? "say" : "say warn");
       modelLine(box, r.note);
       box.appendChild(el("p", "small", DOMAIN_LABEL));
@@ -527,16 +528,9 @@
     }
     card.appendChild(box);
   }
-  function countLine(it) {                              // only what the server says: the counts and the machine's statuses of the examples
-    var c = it.counts, ex = Array.isArray(it.examples) ? it.examples : null;
-    if (!c) { return null; }
-    var parts = [c.calls + " contoh (tetap " + c.same + ", kalau " + c.whatif + ", berubah " + c.after + ")"];
-    if (ex) {
-      var t = {};
-      ex.forEach(function (e) { var s = e.proof && e.proof.status ? e.proof.status : "belum diperiksa mesin"; t[s] = (t[s] || 0) + 1; });
-      Object.keys(t).forEach(function (k) { parts.push(k + " " + t[k]); });
-    }
-    return parts.join(" · ");
+  function countLine(it) {                              // only the counts the server sends (calls, same, whatif, after); nothing from the examples is tallied
+    var c = it.counts;
+    return c ? c.calls + " contoh (tetap " + c.same + ", kalau " + c.whatif + ", berubah " + c.after + ")" : null;
   }
   function planItem(it, dim) {
     var c = el("div", "issue" + (dim ? " stale" : ""));
@@ -614,7 +608,7 @@
     box.appendChild(el("h4", null, title));
     if (!r) { box.appendChild(el("p", "note", "belum ada catatan")); return; }
     var line = function (x, n) {
-      var by = x.reader ? " (" + x.reader.kind + " " + x.reader.id + ")" : "";
+      var by = who_(x.reader) ? " (" + who_(x.reader) + ")" : "";
       say(box, "pembaca", "pembaca patch " + n, "Claude, " + x.at + ": " + (x.verdict === "ok" ? "ok" : "ada yang meragukan") + by, x.verdict === "ok" ? "say" : "say warn");
       modelLine(box, x.note);
     };
@@ -633,7 +627,7 @@
       cardHead(card, "Kartu pasang", d, d.patch_sha12 ? [{ text: "patch " + d.patch_sha12, cls: "mono" }] : []);
       card.appendChild(el("p", d.open ? "say" : "note", d.open ? "Tidak ada syarat yang tertutup (yang tidak berlaku atau tidak tercatat disebut di daftar). Ini bukan jaminan aman." : "Pasang tertutup: ada syarat yang belum terpenuhi."));
       var s1 = sec(card, "1. Apa tujuannya?");
-      say(s1, "model", d.purpose.by, d.purpose.title, "say");
+      say(s1, /model/.test(String(d.purpose.by)) ? "model" : "tak", d.purpose.by, d.purpose.title, "say");
       if (d.purpose.text) { modelLine(s1, d.purpose.text); }
       var s2 = sec(card, "2. Hasil perubahan, dalam angka");
       if (d.item) { s2.appendChild(planItem(d.item, false)); }
