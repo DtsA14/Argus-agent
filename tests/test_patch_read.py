@@ -492,3 +492,27 @@ def test_findings_lists_every_concerns_reading_in_order_and_nothing_for_an_ok(en
     assert pr.findings({"verdict": "ok", "note": "fine", "reader": {"kind": "claude"}}) == []
     with pytest.raises(rj.Refused, match="first sees a write.*second sees a default"):
         apply(env, sha)
+
+
+def test_a_first_ok_and_a_second_concerns_list_the_finding_once_and_say_it_once_in_the_refusal(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha, twice=False)
+    pr.record("jtest", sha[:12], "concerns", "the second sees a write", "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert kind == "concerns" and pr.findings(rec) == [("reader-b", "the second sees a write")]
+    with pytest.raises(rj.Refused) as e:
+        apply(env, sha)
+    assert str(e.value).count("the second sees a write") == 1
+
+
+def test_a_valid_first_concerns_stays_concerns_even_when_the_second_reading_is_stale_or_damaged(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha, verdict="concerns", note="first sees a write")
+    good = json.loads(file_of(env).read_text())
+    stale = {"verdict": "ok", "note": "fine", "at": "2026-11-19T10:00:00Z", "reader": {"kind": "argus", "id": "argus:m"}, "template_sha256": "0" * 64}
+    file_of(env).write_text(json.dumps({**good, "second": stale}))
+    assert pr.load(env.job().dir, "a1", sha)[0] == "concerns"                        # a plain write over it would otherwise be possible
+    file_of(env).write_text(json.dumps({**good, "second": {"verdict": "nonsense"}}))
+    assert pr.load(env.job().dir, "a1", sha)[0] == "concerns"
+    with pytest.raises(rj.Refused, match="not written over"):
+        read(env, sha, twice=False)

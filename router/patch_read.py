@@ -177,14 +177,16 @@ def load(job_dir, sid, patch_sha256):
     if rec["patch_sha256"] != patch_sha256:
         return "stale", None
     sec = rec.get("second")
-    if _model_stale(rec) or (isinstance(sec, dict) and _model_stale(sec)):
+    if _model_stale(rec):
         return "stale", None                                  # a reading of a model made under another template is not a reading under this one
+    if rec["verdict"] == "concerns":
+        return "concerns", rec                                # a fresh, valid `concerns` closes the patch whatever the second reading holds
+    if isinstance(sec, dict) and _model_stale(sec):
+        return "stale", None
     if sec is None:
-        return ("concerns" if rec["verdict"] == "concerns" else "one"), rec
+        return "one", rec
     if not _second_ok(sec):
         return "error", None
-    if rec["verdict"] == "concerns":
-        return "concerns", rec
     if sec["verdict"] == "concerns":
         return "concerns", {**rec, "verdict": "concerns", "note": sec["note"], "reader": sec["reader"], "at": sec["at"]}
     if _rid(rec["reader"]) is None or _rid(sec["reader"]) is None or _rid(rec["reader"]) == _rid(sec["reader"]):
@@ -198,7 +200,9 @@ def findings(rec):
     for r in (rec, rec.get("second") if isinstance(rec, dict) else None):
         if isinstance(r, dict) and r.get("verdict") == "concerns" and isinstance(r.get("note"), str):
             rd = r.get("reader") if isinstance(r.get("reader"), dict) else {}
-            out.append((rd.get("id") or rd.get("kind") or "reader", r["note"]))
+            one = (rd.get("id") or rd.get("kind") or "reader", r["note"])
+            if one not in out:                               # `load` merges a second `concerns` into the note: it must not be listed twice
+                out.append(one)
     return out
 
 

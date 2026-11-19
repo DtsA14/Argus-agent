@@ -520,6 +520,11 @@ class Cards:
         if not q.get("approved"):
             return "PENDING", "menunggu persetujuan antrean (di terminal)", [None] * n_items
         facts, commit, state, nxt, committed = [], q["base_commit"], None, "", 0
+        for it in q["items"]:                                   # what the retired attempts of a retried item spent stays spent (`argus queue retry`)
+            for r in it.get("retries") or []:
+                data, st = self._item_job(r.get("job")) if isinstance(r, dict) else (None, "missing")
+                spent = self._spent(data) if st == "ok" else None
+                committed += to_nano(spent) if spent is not None else int((r or {}).get("spent_nano", 0)) if isinstance(r, dict) else 0
         for item in q["items"]:
             job, status = self._item_job(item.get("job")) if item.get("job") else (None, "missing")
             info = {"job": item.get("job") if status == "ok" else None, "job_state": None, "applied": None, "spent": None, "bound": False}

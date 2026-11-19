@@ -4,6 +4,7 @@
   argus queue go      the human approves the list and the money (its sha)
   argus queue step    at most one drafter run (the next issue's code job), or what waits for a human; never approve, apply or push
   argus queue status  read only
+  argus queue retry   a new job of an item whose job was REJECTED on the patch readers' concerns; their findings go to its drafter as data (at most twice)
   argus queue close   the human closes a queue that is stuck (no job is touched)
 
 The queue's status is never stored: it is derived from the items' job.json each time (PENDING, WAITING, STOPPED, DONE,
@@ -94,9 +95,19 @@ def shape_ok(q, qid):
               and isinstance(q["items"], list) and q["items"]
               and all(isinstance(i, dict) and isinstance(i.get("issue_sha256"), str) and isinstance(i.get("n"), int) for i in q["items"])
               and (q.get("prd") is None or (isinstance(q["prd"], dict) and isinstance(q["prd"].get("sha"), str)
-                                            and re.fullmatch(r"[0-9a-f]{64}", q["prd"]["sha"]) and isinstance(q["prd"].get("dir"), str))))
+                                            and re.fullmatch(r"[0-9a-f]{64}", q["prd"]["sha"]) and isinstance(q["prd"].get("dir"), str)))
+              and all(_retries_ok(i) for i in q["items"]))
     except (KeyError, TypeError):
         return False
+
+
+def _retries_ok(item):
+    """The fields `retry` adds to an item are outside the approved list: they are checked like the rest (a negative spend would add money, a missing list would reset the count)."""
+    r, note = item.get("retries"), item.get("retry_note")
+    return ((r is None or (isinstance(r, list) and len(r) <= MAX_RETRIES and all(
+                isinstance(x, dict) and isinstance(x.get("job"), str) and isinstance(x.get("spent_nano"), int) and not isinstance(x.get("spent_nano"), bool)
+                and x["spent_nano"] >= 0 and isinstance(x.get("findings"), str) for x in r)))
+            and (note is None or (isinstance(note, str) and len(note) <= FINDINGS_MAX)))
 
 
 def _load(d, qid):
@@ -305,7 +316,7 @@ def derive(q, *, jobs_dir=None):
         return PENDING, f"approve with `argus queue go {q['id']} --sha {list_sha(q)[:12]}`", [], [], None
     jobs_dir = q["jobs_dir"]                            # the queue's own: a step on another jobs directory cannot see its jobs
     commit, forget = q["base_commit"], []
-    committed = sum(int(r.get("spent_nano", 0)) for it in q["items"] for r in (it.get("retries") or []) if isinstance(r, dict))    # what retired attempts spent stays spent
+    committed = retired_nano(q)                         # what the retired attempts spent (read live from their jobs) stays spent
     for item in q["items"]:
         job = _open(item, jobs_dir) if item["job"] else None
         if job is not None and not _bound(job, q, item, commit):
@@ -337,6 +348,17 @@ def derive(q, *, jobs_dir=None):
                 [f"argus status {job.id}   (patch sha)", f"argus apply {job.id} --read-sha <patch sha>"], forget, None
         return WAITING, f"item {item['n']}: job {job.id} is {state}", [f"argus resume {job.id}"], forget, None
     return DONE, "", [], forget, None
+
+
+def retired_nano(q, jobs_dir=None):
+    """What the retired attempts of the items (`retry`) spent, read from their jobs now (the number recorded at the retry only when a job cannot be opened).
+    A retired job is REJECTED and holds no more of the queue's money than it spent: a judge run on it later is a separate act of the human with the job's own cap."""
+    total = 0
+    for it in q["items"]:
+        for r in it.get("retries") or []:
+            job = _open({"job": r["job"]}, jobs_dir or q["jobs_dir"])
+            total += rj.spent_nano(job) if job is not None else int(r["spent_nano"])
+    return total
 
 
 def committed_nano(job):

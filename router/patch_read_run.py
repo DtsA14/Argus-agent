@@ -87,7 +87,7 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=64000, 
             continue
         cfg_n, ref = pt._prepare(cfg, name, cap_usd, max_output, None)
         plan.append((name, cfg_n, ref, tr.worst_usd(cfg_n, ref, len(pr.INSTRUCTION) + len(text), max_output)))
-    msg = "\n".join([f"patch reading of {job_id} ({sha[:12]}) by {reader_id(first)}, then (only if it says ok) {reader_id(second)}; the readings are notes of the job (patch_read_<sid>.json)",
+    msg = "\n".join([f"patch reading of {job_id} ({sha[:12]}) by {reader_id(first)}, then {reader_id(second)} (both read, whatever the first says); the readings are notes of the job (patch_read_<sid>.json)",
                      f"worst case per call up to ${max(p[3] for p in plan):.4f}; cap TOTAL for this job's patch readings ${cap_usd:.2f}",
                      f"template {pr.TEMPLATE_SHA256[:12]}; ledger {job.dir / LEDGER}"])
     with rj.live(deps, plan[0][1], [pt.ROLE], msg):

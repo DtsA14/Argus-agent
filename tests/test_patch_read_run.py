@@ -272,3 +272,17 @@ def test_an_unknown_reader_name_is_refused(world):
     env, sha = world
     with pytest.raises(KeyError):
         go(env, models(reply(), reply()), first="nope")
+
+
+def test_a_concerns_with_a_second_reading_is_final_and_a_claude_first_concerns_is_not_resumed(world):
+    env, sha = world
+    s = go(env, models(reply("concerns", "a"), reply("concerns", "b")))
+    assert s["final"] == "concerns"
+    again = models(reply(), reply())
+    s = go(env, again)
+    assert "nothing is read again" in s["stopped"] and again["hy4flash"].calls == [] and again["ds1017"].calls == []
+    pr.path(env.job().dir, "a1").unlink()
+    pr.record("jtest", sha[:12], "concerns", "a Claude session found a write", "claude", "claude:sess-1", deps=env.deps, jobs_dir=env.jobs)
+    again = models(reply(), reply())
+    s = go(env, again)
+    assert "nothing is read again" in s["stopped"] and again["ds1017"].calls == [] and s["billed_usd"] == 0.0

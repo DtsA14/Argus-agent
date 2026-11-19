@@ -1871,6 +1871,8 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
         out += [f"environment: {changed}", f'next: argus abandon {job.id} "<why>"']
     if d.get("human_steered"):                  # SPEC_DRAFT_CALL_PATH 2.4
         out.append("human-steered: a redraft was given a reviewer's note")
+    if d.get("reader_steered"):                 # `argus queue retry`: the first drafter was given the patch readers' findings (models), not a human's note
+        out.append("reader-steered: the drafter was given the patch readers' findings on a rejected attempt of this issue")
     for sid, s in d["stages"].items():
         out.append(f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
                    + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else "")
