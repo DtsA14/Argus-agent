@@ -463,31 +463,64 @@
       stream.appendChild(back);
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Job tidak dapat dibaca.")); });
   }
-  // ---- T3: the plan card (SPEC_KARTU_SETUJU), read only
+  // ---- T3: the plan card and the install card (SPEC_KARTU_SETUJU), read only. Presentation only: every field is the server's, put on the page as text, in
+  // sections that are questions; who speaks is a label (atha, model, mesin, pembaca). Nothing here chooses a colour from a number or a class of the test.
   var TIER_TITLE = { same: "Yang tidak boleh berubah", whatif: "Kalau ... maka", after: "Yang berubah" };
+  var DOMAIN_LABEL = "";
+  function who(kind, text) { return el("span", "who " + kind, text); }
+  function say(parent, kind, label, text, cls) {        // a line with its speaker: the text is data
+    var p = el("p", cls || "say");
+    p.appendChild(who(kind, label));
+    p.appendChild(document.createTextNode(String(text)));
+    parent.appendChild(p);
+    return p;
+  }
+  function who_(r) { return r && typeof r === "object" && r.kind && r.id ? r.kind + " " + r.id : ""; }   // a reader that is not {kind, id} is not named
+  function sec(card, title) {
+    var s = el("section", "sec");
+    s.appendChild(el("h3", null, title));
+    card.appendChild(s);
+    return s;
+  }
+  function kv(parent, k, v, cls) {
+    var r = el("div", "kv" + (cls ? " " + cls : ""));
+    r.appendChild(el("span", "k", k));
+    r.appendChild(el("span", "v", v));
+    parent.appendChild(r);
+  }
+  function cardHead(card, title, d, extra) {
+    var top = el("div", "kind");
+    top.appendChild(el("b", null, title));
+    top.appendChild(el("span", "state " + stateClass(d.state), String(d.state)));
+    card.appendChild(top);
+    var row = el("div", "row");
+    row.appendChild(el("span", "mono", d.id));
+    if (d.repo) { row.appendChild(el("span", null, d.repo)); }
+    (extra || []).forEach(function (x) { row.appendChild(el("span", x.cls || null, x.text)); });
+    card.appendChild(row);
+  }
   function planExample(e) {
-    var d = el("div", "ex");
-    d.appendChild(el("p", "small", e.id));
-    if (e.says) { modelLine(d, e.says); }
+    var d = el("div", "ex2");
+    var head = el("p", "small");
+    head.appendChild(el("span", "tier", TIER_TITLE[e.tier] || e.tier));
+    head.appendChild(document.createTextNode(" " + e.id));
+    d.appendChild(head);
+    if (e.says) { say(d, "model", MODEL, e.says); }
     if (!e.showable) { d.appendChild(el("p", "note", e.why || "contoh ini tidak bisa ditampilkan sebagai angka")); }
-    if (e.call) { d.appendChild(el("p", "small", "fungsi: " + e.call)); }
-    (e.assumptions || []).forEach(function (a) { d.appendChild(el("pre", "code", "Andaikan: " + a.name + " = " + a.shown)); });
-    (e.inputs || []).forEach(function (i) { d.appendChild(el("pre", "code", "masukan " + i.name + " = " + i.shown)); });
-    if (e.output && e.output.raises) { d.appendChild(el("pre", "code", "keluaran: " + e.output.shown)); }
-    else if (e.output) { e.output.forEach(function (o) { d.appendChild(el("pre", "code", "keluaran" + (o.label ? " " + o.label : "") + " = " + o.shown)); }); }
-    if (e.proof) { d.appendChild(el("pre", "code", "Mesin: " + e.proof.wording)); }
+    if (e.call) { kv(d, "fungsi", e.call); }
+    (e.assumptions || []).forEach(function (a) { kv(d, "Andaikan", a.name + " = " + a.shown); });
+    (e.inputs || []).forEach(function (i) { kv(d, "masukan " + i.name, i.shown); });
+    if (e.output && e.output.raises) { kv(d, "keluaran", e.output.shown); }
+    else if (e.output) { e.output.forEach(function (o) { kv(d, "keluaran" + (o.label ? " " + o.label : ""), o.shown); }); }
+    if (e.proof) { say(d, "mesin", "mesin", e.proof.wording, "say proof"); }
     return d;
   }
-  var DOMAIN_LABEL = "";
-  function planReading(card, r) {
-    var box = el("div", "ex");
+  function planReading(card, r) {                       // the domain reader's note: a model's statement, with the server's label
+    var box = el("div", "reader");
     if (!DOMAIN_LABEL) { box.appendChild(el("p", "note", "pembacaan tidak ditampilkan: label 'bukan bukti, bukan manusia' tidak ada")); card.appendChild(box); return; }
-    if (r.fresh && r.verdict === "ok") {
-      box.appendChild(el("p", "small", "Dibaca Claude, " + r.at + ": sesuai permintaan (" + (r.sources || []).join("; ") + ")"));
-      modelLine(box, r.note);
-      box.appendChild(el("p", "small", DOMAIN_LABEL));
-    } else if (r.fresh) {
-      box.appendChild(el("p", "note", "Dibaca Claude, " + r.at + ": ada yang meragukan (" + (r.sources || []).join("; ") + ")"));
+    if (r.fresh) {
+      var by = who_(r.reader) ? " (" + who_(r.reader) + (who_(r.reader2) ? " dan " + who_(r.reader2) : "") + ")" : "";
+      say(box, "pembaca", "pembaca angka", "Dibaca Claude, " + r.at + ": " + (r.verdict === "ok" ? "sesuai permintaan" : "ada yang meragukan") + " (" + (r.sources || []).join("; ") + ")" + by, r.verdict === "ok" ? "say" : "say warn");
       modelLine(box, r.note);
       box.appendChild(el("p", "small", DOMAIN_LABEL));
     } else {
@@ -495,22 +528,39 @@
     }
     card.appendChild(box);
   }
+  function countLine(it) {                              // only the counts the server sends (calls, same, whatif, after); nothing from the examples is tallied
+    var c = it.counts;
+    return c ? c.calls + " contoh (tetap " + c.same + ", kalau " + c.whatif + ", berubah " + c.after + ")" : null;
+  }
   function planItem(it, dim) {
-    var c = el("article", "card" + (dim ? " stale" : ""));
-    c.appendChild(el("h2", null, "Issue " + it.n));
-    if (it.title) { modelLine(c, it.title, "msg"); }
+    var c = el("div", "issue" + (dim ? " stale" : ""));
+    c.appendChild(el("h4", null, "Issue " + it.n));
+    if (it.title) { say(c, "model", MODEL, it.title, "say"); }
     if (it.warning) { c.appendChild(el("p", "note", it.warning)); }
     if (it.no_examples) { modelLine(c, "tanpa contoh: " + it.no_examples); }
     if (it.why) { c.appendChild(el("p", "small", it.why)); }
     if (it.examples && it.examples.withheld) { c.appendChild(el("p", "note", "contoh ditahan harness")); return c; }
+    var line = countLine(it);
+    if (line) { c.appendChild(el("p", "sum", line)); }
     ["same", "whatif", "after"].forEach(function (tier) {
-      var group = (it.examples || []).filter(function (e) { return e.tier === tier; });
-      if (!group.length) { return; }
-      c.appendChild(el("h2", null, TIER_TITLE[tier]));
-      group.forEach(function (e) { c.appendChild(planExample(e)); });
+      (it.examples || []).filter(function (e) { return e.tier === tier; }).forEach(function (e) { c.appendChild(planExample(e)); });
     });
     if (it.domain_read) { planReading(c, it.domain_read); }
     return c;
+  }
+  function cardButtons(extra) {
+    var wrap = el("div", "nav");
+    (extra || []).forEach(function (x) {
+      var b = el("button", null, x.text);
+      b.type = "button";
+      b.addEventListener("click", x.fn);
+      wrap.appendChild(b);
+    });
+    var back = el("button", null, "Semua kartu");
+    back.type = "button";
+    back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
+    wrap.appendChild(back);
+    return wrap;
   }
   function showPlan(id) {
     var seq = ++cardSeq;
@@ -518,61 +568,52 @@
     get("/api/approve/prd/" + encodeURIComponent(id)).then(function (d) {
       if (seq !== cardSeq || mode !== "cards") { return; }
       clear(stream);
+      DOMAIN_LABEL = d.domain_read_label || "";
       var dim = !!(d.stale || d.superseded);
-      var head = el("article", "card" + (dim ? " stale" : ""));
-      head.appendChild(el("h2", null, "Kartu rencana"));
-      var row = el("div", "row");
-      row.appendChild(el("span", "mono", d.id));
-      row.appendChild(el("span", "state " + stateClass(d.state), String(d.state)));
-      if (d.repo) { row.appendChild(el("span", null, d.repo)); }
-      if (d.turn) { row.appendChild(el("span", null, "giliran " + d.turn)); }
-      head.appendChild(row);
-      if (d.stale) { head.appendChild(el("p", "note", "Hasil di commit lama: repo bergeser sejak folder ini ditulis.")); }
-      if (d.superseded) { head.appendChild(el("p", "note", "Folder ini sudah digantikan giliran berikutnya.")); }
-      if (d.why) { head.appendChild(el("p", "note", d.why)); }
+      var card = el("article", "card plan" + (dim ? " stale" : ""));
+      cardHead(card, "Kartu rencana", d, (d.turn ? [{ text: "giliran " + d.turn }] : []));
+      if (d.stale) { card.appendChild(el("p", "note", "Hasil di commit lama: repo bergeser sejak folder ini ditulis.")); }
+      if (d.superseded) { card.appendChild(el("p", "note", "Folder ini sudah digantikan giliran berikutnya.")); }
+      if (d.why) { card.appendChild(el("p", "note", d.why)); }
+      var s1 = sec(card, "1. Apa yang diminta?");
       if (d.request) {
-        head.appendChild(el("span", "tag", d.request_by === "chat" ? "permintaan, ditulis lewat chat:" : "permintaan (pembuat tidak tercatat):"));
-        head.appendChild(el("p", "msg", d.request));
-        if (d.request_truncated) { head.appendChild(el("p", "note", "permintaan dipotong")); }
-      }
-      if (d.summary) { modelLine(head, d.summary, "msg"); } else if (d.summary_why) { head.appendChild(el("p", "note", d.summary_why)); }
-      head.appendChild(el("p", "small", d.issue_count + " issue"));
+        say(s1, d.request_by === "chat" ? "atha" : "tak", d.request_by === "chat" ? "permintaan, ditulis lewat chat:" : "permintaan (pembuat tidak tercatat):", d.request, "say");
+        if (d.request_truncated) { s1.appendChild(el("p", "note", "permintaan dipotong")); }
+      } else { s1.appendChild(el("p", "note", "permintaan tidak tercatat")); }
+      var s2 = sec(card, "2. Apa yang akan dikerjakan?");
+      if (d.summary) { say(s2, "model", MODEL, d.summary, "say"); } else if (d.summary_why) { s2.appendChild(el("p", "note", d.summary_why)); }
+      s2.appendChild(el("p", "small", d.issue_count + " issue"));
+      var s3 = sec(card, "3. Hasilnya nanti, dalam angka");
+      if (d.defects) { s3.appendChild(el("p", "note", d.defects + " contoh tidak bisa ditampilkan sebagai angka (kartu cacat)")); }
+      (d.items || []).forEach(function (it) { s3.appendChild(planItem(it, dim)); });
+      var s4 = sec(card, "4. Berapa batas biayanya?");
       if (d.cost) {
         var ref = d.cost.reference && d.cost.reference.median !== null && d.cost.reference.median !== undefined ? "; acuan: median " + usd(d.cost.reference.median) + " dari " + d.cost.reference.n + " " + d.cost.reference.of : "; acuan: belum cukup data";
-        if (!d.cost.ratio_text) { head.appendChild(el("p", "small", "Rasio batas: belum cukup data job sebelumnya.")); }
-        if (d.cost.ratio_text) { head.appendChild(el("p", "small", "Batas yang diminta " + d.cost.ratio_text + " (1 = biasa; batas itu pagar, bukan perkiraan biaya).")); }
-        head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas antrean untuk " + d.issue_count + " issue " + usd(d.cost.proposed) + (d.cost.proposed_each !== null && d.cost.proposed_each !== undefined ? " (" + usd(d.cost.proposed_each) + " per issue)" : "") + ref + " (acuan: satu job)"));
+        if (!d.cost.ratio_text) { s4.appendChild(el("p", "say", "Rasio batas: belum cukup data job sebelumnya.")); }
+        if (d.cost.ratio_text) { say(s4, "mesin", "mesin", "Batas yang diminta " + d.cost.ratio_text + " (1 = biasa; batas itu pagar, bukan perkiraan biaya).", "say big"); }
+        s4.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas antrean untuk " + d.issue_count + " issue " + usd(d.cost.proposed) + (d.cost.proposed_each !== null && d.cost.proposed_each !== undefined ? " (" + usd(d.cost.proposed_each) + " per issue)" : "") + ref + " (acuan: satu job)"));
       }
-      DOMAIN_LABEL = d.domain_read_label || "";
-      if (d.defects) { head.appendChild(el("p", "note", d.defects + " contoh tidak bisa ditampilkan sebagai angka (kartu cacat)")); }
-      head.appendChild(el("p", "small", d.fixed_line));
-      stream.appendChild(head);
-      (d.items || []).forEach(function (it) { stream.appendChild(planItem(it, dim)); });
-      var tech = el("button", null, "Kartu teknis");
-      tech.type = "button";
-      tech.addEventListener("click", function () { showCard("prd", id); });
-      stream.appendChild(tech);
-      var back = el("button", null, "Semua kartu");
-      back.type = "button";
-      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
-      stream.appendChild(back);
+      var s5 = sec(card, "5. Apa yang belum diperiksa siapa pun?");
+      s5.appendChild(el("p", "say", d.fixed_line));
+      stream.appendChild(card);
+      stream.appendChild(cardButtons([{ text: "Kartu teknis", fn: function () { showCard("prd", id); } }]));
     }).catch(function () {
       if (seq !== cardSeq || mode !== "cards") { return; }
       clear(stream);
       stream.appendChild(el("p", "muted", "Kartu rencana tidak dapat dibaca."));
-      var back = el("button", null, "Semua kartu");
-      back.type = "button";
-      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
-      stream.appendChild(back);
+      stream.appendChild(cardButtons());
     });
   }
-  // ---- T3 5b: the install card, read only: purpose and cost, the examples with the audit's words, the files with the machine's marks, the two Claude
-  // readers (always labelled), and the conditions of block C. No button here: the decision "install" is a later change.
   function installReader(box, title, r, label) {
-    box.appendChild(el("h2", null, title));
+    box.appendChild(el("h4", null, title));
     if (!r) { box.appendChild(el("p", "note", "belum ada catatan")); return; }
-    box.appendChild(el("p", r.verdict === "ok" ? "small" : "note", "Claude, " + r.at + ": " + (r.verdict === "ok" ? "ok" : "ada yang meragukan")));
-    modelLine(box, r.note);
+    var line = function (x, n) {
+      var by = who_(x.reader) ? " (" + who_(x.reader) + ")" : "";
+      say(box, "pembaca", "pembaca patch " + n, "Claude, " + x.at + ": " + (x.verdict === "ok" ? "ok" : "ada yang meragukan") + by, x.verdict === "ok" ? "say" : "say warn");
+      modelLine(box, x.note);
+    };
+    line(r, 1);
+    if (r.second) { line(r.second, 2); }
     box.appendChild(el("p", "small", label));
   }
   function showInstall(id) {
@@ -582,57 +623,53 @@
       if (seq !== cardSeq || mode !== "cards") { return; }
       clear(stream);
       DOMAIN_LABEL = d.domain_read_label || "";
-      var head = el("article", "card");
-      head.appendChild(el("h2", null, "Kartu pasang"));
-      var row = el("div", "row");
-      row.appendChild(el("span", "mono", d.id));
-      row.appendChild(el("span", "state " + stateClass(d.state), String(d.state)));
-      if (d.repo) { row.appendChild(el("span", null, d.repo)); }
-      if (d.patch_sha12) { row.appendChild(el("span", "mono", "patch " + d.patch_sha12)); }
-      head.appendChild(row);
-      head.appendChild(el("span", "tag", d.purpose.by));
-      modelLine(head, d.purpose.title, "msg");
-      if (d.purpose.text) { modelLine(head, d.purpose.text); }
+      var card = el("article", "card install");
+      cardHead(card, "Kartu pasang", d, d.patch_sha12 ? [{ text: "patch " + d.patch_sha12, cls: "mono" }] : []);
+      card.appendChild(el("p", d.open ? "say" : "note", d.open ? "Tidak ada syarat yang tertutup (yang tidak berlaku atau tidak tercatat disebut di daftar). Ini bukan jaminan aman." : "Pasang tertutup: ada syarat yang belum terpenuhi."));
+      var s1 = sec(card, "1. Apa tujuannya?");
+      say(s1, /model/.test(String(d.purpose.by)) ? "model" : "tak", d.purpose.by, d.purpose.title, "say");
+      if (d.purpose.text) { modelLine(s1, d.purpose.text); }
+      var s2 = sec(card, "2. Hasil perubahan, dalam angka");
+      if (d.item) { s2.appendChild(planItem(d.item, false)); }
+      var s3 = sec(card, "3. File mana yang disentuh?");
+      var files = d.files || [];
+      var flagged = files.filter(function (f) { return f.marks.length; }).length;
+      s3.appendChild(el("p", "sum", files.length + " file, " + flagged + " bertanda mesin"));
+      files.forEach(function (f) {
+        var p = el("p", f.marks.length ? "file flagged" : "file");
+        p.appendChild(el("span", "mono", f.path));
+        if (f.marks.length) { p.appendChild(who("mesin", "mesin")); p.appendChild(document.createTextNode(" " + f.marks.join("; "))); }
+        s3.appendChild(p);
+      });
+      if (!files.length) { s3.appendChild(el("p", "note", "daftar file tidak terbaca")); }
+      if (d.files_cut) { s3.appendChild(el("p", "note", d.files_cut + " file lagi tidak ditampilkan")); }
+      if (d.scope_note) { s3.appendChild(el("p", "note", d.scope_note)); }
+      var s4 = sec(card, "4. Syarat pemasangan");
+      var checks = d.checks || [];
+      var n = { ya: 0, tidak: 0, na: 0 };
+      checks.forEach(function (c) { if (c.ok === true) { n.ya++; } else if (c.ok === false) { n.tidak++; } else { n.na++; } });
+      s4.appendChild(el("p", "sum", checks.length + " syarat: " + n.ya + " ya, " + n.tidak + " TIDAK, " + n.na + " tidak berlaku"));
+      checks.forEach(function (c) {
+        s4.appendChild(el("p", c.ok === false ? "cond bad" : "cond", "(" + c.key + ") " + (c.ok === true ? "ya" : c.ok === false ? "TIDAK" : "tidak berlaku") + ": " + c.label + (c.why ? " - " + c.why : "")));
+      });
+      var s5 = sec(card, "5. Siapa yang membaca patch?");
+      installReader(s5, "Pembaca patch", d.patch_read, d.patch_read_label);
+      s5.appendChild(el("p", "small", d.patch_reader_tested ? "pembaca patch sudah diuji" : "pembaca patch belum diuji"));
+      s5.appendChild(el("p", "small", d.domain_reader_tested ? "pembaca angka sudah diuji" : "pembaca angka belum diuji"));
+      if (d.approval) { s5.appendChild(el("p", "small", "persetujuan draf: " + d.approval.at + " oleh " + d.approval.by + " (" + d.approval.note + ")")); }
+      var s6 = sec(card, "6. Berapa biayanya?");
       if (d.cost) {
-        head.appendChild(el("p", "small", "biaya job " + usd(d.cost.spent) + "; batas job " + usd(d.cost.cap) + (d.cost.reference && d.cost.reference.cap_median !== null && d.cost.reference.cap_median !== undefined ? "; batas job biasa (median) " + usd(d.cost.reference.cap_median) : "")));
+        s6.appendChild(el("p", "say", "biaya job " + usd(d.cost.spent) + "; batas job " + usd(d.cost.cap) + (d.cost.reference && d.cost.reference.cap_median !== null && d.cost.reference.cap_median !== undefined ? "; batas job biasa (median) " + usd(d.cost.reference.cap_median) : "")));
       }
-      head.appendChild(el("p", "small", d.fixed_line));
-      head.appendChild(el("p", d.open ? "small" : "note", d.open ? "Tidak ada syarat yang tertutup (yang tidak berlaku atau tidak tercatat disebut di daftar). Ini bukan jaminan aman." : "Pasang tertutup: ada syarat yang belum terpenuhi."));
-      stream.appendChild(head);
-      var conds = el("article", "card");
-      conds.appendChild(el("h2", null, "Syarat"));
-      (d.checks || []).forEach(function (c) {
-        conds.appendChild(el("p", c.ok === false ? "note" : "small", "(" + c.key + ") " + (c.ok === true ? "ya" : c.ok === false ? "TIDAK" : "tidak berlaku") + ": " + c.label + (c.why ? " - " + c.why : "")));
-      });
-      stream.appendChild(conds);
-      if (d.item) { stream.appendChild(planItem(d.item, false)); }
-      var scope = el("article", "card");
-      scope.appendChild(el("h2", null, "File yang disentuh patch"));
-      (d.files || []).forEach(function (f) {
-        scope.appendChild(el("p", f.marks.length ? "note" : "small", f.path + (f.marks.length ? " - " + f.marks.join("; ") : "")));
-      });
-      if (!(d.files || []).length) { scope.appendChild(el("p", "note", "daftar file tidak terbaca")); }
-      if (d.files_cut) { scope.appendChild(el("p", "note", d.files_cut + " file lagi tidak ditampilkan")); }
-      if (d.scope_note) { scope.appendChild(el("p", "note", d.scope_note)); }
-      stream.appendChild(scope);
-      var readers = el("article", "card");
-      installReader(readers, "Pembaca patch", d.patch_read, d.patch_read_label);
-      readers.appendChild(el("p", "small", d.patch_reader_tested ? "pembaca patch sudah diuji" : "pembaca patch belum diuji"));
-      readers.appendChild(el("p", "small", d.domain_reader_tested ? "pembaca angka sudah diuji" : "pembaca angka belum diuji"));
-      if (d.approval) { readers.appendChild(el("p", "small", "persetujuan draf: " + d.approval.at + " oleh " + d.approval.by + " (" + d.approval.note + ")")); }
-      stream.appendChild(readers);
-      var back = el("button", null, "Semua kartu");
-      back.type = "button";
-      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
-      stream.appendChild(back);
+      var s7 = sec(card, "7. Apa yang belum diperiksa siapa pun?");
+      s7.appendChild(el("p", "say", d.fixed_line));
+      stream.appendChild(card);
+      stream.appendChild(cardButtons());
     }).catch(function () {
       if (seq !== cardSeq || mode !== "cards") { return; }
       clear(stream);
       stream.appendChild(el("p", "muted", "Kartu pasang tidak dapat dibaca."));
-      var back = el("button", null, "Semua kartu");
-      back.type = "button";
-      back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
-      stream.appendChild(back);
+      stream.appendChild(cardButtons());
     });
   }
   // ---- T2: read-only cards (docs/reviews/SPEC_CHAT_CARDS.md). Every string is put on the page as text; model text carries its tag, and the

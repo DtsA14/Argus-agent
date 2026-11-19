@@ -298,10 +298,10 @@ def test_the_page_has_a_plan_view_reached_from_the_prd_card_and_writes_only_text
     assert 'plan.addEventListener("click", function () { showPlan(id); });' in js and '"Kartu rencana (angka)"' in js
     for title in ("Yang tidak boleh berubah", "Kalau ... maka", "Yang berubah"):
         assert title in js
-    part = js[js.index("function planExample"):js.index("// ---- T3 5b: the install card")]
+    part = js[js.index("function planExample"):js.index("// ---- T2: read-only cards")]
     assert "innerHTML" not in part and "insertAdjacentHTML" not in part and "document.write" not in part
-    assert 'modelLine(d, e.says)' in part and "e.proof.wording" in part and "it.warning" in part
-    assert part.count('"Semua kartu"') == 2
+    assert 'say(d, "model", MODEL, e.says)' in part and "e.proof.wording" in part and "it.warning" in part
+    assert part.count('"Semua kartu"') == 1 and part.count("cardButtons(") == 5                 # one definition, two cards, each with its failure path
 
 
 def test_the_chat_serves_the_pinned_files():
@@ -434,11 +434,11 @@ def test_the_missing_folder_sha_and_commit_are_not_the_word_none(svc):
 
 def test_the_plan_page_guards_old_answers_and_marks_the_author_honestly():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
-    part = js[js.index("function showPlan"):js.index("// ---- T3 5b: the install card")]
+    part = js[js.index("function showPlan"):js.index("function installReader")]
     assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2
     assert "if (d.defects) {" in part and 'el("p", "note", it.warning)' in js
-    assert 'd.request_by === "chat" ? "permintaan, ditulis lewat chat:" : "permintaan (pembuat tidak tercatat):"' in part
-    assert "d.defects" in part and 'modelLine(head, d.summary, "msg")' in part and 'el("pre", "code", "Mesin: " + e.proof.wording)' in js
+    assert 'd.request_by === "chat"' in part and '"permintaan, ditulis lewat chat:"' in part and '"permintaan (pembuat tidak tercatat):"' in part
+    assert "d.defects" in part and 'say(s2, "model", MODEL, d.summary, "say")' in part and 'say(d, "mesin", "mesin", e.proof.wording' in js
     assert 'function planItem' in js and '["same", "whatif", "after"].forEach' in js
     assert "function setMode(m) {\n    mode = m;\n    cardSeq++;" in js
 
@@ -695,13 +695,13 @@ def test_a_bool_infinite_or_zero_cap_is_no_cap_and_two_caps_are_too_few(svc):
 def test_the_page_shows_the_label_next_to_every_reading_and_never_a_reading_without_it():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     reading = js[js.index("function planReading"):js.index("function planItem")]
-    assert reading.count('box.appendChild(el("p", "small", DOMAIN_LABEL));') == 2                 # the ok branch and the concerns branch
+    assert reading.count('box.appendChild(el("p", "small", DOMAIN_LABEL));') == 1                 # one fresh branch: ok and concerns are told apart inside it
     assert reading.index("if (!DOMAIN_LABEL)") < reading.index("Dibaca Claude")                  # no label, no reading
-    assert 'r.fresh && r.verdict === "ok"' in reading and "} else if (r.fresh) {" in reading
-    assert reading.index("ada yang meragukan") > reading.index("sesuai permintaan")
-    assert reading.count("modelLine(box, r.note)") == 2
+    assert "if (r.fresh) {" in reading and 'r.verdict === "ok" ? "sesuai permintaan" : "ada yang meragukan"' in reading
+    assert reading.index("modelLine(box, r.note)") < reading.index('el("p", "small", DOMAIN_LABEL)')
+    assert reading.count("modelLine(box, r.note)") == 1
     assert "r.note" not in reading.split("} else {")[-1]                                          # a stale or missing reading never shows a note
-    plan_js = js[js.index("function showPlan"):js.index("// ---- T3 5b: the install card")]
+    plan_js = js[js.index("function showPlan"):js.index("function installReader")]
     assert plan_js.index("DOMAIN_LABEL = d.domain_read_label") < plan_js.index("(d.items || []).forEach")
     assert 'el("p", "note", "Dibaca Claude: basi' not in js and "batas itu pagar, bukan perkiraan biaya" in js
 

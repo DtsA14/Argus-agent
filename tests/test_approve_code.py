@@ -358,7 +358,7 @@ def test_the_page_has_an_install_view_reached_from_a_review_ready_queue_item_and
     assert js.count('get("/api/approve/code/" + encodeURIComponent(id))') == 1
     assert 'inst.addEventListener("click", function () { showInstall(it.job); });' in js and 'it.job_state === "REVIEW_READY"' in js
     part = js[js.index("function showInstall"):js.index("// ---- T2: read-only cards")]
-    assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2 and part.count('"Semua kartu"') == 2
+    assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2 and part.count("cardButtons()") == 2
     assert "innerHTML" not in part and "insertAdjacentHTML" not in part and "document.write" not in part
     assert "d.patch_read_label" in part and "d.domain_read_label" in part and "d.fixed_line" in part
     assert "pembaca patch belum diuji" in part and "pembaca angka belum diuji" in part and "TIDAK" in part
