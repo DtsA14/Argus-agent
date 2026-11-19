@@ -171,7 +171,7 @@ def tautology_problem(example, tree):
             modules.update(a.name.split(".")[0] for a in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
             modules.add(node.module.split(".")[0])
-    ours = [m for m in modules if os.path.isdir(os.path.join(tree, m)) or os.path.isfile(os.path.join(tree, m + ".py"))]
+    ours = [m for m in modules if any(os.path.isdir(os.path.join(tree, *d, m)) or os.path.isfile(os.path.join(tree, *d, m + ".py")) for d in ((), ("src",)))]   # flat layout or src layout
     if not ours:
         return f"example {example['id']}: its setup imports no module of the repository"
     if not any(isinstance(n, ast.Call) for n in [*ast.walk(setup), *ast.walk(run)]):
