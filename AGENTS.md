@@ -60,6 +60,17 @@ it is strict-lane. A hint that becomes a gate (refuses, fails or blocks somethin
 - Flag any chat route that changes a job, spends money or starts a process without the spec's two steps (prepare, then confirm with a token bound to the card),
   any Host check that skips a method, any cookie, any HTML sink or storage in `chat_static/app.js`.
 
+### Proportional process and real use first (Atha, 2026-11-19)
+Atha spent a month building Argus without really using it; the goal is to reach **T6** (`argus env init`, environment node, new repos from a prompt) fast, and a
+small PR is not a goal. So:
+- **Strict lane** (spec, Opus review, mutants once, `precheck`, one `verify_at`) stays only for code that can hurt: what applies a patch to a real repo, money
+  caps and ledgers, keys and the terminal filter, sandbox and approval gates.
+- **Light lane** for display, test tools, fixtures, docs and helper scripts: tests that fail on the old code, `precheck`, merge. No Opus review, no mutants, no
+  full `verify_at` unless a reviewer doubts it. When a change touches `chat_static/` only as presentation, treat it as advisory (above) and say so.
+- **Do not build more reader-test or fixture infrastructure.** Reader quality is learned from real jobs (log whether the reader's note matched the real outcome).
+- Before proposing a new gate, ask: does it block a real job Atha wants to run? If not, it waits.
+- Prefer a real task over a test: the next piece of work is chosen because Atha wants the result, and the friction it shows is what gets fixed.
+
 ### Tests
 - A new guarantee needs a test that fails when the guarantee is broken (we mutation-check them).
   A test that is skipped (e.g. Docker unavailable) does not count as passing.
