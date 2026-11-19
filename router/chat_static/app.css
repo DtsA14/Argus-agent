@@ -54,3 +54,25 @@ input.reason{width:100%;min-height:2.75rem;margin-top:.5rem;padding:.5rem .9rem;
 .ex .st.ok{color:var(--ok)}.ex .st.bad{color:var(--bad)}.ex .st.warn{color:var(--warn)}
 .stale{opacity:.6}
 pre.code{white-space:pre-wrap;overflow-wrap:anywhere;font:.8rem ui-monospace,Menlo,monospace;margin:.25rem 0}
+/* T3 cards (presentation only): sections that are questions; the speaker is a label; no colour comes from a number or from the test's class */
+.card .kind{display:flex;justify-content:space-between;align-items:center;gap:.5rem;font-size:.9rem}
+.sec{margin:1.1rem 0 0}
+.sec h3{font-size:.8rem;font-weight:600;color:var(--muted);letter-spacing:.02em;margin:0 0 .4rem}
+.say{margin:.3rem 0;overflow-wrap:anywhere}
+.say.big{font-size:1.1rem}
+.say.warn,.cond.bad,.file.flagged{color:var(--warn)}
+.who{display:inline-block;font-size:.7rem;padding:.05rem .45rem;margin-right:.4rem;border-radius:.35rem;vertical-align:.1rem;border:1px solid var(--line);color:var(--muted);font-style:normal}
+.who.atha{background:var(--text);color:var(--bg);border-color:var(--text)}
+.who.model,.who.pembaca{color:var(--accent)}
+.who.mesin{color:var(--ok)}
+.sum{font-size:.85rem;color:var(--muted);margin:.2rem 0 .5rem}
+.issue h4,.reader h4{font-size:.9rem;margin:.6rem 0 .2rem}
+.ex2{border:1px solid var(--line);border-radius:.8rem;padding:.6rem .7rem;margin:.5rem 0}
+.ex2 .tier{font-weight:600;font-size:.8rem}
+.kv{display:flex;justify-content:space-between;gap:.75rem;padding:.2rem 0;border-top:1px solid var(--line);font-size:.9rem;font-variant-numeric:tabular-nums}
+.kv .k{color:var(--muted);overflow-wrap:anywhere}.kv .v{text-align:right;white-space:pre-wrap;overflow-wrap:anywhere}
+.proof{font-size:.85rem}
+.reader{border-top:1px solid var(--line);margin-top:.6rem;padding-top:.3rem}
+.cond,.file{font-size:.85rem;margin:.25rem 0;overflow-wrap:anywhere}
+.nav{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0 1rem}
+.nav button{min-height:2.75rem;padding:0 1.1rem;border-radius:999px;border:1px solid var(--line);background:none;color:inherit;font:inherit}
