@@ -37,7 +37,7 @@ SNIPPETS = ['if (d.why) { card.appendChild(el("p", "note", d.why)); }', 'if (d.s
             'if (it.warning) { c.appendChild(el("p", "note", it.warning)); }', 'modelLine(c, "tanpa contoh: " + it.no_examples)', 'if (it.why) {', '"contoh ditahan harness"',
             'if (r.second) { line(r.second, 2); }', 'who_(r.reader2)', "(r.sources || []).join", "r.at + \": \"", "if (d.approval) {", 'f.marks.join("; ")', 'if (d.files_cut)', 'if (d.scope_note)',
             'd.patch_sha12 ? [{ text: "patch " + d.patch_sha12', 'd.turn ? [{ text: "giliran " + d.turn }]', "c.why ? \" - \" + c.why : \"\"", 'modelLine(s1, d.purpose.text)',
-            'd.patch_reader_tested ?', 'd.domain_reader_tested ?', "if (d.item) { s2.appendChild(planItem(d.item, false)); }", "d.cost.reference.cap_median"]
+            'd.patch_reader_tested ?', 'c.ok === false ? "cond bad"', 'p.appendChild(who("mesin", "mesin"))', '"say big"', 'd.domain_reader_tested ?', "if (d.item) { s2.appendChild(planItem(d.item, false)); }", "d.cost.reference.cap_median"]
 
 
 @pytest.mark.parametrize("snippet", SNIPPETS)
@@ -66,7 +66,7 @@ def test_the_second_readers_are_shown_too():
 
 
 def test_no_colour_or_class_comes_from_a_number_or_from_the_cost_ratio():
-    assert not re.search(r"\.ratio\b(?!_text)", BLOCK)                     # only the machine's words (ratio_text), never the number
+    assert not re.search(r"\.ratio\b(?!_text)", BLOCK) and not re.search(r"parseFloat|Number\(|\bratio_text\s*[<>]", BLOCK)                     # only the machine's words (ratio_text), never the number
     assert "gradient" not in CSS and "scale" not in CSS.split("T3 cards")[1]
 
 
@@ -150,3 +150,6 @@ def test_a_warning_class_appears_only_where_the_server_marks_something(world):
     flagged = draw(k["i1"], s, root)
     assert "file flagged" in flagged and "src/other.py" in text_of(flagged)
     assert "cond bad" in draw(k["i2"], s, root)
+    ok_card = draw(k["i3"], s, root)
+    assert "cond bad" not in ok_card and "file flagged" not in ok_card                  # a condition that does not apply is not drawn as a failed one
+    assert '<span class="who mesin">mesin</span>' in flagged
