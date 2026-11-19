@@ -212,3 +212,19 @@ def test_a_ledger_that_holds_a_call_without_a_price_stops_the_run(world):
     ms = models(reply(), reply())
     s = go(env, ms)
     assert "not complete" in (s["stopped"] or "") and ms["hy4flash"].calls == [] and s["final"] == "none"
+
+
+def test_the_readers_can_be_chosen_and_a_concerns_of_the_first_reader_still_stops_the_second(world):
+    """`--first ds1017 --second hy4flash` (a measurement: the pair is then not the tested one): the model named first is asked first, and its concerns ends the run."""
+    env, sha = world
+    ms = models(reply(), reply("concerns", "web.py: methods other than the five named still give 501"))
+    ms = {prr.FIRST: ms[prr.FIRST], prr.SECOND: ms[prr.SECOND]}
+    s = go(env, {"ds1017": ms[prr.SECOND], "hy4flash": ms[prr.FIRST]}, first="ds1017", second="hy4flash")
+    assert s["final"] == "concerns" and [r["reader"] for r in s["readings"]] == [prr.reader_id("ds1017")]
+    assert len(ms[prr.FIRST].calls) == 0 and len(ms[prr.SECOND].calls) == 1
+
+
+def test_an_unknown_reader_name_is_refused(world):
+    env, sha = world
+    with pytest.raises(KeyError):
+        go(env, models(reply(), reply()), first="nope")

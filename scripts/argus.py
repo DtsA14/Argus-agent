@@ -181,6 +181,8 @@ def main(argv=None, deps=None):
     prr.add_argument("job")
     prr.add_argument("--cap-usd", type=float, default=0.20, help="the TOTAL cap of this job's patch readings (a call starts only if billed so far + its worst case fits)")
     prr.add_argument("--max-output", type=int, default=32000, help="output tokens a call may use, up to 100000 (a reasoning model spends them on thinking first)")
+    prr.add_argument("--first", choices=("hy4flash", "ds1017"), default="hy4flash", help="the reader asked first (default: the tested pair's first); another order is a measurement: the card says the pair is not tested")
+    prr.add_argument("--second", choices=("hy4flash", "ds1017"), default="ds1017", help="the reader asked second, only if the first says ok")
     p = sub.add_parser("applied")
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
@@ -438,7 +440,7 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "patch-read-run":
             from router import patch_read_run
-            summary = patch_read_run.run(o.job, cfg=load_config(o.config), deps=deps, jobs_dir=o.jobs_dir, cap_usd=o.cap_usd, max_output=o.max_output)
+            summary = patch_read_run.run(o.job, cfg=load_config(o.config), deps=deps, jobs_dir=o.jobs_dir, cap_usd=o.cap_usd, max_output=o.max_output, first=o.first, second=o.second)
             print(json.dumps(summary, indent=1))
             return 0
         if o.cmd == "patch-read":
