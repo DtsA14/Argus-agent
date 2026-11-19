@@ -177,12 +177,12 @@ def main(argv=None, deps=None):
     pr_.add_argument("--reader", required=True, choices=("claude",))
     pr_.add_argument("--reader-id", help="the model or session that read it (an `ok` needs two readings by two different ids: the second with --second)")
     pr_.add_argument("--second", action="store_true", help="the second reading, by another --reader-id than the first (SPEC_KARTU_SETUJU 13.5)")
-    prr = sub.add_parser("patch-read-run", help="the patch reader of an Argus job: Tencent Hy4 Flash, then (only if it says ok) DeepSeek V4.1 Flash 1017, outside a Claude session; costs money, has its own cap")
+    prr = sub.add_parser("patch-read-run", help="the patch reader of an Argus job: Tencent Hy4 Flash, then DeepSeek V4.1 Flash 1017 (both always, so one note holds the findings of both), outside a Claude session; costs money, has its own cap")
     prr.add_argument("job")
     prr.add_argument("--cap-usd", type=float, default=0.20, help="the TOTAL cap of this job's patch readings (a call starts only if billed so far + its worst case fits)")
-    prr.add_argument("--max-output", type=int, default=32000, help="output tokens a call may use, up to 100000 (a reasoning model spends them on thinking first)")
+    prr.add_argument("--max-output", type=int, default=64000, help="output tokens a call may use, up to 100000 (a reasoning model spends them on thinking first)")
     prr.add_argument("--first", choices=("hy4flash", "ds1017"), default="hy4flash", help="the reader asked first (default: the tested pair's first); another order is a measurement: the card says the pair is not tested")
-    prr.add_argument("--second", choices=("hy4flash", "ds1017"), default="ds1017", help="the reader asked second, only if the first says ok")
+    prr.add_argument("--second", choices=("hy4flash", "ds1017"), default="ds1017", help="the reader asked second (asked whatever the first said, unless the first reading was unusable)")
     p = sub.add_parser("applied")
     p.add_argument("job")
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
@@ -250,6 +250,9 @@ def main(argv=None, deps=None):
     qs.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
     qs.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     qsub.add_parser("status").add_argument("queue")
+    qr = qsub.add_parser("retry", help="a new job of an item whose job was REJECTED on the patch readers' concerns: their findings go to the new drafter as data (at most 2 per item); the next `step` starts it")
+    qr.add_argument("queue")
+    qr.add_argument("--item", type=int, required=True)
     qc = qsub.add_parser("close", help="close a stuck queue; no job is touched")
     qc.add_argument("queue")
     qc.add_argument("--note", required=True)
@@ -397,12 +400,13 @@ def main(argv=None, deps=None):
             print(rj.status(fn(o.job, o.reason, deps=deps, jobs_dir=o.jobs_dir, sha=o.sha, via=o.via).id,
                             jobs_dir=o.jobs_dir))
             return 0
-        if o.cmd == "queue" and o.queue_cmd in ("go", "status", "close"):
+        if o.cmd == "queue" and o.queue_cmd in ("go", "status", "close", "retry"):
             from router import queue as rq
             if o.queue_cmd == "status":
                 print(rq.status(o.queue, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
                 return 0
             q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir) if o.queue_cmd == "go"
+                 else rq.retry(o.queue, o.item, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir) if o.queue_cmd == "retry"
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
             return 0

@@ -415,8 +415,11 @@ def test_a_second_reading_needs_a_first_ok_and_another_id_and_a_concerns_is_not_
     read(env, sha, verdict="concerns", note="it writes a file")                      # replaces the single ok: not a concerns yet
     with pytest.raises(rj.Refused, match="not written over"):
         read(env, sha, twice=False)
-    with pytest.raises(rj.Refused, match="not written over"):
-        pr.record("jtest", sha[:12], "ok", "n", "claude", "b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    pr.record("jtest", sha[:12], "ok", "n", "claude", "b", deps=env.deps, jobs_dir=env.jobs, second=True)     # a second reading is ADDED to a `concerns`: its findings are wanted too
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert kind == "concerns" and rec["verdict"] == "concerns" and rec["note"] == "it writes a file" and rec["second"]["verdict"] == "ok"
+    with pytest.raises(rj.Refused, match="not written over"):                   # but not a third, and the first is never changed
+        pr.record("jtest", sha[:12], "concerns", "n2", "claude", "c", deps=env.deps, jobs_dir=env.jobs, second=True)
     assert pr.load(env.job().dir, "a1", sha)[0] == "concerns"
 
 
@@ -478,3 +481,14 @@ def test_when_both_readings_say_concerns_the_first_is_what_is_shown(env, tmp_pat
     file_of(env).write_text(json.dumps({**good, "verdict": "concerns", "note": "first sees a write", "second": {**good["second"], "verdict": "concerns", "note": "second sees a default"}}))
     kind, rec = pr.load(env.job().dir, "a1", sha)
     assert kind == "concerns" and rec["note"] == "first sees a write" and rec["reader"]["id"] == "reader-a"
+
+
+def test_findings_lists_every_concerns_reading_in_order_and_nothing_for_an_ok(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read(env, sha, verdict="concerns", note="first sees a write")
+    pr.record("jtest", sha[:12], "concerns", "second sees a default", "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True)
+    kind, rec = pr.load(env.job().dir, "a1", sha)
+    assert pr.findings(rec) == [("reader-a", "first sees a write"), ("reader-b", "second sees a default")]
+    assert pr.findings({"verdict": "ok", "note": "fine", "reader": {"kind": "claude"}}) == []
+    with pytest.raises(rj.Refused, match="first sees a write.*second sees a default"):
+        apply(env, sha)

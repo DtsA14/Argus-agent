@@ -248,6 +248,20 @@ def test_a_redraft_note_reaches_the_drafter_and_marks_the_job(env):  # noqa: F81
     assert "Note from the reviewer (human-steered)" in (job.runs / st["run_id"] / "DRAFT_REVIEW.md").read_text()
 
 
+def test_readers_findings_reach_the_first_drafter_labelled_as_models_not_as_a_human(env):  # noqa: F811
+    """`argus queue retry`: the findings of the patch readers on a rejected attempt of the same issue (2026-11-19)."""
+    env.drafter.script[:] = [td.SUBMIT]
+    job = env.code(note="- [argus:a] TRACE still gives 501", note_by="reader")
+    st = job.data["stages"]["d1"]
+    assert st["note"] == "- [argus:a] TRACE still gives 501" and st["note_by"] == "reader"
+    assert job.data.get("reader_steered") is True and not job.data.get("human_steered")
+    prompt = "\n".join(m.content if isinstance(m.content, str) else json.dumps(m.content) for m in env.drafter.calls[-1]["messages"])
+    assert dt.READER_NOTE_LABEL in prompt and dt.NOTE_LABEL not in prompt and "TRACE still gives 501" in prompt
+    inputs = json.loads((job.runs / st["run_id"] / "inputs.json").read_text())
+    assert inputs["note"] == st["note"] and inputs["note_by"] == "reader"
+    assert "Findings of the patch readers (models, not a human)" in (job.runs / st["run_id"] / "DRAFT_REVIEW.md").read_text()
+
+
 def test_a_note_too_long_or_empty_starts_nothing(env):  # noqa: F811
     env.code()
     before = json.dumps(env.job().data, sort_keys=True)

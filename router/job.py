@@ -487,13 +487,14 @@ def new_job_id():
 
 
 def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs_dir=JOBS, job_id=None,
-               environment=None, research=False, from_research=None, research_items=None):
+               environment=None, research=False, from_research=None, research_items=None, note=None, note_by=None):
     """A new job: intake, then the first drafter stage. Returns the job. environment: the sandbox environment its
     validations run in, with the image it resolves to now pinned for the whole job; None is the job as before
     (the drafter's configured environment, nothing pinned). research: the human grants the research stage r1 and its
     ReadDocs (SPEC_RESEARCH_STAGE); r1 runs instead of the drafter, which starts at research-ok. from_research: a
     finished research job in jobs_dir whose SUPPORTED items (research_items: some of them) are frozen into the job as
-    its research context (SPEC_FROM_RESEARCH), for the drafter and the agent's contract."""
+    its research context (SPEC_FROM_RESEARCH), for the drafter and the agent's contract. note, note_by: findings of the patch readers on a
+    rejected attempt of this same issue (`argus queue retry`), given to the first drafter as data, not a human's note."""
     if not isinstance(issue, str) or not issue.strip():
         raise Refused("the issue is empty")
     context = None
@@ -573,7 +574,7 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
         if research:
             _research(job, cfg, deps)
         else:
-            _draft(job, cfg, deps, 1)
+            _draft(job, cfg, deps, 1, note=note, note_by=note_by)
     return job
 
 
@@ -912,9 +913,10 @@ def research_ok(job_id, *, sha, cfg, deps, jobs_dir=JOBS):
 NOTE_MAX = 1000                  # SPEC_DRAFT_CALL_PATH 2.4: characters of a reviewer's note to the drafter
 
 
-def _draft(job, cfg, deps, n, note=None):
+def _draft(job, cfg, deps, n, note=None, note_by=None):
     """Start drafter stage n (its cap fixed now), or resume it with the cap it started with. note: a reviewer's note
-    for a redraft, recorded with the stage when it starts (a resume takes the drafter run's own record)."""
+    for a redraft, recorded with the stage when it starts (a resume takes the drafter run's own record); note_by "reader": the note is
+    the patch readers' findings (models), so the job is not marked as steered by a human."""
     from codetask.drafter import DRAFTED, drafter_settings, run_drafter
     sid = f"d{n}"
     stage = job.data["stages"].get(sid)
@@ -937,9 +939,11 @@ def _draft(job, cfg, deps, n, note=None):
     with live(deps, scfg, [scfg["drafter"]["role"]], text, job=job):
         if not resume:
             job.data["stages"][sid] = {"kind": "draft", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
-                                       "started_at": deps.clock(), **({"note": note} if note else {})}
-            if note:
+                                       "started_at": deps.clock(), **({"note": note} if note else {}), **({"note_by": note_by} if note and note_by else {})}
+            if note and note_by != "reader":
                 job.data["human_steered"] = True
+            elif note:
+                job.data["reader_steered"] = True
             job.move(DRAFTING, deps, stage=sid)
         run_id = job.data["stages"][sid]["run_id"]
         again = (job.runs / run_id / "checkpoints.sqlite").exists()
@@ -947,7 +951,7 @@ def _draft(job, cfg, deps, n, note=None):
         r = run_drafter(run_id=run_id, runs_dir=job.runs, cfg=scfg, intake_name=BASE, issue=job_issue(job),
                         max_usd=cap, resume=again, models=deps.models, validate=deps.validate,
                         preflight=deps.preflight, env_preflight=deps.env_preflight, root=job.root, red=deps.red,
-                        note=job.data["stages"][sid].get("note"), research=research)
+                        note=job.data["stages"][sid].get("note"), note_by=job.data["stages"][sid].get("note_by"), research=research)
     st = job.data["stages"][sid]
     st.update(ended_at=deps.clock(), status=r["status"], usd=r["usd_billed"])
     deps.echo(f"drafter finished: {r['status']} (${r['usd_billed']:.4f})")
