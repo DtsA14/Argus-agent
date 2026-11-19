@@ -676,3 +676,15 @@ def test_retry_works_from_the_command_line(qe, capsys):
     assert argus.main([*base, "retry", q["id"], "--item", "1"], deps=qe.env.deps) == 0
     assert "WAITING" in capsys.readouterr().out and qe.q(q)["items"][0]["retries"]
     assert argus.main([*base, "retry", q["id"], "--item", "1"], deps=qe.env.deps) == 2                # nothing to retry now
+
+
+def test_a_retry_names_the_item_the_queue_stopped_at_not_another_item_that_happens_to_hold_a_rejected_job(qe):
+    q = qe.ready(n=2, max_usd=2.0)
+    qe.step(q)
+    job = reject_on_findings(qe, q, 0)
+    st = qe.q(q)
+    st["items"][1]["job"] = job.id                                                                   # a hand-edited queue.json: item 2 points at the same rejected job
+    (qe.queues / q["id"] / "queue.json").write_text(json.dumps(st))
+    with pytest.raises(rq.Refused, match="stopped at"):
+        retry(qe, q, 2)
+    assert "retries" not in qe.q(q)["items"][1]

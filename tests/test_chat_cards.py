@@ -440,6 +440,19 @@ def test_what_a_retired_attempt_of_a_retried_item_spent_counts_in_the_card_like_
     assert c["state"] == "STOPPED" and "uang antrean" in c["next"]                                   # $1.00 - $0.60 leaves less than one $0.50 job
 
 
+def test_a_retired_attempt_that_can_be_opened_counts_what_its_job_spent_not_the_number_recorded(svc):
+    t1, t2 = issue_text(SAME, title="1"), issue_text(AFTER, title="2")
+    write_queue(svc, [(t1, None), (t2, None)], approved={"sha": "x"}, max_usd=1.0, job_cap_usd=0.5)
+    write_job(svc.jobs, CJOB1, kind="code", state="REJECTED", max_usd=0.5,
+              inputs={"repo": "/secret/path", "repo_name": "athena", "commit": "c" * 40, "issue": t1, "environment": "athena_py312"},
+              stages={"a1": {"kind": "agent", "usd": 0.6}})
+    base = json.loads((svc.queues / QID / "queue.json").read_text())
+    base["items"][0]["retries"] = [{"job": CJOB1, "spent_nano": 1, "findings": "x", "at": "t", "by": "u"}]       # the recorded number is tiny: the job's own spend decides
+    (svc.queues / QID / "queue.json").write_text(json.dumps(base))
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and "uang antrean" in c["next"]
+
+
 def test_the_queue_money_is_counted_from_the_jobs_and_stops_the_queue_like_derive(svc):
     t1, t2, t3 = issue_text(SAME, title="1"), issue_text(AFTER, title="2"), issue_text(SAME, title="3")
     write_queue(svc, [(t1, CJOB1), (t2, CJOB2), (t3, None)], approved={"sha": "x"}, max_usd=1.0, job_cap_usd=0.5)

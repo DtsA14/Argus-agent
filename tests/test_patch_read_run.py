@@ -286,3 +286,11 @@ def test_a_concerns_with_a_second_reading_is_final_and_a_claude_first_concerns_i
     again = models(reply(), reply())
     s = go(env, again)
     assert "nothing is read again" in s["stopped"] and again["ds1017"].calls == [] and s["billed_usd"] == 0.0
+
+
+def test_a_first_concerns_by_another_reader_is_not_resumed_with_a_second_reading(world):
+    env, sha = world
+    pr.record("jtest", sha[:12], "concerns", "another model found a write", "argus", "argus:openrouter:someone/else", deps=env.deps, jobs_dir=env.jobs)
+    again = models(reply(), reply())
+    s = go(env, again)
+    assert "nothing is read again" in s["stopped"] and again["hy4flash"].calls == [] and again["ds1017"].calls == []
