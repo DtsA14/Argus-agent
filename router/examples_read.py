@@ -425,6 +425,108 @@ def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps,
     return entry
 
 
+# ---- the human's written acceptance of the domain reader's concerns (docs/reviews/SPEC_ACCEPT_DOMAIN_CONCERNS.md) ----------------------------------
+
+ACCEPT_LABEL = "recorded on the human's word in chat; the record cannot tell the human from a Claude session"
+REASON_MAX = 500
+
+
+def concerns_digest(found):
+    """sha256 of exactly what a human is shown: every fresh reading of the item (both slots, whole entries, so sources and verdicts too), in a fixed order."""
+    parts = sorted(json.dumps([slot, e], sort_keys=True, ensure_ascii=True) for slot, e in found)
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def concerns_of(jobs_dir, job_id, item):
+    """([(slot, entry)] of BOTH readings, bundle info) from one read of the bundle and the file, or ([], None). Only when both readings are there, valid, fresh,
+    by two different reader ids, and at least one of them is `concerns`: a human accepts the concerns of two independent readers, never of one."""
+    _, info = bundle(jobs_dir, job_id, item)
+    raw, _k = _read_file(Path(jobs_dir) / job_id, f"examples_read_{info['turn']}.json")
+    entries = _entries(raw) if raw is not None and len(raw) <= FILE_MAX else None
+    if entries is None:
+        return [], None
+    first, second = entries.get(str(item)), entries.get(second_key(item))
+    if not all(isinstance(e, dict) and _entry_ok(e) and _fresh(e, item, info) for e in (first, second)):
+        return [], None
+    ids = [_rid(first), _rid(second)]
+    if None in ids or ids[0] == ids[1] or "concerns" not in (first["verdict"], second["verdict"]):
+        return [], None
+    return [(str(item), first), (second_key(item), second)], info
+
+
+def _accept_ok(e, item):
+    if not isinstance(e, dict) or type(e.get("item")) is not int or e["item"] != item:
+        return False
+    for k in ("bundle_sha256", "concerns_sha256"):
+        if not isinstance(e.get(k), str) or not HEX64.fullmatch(e[k]):
+            return False
+    r = e.get("reason")
+    return isinstance(e.get("at"), str) and bool(AT.fullmatch(e["at"])) and isinstance(r, str) and bool(r) and ex.clean(r, REASON_MAX) == r
+
+
+def card_text(res):
+    """The words of condition (i) of the install card for an `ok` chain result."""
+    if res.get("kind") == "accepted":
+        return "keberatan pembaca angka diterima secara tertulis (bukan ok dari pembaca): " + res["accepted"]["reason"]
+    return "angka domain dibaca (Claude, bukan manusia)"
+
+
+def accepted_for(jobs_dir, job_id, item):
+    """The acceptance entry that holds for these very readings and this very bundle, or None (anything unexpected is None: the gate never opens by accident)."""
+    try:
+        found, info = concerns_of(jobs_dir, job_id, item)
+        if not found:
+            return None
+        raw, _k = _read_file(Path(jobs_dir) / job_id, f"examples_accept_{info['turn']}.json")
+        entries = _entries(raw) if raw is not None and len(raw) <= FILE_MAX else None
+        e = (entries or {}).get(str(item))
+        if _accept_ok(e, item) and e["bundle_sha256"] == info["bundle_sha256"] and e["concerns_sha256"] == concerns_digest(found):
+            return e
+    except Exception:
+        return None
+    return None
+
+
+def accept(job_id, item, bundle_sha, concerns_sha, reason, *, deps, jobs_dir=rj.JOBS):
+    """Write the human's acceptance of the concerns now standing on the item. Refused (nothing written) unless the notes are a fresh `concerns`, the bundle sha is
+    the bundle as it is now and the concerns sha is the one of the concerns as they stand; the reason is the human's, in words."""
+    text = ex.clean(reason, REASON_MAX) if isinstance(reason, str) else ""
+    if not text:
+        _refuse(job_id, "an acceptance needs the reason, in words")
+    for v in (bundle_sha, concerns_sha):
+        if not isinstance(v, str) or not HEX64.fullmatch(v):
+            _refuse(job_id, "--bundle-sha and --concerns-sha are the 64 hexadecimal characters `--show` prints")
+    job = rj.open_job(job_id, jobs_dir)
+    with job.lock():
+        found, info = concerns_of(jobs_dir, job_id, item)
+        if not found:
+            _refuse(job_id, f"only the concerns of two fresh readings by two different readers can be accepted (item {item} has no such pair of notes)")
+        if bundle_sha != info["bundle_sha256"]:
+            _refuse(job_id, "the bundle is not the one you were shown: it changed; read the concerns again")
+        if concerns_sha != concerns_digest(found):
+            _refuse(job_id, "the concerns are not the ones you were shown: read them again")
+        entry = {"item": item, "bundle_sha256": info["bundle_sha256"], "concerns_sha256": concerns_sha, "reason": text, "at": deps.clock(), "label": ACCEPT_LABEL}
+        name = f"examples_accept_{info['turn']}.json"
+        old, _k = _read_file(job.dir, name)
+        if _k == "error" or (old is not None and _entries(old) is None):
+            _refuse(job_id, f"the existing {name} is damaged: move it away, then accept again")
+        entries = (_entries(old) if old is not None else None) or {}
+        entries[str(item)] = entry
+        target = job.dir / name
+        tmp = target.with_name(target.name + ".tmp")
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"turn": info["turn"], "entries": entries}))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, target)
+    return entry
+
+
 # ---- the chain from a code job back to the note (SPEC_KARTU_SETUJU 5, "Rantai ikatan ke job code") --------------------------------------
 
 def _chain_result(applicable, ok, kind, why, **more):
@@ -546,4 +648,8 @@ def _chain(job, jobs_dir, queues_dir):
     why = {"none": "no domain reader's note for this item", "stale": "the domain reader's note is stale: what it read has changed",
            "error": "the domain reader's note cannot be read", "one": "only one fresh `ok` reading: the numbers need a second, independent reading",
            "concerns": "the domain reader recorded concerns"}.get(kind)
+    if kind == "concerns":                               # a human accepted these very concerns in writing (SPEC_ACCEPT_DOMAIN_CONCERNS): apply may go on, the card says so
+        acc = accepted_for(jobs_dir, prd_job, n)
+        if acc is not None:
+            return _chain_result(True, True, "accepted", f"the domain reader's concerns were accepted in writing: {acc['reason']}", rec=rec, accepted=acc, **more)
     return _chain_result(True, kind == "ok", kind, why, rec=rec, **more)

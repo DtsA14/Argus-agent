@@ -178,7 +178,10 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None)
         res = er.chain(job, job.dir.parent, queues_dir)
         if res["applicable"] and not res["ok"]:
             how = f" (argus examples-read {res['prd_job']} --item {res['item']} --bundle, then --verdict ok ...)" if res["prd_job"] else ""
+            how += f"; or a human's written acceptance of the concerns: argus examples-accept {res['prd_job']} --item {res['item']} --show" if res["prd_job"] and res["kind"] == "concerns" else ""
             refuse(f"{res['why']}; apply needs an ok note of the domain reader for an item of a PRD queue{how}")
+        if res["applicable"] and res["kind"] == "accepted":          # the log says the numbers passed on a human's acceptance, and why (the acceptance file can be replaced later)
+            extra = {**extra, "domain_gate": "accepted", "domain_accept_at": res["accepted"]["at"], "domain_accept_reason": res["accepted"]["reason"]}
         identity = _identity(repo)
         if identity is None:
             refuse("no git identity (user.name and user.email): set them in the repository or globally; none is made up")

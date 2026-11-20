@@ -4,6 +4,7 @@ reader, bound through the chain queue -> PRD folder -> item issue -> digest of t
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -427,3 +428,194 @@ def test_only_the_item_that_is_this_job_counts_in_a_queue_of_several(world):
     note(world)
     edit_queue(world, lambda q: q["items"].append({"n": 2, "issue_sha256": "0" * 64, "job": None}))
     assert apply(world).data["state"] == rj.APPLIED
+
+
+# ---- a human's written acceptance of the domain reader's concerns (SPEC_ACCEPT_DOMAIN_CONCERNS) ---------------------------------------------
+
+def concerned(env, second_verdict="concerns"):
+    """The real case of the web pilot: the first reader says ok, the second (another id) says concerns on a rule only the writer states."""
+    note(env, twice=False)
+    _, info = er.bundle(env.jobs, PJOB, 1)
+    er.record(PJOB, 1, second_verdict, info["bundle_sha256"], "opus-2", ["hanya tulisan penulis" if second_verdict == "concerns" else "permintaan Atha"],
+              "the 3% is only in the PRD", deps=env.deps, jobs_dir=env.jobs, second=True)
+    found, info = er.concerns_of(env.jobs, PJOB, 1)
+    return info["bundle_sha256"], er.concerns_digest(found)
+
+
+def accept(env, reason="Atha: aturan kecil dan wajar, diterima", **kw):
+    b, c = concerned(env) if not kw.get("seen") else kw.pop("seen")
+    return er.accept(PJOB, 1, kw.pop("bundle_sha", b), kw.pop("concerns_sha", c), reason, deps=env.deps, jobs_dir=env.jobs)
+
+
+def accept_file(env):
+    return env.prd_dir / "examples_accept_w1.json"
+
+
+def test_accepted_concerns_open_the_numbers_and_the_card_and_apply_say_so(world):
+    refused_first = er.chain(world.job(), world.jobs, world.queues)
+    assert refused_first["ok"] is False
+    accept(world)
+    res = er.chain(world.job(), world.jobs, world.queues)
+    assert res["applicable"] and res["ok"] and res["kind"] == "accepted" and "diterima" in res["why"] and "accepted in writing" in res["why"]
+    assert apply(world).data["state"] == rj.APPLIED
+
+
+def test_nothing_is_accepted_unless_the_notes_are_a_fresh_concerns(world):
+    note(world)                                                           # two oks
+    with pytest.raises(rj.Refused, match="two fresh readings by two different readers"):
+        er.accept(PJOB, 1, "a" * 64, "b" * 64, "why", deps=world.deps, jobs_dir=world.jobs)
+    assert not accept_file(world).exists()
+
+
+def test_a_wrong_bundle_sha_or_concerns_sha_or_an_empty_reason_writes_nothing(world):
+    b, c = concerned(world)
+    for kw, match in (({"bundle_sha": "0" * 64}, "bundle is not the one"), ({"concerns_sha": "0" * 64}, "concerns are not the ones"),
+                      ({"bundle_sha": "xyz"}, "64 hexadecimal"), ({"reason": "  "}, "needs the reason")):
+        args = {"bundle_sha": b, "concerns_sha": c, "reason": "ok then"}
+        args.update(kw)
+        with pytest.raises(rj.Refused, match=match):
+            er.accept(PJOB, 1, args["bundle_sha"], args["concerns_sha"], args["reason"], deps=world.deps, jobs_dir=world.jobs)
+    assert not accept_file(world).exists()
+    refused(world, "recorded concerns")
+
+
+def test_an_acceptance_is_stale_when_what_the_reader_read_changes(world):
+    accept(world)
+    (world.prd_dir / "runs" / f"{PJOB}-w1" / "source" / "README.md").write_text("The floor is 5.\n")
+    assert er.accepted_for(world.jobs, PJOB, 1) is None
+    refused(world, "stale")
+
+
+def test_an_acceptance_does_not_cover_other_concerns_of_the_same_bundle(world):
+    b, c = concerned(world)
+    accept(world, seen=(b, c))
+    f = world.prd_dir / "examples_read_w1.json"
+    doc = json.loads(f.read_text())
+    doc["entries"]["1#2"]["note"] = "another worry the human never saw"
+    f.write_text(json.dumps(doc))
+    assert er.accepted_for(world.jobs, PJOB, 1) is None
+    refused(world, "recorded concerns")
+
+
+@pytest.mark.parametrize("text", ["{", '{"entries": []}', '{"entries": {"1": {"item": 1}}}'])
+def test_a_damaged_or_malformed_acceptance_never_opens_the_gate(world, text):
+    concerned(world)
+    accept_file(world).write_text(text)
+    assert er.accepted_for(world.jobs, PJOB, 1) is None
+    refused(world, "recorded concerns")
+
+
+def test_a_tampered_acceptance_for_other_concerns_does_not_open_the_gate(world):
+    b, c = concerned(world)
+    accept(world, seen=(b, c))
+    doc = json.loads(accept_file(world).read_text())
+    doc["entries"]["1"]["concerns_sha256"] = "f" * 64
+    accept_file(world).write_text(json.dumps(doc))
+    refused(world, "recorded concerns")
+
+
+def test_an_acceptance_does_not_touch_the_patch_reader_gate(world):
+    accept(world)
+    job = world.job()
+    sha = hashlib.sha256((Path(job.data["stages"]["a1"]["review"]["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    before = head(world)
+    with pytest.raises(rj.Refused):
+        ra.apply("jtest", sha[:12], deps=world.deps, jobs_dir=world.jobs, queues_dir=world.queues)      # no patch reading written: still refused
+    assert head(world) == before
+
+
+def test_the_command_shows_the_concerns_then_records_the_reason(world, capsys):
+    import argus
+    concerned(world)
+    base = ["--jobs-dir", str(world.jobs), "examples-accept", PJOB, "--item", "1"]
+    assert argus.main([*base, "--show"], deps=world.deps) == 0
+    out = capsys.readouterr().out
+    b, c = (re.search(rf"^{k}: ([0-9a-f]{{64}})$", out, re.M).group(1) for k in ("bundle_sha256", "concerns_sha256"))
+    assert "the 3% is only in the PRD" in out
+    assert argus.main([*base, "--reason", "Atha: diterima", "--bundle-sha", b, "--concerns-sha", c], deps=world.deps) == 0
+    assert "accepted" in capsys.readouterr().out and er.accepted_for(world.jobs, PJOB, 1)["reason"] == "Atha: diterima"
+    with pytest.raises(SystemExit):
+        argus.main([*base, "--reason", "x"], deps=world.deps)                                           # no shas
+
+
+def test_a_change_of_the_sources_the_human_was_shown_closes_the_acceptance(world):
+    accept(world)
+    f = world.prd_dir / "examples_read_w1.json"
+    doc = json.loads(f.read_text())
+    doc["entries"]["1#2"]["sources"] = ["permintaan Atha"]
+    f.write_text(json.dumps(doc))
+    assert er.accepted_for(world.jobs, PJOB, 1) is None
+
+
+def test_the_concerns_of_one_reader_alone_cannot_be_accepted(world):
+    note(world, verdict="concerns", sources=("hanya tulisan penulis",), text="only the writer says so")      # a single reading
+    assert er.concerns_of(world.jobs, PJOB, 1) == ([], None)
+    with pytest.raises(rj.Refused, match="two fresh readings by two different readers"):
+        er.accept(PJOB, 1, "a" * 64, "b" * 64, "why", deps=world.deps, jobs_dir=world.jobs)
+    refused(world, "recorded concerns")
+
+
+def test_a_planted_acceptance_with_a_float_or_bool_item_is_not_one(world):
+    b, c = concerned(world)
+    for bad in (1.0, True):
+        accept_file(world).write_text(json.dumps({"entries": {"1": {"item": bad, "bundle_sha256": b, "concerns_sha256": c, "reason": "x", "at": "2026-11-17T10:00:00Z"}}}))
+        assert er.accepted_for(world.jobs, PJOB, 1) is None
+
+
+def test_the_log_says_the_numbers_passed_on_an_acceptance_and_why(world):
+    accept(world, reason="Atha: diterima")
+    done = apply(world)
+    started = [e for e in done.data["log"] if e.get("what") == "apply_started"][-1]
+    assert started["domain_gate"] == "accepted" and started["domain_accept_reason"] == "Atha: diterima" and started["domain_accept_at"]
+
+
+def test_apply_names_the_acceptance_when_the_numbers_have_concerns(world):
+    concerned(world)
+    refused(world, "examples-accept .* --show")
+
+
+def test_planted_readings_with_the_same_reader_id_cannot_be_accepted(world):
+    concerned(world)
+    f = world.prd_dir / "examples_read_w1.json"
+    doc = json.loads(f.read_text())
+    doc["entries"]["1#2"]["reader"]["id"] = doc["entries"]["1"]["reader"]["id"]
+    f.write_text(json.dumps(doc))
+    assert er.concerns_of(world.jobs, PJOB, 1) == ([], None)
+
+
+def test_a_planted_acceptance_with_a_control_character_or_a_long_reason_is_not_one(world):
+    b, c = concerned(world)
+    for reason in ("fine\x1b[31m", "x" * 501, ""):
+        accept_file(world).write_text(json.dumps({"entries": {"1": {"item": 1, "bundle_sha256": b, "concerns_sha256": c, "reason": reason, "at": "2026-11-17T10:00:00Z"}}}))
+        assert er.accepted_for(world.jobs, PJOB, 1) is None
+    accept_file(world).write_text(json.dumps({"entries": {"1": {"item": 1, "bundle_sha256": b, "concerns_sha256": c, "reason": "fine", "at": "2026-11-17T10:00:00Z"}}}))
+    assert er.accepted_for(world.jobs, PJOB, 1)["reason"] == "fine"                                    # the same file with a clean reason is one
+
+
+def test_a_damaged_acceptance_file_is_not_silently_replaced_by_accept(world):
+    b, c = concerned(world)
+    accept_file(world).write_text("{")
+    with pytest.raises(rj.Refused, match="damaged"):
+        er.accept(PJOB, 1, b, c, "Atha: diterima", deps=world.deps, jobs_dir=world.jobs)
+    assert accept_file(world).read_text() == "{"
+
+
+def test_an_error_while_checking_an_acceptance_is_not_an_acceptance(world, monkeypatch):
+    accept(world)
+    monkeypatch.setattr(er, "concerns_digest", lambda found: 1 / 0)
+    assert er.accepted_for(world.jobs, PJOB, 1) is None
+
+
+def test_the_card_words_for_condition_i_say_accepted_or_read(world):
+    assert "diterima secara tertulis" in er.card_text({"kind": "accepted", "accepted": {"reason": "Atha: ok"}})
+    assert "Atha: ok" in er.card_text({"kind": "accepted", "accepted": {"reason": "Atha: ok"}})
+    assert er.card_text({"kind": "ok"}) == "angka domain dibaca (Claude, bukan manusia)"
+
+
+def test_the_command_takes_exactly_one_of_show_or_reason(world):
+    import argus
+    concerned(world)
+    base = ["--jobs-dir", str(world.jobs), "examples-accept", PJOB, "--item", "1"]
+    for extra in ([], ["--show", "--reason", "x"], ["--show", "--bundle-sha", "a" * 64]):
+        with pytest.raises(SystemExit):
+            argus.main([*base, *extra], deps=world.deps)

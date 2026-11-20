@@ -169,6 +169,13 @@ def main(argv=None, deps=None):
     er_.add_argument("--source", action="append", default=[], help="where a rule comes from: 'permintaan Atha', 'dokumen repo: <file>' or 'hanya tulisan penulis' (repeat)")
     er_.add_argument("--note", help="what you checked and what you found")
     er_.add_argument("--second", action="store_true", help="the second, independent reading (another --reader-id than the first): `ok` needs two")
+    ea = sub.add_parser("examples-accept", help="a human's written acceptance of the domain reader's concerns for one item (SPEC_ACCEPT_DOMAIN_CONCERNS): shows them, then records the reason; never for the patch reader")
+    ea.add_argument("job", help="the PRD job")
+    ea.add_argument("--item", required=True, type=int)
+    ea.add_argument("--show", action="store_true", help="print the concerns as they stand and the two shas to give back")
+    ea.add_argument("--bundle-sha", help="the bundle sha `--show` printed")
+    ea.add_argument("--concerns-sha", help="the concerns sha `--show` printed")
+    ea.add_argument("--reason", help="why the human accepts these concerns, in words (his own, as said in chat)")
     pr_ = sub.add_parser("patch-read", help="the note of a patch reader before `apply` (SPEC_KARTU_SETUJU 5): a Claude session's statement, not a proof and not a human")
     pr_.add_argument("job")
     pr_.add_argument("--sha", required=True, help="the sha256 of the patch you read (status prints it), at least 12 characters")
@@ -441,6 +448,26 @@ def main(argv=None, deps=None):
                 ap.error("a note needs --bundle-sha, --reader-id and --note")
             rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir, second=o.second)
             print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}; the note says who wrote it and what bundle it saw, not that the bundle was read")
+            return 0
+        if o.cmd == "examples-accept":
+            from router import examples_read as ers
+            if o.show == bool(o.reason):
+                ap.error("examples-accept takes exactly one of --show or --reason (with --bundle-sha and --concerns-sha)")
+            if o.show:
+                if o.bundle_sha or o.concerns_sha:
+                    ap.error("--show takes no shas: it prints them")
+                found, info = ers.concerns_of(o.jobs_dir, o.job, o.item)
+                if not found:
+                    print(f"examples-accept: item {o.item} has no pair of fresh readings by two readers with a concern among them: nothing to accept")
+                    return 1
+                for _slot, e in found:
+                    print(f"{e['verdict']} by {e['reader'].get('id') or 'claude'} at {e['at']}, sources {', '.join(e['sources']) or 'none'}:\n  {e['note']}")
+                print(f"bundle_sha256: {info['bundle_sha256']}\nconcerns_sha256: {ers.concerns_digest(found)}")
+                return 0
+            if not (o.bundle_sha and o.concerns_sha):
+                ap.error("an acceptance needs --bundle-sha and --concerns-sha")
+            rec = ers.accept(o.job, o.item, o.bundle_sha, o.concerns_sha, o.reason, deps=deps, jobs_dir=o.jobs_dir)
+            print(f"examples-accept for {o.job} item {o.item}: accepted at {rec['at']}: {rec['reason']} ({ers.ACCEPT_LABEL})")
             return 0
         if o.cmd == "patch-read-run":
             from router import patch_read_run
