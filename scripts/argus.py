@@ -282,6 +282,7 @@ def main(argv=None, deps=None):
         if name == "new":
             pn.add_argument("--repo", required=True, help="a name of issue_writer.repos in the config")
             pn.add_argument("--job-id", help="the new job's id")
+            pn.add_argument("--ref", action="append", default=[], metavar="REPO", help="a registered repository whose README.md and file list the writer reads as data (at most 2; docs/reviews/SPEC_PRD_REFS.md)")
         else:
             pn.add_argument("job")
             pn.add_argument("--rebase", action="store_true", help="freeze the commit again at the repository's HEAD now (the notes are dropped)")
@@ -565,7 +566,7 @@ def main(argv=None, deps=None):
                 message = o.message if o.message is not None else Path(o.message_file).read_text(encoding="utf-8")
                 if o.prd_cmd == "new":
                     job = pj.new(repo=o.repo, message=message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir,
-                                 queues_dir=o.queues_dir, job_id=o.job_id)
+                                 queues_dir=o.queues_dir, job_id=o.job_id, refs=o.ref)
                 else:
                     job = pj.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, queues_dir=o.queues_dir,
                                    rebase=o.rebase)

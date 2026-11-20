@@ -1,6 +1,6 @@
 # Spec: `prd new --ref NAME`: the PRD writer reads the README and the file list of a registered reference repository
 
-Status: rev 0, 2026-11-20, strict lane (it sends more of a repository to the model provider). Origin: the ledger-browser pilot (2026-11-20). Atha asked for a
+Status: **rev 1, 2026-11-20 (Opus review: GO WITH FIXES, 10 findings, all applied: see section 6)**, strict lane (it sends more of a repository to the model provider). Origin: the ledger-browser pilot (2026-11-20). Atha asked for a
 version of ledger-cli that runs in the browser: "angkanya harus sama dengan perintah report di ledger-cli". The writer saw only the empty target repository, could not
 read ledger-cli, and guessed its rules wrong in five places (cents instead of any decimals, `baris N:` instead of `line N:`, negative expenses, a fixed header order, whole
 rupiah). A human cannot be asked to type those rules into a reply (Atha, 2026-11-20: "gw juga ga bisa bikin balasan kayak gini").
@@ -34,3 +34,15 @@ nothing started. The cost is the writer's own turn cap: more input tokens, the s
 refs absent gives the same prompt byte for byte; a ref's README and file list reach the prompt; the stored text is used on a reply even when the reference repository
 changed meanwhile; an unknown name, the target as a ref, a duplicate, a third ref, a path, are Refused with nothing started; the cut and the `<<<` escape; no README
 gives files only; neither gives Refused; `job.json` validation accepts refs and rejects a damaged one; the screen names the refs; the target's snapshot is untouched.
+
+## 6. Rev 1: what the review changed (all applied)
+1. The escape spreads every run of three or more `<` or `>` (`re.sub`), also in the file list: a single `replace` left `<<<` inside `<<<<<`.
+2. The README and every path are filtered like the human's messages: no C* or line/paragraph separator (they become `?`; `\n` and `\t` stay in the README), `\r\n` and `\r` become `\n`, `utf-8-sig`, a path's newline is written `\\n`, a path is cut at 200 characters. Order: decode, filter, escape, cut at 8,000, then the marker `[cut]` (no `<` or `>`).
+3. A non-UTF-8 path is listed with backslash escapes (it cannot crash `new`); a non-UTF-8 README is Refused.
+4. README.md is read from `ls-tree -z -l HEAD -- README.md`: only a regular blob (100644 or 100755) counts, a symlink or submodule entry is "no README"; over 1 MiB is Refused before it is read.
+5. The block says the read tools do not see the reference.
+6. Every reference read uses `clean=True` (no inherited `GIT_*`).
+7. `_valid` checks `refs` (absent, or at most two dicts of text); `status_lines` prints `references:`. The plan card and the chat page are NOT changed in this PR (chat code is strict-lane of its own; the CLI and the screen name the references).
+8. At `new`, the references are Refused when the rendered blocks exceed a quarter of the writer's `max_input_tokens` (3 characters per token); the file list is also cut at 6,000 characters.
+9. A reference whose directory is the target's is Refused (not only the same name); references keep the CLI order; they are read before the job directory exists; the prompt reads `inputs.get("refs")` and the key is left out of `inputs` when there are none (an older run's inputs resume byte for byte); `prd reply` has no `--ref`, and `--rebase` keeps the frozen references.
+10. Only the first 200 paths in git order are listed (ledger-cli has 18).
