@@ -432,9 +432,13 @@ def test_only_the_item_that_is_this_job_counts_in_a_queue_of_several(world):
 
 # ---- a human's written acceptance of the domain reader's concerns (SPEC_ACCEPT_DOMAIN_CONCERNS) ---------------------------------------------
 
-def concerned(env):
-    note(env, verdict="concerns", sources=("hanya tulisan penulis",), text="the 3% is only in the PRD")
-    _, found, info = er.concerns_of(env.jobs, PJOB, 1)
+def concerned(env, second_verdict="concerns"):
+    """The real case of the web pilot: the first reader says ok, the second (another id) says concerns on a rule only the writer states."""
+    note(env, twice=False)
+    _, info = er.bundle(env.jobs, PJOB, 1)
+    er.record(PJOB, 1, second_verdict, info["bundle_sha256"], "opus-2", ["hanya tulisan penulis" if second_verdict == "concerns" else "permintaan Atha"],
+              "the 3% is only in the PRD", deps=env.deps, jobs_dir=env.jobs, second=True)
+    found, info = er.concerns_of(env.jobs, PJOB, 1)
     return info["bundle_sha256"], er.concerns_digest(found)
 
 
@@ -458,7 +462,7 @@ def test_accepted_concerns_open_the_numbers_and_the_card_and_apply_say_so(world)
 
 def test_nothing_is_accepted_unless_the_notes_are_a_fresh_concerns(world):
     note(world)                                                           # two oks
-    with pytest.raises(rj.Refused, match="only a fresh .concerns."):
+    with pytest.raises(rj.Refused, match="two fresh readings by two different readers"):
         er.accept(PJOB, 1, "a" * 64, "b" * 64, "why", deps=world.deps, jobs_dir=world.jobs)
     assert not accept_file(world).exists()
 
@@ -487,7 +491,7 @@ def test_an_acceptance_does_not_cover_other_concerns_of_the_same_bundle(world):
     accept(world, seen=(b, c))
     f = world.prd_dir / "examples_read_w1.json"
     doc = json.loads(f.read_text())
-    doc["entries"]["1"]["note"] = "another worry the human never saw"
+    doc["entries"]["1#2"]["note"] = "another worry the human never saw"
     f.write_text(json.dumps(doc))
     assert er.accepted_for(world.jobs, PJOB, 1) is None
     refused(world, "recorded concerns")
@@ -532,3 +536,39 @@ def test_the_command_shows_the_concerns_then_records_the_reason(world, capsys):
     assert "accepted" in capsys.readouterr().out and er.accepted_for(world.jobs, PJOB, 1)["reason"] == "Atha: diterima"
     with pytest.raises(SystemExit):
         argus.main([*base, "--reason", "x"], deps=world.deps)                                           # no shas
+
+
+def test_a_change_of_the_sources_the_human_was_shown_closes_the_acceptance(world):
+    accept(world)
+    f = world.prd_dir / "examples_read_w1.json"
+    doc = json.loads(f.read_text())
+    doc["entries"]["1#2"]["sources"] = ["permintaan Atha"]
+    f.write_text(json.dumps(doc))
+    assert er.accepted_for(world.jobs, PJOB, 1) is None
+
+
+def test_the_concerns_of_one_reader_alone_cannot_be_accepted(world):
+    note(world, verdict="concerns", sources=("hanya tulisan penulis",), text="only the writer says so")      # a single reading
+    assert er.concerns_of(world.jobs, PJOB, 1) == ([], None)
+    with pytest.raises(rj.Refused, match="two fresh readings by two different readers"):
+        er.accept(PJOB, 1, "a" * 64, "b" * 64, "why", deps=world.deps, jobs_dir=world.jobs)
+    refused(world, "recorded concerns")
+
+
+def test_a_planted_acceptance_with_a_float_or_bool_item_is_not_one(world):
+    b, c = concerned(world)
+    for bad in (1.0, True):
+        accept_file(world).write_text(json.dumps({"entries": {"1": {"item": bad, "bundle_sha256": b, "concerns_sha256": c, "reason": "x", "at": "2026-11-17T10:00:00Z"}}}))
+        assert er.accepted_for(world.jobs, PJOB, 1) is None
+
+
+def test_the_log_says_the_numbers_passed_on_an_acceptance_and_why(world):
+    accept(world, reason="Atha: diterima")
+    done = apply(world)
+    started = [e for e in done.data["log"] if e.get("what") == "apply_started"][-1]
+    assert started["domain_gate"] == "accepted" and started["domain_accept_reason"] == "Atha: diterima" and started["domain_accept_at"]
+
+
+def test_apply_names_the_acceptance_when_the_numbers_have_concerns(world):
+    concerned(world)
+    refused(world, "examples-accept .* --show")

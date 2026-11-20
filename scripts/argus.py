@@ -454,12 +454,14 @@ def main(argv=None, deps=None):
             if o.show == bool(o.reason):
                 ap.error("examples-accept takes exactly one of --show or --reason (with --bundle-sha and --concerns-sha)")
             if o.show:
-                kind, found, info = ers.concerns_of(o.jobs_dir, o.job, o.item)
-                if kind != "concerns" or not found:
-                    print(f"examples-accept: the notes of item {o.item} are {kind}: there are no concerns to accept")
+                if o.bundle_sha or o.concerns_sha:
+                    ap.error("--show takes no shas: it prints them")
+                found, info = ers.concerns_of(o.jobs_dir, o.job, o.item)
+                if not found:
+                    print(f"examples-accept: item {o.item} has no pair of fresh readings by two readers with a concern among them: nothing to accept")
                     return 1
-                for e in found:
-                    print(f"concerns by {e['reader'].get('id') or 'claude'} at {e['at']}, sources {', '.join(e['sources']) or 'none'}:\n  {e['note']}")
+                for _slot, e in found:
+                    print(f"{e['verdict']} by {e['reader'].get('id') or 'claude'} at {e['at']}, sources {', '.join(e['sources']) or 'none'}:\n  {e['note']}")
                 print(f"bundle_sha256: {info['bundle_sha256']}\nconcerns_sha256: {ers.concerns_digest(found)}")
                 return 0
             if not (o.bundle_sha and o.concerns_sha):

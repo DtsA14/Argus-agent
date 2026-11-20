@@ -432,41 +432,46 @@ REASON_MAX = 500
 
 
 def concerns_digest(found):
-    """sha256 of exactly the concerns a human is shown: reader id, note, time and bundle of each, in a fixed order."""
-    parts = sorted([(e["reader"].get("id") or ""), e["note"], e["at"], e["bundle_sha256"]] for e in found)
-    return hashlib.sha256(json.dumps(parts, ensure_ascii=True).encode("utf-8")).hexdigest()
+    """sha256 of exactly what a human is shown: every fresh reading of the item (both slots, whole entries, so sources and verdicts too), in a fixed order."""
+    parts = sorted(json.dumps([slot, e], sort_keys=True, ensure_ascii=True) for slot, e in found)
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 def concerns_of(jobs_dir, job_id, item):
-    """(kind, [fresh `concerns` entries], bundle info): the list is empty unless the notes of the item are `concerns` against the bundle as it is NOW."""
-    kind, _ = status(jobs_dir, job_id, item)
-    if kind != "concerns":
-        return kind, [], None
+    """([(slot, entry)] of BOTH readings, bundle info) from one read of the bundle and the file, or ([], None). Only when both readings are there, valid, fresh,
+    by two different reader ids, and at least one of them is `concerns`: a human accepts the concerns of two independent readers, never of one."""
     _, info = bundle(jobs_dir, job_id, item)
     raw, _k = _read_file(Path(jobs_dir) / job_id, f"examples_read_{info['turn']}.json")
-    entries = _entries(raw) if raw is not None else None
-    found = [e for e in ((entries or {}).get(str(item)), (entries or {}).get(second_key(item))) if isinstance(e, dict) and e.get("verdict") == "concerns"]
-    return kind, found, info
+    entries = _entries(raw) if raw is not None and len(raw) <= FILE_MAX else None
+    if entries is None:
+        return [], None
+    first, second = entries.get(str(item)), entries.get(second_key(item))
+    if not all(isinstance(e, dict) and _entry_ok(e) and _fresh(e, item, info) for e in (first, second)):
+        return [], None
+    ids = [_rid(first), _rid(second)]
+    if None in ids or ids[0] == ids[1] or "concerns" not in (first["verdict"], second["verdict"]):
+        return [], None
+    return [(str(item), first), (second_key(item), second)], info
 
 
 def _accept_ok(e, item):
-    if not isinstance(e, dict) or e.get("item") != item or isinstance(e.get("item"), bool):
+    if not isinstance(e, dict) or type(e.get("item")) is not int or e["item"] != item:
         return False
     for k in ("bundle_sha256", "concerns_sha256"):
         if not isinstance(e.get(k), str) or not HEX64.fullmatch(e[k]):
             return False
     r = e.get("reason")
-    return isinstance(e.get("at"), str) and bool(AT.fullmatch(e["at"])) and isinstance(r, str) and bool(r) and ex.clean(r, REASON_MAX) == r
+    return type(e.get("item")) is int and isinstance(e.get("at"), str) and bool(AT.fullmatch(e["at"])) and isinstance(r, str) and bool(r) and ex.clean(r, REASON_MAX) == r
 
 
 def accepted_for(jobs_dir, job_id, item):
-    """The acceptance entry that holds for these very concerns and this very bundle, or None (anything unexpected is None: the gate never opens by accident)."""
+    """The acceptance entry that holds for these very readings and this very bundle, or None (anything unexpected is None: the gate never opens by accident)."""
     try:
-        kind, found, info = concerns_of(jobs_dir, job_id, item)
-        if kind != "concerns" or not found:
+        found, info = concerns_of(jobs_dir, job_id, item)
+        if not found:
             return None
         raw, _k = _read_file(Path(jobs_dir) / job_id, f"examples_accept_{info['turn']}.json")
-        entries = _entries(raw) if raw is not None else None
+        entries = _entries(raw) if raw is not None and len(raw) <= FILE_MAX else None
         e = (entries or {}).get(str(item))
         if _accept_ok(e, item) and e["bundle_sha256"] == info["bundle_sha256"] and e["concerns_sha256"] == concerns_digest(found):
             return e
@@ -483,12 +488,12 @@ def accept(job_id, item, bundle_sha, concerns_sha, reason, *, deps, jobs_dir=rj.
         _refuse(job_id, "an acceptance needs the reason, in words")
     for v in (bundle_sha, concerns_sha):
         if not isinstance(v, str) or not HEX64.fullmatch(v):
-            _refuse(job_id, "--bundle-sha and --concerns-sha are the 64 hexadecimal characters `--accept-show` prints")
+            _refuse(job_id, "--bundle-sha and --concerns-sha are the 64 hexadecimal characters `--show` prints")
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
-        kind, found, info = concerns_of(jobs_dir, job_id, item)
-        if kind != "concerns" or not found:
-            _refuse(job_id, f"only a fresh `concerns` of the domain reader can be accepted (the notes of item {item} are: {kind})")
+        found, info = concerns_of(jobs_dir, job_id, item)
+        if not found:
+            _refuse(job_id, f"only the concerns of two fresh readings by two different readers can be accepted (item {item} has no such pair of notes)")
         if bundle_sha != info["bundle_sha256"]:
             _refuse(job_id, "the bundle is not the one you were shown: it changed; read the concerns again")
         if concerns_sha != concerns_digest(found):
