@@ -154,9 +154,14 @@ def code_job(jobs, queues, taken, prd_job, spec):
     note = {"verdict": "ok", "note": "read the diff against the issue: nothing else changed", "at": NOW, "reader": {"kind": "claude", "id": "fixture-a"}}
     (d / f"patch_read_{sid}.json").write_text(json.dumps({"key": pr.key(sid, psha), "sid": sid, "patch_sha256": psha, **note,
                                                           "second": {**note, "reader": {"kind": "claude", "id": "fixture-b"}}}))
-    qid = "q" + time.strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(2)
-    q = queues / qid
-    q.mkdir(parents=True)
+    while True:                                          # two ids of the same second may draw the same 4 hex digits (verify_at 2026-11-20 failed on it once)
+        qid = "q" + time.strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(2)
+        q = queues / qid
+        try:
+            q.mkdir(parents=True)
+            break
+        except FileExistsError:
+            continue
     prd = json.loads((jobs / prd_job / "job.json").read_text())["prd_turns"][-1]
     (q / "queue.json").write_text(json.dumps({"id": qid, "repo": "/nonexistent/t3a", "name": "toko", "base_commit": "c" * 40, "jobs_dir": str(jobs), "max_usd": 2.0,
                                               "job_cap_usd": CAP, "environment": "py312", "approved": True,

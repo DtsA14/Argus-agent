@@ -26,6 +26,7 @@ from codetask import prd_writer as pw
 from . import issue as ri
 from . import job as rj
 from . import prd as rp
+from . import prd_refs
 from . import queue as rq
 
 NEW, WRITING, AWAITING_HUMAN, WRITE_FAILED = rj.NEW, ri.WRITING, ri.AWAITING_HUMAN, ri.WRITE_FAILED
@@ -74,7 +75,8 @@ def _valid(job):
           and isinstance(d.get("prd_turns", []), list)
           and all(isinstance(t, dict) and isinstance(t.get("turn"), str) and isinstance(t.get("folder_sha"), str)
                   and isinstance(t.get("items"), int) for t in d.get("prd_turns", []))
-          and (d.get("repo_notes") is None or isinstance(d.get("repo_notes"), str)))
+          and (d.get("repo_notes") is None or isinstance(d.get("repo_notes"), str))
+          and prd_refs.valid(d.get("refs")))
     if not ok:
         raise rj.Refused(f"job {job.id}: job.json is not a PRD job's (a key is missing or of the wrong type); nothing was started")
 
@@ -88,13 +90,15 @@ def _screen(job, cfg, what):
         f"model {cfg['roles'][s['role']]['model']}; turn cap ${float(s['turn']['cap_usd']):.2f}; "
         f"job cap ${job.data['max_usd']:.2f}, spent ${rj.spent_nano(job) / 1e9:.4f}",
         "the repository's files and the conversation go to the model provider",
+        *[f"reference repository {r['name']} at {r['commit'][:12]}: its README.md and file list go to the model provider too (read only)" for r in job.data.get("refs") or ()],
         *(["example code written by the model RUNS in the sandbox (RunExample and the gate of the first issue: no network, the "
            f"repository read-only, image {str(job.data.get('environment_image'))[:19]}); the turn is no longer read-only"]
           if iw.has_runner(cfg, i["environment"]) else [])])
 
 
-def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job_id=None):
-    """A new PRD job with the human's first message, then the writer's first turn. Returns the job."""
+def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job_id=None, refs=()):
+    """A new PRD job with the human's first message, then the writer's first turn. Returns the job. refs: names of registered repositories whose README and file list
+    the writer reads as data (SPEC_PRD_REFS); read before anything is made, frozen in the job."""
     s = _settings(cfg)
     path, env = ri.repo_of(cfg, repo)
     why = message_problem(cfg, message, first=True)
@@ -107,6 +111,7 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
     except intake.IntakeError as e:
         raise rj.Refused(f"repository {repo}: {e}; nothing was started") from e
     _repo_state(cfg, repo, commit, queues_dir, jobs_dir)
+    ref_data = prd_refs.read_all(cfg, refs, target=repo)
     job_id = job_id or rj.new_job_id()
     if not rj.JOB_ID.match(job_id):
         raise rj.Refused(f"{job_id!r} is not a job id")
@@ -119,7 +124,7 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
         job.data = {"job": job_id, "kind": "prd", "state": NEW, "created_at": deps.clock(), "max_usd": cap,
                     "inputs": {"repo": path, "repo_name": repo, "commit": commit, "environment": env},
                     "conversation": [{"from": "human", "at": deps.clock(), "text": message.strip()}],
-                    "stages": {}, "log": [], "prd_turns": [], "queues_dir": str(queues_dir)}
+                    "stages": {}, "log": [], "prd_turns": [], "queues_dir": str(queues_dir), **({"refs": ref_data} if ref_data else {})}
         job.note(deps, "created", by=os.environ.get("USER"))
         try:
             try:
@@ -259,7 +264,8 @@ def _turn(job, cfg, deps, queues_dir):
     i = job.data["inputs"]
     inputs = {"repo": i["repo_name"], "commit": i["commit"], "environment": i["environment"],
               "conversation": [{"from": m["from"], "text": m["text"]} for m in job.data["conversation"]],
-              "previous": _previous(job), "notes": job.data.get("repo_notes"), "max_usd": st["cap_usd"]}
+              "previous": _previous(job), "notes": job.data.get("repo_notes"), "max_usd": st["cap_usd"],
+              **({"refs": job.data["refs"]} if job.data.get("refs") else {})}
     try:
         source = ri._snapshot(job.runs / run_id, i["repo"], i["commit"])
     except (intake.IntakeError, OSError) as e:
@@ -332,6 +338,8 @@ def status_lines(job):
     i = d.get("inputs") or {}
     out = [f"repository {i.get('repo_name')} at {str(i.get('commit'))[:12]}, environment {i.get('environment')}; "
            f"{len(ri._turns(job))} turn(s)"]
+    if d.get("refs"):
+        out.append("references: " + ", ".join(f"{r['name']}@{r['commit'][:12]}" for r in d["refs"]))
     queues = Path(d.get("queues_dir") or rq.QUEUES)
     writer = [m for m in d.get("conversation") or [] if m["from"] == "writer"]
     if writer:
