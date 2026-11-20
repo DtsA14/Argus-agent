@@ -196,9 +196,11 @@ def main(argv=None, deps=None):
     p.add_argument("--note")
     p.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="as for apply: the ids of the examples that failed on the patch")
     ei = sub.add_parser("env", help="a new project: `env init NAME --path DIR` makes a small Python scaffold with one commit and prints the config line that registers it (no model, no image, no push)")
-    ei.add_argument("env_cmd", choices=("init",))
-    ei.add_argument("name")
-    ei.add_argument("--path", required=True, help="the new directory (absent or empty, outside this checkout)")
+    ei.add_argument("env_cmd", choices=("init", "propose"))
+    ei.add_argument("name", help="init: the project name; propose: the request in one sentence")
+    ei.add_argument("--path", help="init: the new directory (absent or empty, outside this checkout)")
+    ei.add_argument("--register", action="store_true", help="init: also open a PR that adds the config line (never merges it)")
+    ei.add_argument("--cap-usd", type=float, default=0.02, help="propose: the cap of the one model call (at most 0.10)")
     ei.add_argument("--description", default="A new project")
     ei.add_argument("--environment", default="ledger_py312", help="an existing environment under environments/ (default: Python 3.12 with pytest)")
     g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md, "
@@ -311,7 +313,7 @@ def main(argv=None, deps=None):
         r.add_argument("--sha", help="the draft the human saw (12+ hex): refused when the job's last draft is another")
         r.add_argument("--via", choices=rj.VIA, help="where the decision was made (SPEC_CONTROL_UI F4)")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run", "patch-trial", "patch-read-run"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run", "patch-trial", "patch-read-run", "env"):   # the live commands
             p.add_argument("--key-file", action="append",
                            help="read the API key from this 0600 file instead of typing it; for a stage that needs "
                                 "keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
@@ -457,10 +459,30 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "env":
             from router import env_init
+            if o.env_cmd == "propose":
+                from router import env_propose
+                r = env_propose.propose(o.name, cfg=load_config(o.config), deps=deps, jobs_dir=o.jobs_dir, cap_usd=o.cap_usd)
+                if "name" not in r:
+                    print(f"env propose: no usable proposal: {r['why']} (billed ${r['billed_usd']:.6f})")
+                    return 1
+                print(f"proposal of the model (a suggestion, not a decision; billed ${r['billed_usd']:.6f}):\n  name: {r['name']}\n  description: {r['description']}\n"
+                      f"if it is right: argus env init {r['name']} --path ~/{r['name']} --description \"{r['description']}\" --register")
+                return 0
+            if not o.path:
+                ap.error("env init needs --path")
             r = env_init.init(o.name, o.path, description=o.description, environment=o.environment)
-            print(f"scaffold of {o.name} at {r['path']} (commit {r['commit'][:12]}; files: {', '.join(r['files'])})\n"
-                  f"1. register it: add this line under issue_writer.repos in config.yaml and open a PR (nothing was edited):\n{r['config_line']}\n"
-                  f"2. then: argus prd new ... (the request in the human's words), prd check, prd approve, queue go, queue step")
+            print(f"scaffold of {o.name} at {r['path']} (commit {r['commit'][:12]}; files: {', '.join(r['files'])})")
+            if o.register:
+                from router import env_propose
+                try:
+                    url = env_propose.register_pr(o.name, r["config_line"], o.description)
+                except rj.Refused as e:
+                    print(f"{e}\nthe scaffold stays; register by hand: add this line under issue_writer.repos in config.yaml and open a PR:\n{r['config_line']}")
+                    return 1
+                print(f"registration PR opened (not merged; merge is the human's word): {url}")
+            else:
+                print(f"1. register it: add this line under issue_writer.repos in config.yaml and open a PR (nothing was edited):\n{r['config_line']}")
+            print("2. then: argus prd new ... (the request in the human's words), prd check, prd approve, queue go, queue step")
             return 0
         if o.cmd == "examples-accept":
             from router import examples_read as ers
