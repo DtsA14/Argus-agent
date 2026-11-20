@@ -202,7 +202,7 @@ def main(argv=None, deps=None):
     ei.add_argument("--register", action="store_true", help="init: also open a PR that adds the config line (never merges it)")
     ei.add_argument("--cap-usd", type=float, default=0.02, help="propose: the cap of the one model call (at most 0.10)")
     ei.add_argument("--description", default="A new project")
-    ei.add_argument("--environment", default="ledger_py312", help="an existing environment under environments/ (default: Python 3.12 with pytest)")
+    ei.add_argument("--environment", default="ledger_py312", help="an existing environment under environments/ (default: Python 3.12 with pytest; pwa_node22 gives a React + vitest scaffold with .argus/protected)")
     g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md, "
                                      "SPEC_PWA_VIEWER.md): deploy | rollback | status | check | viewer-* | proxy")
     gs = g.add_subparsers(dest="stage_cmd", required=True)
@@ -466,7 +466,8 @@ def main(argv=None, deps=None):
                     print(f"env propose: no usable proposal: {r['why']} (billed ${r['billed_usd']:.6f})")
                     return 1
                 print(f"proposal of the model (a suggestion, not a decision; billed ${r['billed_usd']:.6f}):\n  name: {r['name']}\n  description: {r['description']}\n"
-                      f"if it is right: argus env init {r['name']} --path ~/{r['name']} --description \"{r['description']}\" --register")
+                      f"if it is right: argus env init {r['name']} --path ~/{r['name']} --description \"{r['description']}\" --register"
+                      + (f" --environment {o.environment}" if o.environment != "ledger_py312" else ""))
                 return 0
             if not o.path:
                 ap.error("env init needs --path")

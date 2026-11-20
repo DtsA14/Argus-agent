@@ -116,3 +116,44 @@ def test_the_command_prints_the_next_steps_and_edits_no_config(tmp_path, root, c
 
 
 real_init = ei.init
+
+
+# --- a vitest environment (pwa_node22): the React + vitest scaffold (2026-11-20; run for real in the sandbox image: 1 test passed) ---
+def _node(tmp_path, name="web-thing"):
+    from router import env_init as ei
+    return ei.init(name, tmp_path / name, description="A web thing.", environment="pwa_node22"), tmp_path / name
+
+
+def test_a_vitest_environment_gets_the_node_scaffold_with_the_protected_list(tmp_path):
+    import json
+    r, d = _node(tmp_path)
+    assert {"package.json", "vite.config.js", "vitest.setup.js", ".argus/protected", "index.html", "src/App.test.jsx"} <= set(r["files"])
+    assert not (d / "pyproject.toml").exists() and r["config_line"].endswith("environment: pwa_node22}")
+    env_pkg = json.loads((Path(__file__).resolve().parent.parent / "environments" / "pwa_node22" / "package.json").read_text())
+    pkg = json.loads((d / "package.json").read_text())
+    assert pkg["name"] == "web-thing" and pkg["dependencies"] == env_pkg["dependencies"] and pkg["devDependencies"] == env_pkg["devDependencies"]
+    protected = (d / ".argus" / "protected").read_text().splitlines()
+    assert {"package.json", "index.html", "vite.config.js", "vitest.setup.js"} <= set(protected)
+    assert "setupFiles: ['./vitest.setup.js']" in (d / "vite.config.js").read_text() and "console.error" in (d / "vitest.setup.js").read_text()
+
+
+def test_the_python_scaffold_is_unchanged_for_a_python_environment(tmp_path):
+    from router import env_init as ei
+    r = ei.init("py-thing", tmp_path / "py-thing", description="x", environment="ledger_py312")
+    assert "pyproject.toml" in r["files"] and "package.json" not in r["files"]
+
+
+def test_the_runner_comes_from_config_and_defaults_to_pytest(tmp_path):
+    from router import env_init as ei
+    assert ei.runner_of("pwa_node22") == "vitest" and ei.runner_of("ledger_py312") == "pytest" and ei.runner_of("unknown") == "pytest"
+    assert ei.runner_of("pwa_node22", root=tmp_path) == "pytest"            # no config there: the Python default
+    (tmp_path / "config.yaml").write_text(": : bad [", encoding="utf-8")
+    assert ei.runner_of("pwa_node22", root=tmp_path) == "pytest"
+
+
+def test_the_node_scaffold_has_one_commit_and_a_clean_tree(tmp_path):
+    import subprocess
+    r, d = _node(tmp_path)
+    log = subprocess.run(["git", "-C", str(d), "log", "--oneline"], capture_output=True, text=True).stdout.strip().splitlines()
+    assert len(log) == 1 and "scaffold: web-thing" in log[0]
+    assert subprocess.run(["git", "-C", str(d), "status", "--porcelain"], capture_output=True, text=True).stdout == ""
