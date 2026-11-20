@@ -195,6 +195,12 @@ def main(argv=None, deps=None):
     p.add_argument("--commit", required=True, help="the commit of the target repository the patch was applied in")
     p.add_argument("--note")
     p.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="as for apply: the ids of the examples that failed on the patch")
+    ei = sub.add_parser("env", help="a new project: `env init NAME --path DIR` makes a small Python scaffold with one commit and prints the config line that registers it (no model, no image, no push)")
+    ei.add_argument("env_cmd", choices=("init",))
+    ei.add_argument("name")
+    ei.add_argument("--path", required=True, help="the new directory (absent or empty, outside this checkout)")
+    ei.add_argument("--description", default="A new project")
+    ei.add_argument("--environment", default="ledger_py312", help="an existing environment under environments/ (default: Python 3.12 with pytest)")
     g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md, "
                                      "SPEC_PWA_VIEWER.md): deploy | rollback | status | check | viewer-* | proxy")
     gs = g.add_subparsers(dest="stage_cmd", required=True)
@@ -448,6 +454,13 @@ def main(argv=None, deps=None):
                 ap.error("a note needs --bundle-sha, --reader-id and --note")
             rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir, second=o.second)
             print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}; the note says who wrote it and what bundle it saw, not that the bundle was read")
+            return 0
+        if o.cmd == "env":
+            from router import env_init
+            r = env_init.init(o.name, o.path, description=o.description, environment=o.environment)
+            print(f"scaffold of {o.name} at {r['path']} (commit {r['commit'][:12]}; files: {', '.join(r['files'])})\n"
+                  f"1. register it: add this line under issue_writer.repos in config.yaml and open a PR (nothing was edited):\n{r['config_line']}\n"
+                  f"2. then: argus prd new ... (the request in the human's words), prd check, prd approve, queue go, queue step")
             return 0
         if o.cmd == "examples-accept":
             from router import examples_read as ers
