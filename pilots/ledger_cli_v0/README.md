@@ -63,6 +63,21 @@ not say so (the scaffold was Claude's choice; the hidden tests set the path). Th
 13. The machine's scope mark flagged `README.md` ("not named by the issue") although the issue asked for a README section: the anchors are code names. A false alarm a human can judge, but it will recur.
 14. Part of the PRD improvements came from instructions Claude wrote in `prd reply` messages (for example the explicit rule about padded dates); count it as operator help, not as Argus alone. The first PRD (five issues) was written from Atha's request only.
 
+## Web page for ledger-cli (second part, 2026-11-19/20)
+
+Request (Claude's draft, from Atha's wish "report viewable from the phone, HTML only, no JavaScript"): `serve [--port]`, `GET /`, `POST /report`, `POST /report.json`, 404 elsewhere, escape, no upload kept; three ordered issues. Hidden tests: 10 web tests (written before Argus; the hash recorded in `~/ledger_eval/web_hash.txt` could not be re-derived afterwards, but the files are unchanged since 16:57:04 on 2026-11-19, before the first PRD approval, so this is mtime evidence, not hash evidence).
+
+Result: **web 10/10, CLI 12/12 (still), ledger-cli's own 55 tests pass**; three commits on `ledger-cli` main (`a2a3ea2`, `777ee32`, `e9bd633`), not pushed. PRD writer spent $0.10 over five turns (one WRITE_FAILED: output truncated). Issue 1 needed two rejected jobs before the third passed; issues 2 and 3 passed at the first job.
+
+Frictions (continuing the list above):
+15. The PRD writer refused `/api/report`: the harness treats `/api/...` as the viewer-proxy side. Renamed `/report.json`.
+16. PRD turn truncated (long contract plus three issues): asked for a shorter text.
+17. Two patch readers found real defects in issue 1 (unread request body on a kept-alive connection, 501 for other methods, bad Content-Length): rejected twice. The first rejection came from a Claude reader after DeepSeek was truncated. DeepSeek V4.1 Flash 1017 spends 30k to 42k reasoning tokens on a 10k-token patch; the ceiling is now 100,000 and both readers always read (PR #635, #637).
+18. `queue retry` (built from this): the second job got both readers' findings verbatim and its tests covered TRACE, keep-alive and Content-Length. First real use worked.
+19. **The domain reader found a writer-only detail in every issue**, each time a small, harmless one (JSON indent and utf-8-sig and the "no file uploaded" text; `serve --port abc` exits 2; status 200, `text/html`, `<p class="error">`, `html.escape`; CSS values, class names, the heading "Galat", the README section name). Rewriting the PRD once removed five details and exposed one more. Built `argus examples-accept` (PR #638): a human's written reason, bound to the bundle and both readings, shown on the card and logged on `apply_started`. Atha accepted three times; the reason texts were drafted by Claude and approved by Atha (recorded as such).
+20. The domain-reader bundle shows the operator's `prd reply` messages as "the human's words". Candidate: mark operator messages.
+21. Graded for the product: the three issues were applied only after both patch readers said ok, the examples passed, and the hidden tests pass. Graded for the process: three human acceptances of domain concerns, none of which found a real defect; the patch readers found the real ones.
+
 ## Next
 Do not build more gates for this. Candidate builds in the order of pain: a connector that runs the steps and stops only at Atha's gates (T5); `queue retry` (10); card grammar for stdlib setups (9, 2); `apply --accept-domain-concerns` (12); the plan card request display (1); first-issue-of-a-new-repo handling and `argus env init` (T6).
 Second project, if Atha wants it: patungan (bill splitter), harder (rounding of leftover Rupiah, minimal settlements).
