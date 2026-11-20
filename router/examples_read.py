@@ -425,6 +425,96 @@ def record(job_id, item, verdict, bundle_sha, reader_id, sources, note, *, deps,
     return entry
 
 
+# ---- the human's written acceptance of the domain reader's concerns (docs/reviews/SPEC_ACCEPT_DOMAIN_CONCERNS.md) ----------------------------------
+
+ACCEPT_LABEL = "recorded on the human's word in chat; the record cannot tell the human from a Claude session"
+REASON_MAX = 500
+
+
+def concerns_digest(found):
+    """sha256 of exactly the concerns a human is shown: reader id, note, time and bundle of each, in a fixed order."""
+    parts = sorted([(e["reader"].get("id") or ""), e["note"], e["at"], e["bundle_sha256"]] for e in found)
+    return hashlib.sha256(json.dumps(parts, ensure_ascii=True).encode("utf-8")).hexdigest()
+
+
+def concerns_of(jobs_dir, job_id, item):
+    """(kind, [fresh `concerns` entries], bundle info): the list is empty unless the notes of the item are `concerns` against the bundle as it is NOW."""
+    kind, _ = status(jobs_dir, job_id, item)
+    if kind != "concerns":
+        return kind, [], None
+    _, info = bundle(jobs_dir, job_id, item)
+    raw, _k = _read_file(Path(jobs_dir) / job_id, f"examples_read_{info['turn']}.json")
+    entries = _entries(raw) if raw is not None else None
+    found = [e for e in ((entries or {}).get(str(item)), (entries or {}).get(second_key(item))) if isinstance(e, dict) and e.get("verdict") == "concerns"]
+    return kind, found, info
+
+
+def _accept_ok(e, item):
+    if not isinstance(e, dict) or e.get("item") != item or isinstance(e.get("item"), bool):
+        return False
+    for k in ("bundle_sha256", "concerns_sha256"):
+        if not isinstance(e.get(k), str) or not HEX64.fullmatch(e[k]):
+            return False
+    r = e.get("reason")
+    return isinstance(e.get("at"), str) and bool(AT.fullmatch(e["at"])) and isinstance(r, str) and bool(r) and ex.clean(r, REASON_MAX) == r
+
+
+def accepted_for(jobs_dir, job_id, item):
+    """The acceptance entry that holds for these very concerns and this very bundle, or None (anything unexpected is None: the gate never opens by accident)."""
+    try:
+        kind, found, info = concerns_of(jobs_dir, job_id, item)
+        if kind != "concerns" or not found:
+            return None
+        raw, _k = _read_file(Path(jobs_dir) / job_id, f"examples_accept_{info['turn']}.json")
+        entries = _entries(raw) if raw is not None else None
+        e = (entries or {}).get(str(item))
+        if _accept_ok(e, item) and e["bundle_sha256"] == info["bundle_sha256"] and e["concerns_sha256"] == concerns_digest(found):
+            return e
+    except Exception:
+        return None
+    return None
+
+
+def accept(job_id, item, bundle_sha, concerns_sha, reason, *, deps, jobs_dir=rj.JOBS):
+    """Write the human's acceptance of the concerns now standing on the item. Refused (nothing written) unless the notes are a fresh `concerns`, the bundle sha is
+    the bundle as it is now and the concerns sha is the one of the concerns as they stand; the reason is the human's, in words."""
+    text = ex.clean(reason, REASON_MAX) if isinstance(reason, str) else ""
+    if not text:
+        _refuse(job_id, "an acceptance needs the reason, in words")
+    for v in (bundle_sha, concerns_sha):
+        if not isinstance(v, str) or not HEX64.fullmatch(v):
+            _refuse(job_id, "--bundle-sha and --concerns-sha are the 64 hexadecimal characters `--accept-show` prints")
+    job = rj.open_job(job_id, jobs_dir)
+    with job.lock():
+        kind, found, info = concerns_of(jobs_dir, job_id, item)
+        if kind != "concerns" or not found:
+            _refuse(job_id, f"only a fresh `concerns` of the domain reader can be accepted (the notes of item {item} are: {kind})")
+        if bundle_sha != info["bundle_sha256"]:
+            _refuse(job_id, "the bundle is not the one you were shown: it changed; read the concerns again")
+        if concerns_sha != concerns_digest(found):
+            _refuse(job_id, "the concerns are not the ones you were shown: read them again")
+        entry = {"item": item, "bundle_sha256": info["bundle_sha256"], "concerns_sha256": concerns_sha, "reason": text, "at": deps.clock(), "label": ACCEPT_LABEL}
+        name = f"examples_accept_{info['turn']}.json"
+        old, _k = _read_file(job.dir, name)
+        if _k == "error" or (old is not None and _entries(old) is None):
+            _refuse(job_id, f"the existing {name} is damaged: move it away, then accept again")
+        entries = (_entries(old) if old is not None else None) or {}
+        entries[str(item)] = entry
+        target = job.dir / name
+        tmp = target.with_name(target.name + ".tmp")
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"turn": info["turn"], "entries": entries}))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, target)
+    return entry
+
+
 # ---- the chain from a code job back to the note (SPEC_KARTU_SETUJU 5, "Rantai ikatan ke job code") --------------------------------------
 
 def _chain_result(applicable, ok, kind, why, **more):
@@ -546,4 +636,8 @@ def _chain(job, jobs_dir, queues_dir):
     why = {"none": "no domain reader's note for this item", "stale": "the domain reader's note is stale: what it read has changed",
            "error": "the domain reader's note cannot be read", "one": "only one fresh `ok` reading: the numbers need a second, independent reading",
            "concerns": "the domain reader recorded concerns"}.get(kind)
+    if kind == "concerns":                               # a human accepted these very concerns in writing (SPEC_ACCEPT_DOMAIN_CONCERNS): apply may go on, the card says so
+        acc = accepted_for(jobs_dir, prd_job, n)
+        if acc is not None:
+            return _chain_result(True, True, "accepted", f"the domain reader's concerns were accepted in writing: {acc['reason']}", rec=rec, accepted=acc, **more)
     return _chain_result(True, kind == "ok", kind, why, rec=rec, **more)

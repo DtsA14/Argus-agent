@@ -234,7 +234,8 @@ class Install:
                 checks["i"] = _chk("i", None, f"tidak berlaku: {res['why']}")
                 item["domain_read"] = {"kind": "tidak_berlaku", "fresh": False, "why": f"tidak berlaku: {res['why']}"}
             else:
-                checks["i"] = _chk("i", res["ok"], "angka domain dibaca (Claude, bukan manusia)" if res["ok"] else (res["why"] or "angka domain belum dibaca"))
+                checks["i"] = _chk("i", res["ok"], ("keberatan pembaca angka diterima secara tertulis (bukan ok dari pembaca): " + res["accepted"]["reason"] if res["kind"] == "accepted"
+                                                    else "angka domain dibaca (Claude, bukan manusia)") if res["ok"] else (res["why"] or "angka domain belum dibaca"))
                 item["domain_read"] = (self.approve._domain_read(res["prd_job"], res["item"], item) if res.get("prd_job") else
                                        {"kind": "tidak_terbaca", "fresh": False, "why": res["why"] or "tidak terbaca"})
             files, scope_note, cut = self._files(listed, patch_bytes, globs, res)
