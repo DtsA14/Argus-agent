@@ -461,7 +461,14 @@ def _accept_ok(e, item):
         if not isinstance(e.get(k), str) or not HEX64.fullmatch(e[k]):
             return False
     r = e.get("reason")
-    return type(e.get("item")) is int and isinstance(e.get("at"), str) and bool(AT.fullmatch(e["at"])) and isinstance(r, str) and bool(r) and ex.clean(r, REASON_MAX) == r
+    return isinstance(e.get("at"), str) and bool(AT.fullmatch(e["at"])) and isinstance(r, str) and bool(r) and ex.clean(r, REASON_MAX) == r
+
+
+def card_text(res):
+    """The words of condition (i) of the install card for an `ok` chain result."""
+    if res.get("kind") == "accepted":
+        return "keberatan pembaca angka diterima secara tertulis (bukan ok dari pembaca): " + res["accepted"]["reason"]
+    return "angka domain dibaca (Claude, bukan manusia)"
 
 
 def accepted_for(jobs_dir, job_id, item):

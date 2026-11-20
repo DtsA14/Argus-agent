@@ -572,3 +572,50 @@ def test_the_log_says_the_numbers_passed_on_an_acceptance_and_why(world):
 def test_apply_names_the_acceptance_when_the_numbers_have_concerns(world):
     concerned(world)
     refused(world, "examples-accept .* --show")
+
+
+def test_planted_readings_with_the_same_reader_id_cannot_be_accepted(world):
+    concerned(world)
+    f = world.prd_dir / "examples_read_w1.json"
+    doc = json.loads(f.read_text())
+    doc["entries"]["1#2"]["reader"]["id"] = doc["entries"]["1"]["reader"]["id"]
+    f.write_text(json.dumps(doc))
+    assert er.concerns_of(world.jobs, PJOB, 1) == ([], None)
+
+
+def test_a_planted_acceptance_with_a_control_character_or_a_long_reason_is_not_one(world):
+    b, c = concerned(world)
+    for reason in ("fine\x1b[31m", "x" * 501, ""):
+        accept_file(world).write_text(json.dumps({"entries": {"1": {"item": 1, "bundle_sha256": b, "concerns_sha256": c, "reason": reason, "at": "2026-11-17T10:00:00Z"}}}))
+        assert er.accepted_for(world.jobs, PJOB, 1) is None
+    accept_file(world).write_text(json.dumps({"entries": {"1": {"item": 1, "bundle_sha256": b, "concerns_sha256": c, "reason": "fine", "at": "2026-11-17T10:00:00Z"}}}))
+    assert er.accepted_for(world.jobs, PJOB, 1)["reason"] == "fine"                                    # the same file with a clean reason is one
+
+
+def test_a_damaged_acceptance_file_is_not_silently_replaced_by_accept(world):
+    b, c = concerned(world)
+    accept_file(world).write_text("{")
+    with pytest.raises(rj.Refused, match="damaged"):
+        er.accept(PJOB, 1, b, c, "Atha: diterima", deps=world.deps, jobs_dir=world.jobs)
+    assert accept_file(world).read_text() == "{"
+
+
+def test_an_error_while_checking_an_acceptance_is_not_an_acceptance(world, monkeypatch):
+    accept(world)
+    monkeypatch.setattr(er, "concerns_digest", lambda found: 1 / 0)
+    assert er.accepted_for(world.jobs, PJOB, 1) is None
+
+
+def test_the_card_words_for_condition_i_say_accepted_or_read(world):
+    assert "diterima secara tertulis" in er.card_text({"kind": "accepted", "accepted": {"reason": "Atha: ok"}})
+    assert "Atha: ok" in er.card_text({"kind": "accepted", "accepted": {"reason": "Atha: ok"}})
+    assert er.card_text({"kind": "ok"}) == "angka domain dibaca (Claude, bukan manusia)"
+
+
+def test_the_command_takes_exactly_one_of_show_or_reason(world):
+    import argus
+    concerned(world)
+    base = ["--jobs-dir", str(world.jobs), "examples-accept", PJOB, "--item", "1"]
+    for extra in ([], ["--show", "--reason", "x"], ["--show", "--bundle-sha", "a" * 64]):
+        with pytest.raises(SystemExit):
+            argus.main([*base, *extra], deps=world.deps)
