@@ -370,3 +370,9 @@ Syarat buka ulang dari `docs/reviews/FABLE_PLAN_2026-11-11.md` bagian 4, kecuali
   teks tidak menangkap akses yang disamarkan (SPEC_PWA_VIEWER A3)
 - Empat skrip eksperimen lama (`analyze_series.py`, `sim_admission.py`, `dry_feedback.py`, `measure_context.py`) masih membaca log dengan
   `json.loads` per baris; diarsipkan apa adanya
+
+## Kandidat dari pilot web ledger-cli (2026-11-20)
+
+- [ ] **Saran model untuk keberatan pembaca angka** (usul Atha 2026-11-20, hanya dicatat): satu model lain menilai keberatan yang sedang diterima (`bawaan wajar` atau `mengubah perilaku`, satu baris) dan kartu menampilkannya di dekat keputusan Atha. Saran bukan keputusan: `examples-accept` tetap butuh alasan Atha. Keputusan Atha 2026-11-20: model yang meneruskan sendiri tidak dipakai (penulis, pembaca dan penilai model sejenis; keberatan "aturan ini bukan dari Atha" hanya bisa dijawab Atha). Kemungkinan lanjutan: daftar aturan yang boleh lolos otomatis, ditulis Atha sekali.
+- [ ] Bundel pembaca angka menampilkan pesan revisi PRD yang ditulis operator (Claude) sebagai "kata-kata manusia"; tandai pesan operator.
+- [ ] Kartu rencana: tandai permintaan yang ditulis operator "Claude (operator)" dan tampilkan lebih pendek.
