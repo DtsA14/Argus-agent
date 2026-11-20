@@ -233,6 +233,7 @@ issue_writer:
     argus-ledger: {path: "~/argus-ledger", environment: ledger_py312_up2}
     athena: {path: "~/athena", environment: athena_py312}   # outside-repo pilot (public repository), 2026-11-15
     ledger-cli: {path: "~/ledger-cli", environment: ledger_py312}   # first repo built from a scaffold by Argus (Atha 2026-11-19): Python 3.12 + pytest, stdlib only; reuses the ledger_py312 image
+    ledger-browser: {path: "/home/ubuntu/ledger-browser", environment: pwa_node22}
   # max_input_tokens: Haiku's bound through the gateway (#415): its long-context price starts at 100,000 tokens and the
   # heuristic count of an OpenRouter prompt is not exact, so 100,000 x 1.2 / 3 = 40,000 (harness/llm.py
   # check_long_context); the replays used at most ~25,000. cap_usd is the bound: one turn never costs more.
