@@ -19,6 +19,7 @@ from pathlib import Path
 
 from acceptance.contract import matches
 from router import job as rj
+from router import reason as reason_rule
 from router import examples_read as er
 from router import patch_read as pr
 from router import stage_data
@@ -100,14 +101,7 @@ def raw_entries(out):
 
 def _accepted_reason(text):
     """The human's reason for `--accept-concerns`: one line of 10..500 characters, refused (never cut) otherwise, and never a key (the commit message is not scrubbed)."""
-    if not isinstance(text, str) or any(unicodedata.category(c)[0] == "C" for c in text):
-        raise rj.Refused("--accept-concerns: the reason must be plain text without control characters; nothing was changed")
-    t = ex.clean(text, 10_000)
-    if not 10 <= len(t) <= 500:
-        raise rj.Refused(f"--accept-concerns: the reason must be 10 to 500 characters (it has {len(t)}); nothing was changed")
-    if stage_data.KEY.search(t.encode()) or stage_data.KEY.search(json.dumps(t).encode()):
-        raise rj.Refused("--accept-concerns: the reason looks like it holds a key or a secret; it must not reach git history; nothing was changed")
-    return t
+    return reason_rule.check(text, "--accept-concerns")
 
 
 def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None, queues_dir=None, accept_concerns=None):
