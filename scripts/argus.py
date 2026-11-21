@@ -152,7 +152,7 @@ def main(argv=None, deps=None):
     t3b.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of this T3b directory (run 1 and run 2 share one ledger): a call starts only if billed so far + its worst case fits")
     t3b.add_argument("--max-output", type=int, default=6000, help="output tokens a call may use (a reasoning model spends them on thinking first)")
     t3b.add_argument("--effort", choices=("low", "medium", "high"), help="the provider's reasoning effort for this run (OpenRouter reasoning.effort, set in a copy of the config; default: the provider's)")
-    pt = sub.add_parser("patch-trial", help="a trial of one model as the PATCH reader on eight planted patches (SPEC_KARTU_SETUJU 5), outside the approval card: costs money, own cap, writes nothing to a job")
+    pt = sub.add_parser("patch-trial", help="a trial of one model as the PATCH reader on the planted patches (SPEC_KARTU_SETUJU 5; defects and good ones, SPEC_PATCH_READER_SEVERITY), outside the approval card: costs money, own cap, writes nothing to a job")
     pt.add_argument("root", help="the trial directory (created); ledger and readings of all models live here")
     pt.add_argument("--model", required=True, help="a name of router/patch_trial.MODELS")
     pt.add_argument("--run", type=int, choices=(1, 2), required=True)

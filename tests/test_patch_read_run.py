@@ -21,8 +21,8 @@ from runner import load_config  # noqa: E402
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="posix")
 
 
-def reply(verdict="ok", note="every changed line is explained by the issue", tokens=(2000, 200)):
-    return AIMessage(content=json.dumps({"verdict": verdict, "note": note}),
+def reply(verdict="ok", note="every changed line is explained by the issue", tokens=(2000, 200), severity=None):
+    return AIMessage(content=json.dumps({"verdict": verdict, "note": note, **({"severity": severity} if severity else {})}),
                      usage_metadata={"input_tokens": tokens[0], "output_tokens": tokens[1], "total_tokens": sum(tokens)},
                      response_metadata={"token_usage": {"prompt_tokens": tokens[0], "completion_tokens": tokens[1], "cost": 0.0003}})
 
@@ -294,3 +294,25 @@ def test_a_first_concerns_by_another_reader_is_not_resumed_with_a_second_reading
     again = models(reply(), reply())
     s = go(env, again)
     assert "nothing is read again" in s["stopped"] and again["hy4flash"].calls == [] and again["ds1017"].calls == []
+
+
+# ---- severity (SPEC_PATCH_READER_SEVERITY) ---------------------------------------------------------------------------------------------------------
+
+def test_two_nits_make_the_pair_a_nit_which_is_final_and_not_read_again(world):
+    env, sha = world
+    out = go(env, models(reply("concerns", "a corner", severity="nit"), reply("concerns", "another corner", severity="nit")))
+    assert out["final"] == "nit" and [r.get("severity") for r in out["readings"]] == ["nit", "nit"]
+    again = go(env, models(lambda: (_ for _ in ()).throw(AssertionError("asked")), lambda: (_ for _ in ()).throw(AssertionError("asked"))))
+    assert again["final"] == "nit" and "nothing is read again" in again["stopped"]
+
+
+def test_a_blocker_or_a_missing_severity_keeps_the_patch_closed(world):
+    env, sha = world
+    out = go(env, models(reply("concerns", "a corner", severity="nit"), reply("concerns", "it deletes a file", severity="blocker")))
+    assert out["final"] == "concerns"
+
+
+def test_a_missing_severity_on_a_concern_is_a_blocker_in_the_note(world):
+    env, sha = world
+    out = go(env, models(reply("ok"), reply("concerns", "a corner")))
+    assert out["final"] == "concerns" and out["readings"][1]["severity"] == "blocker"

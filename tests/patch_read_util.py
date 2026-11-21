@@ -34,3 +34,15 @@ def read_pair(env, first, second, ids=("reader-a", "reader-b"), reader="claude")
     if second is not None:
         pr.record(job.id, disk[:12], second, "second reading", reader, ids[1], deps=env.deps, jobs_dir=env.jobs, second=True)
     return disk
+
+
+def read_argus_pair(env, first, second, sev1=None, sev2=None):
+    """The two readings of Argus's own pair (the ids `patch-read-run` writes), with the severity each says for a `concerns`."""
+    from router import patch_read_run as prr
+    job = env.job()
+    sid, stage = rj.last_agent(job)
+    disk = hashlib.sha256((Path(stage["review"]["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    pr.record(job.id, disk[:12], first, "first reading", "argus", prr.reader_id(prr.FIRST), deps=env.deps, jobs_dir=env.jobs, severity=sev1)
+    if second is not None:
+        pr.record(job.id, disk[:12], second, "second reading", "argus", prr.reader_id(prr.SECOND), deps=env.deps, jobs_dir=env.jobs, second=True, severity=sev2)
+    return disk

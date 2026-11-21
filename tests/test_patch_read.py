@@ -471,7 +471,7 @@ def test_a_second_reading_without_an_id_is_not_a_second_reader_and_a_model_readi
 
 def test_the_model_reader_is_a_reader_kind_and_the_template_is_the_tested_one():
     assert "argus" in pr.READERS and "claude" in pr.READERS
-    assert pr.TEMPLATE_SHA256 == "05ce799f3234a2ffaf8f68eb7cfcbd8727d96fc55cda7ee3d270f522e9af0c2a"       # what the planted-patch trial tested; a change is a new trial
+    assert pr.TEMPLATE_SHA256 == "191797d73c06d258abb0b0196b8463bbaa838fbd05a8c84a3754e7008998c5a9"       # what the planted-patch trial tested; a change is a new trial
 
 
 def test_when_both_readings_say_concerns_the_first_is_what_is_shown(env, tmp_path):

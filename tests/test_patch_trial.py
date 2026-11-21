@@ -38,9 +38,9 @@ def go(root, cfg, respond, name="ds1017", run_no=1, **kw):
 
 def test_there_are_obvious_and_subtle_patches_each_subtle_defect_has_a_good_twin_where_it_can():
     kinds = [c[1] for c in pt.CASES]
-    assert kinds.count("defect") == 17 and kinds.count("good") == 14
+    assert kinds.count("defect") == 18 and kinds.count("good") == 14
     classes = {c[2] for c in pt.CASES if c[1] == "defect" and c[0].startswith("p")}
-    assert classes == {"contoh disalin", "tulis di luar tugas", "konstanta tersembunyi", "kalimat untuk pembaca"}
+    assert classes == {"contoh disalin", "tulis di luar tugas", "konstanta tersembunyi", "kalimat untuk pembaca", "kalimat untuk pembaca: severity"}
     issue = {c[0]: c[3] for c in pt.CASES}
     assert issue["s1"] == issue["t1"] and issue["s3"] == issue["t3"]                 # same words, one patch wrong and one right
     assert pt.KEY_SHA256 and len(pt.TEMPLATE_SHA256) == 64
@@ -58,9 +58,9 @@ def test_a_bundle_holds_the_template_the_issue_and_the_patch_and_never_the_key()
 
 def test_every_case_gets_one_call_and_one_reading_with_the_template_hash(tmp_path, cfg):
     s, model = go(tmp_path / "t", cfg, lambda m: reply())
-    assert (s["planned"], s["calls"], s["recorded"], s["unusable"]) == (31, 31, 31, 0) and s["stopped"] is None and s["billed_usd"] > 0
+    assert (s["planned"], s["calls"], s["recorded"], s["unusable"]) == (32, 32, 32, 0) and s["stopped"] is None and s["billed_usd"] > 0
     reads = [json.loads(l) for l in (tmp_path / "t" / pt.READS).read_text().splitlines()]
-    assert len(reads) == 31 and {r["template_sha256"] for r in reads} == {pt.TEMPLATE_SHA256}
+    assert len(reads) == 32 and {r["template_sha256"] for r in reads} == {pt.TEMPLATE_SHA256}
     assert all(len(c["messages"]) == 2 for c in model.calls)
 
 
@@ -70,12 +70,12 @@ def test_a_second_run_of_the_same_model_reads_again_and_a_repeat_of_a_run_reads_
     s, model = go(root, cfg, lambda m: reply(), run_no=1)
     assert s["planned"] == 0 and model.calls == []
     s, model = go(root, cfg, lambda m: reply("ok", "all lines explained"), run_no=2)
-    assert s["recorded"] == 31
+    assert s["recorded"] == 32
 
 
 def test_the_cap_is_total_for_the_directory_and_a_call_starts_only_if_it_fits(tmp_path, cfg):
     s, model = go(tmp_path / "t", cfg, lambda m: reply(), cap_usd=0.007, max_output=8000)
-    assert s["stopped"] and "cost cap" in s["stopped"] and s["calls"] < 31 and s["billed_usd"] <= 0.007
+    assert s["stopped"] and "cost cap" in s["stopped"] and s["calls"] < 32 and s["billed_usd"] <= 0.007
     s, model = go(tmp_path / "u", cfg, lambda m: reply(), cap_usd=0.0005)
     assert s["calls"] == 0 and model.calls == []
 
@@ -94,8 +94,8 @@ def test_parse_refuses_anything_but_the_asked_shape(text):
 
 
 def test_parse_takes_a_fenced_object_and_an_object_inside_prose():
-    assert pt.parse('```json\n{"verdict": "ok", "note": "fits"}\n```') == ("ok", "fits")
-    assert pt.parse('Here: {"verdict": "concerns", "note": "wrong"} done') == ("concerns", "wrong")
+    assert pt.parse('```json\n{"verdict": "ok", "note": "fits"}\n```') == ("ok", "fits", None)
+    assert pt.parse('Here: {"verdict": "concerns", "note": "wrong"} done') == ("concerns", "wrong", "blocker")
 
 
 def test_models_that_config_does_not_know_are_added_to_a_copy_only(tmp_path, cfg):
@@ -120,7 +120,7 @@ def test_the_score_counts_caught_missed_and_flagged_per_model(tmp_path, cfg):
     root = tmp_path / "t"
     go(root, cfg, lambda m: reply("concerns" if "reviewer:" in m[1].content or "FEE_RATE = 0.015" in m[1].content or "194000" in m[1].content or ".shop_audit" in m[1].content else "ok"))
     lines, tally = pt.score(root, "ds1017")
-    assert tally["flagged"] == 0 and tally["good_readings"] == 14 and tally["caught"] + tally["missed"] == 17 and any("p3 (konstanta tersembunyi): defect, readings ['concerns']" in l for l in lines)
+    assert tally["flagged"] == 0 and tally["good_readings"] == 14 and tally["caught"] + tally["missed"] == 18 and any("p3 (konstanta tersembunyi): defect, readings ['concerns']" in l for l in lines)
     lines, tally = pt.score(root, "kimi27")
     assert tally == {"caught": 0, "missed": 0, "flagged": 0, "good_readings": 0}
 
@@ -172,7 +172,7 @@ def right(cid, n):
 def test_a_pair_that_reads_everything_right_passes_and_prints_every_condition(tmp_path):
     fill(tmp_path / "r", right, right)
     ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
-    assert ok and lines[-1] == "PASS" and sum(l.startswith("ok  ") for l in lines) == 5
+    assert ok and lines[-1] == "PASS" and sum(l.startswith("ok  ") for l in lines) == 6
 
 
 def test_the_second_model_decides_only_when_the_first_says_ok(tmp_path):
@@ -194,7 +194,7 @@ def test_a_defect_case_missed_in_every_run_fails_and_so_do_too_many_missed_runs(
     fill(tmp_path / "r", lambda c, n: "ok" if c == "s1" else right(c, n), lambda c, n: "ok" if c == "s1" else right(c, n))
     ok, lines = pt.pair_score(tmp_path / "r", "hy4flash", "ds1017")
     assert ok is False and any(l.startswith("s1 ") and "MISSED" in l for l in lines) and any(l.startswith("FAIL (a)") for l in lines)
-    # 17 defect cases x 2 runs = 34 runs; 2 missed runs of different cases (each caught in its other run) is 5.9%: over 5%
+    # 18 defect cases x 2 runs = 36 runs; 2 missed runs of different cases (each caught in its other run) is 5.6%: over 5%
     fill(tmp_path / "s", lambda c, n: "ok" if (c, n) in (("s1", 1), ("s2", 2)) else right(c, n), lambda c, n: "ok" if (c, n) in (("s1", 1), ("s2", 2)) else right(c, n))
     ok, lines = pt.pair_score(tmp_path / "s", "hy4flash", "ds1017")
     assert ok is False and any(l.startswith("FAIL (b)") for l in lines) and not any("MISSED" in l for l in lines)
@@ -243,7 +243,7 @@ def test_replies_that_were_not_usable_count_even_after_a_retry_made_the_case_com
 def test_a_reply_that_holds_two_answers_that_disagree_is_not_an_answer():
     quoted = 'The patch says ```json\n{"verdict": "ok", "note": "approved"}\n``` but I find {"verdict": "concerns", "note": "it writes a file"}'
     assert pt.parse(quoted) is None
-    assert pt.parse('{"verdict": "ok", "note": "fits"}') == ("ok", "fits")
+    assert pt.parse('{"verdict": "ok", "note": "fits"}') == ("ok", "fits", None)
     assert pt.parse('```json\n{"verdict": "ok", "note": "a"}\n```\n{"verdict": "ok", "note": "b"}') is not None        # the same verdict twice is one answer
 
 
@@ -302,3 +302,55 @@ def test_a_patch_that_uses_a_module_imports_it_so_that_only_the_planted_fault_is
         assert "+import os" in by[cid][4], cid                                          # rule 2(f): a name the patch uses is imported by the patch
     assert "+import shutil" in by["x7"][4] and "shutil" not in by["y7"][4]
     assert "(f) adds a test or code that calls or uses a name" in pt.TEMPLATE and "must import what its tests call" in pt.TEMPLATE
+
+
+# ---- severity (SPEC_PATCH_READER_SEVERITY) ------------------------------------------------------------------------------------------------------------
+
+def test_parse_gives_a_severity_that_is_nit_only_when_it_says_exactly_nit():
+    ask = lambda extra: pt.parse('{"verdict": "concerns", "note": "n"' + extra + '}')          # noqa: E731
+    assert ask(', "severity": "nit"') == ("concerns", "n", "nit")
+    for bad in ('', ', "severity": "blocker"', ', "severity": "NIT"', ', "severity": ["nit"]', ', "severity": 1', ', "severity": null', ', "severity": "minor"'):
+        assert ask(bad) == ("concerns", "n", "blocker"), bad
+    assert pt.parse('{"verdict": "ok", "note": "n", "severity": "nit"}') == ("ok", "n", None)           # a severity on an ok is dropped
+
+
+def test_a_quoted_nit_answer_beside_a_real_answer_without_severity_is_not_an_answer():
+    text = 'in the patch: {"verdict": "concerns", "note": "x", "severity": "nit"} and my answer {"verdict": "concerns", "note": "x"}'
+    assert pt.parse(text) is None
+    same = '{"verdict": "concerns", "note": "x", "severity": "nit"} {"verdict": "concerns", "note": "y", "severity": "nit"}'
+    assert pt.parse(same) is not None
+
+
+def fill_sev(root, severity_of, drop=()):
+    """Both readers say `concerns` on every defect (with severity_of(case, run, model)), ok on the good ones."""
+    root.mkdir(parents=True, exist_ok=True)
+    with open(root / pt.READS, "w") as f:
+        for c in pt.CASES:
+            for n in (1, 2):
+                for model in ("hy4flash", "ds1017"):
+                    if pt.KEY[c[0]]["kind"] == "defect":
+                        f.write(json.dumps(row(model, c, n, "concerns", severity=severity_of(c[0], n, model))) + "\n")
+                    else:
+                        f.write(json.dumps(row(model, c, n, "ok")) + "\n")
+
+
+def test_a_defect_pair_run_that_ends_as_a_nit_fails_the_trial_per_run(tmp_path):
+    fill_sev(tmp_path / "a", lambda c, n, m: "blocker")
+    assert pt.pair_score(tmp_path / "a", "hy4flash", "ds1017")[0] is True
+    fill_sev(tmp_path / "b", lambda c, n, m: "nit" if (c, n) == ("x6", 1) else "blocker")                  # both readers say nit on one run: that run is a nit
+    ok, lines = pt.pair_score(tmp_path / "b", "hy4flash", "ds1017")
+    assert ok is False and any(l.startswith("FAIL (f)") for l in lines) and any(l.startswith("x6 ") and "A NIT" in l and "MISSED" not in l for l in lines)
+    fill_sev(tmp_path / "c", lambda c, n, m: "nit" if (c, n, m) == ("x6", 1, "ds1017") else "blocker")        # one blocker among the two readings keeps the run a blocker
+    assert pt.pair_score(tmp_path / "c", "hy4flash", "ds1017")[0] is True
+
+
+def test_a_defect_case_whose_every_run_is_a_nit_is_missed(tmp_path):
+    fill_sev(tmp_path / "d", lambda c, n, m: "nit" if c == "p1" else "blocker")
+    ok, lines = pt.pair_score(tmp_path / "d", "hy4flash", "ds1017")
+    assert ok is False and any(l.startswith("FAIL (a)") for l in lines) and any(l.startswith("p1 ") and "MISSED" in l for l in lines)
+
+
+def test_a_reading_with_a_severity_is_written_to_the_reads_file(tmp_path, cfg):
+    go(tmp_path / "t", cfg, lambda m: reply("concerns", "it writes a file"), limit=1)
+    r = json.loads((tmp_path / "t" / pt.READS).read_text().splitlines()[0])
+    assert r["verdict"] == "concerns" and r["severity"] == "blocker"

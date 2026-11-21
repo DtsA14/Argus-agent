@@ -2,16 +2,16 @@
  "athena": {
   "patch": {
    "effort": "default",
-   "evidence": "ok   (a) defect cases with no pair run that says concerns: 0 (got 0); ok   (b) usable defect pair runs that say ok: at most 5% (got 0 of 34); ok   (c) good cases with a pair run that says concerns: at most 1 (got 0); ok   (d) pair runs not usable: at most 10%, and replies that were not usable (the errors file): at most 10% of the attempts (got 1 of 62 runs; 1 of 124 attempts); ok   (e) readings made with another template, instruction, case text, key or effort than the current ones: 0 (got 0)",
-   "instruction_sha256": "71f8a6864be9460c8faed390d8260724a12e239c30bef2b1c9a4cf99c3ad94ea",
-   "key_sha256": "971ca88f95bc186036120fde5d938097cddf5e246924fb938fe1e1f67d8390b7",
+   "evidence": "ok   (a) defect cases with no pair run that says concerns: 0 (got 0); ok   (b) usable defect pair runs that say ok: at most 5% (got 0 of 36); ok   (c) good cases with a pair run that says concerns: at most 1 (got 0); ok   (d) pair runs not usable: at most 10%, and replies that were not usable (the errors file): at most 10% of the attempts (got 0 of 64 runs; 0 of 128 attempts); ok   (e) readings made with another template, instruction, case text, key or effort than the current ones: 0 (got 0); ok   (f) defect pair runs that say only nit: 0 (nit pair runs on good cases, reported: 0) (got 0)",
+   "instruction_sha256": "f4f4fc0af03b8da09aa185d19de49cc3c8f715ff424aa5ef78a29289d8a51644",
+   "key_sha256": "b38b75cf77cef0709e87d41237f65606931907130081a2ad11551b7c5f4b2254",
    "models": [
     "argus:openrouter:tencent/hy4-flash",
     "argus:openrouter:deepseek/deepseek-v4.1-flash-1017"
    ],
-   "passed_at": "2026-11-18",
+   "passed_at": "2026-11-21",
    "spec": "rev 3 section 13.5",
-   "template_sha256": "05ce799f3234a2ffaf8f68eb7cfcbd8727d96fc55cda7ee3d270f522e9af0c2a"
+   "template_sha256": "191797d73c06d258abb0b0196b8463bbaa838fbd05a8c84a3754e7008998c5a9"
   }
  }
 }
