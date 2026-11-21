@@ -137,8 +137,8 @@
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Lingkungan"], ["commit", "Commit"],
     ["turn", "Giliran"], ["turn_cap_usd", "Batas giliran"], ["job_cap_usd", "Batas job"], ["reason", "Alasan"],
     ["profile", "Profil"], ["model", "Model"], ["stage_models", "Model"], ["stage_caps", "Batas tahap"], ["web", "Web"], ["data_sent", "Data keluar"],
-    ["free_models", "Model gratis"], ["runs_code", "Kode contoh"], ["kind", "Jenis"], ["job_title", "Judul"], ["sha12", "Draf"], ["spent_usd", "Biaya"], ["cap_usd", "Batas"]];
-  var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1 };
+    ["free_models", "Model gratis"], ["runs_code", "Kode contoh"], ["kind", "Jenis"], ["job_title", "Judul"], ["sha12", "Draf"], ["spent_usd", "Biaya"], ["cap_usd", "Batas"], ["queue_usd", "Uang antrean"], ["money", "Catatan uang"]];
+  var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1, queue_usd: 1 };
   function fact(parent, label, value) {
     var p = el("p", "fact");
     p.appendChild(el("b", null, label + ": "));
@@ -149,12 +149,17 @@
     var card = prep.card;
     var c = el("article", "card");
     c.appendChild(el("h2", null, card.title));
+    (card.flags || []).forEach(function (f) { say(c, "mesin", "tanda mesin", f, "say warn"); });      // the machine's marks come first, above every green line (T3 light)
     LABELS.forEach(function (kv) {
       var v = card[kv[0]];
       if (v === undefined || v === null || v === "") { return; }
       fact(c, kv[1], USD_KEYS[kv[0]] ? usd(v) : v);
     });
     if (card.issue_title) { fact(c, "Judul issue", card.issue_title); }
+    if (card.folder_sha) { fact(c, "Sha folder", String(card.folder_sha).slice(0, 12)); }
+    if (card.request) { say(c, "atha", "permintaan", card.request, "say"); }
+    if (card.summary) { say(c, "model", "ringkasan penulis (tulisan model)", card.summary, "say"); }
+    (card.issues || []).forEach(function (i) { fact(c, "Issue " + i.n, i.title + (i.warning ? " (tanpa contoh perilaku baru)" : "")); });
     if (card.message) { c.appendChild(el("p", "msg human", card.message)); }
     if (card.issue_text) { c.appendChild(el("p", "msg", card.issue_text)); }
     c.appendChild(el("p", "note", "Eksposur biaya yang dihitung: " + usd(prep.exposure_usd) + ". Tidak ada yang berjalan sebelum Konfirmasi."));
@@ -239,6 +244,7 @@
         message.value = "";
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
         if (mode === "prd") { return; }
+        if (mode === "cards" && openCard !== null) { showPlan(openCard); return; }
         if (mode === "decide") { if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); } return; }
         loadIssues();
         if (r.job && mode === "issue") { showIssue(r.job, true); }
@@ -564,6 +570,26 @@
     wrap.appendChild(back);
     return wrap;
   }
+  function planActions(id, t4) {                        // SPEC_CHAT_T4A: the server says which button the builders would let through; the second button is a placeholder for now (Atha)
+    var box = el("div", "nav");
+    if (!t4) { return box; }
+    if (t4.action === "prd_approve") {
+      var b = el("button", "go", "Setujui rencana");
+      b.type = "button";
+      b.addEventListener("click", function () { prepare({ action: "prd_approve", job: id }); });
+      box.appendChild(b);
+      box.appendChild(el("p", "small", "Tidak ada uang yang keluar: ini membuat antrean yang masih menunggu persetujuan uang."));
+    } else if (t4.action === "queue_go") {
+      var p = el("button", null, "Jalankan antrean (belum aktif)");
+      p.type = "button";
+      p.disabled = true;
+      box.appendChild(p);
+      box.appendChild(el("p", "small", "Menyetujui uang antrean masih lewat terminal; tombol ini belum diaktifkan." + (t4.needs && t4.needs.length ? " Nanti akan meminta: " + t4.needs.join(", ") + "." : "")));
+    } else if (t4.why) {
+      box.appendChild(el("p", "note", t4.why));
+    }
+    return box;
+  }
   function showPlan(id) {
     var seq = ++cardSeq;
     openCard = id;
@@ -598,6 +624,7 @@
       var s5 = sec(card, "5. Apa yang belum diperiksa siapa pun?");
       s5.appendChild(el("p", "say", d.fixed_line));
       stream.appendChild(card);
+      stream.appendChild(planActions(id, d.t4));
       stream.appendChild(cardButtons([{ text: "Kartu teknis", fn: function () { showCard("prd", id); } }]));
     }).catch(function () {
       if (seq !== cardSeq || mode !== "cards") { return; }

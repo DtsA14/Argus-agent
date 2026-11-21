@@ -72,7 +72,7 @@ def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
     assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
-    assert JS.count("action:") == 8                                 # the reply is prepared from a button and from the composer; research_new and prd_new from the composer
+    assert JS.count("action:") == 9                                 # the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -245,15 +245,34 @@ def decide_part():
     return JS.split("function decideCard")[1].split("function setMode")[0]
 
 
-def test_the_decisions_chip_is_on_and_there_is_no_approve_anywhere_in_the_page():
+def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_button():
     assert re.search(r'data-mode="decide"[^>]*>Keputusan<', HTML)
     assert not re.search(r'data-mode="decide"[^>]*disabled', HTML)
-    # the only allowed uses: the addresses of the READ-ONLY plan and install cards (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else
+    # the addresses of the READ-ONLY plan and install cards (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else
     assert JS.count("/api/approve/") == 2 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
     assert 'get("/api/approve/code/" + encodeURIComponent(id))' in JS
     js = JS.replace('get("/api/approve/prd/" + encodeURIComponent(id))', "").replace('get("/api/approve/code/" + encodeURIComponent(id))', "")
-    for text in ("approve", "Approve", "job_approve", "setujui"):
-        assert text not in js and text not in HTML
+    # SPEC_CHAT_T4A: exactly one live approval, the plan's, prepared with the job id and nothing else (the server reads the rest); never a draft approval
+    assert js.count('prepare({ action: "prd_approve", job: id })') == 1 and js.count("prd_approve") == 2          # the call, and the server's name for the button
+    assert "job_approve" not in js and "Approve" not in js and "approve" not in js.replace("prd_approve", "")
+    assert js.count("Setujui") == 1 and 'el("button", "go", "Setujui rencana")' in js and "setujui" not in js
+    assert "setujui" not in HTML and "approve" not in HTML.lower()
+
+
+def test_run_the_queue_is_only_a_placeholder_for_now():
+    assert JS.count('"queue_go"') == 1 and 'action: "queue_go"' not in JS and "queue_go" not in JS.replace('t4.action === "queue_go"', "")
+    assert 'var p = el("button", null, "Jalankan antrean (belum aktif)");' in JS and "p.disabled = true;" in JS
+    assert JS.count("Jalankan antrean") == 1
+
+
+def test_the_machine_flags_come_before_every_fact_of_a_confirmation_card():
+    body = JS.split("function renderCard")[1].split("function prepare")[0]
+    assert body.index("card.flags") < body.index("LABELS.forEach") < body.index("card.request")
+
+
+def test_the_page_offers_the_button_the_server_names_and_refreshes_the_plan_after_it():
+    assert "stream.appendChild(planActions(id, d.t4));" in JS and 'if (t4.action === "prd_approve") {' in JS
+    assert 'if (mode === "cards" && openCard !== null) { showPlan(openCard); return; }' in JS
 
 
 def test_a_decision_is_prepared_from_a_button_with_the_sha_the_card_showed_and_the_reason_of_its_own_card():
@@ -267,6 +286,8 @@ def test_the_decide_link_reads_the_path_once_matches_it_and_opens_a_card_without
     assert JS.count("location") == 1 and 'exec(location.pathname)' in JS
     assert r"/^\/jobs\/(j[0-9]{8}_[0-9]{6}_[0-9a-f]{4})$/" in JS
     body = JS.split("function showDecision")[1].split("function setMode")[0]
+    pre, rest = body.split("function planActions")                           # the plan's own button (SPEC_CHAT_T4A) is the one prepare of the cards; the decide link never reaches it
+    body = pre + "function showPlan" + rest.split("function showPlan")[1]
     assert "prepare(" not in body and "post(" not in body and "message.value" not in body
     assert 'if (deep) { setMode("decide"); showDecision(deep[1]); }' in JS
 
