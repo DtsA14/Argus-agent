@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build the sandbox image of an environment defined in environments/NAME/ from an official Python image
 # (docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md 2.2). The builder container is the only step with network: it installs the
-# exact, hashed requirements (pip --require-hashes) and copies the interpreter, the stdlib, the installed packages and
+# exact, hashed requirements (pip --require-hashes, wheels only: --only-binary :all:, so no package's setup code runs in this
+# container; the index is named, not read from any pip configuration: --isolated --index-url) and copies the interpreter, the stdlib, the installed packages and
 # the shared libraries they need (scripts/env_builder_copy.py). The image is then assembled on this host exactly as
 # scripts/build_env_sandbox_image.sh does it: fixed times and owners, sorted tar, docker import. No shell, no pip, no git.
 #
@@ -27,7 +28,8 @@ trap 'rm -rf "$W"' EXIT
 mkdir -p "$W/root" "$W/site"
 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e PIP_DISABLE_PIP_VERSION_CHECK=1 \
   -v "$(cd "$DEF" && pwd):/def:ro" -v "$PWD/scripts/env_builder_copy.py:/copy.py:ro" -v "$CACHE:/cache" -v "$W:/out" "$BASE" \
-  sh -c 'python3 -m pip install -q --no-deps --no-compile --require-hashes --cache-dir /cache --target /out/site \
+  sh -c 'python3 -m pip --isolated install -q --no-deps --no-compile --require-hashes --only-binary :all: \
+           --index-url https://pypi.org/simple --cache-dir /cache --target /out/site \
            -r /def/requirements.txt && python3 /copy.py /out/root /out/site'
 R="$W/root"
 mkdir -p "$R/etc" "$R/tmp" "$R/workspace" "$R/data" "$R/proc" "$R/sys" "$R/dev"
