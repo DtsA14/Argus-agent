@@ -255,3 +255,73 @@ def test_each_check_fails_when_its_condition_does_not_hold(monkeypatch, flip, ch
                                                                  {"tests/test_demo.py::test_add"}, None))
     results = {c: ok for c, ok, _ in m.checks("sympy_py39", {}, "/nowhere")}
     assert results[check] is False and [c for c, ok in results.items() if not ok] == [check]
+
+
+# ---- T6 PR1 (docs/reviews/SPEC_T6_ENV_BUILD.md 2): the pip line of the builder installs wheels only, from a named index ------------------
+
+def pip_command(tmp_path):
+    """The `sh -c` string the builder hands docker (a fake docker that records its arguments and fails)."""
+    defs = tmp_path / "defs"
+    (defs / "fine").mkdir(parents=True)
+    (defs / "fine" / "base").write_text(DIGEST + "\n")
+    (defs / "fine" / "requirements.txt").write_text(REQ)
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "docker").write_text(f"#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > {tmp_path / 'docker_args'}\nexit 1\n")
+    (fake / "docker").chmod(0o755)
+    (tmp_path / "out").mkdir()
+    env = {**os.environ, "PATH": f"{fake}:{os.environ['PATH']}", "ARGUS_ENV_DEFS": str(defs), "ARGUS_ENV_OUT": str(tmp_path / "out")}
+    subprocess.run(["bash", str(BUILD), "fine", str(tmp_path / "cache")], env=env, capture_output=True, text=True)
+    args = (tmp_path / "docker_args").read_text()                         # one argument per line; the `sh -c` string spans lines (a backslash continues it)
+    assert "pip" in args and "install" in args
+    return args
+
+
+def test_the_builder_installs_wheels_only_from_the_named_index_without_any_pip_configuration(tmp_path):
+    cmd = pip_command(tmp_path)
+    assert "--only-binary :all:" in cmd                                    # no sdist: no package's setup code runs in a container with network
+    assert "--index-url https://pypi.org/simple" in cmd                    # the index is named here, not left to a configuration or an environment variable
+    assert "--isolated" in cmd                                             # pip reads no environment variable and no configuration file
+    assert "--require-hashes" in cmd and "--no-deps" in cmd and "--no-compile" in cmd and "--target /out/site" in cmd
+    assert cmd.index("--only-binary :all:") < cmd.index("-r /def/requirements.txt")
+
+
+def make_index(tmp_path):
+    """A local, offline index: one package as a wheel and as an sdist, with the sha256 of each file."""
+    import hashlib
+    import tarfile
+    import zipfile
+    d = tmp_path / "index"
+    d.mkdir()
+    whl = d / "demo_pkg-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(whl, "w") as z:
+        z.writestr("demo_pkg/__init__.py", "X = 1\n")
+        z.writestr("demo_pkg-1.0.dist-info/METADATA", "Metadata-Version: 2.1\nName: demo-pkg\nVersion: 1.0\n")
+        z.writestr("demo_pkg-1.0.dist-info/WHEEL", "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+        z.writestr("demo_pkg-1.0.dist-info/RECORD", "")
+    src = tmp_path / "demo-pkg-1.0"
+    src.mkdir()
+    (src / "PKG-INFO").write_text("Metadata-Version: 2.1\nName: demo-pkg\nVersion: 1.0\n")
+    (src / "setup.py").write_text("raise SystemExit('the setup code ran')\n")
+    sdist = d / "demo-pkg-1.0.tar.gz"
+    with tarfile.open(sdist, "w:gz") as t:
+        t.add(src, arcname="demo-pkg-1.0")
+    sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()  # noqa: E731
+    return d, sha(whl), sha(sdist)
+
+
+def pip_install(tmp_path, index, line):
+    req = tmp_path / "req.txt"
+    req.write_text(line + "\n")
+    return subprocess.run([sys.executable, "-m", "pip", "--isolated", "install", "-q", "--no-deps", "--no-compile", "--require-hashes", "--only-binary", ":all:",
+                           "--no-index", "--find-links", str(index), "--target", str(tmp_path / "site"), "-r", str(req)],
+                          capture_output=True, text=True, timeout=120)
+
+
+def test_with_these_flags_a_wheel_with_its_hash_installs_and_an_sdist_line_does_not(tmp_path):
+    index, whl_sha, sdist_sha = make_index(tmp_path)
+    ok = pip_install(tmp_path, index, f"demo-pkg==1.0 --hash=sha256:{whl_sha}")
+    assert ok.returncode == 0, ok.stderr
+    assert (tmp_path / "site" / "demo_pkg" / "__init__.py").exists()
+    bad = pip_install(tmp_path / "second" if (tmp_path / "second").mkdir() is None else tmp_path, index, f"demo-pkg==1.0 --hash=sha256:{sdist_sha}")
+    assert bad.returncode != 0 and "setup code ran" not in bad.stderr + bad.stdout          # refused before any setup code could run
