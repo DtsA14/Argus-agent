@@ -17,7 +17,7 @@ Tiga PRD pertama jalan sebagai pilot dengan Atha membaca semuanya; tidak ada kla
 
 ## 2. Alur (terminal dulu; halaman chat belakangan, D5)
 
-1. `argus prd new --repo <nama> --message-file F [--key-file ...] [--yes]` (tanpa `--via`: `rj.VIA` mencatat keputusan UI, terminal tidak boleh mengklaimnya sampai D5). Job `kind: "prd"`. **Preflight tanpa model dan tanpa uang** (bagian 3.5) sebelum job dibuat. Repo dari `issue_writer.repos` (K2: tidak pernah Argus-agent), commit dibekukan, alat baca melihat salinan snapshot.
+1. `argus prd new --repo <nama> --message-file F [--key-file ...] [--yes]` (`--via ui` dibuka 2026-11-21 untuk PRD dari chat, D5, atas kata Atha "Gass bro" pada P2a SPEC_CHAT_MANAGER 15; hanya chat yang memberinya, dengan id berbentuk id harness). Job `kind: "prd"`. **Preflight tanpa model dan tanpa uang** (bagian 3.5) sebelum job dibuat. Repo dari `issue_writer.repos` (K2: tidak pernah Argus-agent), commit dibekukan, alat baca melihat salinan snapshot.
 2. Tiap giliran penulis menyerahkan `SubmitPRD` (bagian 3). Harness memeriksa; masalah dikembalikan ke model (batas submit, bagian 3.4).
 3. Giliran lolos: harness menulis folder `jobs/<id>/prd-wN/` (bagian 4.4) dan job menunggu Atha (`AWAITING_HUMAN`).
 4. `argus status <job>` untuk job `prd` mencetak balasan, PRD, tiap issue, touches/creates/clashes, temuan pemeriksa dan **baris persis `argus prd check <jalur mutlak folder>`**. Tidak ada `prd show` atau `prd abandon` terpisah (`argus abandon` dan `status` sudah ada; dua jalur = dua set tes kunci dan LEGAL). `argus prd reply <job> --message-file F [--rebase]` merevisi.
@@ -97,7 +97,7 @@ Teks repo dan percakapan adalah data. Model tidak pernah menulis ke disk; folder
 ## 10. Keputusan untuk Atha
 | | Pertanyaan | Usul Claude |
 |---|---|---|
-| D5 | Terminal dulu, atau halaman chat sekaligus? | **Terminal dulu**; halaman chat PR terpisah bila PRD tulisan model layak (halaman chat membawa permukaan serangan baru sebelum ada bukti kualitas) |
+| D5 | Terminal dulu, atau halaman chat sekaligus? | **Terminal dulu**; **dibuka 2026-11-21** (Atha "Gass bro": PRD dari chat, diketik manusia, jatah di batas harian, bukti kualitas dari pilot ledger-cli, ledger-browser, bulking-app); halaman chat PR terpisah bila PRD tulisan model layak (halaman chat membawa permukaan serangan baru sebelum ada bukti kualitas) |
 | D6 | Model penulis PRD | role `issue_writer` yang ada (Haiku 5.5); ganti hanya bila tiga PRD pertama lemah |
 | D7 | `max_items` | 5 (bukan 8): batas keluaran/token satu submit; naik setelah diukur |
 | D8 | Uang | giliran $0,30, job PRD $1,50 (tebakan; diukur lalu diset ulang) |

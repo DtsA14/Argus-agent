@@ -1,11 +1,11 @@
-"""The chat's actions, C2a (docs/reviews/SPEC_CHAT_APP.md, sections 1.3, 3 and 11): the issue writer, in two steps.
+"""The chat's actions (docs/reviews/SPEC_CHAT_APP.md, sections 1.3, 3, 11, 12, 13; SPEC_CHAT_MANAGER 13): the issue writer, a PRD job typed by the human, research, and the reject or abandon of a job, in two steps.
 
   prepare  builds the confirmation card from harness data (repository, commit, environment, caps, the issue text itself) and
            keeps the prepared action in memory under a random token. Nothing is run and nothing is spent.
   confirm  takes the token only. The server rebuilds the card from live data and refuses when it is not the one that was shown
            (the digest differs), when the daily exposure would pass its cap, or when it comes less than MIN_DELAY after prepare.
 
-The CLI does the work (`argus issue new|reply|start|abandon --via ui`), as for the control service on 8711: its job lock, its
+The CLI does the work (`argus issue new|reply|start|abandon`, `argus prd new`, `argus research`, each with --via ui), as for the control service on 8711: its job lock, its
 state gate and its sha check stay under it. This module holds no key (it passes a key file's path from its environment), runs
 no model and keeps its own state and audit directory, not the control service's (11.10, 11.14).
 """
@@ -31,6 +31,7 @@ from harness.events import parse_lines
 from models.registry import ConfigError
 from research.stages import QUESTION_MAX, QUESTION_MIN
 from router import job as rj
+from router import prd_job as pj
 from router import research as rr
 from router import stage_data as sd
 from router.control import cli as control_cli
@@ -43,7 +44,7 @@ WRITER_KEY_ENV = "ARGUS_CHAT_WRITER_KEY_FILE"
 RESEARCH_KEY_ENV = "ARGUS_CHAT_RESEARCH_KEY_FILE"   # research uses DeepSeek's own search and fetch API: its own key, when the code key is another provider's
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
-ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "job_reject", "job_abandon")   # never an approve (13.7 item 9)
+ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "job_reject", "job_abandon")   # never an approve (13.7 item 9)
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -104,6 +105,13 @@ def strict_json(raw):
     if not isinstance(d, dict):
         raise ValueError("not an object")
     return d
+
+
+def prd_cli(jobs_dir, queues_dir, key_file, *args):
+    """The argv of an `argus prd new ...` run from the chat (SPEC_CHAT_MANAGER 13.8): the queues directory (the repository's state check reads
+    it), --via ui, and never --ref, --rebase, --max-usd or --profile."""
+    return [sys.executable, str(rj.ROOT / "scripts" / "argus.py"), "--jobs-dir", str(jobs_dir), "--queues-dir", str(queues_dir), "prd", *args,
+            "--via", "ui", "--key-file", str(key_file), "--yes"]
 
 
 def research_cli(jobs_dir, key_file, *args):
@@ -413,6 +421,8 @@ class Actions:
         cfg = self.cfg
         if action == "research_new":
             return self.build_research(cfg, params)
+        if action == "prd_new":
+            return self.build_prd(cfg, params)
         w = cfg.get("issue_writer") or {}
         if not w:
             raise Refusal(409, "config", "the config has no issue writer")
@@ -630,9 +640,40 @@ class Actions:
         got = self._read_data(job_id)
         if got is None:
             return None
-        if got[0].get("kind") in ("issue", "prd"):          # a prd job is terminal-only until the chat page (SPEC_PRD_WRITER D5)
+        if got[0].get("kind") in ("issue", "prd"):          # a prd job is read only here: the writer's turns are started from the PRD form, its plan card is the Kartu tab (SPEC_PRD_WRITER D5, opened 2026-11-21)
             return {"id": job_id, "kind": got[0]["kind"], "state": got[0].get("state")}
         return self.decision_row(job_id, *got)
+
+    def build_prd(self, cfg, params):
+        """(card, run params) of a new PRD job typed by the human (SPEC_CHAT_MANAGER 13.8): exactly {repo, message}; the repo is one the
+        writer reads; the text under the PRD writer's own limits and no key-like or invisible text; the facts from the one function the
+        terminal's go-live screen reads (pj.screen_facts). No commit is shown: prepare runs no subprocess (11.10), the job freezes HEAD."""
+        if set(params) - {"repo", "message"}:
+            raise Refusal(400, "form", "a PRD job takes a repository and a message and nothing else")
+        repo, text = params.get("repo"), normalize(params.get("message") or "")
+        repos = (cfg.get("issue_writer") or {}).get("repos") or {}
+        if repo not in repos:
+            raise Refusal(400, "form", "that repository is not one the writer reads")
+        try:
+            why = pj.message_problem(cfg, text, first=True)
+            if why is None and scrub(text) != text:
+                why = "the message holds a key-like string or invisible characters"
+            if why:
+                raise Refusal(400, "form", why)
+            cap = float(pj._settings(cfg)["max_usd"])
+            pj._preflight(cfg, cap)
+            f = pj.screen_facts(cfg, repos[repo].get("environment"))
+        except rj.Refused as e:
+            raise Refusal(409, "config", strip_refused(str(e))) from None
+        except (KeyError, TypeError, ValueError, AttributeError, ConfigError):
+            raise Refusal(409, "config", "the PRD writer's configuration is not complete") from None
+        self._need_key(True)
+        card = {"action": "prd_new", "title": "Ask the PRD writer", "repo": repo, "environment": repos[repo].get("environment"),
+                "message": text, "commit": "HEAD when the job is created", "model": f["model"], "turn_cap_usd": f["turn_cap"],
+                "job_cap_usd": cap,
+                **({"runs_code": self.runs_code(cfg, repos[repo].get("environment"))["runs_code"]} if f["has_runner"] else {}),
+                "data_sent": "the repository's files and this conversation go to the model provider; do not put secrets in the message"}
+        return card, {"repo": repo, "message": text}
 
     def build_research(self, cfg, params):
         """(card, run params) of a new research job (12.2, 12.10 items 2, 7, 8, 12): everything the CLI's own go-live screen shows,
@@ -695,12 +736,13 @@ class Actions:
     # ---- exposure (11.8): the full cap of every job a UI action started, from the moment it was confirmed ---------------
 
     def exposure(self):
-        """USD of exposure in the last 24 hours: the writer jobs created via the UI (their max_usd) and the code jobs their
+        """USD of exposure in the last 24 hours: the writer, PRD and research jobs created via the UI (their max_usd, at least the configured cap of PRD and research) and the code jobs their
         starts made via the UI (the code cap), read from the job directories of any service, plus this service's own recent
         confirms the directories do not show yet. A job directory that cannot be read means the exposure is unknown: Refusal."""
         now = self.clock()
         total, seen = 0.0, set()
         rcap = self.research_cap()                 # read once: the config is loaded for every call
+        pcap = self.prd_cap()
         try:
             names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
         except OSError:
@@ -739,6 +781,16 @@ class Actions:
                 except (KeyError, TypeError, ValueError):
                     raise unknown from None
                 continue
+            if data.get("kind") == "prd":                     # SPEC_CHAT_MANAGER 13.2: a PRD job started via the UI is exposure too
+                try:
+                    for entry in data.get("log") or []:
+                        if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
+                                and parse_time(entry["at"]) >= now - DAY:
+                            total += max(float(data["max_usd"]), pcap)
+                            seen.add(("new", n))
+                except (KeyError, TypeError, ValueError):
+                    raise unknown from None
+                continue
             if data.get("kind") != "issue":
                 continue
             try:
@@ -753,10 +805,11 @@ class Actions:
                     seen.add(("start", n))
             except (KeyError, TypeError, ValueError):
                 raise unknown from None
-        for job_id, at in self.audited_research(now):        # the net under the directory count: a `via` lost from the CLI
-            if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
-                total += rcap
-                seen.add(("new", job_id))
+        for action, cap in (("research_new", rcap), ("prd_new", pcap)):
+            for job_id, at in self.audited_jobs(now, action):        # the net under the directory count: a `via` lost from the CLI
+                if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
+                    total += cap
+                    seen.add(("new", job_id))
         self.pending = [(at, key, usd) for at, key, usd in self.pending if now - at < PENDING_S]
         total += sum(usd for _, key, usd in self.pending if key not in seen)
         return total
@@ -767,8 +820,14 @@ class Actions:
         except (TypeError, ValueError):
             raise Refusal(503, "cap", "the daily exposure cannot be computed (the research cap is not a number)") from None
 
-    def audited_research(self, now):
-        """(job id, time) of the research jobs this chat started in the last 24 hours, from its own audit file."""
+    def prd_cap(self):
+        try:
+            return float((self.cfg.get("prd_writer") or {}).get("max_usd", 1.5))
+        except (TypeError, ValueError):
+            raise Refusal(503, "cap", "the daily exposure cannot be computed (the PRD cap is not a number)") from None
+
+    def audited_jobs(self, now, action="research_new"):
+        """(job id, time) of the jobs of this action (research, or a PRD) this chat started in the last 24 hours, from its own audit file."""
         try:
             with open(self.audit_path, "rb") as f:
                 f.seek(0, os.SEEK_END)
@@ -782,7 +841,7 @@ class Actions:
         for line in raw.decode("utf-8", "replace").splitlines():
             try:
                 r = json.loads(line)
-                if r.get("action") == "research_new" and r.get("ok") == "confirm" and UI_ID.fullmatch(str(r.get("job"))) \
+                if r.get("action") == action and r.get("ok") == "confirm" and UI_ID.fullmatch(str(r.get("job"))) \
                         and parse_time(r["at"]) >= now - DAY:
                     out.append((r["job"], parse_time(r["at"])))
             except (ValueError, KeyError, TypeError, AttributeError):
@@ -790,7 +849,7 @@ class Actions:
         return out
 
     def exposure_of(self, card):
-        if card["action"] in ("issue_new", "issue_start", "research_new"):
+        if card["action"] in ("issue_new", "issue_start", "research_new", "prd_new"):
             return float(card["job_cap_usd"])
         if card["action"] == "issue_reply" and not card.get("counted"):
             return float(card["turn_cap_usd"])           # a paid turn on a job whose creation the 24 hours do not hold
@@ -861,13 +920,21 @@ class Actions:
             if code != 0:
                 raise Refusal(409, "cli", strip_refused(line) or "the command failed")
             return {"job": rp["job"], "done": True}
-        key = self.key_file(a in ("issue_new", "issue_reply"), research=(a == "research_new"))
+        key = self.key_file(a in ("issue_new", "issue_reply", "prd_new"), research=(a == "research_new"))
         c = self.jobs_dir
         if a == "research_new":
             new_id = rj.new_job_id()
             message = self.spawner.message_file(rp["message"])
             argv = self.with_config(research_cli(c, key, "--question-file", str(message), "--job-id", new_id))
             self.spawner.spawn(new_id, argv, message, action="research", text=rp["message"])
+            self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))
+            return {"job": new_id, "started": True}
+        if a == "prd_new":
+            new_id = rj.new_job_id()
+            message = self.spawner.message_file(rp["message"])
+            argv = self.with_config(prd_cli(c, self.cards.queues_dir, key, "new", "--repo", rp["repo"], "--job-id", new_id,
+                                            "--message-file", str(message)))
+            self.spawner.spawn(new_id, argv, message, action="prd", text=rp["message"])
             self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))
             return {"job": new_id, "started": True}
         if a == "issue_new":
@@ -884,7 +951,9 @@ class Actions:
             if self.exposure_of(card):
                 self.pending.append((self.clock(), ("reply", rp["job"], self.clock()), self.exposure_of(card)))
             return {"job": rp["job"], "started": True}
-        argv = self.with_config(issue_cli(c, key, "start", "--sha", rp["sha"]) + ["--", rp["job"]])
-        self.spawner.spawn(rp["job"], argv, None, action="start")
-        self.pending.append((self.clock(), ("start", rp["job"]), self.exposure_of(card)))
-        return {"job": rp["job"], "started": True}
+        if a == "issue_start":
+            argv = self.with_config(issue_cli(c, key, "start", "--sha", rp["sha"]) + ["--", rp["job"]])
+            self.spawner.spawn(rp["job"], argv, None, action="start")
+            self.pending.append((self.clock(), ("start", rp["job"]), self.exposure_of(card)))
+            return {"job": rp["job"], "started": True}
+        raise Refusal(500, "action", "no such action is run here")     # SPEC_CHAT_MANAGER 13.9: an action without a branch never starts another one

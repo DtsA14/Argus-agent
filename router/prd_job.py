@@ -81,24 +81,40 @@ def _valid(job):
         raise rj.Refused(f"job {job.id}: job.json is not a PRD job's (a key is missing or of the wrong type); nothing was started")
 
 
-def _screen(job, cfg, what):
+def screen_facts(cfg, environment):
+    """The facts of the go-live screen that do not depend on a job: the model, the turn cap and whether example code runs in the
+    sandbox. The terminal's screen (_screen) and the chat's card (SPEC_CHAT_MANAGER 13.8) both read them from here, so they cannot drift."""
     s = _settings(cfg)
+    return {"model": cfg["roles"][s["role"]]["model"], "turn_cap": float(s["turn"]["cap_usd"]),
+            "has_runner": bool(iw.has_runner(cfg, environment))}
+
+
+def _screen(job, cfg, what):
     i = job.data["inputs"]
+    f = screen_facts(cfg, i["environment"])
     return "\n".join([
         f"PRD writer: {what} for job {job.id}",
         f"repository {i['repo_name']} at {i['commit'][:12]} (read-only copy), environment {i['environment']}",
-        f"model {cfg['roles'][s['role']]['model']}; turn cap ${float(s['turn']['cap_usd']):.2f}; "
+        f"model {f['model']}; turn cap ${f['turn_cap']:.2f}; "
         f"job cap ${job.data['max_usd']:.2f}, spent ${rj.spent_nano(job) / 1e9:.4f}",
         "the repository's files and the conversation go to the model provider",
         *[f"reference repository {r['name']} at {r['commit'][:12]}: its README.md and file list go to the model provider too (read only)" for r in job.data.get("refs") or ()],
         *(["example code written by the model RUNS in the sandbox (RunExample and the gate of the first issue: no network, the "
            f"repository read-only, image {str(job.data.get('environment_image'))[:19]}); the turn is no longer read-only"]
-          if iw.has_runner(cfg, i["environment"]) else [])])
+          if f["has_runner"] else [])])
 
 
-def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job_id=None, refs=()):
+def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job_id=None, refs=(), via=None):
     """A new PRD job with the human's first message, then the writer's first turn. Returns the job. refs: names of registered repositories whose README and file list
-    the writer reads as data (SPEC_PRD_REFS); read before anything is made, frozen in the job."""
+    the writer reads as data (SPEC_PRD_REFS); read before anything is made, frozen in the job. via: where it was started (SPEC_CHAT_MANAGER 13.3):
+    the chat's daily cap counts a job created via "ui", so an id given with it must be the exact shape of a harness id."""
+    if via is not None and via not in rj.VIA:
+        raise rj.Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was started")
+    if via is not None and job_id is not None:
+        from . import research as rr
+        why = rr.ui_job_id_problem(job_id, deps.clock())
+        if why:
+            raise rj.Refused(f"{why}; nothing was started")
     s = _settings(cfg)
     path, env = ri.repo_of(cfg, repo)
     why = message_problem(cfg, message, first=True)
@@ -113,7 +129,7 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
     _repo_state(cfg, repo, commit, queues_dir, jobs_dir)
     ref_data = prd_refs.read_all(cfg, refs, target=repo)
     job_id = job_id or rj.new_job_id()
-    if not rj.JOB_ID.match(job_id):
+    if not rj.JOB_ID.fullmatch(job_id):               # fullmatch: JOB_ID's `$` accepts a trailing newline (SPEC_CHAT_APP 12.10 item 9)
         raise rj.Refused(f"{job_id!r} is not a job id")
     job = rj.Job(Path(jobs_dir) / job_id)
     if job.file.exists():
@@ -125,7 +141,7 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
                     "inputs": {"repo": path, "repo_name": repo, "commit": commit, "environment": env},
                     "conversation": [{"from": "human", "at": deps.clock(), "text": message.strip()}],
                     "stages": {}, "log": [], "prd_turns": [], "queues_dir": str(queues_dir), **({"refs": ref_data} if ref_data else {})}
-        job.note(deps, "created", by=os.environ.get("USER"))
+        job.note(deps, "created", by=os.environ.get("USER"), **({"via": via} if via else {}))
         try:
             try:
                 ri._pin_environment(job, cfg)
