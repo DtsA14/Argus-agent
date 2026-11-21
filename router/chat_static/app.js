@@ -136,7 +136,7 @@
   }
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Lingkungan"], ["commit", "Commit"],
     ["turn", "Giliran"], ["turn_cap_usd", "Batas giliran"], ["job_cap_usd", "Batas job"], ["reason", "Alasan"],
-    ["profile", "Profil"], ["stage_models", "Model"], ["stage_caps", "Batas tahap"], ["web", "Web"], ["data_sent", "Data keluar"],
+    ["profile", "Profil"], ["model", "Model"], ["stage_models", "Model"], ["stage_caps", "Batas tahap"], ["web", "Web"], ["data_sent", "Data keluar"],
     ["free_models", "Model gratis"], ["runs_code", "Kode contoh"], ["kind", "Jenis"], ["job_title", "Judul"], ["sha12", "Draf"], ["spent_usd", "Biaya"], ["cap_usd", "Batas"]];
   var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1 };
   function fact(parent, label, value) {
@@ -180,7 +180,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Dijalankan"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
+        c.appendChild(el("p", "note", card.action === "prd_new" ? "PRD sedang ditulis (satu giliran). Hasilnya muncul di tab Kartu; menyetujui dan menjalankan antrean masih lewat terminal." : card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
         var close = el("button", null, "Tutup");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -193,7 +193,7 @@
           c.appendChild(el("p", "note", "Ditolak: " + e.message));
           no.disabled = false;
         } else {                                        // no answer: the server may have run it; do not prepare the same thing again blind
-          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar " + (card.action === "research_new" ? "riset" : (card.action.indexOf("job_") === 0 ? "keputusan" : "issue")) + " sebelum mencoba lagi."));
+          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar " + (card.action === "prd_new" ? "kartu" : card.action === "research_new" ? "riset" : (card.action.indexOf("job_") === 0 ? "keputusan" : "issue")) + " sebelum mencoba lagi."));
           no.disabled = false;
           if (card.action === "research_new") { loadResearch(); }
           else if (card.action.indexOf("job_") === 0) { loadDecisions(); }
@@ -238,6 +238,7 @@
       var c = renderCard(prep, function (r) {
         message.value = "";
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
+        if (mode === "prd") { return; }
         if (mode === "decide") { if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); } return; }
         loadIssues();
         if (r.job && mode === "issue") { showIssue(r.job, true); }
@@ -273,10 +274,10 @@
     return b;
   }
   function formState() {
-    var r = mode === "research";
+    var r = mode === "research", p = mode === "prd";
     repoSel.hidden = r || openIssue !== null;
-    document.getElementById("prepare").textContent = r ? "Siapkan riset" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru");
-    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : "Tulis pesan";
+    document.getElementById("prepare").textContent = r ? "Siapkan riset" : (p ? "Siapkan PRD" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru"));
+    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : (p ? "Tulis permintaan PRD: apa yang diubah dan kenapa (sampai 4000 karakter)" : "Tulis pesan");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
@@ -862,6 +863,7 @@
     openDecision = null;
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
+    else if (m === "prd") { openIssue = null; formState(); clear(stream); stream.appendChild(el("p", "muted", "Tulis permintaan di bawah untuk penulis PRD. Satu giliran; hasilnya muncul di tab Kartu.")); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else if (m === "cards") { loadCards(); renderCards(); }
@@ -875,6 +877,7 @@
     e.preventDefault();
     if (mode === "decide") { return; }
     if (mode === "research") { prepare({ action: "research_new", message: message.value }); }
+    else if (mode === "prd") { prepare({ action: "prd_new", repo: repoSel.value, message: message.value }); }
     else if (openIssue !== null) { prepare({ action: "issue_reply", job: openIssue, message: message.value }); }
     else { prepare({ action: "issue_new", repo: repoSel.value, message: message.value }); }
   });

@@ -283,7 +283,8 @@ def main(argv=None, deps=None):
         pn = psub.add_parser(name, help="the PRD writer: a conversation that writes a PRD folder (docs/reviews/SPEC_PRD_WRITER.md)")
         if name == "new":
             pn.add_argument("--repo", required=True, help="a name of issue_writer.repos in the config")
-            pn.add_argument("--job-id", help="the new job's id")
+            pn.add_argument("--job-id", help="the new job's id (with --via the exact shape of a harness id, now)")
+            pn.add_argument("--via", choices=rj.VIA, help="where the job was started (SPEC_CHAT_MANAGER 13.3: the chat's daily cap counts it)")
             pn.add_argument("--ref", action="append", default=[], metavar="REPO", help="a registered repository whose README.md and file list the writer reads as data (at most 2; docs/reviews/SPEC_PRD_REFS.md)")
         else:
             pn.add_argument("job")
@@ -568,7 +569,7 @@ def main(argv=None, deps=None):
                 message = o.message if o.message is not None else Path(o.message_file).read_text(encoding="utf-8")
                 if o.prd_cmd == "new":
                     job = pj.new(repo=o.repo, message=message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir,
-                                 queues_dir=o.queues_dir, job_id=o.job_id, refs=o.ref)
+                                 queues_dir=o.queues_dir, job_id=o.job_id, refs=o.ref, via=o.via)
                 else:
                     job = pj.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, queues_dir=o.queues_dir,
                                    rebase=o.rebase)

@@ -71,7 +71,8 @@ def test_an_enter_in_the_message_box_does_not_prepare_by_a_hidden_default():
 def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
-    assert JS.count("action:") == 7                                 # the reply is prepared from a button and from the composer; research_new from the composer
+    assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
+    assert JS.count("action:") == 8                                 # the reply is prepared from a button and from the composer; research_new and prd_new from the composer
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -205,7 +206,7 @@ def test_the_confirm_card_shows_the_go_live_screen_fields():
 
 
 def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden():
-    assert 'var r = mode === "research";' in JS and "Siapkan riset" in JS
+    assert 'var r = mode === "research", p = mode === "prd";' in JS and "Siapkan riset" in JS and "Siapkan PRD" in JS
     assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards";' in JS and 'query.hidden = m !== "status";' in JS
 
 
