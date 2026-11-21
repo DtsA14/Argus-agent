@@ -20,10 +20,10 @@ M = [
     ("a missing cap counts as zero", A, [('total += max(float(data["max_usd"]), rcap)', 'total += max(float(data.get("max_usd") or 0), 0)')], BACK),
     ("a research job without via counts", A, [('                        if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \\\n                                and parse_time(entry["at"]) >= now - DAY:\n                            total += max', '                        if isinstance(entry, dict) and entry.get("what") == "created" \\\n                                and parse_time(entry["at"]) >= now - DAY:\n                            total += max')], BACK),
     ("a research job older than a day counts", A, [('                        if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \\\n                                and parse_time(entry["at"]) >= now - DAY:\n                            total += max', '                        if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui":\n                            total += max')], BACK),
-    ("the audit net is dropped", A, [("for job_id, at in self.audited_research(now):", "for job_id, at in []:")], BACK),
+    ("the audit net is dropped", A, [("for job_id, at in self.audited_jobs(now, action):", "for job_id, at in []:")], BACK),
     ("the audit net counts old lines", A, [('and parse_time(r["at"]) >= now - DAY:\n                    out.append', 'and True:\n                    out.append')], BACK),
-    ("the audit net counts any action", A, [('if r.get("action") == "research_new" and r.get("ok") == "confirm"', 'if r.get("ok") == "confirm"')], BACK),
-    ("the audit net counts attempts", A, [('r.get("action") == "research_new" and r.get("ok") == "confirm"', 'r.get("action") == "research_new"')], BACK),
+    ("the audit net counts any action", A, [('if r.get("action") == action and r.get("ok") == "confirm"', 'if r.get("ok") == "confirm"')], BACK),
+    ("the audit net counts attempts", A, [('r.get("action") == action and r.get("ok") == "confirm"', 'r.get("action") == action')], BACK),
     ("the audit net counts a job already seen", A, [('            if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):\n                total += rcap', '            if True:\n                total += rcap')], BACK),
     ("an unreadable audit is zero", A, [('        except OSError:\n            raise Refusal(503, "cap", "the daily exposure cannot be computed (the audit cannot be read)") from None', '        except OSError:\n            return []')], BACK),
     # ---- the card and its gates

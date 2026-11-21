@@ -180,7 +180,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Dijalankan"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.action === "prd_new" ? "PRD sedang ditulis (satu giliran). Hasilnya muncul di tab Kartu; menyetujui dan menjalankan antrean masih lewat terminal." : card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
+        c.appendChild(el("p", "note", card.action === "prd_new" ? "PRD sedang ditulis (satu giliran). Hasilnya muncul di tab Kartu. Penolakan sebelum job dibuat (antrean menunggu, repo berubah) hanya terlihat di terminal. Menyetujui dan menjalankan antrean masih lewat terminal." : card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
         var close = el("button", null, "Tutup");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -275,13 +275,14 @@
   }
   function formState() {
     var r = mode === "research", p = mode === "prd";
-    repoSel.hidden = r || openIssue !== null;
+    repoSel.hidden = r || (!p && openIssue !== null);
     document.getElementById("prepare").textContent = r ? "Siapkan riset" : (p ? "Siapkan PRD" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru"));
-    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : (p ? "Tulis permintaan PRD: apa yang diubah dan kenapa (sampai 4000 karakter)" : "Tulis pesan");
+    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : (p ? "Tulis permintaan PRD: apa yang diubah dan kenapa" : "Tulis pesan");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
     get("/api/issues/" + encodeURIComponent(id)).then(function (d) {
+      if (mode === "prd") { return; }                   // the user moved to the PRD form while this was read: draw nothing
       openIssue = id;
       formState();
       clear(stream);
@@ -863,7 +864,7 @@
     openDecision = null;
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
-    else if (m === "prd") { openIssue = null; formState(); clear(stream); stream.appendChild(el("p", "muted", "Tulis permintaan di bawah untuk penulis PRD. Satu giliran; hasilnya muncul di tab Kartu.")); }
+    else if (m === "prd") { openIssue = null; formState(); loadIssues(); clear(stream); stream.appendChild(el("p", "muted", "Tulis permintaan di bawah untuk penulis PRD. Satu giliran; hasilnya muncul di tab Kartu.")); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else if (m === "cards") { loadCards(); renderCards(); }

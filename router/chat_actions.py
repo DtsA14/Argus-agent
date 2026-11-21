@@ -1,11 +1,11 @@
-"""The chat's actions, C2a (docs/reviews/SPEC_CHAT_APP.md, sections 1.3, 3 and 11): the issue writer, in two steps.
+"""The chat's actions (docs/reviews/SPEC_CHAT_APP.md, sections 1.3, 3, 11, 12, 13; SPEC_CHAT_MANAGER 13): the issue writer, a PRD job typed by the human, research, and the reject or abandon of a job, in two steps.
 
   prepare  builds the confirmation card from harness data (repository, commit, environment, caps, the issue text itself) and
            keeps the prepared action in memory under a random token. Nothing is run and nothing is spent.
   confirm  takes the token only. The server rebuilds the card from live data and refuses when it is not the one that was shown
            (the digest differs), when the daily exposure would pass its cap, or when it comes less than MIN_DELAY after prepare.
 
-The CLI does the work (`argus issue new|reply|start|abandon --via ui`), as for the control service on 8711: its job lock, its
+The CLI does the work (`argus issue new|reply|start|abandon`, `argus prd new`, `argus research`, each with --via ui), as for the control service on 8711: its job lock, its
 state gate and its sha check stay under it. This module holds no key (it passes a key file's path from its environment), runs
 no model and keeps its own state and audit directory, not the control service's (11.10, 11.14).
 """
@@ -640,7 +640,7 @@ class Actions:
         got = self._read_data(job_id)
         if got is None:
             return None
-        if got[0].get("kind") in ("issue", "prd"):          # a prd job is terminal-only until the chat page (SPEC_PRD_WRITER D5)
+        if got[0].get("kind") in ("issue", "prd"):          # a prd job is read only here: the writer's turns are started from the PRD form, its plan card is the Kartu tab (SPEC_PRD_WRITER D5, opened 2026-11-21)
             return {"id": job_id, "kind": got[0]["kind"], "state": got[0].get("state")}
         return self.decision_row(job_id, *got)
 
@@ -736,7 +736,7 @@ class Actions:
     # ---- exposure (11.8): the full cap of every job a UI action started, from the moment it was confirmed ---------------
 
     def exposure(self):
-        """USD of exposure in the last 24 hours: the writer jobs created via the UI (their max_usd) and the code jobs their
+        """USD of exposure in the last 24 hours: the writer, PRD and research jobs created via the UI (their max_usd, at least the configured cap of PRD and research) and the code jobs their
         starts made via the UI (the code cap), read from the job directories of any service, plus this service's own recent
         confirms the directories do not show yet. A job directory that cannot be read means the exposure is unknown: Refusal."""
         now = self.clock()
@@ -806,7 +806,7 @@ class Actions:
             except (KeyError, TypeError, ValueError):
                 raise unknown from None
         for action, cap in (("research_new", rcap), ("prd_new", pcap)):
-            for job_id, at in self.audited_research(now, action):        # the net under the directory count: a `via` lost from the CLI
+            for job_id, at in self.audited_jobs(now, action):        # the net under the directory count: a `via` lost from the CLI
                 if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
                     total += cap
                     seen.add(("new", job_id))
@@ -826,7 +826,7 @@ class Actions:
         except (TypeError, ValueError):
             raise Refusal(503, "cap", "the daily exposure cannot be computed (the PRD cap is not a number)") from None
 
-    def audited_research(self, now, action="research_new"):
+    def audited_jobs(self, now, action="research_new"):
         """(job id, time) of the jobs of this action (research, or a PRD) this chat started in the last 24 hours, from its own audit file."""
         try:
             with open(self.audit_path, "rb") as f:

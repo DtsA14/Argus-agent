@@ -132,8 +132,8 @@ def test_a_failed_fetch_is_not_shown_as_a_refusal():
 
 
 def test_the_form_says_whether_it_makes_a_new_issue_or_a_reply():
-    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || openIssue !== null" in JS
-    assert re.search(r'encodeURIComponent\(id\)\)\.then\(function \(d\) \{\n\s+openIssue = id;', JS)      # set when the thread was read, not before
+    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || (!p && openIssue !== null)" in JS
+    assert re.search(r'encodeURIComponent\(id\)\)\.then\(function \(d\) \{\n(\s+if \(mode === "prd"\) \{ return; \}[^\n]*\n)?\s+openIssue = id;', JS)      # set when the thread was read, not before (nothing drawn if the user moved to the PRD form)
 
 
 def test_a_prepare_answered_after_the_user_moved_on_is_dropped():
@@ -317,3 +317,8 @@ def test_the_poll_does_not_redraw_the_decision_list_while_a_reason_is_typed_or_f
 
 def test_the_empty_hint_of_a_decision_card_is_a_status_region():
     assert 'hint.setAttribute("role", "status");' in decide_part()
+
+
+def test_the_prd_form_fills_the_repository_list_and_hides_nothing():
+    assert 'else if (m === "prd") { openIssue = null; formState(); loadIssues();' in JS      # the list is filled in this mode, not only in Issue mode
+    assert 'prepare({ action: "prd_new", repo: repoSel.value, message: message.value })' in JS

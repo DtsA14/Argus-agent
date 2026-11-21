@@ -56,6 +56,8 @@ def test_prepare_shows_the_screen_facts_and_runs_nothing(svc):
     assert card["action"] == "prd_new" and card["repo"] == REPO and card["message"] == MSG
     assert card["model"] == f["model"] and card["turn_cap_usd"] == f["turn_cap"]            # one function for the screen and the card
     assert card["job_cap_usd"] == float(BASE["prd_writer"]["max_usd"]) and card["commit"] == "HEAD when the job is created"
+    pw = BASE["prd_writer"]
+    assert card["model"] == BASE["roles"][pw["role"]]["model"] and card["turn_cap_usd"] == float(pw["turn"]["cap_usd"])    # and from the config itself
     assert ("runs_code" in card) == f["has_runner"]
     assert out["exposure_usd"] == card["job_cap_usd"]
 
@@ -107,10 +109,17 @@ def test_confirm_starts_prd_new_with_the_flags_the_chat_owns(svc):
     assert argv[argv.index("--via") + 1] == "ui" and argv[argv.index("--job-id") + 1] == out["job"]
     assert argv[argv.index("--key-file") + 1] == t.WKEY and "--yes" in argv                # the writer's key slot, not the code key
     assert argv[argv.index("--repo") + 1] == REPO and "--message-file" in argv and MSG not in " ".join(argv)
-    assert "--queues-dir" in argv and argv.index("--queues-dir") < argv.index("prd")        # the repository's state check reads the queues
+    assert argv[argv.index("--queues-dir") + 1] == str(svc.actions.cards.queues_dir) and argv.index("--queues-dir") < argv.index("prd")
     for never in ("--ref", "--rebase", "--max-usd", "--profile"):
         assert never not in argv
     assert call["text"] == MSG
+
+
+def test_a_config_change_between_prepare_and_confirm_is_refused_and_runs_nothing(svc):
+    token = prep(svc)[1]["token"]
+    svc.actions._cfg["prd_writer"]["max_usd"] = float(svc.actions._cfg["prd_writer"]["max_usd"]) - 0.1     # what the card showed changed
+    status, out = svc.confirm(token)
+    assert status == 409 and out["refused"] and svc.spawner.calls == []
 
 
 def test_a_token_works_once_and_confirm_rebuilds_the_card(svc):
@@ -128,6 +137,12 @@ def test_a_prd_job_started_from_the_ui_counts_as_exposure(svc):
     assert svc.actions.exposure() == pytest.approx(float(BASE["prd_writer"]["max_usd"]))
 
 
+def test_the_24_hour_window_of_a_prd_job_is_its_creation_not_its_name(svc):
+    make_prd(svc.jobs, "j20261114_162000_aaaa", created=t.NOW - 3600 * 30)        # named inside 48 hours, created 30 hours ago
+    make_prd(svc.jobs, "j20261115_100000_bbbb", created=t.NOW - 3600 * 12)
+    assert svc.actions.exposure() == pytest.approx(float(BASE["prd_writer"]["max_usd"]))
+
+
 def test_a_prd_job_counts_at_least_the_configured_cap(svc):
     make_prd(svc.jobs, "j20261115_100000_aaaa", max_usd=0.1)
     assert svc.actions.exposure() == pytest.approx(float(BASE["prd_writer"]["max_usd"]))
@@ -139,6 +154,15 @@ def test_the_audit_net_counts_a_confirmed_prd_job_whose_via_is_missing(svc):
     svc.actions.pending.clear()                                               # what a restart forgets
     make_prd(svc.jobs, job, via=None, created=t.NOW)                           # the CLI wrote a job but lost its `via`
     assert svc.actions.exposure() == pytest.approx(float(BASE["prd_writer"]["max_usd"]))
+
+
+def test_a_confirmed_prd_job_is_counted_once_by_pending_directory_and_audit(svc):
+    token = prep(svc)[1]["token"]
+    job = svc.confirm(token)[1]["job"]
+    cap = float(BASE["prd_writer"]["max_usd"])
+    assert svc.actions.exposure() == pytest.approx(cap)                        # pending and audit, no directory yet
+    make_prd(svc.jobs, job, created=t.NOW)                                     # the CLI's job appears: still one job
+    assert svc.actions.exposure() == pytest.approx(cap)
 
 
 def test_a_prd_is_refused_when_the_cap_would_be_passed(svc):
@@ -163,11 +187,20 @@ def test_an_unknown_action_is_never_dispatched_to_issue_start(svc):
     assert e.value.status == 500 and svc.spawner.calls == []
 
 
-def test_every_action_has_a_branch_in_execute(svc):
-    import inspect
-    src = inspect.getsource(ca.Actions.execute)
-    for a in ca.ACTIONS:
-        assert f'"{a}"' in src, a
+@pytest.mark.parametrize("sub,body", [
+    ("prd", {"action": "prd_new", "repo": REPO, "message": MSG}),
+    ("issue", {"action": "issue_new", "repo": REPO, "message": MSG}),
+    ("research", {"action": "research_new", "message": "Apa perbedaan utama antara Python 3.13 dan 3.14 dalam hal kinerja?"})])
+def test_each_new_job_action_starts_its_own_subcommand_and_nothing_else(tmp_path, sub, body):
+    s = t.Service(tmp_path, cfg=config())
+    try:
+        status, out = s.prepare(**body)
+        assert status == 200, out
+        assert s.confirm(out["token"])[0] == 200
+        (call,) = s.spawner.calls
+        assert [a for a in ("prd", "issue", "research") if a in call["argv"]] == [sub]
+    finally:
+        s.stop()
 
 
 # ---- the CLI side: --via, the id, the screen -------------------------------------------------------------------------------
@@ -216,3 +249,22 @@ def test_the_terminal_screen_reads_the_same_facts_as_the_chat_card(tmp_path):
     f = pj.screen_facts(env.cfg, w.ENV)
     text = pj._screen(job, env.cfg, "first turn")
     assert f"model {f['model']}; turn cap ${f['turn_cap']:.2f}" in text
+
+
+def test_the_cli_passes_via_and_the_id_to_the_job_and_refuses_an_unknown_via(monkeypatch, tmp_path):
+    import argus
+    seen = {}
+
+    class J:
+        id = "jx"
+        data = {"state": pj.AWAITING_HUMAN}
+
+    monkeypatch.setattr(pj, "new", lambda **kw: seen.update(kw) or J)
+    monkeypatch.setattr(rj, "status", lambda *a, **k: "status")
+    base = ["--jobs-dir", str(tmp_path / "jobs"), "prd", "new", "--repo", "demo", "--message", "m"]
+    assert argus.main([*base, "--via", "ui", "--job-id", "j20261116_120000_ab12"]) == 0
+    assert seen["via"] == "ui" and seen["job_id"] == "j20261116_120000_ab12"
+    seen.clear()
+    assert argus.main(base) == 0 and seen["via"] is None
+    with pytest.raises(SystemExit):
+        argus.main([*base, "--via", "elsewhere"])

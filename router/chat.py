@@ -1,4 +1,4 @@
-"""The chat app of the phone (docs/reviews/SPEC_CHAT_APP.md, sections 3, 11, 12, 13): the jobs' state, the issue writer, research, and
+"""The chat app of the phone (docs/reviews/SPEC_CHAT_APP.md, sections 3, 11, 12, 13): the jobs' state, the issue writer, a PRD job typed by the human (P2a), research, and
 the reject and abandon of a job, all through GET reads and the two POST routes prepare and confirm.
 
   argus chat serve [--port 8711|8712]   forever, on 127.0.0.1 only (systemd --user argus-chat); 8712 while it is built, 8711 after C4b
@@ -42,7 +42,7 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "73bb8127bbaca5c0ec83de89c54992ff446a285474d16a70c51090a6d6b0519f",
-    "app.js": "0941679310d001aa37f827a4dacca0fb54e54c337b2869c89fd8d73b02d62229",
+    "app.js": "fcd1f495de4411bc30971f61c6d0404818be369ee9f617d7eb53205c77fc37c3",
     "app.css": "dfebd9fc195499c15efceb00ed08abdcef4e23647b283333af7bd183fcb28d1f",
 }
 
