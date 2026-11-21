@@ -68,8 +68,10 @@ def test_no_colour_or_class_comes_from_a_number_or_from_the_cost_ratio():
 
 
 def test_the_cards_still_have_no_button_that_decides_anything():
-    assert re.findall(r'el\("button", null, "([^"]+)"', BLOCK) == ["Semua kartu"] and re.findall(r'\{ text: "([^"]+)", fn:', BLOCK) == ["Kartu teknis"]
-    assert not re.search(r'method:\s*"POST"|\.post\(', BLOCK) and "prepare(" not in BLOCK
+    # SPEC_CHAT_T4A: the plan card has one live button ("Setujui rencana", prepared with the job id only) and one disabled placeholder; nothing else decides
+    assert re.findall(r'el\("button", null, "([^"]+)"', BLOCK) == ["Semua kartu", "Jalankan antrean (belum aktif)"] and re.findall(r'\{ text: "([^"]+)", fn:', BLOCK) == ["Kartu teknis"]
+    assert re.findall(r'el\("button", "go", "([^"]+)"', BLOCK) == ["Setujui rencana"]
+    assert not re.search(r'method:\s*"POST"|\.post\(', BLOCK) and BLOCK.count("prepare(") == 1 and 'prepare({ action: "prd_approve", job: id })' in BLOCK
 
 
 def test_the_request_is_labelled_atha_only_when_the_server_says_it_came_through_the_chat():
