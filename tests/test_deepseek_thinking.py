@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 def thinking_cfg():
     c = load_config()
+    c["roles"]["drafter"]["model"] = "deepseek:deepseek-flash"     # the direct API (the config now routes coder and drafter through OpenRouter)
     c["roles"]["drafter"]["params"] = {"extra_body": {"thinking": {"type": "enabled"}}}
     return c
 
