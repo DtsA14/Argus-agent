@@ -9,8 +9,10 @@
 
 The queue's status is never stored: it is derived from the items' job.json each time (PENDING, WAITING, STOPPED, DONE,
 CLOSED). Stored are the repository, the commit, the money, the issues (their text, written once) and the approval.
-Money: a job that can still spend counts at its whole cap, so the total never passes max_usd (a judge can still spend
-on an APPLIED or REJECTED job, a failed one can be retried); only ABANDONED, BLOCKED and REVIEW_INVALID count what they spent.
+Money: a job that can still spend (a live one, a failed one that can be retried, a REJECTED one not yet retired) counts at its whole cap;
+ABANDONED, BLOCKED, REVIEW_INVALID and APPLIED count what they spent (SPEC_QUEUE_MONEY). So max_usd bounds what the queue's own steps
+can start. A judge run later by the human on an APPLIED or retired job spends under that job's own cap (up to $0.30) and is counted once
+it has happened: it can take the total past max_usd by that much, never by more.
 """
 import fcntl
 import hashlib
@@ -40,7 +42,7 @@ RUNNING_NEXT = "NEXT"           # derive's answer when the next item can start (
 FAILED = (rj.DRAFT_FAILED, rj.AGENT_FAILED, rj.REVIEW_INVALID, rj.BLOCKED, rj.REJECTED, rj.ABANDONED,
           rj.RESEARCH_INCONCLUSIVE, rj.RESEARCH_FAILED)
 LIVE = (rj.NEW, rj.DRAFTING, rj.AWAITING_APPROVAL, rj.AGENT_RUNNING, rj.REVIEW_READY)
-SPENT_ONLY = (rj.ABANDONED, rj.BLOCKED, rj.REVIEW_INVALID)      # states that cannot spend again (LEGAL, JUDGEABLE)
+SPENT_ONLY = (rj.ABANDONED, rj.BLOCKED, rj.REVIEW_INVALID, rj.APPLIED)      # hold only what they spent: no step of the queue spends on them again (a human's judge is counted when it happens)
 
 
 class Refused(rj.Refused):
