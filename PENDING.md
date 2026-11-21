@@ -97,15 +97,15 @@ ia masuk "Ditunda sampai ada bukti kebutuhan".
 
 ### Keputusan Atha yang ditunggu
 
-- [ ] **GATE-10** (tidak darurat, 2026-11-14): P1 memindai tes yang ditulis agen sendiri dengan pola deteksi, sehingga tes jujur yang
+- [x] **GATE-10** (**Atha 2026-11-21: biarkan** — tidak diperbaiki sampai mengganggu pekerjaan nyata; tidak darurat, 2026-11-14): P1 memindai tes yang ditulis agen sendiri dengan pola deteksi, sehingga tes jujur yang
   menyebut `sys.modules` dan `pytest` berakhir `FAILED_ACCEPTANCE` tanpa retry. Usul Opus: persempit sedikit (sekitar 15 baris,
   jalur ketat). Risiko kecil; ditunda (arsip, butir "Fase 3 dan batch kedua").
-- [ ] **Probe aplikasi dari nol** (`docs/reviews/FABLE_GREENFIELD_PROBE_PROPOSAL.md`): aplikasinya dan "ok"; saran Fable dan Claude:
+- [x] **Probe aplikasi dari nol** (**Atha 2026-11-21: tutup** — sebagian terjawab oleh pilot ledger-cli; proyek baru nyata Atha kelak jadi probenya) (`docs/reviews/FABLE_GREENFIELD_PROBE_PROPOSAL.md`): aplikasinya dan "ok"; saran Fable dan Claude:
   sesudah eksperimen repo luar.
-- [ ] **Riset 2026-11-16 terhadap aturan "pekerjaan riset baru tidak dimulai":** satu job riset (aturan ARB/ARA BEI) dan pilot
+- [x] **Riset 2026-11-16 terhadap aturan "pekerjaan riset baru tidak dimulai"** (**Atha 2026-11-21: pengecualian**, bukan jatah hari eksplorasi): satu job riset (aturan ARB/ARA BEI) dan pilot
   research → issue → kode dijalankan 2026-11-16. Tidak tercatat apakah itu jatah hari eksplorasi (1 hari per minggu) atau pengecualian;
   Atha yang menentukan, supaya aturan main arah tetap bisa dipegang.
-- [ ] **Port 443 mesin ini dibuka ke luar untuk backend athena** (2026-11-16, lihat "Pekerjaan operasional"): catatan Claude: ini
+- [x] **Port 443 mesin ini dibuka ke luar untuk backend athena** (**Atha 2026-11-21: tutup lagi; dilakukan Claude hari itu**, lihat "Pekerjaan operasional") (2026-11-16, lihat "Pekerjaan operasional"): catatan Claude: ini
   menyentuh pemicu "M9 production" (akses tanpa Termius) yang tercatat ditunda dengan spek dan persetujuan terpisah. Athena bukan
   staging Argus, jadi mungkin memang di luar aturan itu; Atha yang menentukan, dan security list Oracle belum diperiksa.
 
@@ -318,7 +318,7 @@ titik cek.
 ## Pekerjaan operasional (Atha, di luar repo)
 
 - [ ] **Periksa ulang aturan ARB/ARA BEI pada 2 Januari 2027** (research 2026-11-16, `jobs/j20261116_081333_0a18/REPORT.md`): ARB 7% (dan Rp11-14 jadi Rp1) hanya berlaku sampai 31 Desember 2026 menurut OJK; apa yang berlaku mulai 2027 tidak jelas (satu judul Katadata menyebut ARB 35%). `DEFAULT_SLIPPAGE_BUFFER_PCT = 0.15` di athena sengaja tidak diubah sampai itu jelas. Sumber primer (idx.co.id) belum ditemukan; semua angka masih dari media dan sekuritas.
-- [ ] **Firewall mesin ini, port 443 (2026-11-16):** `/etc/iptables/rules.v4` kini memuat `ACCEPT tcp 443` (sebelumnya tidak ada; backend athena tidak terjangkau dari luar sampai itu dibuka, PWA memberi `no-response`). Cadangan berkas lama: `/tmp/claude-1001/rules.v4.bak-20261116` (hilang bila /tmp dibersihkan; **pindahkan ke tempat yang awet**). Belum diuji lewat boot ulang; security list di konsol Oracle tidak diperiksa.
+- [x] **Firewall mesin ini, port 443 (2026-11-16, ditutup lagi 2026-11-21 atas kata Atha "Tutup lagi"):** aturan `ACCEPT tcp 443` dicabut dari iptables yang hidup dan dari `/etc/iptables/rules.v4` (cadangan sebelum perubahan: `/etc/iptables/rules.v4.bak-20261121-port443`); aturan SSH (22) tidak disentuh dan masih mendengarkan; nginx tetap hidup di mesin (443 lokal masih menjawab) tetapi tidak terjangkau dari luar. **Akibatnya:** backend athena dan PWA-nya tidak terjangkau dari internet lagi (dikehendaki Atha). **Catatan:** port **80** masih terbuka di firewall (nginx); tidak disebut Atha, tidak disentuh, perlu keputusan bila mau ditutup juga. Cadangan lama 2026-11-16 di `/tmp` sudah tidak relevan. Belum diuji lewat boot ulang (aturan file sudah konsisten dengan yang hidup); security list Oracle tidak diperiksa (seharusnya lebih ketat atau sama).
 
 - [ ] **Kunci HP di `authorized_keys` VM**: baris `iphone-viewer` (`restrict,port-forwarding,permitopen=...`); dicatat agar dicabut
   bila HP hilang. Backup: `~/.ssh/authorized_keys.bak-20261114-chat`.
