@@ -309,7 +309,7 @@ def test_the_paid_checker_asks_for_low_reasoning_effort_alongside_the_gateway_pi
     assert c["roles"]["or_deepseek"].get("params") is None          # the other paid research stages are unchanged
 
 
-def test_the_paid_deepseek_pin_puts_baidu_first_then_deepinfra_and_morph_behind_it():   # Atha 2026-11-21
+def test_the_paid_deepseek_pin_keeps_deepinfra_first_and_morph_only_behind_it():
     # pilots/e1_morph_v0 (Atha 2026-11-07): Morph matched the reference 55/60, mostly lenient, so it is only a backup
     from models import gateway
     from models.registry import ModelRef
@@ -317,5 +317,5 @@ def test_the_paid_deepseek_pin_puts_baidu_first_then_deepinfra_and_morph_behind_
     for role in ("or_deepseek", "or_deepseek_checker"):
         r = c["roles"][role]
         p = gateway.request_params(c, ModelRef.parse(r["model"]), r.get("params") or {})["extra_body"]["provider"]
-        assert p["order"] == p["only"] == ["baidu/fp8", "deepinfra/fp8", "morph/fp8"] and p["allow_fallbacks"] is False
-        assert p["data_collection"] == "deny" and p["max_price"] == {"prompt": 0.30, "completion": 1.20}
+        assert p["order"] == p["only"] == ["deepinfra/fp8", "morph/fp8"] and p["allow_fallbacks"] is False
+        assert p["data_collection"] == "deny" and p["max_price"] == {"prompt": 0.20, "completion": 0.60}

@@ -193,7 +193,7 @@ def test_deepseek_gets_its_own_input_limit_and_sonnet_keeps_the_profiles():
     c = load_config()
     by_model = c["code_task"]["max_input_tokens_by_model"]
     assert by_model == {"deepseek:deepseek-flash": 60000, "deepseek:deepseek-v4-pro": 60000,
-                        "openrouter:deepseek/deepseek-v4.1-flash": 60000}
+                        "openrouter:deepseek/deepseek-v4.1-flash-1017": 60000}
     assert c["code_task"]["context_notice_at"] == 0.7
     for model, want in (("deepseek:deepseek-flash", 60000), ("deepseek:deepseek-v4-pro", 60000),
                         ("anthropic:claude-sonnet-5-5", 40000)):
@@ -278,7 +278,7 @@ def test_deepseek_gets_a_larger_reply_on_usd_profiles_only_and_sonnet_keeps_its_
     c = load_config()
     assert c["code_task"]["max_output_tokens_by_model"] == {"deepseek:deepseek-flash": 32000,
                                                             "deepseek:deepseek-v4-pro": 32000,
-                                                            "openrouter:deepseek/deepseek-v4.1-flash": 32000}
+                                                            "openrouter:deepseek/deepseek-v4.1-flash-1017": 32000}
     for model, profile, want in (("deepseek:deepseek-flash", "large_usd", 32000),
                                  ("deepseek:deepseek-v4-pro", "large_usd", 32000),
                                  ("deepseek:deepseek-flash", "large", 8192),        # a token profile: unchanged

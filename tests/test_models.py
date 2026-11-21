@@ -168,7 +168,7 @@ def test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries(keys):
 
 
 def test_the_coder_and_drafter_go_through_the_pinned_gateway_model_and_the_direct_class_still_sends_reasoning_back(keys):
-    # 2026-11-21 (Atha: the DeepSeek balance ran out): coder and drafter are the V4.1 Flash on OpenRouter, pinned (Baidu
+    # 2026-11-21 (Atha: the DeepSeek balance ran out): coder and drafter are the V4.1 Flash 1017 on OpenRouter, pinned (DeepInfra
     # first). The direct API stays supported by deepseek_class(), which with tools in thinking mode sends every earlier
     # reasoning_content back (HTTP 400 otherwise); the gateway class does not, so a many-step tool run there is only
     # shown by a live job.
@@ -176,10 +176,10 @@ def test_the_coder_and_drafter_go_through_the_pinned_gateway_model_and_the_direc
     from models.registry import deepseek_class
     cfg = load_config()
     for role in ("coder", "drafter"):
-        assert cfg["roles"][role]["model"] == "openrouter:deepseek/deepseek-v4.1-flash"
+        assert cfg["roles"][role]["model"] == "openrouter:deepseek/deepseek-v4.1-flash-1017"
         model = build_chat_model(cfg, role)
         assert type(model) is gateway.chat_class(), role
-        assert model.extra_body["provider"]["order"] == ["baidu/fp8", "deepinfra/fp8", "morph/fp8"], role
+        assert model.extra_body["provider"]["order"] == ["deepinfra/fp8", "morph/fp8"], role
     direct = {**cfg, "roles": {**cfg["roles"], "drafter": {**cfg["roles"]["drafter"], "model": "deepseek:deepseek-flash",
                                                           "params": {"extra_body": {"thinking": {"type": "enabled"}}}}}}
     model = build_chat_model(direct, "drafter")
