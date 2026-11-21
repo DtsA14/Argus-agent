@@ -7,6 +7,7 @@ from pathlib import Path
 WT, PY = Path(sys.argv[1]), sys.argv[2]
 P, A, C, Q, R, S = "router/chat_plan.py", "router/chat_actions.py", "router/chat.py", "router/queue.py", "router/reason.py", "scripts/argus.py"
 T = ["-rfEs", "tests/test_chat_plan.py", "tests/test_chat_actions.py", "tests/test_chat_prd_new.py", "tests/test_apply_cmd.py", "tests/test_queue.py"]
+# Result 2026-11-21: 54/55 killed; the one survivor, "the plan approval dir is the client's", is equivalent (a `dir` param is a 400 before the line is reached).
 M = [
     ("an approved queue can be approved again", P, [('        if q.get("approved"):\n            raise self._no(409, "queue", f"queue {q[\'id\']} is already approved")\n        if not ok:', '        if not ok:')]),
     ("M8 accepts concerns", P, [('if i["read"] not in ("ok", "tidak_berlaku")]\n        if bad:', 'if i["read"] not in ("ok", "tidak_berlaku", "concerns")]\n        if bad:')]),

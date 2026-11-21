@@ -668,3 +668,34 @@ def test_the_reason_file_must_be_utf8_text_of_four_kilobytes_at_most(tmp_path):
         argus._read_reason_file(str(f))
     f.write_text("a reason that is long enough")
     assert argus._read_reason_file(str(f)) == "a reason that is long enough"
+
+
+# ---- mutant survivors ---------------------------------------------------------------------------------------------------------------
+
+def test_a_confirmed_queue_go_counts_from_pending_even_without_an_audit_line(svc):
+    setup(svc)
+    token = prep_go(svc, ack="1,2")[1]["token"]
+    assert svc.confirm(token)[0] == 200
+    svc.actions.audit_path.rename(svc.actions.audit_path.with_suffix(".gone"))     # the net is gone: only the pending list is left
+    assert svc.actions.exposure() == pytest.approx(2.0)
+
+
+def test_a_refused_queue_go_leaves_no_exposure_though_its_attempt_line_is_in_the_audit(svc):
+    setup(svc)
+    token = prep_go(svc, ack="1,2")[1]["token"]
+    svc.actions.plans.run = lambda argv: (2, "refused: nothing was approved\n")
+    assert svc.confirm(token)[0] == 409
+    lines = [json.loads(x) for x in svc.actions.audit_path.read_text().splitlines()]
+    assert [x for x in lines if x.get("attempt") == "confirm" and x.get("queue") == QID]        # the attempt is written before the run, with the queue
+    assert svc.actions.exposure() == 0.0                                  # but only an `ok` line counts
+
+
+def test_the_page_state_never_raises_whatever_a_builder_hits(svc, monkeypatch):
+    setup(svc)
+
+    def boom(job_id):
+        raise KeyError("shape")
+    monkeypatch.setattr(svc.actions.plans, "go_facts", boom)
+    monkeypatch.setattr(svc.actions.plans, "build_approve", lambda params: (_ for _ in ()).throw(TypeError("shape")))
+    status, card = svc.request("GET", f"/api/approve/prd/{PJOB}")
+    assert status == 200 and card["t4"]["action"] is None
