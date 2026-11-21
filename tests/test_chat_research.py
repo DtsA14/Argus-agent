@@ -582,3 +582,35 @@ def test_a_stage_cap_written_as_text_in_the_config_is_a_refusal_not_a_500(tmp_pa
         assert st == 409 and "token" not in d
     finally:
         s.stop()
+
+
+RKEY = "/keys/research.key"
+
+
+def test_research_gets_its_own_key_file_and_the_code_key_is_not_given_to_it(tmp_path):
+    s = t.Service(tmp_path, cfg=config(), environ={ca.KEY_ENV: t.KEY, ca.RESEARCH_KEY_ENV: RKEY, ca.WRITER_KEY_ENV: t.WKEY})
+    try:
+        token = s.prepare(action="research_new", message=Q)[1]["token"]
+        assert s.confirm(token)[0] == 200
+        (call,) = s.spawner.calls
+        argv = call["argv"]
+        assert argv[argv.index("--key-file") + 1] == RKEY
+    finally:
+        s.stop()
+
+
+def test_research_with_only_the_research_key_is_enough_and_the_code_key_alone_still_works(tmp_path):
+    s = t.Service(tmp_path, cfg=config(), environ={ca.RESEARCH_KEY_ENV: RKEY})
+    try:
+        assert s.prepare(action="research_new", message=Q)[0] == 200
+    finally:
+        s.stop()
+
+
+def test_the_research_key_is_not_the_code_key_of_a_started_issue(tmp_path):
+    s = t.Service(tmp_path, cfg=config(), environ={ca.RESEARCH_KEY_ENV: RKEY})
+    try:
+        act = s.actions
+        assert act.key_file(False) is None and act.key_file(False, research=True) == RKEY and act.key_file(True) is None
+    finally:
+        s.stop()
