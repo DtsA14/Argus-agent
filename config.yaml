@@ -106,12 +106,12 @@ code_task:
   # of 14 runs: est/billed median 1.34-1.37, min 0.89, so counting is not changed): 60,000 is about 45,000 billed;
   # worst case per call $0.018 (60,000 x $0.15 x 2 peak / 1M), the attempt's USD reservation still binds. Sonnet keeps
   # the profile's 40,000.
-  max_input_tokens_by_model: {"deepseek:deepseek-flash": 60000, "deepseek:deepseek-v4-pro": 60000}
+  max_input_tokens_by_model: {"deepseek:deepseek-flash": 60000, "deepseek:deepseek-v4-pro": 60000, "openrouter:deepseek/deepseek-v4.1-flash-1017": 60000}
   # docs/reviews/SPEC_AGENT_OUTPUT_BUDGET.md: a USD profile's max_output_tokens per coder model. DeepSeek thinking shares the
   # reply budget with its reasoning: at 8,192 (chosen for Sonnet without thinking) the SWE v0 batch 2 agent spent 7,858 and
   # 8,192 on reasoning and was cut before any tool call. 32,000 output is at worst $0.0384 a call (peak); every call is still
   # refused before sending when its worst case does not fit the attempt's USD reservation. Token profiles and Sonnet keep 8,192.
-  max_output_tokens_by_model: {"deepseek:deepseek-flash": 32000, "deepseek:deepseek-v4-pro": 32000}
+  max_output_tokens_by_model: {"deepseek:deepseek-flash": 32000, "deepseek:deepseek-v4-pro": 32000, "openrouter:deepseek/deepseek-v4.1-flash-1017": 32000}
   # Budget profiles (M6 W5): a contract may name one ("budget_profile": "large"). A profile sets only the attempt
   # reservation and the coder's output cap; it never changes the cost cap, which stays min(budget.max_usd, the
   # contract's limits.max_usd). At the default $0.50, `large` (45,000 tokens = $0.45 at $10/M output) leaves room
@@ -144,7 +144,7 @@ drafter:
   # docs/reviews/SPEC_AGENT_BUDGET_GAPS.md 2.2: the drafter's output cap per model. SWE v0 batch 3 (21612 d1): DeepSeek's
   # reasoning used 16,384 of 16,384 and the drafter ended NO_DRAFT before a submit. 32,000 as the coder (#200); every call
   # is still lowered to what fits the attempt's $0.70 reservation.
-  max_output_tokens_by_model: {"deepseek:deepseek-flash": 32000, "deepseek:deepseek-v4-pro": 32000}
+  max_output_tokens_by_model: {"deepseek:deepseek-flash": 32000, "deepseek:deepseek-v4-pro": 32000, "openrouter:deepseek/deepseek-v4.1-flash-1017": 32000}
   # 24 since SPEC_DRAFTER_SKIPPED_STEPS (2026-10-27): the 21379 re-run's drafters read 13 steps on sympy before a first
   # submit and ran out at 16 with one problem left, twice. The money bound is unchanged (attempt_usd, the stage cap).
   max_steps: 24
@@ -278,8 +278,8 @@ router:
     # Counted, 2,006 DeepSeek calls bill at most 0.68x the estimate at 1.5 (Atha: 1.5). The input limits are the raw
     # tokens x 1.5: agent 100,000 and drafter ~166,000 raw, the context the uncounted reasoning already allowed (largest
     # billed 108,065 and 127,856); DeepSeek's context is above 393,216 (its max_tokens bound), so 100,000 + 32,000 fits.
-    llm.input_margin_by_model: {"deepseek:deepseek-flash": 1.5, "deepseek:deepseek-v4-pro": 1.5}
-    code_task.max_input_tokens_by_model: {"deepseek:deepseek-flash": 150000, "deepseek:deepseek-v4-pro": 150000}
+    llm.input_margin_by_model: {"deepseek:deepseek-flash": 1.5, "deepseek:deepseek-v4-pro": 1.5, "openrouter:deepseek/deepseek-v4.1-flash-1017": 1.5}
+    code_task.max_input_tokens_by_model: {"deepseek:deepseek-flash": 150000, "deepseek:deepseek-v4-pro": 150000, "openrouter:deepseek/deepseek-v4.1-flash-1017": 150000}
     drafter.max_input_tokens: 250000
     # H2: large_usd's token ceiling bound before its USD (sympy-24562: 400,000 tokens at $0.036 of $0.45)
     code_task.profiles.large_usd.attempt_tokens: 1200000
@@ -373,19 +373,21 @@ roles:
     # DeepSeek V4.1 Flash since 2026-10-23 (Atha), thinking mode since router pilot #2 (Atha: "mode thinking semua"):
     # with tools DeepSeek requires every earlier reasoning_content back (HTTP 400 otherwise); models/registry.py sends
     # it and the step memo keeps it (PR #168).
-    model: "deepseek:deepseek-flash"
+    # Atha 2026-11-21: the DeepSeek balance ran out; coder and drafter now go through OpenRouter
+    # (V4.1 Flash 1017, the snapshot deepseek-flash serves; DeepInfra fp8 first, Morph behind it, pinned in gateway_models); research and evaluator stay on the direct API (its web search and fetch). Thinking stays on by default there; the direct API's
+    # extra_body.thinking is not sent (a gateway pin sets require_parameters). Not yet shown: a many-step tool run on the
+    # gateway class, which does not send reasoning back as deepseek_class() does (first live job decides).
+    model: "openrouter:deepseek/deepseek-v4.1-flash-1017"
     max_output_tokens: 4096
     timeout_s: 120
-    params: {extra_body: {thinking: {type: enabled}}}
   drafter:
     # W2b task drafts (codetask/drafter.py). One SubmitDraft holds the plan, the contract and every new test, plus the
     # model's thinking (on by default): in pilot w2b1d1 it hit 8,192 with 6,108 of them thinking, before any test was
     # written. 16,384 since then (option A, Atha 2026-10-22); the attempt's USD reservation still bounds every call.
     # DeepSeek V4.1 Flash, thinking mode (as coder). Pilot #2: 1 drafter run instead of 3, at about the same cost.
-    model: "deepseek:deepseek-flash"
+    model: "openrouter:deepseek/deepseek-v4.1-flash-1017"
     max_output_tokens: 16384
     timeout_s: 180
-    params: {extra_body: {thinking: {type: enabled}}}
   researcher:
     # SPEC_RESEARCH_STAGE r1: the drafter's model and thinking mode; its output cap per model is research.max_output_tokens_by_model.
     model: "deepseek:deepseek-flash"

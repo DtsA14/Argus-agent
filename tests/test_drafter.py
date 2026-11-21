@@ -681,7 +681,7 @@ def test_the_task_names_each_profile_with_its_limits_and_the_draft_must_choose_o
     c = load_config()
     assert "budget_profile, required" in prompt and c["drafter"]["agent_profiles"] == ["default", "large_usd"]
     # SPEC_AGENT_BUDGET_GAPS 2.3: the profiles as the configured coder (DeepSeek) runs them, not the raw profile numbers
-    assert c["roles"]["coder"]["model"] == "deepseek:deepseek-flash"
+    assert c["roles"]["coder"]["model"] == "openrouter:deepseek/deepseek-v4.1-flash-1017"
     for name, out in (("default", 4096), ("large_usd", 32000)):
         assert f"  - {name}: " in prompt and f"output up to {out:,} per call" in prompt
     assert "  - large: " not in prompt                                         # not offered (router pilot #1)
@@ -816,7 +816,8 @@ def test_deepseek_drafters_get_a_larger_reply_and_others_keep_their_own():
     from codetask.drafter import with_drafter_output
     c = load_config()
     assert c["drafter"]["max_output_tokens_by_model"] == {"deepseek:deepseek-flash": 32000,
-                                                          "deepseek:deepseek-v4-pro": 32000}
+                                                          "deepseek:deepseek-v4-pro": 32000,
+                                                          "openrouter:deepseek/deepseek-v4.1-flash-1017": 32000}
     assert with_drafter_output(c)["roles"]["drafter"]["max_output_tokens"] == 32000
     c["roles"]["drafter"]["model"] = "anthropic:claude-sonnet-5-5"
     assert with_drafter_output(c)["roles"]["drafter"]["max_output_tokens"] == c["roles"]["drafter"]["max_output_tokens"]

@@ -132,10 +132,17 @@ def test_no_peak_line_without_a_window_or_a_higher_price():
     assert peak_line("deepseek", {"input": 1, "output": 1}, WINDOW, at(THU, 2)) is None
 
 
+def deepseek_roles(c):
+    """The config routes coder and drafter through OpenRouter (2026-11-21); these tests are about the direct API's peak."""
+    for r in ("coder", "drafter"):
+        c["roles"][r] = {**c["roles"][r], "model": "deepseek:deepseek-flash"}
+    return c
+
+
 def test_the_confirm_screen_and_limits_shown_carry_the_peak_line(tmp_path):
     from router import job as rj
     from tests.test_router import Env
-    c = load_config()                                  # DeepSeek roles, models still the scripted fakes
+    c = deepseek_roles(load_config())                  # DeepSeek roles, models still the scripted fakes
     e = Env(tmp_path, config=c)
     e.deps.clock, e.deps.get_key = (lambda: "2026-10-15T02:00:00Z"), (lambda: "sk-" + "a" * 32)
     e.code()
@@ -146,7 +153,7 @@ def test_the_confirm_screen_and_limits_shown_carry_the_peak_line(tmp_path):
 
 def test_no_peak_line_on_the_confirm_screen_off_peak(tmp_path):
     from tests.test_router import Env
-    e = Env(tmp_path, config=load_config())
+    e = Env(tmp_path, config=deepseek_roles(load_config()))
     e.deps.get_key = lambda: "sk-" + "a" * 32
     e.code()                                           # Friday 00:00 UTC
     assert "peak:" not in e.confirms[0]
@@ -202,7 +209,7 @@ def test_a_peak_that_lasts_days_ends_where_it_ends():
 def test_a_bad_window_does_not_crash_the_confirm_screen():
     from types import SimpleNamespace
     from router.job import _peak_lines
-    cfg = copy.deepcopy(load_config())
+    cfg = deepseek_roles(copy.deepcopy(load_config()))
     cfg["peak_windows"]["deepseek"] = {"utc_hours": [[1, 25]]}
     lines = _peak_lines(SimpleNamespace(clock=lambda: "2026-10-15T02:00:00Z"), cfg, ["coder"])
     assert lines == ["peak: the deepseek peak window in the config cannot be read; the stage will refuse to call it"]

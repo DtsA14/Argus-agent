@@ -10,7 +10,7 @@ from models.registry import (
 )
 from runner import load_config
 
-KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "TOGETHER_API_KEY")
+KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "TOGETHER_API_KEY", "OPENROUTER_API_KEY")
 
 
 @pytest.fixture
@@ -167,13 +167,20 @@ def test_the_coder_has_a_request_timeout_and_no_hidden_sdk_retries(keys):
         assert timeout == cfg["roles"][role]["timeout_s"] > 0 and model.max_retries == 0, role
 
 
-def test_the_coder_and_drafter_run_deepseek_in_thinking_mode_through_the_class_that_sends_reasoning_back(keys):
-    # 2026-10-23: DeepSeek V4.1 Flash in thinking mode (router pilot #2). With tools DeepSeek requires every earlier
-    # reasoning_content back (HTTP 400 otherwise): the role must be built by deepseek_class(), which sends it.
+def test_the_coder_and_drafter_go_through_the_pinned_gateway_model_and_the_direct_class_still_sends_reasoning_back(keys):
+    # 2026-11-21 (Atha: the DeepSeek balance ran out): coder and drafter are the V4.1 Flash 1017 on OpenRouter, pinned (DeepInfra
+    # first). The direct API stays supported by deepseek_class(), which with tools in thinking mode sends every earlier
+    # reasoning_content back (HTTP 400 otherwise); the gateway class does not, so a many-step tool run there is only
+    # shown by a live job.
+    from models import gateway
     from models.registry import deepseek_class
     cfg = load_config()
     for role in ("coder", "drafter"):
-        assert cfg["roles"][role]["model"] == "deepseek:deepseek-flash"
+        assert cfg["roles"][role]["model"] == "openrouter:deepseek/deepseek-v4.1-flash-1017"
         model = build_chat_model(cfg, role)
-        assert model.extra_body == {"thinking": {"type": "enabled"}}, role
-        assert type(model) is deepseek_class(), role
+        assert type(model) is gateway.chat_class(), role
+        assert model.extra_body["provider"]["order"] == ["deepinfra/fp8", "morph/fp8"], role
+    direct = {**cfg, "roles": {**cfg["roles"], "drafter": {**cfg["roles"]["drafter"], "model": "deepseek:deepseek-flash",
+                                                          "params": {"extra_body": {"thinking": {"type": "enabled"}}}}}}
+    model = build_chat_model(direct, "drafter")
+    assert model.extra_body == {"thinking": {"type": "enabled"}} and type(model) is deepseek_class()

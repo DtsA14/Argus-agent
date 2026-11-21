@@ -150,8 +150,10 @@ def test_recorded_steps_are_estimated_above_what_was_billed(tmp_path, name, est_
 def test_router_margin_and_input_limits():
     cfg, base = router_cfg(), load_config()
     o = base["router"]["overrides"]
-    assert o["llm.input_margin_by_model"] == {DEEPSEEK: 1.5, "deepseek:deepseek-v4-pro": 1.5}
-    assert o["code_task.max_input_tokens_by_model"] == {DEEPSEEK: 150_000, "deepseek:deepseek-v4-pro": 150_000}
+    assert o["llm.input_margin_by_model"] == {DEEPSEEK: 1.5, "deepseek:deepseek-v4-pro": 1.5,
+                                                         "openrouter:deepseek/deepseek-v4.1-flash-1017": 1.5}
+    assert o["code_task.max_input_tokens_by_model"] == {DEEPSEEK: 150_000, "deepseek:deepseek-v4-pro": 150_000,
+                                                                "openrouter:deepseek/deepseek-v4.1-flash-1017": 150_000}
     assert o["drafter.max_input_tokens"] == 250_000
     assert cfg["llm"]["input_margin_by_model"][DEEPSEEK] == 1.5
     assert "input_margin_by_model" not in base["llm"] and base["llm"]["input_margin"] == 1.2       # evals unchanged
