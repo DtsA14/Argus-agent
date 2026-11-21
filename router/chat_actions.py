@@ -40,6 +40,7 @@ from router.control_issues import Spawner, issue_cli, normalize
 STATE = Path.home() / ".local" / "state" / "argus-chat"
 KEY_ENV = "ARGUS_CHAT_KEY_FILE"
 WRITER_KEY_ENV = "ARGUS_CHAT_WRITER_KEY_FILE"
+RESEARCH_KEY_ENV = "ARGUS_CHAT_RESEARCH_KEY_FILE"   # research uses DeepSeek's own search and fetch API: its own key, when the code key is another provider's
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
 ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "job_reject", "job_abandon")   # never an approve (13.7 item 9)
@@ -171,8 +172,10 @@ class Actions:
         v = (self.cfg.get("chat") or {}).get("daily_cap_usd", DEFAULT_CAP_USD)
         return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else DEFAULT_CAP_USD
 
-    def key_file(self, writer):
-        return (self.environ.get(WRITER_KEY_ENV) if writer else None) or self.environ.get(KEY_ENV) or None
+    def key_file(self, writer, research=False):
+        """The key file a paid action is given: the writer's turns WRITER_KEY_ENV, research RESEARCH_KEY_ENV, each when set, else KEY_ENV (the code key)."""
+        first = WRITER_KEY_ENV if writer else RESEARCH_KEY_ENV if research else None
+        return (self.environ.get(first) if first else None) or self.environ.get(KEY_ENV) or None
 
     # ---- audit (11.14): one line per prepare and per confirm, the token and the text never in it --------------------------
 
@@ -389,9 +392,10 @@ class Actions:
 
     # ---- the card ---------------------------------------------------------------------------------------------------
 
-    def _need_key(self, writer):
-        if self.key_file(writer) is None:
-            raise Refusal(409, "key", f"{WRITER_KEY_ENV if writer else KEY_ENV} (or {KEY_ENV}) is not set for the service")
+    def _need_key(self, writer, research=False):
+        if self.key_file(writer, research) is None:
+            first = WRITER_KEY_ENV if writer else RESEARCH_KEY_ENV if research else None
+            raise Refusal(409, "key", f"{first} (or {KEY_ENV}) is not set for the service" if first else f"{KEY_ENV} is not set for the service")
 
     @staticmethod
     def runs_code(cfg, environment):
@@ -662,7 +666,7 @@ class Actions:
             raise Refusal(409, "config", "the research job's configuration is not complete") from None
         if [k[0] for k in keys] != ["deepseek"]:
             raise Refusal(409, "key", "this profile needs more than the one DeepSeek key the chat is given: start it from the terminal")
-        self._need_key(False)
+        self._need_key(False, research=True)
         try:
             models = ", ".join(f"{k} {facts['models'][k]}" for k in rr.STAGE_KINDS)
             c = facts["caps"]
@@ -857,7 +861,7 @@ class Actions:
             if code != 0:
                 raise Refusal(409, "cli", strip_refused(line) or "the command failed")
             return {"job": rp["job"], "done": True}
-        key = self.key_file(a in ("issue_new", "issue_reply"))
+        key = self.key_file(a in ("issue_new", "issue_reply"), research=(a == "research_new"))
         c = self.jobs_dir
         if a == "research_new":
             new_id = rj.new_job_id()
