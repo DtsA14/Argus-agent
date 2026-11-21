@@ -206,6 +206,92 @@ def test_a_protected_file_in_the_patch_is_refused_again(env, tmp_path):
     refused(env, tmp_path, sha, "protected")
 
 
+def add_file(path, text="export const x = 1\n"):
+    def change(r):
+        (r / path).parent.mkdir(parents=True, exist_ok=True)
+        (r / path).write_text(text)
+    return change
+
+
+def protected_new_file(env, tmp_path, path, meta, globs):
+    """A package whose patch ADDS `path` (and edits shop.py) with `meta` as that file's entry in the package's file list, for a repository that protects `globs`."""
+    def change(r):
+        edit_shop()(r)
+        add_file(path)(r)
+    patch, sha = package(env, tmp_path, change)
+    rewrite(env, patch, [{"path": "src/shop.py", "change": "M", "approved_test": False}, {"path": path, **meta}])
+    job = env.job()
+    job.data["protected_repo"] = {"sha256": "x", "globs": globs}
+    job.save()
+    return sha
+
+
+def test_a_new_test_of_the_approved_draft_may_match_the_protected_list_and_is_applied(env, tmp_path):
+    sha = protected_new_file(env, tmp_path, "src/shop.test.js", {"change": "A", "approved_test": True}, ["**/*.test.*"])
+    run_apply(env, sha)
+    assert env.job().data["state"] == rj.APPLIED and (env.repo / "src" / "shop.test.js").exists()
+
+
+@pytest.mark.parametrize("path,meta,globs,why", [
+    ("src/shop.test.js", {"change": "A", "approved_test": False}, ["**/*.test.*"], "a new test the draft did not declare"),
+    ("src/shop.test.js", {"change": "M", "approved_test": True}, ["**/*.test.*"], "an existing protected file changed"),
+    ("src/shop.test.js", {"change": "D", "approved_test": True}, ["**/*.test.*"], "a protected file removed"),
+    ("src/shop.test.js", {"approved_test": True}, ["**/*.test.*"], "a package without `change` (an old one)"),
+    ("src/shop.test.js", {"change": "A"}, ["**/*.test.*"], "a package without `approved_test`"),
+    ("src/shop.test.js", {"change": "A", "approved_test": "yes"}, ["**/*.test.*"], "approved_test is not the boolean true"),
+    ("src/config.js", {"change": "A", "approved_test": True}, ["src/*.js"], "new and declared, but not a test by its name"),
+    ("tests/conftest.py", {"change": "A", "approved_test": True}, ["tests/**"], "conftest.py is code, not a test"),
+    ("src/shop.spec.js", {"change": "A", "approved_test": True}, ["**/*.spec.*"], "a name that is no test name here"),
+])
+def test_everything_else_that_matches_the_protected_list_still_stops_the_patch(env, tmp_path, path, meta, globs, why):
+    sha = protected_new_file(env, tmp_path, path, meta, globs)
+    refused(env, tmp_path, sha, "protected")
+
+
+def test_a_forged_new_test_entry_on_a_patch_that_really_modifies_a_protected_test_is_refused(env, tmp_path):
+    """The package's `change: A` and `approved_test: true` are the package's word; git's reading of the patch must agree (SPEC_PROTECTED_FILES 10)."""
+    patch, sha = package(env, tmp_path, lambda r: (r / "tests" / "test_old.py").write_text("def test_x():\n    assert True  # rewritten\n"))
+    rewrite(env, patch, [{"path": "tests/test_old.py", "change": "A", "approved_test": True}])        # the real status is M
+    job = env.job()
+    job.data["protected_repo"] = {"sha256": "x", "globs": ["tests/**"]}
+    job.save()
+    refused(env, tmp_path, sha, "does not add it")
+
+
+def test_a_forged_new_test_entry_on_a_patch_that_removes_a_protected_test_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, lambda r: (r / "tests" / "test_old.py").unlink())
+    rewrite(env, patch, [{"path": "tests/test_old.py", "change": "A", "approved_test": True}])        # the real status is D
+    job = env.job()
+    job.data["protected_repo"] = {"sha256": "x", "globs": ["tests/**"]}
+    job.save()
+    refused(env, tmp_path, sha, "does not add it")
+
+
+def test_a_new_approved_test_does_not_unprotect_another_file_of_the_same_patch(env, tmp_path):
+    def change(r):
+        edit_shop()(r)
+        add_file("src/shop.test.js")(r)
+    patch, sha = package(env, tmp_path, change)
+    rewrite(env, patch, [{"path": "src/shop.py", "change": "M", "approved_test": False}, {"path": "src/shop.test.js", "change": "A", "approved_test": True}])
+    job = env.job()
+    job.data["protected_repo"] = {"sha256": "x", "globs": ["**/*.test.*", "src/shop.py"]}                  # shop.py is protected too
+    job.save()
+    refused(env, tmp_path, sha, "protected")
+
+
+def test_the_rule_is_one_function_for_apply_and_the_card():
+    from router import protected_files as pf
+    new_test = {"path": "src/a.test.jsx", "change": "A", "approved_test": True}
+    assert pf.stopped([new_test], ["**/*.test.*"]) == [] and pf.allowed_new_tests([new_test], ["**/*.test.*"]) == ["src/a.test.jsx"]
+    assert pf.stopped([{**new_test, "approved_test": False}], ["**/*.test.*"]) == ["src/a.test.jsx"]
+    assert pf.stopped([new_test], ["src/other/*"]) == [] and pf.allowed_new_tests([new_test], ["src/other/*"]) == []       # not matched: nothing to allow
+    for name in ("test_a.py", "a_test.py", "x/a.test.js", "a.test.ts", "a.test.tsx", "a.test.jsx"):
+        assert pf.is_new_approved_test({"path": name, "change": "A", "approved_test": True}), name
+    for name in ("conftest.py", "a.spec.js", "a.test.json", "a.test.js.map", "test.js", "a.tests.js", "testing/a.py", "contest_a.py", "latest_a.py",
+                 "src/contest_a.py", "x_test.py.bak", "a.TEST.js", "xa.test.jsx.orig"):
+        assert not pf.is_new_approved_test({"path": name, "change": "A", "approved_test": True}), name
+
+
 @pytest.mark.parametrize("what", ["tracked", "untracked"])
 def test_a_dirty_tree_is_refused(env, tmp_path, what):
     patch, sha = package(env, tmp_path, edit_shop())

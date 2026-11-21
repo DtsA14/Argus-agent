@@ -17,8 +17,8 @@ import unicodedata
 from contextlib import contextmanager
 from pathlib import Path
 
-from acceptance.contract import matches
 from router import job as rj
+from router import protected_files
 from router import reason as reason_rule
 from router import examples_read as er
 from router import patch_read as pr
@@ -160,9 +160,10 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None,
         extra = {**extra, "accepted_nits": [list(f) for f in nits]}
     if accept is not None:
         extra = {**extra, "accepted_concerns": accept, "accepted_findings": [list(f) for f in seen], "accepted_sha": sha}
-    listed = sorted(f["path"] for f in (prov.get("patch") or {}).get("files") or [])
+    pfiles = [f for f in (prov.get("patch") or {}).get("files") or [] if isinstance(f, dict) and isinstance(f.get("path"), str)]
+    listed = sorted(f["path"] for f in pfiles)
     globs = (job.data.get("protected_repo") or {}).get("globs") or []
-    hit = [p for p in listed if matches(p, globs)]
+    hit = protected_files.stopped(pfiles, globs)       # a NEW test of the approved draft may match the list (SPEC_PROTECTED_FILES P3); nothing else may
     if hit:
         refuse(f"the patch changes files the repository protects (.argus/protected): {hit[:3]}")
     if not patch.strip() or not listed:
@@ -240,6 +241,12 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None,
             refuse(f"{path}: a git metadata path is not applied by this command")
     if sorted(p for _, _, _, p in entries) != listed:
         refuse("the files the patch changes are not the files the package lists")
+    by_path = {p: (old, status) for old, _, status, p in entries}
+    for p in protected_files.allowed_new_tests(pfiles, globs):          # the package's `change: A` is the package's word: git's own reading of the patch must agree
+        old, status = by_path.get(p, (None, None))
+        if status != "A" or old != "000000":
+            refuse(f"the patch changes files the repository protects (.argus/protected): {[p]}; the package calls it a new test, but the patch does not add it "
+                   f"(git status {status}, old mode {old})")
     # 6. the change itself: logged first, applied to the tree and the index, committed
     title = _title(review_dir, job.id)
     job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha, **extra, **({"examples_failed": failed} if failed else {}))

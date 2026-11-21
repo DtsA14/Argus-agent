@@ -36,7 +36,7 @@ KEYS = "abcdefghi"
 
 
 def make(s, jid=CJOB, examples=(SAME, AFTER), *, base="pass", audit="pass", review_valid=True, state="REVIEW_READY", approval=True,
-         read="ok", prov_sha=None, read_sha=None, files=("src/shop.py",), protected=(), text=None, approved_draft="d" * 64, patch_sha=None, cap=0.5,
+         read="ok", prov_sha=None, read_sha=None, files=("src/shop.py",), protected=(), new_tests=(), text=None, approved_draft="d" * 64, patch_sha=None, cap=0.5,
          note="read the diff: only the floor changed", by_reader="claude", bodies=None, sid="a1", base_fail=(), one_reading=False):
     """A code job as the files of a real one: job.json, the review package, the examples intake and audit, the patch reader's note."""
     text = text if text is not None else issue_text(*examples)
@@ -65,7 +65,7 @@ def make(s, jid=CJOB, examples=(SAME, AFTER), *, base="pass", audit="pass", revi
     (tree / "__init__.py").write_text("")
     (tree / "shop.py").write_text(SHOP)
     (rev / "provenance.json").write_text(json.dumps({"patch": {"sha256": prov_sha or hashlib.sha256(patch).hexdigest(),
-                                                               "files": [{"path": p} for p in files]}}))
+                                                               "files": [({"path": p, "change": "A", "approved_test": True} if p in new_tests else {"path": p}) for p in files]}}))
     if parsed:
         base_rows = [{"id": e["id"], "tier": e["tier"], "status": "unchecked", "base_actual": -4} if e["tier"] == "after"
                      else {"id": e["id"], "tier": e["tier"], "status": "fail" if base == "fail" or e["id"] in base_fail else "pass", "actual": e["expect"]} for e in parsed]
@@ -542,7 +542,8 @@ def test_an_example_outside_the_grammar_closes_h(svc):
 def test_a_glob_that_cannot_be_read_protects(svc, monkeypatch):
     def boom(path, globs):
         raise ValueError("bad glob")
-    monkeypatch.setattr(acode, "matches", boom)
+    from router import protected_files as pf
+    monkeypatch.setattr(pf, "matches", boom)                                         # the one matcher `argus apply` and the card share
     c = good(svc, protected=("x/*",))
     assert c["files"][0]["marks"] == [acode.PROTECTED_MARK] and c["open"] is False
 
@@ -617,3 +618,18 @@ def test_a_nit_pair_of_the_argus_readers_opens_check_f_and_shows_the_nit(svc):
     rec["second"]["severity"] = "blocker"                                                     # a blocker beside it closes the card again
     f.write_text(json.dumps(rec))
     assert checks(get(svc)[1])["f"]["ok"] is False
+
+
+def test_a_new_test_of_the_approved_draft_may_match_the_protected_list_and_is_shown_not_hidden(svc):
+    c = good(svc, files=("src/shop.py", "src/shop.test.js"), protected=("**/*.test.*",), new_tests=("src/shop.test.js",))
+    marks = {f["path"]: f["marks"] for f in c["files"]}
+    assert marks["src/shop.test.js"] == ["tes baru yang disetujui draf (cocok dengan daftar dilindungi repo, boleh)"] and marks["src/shop.py"] == []
+    assert checks(c)["c"]["ok"] is True                                              # `argus apply` lets it through (router/protected_files.py)
+
+
+def test_a_protected_file_that_is_not_a_new_approved_test_still_blocks_the_card(svc):
+    c = good(svc, files=("src/shop.py", "src/shop.test.js"), protected=("**/*.test.*",))              # the entry says nothing about a new approved test
+    assert {f["path"]: f["marks"] for f in c["files"]}["src/shop.test.js"] == ["dilindungi repo (.argus/protected)"] and checks(c)["c"]["ok"] is False
+    make(svc, jid="j20261117_100300_dddd", files=("src/shop.py", "config/secret.js"), protected=("config/*",), new_tests=("config/secret.js",))   # new and declared, but not a test by its name
+    status, c2 = get(svc, "j20261117_100300_dddd")
+    assert status == 200 and checks(c2)["c"]["ok"] is False
