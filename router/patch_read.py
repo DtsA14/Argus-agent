@@ -131,7 +131,7 @@ def record(job_id, sha, verdict, note, reader, reader_id=None, *, deps, jobs_dir
     return rec
 
 
-def load(job_dir, sid, patch_sha256):
+def load(job_dir, sid, patch_sha256, *, raw_pair=False):
     """('none', None) no note for this stage; ('stale', None) the note is for another patch; ('error', None) anything damaged;
     ('ok' | 'concerns', note). The file is read through a descriptor, never through a symlink, never past FILE_MAX."""
     if not (isinstance(sid, str) and SID.fullmatch(sid) and isinstance(patch_sha256, str) and SHA.fullmatch(patch_sha256)):
@@ -188,6 +188,8 @@ def load(job_dir, sid, patch_sha256):
     if not _second_ok(sec):
         return "error", None
     if sec["verdict"] == "concerns":
+        if raw_pair:                                          # `require_concerns_pair`: the first reading as written, not overwritten by the second
+            return "concerns", rec
         return "concerns", {**rec, "verdict": "concerns", "note": sec["note"], "reader": sec["reader"], "at": sec["at"]}
     if _rid(rec["reader"]) is None or _rid(sec["reader"]) is None or _rid(rec["reader"]) == _rid(sec["reader"]):
         return "one", rec
@@ -240,3 +242,29 @@ def require_ok(job, sid, sha, reader=None):
     if reader is not None and rec["reader"]["kind"] != reader:
         raise rj.Refused(f"job {job.id}: the patch-read note was written by {rec['reader']['kind']}, not by {reader} (--reader)")
     return rec
+
+
+def require_concerns_pair(job, sid, sha, reader=None):
+    """`argus apply --accept-concerns` (SPEC_APPLY_ACCEPT_CONCERNS): Refused unless BOTH readings exist and are valid for exactly this patch, by two
+    different readers, and at least one of them says `concerns`. Returns (raw record, findings). Two `ok` is not asked to be accepted."""
+    kind, rec = load(job.dir, sid, sha, raw_pair=True)
+    how = f"argus patch-read-run {job.id}"
+    if kind == "none":
+        raise rj.Refused(f"job {job.id}: no patch-read note: someone reads the patch first ({how})")
+    if kind in ("stale", "error"):
+        raise rj.Refused(f"job {job.id}: the patch-read note is {'for another patch' if kind == 'stale' else 'unreadable'}: read this patch again ({how})")
+    if kind == "one":
+        raise rj.Refused(f"job {job.id}: only one patch reading: --accept-concerns needs both readings ({how})")
+    if kind == "ok":
+        raise rj.Refused(f"job {job.id}: both readers said ok: nothing to accept (apply without --accept-concerns)")
+    sec = rec.get("second")
+    if not _second_ok(sec) or _model_stale(sec) or _model_stale(rec):
+        raise rj.Refused(f"job {job.id}: the second patch reading is missing, damaged or made under another template: --accept-concerns needs both ({how})")
+    a, b = _rid(rec["reader"]), _rid(sec["reader"])
+    if a is None or b is None or a == b:
+        raise rj.Refused(f"job {job.id}: the two readings are not by two different readers (ids {a!r}, {b!r})")
+    if reader is not None and (rec["reader"]["kind"] != reader or sec["reader"]["kind"] != reader):
+        raise rj.Refused(f"job {job.id}: the patch readings were not both written by {reader} (--reader)")
+    if "concerns" not in (rec["verdict"], sec["verdict"]):
+        raise rj.Refused(f"job {job.id}: no reading holds a concern: nothing to accept")
+    return rec, findings(rec)

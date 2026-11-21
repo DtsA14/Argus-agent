@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import tempfile
+import unicodedata
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from acceptance.contract import matches
 from router import job as rj
 from router import examples_read as er
 from router import patch_read as pr
+from router import stage_data
+from codetask import examples as ex
 
 ROOT = Path(__file__).resolve().parent.parent
 LOCAL_OK = re.compile(r"^(core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase)|user\..+|remote\..+|branch\..+)$")
@@ -95,12 +98,25 @@ def raw_entries(out):
     return entries
 
 
-def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None, queues_dir=None):
+def _accepted_reason(text):
+    """The human's reason for `--accept-concerns`: one line of 10..500 characters, refused (never cut) otherwise, and never a key (the commit message is not scrubbed)."""
+    if not isinstance(text, str) or any(unicodedata.category(c)[0] == "C" for c in text):
+        raise rj.Refused("--accept-concerns: the reason must be plain text without control characters; nothing was changed")
+    t = ex.clean(text, 10_000)
+    if not 10 <= len(t) <= 500:
+        raise rj.Refused(f"--accept-concerns: the reason must be 10 to 500 characters (it has {len(t)}); nothing was changed")
+    if stage_data.KEY.search(t.encode()) or stage_data.KEY.search(json.dumps(t).encode()):
+        raise rj.Refused("--accept-concerns: the reason looks like it holds a key or a secret; it must not reach git history; nothing was changed")
+    return t
+
+
+def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None, queues_dir=None, accept_concerns=None):
+    reason = None if accept_concerns is None else _accepted_reason(accept_concerns)    # before anything is opened or locked
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
         repo = job.data["inputs"]["repo"]
         with lock_repo(jobs_dir, repo):
-            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader, queues_dir=queues_dir)
+            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader, queues_dir=queues_dir, accept=reason)
 
 
 def _title(review_dir, job_id):
@@ -115,7 +131,7 @@ def _title(review_dir, job_id):
     return f"job {job_id}"
 
 
-def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None):
+def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None, accept=None):
     def refuse(why):
         raise rj.Refused(f"job {job.id}: {why}; nothing was changed")
 
@@ -138,10 +154,16 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None)
     if recorded != sha or (prov.get("patch") or {}).get("sha256") != sha:
         refuse("the patch on disk is not the one the review recorded (job.json and provenance.json must both name it)")
     try:                                    # SPEC_KARTU_SETUJU 5: an `ok` note of a patch reader for these very bytes, before anything is touched
-        pr.require_ok(job, rj.last_agent(job)[0], sha, reader)
+        if accept is None:
+            pr.require_ok(job, rj.last_agent(job)[0], sha, reader)
+            seen = None
+        else:                               # SPEC_APPLY_ACCEPT_CONCERNS: both readings, one of them a concern; everything after this line is unchanged
+            seen = pr.require_concerns_pair(job, rj.last_agent(job)[0], sha, reader)[1]
     except rj.Refused as e:
         refuse(str(e).split(": ", 1)[1] if ": " in str(e) else str(e))
     extra = {"reader": reader} if reader else {}
+    if accept is not None:
+        extra = {**extra, "accepted_concerns": accept, "accepted_findings": [list(f) for f in seen], "accepted_sha": sha}
     listed = sorted(f["path"] for f in (prov.get("patch") or {}).get("files") or [])
     globs = (job.data.get("protected_repo") or {}).get("globs") or []
     hit = [p for p in listed if matches(p, globs)]
@@ -230,7 +252,8 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None)
         run_git(repo, "apply", "--index", "--whitespace=nowarn", data=patch)
         run_git(repo, "commit", "-q", "--no-verify", "--no-gpg-sign", "-m", title,
                 "-m", f"Applied by `argus apply` from the review package of job {job.id}.",
-                "-m", f"Argus-Job: {job.id}\nArgus-Patch-Sha256: {sha}", identity=identity)
+                "-m", f"Argus-Job: {job.id}\nArgus-Patch-Sha256: {sha}" + (f"\nAccepted-concerns: {accept}" if accept is not None else ""),
+                identity=identity)
         commit = run_git(repo, "rev-parse", "HEAD").decode().strip()
     except Exception as e:                                  # not BaseException: a kill is the crash the next call heals
         try:

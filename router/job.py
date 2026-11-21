@@ -1911,6 +1911,8 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                                                                                              "changes not compared")
         out.append(f"applied: commit {why.get('commit')} ({as_is})" + (f" (by {why['by']})" if why.get("by") else "")
                    + (f"; note: {why['note']}" if why.get("note") else ""))
+        if isinstance(why.get("accepted_concerns"), str):
+            out.append("applied with accepted concerns: " + exl.clean(why["accepted_concerns"], 500))
     if d["state"] in (DRAFT_FAILED, AGENT_FAILED, BLOCKED, REJECTED, ABANDONED, RESEARCH_FAILED):
         why = _why(job)
         out.append(f"why: {why.get('reason') or 'not recorded'}" + (f" (by {why['by']})" if why.get("by") else ""))
