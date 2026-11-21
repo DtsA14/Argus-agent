@@ -5,7 +5,8 @@
   confirm  takes the token only. The server rebuilds the card from live data and refuses when it is not the one that was shown
            (the digest differs), when the daily exposure would pass its cap, or when it comes less than MIN_DELAY after prepare.
 
-The CLI does the work (`argus issue new|reply|start|abandon`, `argus prd new`, `argus research`, each with --via ui), as for the control service on 8711: its job lock, its
+The CLI does the work (`argus issue new|reply|start|abandon`, `argus prd new`, `argus research`, each with --via ui; `argus prd approve` and
+`argus queue go` through router/chat_plan.py, which read the folder, the queue and the money themselves), as for the control service on 8711: its job lock, its
 state gate and its sha check stay under it. This module holds no key (it passes a key file's path from its environment), runs
 no model and keeps its own state and audit directory, not the control service's (11.10, 11.14).
 """

@@ -91,7 +91,7 @@ class Service:
             return (run or (lambda *a: (0, "ok")))(action, job_id, reason)
         self.actions = ca.Actions(self.jobs, cfg, state=tmp / "state", clock=self.clock,
                                   environ={ca.WRITER_KEY_ENV: WKEY, ca.KEY_ENV: KEY} if environ is None else environ,
-                                  spawner=self.spawner, run=fake_run)
+                                  spawner=self.spawner, run=fake_run, queues_dir=tmp / "queues")
         self.chat = rc.Chat(self.jobs, clock=self.clock, actions=self.actions)
         self.srv = rc.server(self.chat, port=0)
         self.port = self.srv.server_address[1]

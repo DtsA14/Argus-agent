@@ -87,6 +87,17 @@ def _ids(text):
     return tuple(ids)
 
 
+def _read_reason_file(path):
+    """The reason file of `queue go` (at most 4 KB, UTF-8); anything else is refused, never half read."""
+    try:
+        raw = Path(path).read_bytes()[:4097]
+        if len(raw) > 4096:
+            raise ValueError("too long")
+        return raw.decode("utf-8")
+    except (OSError, ValueError) as e:
+        raise rj.Refused(f"--reason-file: cannot be read as UTF-8 text of at most 4 KB ({type(e).__name__}); nothing was approved") from None
+
+
 def main(argv=None, deps=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config")
@@ -427,7 +438,7 @@ def main(argv=None, deps=None):
                 print(rq.status(o.queue, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
                 return 0
             q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir, via=o.via,
-                        reason=Path(o.reason_file).read_text(encoding="utf-8") if o.reason_file else None) if o.queue_cmd == "go"
+                        reason=_read_reason_file(o.reason_file) if o.reason_file else None) if o.queue_cmd == "go"
                  else rq.retry(o.queue, o.item, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir) if o.queue_cmd == "retry"
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))

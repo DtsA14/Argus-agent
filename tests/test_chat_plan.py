@@ -506,3 +506,165 @@ def test_the_real_config_funds_a_prd_and_its_queue_in_one_day():
     from runner import load_config
     cfg = load_config(Path(__file__).resolve().parent.parent / "config.yaml")
     assert cfg["chat"]["daily_cap_usd"] >= float(cfg["prd_writer"]["max_usd"]) + rq.QUEUE_MAX_USD
+
+
+# ---- review changes (Opus, 2026-11-21) ------------------------------------------------------------------------------------------------
+
+def test_prd_approve_never_runs_git_to_find_an_unfinished_queue(svc, monkeypatch):
+    from acceptance import intake
+    setup(svc, queue=False)
+
+    def boom(*a, **k):
+        raise AssertionError("prepare ran git")
+    monkeypatch.setattr(intake, "git", boom)
+    tc.write_queue(svc, [(x, None) for x in TWO], max_usd=2.0, repo="/secret/path", approved={"sha": "x" * 64, "at": t.iso(t.NOW - 100)},
+                   prd={"sha": "f" * 64, "dir": "/elsewhere"})              # approved, its next item has no job: `rq.derive` would run git for HEAD
+    status, out = prep(svc, "prd_approve")
+    assert status == 409 and "not finished" in out["refused"]
+    assert svc.request("GET", f"/api/approve/prd/{PJOB}")[0] == 200
+
+
+@pytest.mark.parametrize("state,busy", [("WRITING", False), ("WRITE_FAILED", False), ("AWAITING_HUMAN", True), ("ABANDONED", False)])
+def test_queue_go_is_refused_while_the_plan_is_being_rewritten(svc, state, busy):
+    setup(svc)
+    jp = svc.jobs / PJOB / "job.json"
+    data = json.loads(jp.read_text())
+    jp.write_text(json.dumps({**data, "state": state}))
+    if busy:
+        svc.spawner.busy_ids.add(PJOB)
+    status, out = prep_go(svc, ack="1,2")
+    assert status == 409 and "token" not in out
+
+
+def test_an_old_queue_approved_inside_the_window_counts_without_any_audit_line(svc):
+    d, files, _ = setup(svc)
+    old = svc.queues / "q20261110T100000Z-abcd"
+    (svc.queues / QID).rename(old)
+    q = json.loads((old / "queue.json").read_text())
+    q["id"] = old.name
+    q["approved"] = {"sha": "x" * 64, "at": t.iso(t.NOW - 100), "via": "ui"}
+    (old / "queue.json").write_text(json.dumps(q))
+    assert svc.actions.exposure() == pytest.approx(2.0)                   # named five days ago, approved a minute ago
+
+
+@pytest.mark.parametrize("how", ["broken_block", "withheld"])
+def test_examples_that_cannot_be_read_refuse_whatever_is_acknowledged(svc, how):
+    texts = [tc.issue_text(tc.SAME, tc.AFTER, title="One").replace("```argus-examples", "```argus-examples json")] if how == "broken_block" else \
+            [tc.issue_text({**tc.SAME, "setup": "from src.shop import total; k1 = 'sk-ant-'", "run": "'abcdefghij1234' and total([2, 3], 1)"}, title="One")]
+    d, files = tc.write_prd(svc.jobs, texts, [tc.stored_for([tc.SAME])], max_usd=1.0)
+    for jid in ("j20261117_090000_aaa1", "j20261117_090100_aaa2", "j20261117_090200_aaa3"):
+        tc.write_job(svc.jobs, jid, kind="code", state="APPLIED", max_usd=1.0)
+    tc.write_queue(svc, [(texts[0], None)], max_usd=1.0, prd={"sha": rp.folder_sha(files), "dir": str(d / "prd-w1")})
+    status, out = prep_go(svc, ack="1")
+    assert status == 409 and "cannot be read" in out["refused"]
+    status, out = prep_go(svc)
+    assert status == 409 and "cannot be read" in out["refused"]
+
+
+def test_a_queue_with_the_right_sha_in_the_wrong_directory_is_refused(svc):
+    setup(svc)
+    qj = svc.queues / QID / "queue.json"
+    q = json.loads(qj.read_text())
+    qj.write_text(json.dumps({**q, "prd": {**q["prd"], "dir": str(svc.jobs / "elsewhere" / "prd-w1")}}))
+    assert "approve the plan first" in prep_go(svc, ack="1,2")[1]["refused"]
+
+
+def test_the_digest_holds_the_full_list_sha_and_the_queue_base_commit(svc):
+    setup(svc)
+    token = prep_go(svc, ack="1,2")[1]["token"]
+    qj = svc.queues / QID / "queue.json"
+    q = json.loads(qj.read_text())
+    qj.write_text(json.dumps({**q, "base_commit": "d" * 40}))
+    assert svc.confirm(token)[0] == 409 and svc.cli == []
+    qj.write_text(json.dumps(q))
+    token = prep_go(svc, ack="1,2")[1]["token"]
+    qj.write_text(json.dumps({**q, "environment": "other_env"}))              # list_sha covers the environment: the card changed
+    assert svc.confirm(token)[0] == 409 and svc.cli == []
+
+
+def test_a_prd_approve_refusal_runs_nothing_and_the_audit_says_so(svc):
+    setup(svc, queue=False)
+    svc.actions.plans.run = lambda argv: (2, "refused: nothing was approved\n")
+    token = prep(svc, "prd_approve")[1]["token"]
+    assert svc.confirm(token)[0] == 409
+    lines = [json.loads(x) for x in svc.actions.audit_path.read_text().splitlines()]
+    assert not [x for x in lines if x.get("ok") == "confirm" and x.get("action") == "prd_approve"]
+    assert [x for x in lines if x.get("attempt") == "confirm"]
+
+
+def test_the_cli_refusal_of_queue_go_is_scrubbed(svc):
+    setup(svc)
+    token = prep_go(svc, ack="1,2")[1]["token"]
+    svc.actions.plans.run = lambda argv: (2, "refused: the list sk-ant-api03-" + "a" * 40 + " is not the one\n")
+    status, out = svc.confirm(token)
+    assert status == 409 and "sk-ant" not in json.dumps(out)
+
+
+def test_a_timed_out_queue_go_still_counts_its_money_as_pending(svc):
+    setup(svc)
+    token = prep_go(svc, ack="1,2")[1]["token"]
+    svc.actions.plans.run = lambda argv: (None, "")
+    assert svc.confirm(token)[0] == 409
+    assert svc.actions.exposure() == pytest.approx(2.0)
+
+
+def test_the_page_state_names_both_inputs_when_both_are_needed_and_the_cap(svc):
+    setup(svc, texts=TWO[:1], max_usd=5.0)
+    card = svc.request("GET", f"/api/approve/prd/{PJOB}")[1]
+    assert card["t4"] == {"action": "queue_go", "why": None, "needs": ["ack", "reason"]}
+    svc.actions._cfg["chat"]["daily_cap_usd"] = 1.0                      # 5.00 would pass the cap: no button
+    card = svc.request("GET", f"/api/approve/prd/{PJOB}")[1]
+    assert card["t4"]["action"] is None and "daily cap" in card["t4"]["why"]
+
+
+def test_the_page_state_survives_a_queue_file_without_the_shape_the_builders_read(svc):
+    setup(svc)
+    qj = svc.queues / QID / "queue.json"
+    q = json.loads(qj.read_text())
+    del q["environment"]                                                 # shape_ok does not require it, list_sha does
+    qj.write_text(json.dumps(q))
+    status, card = svc.request("GET", f"/api/approve/prd/{PJOB}")
+    assert status == 200 and card["t4"]["action"] is None
+
+
+def test_an_unreadable_queue_means_unknown_exposure_and_names_it(svc):
+    setup(svc)
+    approve_queue(svc, via="ui")
+    qj = svc.queues / QID / "queue.json"
+    q = json.loads(qj.read_text())
+    for bad in (float("nan"), -5.0, "x"):
+        qj.write_text(json.dumps({**q, "max_usd": bad}) if bad == bad else json.dumps({**q, "max_usd": 1}).replace("1", "NaN", 1))
+        with pytest.raises(ca.Refusal) as e:
+            svc.actions.exposure()
+        assert e.value.status == 503 and QID in e.value.why
+
+
+def test_two_real_queue_go_confirms_in_a_row_cannot_beat_the_cap(tmp_path):
+    s = t.Service(tmp_path, cfg={**copy.deepcopy(t.CFG), "chat": {"daily_cap_usd": 3.0}})
+    try:
+        s.queues = tmp_path / "queues"
+        s.queues.mkdir()
+        s.actions.cards.queues_dir = s.queues
+        s.actions.plans.run = lambda argv: (0, "ok\n")
+        setup(s)
+        a = prep_go(s, ack="1,2")[1]["token"]
+        b = prep_go(s, ack="1,2")[1]["token"]                              # both prepared before either confirm: 2.0 each against 3.0
+        assert s.confirm(a)[0] == 200
+        status, out = s.confirm(b)
+        assert status in (403, 409)
+    finally:
+        s.stop()
+
+
+def test_the_reason_file_must_be_utf8_text_of_four_kilobytes_at_most(tmp_path):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import argus
+    f = tmp_path / "r.txt"
+    f.write_bytes(b"\xff\xfe not text at all, but long enough")
+    with pytest.raises(rj.Refused):
+        argus._read_reason_file(str(f))
+    f.write_bytes(b"x" * 5000)
+    with pytest.raises(rj.Refused):
+        argus._read_reason_file(str(f))
+    f.write_text("a reason that is long enough")
+    assert argus._read_reason_file(str(f)) == "a reason that is long enough"
