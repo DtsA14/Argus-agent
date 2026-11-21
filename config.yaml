@@ -242,6 +242,12 @@ issue_writer:
   turn: {cap_usd: 0.10, attempt_tokens: 1200000, max_input_tokens: 40000, max_steps: 20, max_submits: 6}
   code_max_usd: 1.00   # K3: the cap of a code job `argus issue start` makes (router/issue.py refuses more than $1.00)
 
+# The chat (router/chat.py, SPEC_CHAT_APP 11.8, SPEC_CHAT_T4A 10 item 5): the exposure one phone may commit in 24 hours. Every job a UI action starts counts its
+# full cap from the confirm: a writer job (issue $0.50, PRD $1.50), a research job ($1.00) and a queue approved with `queue go` (up to $5.00). $7.00 (Atha
+# 2026-11-21, K3 A) so a PRD and its queue fit; it is a fence, not a spend: real code jobs cost about $0.04.
+chat:
+  daily_cap_usd: 7.00
+
 # SPEC_PRD_WRITER 5: the PRD writer (job kind prd, `argus prd new|reply`). It reads the same repos (issue_writer.repos, K2) and
 # the same role as the issue writer (D6). The numbers are guesses to be measured on the first three PRDs (D8): max_usd is one
 # PRD job, turn one writer turn (a PRD turn writes up to max_items issues); max_items 5 (D7) because one submit must fit

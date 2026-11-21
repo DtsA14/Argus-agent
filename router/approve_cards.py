@@ -1,7 +1,7 @@
 """The plan card of the plain-language approval (docs/reviews/SPEC_KARTU_SETUJU.md sections 2, 3 and 6, PR 2 of T3): what will be built, the
 examples as numbers, and what it costs, for one PRD job. Read only, on top of the T2 cards (`router.cards.Cards`): it opens files the same
 way (one name at a time through directory descriptors, never through a symlink), it runs nothing, it starts no process, it calls no model,
-it writes nothing. There is no button here: the one decision "run the queue" is a later change (T4).
+it writes nothing. There is no button in this module: the two decisions (approve the plan, run the queue) are the chat's `prd_approve` and `queue_go` (router/chat_plan.py, SPEC_CHAT_T4A), which read the same card.
 
 What the card is made of, and who says it:
 - block A: the request as the human wrote it (the first human message, word for word; cut and marked when it is long), the writer's reply

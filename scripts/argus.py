@@ -87,6 +87,17 @@ def _ids(text):
     return tuple(ids)
 
 
+def _read_reason_file(path):
+    """The reason file of `queue go` (at most 4 KB, UTF-8); anything else is refused, never half read."""
+    try:
+        raw = Path(path).read_bytes()[:4097]
+        if len(raw) > 4096:
+            raise ValueError("too long")
+        return raw.decode("utf-8")
+    except (OSError, ValueError) as e:
+        raise rj.Refused(f"--reason-file: cannot be read as UTF-8 text of at most 4 KB ({type(e).__name__}); nothing was approved") from None
+
+
 def main(argv=None, deps=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config")
@@ -262,6 +273,8 @@ def main(argv=None, deps=None):
     qg = qsub.add_parser("go", help="approve the list and the money (its sha, as `new` and `status` print it)")
     qg.add_argument("queue")
     qg.add_argument("--sha", required=True)
+    qg.add_argument("--via", choices=rj.VIA, help="where the money was approved (SPEC_CHAT_T4A: the chat's daily cap counts it)")
+    qg.add_argument("--reason-file", help="the human's reason (10-500 characters), stored with the approval; the chat asks for one when a machine flag is raised")
     qs = qsub.add_parser("step", help="at most one drafter run; otherwise what waits for a human. Never approves or applies")
     qs.add_argument("queue")
     qs.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
@@ -424,7 +437,8 @@ def main(argv=None, deps=None):
             if o.queue_cmd == "status":
                 print(rq.status(o.queue, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))
                 return 0
-            q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir) if o.queue_cmd == "go"
+            q = (rq.go(o.queue, sha=o.sha, deps=deps, queues_dir=o.queues_dir, via=o.via,
+                        reason=_read_reason_file(o.reason_file) if o.reason_file else None) if o.queue_cmd == "go"
                  else rq.retry(o.queue, o.item, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir) if o.queue_cmd == "retry"
                  else rq.close(o.queue, o.note, deps=deps, queues_dir=o.queues_dir))
             print(rq.status(q["id"], queues_dir=o.queues_dir, jobs_dir=o.jobs_dir))

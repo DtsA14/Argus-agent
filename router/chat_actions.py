@@ -5,7 +5,8 @@
   confirm  takes the token only. The server rebuilds the card from live data and refuses when it is not the one that was shown
            (the digest differs), when the daily exposure would pass its cap, or when it comes less than MIN_DELAY after prepare.
 
-The CLI does the work (`argus issue new|reply|start|abandon`, `argus prd new`, `argus research`, each with --via ui), as for the control service on 8711: its job lock, its
+The CLI does the work (`argus issue new|reply|start|abandon`, `argus prd new`, `argus research`, each with --via ui; `argus prd approve` and
+`argus queue go` through router/chat_plan.py, which read the folder, the queue and the money themselves), as for the control service on 8711: its job lock, its
 state gate and its sha check stay under it. This module holds no key (it passes a key file's path from its environment), runs
 no model and keeps its own state and audit directory, not the control service's (11.10, 11.14).
 """
@@ -32,6 +33,7 @@ from models.registry import ConfigError
 from research.stages import QUESTION_MAX, QUESTION_MIN
 from router import job as rj
 from router import prd_job as pj
+from router.chat_plan import Plan
 from router import research as rr
 from router import stage_data as sd
 from router.control import cli as control_cli
@@ -44,7 +46,7 @@ WRITER_KEY_ENV = "ARGUS_CHAT_WRITER_KEY_FILE"
 RESEARCH_KEY_ENV = "ARGUS_CHAT_RESEARCH_KEY_FILE"   # research uses DeepSeek's own search and fetch API: its own key, when the code key is another provider's
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
-ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "job_reject", "job_abandon")   # never an approve (13.7 item 9)
+ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "prd_approve", "queue_go", "job_reject", "job_abandon")   # no approve of a draft, no apply, no queue step; the only approvals are prd_approve and queue_go (SPEC_CHAT_T4A, amending 13.7 item 9)
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -149,6 +151,7 @@ class Actions:
         self.approve = Approve(self.cards)                                                       # SPEC_KARTU_SETUJU: the plan card, read only
         self.approve_code = Install(self.approve)                                                # 5b: the install card, read only
         self.config_path = config_path
+        self.plans = Plan(self, Refusal)                                                          # SPEC_CHAT_T4A: prd_approve and queue_go
         self.state = Path(state)
         self.spawner = spawner or Spawner(self.state, clock)
         self.run = run or (lambda action, job_id, reason, sha="": control_cli(action, job_id, reason, sha, self.jobs_dir))
@@ -423,6 +426,10 @@ class Actions:
             return self.build_research(cfg, params)
         if action == "prd_new":
             return self.build_prd(cfg, params)
+        if action == "prd_approve":
+            return self.plans.build_approve(params)
+        if action == "queue_go":
+            return self.plans.build_go(params)
         w = cfg.get("issue_writer") or {}
         if not w:
             raise Refusal(409, "config", "the config has no issue writer")
@@ -805,6 +812,11 @@ class Actions:
                     seen.add(("start", n))
             except (KeyError, TypeError, ValueError):
                 raise unknown from None
+        total += self.plans.exposure(now, seen)               # queues approved via the UI (SPEC_CHAT_T4A 4)
+        for job_id, usd, at in self.plans.audited(now):       # the net under it: a `via` lost from the queue file
+            if ("go", job_id) not in seen and os.path.lexists(self.cards.queues_dir / job_id):
+                total += usd
+                seen.add(("go", job_id))
         for action, cap in (("research_new", rcap), ("prd_new", pcap)):
             for job_id, at in self.audited_jobs(now, action):        # the net under the directory count: a `via` lost from the CLI
                 if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
@@ -851,6 +863,8 @@ class Actions:
     def exposure_of(self, card):
         if card["action"] in ("issue_new", "issue_start", "research_new", "prd_new"):
             return float(card["job_cap_usd"])
+        if card["action"] == "queue_go":
+            return float(card["queue_usd"])                  # the money the queue is approved to spend; prd_approve spends none
         if card["action"] == "issue_reply" and not card.get("counted"):
             return float(card["turn_cap_usd"])           # a paid turn on a job whose creation the 24 hours do not hold
         return 0.0
@@ -920,6 +934,8 @@ class Actions:
             if code != 0:
                 raise Refusal(409, "cli", strip_refused(line) or "the command failed")
             return {"job": rp["job"], "done": True}
+        if a in ("prd_approve", "queue_go"):                 # no model and no key: the CLI approves what the card showed (SPEC_CHAT_T4A 5)
+            return self.plans.execute(a, card, rp)
         key = self.key_file(a in ("issue_new", "issue_reply", "prd_new"), research=(a == "research_new"))
         c = self.jobs_dir
         if a == "research_new":

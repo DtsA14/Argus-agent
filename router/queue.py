@@ -221,8 +221,17 @@ def _all(queues_dir):
     return out
 
 
-def go(qid, *, sha, deps, queues_dir=QUEUES):
-    """The human approves the list and the money: sha is (12+ hex of) the list sha `new` printed."""
+def go(qid, *, sha, deps, queues_dir=QUEUES, via=None, reason=None):
+    """The human approves the list and the money: sha is (12+ hex of) the list sha `new` printed. via: where it was decided (SPEC_CHAT_T4A 4: the chat's
+    daily cap counts a queue approved via the UI); reason: the human's typed reason (SPEC_CHAT_T4A 3), stored with the approval."""
+    if via is not None and via not in rj.VIA:
+        raise Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was approved")
+    if reason is not None:
+        from router import reason as reason_rule
+        try:
+            reason = reason_rule.check(reason, "--reason-file", "nothing was approved")
+        except rj.Refused as e:
+            raise Refused(str(e)) from None
     with _locked(queues_dir, qid) as (d, q):
         if q.get("closed"):
             raise Refused(f"queue {qid} is closed")
@@ -234,7 +243,8 @@ def go(qid, *, sha, deps, queues_dir=QUEUES):
             raise Refused(f"the list is {want[:12]}, not the {sha!r} given; nothing was approved")
         for item in q["items"]:
             _issue_text(d, item)
-        q["approved"] = {"sha": want, "at": deps.clock(), "by": os.environ.get("USER")}
+        q["approved"] = {"sha": want, "at": deps.clock(), "by": os.environ.get("USER"), **({"via": via} if via else {}),
+                         **({"reason": reason} if reason else {})}
         _save(d, q)
         return q
 

@@ -59,6 +59,10 @@ it is strict-lane. A hint that becomes a gate (refuses, fails or blocks somethin
   agents) stays read only on its own origin and never calls a chat route; the two are linked by navigation only, never by `fetch`.
 - Flag any chat route that changes a job, spends money or starts a process without the spec's two steps (prepare, then confirm with a token bound to the card),
   any Host check that skips a method, any cookie, any HTML sink or storage in `chat_static/app.js`.
+- The chat's only approvals are `prd_approve` and `queue_go` (SPEC_CHAT_T4A), each through prepare and confirm; the client sends only the PRD job's id (plus `ack`
+  and `reason` when a machine flag asks), the server reads the folder, the queue, the shas and the money; the machine's refusals (two agreeing readings, the
+  acknowledgement, the cost reason) are enforced on the server, not only in a page; the queue's money counts in the daily cap. Flag any chat route that approves a
+  draft, applies a patch, starts a drafter (`queue step`) or lets the client pick a queue, a sha or an amount. A terminal `queue go` does not enforce them (known).
 
 ### Proportional process and real use first (Atha, 2026-11-19)
 Atha spent a month building Argus without really using it; the goal is to reach **T6** (`argus env init`, environment node, new repos from a prompt) fast, and a

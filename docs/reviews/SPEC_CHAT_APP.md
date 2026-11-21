@@ -188,3 +188,7 @@ C4 dipecah dua supaya satu-satunya langkah yang berisiko (pindah port) kecil dan
 ### 13.8 Catatan dari tinjau Opus atas kode C4a (2026-11-15, GO WITH CHANGES; diterapkan)
 
 Daftar keputusan tidak membuka ledger (biaya dari `stages[*].usd` di `job.json`), satu rekaman yang tak dapat ditampilkan dihitung `skipped` dan tidak merusak daftar, draf dibaca lewat fd (tanpa symlink di tiap langkah; id run harus nama biasa), kartu yang terbuka dibaca ulang sesudah keputusan, `sha` hanya dikirim untuk `job_*` (aksi lain menolaknya), CLI yang habis waktu tercatat `exit: "timeout"`. **Batas yang diketahui:** `spent_usd` pada kartu ikut digest, jadi abandon job yang sedang berjalan dan menghabiskan uang dapat gagal di `confirm` dengan "kartu berubah" (CLI menolaknya juga lewat kunci job).
+
+## 14. Amandemen T4a (2026-11-21, Atha "Ok gass" dan K3 A; `SPEC_CHAT_T4A.md` rev 1)
+
+Mengamandemen 11.6 ("`approve` di luar cakupan sampai ada spek F8") dan 13.7 butir 9 ("tak ada tombol atau teks approve di chat") **hanya** untuk dua aksi: `prd_approve` (`argus prd approve`, tanpa uang) dan `queue_go` (`argus queue go --via ui`, menyetujui uang antrean), keduanya lewat prepare dan confirm. Tetap di luar: approve draf, apply, `queue step`, buka PR, merge. Batas harian chat dinaikkan ke $7,00 (`chat.daily_cap_usd` di `config.yaml`; sebelumnya bawaan $2,00) dan menghitung uang antrean yang disetujui via UI. Aturan "Chat app" di `AGENTS.md` ikut diperbarui.

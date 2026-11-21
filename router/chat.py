@@ -30,7 +30,7 @@ PORTS = (8711, 8712)                              # SPEC_CHAT_APP 13.4: 8712 whi
 HOSTS = (f"{BIND}:{PORT}",)
 ORIGINS = (f"http://{BIND}:{PORT}",)                  # the one origin a POST may come from (11.2)
 POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm"}   # the only POST routes; any other POST is a 405
-PARAMS = {"repo", "message", "job", "reason", "sha"}
+PARAMS = {"repo", "message", "job", "reason", "sha", "ack"}
 BODY_MAX = 16 * 1024                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
@@ -275,6 +275,8 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/approve/prd/([^/?#%]+)", path)         # SPEC_KARTU_SETUJU: the plan card, read only, GET only
         if a is not None and m:
             got = a.approve.plan(m.group(1))
+            if got is not None:
+                got["t4"] = a.plans.state(m.group(1))                    # SPEC_CHAT_T4A 10 item 10: the button the same builders would let through
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         m = re.fullmatch(r"/api/approve/code/([^/?#%]+)", path)        # SPEC_KARTU_SETUJU 5b: the install card, read only, GET only
         if a is not None and m:
@@ -373,6 +375,10 @@ class Handler(BaseHTTPRequestHandler):
             raise Refusal(400, "form", "a confirm carries the token and nothing else")
         action, card, rp, digest = a.confirm(body["token"])
         rec.update(action=action, job=card.get("job"), digest=digest)
+        if action == "queue_go":                                          # the audit net of the daily cap reads these (SPEC_CHAT_T4A 10 item 6); the reason only as a hash
+            rec.update(queue=card["queue"], usd=card["queue_usd"])
+            if card.get("reason"):
+                rec["reason_sha256"] = hashlib.sha256(card["reason"].encode()).hexdigest()
         if card.get("sha12"):
             rec["sha"] = card["sha12"]
         if not self._audit(a, **rec, attempt="confirm"):

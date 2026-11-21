@@ -13,7 +13,7 @@ Ukuran: (1) per issue, Atha membaca kartunya tanpa melihat kode (waktu diukur pe
 Satu PRD punya satu keputusan rencana dan satu keputusan pasang per issue, di waktu berbeda; keduanya kartu terpisah (halaman baru di atas T2; T2 tetap sebagai tampilan teknis).
 - **Kartu rencana** (per giliran PRD, `AWAITING_HUMAN`, sebelum ada kode): blok A dan B dengan hasil di dasar. Satu-satunya keputusan: "jalankan antrean".
 - **Kartu pasang** (per job code, per sha patch, `REVIEW_READY`): blok B dengan hasil audit, dan blok C. Satu-satunya keputusan: "pasang". Membaca `job.json` job code, `examples_intake.json`, `examples_audit_<sid>.json`, `review/` tahap terakhir, `patch_read_<sid>.json`, `examples_read_<turn>.json` (job PRD asalnya).
-Keduanya hanya baca di spek ini; tombol adalah T4.
+Keduanya hanya baca di spek ini; tombol adalah T4 (T4a dibangun 2026-11-21, `SPEC_CHAT_T4A.md`: `prd_approve` dan `queue_go`; apply tetap di luar).
 
 ## 3. Blok kartu
 **A. "Ini yang akan dibuat dan biayanya"** (rencana): permintaan Atha **apa adanya** (pesan pertama manusia, kata demi kata, bertanda "tulisan Anda" atau "tulisan Claude" bila job dibuat oleh sesi Claude), ringkasan penulis dalam bahasa biasa (`reply`, bertanda "ditulis model"), jumlah issue, biaya: yang sudah keluar dan yang diusulkan untuk antrean (mesin), dan acuan biaya (median biaya job terdahulu yang sama jenisnya, dihitung mesin dari ledger yang terbit).

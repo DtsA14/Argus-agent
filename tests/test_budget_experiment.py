@@ -55,6 +55,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["issue_writer"], base["roles"]["issue_writer"], base["tools"]["issue_writer"]   # SPEC_ISSUE_WRITER (never used)
     del base["prd_writer"]                # SPEC_PRD_WRITER 5 (the PRD writer's limits, never used by these arms)
     del base["control"]                   # SPEC_ISSUE_WRITER 6 (the control service's limits, never used by these arms)
+    del base["chat"]                      # SPEC_CHAT_T4A 10 item 5 (the chat's daily cap, never used by these arms)
     base["roles"]["coder"] = config("30k")["roles"]["coder"]   # the coder moved to DeepSeek on 2026-10-23; the arms ran Sonnet
     # D5: llm.prompt_cache added after the arms ran (absent means off); cache prices corrected and write rates added
     # after them. Their runs had no cache reads or writes, so their costs are the same under either table; every other
