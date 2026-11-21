@@ -19,7 +19,6 @@ import stat
 from pathlib import Path
 from types import SimpleNamespace
 
-from acceptance.contract import matches
 from codetask import examples as ex
 from router import protected_files
 from router import card_numbers as cn
@@ -372,10 +371,7 @@ class Install:
 
     @staticmethod
     def _protected(path, globs):
-        try:
-            return bool(matches(path, globs))
-        except Exception:
-            return True                                           # a glob that cannot be read protects
+        return protected_files.match_of(path, globs)              # one matcher for the card and `argus apply`; a glob that cannot be read protects
 
     def _files(self, listed, patch_bytes, globs, res, new_tests=frozenset()):
         """([{path, marks}], note, how many files were cut): the marks are hints of the machine, not a judgement; the note says when the issue's own

@@ -543,8 +543,7 @@ def test_a_glob_that_cannot_be_read_protects(svc, monkeypatch):
     def boom(path, globs):
         raise ValueError("bad glob")
     from router import protected_files as pf
-    monkeypatch.setattr(acode, "matches", boom)                                      # the mark of the file list
-    monkeypatch.setattr(pf, "matches", boom)                                         # the rule `argus apply` and the card share
+    monkeypatch.setattr(pf, "matches", boom)                                         # the one matcher `argus apply` and the card share
     c = good(svc, protected=("x/*",))
     assert c["files"][0]["marks"] == [acode.PROTECTED_MARK] and c["open"] is False
 

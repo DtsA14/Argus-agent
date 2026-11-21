@@ -248,6 +248,25 @@ def test_everything_else_that_matches_the_protected_list_still_stops_the_patch(e
     refused(env, tmp_path, sha, "protected")
 
 
+def test_a_forged_new_test_entry_on_a_patch_that_really_modifies_a_protected_test_is_refused(env, tmp_path):
+    """The package's `change: A` and `approved_test: true` are the package's word; git's reading of the patch must agree (SPEC_PROTECTED_FILES 10)."""
+    patch, sha = package(env, tmp_path, lambda r: (r / "tests" / "test_old.py").write_text("def test_x():\n    assert True  # rewritten\n"))
+    rewrite(env, patch, [{"path": "tests/test_old.py", "change": "A", "approved_test": True}])        # the real status is M
+    job = env.job()
+    job.data["protected_repo"] = {"sha256": "x", "globs": ["tests/**"]}
+    job.save()
+    refused(env, tmp_path, sha, "does not add it")
+
+
+def test_a_forged_new_test_entry_on_a_patch_that_removes_a_protected_test_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, lambda r: (r / "tests" / "test_old.py").unlink())
+    rewrite(env, patch, [{"path": "tests/test_old.py", "change": "A", "approved_test": True}])        # the real status is D
+    job = env.job()
+    job.data["protected_repo"] = {"sha256": "x", "globs": ["tests/**"]}
+    job.save()
+    refused(env, tmp_path, sha, "does not add it")
+
+
 def test_a_new_approved_test_does_not_unprotect_another_file_of_the_same_patch(env, tmp_path):
     def change(r):
         edit_shop()(r)
@@ -268,7 +287,8 @@ def test_the_rule_is_one_function_for_apply_and_the_card():
     assert pf.stopped([new_test], ["src/other/*"]) == [] and pf.allowed_new_tests([new_test], ["src/other/*"]) == []       # not matched: nothing to allow
     for name in ("test_a.py", "a_test.py", "x/a.test.js", "a.test.ts", "a.test.tsx", "a.test.jsx"):
         assert pf.is_new_approved_test({"path": name, "change": "A", "approved_test": True}), name
-    for name in ("conftest.py", "a.spec.js", "a.test.json", "a.test.js.map", "test.js", "a.tests.js", "testing/a.py"):
+    for name in ("conftest.py", "a.spec.js", "a.test.json", "a.test.js.map", "test.js", "a.tests.js", "testing/a.py", "contest_a.py", "latest_a.py",
+                 "src/contest_a.py", "x_test.py.bak", "a.TEST.js", "xa.test.jsx.orig"):
         assert not pf.is_new_approved_test({"path": name, "change": "A", "approved_test": True}), name
 
 

@@ -3,8 +3,10 @@
 The list is the contract for the agent: it never changes a file that matches. SPEC_PROTECTED_FILES P3 says a NEW test file of the approved draft
 (`new_tests`) may match the list (`*.test.*`), because it is a new file and a human approved it; `argus apply` and the install card refused it all the
 same. The rule, in one place for both: a matching file stops the patch unless it is (1) ADDED by the patch (`change == "A"`), (2) a test file by its
-NAME (pytest `test_*.py` and `*_test.py`, vitest `*.test.js|jsx|ts|tsx`; never `conftest.py`, never a config), and (3) one the approved draft declared
-and whose content is the content it approved (`approved_test`, from the review package, bound to the draft's hash). Everything else that matches
+NAME (pytest `test_*.py` and `*_test.py`, vitest `*.test.js|jsx|ts|tsx`; never `conftest.py`; by NAME only: the config names vitest and vite load, `vitest.config.<ext>`,
+`package.json`, cannot end in `.test.<ext>`, so none of them can pass), and (3) one the approved draft declared and whose content is the content it approved
+(`approved_test`, from the review package: the intake record's `added` hashes, from the approved draft). `argus apply` also requires git's own reading of the
+patch to agree with `change == "A"` (status A, old mode 000000): the package's two keys are the package's word, git's reading is the check. Everything else that matches
 (a modified or deleted protected file, a new file that is not a test, a new test the draft did not declare) still stops the patch. A package that does
 not say `change` and `approved_test` (an old one) stops as before.
 """
