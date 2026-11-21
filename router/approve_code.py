@@ -21,6 +21,7 @@ from types import SimpleNamespace
 
 from acceptance.contract import matches
 from codetask import examples as ex
+from router import protected_files
 from router import card_numbers as cn
 from router import example_gate as eg
 from router import examples_read as er
@@ -37,6 +38,7 @@ SID = re.compile(r"a[0-9]{1,3}")
 SHA = re.compile(r"[0-9a-f]{64}")
 PROTECTED_MARK = "dilindungi repo (.argus/protected)"
 OUTSIDE_MARK = "di luar yang disebut issue (touches/creates)"
+NEW_TEST_MARK = "tes baru yang disetujui draf (cocok dengan daftar dilindungi repo, boleh)"
 LABELS = {"a": "contoh di dasar tidak gagal", "b": "audit: contoh benar pada kode akhir", "c": "paket review valid",
           "d": "tes lama yang bentrok sudah dilonggarkan", "e": "draf tes disetujui", "f": "pembaca patch mencatat ok untuk patch ini",
           "g": "satu sha untuk review, provenance dan patch", "h": "ada contoh perilaku yang baru", "i": "angka domain dibaca"}
@@ -155,7 +157,8 @@ class Install:
                     finally:
                         os.close(rfd)
             patch = prov.get("patch") if isinstance(prov, dict) and isinstance(prov.get("patch"), dict) else {}
-            listed = [f["path"] for f in patch.get("files") or [] if isinstance(f, dict) and isinstance(f.get("path"), str)]
+            pfiles = [f for f in patch.get("files") or [] if isinstance(f, dict) and isinstance(f.get("path"), str)]
+            listed = [f["path"] for f in pfiles]
 
             # the example items as numbers
             src_fd = self._chain_fds(jfd, ("runs", run_id, "workspace")) if run_ok else None
@@ -183,7 +186,8 @@ class Install:
             # (c) the review package, (d) and (e) the approval of the draft
             state = data.get("state")
             globs = [g for g in ((data.get("protected_repo") or {}).get("globs") or []) if isinstance(g, str)]
-            protected = [p for p in listed if self._protected(p, globs)]
+            protected = protected_files.stopped(pfiles, globs)                       # the same rule `argus apply` applies (new approved tests may match the list)
+            new_tests = set(protected_files.allowed_new_tests(pfiles, globs))
             if state != "REVIEW_READY":
                 checks["c"] = _chk("c", False, f"job ada di keadaan {state}, bukan REVIEW_READY: belum ada paket review yang siap")
             elif rv.get("valid") is not True or rv.get("problems"):
@@ -238,7 +242,7 @@ class Install:
                 checks["i"] = _chk("i", res["ok"], er.card_text(res) if res["ok"] else (res["why"] or "angka domain belum dibaca"))
                 item["domain_read"] = (self.approve._domain_read(res["prd_job"], res["item"], item) if res.get("prd_job") else
                                        {"kind": "tidak_terbaca", "fresh": False, "why": res["why"] or "tidak terbaca"})
-            files, scope_note, cut = self._files(listed, patch_bytes, globs, res)
+            files, scope_note, cut = self._files(listed, patch_bytes, globs, res, new_tests)
             repo = i.get("repo_name")
             cost = {"spent": c._spent(data), "cap": data.get("max_usd") if isinstance(data.get("max_usd"), (int, float)) and not isinstance(data.get("max_usd"), bool) else None,
                     "reference": self.approve._reference()}
@@ -373,7 +377,7 @@ class Install:
         except Exception:
             return True                                           # a glob that cannot be read protects
 
-    def _files(self, listed, patch_bytes, globs, res):
+    def _files(self, listed, patch_bytes, globs, res, new_tests=frozenset()):
         """([{path, marks}], note, how many files were cut): the marks are hints of the machine, not a judgement; the note says when the issue's own
         anchors could not be compared (no anchors, no readable patch)."""
         anchors = self._anchors(res)
@@ -387,7 +391,9 @@ class Install:
         out = []
         for p in sorted(listed)[:FILES_MAX]:
             marks = []
-            if self._protected(p, globs):
+            if p in new_tests:
+                marks.append(NEW_TEST_MARK)                       # matches the list but is a new test the approved draft declared: shown, not hidden, not red
+            elif self._protected(p, globs):
                 marks.append(PROTECTED_MARK)
             if anchors and p in sections and not any(a in sections[p] for a in anchors):
                 marks.append(OUTSIDE_MARK)

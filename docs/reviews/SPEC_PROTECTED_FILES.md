@@ -113,3 +113,11 @@ jadi tidak bisa menanam `postcss.config.js` atau sejenisnya.
 - **K4:** **tanpa mengejar tenggat up2**; perubahan keamanan jalur ketat tidak dipercepat. Satu PR jalur ketat pada satu
   waktu: bila belum selesai saat up2 dimulai, Atha memilih yang didahulukan.
 - Tambahan Atha: hapus/rename dan symlink (P8, jaminan 8).
+
+## 10. Amandemen 2026-11-21: P3 berlaku juga di `argus apply` dan kartu pasang (celah dari pilot bulking-app)
+
+**Celah:** P3 (bagian 3) mengizinkan tes baru drafter (`new_tests`) cocok dengan daftar (`*.test.*`), dan draf serta agen memang meloloskannya, tetapi `argus apply` menolak setiap berkas patch yang cocok dengan daftar, termasuk berkas baru itu (`router/apply.py`, "the patch changes files the repository protects"); kartu pasang menandainya merah dan mematikan syarat (c). Akibatnya setiap repo vitest yang melindungi `*.test.*` harus di-apply dengan tangan (`git apply` + `argus applied`), kejadian di job bulking-app `j20261121_115439_1540`.
+
+**Aturan (satu fungsi, `router/protected_files.py`, dipakai apply dan kartu):** berkas yang cocok dengan daftar menghentikan patch **kecuali** ia (1) **ditambah** oleh patch (`change == "A"`), (2) **berkas tes menurut namanya** (`test_*.py`, `*_test.py`, `*.test.js|jsx|ts|tsx`; bukan `conftest.py`, bukan konfigurasi), dan (3) **dinyatakan draf yang disetujui dan isinya persis yang disetujui** (`approved_test`, dari paket review, terikat ke hash draf). Semua yang lain tetap menghentikan: berkas terlindungi yang diubah atau dihapus, berkas baru yang bukan tes, tes baru yang tidak dinyatakan draf, dan paket tanpa `change` atau `approved_test` (paket lama; aman secara bawaan). Glob yang tidak terbaca tetap melindungi. Kartu pasang menampilkan tes baru yang lolos dengan tanda sendiri ("tes baru yang disetujui draf (cocok dengan daftar dilindungi repo, boleh)"): tampil, tidak tersembunyi, tidak merah; berkas yang tetap terlindungi tetap merah dan mematikan syarat (c).
+
+**Tidak berubah:** daftar tetap tidak dapat ditulis agen; `changed_tests` pada berkas yang cocok tetap ditolak di draf (P3); berkas konfigurasi (`vite.config.*`, `package.json`, `vitest.config.*`) tidak pernah lolos lewat jalur ini karena bukan nama tes.

@@ -17,8 +17,8 @@ import unicodedata
 from contextlib import contextmanager
 from pathlib import Path
 
-from acceptance.contract import matches
 from router import job as rj
+from router import protected_files
 from router import reason as reason_rule
 from router import examples_read as er
 from router import patch_read as pr
@@ -160,9 +160,10 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None,
         extra = {**extra, "accepted_nits": [list(f) for f in nits]}
     if accept is not None:
         extra = {**extra, "accepted_concerns": accept, "accepted_findings": [list(f) for f in seen], "accepted_sha": sha}
-    listed = sorted(f["path"] for f in (prov.get("patch") or {}).get("files") or [])
+    pfiles = [f for f in (prov.get("patch") or {}).get("files") or [] if isinstance(f, dict) and isinstance(f.get("path"), str)]
+    listed = sorted(f["path"] for f in pfiles)
     globs = (job.data.get("protected_repo") or {}).get("globs") or []
-    hit = [p for p in listed if matches(p, globs)]
+    hit = protected_files.stopped(pfiles, globs)       # a NEW test of the approved draft may match the list (SPEC_PROTECTED_FILES P3); nothing else may
     if hit:
         refuse(f"the patch changes files the repository protects (.argus/protected): {hit[:3]}")
     if not patch.strip() or not listed:
