@@ -177,3 +177,22 @@ def test_the_status_names_a_nit_pair(env, tmp_path):
     read_argus_pair(env, "ok", "concerns", None, "nit")
     out = rj.status("jtest", jobs_dir=env.jobs)
     assert "patch read: nit" in out and "second reading" in out and "write the note first" not in out
+
+
+def test_a_claude_reading_with_the_ids_of_the_pair_is_still_not_a_nit_pair(env, tmp_path):
+    from router import patch_read_run as prr
+    patch, sha = package(env, tmp_path, edit_shop())
+    disk = read_argus_pair(env, "concerns", "ok", "nit", None)
+    assert kind_of(env, disk) == "nit"
+    edit(env, lambda r: r["reader"].update(kind="claude"))
+    edit(env, lambda r: r.pop("template_sha256"))
+    assert kind_of(env, disk) == "concerns"                                                         # the ids are the pair's, the kind is not argus
+
+
+def test_a_nit_of_a_second_reader_that_is_not_the_pair_keeps_the_patch_closed_and_stays_out_of_a_retry(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    disk = pr_disk = read_pair(env, "ok", None)
+    pr.record("jtest", disk[:12], "concerns", "a corner", "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True, severity="nit")
+    kind, rec = pr.load(env.job().dir, "a1", disk)
+    assert kind == "concerns"                                                                      # a Claude nit is not enough to open the patch
+    assert pr.findings(rec, blockers_only=True) == [] and [n for _, n in pr.nits(rec)] == ["a corner"]
