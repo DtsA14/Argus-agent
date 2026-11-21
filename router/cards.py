@@ -500,13 +500,23 @@ class Cards:
         return data, "ok"
 
     def _committed(self, job):
-        """Nano-dollars a started job holds of the queue's money, as the chat can tell it without the ledger: what its finished stages
-        recorded when it can no longer spend (APPLIED and the like), else its whole cap; an unknown cost counts as the cap."""
+        """Nano-dollars a started job holds of the queue's money, as the chat can tell it without the ledger (job.json; the queue's own count reads the
+        ledger): what its stages recorded when no step of the queue can spend on it again (rq.SPENT_ONLY: APPLIED, ABANDONED, ...), else its whole
+        cap; a stage with no recorded cost counts as the cap."""
         cap = to_nano(job.get("max_usd")) if isinstance(job.get("max_usd"), (int, float)) and not isinstance(job.get("max_usd"), bool) else 0
         if job.get("state") in rq.SPENT_ONLY:
             spent = self._spent(job)
             return to_nano(spent) if spent is not None else cap
         return cap
+
+    def _stopped_hint(self, q, item, job, st):
+        """What the human does about a job that stopped the queue: one fixed sentence per cause (ids are scrubbed; commands are for the terminal, the chat runs none)."""
+        j = self.s(job.get("job"))
+        if st == "REJECTED":
+            if len(item.get("retries") or []) < rq.MAX_RETRIES:
+                return f"Coba lagi dengan temuan pembaca: argus queue retry {self.s(q.get('id'))} --item {item['n']} (di terminal)"
+            return "Retry habis: ulangi issue ini dari PRD"
+        return f"Lihat: argus status {j} (di terminal)"
 
     def _derive(self, q):
         """(state, next, per-item facts) of a queue as `rq.derive` would say it, computed here: the item jobs are read through file
@@ -537,19 +547,20 @@ class Cards:
             if state is not None:
                 continue
             if status == "bad":
-                state, nxt = "STOPPED", f"item {item['n']}: job tidak terbaca atau bukan job code"
+                state, nxt = "STOPPED", f"item {item['n']}: job tidak terbaca atau bukan job code. Lihat: argus status <job> (di terminal)"
                 continue
             if status == "ok" and not info["bound"]:
-                state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} bukan issue antrean ini di commit ini"
+                state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} bukan issue antrean ini di commit ini. Lihat: argus status {self.s(job.get('job'))} (di terminal)"
                 continue
             if status == "missing" or (not job.get("stages") and job.get("state") in ("NEW", "ABANDONED", "BLOCKED")):
                 if status == "ok" and job.get("state") == "BLOCKED":
-                    state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} BLOCKED sebelum tahap pertama"
+                    state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} BLOCKED sebelum tahap pertama. Lihat: argus status {self.s(job.get('job'))} (di terminal)"
                     continue
                 left = to_nano(q["max_usd"]) - committed
                 cap = to_nano(q["job_cap_usd"])
                 if cap > left:
-                    state, nxt = "STOPPED", f"item {item['n']}: uang antrean (${q['max_usd']:.2f}) tersisa ${left / 1e9:.4f}, satu job butuh ${cap / 1e9:.2f}"
+                    state, nxt = "STOPPED", (f"item {item['n']}: uang antrean (${q['max_usd']:.2f}) tersisa ${left / 1e9:.4f}, satu job butuh ${cap / 1e9:.2f}. "
+                                             "Tidak ada perintah yang menambah uang antrean: tutup antrean ini dan buat antrean baru untuk issue yang tersisa (di terminal)")
                 else:
                     state, nxt = "WAITING", f"item {item['n']} bisa mulai (HEAD tidak diperiksa dari chat; uang dihitung dari job.json)"
                 continue
@@ -562,13 +573,13 @@ class Cards:
                         commit_new, as_is = e.get("commit"), e.get("as_is")
                         break
                 if not isinstance(commit_new, str) or as_is is not True:
-                    state, nxt = "STOPPED", f"item {item['n']}: APPLIED tetapi commitnya tidak tercatat sebagai patch"
+                    state, nxt = "STOPPED", f"item {item['n']}: APPLIED tetapi commitnya tidak tercatat sebagai patch. Lihat: argus status {self.s(job.get('job'))} (di terminal)"
                 else:
                     info["applied"] = self.s(commit_new[:12])
                     commit = commit_new
                 continue
             if st in rq.FAILED:
-                state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} {self.s(st)}"
+                state, nxt = "STOPPED", f"item {item['n']}: job {self.s(job.get('job'))} {self.s(st)}. " + self._stopped_hint(q, item, job, st)
             elif st == "AWAITING_APPROVAL":
                 state, nxt = "WAITING", f"item {item['n']}: draf menunggu approve"
             elif st == "REVIEW_READY":

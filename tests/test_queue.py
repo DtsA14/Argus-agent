@@ -1,7 +1,8 @@
 """SPEC_PRD_QUEUE part A: `argus queue` (router/queue.py): issues in order on one repository, each on the commit the one before was
 applied as; the human approves the list and the money once; `step` makes at most one drafter run and never approves or applies;
-a failure stops the queue; the money of the started jobs, at their caps, never passes max_usd."""
+a failure stops the queue; a job that can still spend holds its whole cap, an applied or finished one what it spent (SPEC_QUEUE_MONEY)."""
 import json
+import shutil
 import os
 import subprocess
 import sys
@@ -279,9 +280,9 @@ def test_a_recorded_job_that_is_not_the_queues_issue_stops_the_queue_and_is_not_
 
 # ---- money ----------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("state,counts_cap", [(rj.APPLIED, True), (rj.REJECTED, True), (rj.DRAFT_FAILED, True), (rj.AGENT_FAILED, True),
+@pytest.mark.parametrize("state,counts_cap", [(rj.APPLIED, False), (rj.REJECTED, True), (rj.DRAFT_FAILED, True), (rj.AGENT_FAILED, True),
                                               (rj.AWAITING_APPROVAL, True), (rj.ABANDONED, False), (rj.BLOCKED, False), (rj.REVIEW_INVALID, False)])
-def test_a_job_holds_its_whole_cap_unless_it_cannot_spend_again(qe, state, counts_cap):
+def test_a_job_holds_its_whole_cap_unless_no_step_of_the_queue_can_spend_on_it_again(qe, state, counts_cap):
     q = qe.ready()
     qe.step(q)
     job = qe.job(q, 0)
@@ -290,13 +291,28 @@ def test_a_job_holds_its_whole_cap_unless_it_cannot_spend_again(qe, state, count
     assert counts_cap or rj.spent_nano(qe.job(q, 0)) > 0          # the fake drafter spent something: "spent" and "zero" differ
 
 
-def test_the_started_jobs_at_their_caps_never_pass_the_queue_money(qe):
-    q = qe.ready(n=3, max_usd=2.0)
+def test_two_applied_jobs_hold_what_they_spent_and_the_third_issue_steps(qe):
+    q = qe.ready(n=3, max_usd=2.0)                       # the pilot's shape: money of issues x cap would be $3.00, here $2.00 and one $1.00 job each
     for i in range(2):
         qe.step(q)
         qe.apply(q, i)
-    out = qe.step(q)                                     # two APPLIED jobs hold $2.00 each at cap: a judge could still spend on them
-    assert qe.status(q) == "STOPPED" and "the money" in out and len(qe.calls) == 2
+    held = sum(rq.committed_nano(qe.job(q, i)) for i in range(2))
+    assert 0 < held < 100_000_000                        # what the fake drafter spent, not $2.00
+    out = qe.step(q)
+    assert "the money" not in out and len(qe.calls) == 3 and qe.status(q) == "WAITING"
+
+
+def test_a_later_judge_of_an_applied_job_is_counted_once_it_has_happened(qe):
+    q = qe.ready(n=1, max_usd=1.0)
+    qe.step(q)
+    qe.apply(q, 0)
+    job = qe.job(q, 0)
+    before = rq.committed_nano(job)
+    first = next(iter(job.data["stages"].values()))
+    shutil.copytree(job.runs / first["run_id"], job.runs / "judge-run")      # a judge's run: a ledger of its own, registered as a stage
+    job.data["stages"]["j1"] = {**first, "kind": "judge", "run_id": "judge-run"}
+    job.save()
+    assert rq.committed_nano(qe.job(q, 0)) == 2 * before             # spent_nano adds every stage: nothing filters a judge out, and it counts only once it exists
 
 
 # ---- close ----------------------------------------------------------------------------------------------------------
@@ -384,7 +400,7 @@ def test_the_money_fits_exactly(qe):
         qe.step(q)
         qe.apply(q, i)
     qe.step(q)
-    assert len(qe.calls) == 3 and qe.status(q) == "WAITING"      # 1 + 1 held, 1 more fits at exactly $3.00
+    assert len(qe.calls) == 3 and qe.status(q) == "WAITING"      # two applied jobs hold what they spent: the third fits
 
 
 def test_reordered_items_after_go_are_refused(qe):

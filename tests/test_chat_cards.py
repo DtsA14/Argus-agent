@@ -453,7 +453,8 @@ def test_a_retired_attempt_that_can_be_opened_counts_what_its_job_spent_not_the_
     assert c["state"] == "STOPPED" and "uang antrean" in c["next"]
 
 
-def test_the_queue_money_is_counted_from_the_jobs_and_stops_the_queue_like_derive(svc):
+def applied_pair(svc, usd):
+    """Queue of 3 items (max $1.00, cap $0.50) whose first two jobs are APPLIED as the patch; their stage records say `usd` (None: no number)."""
     t1, t2, t3 = issue_text(SAME, title="1"), issue_text(AFTER, title="2"), issue_text(SAME, title="3")
     write_queue(svc, [(t1, CJOB1), (t2, CJOB2), (t3, None)], approved={"sha": "x"}, max_usd=1.0, job_cap_usd=0.5)
     for jid, t, commit in ((CJOB1, t1, "c" * 40), (CJOB2, t2, "e" * 40)):
@@ -462,9 +463,43 @@ def test_the_queue_money_is_counted_from_the_jobs_and_stops_the_queue_like_deriv
         j = json.loads((d / "job.json").read_text())
         j["inputs"]["commit"] = commit
         j["max_usd"] = 0.5
+        if usd is not None:
+            j["stages"]["a1"]["usd"] = usd
         (d / "job.json").write_text(json.dumps(j))
+
+
+def test_applied_jobs_hold_what_their_stages_spent_and_the_next_item_can_start(svc):
+    applied_pair(svc, 0.01)
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "WAITING" and "item 3 bisa mulai" in c["next"]
+
+
+def test_an_applied_job_with_an_unknown_cost_holds_its_cap_and_stops_the_queue_with_the_next_step(svc):
+    applied_pair(svc, None)
     c = card(svc, "queue", QID)[1]
     assert c["state"] == "STOPPED" and "uang antrean" in c["next"]
+    assert "Tidak ada perintah yang menambah uang antrean" in c["next"] and "antrean baru" in c["next"]
+
+
+def test_real_spend_that_fills_the_money_still_stops_the_queue(svc):
+    applied_pair(svc, 0.45)                                      # $0.90 spent of $1.00: one $0.50 job no longer fits
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and "uang antrean" in c["next"]
+
+
+@pytest.mark.parametrize("retries,state,expect", [
+    ([], "REJECTED", "argus queue retry"), ([{"job": "x", "spent_nano": 1, "findings": "x", "at": "t", "by": "u"}] * 2, "REJECTED", "ulangi issue ini dari PRD"),
+    ([], "AGENT_FAILED", "argus status"), ([], "REVIEW_INVALID", "argus status"), ([], "DRAFT_FAILED", "argus status"),
+])
+def test_a_stopped_card_says_what_to_do_per_cause(svc, retries, state, expect):
+    t1 = issue_text(SAME, title="1")
+    write_queue(svc, [(t1, CJOB1)], approved={"sha": "x"}, max_usd=3.0, job_cap_usd=1.0)
+    code_job(svc, CJOB1, t1, state=state)
+    base = json.loads((svc.queues / QID / "queue.json").read_text())
+    base["items"][0]["retries"] = retries
+    (svc.queues / QID / "queue.json").write_text(json.dumps(base))
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and expect in c["next"] and "/secret/path" not in c["next"]
 
 
 def test_an_item_job_that_is_there_but_not_a_code_job_stops_the_queue_and_a_missing_one_waits(svc):
@@ -632,7 +667,7 @@ def test_an_applied_job_that_is_not_the_patch_and_a_blocked_one_stop_the_queue(s
     t1 = issue_text(SAME)
     write_queue(svc, [(t1, CJOB1)], approved={"sha": "x"})
     d = code_job(svc, CJOB1, t1, state="APPLIED", log=[{"at": "t", "what": "state", "new": "APPLIED", "commit": "e" * 40, "as_is": False}])
-    assert card(svc, "queue", QID)[1]["state"] == "STOPPED" and "tidak tercatat sebagai patch" in card(svc, "queue", QID)[1]["next"]
+    assert card(svc, "queue", QID)[1]["state"] == "STOPPED" and "tidak tercatat sebagai patch" in card(svc, "queue", QID)[1]["next"] and "argus status" in card(svc, "queue", QID)[1]["next"]
     j = json.loads((d / "job.json").read_text())
     j.update(state="BLOCKED", stages={}, log=[])
     (d / "job.json").write_text(json.dumps(j))
@@ -709,3 +744,11 @@ def test_the_page_shows_the_summary_once_the_label_once_and_no_title_twice():
     part = js[js.index("// ---- T2: read-only cards"):js.index("  function setMode(m) {")]
     assert "Ringkasan mesin: " in part and "perilaku baru (after): " in part and "sm.after === 0" in part
     assert part.count("output of the example's own code") == 1 and "if (it.title && !it.text)" in part
+
+
+def test_a_job_that_is_not_this_queues_issue_stops_the_card_with_the_next_step(svc):
+    t1 = issue_text(SAME, title="1")
+    write_queue(svc, [(t1, CJOB1)], approved={"sha": "x"}, max_usd=3.0, job_cap_usd=1.0)
+    code_job(svc, CJOB1, issue_text(AFTER, title="another issue"), state="REVIEW_READY")
+    c = card(svc, "queue", QID)[1]
+    assert c["state"] == "STOPPED" and "bukan issue antrean ini" in c["next"] and "argus status" in c["next"]
