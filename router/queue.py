@@ -274,7 +274,7 @@ def retry(qid, n, *, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
         sid, stage = rj.last_agent(job)
         sha = ((stage or {}).get("review") or {}).get("patch_sha256")
         kind, rec = pr.load(job.dir, sid, sha) if isinstance(sid, str) and isinstance(sha, str) else ("none", None)
-        found = pr.findings(rec) if kind == "concerns" and isinstance(rec, dict) else []
+        found = pr.findings(rec, blockers_only=True) if kind == "concerns" and isinstance(rec, dict) else []          # nits never go to a drafter
         if not found:
             raise Refused(f"queue {qid}: job {job.id} was not rejected on a patch reader's concerns (its note is {kind}): there is nothing to hand to a new drafter; nothing was changed")
         text = "\n".join(f"- [{who}] {note}" for who, note in found)

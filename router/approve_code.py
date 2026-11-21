@@ -209,8 +209,9 @@ class Install:
 
             # (f) the patch reader's note, (g) one sha
             pr_kind, pr_rec = pr.load(f"/proc/self/fd/{jfd}", sid, rsha) if sid and rsha else ("error", None)
-            checks["f"] = _chk("f", pr_kind == "ok", {
-                "ok": "dua pembaca patch sama-sama mencatat ok untuk patch ini", "concerns": "pembaca patch mencatat ada yang meragukan",
+            checks["f"] = _chk("f", pr_kind in ("ok", "nit"), {
+                "ok": "dua pembaca patch sama-sama mencatat ok untuk patch ini", "nit": "dua pembaca patch membaca patch ini; hanya ada catatan kecil (nit), bukan keberatan",
+                "concerns": "pembaca patch mencatat ada yang meragukan",
                 "one": "baru satu bacaan patch: ok butuh dua bacaan oleh dua pembaca berbeda",
                 "none": "belum ada catatan pembaca patch", "stale": "catatan pembaca patch untuk patch lain",
                 "error": "catatan pembaca patch rusak atau tidak bisa dibaca"}[pr_kind])
@@ -251,12 +252,14 @@ class Install:
                     "patch_read": None, "patch_read_label": PATCH_LABEL, "fixed_line": FIXED_LINE, "domain_read_label": DOMAIN_LABEL,
                     "approval": None if appr is None else {"at": appr.get("at"), "by": appr.get("by"), "note": APPROVAL_NOTE},
                     "patch_reader_tested": False, "domain_reader_tested": False}
-            if pr_kind in ("ok", "concerns") and pr_rec:
-                card["patch_read"] = {"verdict": pr_rec["verdict"], "reader": pr_rec["reader"], "at": pr_rec["at"], "note": pr_rec["note"], "by": "model"}
+            if pr_kind in ("ok", "concerns", "nit") and pr_rec:
+                card["patch_read"] = {"verdict": pr_rec["verdict"], "reader": pr_rec["reader"], "at": pr_rec["at"], "note": pr_rec["note"], "by": "model",
+                                      **({"severity": pr_rec["severity"]} if pr_rec.get("severity") else {})}
                 if isinstance(pr_rec.get("second"), dict):
                     s2 = pr_rec["second"]
-                    card["patch_read"]["second"] = {"verdict": s2["verdict"], "reader": s2["reader"], "at": s2["at"], "note": s2["note"]}
-            pids = [(r.get("kind"), r.get("id")) for r in ((pr_rec or {}).get("reader"), ((pr_rec or {}).get("second") or {}).get("reader")) if isinstance(r, dict)] if pr_kind == "ok" else []
+                    card["patch_read"]["second"] = {"verdict": s2["verdict"], "reader": s2["reader"], "at": s2["at"], "note": s2["note"],
+                                                    **({"severity": s2["severity"]} if s2.get("severity") else {})}
+            pids = [(r.get("kind"), r.get("id")) for r in ((pr_rec or {}).get("reader"), ((pr_rec or {}).get("second") or {}).get("reader")) if isinstance(r, dict)] if pr_kind in ("ok", "nit") else []
             dr = item.get("domain_read") if isinstance(item, dict) else None
             ids = [r.get("id") for r in (dr.get("reader"), dr.get("reader2")) if isinstance(r, dict)] if isinstance(dr, dict) else []
             card["patch_reader_tested"], card["domain_reader_tested"] = self._tested(repo, ids, pids)

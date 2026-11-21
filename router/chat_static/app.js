@@ -609,7 +609,9 @@
     if (!r) { box.appendChild(el("p", "note", "belum ada catatan")); return; }
     var line = function (x, n) {
       var by = who_(x.reader) ? " (" + who_(x.reader) + ")" : "";
-      say(box, "pembaca", "pembaca patch " + n, "Claude, " + x.at + ": " + (x.verdict === "ok" ? "ok" : "ada yang meragukan") + by, x.verdict === "ok" ? "say" : "say warn");
+      var nit = x.verdict === "concerns" && x.severity === "nit";
+      var who = (x.reader && x.reader.kind === "argus") ? "Model" : "Claude";
+      say(box, "pembaca", "pembaca patch " + n, who + ", " + x.at + ": " + (x.verdict === "ok" ? "ok" : nit ? "catatan kecil (nit)" : "ada yang meragukan") + by, x.verdict === "ok" || nit ? "say" : "say warn");
       modelLine(box, x.note);
     };
     line(r, 1);

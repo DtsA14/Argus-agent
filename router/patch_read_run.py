@@ -1,8 +1,8 @@
 """`argus patch-read-run <job>`: the patch reader of an Argus job is a pair of models of Argus's own (docs/reviews/SPEC_KARTU_SETUJU.md 13.5), not a Claude session.
 
-The first reader is Tencent Hy4 Flash. Only when it says `ok` is the second asked, DeepSeek V4.1 Flash 1017; the patch is `ok` only when both said `ok` (a `concerns` of
-either closes it, and a `concerns` of the first needs no second call). Each is given the fixed template of router/patch_read.py, the issue of the job, the files the patch
-touches and the patch, as data, and nothing else; the reply must be one JSON object {verdict, note}. Every call goes through LLMCaller (a reservation before sending, an
+The first reader is Tencent Hy4 Flash, the second DeepSeek V4.1 Flash 1017; BOTH always read (since 2026-11-19). The patch is `ok` only when both said `ok`; a `concerns` of either closes it,
+unless every `concerns` is an explicit `nit` of the two Argus readers (SPEC_PATCH_READER_SEVERITY: the pair is then `nit` and applies like `ok`). Each is given the fixed template of router/patch_read.py, the issue of the job, the files the patch
+touches and the patch, as data, and nothing else; the reply must be one JSON object {verdict, note, severity (only with concerns)}. Every call goes through LLMCaller (a reservation before sending, an
 entry in the ledger before and after, integer nano-dollars) and the cap of the run (`--cap-usd`) is TOTAL for the job's patch readings: the ledger sits in the job
 directory (`patch_read_ledger.jsonl`) and a call starts only if the money already billed plus its worst case fits. The readings are written through
 `patch_read.record` (reader kind `argus`, id `argus:<model>`), so the card and `argus apply` read them like any note; nothing is added to the log of the job.
@@ -77,7 +77,7 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=64000, 
     kind0, rec0 = pr.load(job.dir, sid, sha)
     resume = (kind0 in ("one", "concerns") and isinstance(rec0, dict) and rec0["reader"].get("kind") == "argus"
               and rec0["reader"].get("id") == reader_id(first) and "second" not in rec0)      # the first reading stands (ok or concerns): only the second is asked
-    if kind0 == "ok" or (kind0 == "concerns" and not resume):
+    if kind0 in ("ok", "nit") or (kind0 == "concerns" and not resume):
         summary["final"] = kind0
         summary["stopped"] = f"the patch already has a final reading ({kind0}); nothing is read again"
         return summary
@@ -117,13 +117,13 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=64000, 
             if got is None:
                 summary["readings"].append({"reader": reader_id(name), "usable": False, "why": "the reply is not the asked JSON"})
                 break
-            verdict, note = got
+            verdict, note, severity = got
             try:
-                pr.record(job_id, sha, verdict, note, "argus", reader_id(name), deps=deps, jobs_dir=jobs_dir, second=(n == 1))
+                pr.record(job_id, sha, verdict, note, "argus", reader_id(name), deps=deps, jobs_dir=jobs_dir, second=(n == 1), severity=severity)
             except rj.Refused as e:                           # the job changed while the model read (a manual note, a new patch): the reading is not written
                 summary["readings"].append({"reader": reader_id(name), "usable": False, "why": f"not written: {str(e).split(': ', 1)[-1].split('; nothing')[0]}"})
                 break
-            summary["readings"].append({"reader": reader_id(name), "usable": True, "verdict": verdict})
+            summary["readings"].append({"reader": reader_id(name), "usable": True, "verdict": verdict, **({"severity": severity} if severity else {})})
             verdicts.append(verdict)                           # a `concerns` of the first reader does not stop the second: both readers' findings are wanted in one note
         summary["billed_usd"] = reconcile_ledger(log.read())[1]["usd"]
     kind, _ = pr.load(job.dir, sid, sha)

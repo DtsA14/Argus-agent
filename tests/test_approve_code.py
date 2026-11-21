@@ -600,3 +600,20 @@ def test_the_patch_reader_is_tested_only_for_the_pair_of_models_and_the_template
         assert get(svc)[1]["patch_reader_tested"] is False
     f.write_text(json.dumps({"athena": {"patch": entry}}))
     assert get(svc)[1]["patch_reader_tested"] is True
+
+
+def test_a_nit_pair_of_the_argus_readers_opens_check_f_and_shows_the_nit(svc):
+    from router import patch_read_run as prr
+    d = make(svc, read="ok", by_reader="argus")
+    f = d / "patch_read_a1.json"
+    rec = json.loads(f.read_text())
+    rec["reader"]["id"] = prr.reader_id(prr.FIRST)
+    rec["second"].update(verdict="concerns", severity="nit", note="year 0-99 is accepted")
+    rec["second"]["reader"]["id"] = prr.reader_id(prr.SECOND)
+    f.write_text(json.dumps(rec))
+    status, c = get(svc)
+    assert status == 200 and checks(c)["f"]["ok"] is True and "catatan kecil" in checks(c)["f"]["why"]
+    assert c["patch_read"]["second"]["severity"] == "nit" and c["patch_read"]["second"]["verdict"] == "concerns"
+    rec["second"]["severity"] = "blocker"                                                     # a blocker beside it closes the card again
+    f.write_text(json.dumps(rec))
+    assert checks(get(svc)[1])["f"]["ok"] is False

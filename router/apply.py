@@ -155,13 +155,15 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None,
         refuse("the patch on disk is not the one the review recorded (job.json and provenance.json must both name it)")
     try:                                    # SPEC_KARTU_SETUJU 5: an `ok` note of a patch reader for these very bytes, before anything is touched
         if accept is None:
-            pr.require_ok(job, rj.last_agent(job)[0], sha, reader)
             seen = None
+            nits = pr.nits(pr.require_ok(job, rj.last_agent(job)[0], sha, reader))      # a `nit` pair goes through like `ok`; its notes are recorded
         else:                               # SPEC_APPLY_ACCEPT_CONCERNS: both readings, one of them a concern; everything after this line is unchanged
             seen = pr.require_concerns_pair(job, rj.last_agent(job)[0], sha, reader)[1]
     except rj.Refused as e:
         refuse(str(e).split(": ", 1)[1] if ": " in str(e) else str(e))
     extra = {"reader": reader} if reader else {}
+    if accept is None and nits:
+        extra = {**extra, "accepted_nits": [list(f) for f in nits]}
     if accept is not None:
         extra = {**extra, "accepted_concerns": accept, "accepted_findings": [list(f) for f in seen], "accepted_sha": sha}
     listed = sorted(f["path"] for f in (prov.get("patch") or {}).get("files") or [])

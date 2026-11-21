@@ -704,3 +704,17 @@ def test_a_retry_names_the_item_the_queue_stopped_at_not_another_item_that_happe
     with pytest.raises(rq.Refused, match="stopped at"):
         retry(qe, q, 2)
     assert "retries" not in qe.q(q)["items"][1]
+
+
+def test_a_retry_hands_the_drafter_only_the_blocker_findings_never_the_nits(qe):
+    q = qe.ready(n=1, max_usd=3.0)
+    qe.step(q)
+    job = reject_on_findings(qe, q, 0, notes=(("argus:hy4", "it deletes the parent directory"), ("argus:ds", "year 0-99 is accepted")))
+    f = job.dir / "patch_read_a1.json"
+    rec = json.loads(f.read_text())
+    rec["severity"] = "blocker"
+    rec["second"]["severity"] = "nit"
+    f.write_text(json.dumps(rec))
+    out = retry(qe, q)
+    note = qe.q(q)["items"][0]["retry_note"]
+    assert "deletes the parent directory" in note and "year 0-99" not in note

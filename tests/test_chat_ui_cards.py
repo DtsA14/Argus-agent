@@ -29,7 +29,7 @@ def test_every_field_the_old_cards_showed_is_still_read_by_the_drawing_code(fiel
 
 
 # one line of the drawing code per displayed thing: a deleted or disabled line fails here even when its field name is read elsewhere
-SNIPPETS = ['r.verdict === "ok" ? "say" : "say warn"', 'x.verdict === "ok" ? "say" : "say warn"', 's5.appendChild(el("p", "say", d.fixed_line))', 's7.appendChild(el("p", "say", d.fixed_line))', 'if (d.why) { card.appendChild(el("p", "note", d.why)); }', 'if (d.stale) {', 'if (d.superseded) {', 'if (d.request_truncated)', "s2.appendChild(el(\"p\", \"note\", d.summary_why))",
+SNIPPETS = ['r.verdict === "ok" ? "say" : "say warn"', 'x.verdict === "ok" || nit ? "say" : "say warn"', 's5.appendChild(el("p", "say", d.fixed_line))', 's7.appendChild(el("p", "say", d.fixed_line))', 'if (d.why) { card.appendChild(el("p", "note", d.why)); }', 'if (d.stale) {', 'if (d.superseded) {', 'if (d.request_truncated)', "s2.appendChild(el(\"p\", \"note\", d.summary_why))",
             'if (d.defects) {', 'kv(d, "Andaikan", a.name + " = " + a.shown)', 'kv(d, "masukan " + i.name, i.shown)', 'kv(d, "fungsi", e.call)', "e.proof.wording",
             'if (it.warning) { c.appendChild(el("p", "note", it.warning)); }', 'modelLine(c, "tanpa contoh: " + it.no_examples)', 'if (it.why) {', '"contoh ditahan harness"',
             'if (r.second) { line(r.second, 2); }', 'who_(r.reader2)', "(r.sources || []).join", "r.at + \": \"", "if (d.approval) {", 'f.marks.join("; ")', 'if (d.files_cut)', 'if (d.scope_note)',

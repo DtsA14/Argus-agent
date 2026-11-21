@@ -1740,13 +1740,16 @@ def _review_lines(job, rv):
     from router import patch_read as pr          # SPEC_KARTU_SETUJU 5; imported here: patch_read imports this module
     sid = last_agent(job)[0]
     kind, note = pr.load(job.dir, sid, sha) if sid and len(sha) == 64 else ("none", None)
-    if kind in ("ok", "concerns"):
+    if kind in ("ok", "concerns", "nit"):
         who = note["reader"]["kind"]
         read_line = (f"  patch read: {kind} by {who} at {note['at']}: {note['note']} ({pr.LABEL})")
+        if kind == "nit":
+            read_line = ("  patch read: nit (two readers; only small notes, apply goes ahead and records them): "
+                         + " | ".join(f"{w}: {n}" for w, n in pr.nits(note)))
     else:
         read_line = (f"  patch read: {kind}{' (the note cannot be read)' if kind == 'error' else ''}: {'a second reading is needed' if kind == 'one' else 'write the note first'} "
                      f"(apply refuses without an ok of two readings by two different readers):\n"
-                     f"    argus patch-read-run {job.id}      (Hy4 Flash, then DeepSeek 1017 if it says ok; costs money)\n"
+                     f"    argus patch-read-run {job.id}      (Hy4 Flash and DeepSeek 1017, both read; costs money)\n"
                      f"    or: argus patch-read {job.id} --sha {sha[:12]} --verdict ok --note \"...\" --reader claude --reader-id <id> [--second]")
     return out + [f"  patch:          {patch} (sha256 {sha})", read_line,
                   "apply (read the patch first; its sha256 is the --read-sha):",

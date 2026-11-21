@@ -16,7 +16,7 @@ def off(cond):
 
 
 M = [
-    ("the flag chooses nothing: always require_ok", A, [("        if accept is None:\n            pr.require_ok(", "        if True:\n            pr.require_ok(")]),
+    ("the flag chooses nothing: always require_ok", A, [("        if accept is None:\n            seen = None\n            nits = pr.nits(pr.require_ok(", "        if True:\n            seen = None\n            nits = pr.nits(pr.require_ok(")]),
     ("the flag skips the reader check altogether", A, [("            seen = pr.require_concerns_pair(job, rj.last_agent(job)[0], sha, reader)[1]", "            seen = []")]),
     ("an ok pair is accepted", P, [('    if kind == "ok":\n        raise rj.Refused(f"job {job.id}: both readers said ok: nothing to accept', '    if False:\n        raise rj.Refused(f"job {job.id}: both readers said ok: nothing to accept')]),
     ("one reading is accepted", P, [('    if kind == "one":\n        raise rj.Refused(f"job {job.id}: only one patch reading: --accept', '    if False:\n        raise rj.Refused(f"job {job.id}: only one patch reading: --accept')]),
@@ -41,7 +41,7 @@ M = [
     ("the findings are not recorded", A, [('"accepted_findings": [list(f) for f in seen], ', '"accepted_findings": [], ')]),
     ("the status prints no accepted concerns", J, [('        if isinstance(why.get("accepted_concerns"), str):', "        if False:")]),
     ("the CLI drops the flag", C, [("accept_concerns=o.accept_concerns)", "accept_concerns=None)")]),
-    ("the rerun after a crash does not need the flag", A, [("        if accept is None:\n            pr.require_ok(job, rj.last_agent(job)[0], sha, reader)\n            seen = None", "        if accept is None:\n            seen = None")]),
+    ("the rerun after a crash does not need the flag", A, [("            nits = pr.nits(pr.require_ok(job, rj.last_agent(job)[0], sha, reader))      # a `nit` pair goes through like `ok`; its notes are recorded", "            nits = []")]),
 ]
 
 if __name__ == "__main__":
