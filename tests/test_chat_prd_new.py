@@ -86,6 +86,17 @@ def test_no_writer_key_means_no_card(tmp_path):
         s.stop()
 
 
+def test_a_job_cap_that_funds_no_turn_gets_no_card(tmp_path):
+    c = config()
+    c["prd_writer"]["max_usd"] = 0.1                                          # below one turn (the preflight the CLI would refuse with)
+    s = t.Service(tmp_path, cfg=c)
+    try:
+        status, out = prep(s)
+        assert status == 409 and "token" not in out and "fund one turn" in out["refused"]
+    finally:
+        s.stop()
+
+
 def test_a_config_without_the_prd_writer_gets_no_card(tmp_path):
     c = config()
     del c["prd_writer"]
@@ -120,6 +131,13 @@ def test_a_config_change_between_prepare_and_confirm_is_refused_and_runs_nothing
     svc.actions._cfg["prd_writer"]["max_usd"] = float(svc.actions._cfg["prd_writer"]["max_usd"]) - 0.1     # what the card showed changed
     status, out = svc.confirm(token)
     assert status == 409 and out["refused"] and svc.spawner.calls == []
+
+
+def test_the_run_reads_the_queues_directory_the_chat_was_given(svc, tmp_path):
+    svc.actions.cards.queues_dir = tmp_path / "other_queues"
+    svc.confirm(prep(svc)[1]["token"])
+    argv = svc.spawner.calls[0]["argv"]
+    assert argv[argv.index("--queues-dir") + 1] == str(tmp_path / "other_queues")
 
 
 def test_a_token_works_once_and_confirm_rebuilds_the_card(svc):
