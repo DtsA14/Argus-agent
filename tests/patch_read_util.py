@@ -23,3 +23,14 @@ def read_ok(env, sha=None, verdict="ok"):
     pr.record(job.id, disk[:12], verdict, "test note", "claude", "reader-a", deps=env.deps, jobs_dir=env.jobs)
     if verdict == "ok":                                                       # rev 3 (SPEC_KARTU_SETUJU 13.5): an ok is two readings by two ids
         pr.record(job.id, disk[:12], verdict, "test note", "claude", "reader-b", deps=env.deps, jobs_dir=env.jobs, second=True)
+
+
+def read_pair(env, first, second, ids=("reader-a", "reader-b"), reader="claude"):
+    """Both readings of the patch on disk, as `patch-read-run` leaves them (read_ok writes a single `concerns`, or two `ok`)."""
+    job = env.job()
+    sid, stage = rj.last_agent(job)
+    disk = hashlib.sha256((Path(stage["review"]["dir"]) / "changes.patch").read_bytes()).hexdigest()
+    pr.record(job.id, disk[:12], first, "first reading", reader, ids[0], deps=env.deps, jobs_dir=env.jobs)
+    if second is not None:
+        pr.record(job.id, disk[:12], second, "second reading", reader, ids[1], deps=env.deps, jobs_dir=env.jobs, second=True)
+    return disk

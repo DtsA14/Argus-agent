@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_router as tr  # noqa: E402
-from patch_read_util import read_ok  # noqa: E402
+from patch_read_util import read_ok, read_pair  # noqa: E402
 from router import apply as ra  # noqa: E402
 from router import job as rj  # noqa: E402
 
@@ -660,3 +660,210 @@ def test_a_failure_that_is_not_a_git_failure_after_the_change_is_undone_too(env,
     with pytest.raises(rj.Refused, match="undone"):
         run_apply(env, sha)
     untouched(env, before)
+
+
+# ---- SPEC_APPLY_ACCEPT_CONCERNS ---------------------------------------------------------------------------------------------------------
+
+REASON = "the tests sit in a new file, the code is right and 32 tests pass"
+
+
+def accept(env, sha, reason=REASON, **kw):
+    return ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs, accept_concerns=reason, **kw)
+
+
+def test_accepted_concerns_apply_with_the_trailer_the_log_line_and_the_status(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    before = head(env)
+    job = accept(env, sha)
+    assert job.data["state"] == rj.APPLIED and head(env) != before
+    msg = g(env.repo, "log", "-1", "--format=%B")
+    assert msg.endswith(f"Argus-Patch-Sha256: {sha}\nAccepted-concerns: {REASON}")
+    e = job.data["log"][-1]
+    assert e["accepted_concerns"] == REASON and e["accepted_sha"] == sha and e["accepted_findings"] == [["reader-b", "second reading"]]
+    started = [x for x in job.data["log"] if x.get("what") == "apply_started"][-1]
+    assert started["accepted_concerns"] == REASON
+    assert f"applied with accepted concerns: {REASON}" in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_first_concerns_with_a_valid_second_applies_and_lists_both_findings(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "concerns", "concerns")
+    job = accept(env, sha)
+    assert [f[0] for f in job.data["log"][-1]["accepted_findings"]] == ["reader-a", "reader-b"]
+
+
+def test_the_plain_commit_message_is_byte_for_byte_as_before(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    run_apply(env, sha)
+    assert g(env.repo, "log", "-1", "--format=%B").endswith(f"Argus-Job: jtest\nArgus-Patch-Sha256: {sha}")
+    assert "Accepted-concerns" not in g(env.repo, "log", "-1", "--format=%B")
+    assert "accepted_concerns" not in env.job().data["log"][-1]
+    assert "accepted concerns" not in rj.status("jtest", jobs_dir=env.jobs)
+
+
+def test_a_concern_without_the_flag_is_refused_as_today(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    before = head(env)
+    with pytest.raises(rj.Refused, match="recorded concerns"):
+        ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs)
+    untouched(env, before)
+
+
+@pytest.mark.parametrize("reason", ["", "short", "x" * 9, "y" * 501, "a valid length but sk-ant-abcdefgh12345 inside", "a reason\x07 with a bell char",
+                                    "a reason with api_key = \"abc\" in it"])
+def test_a_bad_reason_is_refused_and_nothing_changes(env, tmp_path, reason):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    before = head(env)
+    with pytest.raises(rj.Refused, match="accept-concerns"):
+        accept(env, sha, reason)
+    untouched(env, before)
+    assert not [x for x in env.job().data["log"] if x.get("what") == "apply_started"]
+
+
+@pytest.mark.parametrize("first,second,why", [
+    ("ok", None, "only one"), ("concerns", None, "second patch reading|only one"), ("ok", "ok", "nothing to accept"),
+])
+def test_only_a_pair_with_a_concern_is_accepted(env, tmp_path, first, second, why):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, first, second)
+    before = head(env)
+    with pytest.raises(rj.Refused, match=why):
+        accept(env, sha)
+    untouched(env, before)
+
+
+def test_no_note_a_stale_note_and_a_damaged_second_reading_are_refused_with_the_flag(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    with pytest.raises(rj.Refused, match="no patch-read note"):
+        accept(env, sha)
+    read_pair(env, "ok", "concerns")
+    f = [p for p in env.job().dir.iterdir() if p.name.startswith("patch_read")]
+    assert len(f) == 1
+    rec = json.loads(f[0].read_text())
+    rec["second"]["note"] = ""
+    f[0].write_text(json.dumps(rec))
+    with pytest.raises(rj.Refused):
+        accept(env, sha)
+    untouched(env, before)
+
+
+def test_the_same_reader_id_twice_is_not_two_readers(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    f = [p for p in env.job().dir.iterdir() if p.name.startswith("patch_read")][0]
+    rec = json.loads(f.read_text())
+    rec["second"]["reader"]["id"] = rec["reader"]["id"]
+    f.write_text(json.dumps(rec))
+    before = head(env)
+    with pytest.raises(rj.Refused):
+        accept(env, sha)
+    untouched(env, before)
+
+
+def test_the_reader_filter_applies_to_both_readings(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    before = head(env)
+    with pytest.raises(rj.Refused, match="--reader"):
+        accept(env, sha, reader="argus")
+    untouched(env, before)
+
+
+def test_a_sha_of_another_patch_is_refused_with_the_flag(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    before = head(env)
+    with pytest.raises(rj.Refused, match="read-sha"):
+        ra.apply("jtest", "0" * 12, deps=env.deps, jobs_dir=env.jobs, accept_concerns=REASON)
+    untouched(env, before)
+
+
+def test_the_other_checks_still_refuse_with_the_flag(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    before = head(env)
+    (env.repo / "dirty.txt").write_text("x")
+    with pytest.raises(rj.Refused, match="not clean"):
+        accept(env, sha)
+    (env.repo / "dirty.txt").unlink()
+    job = env.job()
+    job.data["protected_repo"] = {"globs": ["src/*"]}
+    job.save()
+    with pytest.raises(rj.Refused, match="protects"):
+        accept(env, sha)
+    untouched(env, before)
+
+
+def test_the_flag_on_an_applied_job_is_refused(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    accept(env, sha)
+    with pytest.raises(rj.Refused, match="APPLIED"):
+        accept(env, sha)
+
+
+def test_a_crash_after_the_commit_needs_the_flag_and_keeps_the_acceptance(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    before = head(env)
+    real = rj._record_applied
+
+    def crash(*a, **k):
+        raise KeyboardInterrupt("killed after the commit")
+    monkeypatch.setattr(rj, "_record_applied", crash)
+    with pytest.raises(KeyboardInterrupt):
+        accept(env, sha)
+    monkeypatch.setattr(rj, "_record_applied", real)
+    with pytest.raises(rj.Refused):                                  # without the flag: refused at the reader check, before anything is healed
+        ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs)
+    job = accept(env, sha)
+    assert g(env.repo, "rev-list", "--count", f"{before}..HEAD") == "1"
+    e = job.data["log"][-1]
+    assert e["recovered"] is True and e["accepted_concerns"] == REASON
+
+
+def test_the_flag_combines_with_allowed_failed_examples_and_is_recorded_separately(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    job = accept(env, sha, allow_failed_examples=())
+    assert "examples_failed" not in job.data["log"][-1] and job.data["log"][-1]["accepted_concerns"] == REASON
+
+
+def test_the_cli_takes_the_flag(env, tmp_path, capsys):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "ok", "concerns")
+    assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12], "--accept-concerns", REASON], deps=env.deps) == 0
+    assert f"applied with accepted concerns: {REASON}" in capsys.readouterr().out
+
+
+def edit_note(env, fn):
+    f = [p for p in env.job().dir.iterdir() if p.name.startswith("patch_read")][0]
+    rec = json.loads(f.read_text())
+    fn(rec)
+    f.write_text(json.dumps(rec))
+
+
+@pytest.mark.parametrize("name,fn,kw", [
+    ("a second reading of a model under another template", lambda r: r["second"].update(reader={"kind": "argus", "id": "m2"}, template_sha256="0" * 64), {}),
+    ("a first reading without an id", lambda r: r["reader"].pop("id"), {}),
+    ("a first reading by another kind than --reader", lambda r: r.update(reader={"kind": "argus", "id": "m1"}, template_sha256=pr_template()), {"reader": "claude"}),
+])
+def test_more_reader_checks_hold_with_the_flag(env, tmp_path, name, fn, kw):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_pair(env, "concerns", "concerns")
+    edit_note(env, fn)
+    before = head(env)
+    with pytest.raises(rj.Refused):
+        accept(env, sha, **kw)
+    untouched(env, before)
+
+
+def pr_template():
+    from router import patch_read as pr
+    return pr.TEMPLATE_SHA256

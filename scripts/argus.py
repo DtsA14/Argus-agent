@@ -143,6 +143,8 @@ def main(argv=None, deps=None):
     ap_.add_argument("--reader", choices=("claude", "argus"), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
     ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
                      "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
+    ap_.add_argument("--accept-concerns", metavar="REASON", help="apply although a patch reader said `concerns` (both readings must exist, by two readers; two `ok` needs no flag): "
+                     "REASON is YOUR words, 10-500 characters, quoted by you, never written by a model; every other check of apply still runs; recorded in the job log and in the commit message")
     t3b = sub.add_parser("t3b-run", help="one round of the T3b test of the domain reader with an Argus model (GLM, role code_judge) as the reader, outside the approval card: costs money, has its own cap (SPEC_KARTU_SETUJU 8)")
     t3b.add_argument("root", help="the directory built by scripts/t3b_fixtures.py build")
     t3b.add_argument("--run", type=int, choices=(1, 2), required=True, help="which of the two readings of every set")
@@ -525,7 +527,7 @@ def main(argv=None, deps=None):
             except Exception as e:              # a message only: the gate itself is in `apply`
                 print(f"domain reader's note: could not be looked at ({type(e).__name__})")
             done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples,
-                            reader=o.reader, queues_dir=o.queues_dir)
+                            reader=o.reader, queues_dir=o.queues_dir, accept_concerns=o.accept_concerns)
             print(rj.status(done.id, jobs_dir=o.jobs_dir))
             e = done.data["log"][-1]
             print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}); not pushed, not deployed.\n"
