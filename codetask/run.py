@@ -52,6 +52,7 @@ from .tools import Toolbox
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE = "workspace"
+DRAFT_TEST_CONFLICT = "draft_test_conflict"      # stop reason prefix: the agent says the draft's own new tests cannot pass
 
 
 class RunExists(Exception):
@@ -374,12 +375,18 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         if reported:
             if v["outcome"] == "fail":
                 record = intake.record_for(contract["inputs"]["workspace"], root)
+                draft_files = set(intake.approved_tests(record)) if record else set()
                 v["conflict"] = conflict_mod.verify(
                     contract, v, reported["files"], ws=str(ws), before=state["before"],
                     input_dir=root / contract["inputs"]["workspace"], scfg=scfg,
                     repo_protected=state.get("repo_protected") or (),
-                    draft_files=set(intake.approved_tests(record)) if record else (),
+                    draft_files=draft_files,
                     red=red or red_check_ex, log=TaggedLog(log, origin="conflict"))
+                # A report that names a test the approved draft itself added or changed cannot be confirmed (those tests are
+                # the task): it says the DRAFT's tests cannot pass. When such a file is red, another attempt reads the same tests: the run stops.
+                red_files = {n.split("::", 1)[0] for c in v["criteria"] if c["layer"] == "C"
+                             for n in (c.get("evidence") or {}).get("failed_nodes") or []}
+                v["conflict"]["draft_tests"] = [f for f in v["conflict"].get("files") or [] if f in draft_files and f in red_files]
             elif v["outcome"] == "pass":      # nothing is red: there is nothing to confirm (the run is DONE, as always)
                 v["conflict"] = {"state": "unconfirmed", "files": list(reported["files"]), "nodes": [],
                                  "unconfirmed": ["red: nothing is red"], "checks": {}, "reason": "red: nothing is red"}
@@ -394,7 +401,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
         conf = v.get("conflict")
         summary = {"iteration": i, "outcome": v["outcome"], "failing": failing,
                    "workspace_digest": v["workspace_digest"],
-                   **({"conflict": {k: conf.get(k) for k in ("state", "files", "nodes", "unconfirmed")}} if conf else {})}
+                   **({"conflict": {k: conf.get(k) for k in ("state", "files", "nodes", "unconfirmed", "draft_tests") if k in conf}} if conf else {})}
         history = list(state.get("failures") or []) + [failing]
         if v["outcome"] == "pass":
             return move(state, st.DONE, reason="all criteria passed", verdict=summary, failures=history)
@@ -424,6 +431,14 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                                                                       for h in (ev.get("hits") or [])[:5]]}
             return move(state, st.FAILED_ACCEPTANCE, verdict=summary, failures=history, **new_conflict,
                         reason="test_detection: production code recognises tests (shown to a human, never fed back to the agent)")
+        # After the test-detection gate (a production-code hit ends the job as it always did). The file list is checked
+        # against the red nodes of the validations only: a suite or import error in a draft file, or nodes beyond the
+        # listed 50, give no red file here and the run goes on with another attempt as before.
+        if conf and conf.get("state") == "unconfirmed" and conf.get("draft_tests"):
+            return move(state, st.FAILED_ACCEPTANCE, verdict=summary, failures=history, **new_conflict,
+                        reason=DRAFT_TEST_CONFLICT + ": the agent reported that tests the approved draft added cannot pass: "
+                               + ", ".join(conf["draft_tests"]) + "; stopped for a human (`argus redraft`, or `argus retry` if you "
+                               "judge the tests right), not run again on the same tests")
         lim = settings(cfg, contract)
         n = lim["stagnation_rounds"]
         if i + 1 >= lim["max_iterations"]:
