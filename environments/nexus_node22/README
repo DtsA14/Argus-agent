@@ -1,6 +1,6 @@
 Sandbox environment for NEXUS-lite (Atha, 2026-11-22): the pwa_node22 recipe (React 19, Vite 6, Tailwind 4, vitest 3) plus
 vite-plugin-pwa 1.3.0 (PWA, as bulking_node22) and the packages shadcn/ui components need (radix-ui, class-variance-authority, clsx,
-tailwind-merge, lucide-react, tw-animate-css). shadcn itself is not a package: its CLI copies component source into the repository
+tailwind-merge, lucide-react, tw-animate-css) and fake-indexeddb (tests of the IndexedDB storage in jsdom). shadcn itself is not a package: its CLI copies component source into the repository
 (a human adds it, the sandbox has no network). Every version is exact and at least 3 weeks old when pinned; lockfile v3, every package from
 registry.npmjs.org with a sha512 integrity (npm install --package-lock-only --ignore-scripts, then scripts/build_env_node.sh nexus_node22).
 Own environment, not an edit of bulking_node22 (React 18) or pwa_node22 (React 19, no PWA plugin): per-repo versions differ on purpose.
