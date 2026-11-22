@@ -74,7 +74,8 @@ Peta ini hanya penunjuk; teks butirnya tetap di bagian masing-masing di bawah. S
 3. **Ditahan sengaja:** T4b (apply, approve draf, `queue step` dari chat), "Approve dari HP lewat chat", riset baru, chat sebagai mandor (parkiran, titik cek 2026-11-29), T6 PR2–5 dan merampingkan environment (sampai ada repo Python dengan dependensi nyata).
 4. **Pembersih kecil** (kandidat issue murah): papan skor terpotong di HP, pesan "no draft to review", sinkronisasi pin image antar checkout, catat pelaku approve dan apply, `web.environments` memuat `bulking_node22`, celah kecil T4a (bagian bulking-app).
 5. **Jaga-jaga, belum bisa dipicu:** idempotency key provider, R2 `ReportNoRepro`, operator rantai tetap, batasan yang diterima.
-6. **Pengingat bertanggal dan operasional** (bagian "Pekerjaan operasional"): periksa ulang aturan ARB/ARA BEI 2 Januari 2027; sertifikat Let's Encrypt athena habis 2027-01-16 (port 80 ditutup); kunci HP `iphone-viewer` di `authorized_keys`.
+6. **Angka "bisa ditinggal"** (bagian "Angka bisa ditinggal" di bawah): 0 dari 2 issue, titik awal untuk titik cek 2026-11-29.
+7. **Pengingat bertanggal dan operasional** (bagian "Pekerjaan operasional"): periksa ulang aturan ARB/ARA BEI 2 Januari 2027; sertifikat Let's Encrypt athena habis 2027-01-16 (port 80 ditutup); kunci HP `iphone-viewer` di `authorized_keys`.
 
 ## Ringkasan
 
@@ -395,6 +396,17 @@ Syarat buka ulang dari `docs/reviews/FABLE_PLAN_2026-11-11.md` bagian 4, kecuali
 
 - [x] **`argus apply --accept-concerns "ALASAN"`** (Atha 2026-11-21, #650, `docs/reviews/SPEC_APPLY_ACCEPT_CONCERNS.md`): menerapkan patch yang dua pembacanya (dua id berbeda) salah satunya `concerns`, lewat semua cek apply lain; alasan 10-500 karakter dari manusia dicatat di log job, trailer commit `Accepted-concerns:` dan `argus status`. Hanya CLI, bukan tombol chat.
 - [ ] **Dua slot kunci chat** (#653, 2026-11-21): `ARGUS_CHAT_KEY_FILE` (kode) dan `ARGUS_CHAT_RESEARCH_KEY_FILE` (riset, DeepSeek) terpisah; kunci kode sekarang OpenRouter. Riset dari chat butuh saldo DeepSeek.
+## Angka "bisa ditinggal": keputusan di tengah per issue (mulai 2026-11-22)
+
+Ukuran usul Claude, diterima Atha 2026-11-22 ("Ok catat bro"), untuk titik cek 2026-11-29. **Definisi:** dari kemauan Atha sampai PR, hitung tiap keputusan yang diambil seseorang di tengah (bukan merge akhir, yang selalu Atha). Dicatat per langkah: siapa yang memutuskan, Atha (A) atau Claude (C). Sebuah issue disebut **bisa ditinggal** bila semua keputusan di tengahnya diambil mesin atau gerbang, tanpa Claude membaca atau menyetujui sesuatu. Alasan Atha: produk tetap tujuan utama; "belajar" hanya cara memandang supaya tidak frustrasi bila Argus lama jadi.
+
+| Issue (bulking-app) | Keputusan di tengah | Siapa | Bisa ditinggal? |
+|---|---|---|---|
+| 1: tes `targetEngine` (PR #5, 2026-11-21) | prompt PRD, setuju uang antrean, jalan tulis tes tangan (draf ditolak gerbang), baca dan apply tangan, merge | Atha: prompt, uang, pilih jalan "A"; Claude: tulis tes, baca, apply; merge: Atha | tidak |
+| 2: penjaga stabilitas TDEE (PR #6, 2026-11-22) | setuju prompt, setuju PRD dan uang, baca draf lalu approve draf, baca patch, apply, tes di image, push dan PR | Atha: prompt ("Run") dan uang ("Go sampai apply"); Claude: approve draf, baca patch (dua pembaca otomatis sepakat ok), apply, PR; merge: Atha | tidak |
+
+Catatan: angka pasti per langkah (berapa kali Atha dihubungi) belum dicatat otomatis; tabel ini dibuat dari ingatan sesi dan harus dibaca sebagai perkiraan. Keputusan yang masih memakai Claude: baca draf, baca patch, apply (T4b ditahan karena itu). Titik awal hari ini: **0 issue bisa ditinggal dari 2**.
+
 ## Pilot bulking-app dan kemampuan Argus (2026-11-21)
 
 - [x] **P2a: PRD dari chat** (#660) — rincian di `docs/reviews/PENDING_ARCHIVE_2026-11-22.md`.
