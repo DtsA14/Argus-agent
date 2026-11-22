@@ -1,6 +1,6 @@
-# NEXUS-lite: spek pilot (revisi 2, 2026-11-22; draf Claude untuk review Atha)
+# NEXUS-lite: spek pilot (revisi 3, 2026-11-22; disetujui Atha)
 
-Status: **draf untuk review Atha. Belum ada repo, belum ada uang keluar, belum ada yang dikirim ke Argus.** Revisi 2 menjawab tinjauan Opus (GO WITH CHANGES, 25 temuan; 5 yang utama:
+Status: **disetujui Atha 2026-11-22 (revisi 3: tag sebagai array di dalam item, tanpa relasi; Atha mengizinkan pembuatan repo privat `nexus-lite`).** Belum ada uang keluar, belum ada yang dikirim ke Argus. Revisi 2 menjawab tinjauan Opus (GO WITH CHANGES, 25 temuan; 5 yang utama:
 tanda tangan metode yang pasti, normalisasi URL dengan tabel, aturan tag/status/snapshot/Markdown yang lengkap, urutan issue dan antarmuka penyimpanan yang ditulis di issue, perancah
 dengan konfigurasi tes terpisah). Spek dan tes tersembunyi ditulis Claude, jadi tes hanya menguji kasus yang Claude pikirkan (uji asap, bukan bukti kebenaran).
 
@@ -46,7 +46,7 @@ Semua galat adalah `NexusError` (`src/core/errors.js`) dengan properti `code`, d
 `id`, `kind` (`url` | `text` | `note`), `title`, `body`, `url`, `summary`, `tags` (array), `status` (`inbox` | `filed` | `archived`), `project` (string atau `null`), `createdAt`, `updatedAt`.
 Urutan pemeriksaan di `addItem`/`updateItem` (galat pertama yang menang): `kind` (tidak dikenal: `INVALID_INPUT`) → `title` (setelah `trim()` tidak boleh kosong atau mengandung baris baru: `INVALID_INPUT`) →
 `url` (`text`/`note` dengan `url`: `INVALID_INPUT`; `url` tanpa `url` atau tidak valid: `INVALID_URL`) → `tags` → duplikat URL. `project` di-`trim()`; `''` menjadi `null`. Duplikat memeriksa semua item **kecuali item itu sendiri**.
-Tag disimpan sebagai relasi (koleksi `items`, `tags`, `itemTags`), bukan teks atau JSON di dalam item.
+Tag disimpan sebagai array di dalam item (Atha 2026-11-22: tanpa tabel relasi dan tanpa indeks `multiEntry`; filter tag dilakukan di memori; relasi baru dirancang di irisan kedua).
 
 ### 4.2 Normalisasi URL
 `input` bukan string → `null`. `trim()`, lalu `new URL(...)`; gagal parse, atau protokol bukan `http:`/`https:` → `null`. Kosongkan `hash`. Dari string `search` mentah, pisahkan pada `&`; buang pasangan yang
@@ -92,7 +92,7 @@ Urutan: item yang kata kuncinya ada di `title` dulu, lalu `updatedAt` turun (per
 `exportSnapshot()` → objek biasa `{ version: 1, exportedAt: now(), items }`, `items` urut `createdAt` lalu `id`. `importSnapshot(x)` menerima objek atau string JSON (gagal parse: `INVALID_SNAPSHOT`). Diperiksa dulu di tempat sementara:
 `version` tepat 1; tiap item lolos aturan 4.1 dan 4.4 dan `url`-nya sudah sama dengan `normalizeUrl(url)`; `id` unik; URL unik. Lolos → mengganti seluruh isi sekaligus, mempertahankan `id`/`createdAt`/`updatedAt`
 tanpa memanggil `now` atau `idGen`. Gagal → `INVALID_SNAPSHOT` dan isi lama tidak berubah. Ekspor setelah impor sama persis dengan yang diimpor, kecuali `exportedAt`.
-Di `indexedDbStorage`, penggantian isi harus **satu transaksi `readwrite` atas semua koleksi**, dan kegagalan di dalamnya memanggil `abort()`.
+Di `indexedDbStorage`, penggantian isi harus **satu transaksi `readwrite` (kosongkan lalu isi semua)**, dan kegagalan di dalamnya memanggil `abort()`.
 
 ### 4.8 Ekspor Markdown
 `exportMarkdown(project)`: `project` kosong atau bukan string → `PROJECT_REQUIRED`. Cocok persis dengan `project` item; semua status; urut `createdAt` naik lalu `id`. Blok digabung dengan `\n\n`; berkas diakhiri tepat satu `\n`.
@@ -110,7 +110,7 @@ Project tanpa item: `"# Project: X\n\nDiekspor: <now>\n"`.
 ## 5. Issue inti (urutan; yang bisa diskor)
 Tiap issue berbunyi "implementasikan HANYA ini, jangan buat yang lain" dan contohnya menyentuh perilaku yang baru di issue itu (supaya draf tidak lolos di basis dan gerbang draf tidak berakhir `NO_DRAFT`).
 1. Modul murni: `errors.js`, `normalizeUrl` (tabel 4.2), `normalizeTags` (4.3).
-2. Antarmuka penyimpanan dan `memoryStorage` (koleksi `items`, `tags`, `itemTags`, dan `replaceAll` atomik, ditulis di issue); `createNexus` dengan `addItem`, `getItem`, `listItems`, pemeriksaan 4.1 dan duplikat URL.
+2. Antarmuka penyimpanan dan `memoryStorage` (`getAll()`, `put(item)`, `delete(id)`, `replaceAll(items)` atomik, ditulis di issue); `createNexus` dengan `addItem`, `getItem`, `listItems`, pemeriksaan 4.1 dan duplikat URL.
 3. `updateItem`, `deleteItem`, dan matriks status 4.4.
 4. `search` dan filter (4.5); jangkar issue pada tes urutan dan filter, uji kecepatan hanya tambahan.
 5. `stats` (4.6).
