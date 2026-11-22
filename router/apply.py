@@ -113,6 +113,24 @@ def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_e
             return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader, queues_dir=queues_dir, accept=reason)
 
 
+def _leave_own_branch(repo, first, own):
+    """Back on the branch the repository was on, and the branch made here (it holds no commit) deleted. True if both worked."""
+    try:
+        run_git(repo, "checkout", "-q", first)
+        run_git(repo, "branch", "-q", "-D", own)
+        return True
+    except Exception:
+        return False
+
+
+def _is_main_line(repo, branch):
+    """main, master, or the branch origin's HEAD points at: the places a commit must not land by itself."""
+    if branch in ("main", "master"):
+        return True
+    out = run_git(repo, "symbolic-ref", "-q", "refs/remotes/origin/HEAD", ok=(0, 1)).decode().strip()
+    return out == f"refs/remotes/origin/{branch}"
+
+
 def _title(review_dir, job_id):
     """The package's PR title for the commit message; any trouble reading it (no file, not UTF-8, a NUL) is the fallback, never an exception."""
     try:
@@ -247,9 +265,28 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None,
         if status != "A" or old != "000000":
             refuse(f"the patch changes files the repository protects (.argus/protected): {[p]}; the package calls it a new test, but the patch does not add it "
                    f"(git status {status}, old mode {old})")
+    # 5b. on the repository's main line the commit never goes there: it goes on a branch of its own, made here (the tree is clean and HEAD is the base
+    # commit, so this is safe); on any other branch the human made, it stays. A branch of that name that exists already is refused, never reused.
+    first_branch, own_branch = ref[11:], None
+    if _is_main_line(repo, first_branch):
+        own_branch = rj.branch_name(job.id)
+        try:
+            there = run_git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{own_branch}", ok=(0, 1)).decode().strip()
+            if there:
+                refuse(f"the branch {own_branch} exists already: " + (f"it holds a commit (an earlier apply?): `git checkout {own_branch}` and run apply again to record it"
+                                                                      if there != head else "it points at the base commit: delete it, and run apply again"))
+            run_git(repo, "checkout", "-q", "-b", own_branch)
+        except (GitFail, subprocess.TimeoutExpired) as e:           # nothing was changed yet (a branch named `argus`, a lock file...)
+            refuse(f"could not make the branch {own_branch}: {e}")
+        ref = f"refs/heads/{own_branch}"
     # 6. the change itself: logged first, applied to the tree and the index, committed
     title = _title(review_dir, job.id)
-    job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha, **extra, **({"examples_failed": failed} if failed else {}))
+    try:
+        job.note(deps, "apply_started", head_before=head, branch=ref[11:], read_sha=read_sha, **extra, **({"examples_failed": failed} if failed else {}))
+    except Exception:
+        if own_branch:
+            _leave_own_branch(repo, first_branch, own_branch)
+        raise
     commit = None
     try:
         run_git(repo, "apply", "--index", "--whitespace=nowarn", data=patch)
@@ -267,7 +304,9 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None,
             commit = now
         else:
             undone = _undo(repo, patch)
-            raise rj.Refused(f"job {job.id}: {e}; the change was undone" + ("" if undone else f"; THE TREE IS NOT CLEAN: git -C {repo} status")) from None
+            back = bool(own_branch) and undone and _leave_own_branch(repo, first_branch, own_branch)   # nothing was committed: back on the branch it was on
+            where = f"; the repository is on {own_branch}, not on {first_branch}: git -C {repo} checkout {first_branch}" if own_branch and not back else ""
+            raise rj.Refused(f"job {job.id}: {e}; the change was undone" + ("" if undone else f"; THE TREE IS NOT CLEAN: git -C {repo} status") + where) from None
     try:
         parent = run_git(repo, "rev-parse", f"{commit}^").decode().strip()
     except Exception:
