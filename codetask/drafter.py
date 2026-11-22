@@ -296,6 +296,17 @@ SYSTEM_VITEST = "\n".join([
     "missing export, a TypeError, an element getByText cannot find, nor an error thrown inside the code under test: the "
     "harness checks the error and where it was raised), and test only the behaviour the issue asks for. Everything "
     "else must pass now. To look for an element that may be missing, use queryByText and expect(...) on the result.",
+    "- A module that does not exist yet must still make the test fail BY AN expect(), never by an import error of the "
+    "file. Load it inside the test like this, with a RELATIVE specifier held in a constant: "
+    "`const SPEC = './errors.js'` and `async function load() { try { return await import(/* @vite-ignore */ SPEC) } "
+    "catch (e) { if (/Cannot find module/.test(String(e && e.message))) return null; throw Object.assign(new "
+    "AssertionError({ message: `load() threw: ${e && e.message}` }), { cause: e }) } }` (AssertionError from "
+    "'node:assert'), then `expect(await load(), 'errors.js must exist').not.toBeNull()`. This fails by assertion while "
+    "the file is missing, passes when it exists, and shows the cause when the file exists but cannot load. NEVER build "
+    "the specifier with new URL('...', import.meta.url), import.meta.resolve(...) or location: under jsdom vite turns "
+    "such a URL into an http:// one, which import() refuses, so the test could not pass even with correct code (a run "
+    "of the agent was lost to exactly this on 2026-11-22). Do not use absolute paths either (they work here but break "
+    "elsewhere).",
     "- To test that code does not throw, call it inside try and, in the catch block, throw an AssertionError with the "
     "error as its cause: `import { AssertionError } from 'node:assert'` and "
     "`throw Object.assign(new AssertionError({ message: `load() threw: ${e}` }), { cause: e })`. The harness then "
@@ -475,6 +486,36 @@ def _intake_text(intake_dir, path):
         return None
 
 
+DYNAMIC_IMPORT = re.compile(r"\bimport\s*\(")
+# the forms measured on 2026-11-22 (vitest 3, jsdom) to give import() an http:// URL or no URL at all: they never load
+BUILT_SPECIFIER = re.compile(r"\bnew\s+(?:(?:globalThis|window|self)\.)?URL\s*\([^)]*import\.meta\.url"
+                             r"|import\.meta\.resolve\b|\blocation\.(?:origin|href)\b")
+BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+LINE_COMMENT = re.compile(r"(?m)(?:^|\s)//.*$")
+
+
+def unresolvable_imports(new_tests):
+    """Problems for a new vitest test file that loads a module with import(...) and builds the location with
+    new URL('...', import.meta.url), import.meta.resolve(...) or location. Under jsdom vite turns such a URL into an
+    http:// one and import() refuses it, so the loader's catch returns null and the test cannot pass even with correct
+    code (2026-11-22: the agent spent its 30 steps on such a test). The harness only checks that a new test fails now,
+    never that it can pass, so the draft is refused here with the form that works. Comments are ignored."""
+    out = []
+    for t in new_tests if isinstance(new_tests, list) else []:
+        text = t.get("content") if isinstance(t, dict) else None
+        if not isinstance(text, str):
+            continue
+        code = LINE_COMMENT.sub("", BLOCK_COMMENT.sub("", text))
+        if DYNAMIC_IMPORT.search(code) and BUILT_SPECIFIER.search(code):
+            out.append(f"new test {t.get('path')}: it loads a module with import(...) and builds the location with "
+                       "new URL('...', import.meta.url), import.meta.resolve(...) or location: under jsdom that "
+                       "becomes an http:// URL and import() refuses it, so the test could not pass even with correct "
+                       "code. Remove that code from the file (do not use those names even in a code path you do not "
+                       "need) and use `const SPEC = './x.js'` with `await import(/* @vite-ignore */ SPEC)` inside "
+                       "try/catch: it fails by assertion while the file is missing and passes when it exists")
+    return out
+
+
 def draft_from_args(args, *, base, policy, base_files=None, intake_dir=None):
     """SubmitDraft arguments -> (a W2a draft, problems). Only what the drafter may set comes from the arguments.
     base_files: the intake's files (a vitest draft gets the harness's old_tests_* validations from them, F5).
@@ -524,6 +565,8 @@ def draft_from_args(args, *, base, policy, base_files=None, intake_dir=None):
     if tools is not None and not (isinstance(tools, list) and len(set(tools)) == len(tools)
                                   and all(t in ct.CONTRACT_TOOLS for t in tools)):
         problems.append(f"tools must be a list of distinct names from {sorted(ct.CONTRACT_TOOLS)}")
+    if vitest:
+        problems += unresolvable_imports(args.get("new_tests"))
     if problems:
         return None, problems
     if vitest and base_files is not None:

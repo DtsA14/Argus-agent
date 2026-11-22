@@ -399,3 +399,72 @@ def test_a_swallowed_vitest_error_is_told_the_vitest_way():
     rec_["repo_paths"] = ["src/list.jsx", FILE]                                # the cause's stack reached the code
     assert drafter.swallowed_problems(d, {"baseline": {"t": {"red_check": {RED: rec_}}}}) == []
     assert "not.toThrow()" not in drafter.SYSTEM_VITEST.split("Never use")[0]
+
+
+# --- a new test that could never pass (2026-11-22, nexus-lite pilot; forms measured in the nexus_node22 image) ---
+
+BAD_LOADER = ("const moduleUrl = new URL('./errors.js', import.meta.url).href\n"
+              "async function load() { try { return await import(moduleUrl) } catch { return null } }\n")
+GOOD_LOADER = ("const SPEC = './errors.js'\n"
+               "async function load() { try { return await import(/* @vite-ignore */ SPEC) } catch { return null } }\n")
+
+
+def _args(content, extra_problem=False):
+    a = {"plan": {"files": ["src/list.jsx"], "steps": ["s"], "risks": []},
+         "scope": {"writable": ["src/list.jsx"], "protected": ["src/*.test.jsx"]},
+         "validation": [{"id": "target", "paths": [FILE], "must_pass": [RED], "min_tests": 1}],
+         "new_tests": [{"path": FILE, "content": content}], "unverifiable": [], "budget_profile": "default"}
+    if extra_problem:
+        a["budget_profile"] = "nope"                  # a problem of its own, found before the loader check
+    return a
+
+
+def test_a_new_test_that_loads_a_module_through_new_url_import_meta_url_is_refused_with_the_form_that_works():
+    d, problems = drafter.draft_from_args(_args(BAD_LOADER), base="b", policy=POLICY)
+    assert d is None and len(problems) == 1
+    assert FILE in problems[0] and "import.meta.url" in problems[0] and "@vite-ignore" in problems[0]
+
+
+def test_the_relative_specifier_in_a_constant_is_accepted():
+    d, problems = drafter.draft_from_args(_args(GOOD_LOADER), base="b", policy=POLICY)
+    assert problems == [] and d is not None
+
+
+@pytest.mark.parametrize("content", [
+    "const m = await import(x)\nconst u = new URL('./a.js', import.meta.url)\n",
+    "const m = await import (x)\nconst u = new URL('./a.js', import.meta.url)\n",            # a space before the paren
+    "const m = await import(x)\nconst u = new globalThis.URL('./a.js', import.meta.url)\n",
+    "const m = await import(x)\nconst r = import.meta.resolve('./a.js')\n",
+    "const m = await import(x)\nconst p = window.location.origin + '/src/a.js'\n",
+    "const m = await import(x)\nconst p = location.href\n",
+])
+def test_each_measured_unloadable_form_is_refused(content):
+    assert len(drafter.unresolvable_imports([{"path": FILE, "content": content}])) == 1
+
+
+@pytest.mark.parametrize("content", [
+    "const m = await import('./a.js')\nconst u = new URL('http://x/y?z=1'); u.searchParams.get('z')\n",   # an unrelated URL
+    "const m = await import('./a.js')\n// do not use new URL('./a.js', import.meta.url) here\n",           # a line comment
+    "const m = await import('./a.js')\n/* new URL('./a.js', import.meta.url) */\n",                       # a block comment
+    "import.meta.url is only mentioned here\n",                                                             # no dynamic import
+    "const u = new URL('./b', import.meta.url)\n",                                                          # no dynamic import
+    "import { a } from './a.js'\nconst b = new URL('./b', import.meta.url)\n",                            # static import only
+])
+def test_legitimate_text_is_left_alone(content):
+    assert drafter.unresolvable_imports([{"path": FILE, "content": content}]) == []
+
+
+def test_the_check_keeps_the_problems_found_before_it():
+    d, problems = drafter.draft_from_args(_args(BAD_LOADER, extra_problem=True), base="b", policy=POLICY)
+    assert d is None and len(problems) == 2 and "budget_profile" in problems[0] and "import.meta.url" in problems[1]
+
+
+def test_a_pytest_draft_is_not_checked_for_it():
+    d, problems = drafter.draft_from_args(_args(BAD_LOADER), base="b", policy={**POLICY, "runner": "pytest"})
+    assert not any("import.meta.url" in p for p in problems)
+
+
+def test_the_vitest_system_prompt_teaches_the_loader_that_works_and_names_the_forms_that_fail():
+    text = drafter.SYSTEM_VITEST
+    assert "@vite-ignore" in text and "Cannot find module" in text and "AssertionError" in text
+    assert "import.meta.resolve" in text and "http://" in text and "NEVER build" in text
