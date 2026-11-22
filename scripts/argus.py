@@ -545,7 +545,7 @@ def main(argv=None, deps=None):
                             reader=o.reader, queues_dir=o.queues_dir, accept_concerns=o.accept_concerns)
             print(rj.status(done.id, jobs_dir=o.jobs_dir))
             e = done.data["log"][-1]
-            print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}); not pushed, not deployed.\n"
+            print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}; if the branch name starts with argus/, apply made it and the repository stays on it); not pushed, not deployed.\n"
                   f"next: `argus stage deploy {done.id}` needs its PLAN.md and your go live.")
             return 0
         if o.cmd == "applied":

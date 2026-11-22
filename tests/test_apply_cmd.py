@@ -93,18 +93,20 @@ def untouched(env, before):
 
 # ---- the good paths -----------------------------------------------------------------------------------------------------------------
 
-def test_the_patch_goes_in_as_one_commit_on_the_current_branch_and_the_job_is_applied(env, tmp_path):
+def test_the_patch_goes_in_as_one_commit_on_a_branch_of_its_own_when_the_repository_is_on_its_main_line(env, tmp_path):
     patch, sha = package(env, tmp_path, edit_shop())
     before, branch = head(env), g(env.repo, "symbolic-ref", "--short", "HEAD")
     job = run_apply(env, sha, note="n")
     new = head(env)
-    assert new != before and g(env.repo, "rev-parse", "HEAD^") == before and g(env.repo, "symbolic-ref", "--short", "HEAD") == branch
+    assert branch == "master"                                                    # the fixture repository is on its main line
+    assert new != before and g(env.repo, "rev-parse", "HEAD^") == before and g(env.repo, "symbolic-ref", "--short", "HEAD") == "argus/jtest"
+    assert g(env.repo, "rev-parse", "master") == before                          # the main line did not move
     msg = g(env.repo, "log", "-1", "--format=%B")
     assert "Argus-Job: jtest" in msg and f"Argus-Patch-Sha256: {sha}" in msg and msg.splitlines()[0]
     assert g(env.repo, "status", "--porcelain", "--untracked-files=all") == ""
     e = job.data["log"][-1]
     assert job.data["state"] == rj.APPLIED and e["commit"] == new and e["as_is"] is True and e["method"] == "apply"
-    assert e["head_before"] == before and e["branch"] == branch and e["read_sha"] == sha[:12] and e["note"] == "n"
+    assert e["head_before"] == before and e["branch"] == "argus/jtest" and e["read_sha"] == sha[:12] and e["note"] == "n"
     assert "Global Person" in g(env.repo, "log", "-1", "--format=%an")                # no local identity: the global one, read once
 
 
@@ -691,7 +693,7 @@ def test_the_cli_prints_the_branch_and_says_it_was_not_pushed(env, tmp_path, cap
     sys.path.insert(0, str(tr.ROOT / "scripts"))
     import argus
     patch, sha = package(env, tmp_path, edit_shop())
-    branch = g(env.repo, "symbolic-ref", "--short", "HEAD")
+    branch = "argus/jtest"  # on master the commit goes on a branch of its own
     read_ok(env, sha)
     assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12]], deps=env.deps) == 0
     out = capsys.readouterr().out
@@ -953,3 +955,131 @@ def test_more_reader_checks_hold_with_the_flag(env, tmp_path, name, fn, kw):
 def pr_template():
     from router import patch_read as pr
     return pr.TEMPLATE_SHA256
+
+
+# ---- the branch of its own -----------------------------------------------------------------------------------------------------------
+
+def test_a_branch_the_human_made_is_kept_and_no_argus_branch_is_made(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    g(env.repo, "checkout", "-q", "-b", "my-work")
+    job = run_apply(env, sha)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "my-work" and job.data["log"][-1]["branch"] == "my-work"
+    assert g(env.repo, "branch", "--list", "argus/*") == ""
+
+
+def test_the_branch_origin_points_at_counts_as_the_main_line(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    g(env.repo, "checkout", "-q", "-b", "trunk")
+    g(env.repo, "update-ref", "refs/remotes/origin/trunk", "HEAD")
+    g(env.repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+    before = head(env)
+    run_apply(env, sha)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "argus/jtest" and g(env.repo, "rev-parse", "trunk") == before
+
+
+def test_an_existing_branch_of_that_name_is_refused_and_the_repository_is_untouched(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    g(env.repo, "branch", "argus/jtest")
+    with pytest.raises(rj.Refused, match="points at the base commit"):
+        run_apply(env, sha)
+    untouched(env, before)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "master"
+
+
+def test_a_failed_commit_leaves_the_main_line_checked_out_and_no_branch_behind(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = ra.run_git
+
+    def boom(repo, *a, **k):
+        if a and a[0] == "commit":
+            raise ra.GitFail("injected")
+        return real(repo, *a, **k)
+    monkeypatch.setattr(ra, "run_git", boom)
+    with pytest.raises(rj.Refused, match="undone"):
+        run_apply(env, sha)
+    monkeypatch.setattr(ra, "run_git", real)
+    untouched(env, before)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "master" and g(env.repo, "branch", "--list", "argus/*") == ""
+
+
+def test_a_kill_right_after_the_branch_was_made_is_healed_and_the_record_names_the_branch(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = rj.Job.note
+
+    def die(self, deps, what, **kw):
+        if what == "apply_started":
+            raise KeyboardInterrupt("killed after the branch, before the log")
+        return real(self, deps, what, **kw)
+    monkeypatch.setattr(rj.Job, "note", die)
+    with pytest.raises(KeyboardInterrupt):
+        run_apply(env, sha)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "argus/jtest" and head(env) == before
+    monkeypatch.setattr(rj.Job, "note", real)
+    job = run_apply(env, sha)
+    assert job.data["state"] == rj.APPLIED and job.data["log"][-1]["branch"] == "argus/jtest" and g(env.repo, "rev-parse", "master") == before
+
+
+def test_a_crash_after_the_commit_is_recorded_with_the_own_branch(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    real = rj._record_applied
+    monkeypatch.setattr(rj, "_record_applied", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt("killed")))
+    with pytest.raises(KeyboardInterrupt):
+        run_apply(env, sha)
+    monkeypatch.setattr(rj, "_record_applied", real)
+    job = run_apply(env, sha)
+    assert job.data["log"][-1]["recovered"] is True and job.data["log"][-1]["branch"] == "argus/jtest"
+
+
+def test_an_error_writing_the_log_puts_the_repository_back_on_the_main_line(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    real = rj.Job.note
+
+    def bad(self, deps, what, **kw):
+        if what == "apply_started":
+            raise OSError("disk full")
+        return real(self, deps, what, **kw)
+    monkeypatch.setattr(rj.Job, "note", bad)
+    with pytest.raises(OSError):
+        run_apply(env, sha)
+    untouched(env, before)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "master" and g(env.repo, "branch", "--list", "argus/*") == ""
+
+
+def test_a_branch_named_argus_makes_the_new_name_impossible_and_is_a_refusal_not_a_traceback(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    before = head(env)
+    g(env.repo, "branch", "argus")
+    with pytest.raises(rj.Refused, match="could not make the branch argus/jtest"):
+        run_apply(env, sha)
+    untouched(env, before)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "master"
+
+
+def test_an_existing_branch_that_holds_a_commit_is_pointed_at_not_deleted(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    g(env.repo, "checkout", "-q", "-b", "argus/jtest")
+    g(env.repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "earlier")
+    g(env.repo, "checkout", "-q", "master")
+    with pytest.raises(rj.Refused, match="holds a commit"):
+        run_apply(env, sha)
+    assert g(env.repo, "branch", "--list", "argus/jtest") != ""
+
+
+def test_when_the_undo_fails_the_repository_stays_on_the_own_branch_and_the_message_says_so(env, tmp_path, monkeypatch):
+    patch, sha = package(env, tmp_path, edit_shop())
+    real = ra.run_git
+
+    def boom(repo, *a, **k):
+        if a and a[0] == "commit":
+            raise ra.GitFail("injected")
+        return real(repo, *a, **k)
+    monkeypatch.setattr(ra, "run_git", boom)
+    monkeypatch.setattr(ra, "_undo", lambda repo, patch: False)
+    with pytest.raises(rj.Refused, match="NOT CLEAN.*argus/jtest, not on master"):
+        run_apply(env, sha)
+    monkeypatch.setattr(ra, "run_git", real)
+    assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "argus/jtest"

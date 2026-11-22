@@ -100,7 +100,7 @@ konfigurasi, pembuangan `GIT_*`, kunci per repo, pembandingan patch-id sebelum c
 |---|---|---|
 | K1 | `--read-sha` wajib | ya |
 | K2 | `HEAD` harus sama dengan `intake.commit`; tanpa `--onto-descendant` di v0 | ya (berubah dari revisi 0 atas saran peninjau) |
-| K3 | Commit di cabang aktif repo target; teks `status` diperbarui | ya untuk repo latihan |
+| K3 | Commit di cabang aktif repo target; teks `status` diperbarui. **Revisi 2026-11-22:** bila cabang aktif adalah garis utama (`main`, `master`, atau yang ditunjuk `origin/HEAD`), commit masuk ke cabang `argus/<job>` yang dibuat `apply` sendiri; cabang lain buatan manusia dipakai apa adanya; cabang `argus/<job>` yang sudah ada ditolak; commit gagal dan dibatalkan mengembalikan garis utama dan menghapus cabang itu (ditemukan di pilot bulking-app issue 2, `apply` meng-commit ke `main`) | ya untuk repo latihan |
 | K4 | Tanpa push, merge, atau deploy | ya |
 | K5 | Hook, filter, fsmonitor dan gpg tidak berjalan; konfigurasi lokal di luar daftar putih ditolak | ya |
 | K6 | Kartu apply di chat menyusul sesudah CLI ini live | ya |
