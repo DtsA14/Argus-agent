@@ -78,6 +78,7 @@ LEGAL = {(NEW, DRAFTING), (NEW, BLOCKED),
          (AGENT_RUNNING, REVIEW_READY), (AGENT_RUNNING, REVIEW_INVALID), (AGENT_RUNNING, AGENT_FAILED),
          (AGENT_RUNNING, BLOCKED),
          (AGENT_FAILED, AGENT_RUNNING), (AGENT_FAILED, BLOCKED),
+         (AGENT_FAILED, DRAFTING),                 # a draft whose own tests the agent reported as unpassable is redrafted (draft_test_conflict)
          (REVIEW_READY, APPLIED), (REVIEW_READY, REJECTED), (REVIEW_INVALID, REJECTED)} | \
         {(s, ABANDONED) for s in (NEW, DRAFTING, DRAFT_FAILED, AWAITING_APPROVAL, AGENT_RUNNING, AGENT_FAILED, BLOCKED,
                                   RESEARCHING, AWAITING_RESEARCH_REVIEW, RESEARCH_INCONCLUSIVE, RESEARCH_FAILED)}
@@ -940,7 +941,11 @@ def _draft(job, cfg, deps, n, note=None, note_by=None):
         if not resume:
             job.data["stages"][sid] = {"kind": "draft", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
                                        "started_at": deps.clock(), **({"note": note} if note else {}), **({"note_by": note_by} if note and note_by else {})}
-            if note and note_by != "reader":
+            if note and note_by == "conflict":
+                job.data["conflict_steered"] = True          # the harness's facts about the agent's report
+                if "Reviewer (human): " in note:
+                    job.data["human_steered"] = True         # and a human's own words
+            elif note and note_by != "reader":
                 job.data["human_steered"] = True
             elif note:
                 job.data["reader_steered"] = True
@@ -996,7 +1001,8 @@ def protected_changed(job, cfg):
     record from before the lists, or one edited since, must never run with less protection than the job showed. A job
     from before the lists runs as before, unless its environment requires one."""
     try:
-        rec = json.loads((job.root / "fixtures" / "intake" / f"{TASK}.json").read_text(encoding="utf-8"))
+        task = (job.data.get("approval") or {}).get("task") or TASK
+        rec = json.loads((job.root / "fixtures" / "intake" / f"{task}.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
         return f"the task record cannot be read: {e}"
     env = job.data["inputs"].get("environment")
@@ -1080,6 +1086,9 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
         if not sha or not seen.startswith(sha) or len(sha) < 12:
             raise Refused(f"the draft is {seen[:12]}, not the {sha!r} given: approve the draft status shows "
                           "(at least its first 12 characters)")
+        if (job.data.get("approval") or {}).get("draft_sha256") == seen:
+            raise Refused(f"the draft {seen[:12]} was already approved and its agent has run: redraft it (a job whose agent reported that "
+                          "the draft's tests cannot pass) or retry the agent; nothing was approved")
         draft = json.loads(path.read_text(encoding="utf-8"))
         # SPEC_CONFLICT_GATE C1: before anything else (web, cap, BLOCKED, the confirmation, the agent). Not refused at
         # the draft check: that would be the drafter's feedback, and it would learn to drop the marker.
@@ -1119,7 +1128,8 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
         with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
             if draft_sha(path) != seen:                 # changed while the human was reading
                 raise Refused("the draft changed after it was shown; nothing was approved")
-            report = dr.check(draft, task=TASK, issue=job_issue(job), research=job_research(job), max_usd=cap,
+            task = _next_task(job)
+            report = dr.check(draft, task=task, issue=job_issue(job), research=job_research(job), max_usd=cap,
                               max_iterations=max_iterations, reference_patch=reference_patch,
                               sandbox_cfg=sandbox_cfg or acfg.get("sandbox") or {}, root=job.root,
                               profiles=sorted((cfg.get("code_task") or {}).get("profiles") or {}),
@@ -1131,13 +1141,26 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             from codetask.agent import baseline_errors
             # SPEC_LOCATE_FROM_TRACEBACK 2.2: the red baseline of this check (the approved draft, just now), recorded
             # once; every agent stage's first attempt is told it, a resume included.
-            job.data["approval"] = {"draft_sha256": seen, "contract_sha256": record["contract_sha256"], "task": TASK,
+            job.data["approval"] = {"draft_sha256": seen, "contract_sha256": record["contract_sha256"], "task": task,
                                     "max_usd": cap, "max_iterations": max_iterations, "at": deps.clock(),
                                     "by": os.environ.get("USER"), "feasibility": record["feasibility"],
                                     "baseline": baseline_errors(report), "web": bool(web)}
             job.note(deps, "approved", draft=seen[:12], contract=record["contract_sha256"][:12])
-            r = _agent(job, cfg, deps, sandbox_cfg)
+            last, _ = last_agent(job)         # a redraft after a draft_test_conflict leaves agent stages behind: this is the next one
+            r = _agent(job, cfg, deps, sandbox_cfg, sid=f"a{int(last[1:]) + 1}" if last else "a1")
     return job, r
+
+
+def _next_task(job):
+    """The name of the task this approval publishes: `task` the first time, `task2`, `task3`... after a redraft that followed an agent
+    that reported the draft's own tests as unpassable (an approval never overwrites, so the earlier approved task stays as it was)."""
+    def taken(t):                  # an approval writes the record, then the contract, then the repository: a cut-off leaves any of them
+        return any(p.exists() for p in (job.root / "fixtures" / "repos" / t, job.root / "fixtures" / "intake" / f"{t}.json",
+                                        job.root / "fixtures" / "contracts" / f"{t}.json"))
+    n = 1
+    while taken(TASK if n == 1 else TASK + str(n)):
+        n += 1
+    return TASK if n == 1 else f"{TASK}{n}"
 
 
 def agent_stages(job):
@@ -1438,6 +1461,42 @@ def carry_from(job, sid):
     return {"carried": True, "from": sid, "stopped": stopped(a)}
 
 
+NOTE_FACTS_MAX = 700
+NOTE_FACTS_MIN = 200
+
+
+def _draft_test_conflict_note(job, room=NOTE_MAX):
+    """The facts a redraft after a `draft_test_conflict` carries (at most `room` characters), or None when the last agent stage did
+    not stop that way. From the harness's record only: the reported files that are tests of the draft, their failing nodes, and the
+    failure lines of those files from the last verdict. The agent's own text is never kept (SPEC_REPORT_CONFLICT). The lines are test
+    output and can hold text produced by the agent's code, so the drafter is told they are data, not instructions."""
+    from codetask.run import DRAFT_TEST_CONFLICT
+    try:
+        _, stage = last_agent(job)
+        run_dir = job.runs / stage["run_id"]
+        r = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
+        if not str(r.get("stop_reason") or "").startswith(DRAFT_TEST_CONFLICT):
+            return None
+        conf = (r.get("verdict") or {}).get("conflict") or {}
+        files = [str(f) for f in (conf.get("draft_tests") or conf.get("files") or [])][:5]
+        v = json.loads((run_dir / f"verdict_{(r.get('verdict') or {}).get('iteration', 0)}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+    nodes, lines = [], []
+    for c in v.get("criteria") or []:
+        if c.get("layer") != "C" or c.get("status") == "pass":
+            continue
+        ev = c.get("evidence") or {}
+        nodes += [str(n) for n in (ev.get("failed_nodes") or []) if str(n).split("::", 1)[0] in files][:3]
+        lines += [ln.strip() for ln in str(ev.get("output_tail") or "").splitlines()
+                  if any(f in ln for f in files) or ln.strip().startswith(("AssertionError", "FAIL "))]
+    text = " ".join(" ".join(lines).split())[:NOTE_FACTS_MAX]
+    out = ("The agent stopped and reported that these tests of the draft cannot pass: " + ", ".join(files)
+           + ". This claim was not checked. Failing now: " + (", ".join(nodes[:3]) or "-") + ". Failure lines: " + (text or "-")
+           + " Rewrite only the tests that are really impossible for correct code to pass; keep the tests that are correct.")
+    return out[:max(room, 0)]
+
+
 def _last_conflict(job):
     """(blocked_reason, verdict conflict record) of the last agent stage's result.json (SPEC_REPORT_CONFLICT), read only;
     (None, None) for anything unreadable or a run without a report."""
@@ -1532,11 +1591,25 @@ def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
     job = open_job(job_id, jobs_dir)
     with job.lock():
         _check_environment(job, cfg)
-        if job.data["state"] not in (DRAFT_FAILED, AWAITING_APPROVAL):
+        facts, note_by = None, None
+        if job.data["state"] not in (DRAFT_FAILED, AWAITING_APPROVAL, AGENT_FAILED):
             raise Refused(f"job {job.id} is {job.data['state']}: only a failed or unapproved draft is redrafted")
+        if job.data["state"] == AGENT_FAILED and _draft_test_conflict_note(job) is None:
+            raise Refused(f"job {job.id} is AGENT_FAILED: only a failed or unapproved draft is redrafted, or a job whose agent "
+                          "reported that the draft's own tests cannot pass (retry runs the agent again; abandon closes the job)")
+        if job.data.get("approval") and _draft_test_conflict_note(job) is not None:
+            # the last agent stage stopped that way: every redraft of this job carries the facts, also one after a failed redraft
+            room = NOTE_MAX - (len(" Reviewer (human): ") + len(note) if note else 0)
+            if room < NOTE_FACTS_MIN:
+                raise Refused(f"the note has {len(note)} characters; the facts of the agent's report need at least {NOTE_FACTS_MIN} of the "
+                              f"{NOTE_MAX}; nothing was started")
+            facts = _draft_test_conflict_note(job, room)
+            note = clean(facts + (" Reviewer (human): " + note if note else "")).strip()
+            note_by = "conflict"
         n = 1 + max(int(k[1:]) for k, s in job.data["stages"].items() if s["kind"] == "draft")
-        job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"), **({"note": True} if note else {}))
-        return job, _draft(job, cfg, deps, n, note=note)
+        job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"), **({"note": True} if note else {}),
+                 **({"after": "draft_test_conflict"} if facts else {}))
+        return job, _draft(job, cfg, deps, n, note=note, note_by=note_by)
 
 
 VIA = ("ui",)                   # SPEC_CONTROL_UI F4: the only channel a decision is recorded as coming through
@@ -1876,6 +1949,8 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
         out.append("human-steered: a redraft was given a reviewer's note")
     if d.get("reader_steered"):                 # `argus queue retry`: the first drafter was given the patch readers' findings (models), not a human's note
         out.append("reader-steered: the drafter was given the patch readers' findings on a rejected attempt of this issue")
+    if d.get("conflict_steered"):               # a redraft after the agent reported that the draft's own tests cannot pass
+        out.append("conflict-steered: the drafter was given the harness's facts after the agent reported unpassable tests of the draft")
     for sid, s in d["stages"].items():
         out.append(f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
                    + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else "")
@@ -1925,9 +2000,12 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
             out += report_conflict_lines(job, last)
             out += detection_lines(job)
         blocked = last[0] if d["state"] == AGENT_FAILED else None
+        redraftable = d["state"] == AGENT_FAILED and _draft_test_conflict_note(job) is not None
         nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
                AGENT_FAILED: ([f'argus abandon {job.id} "<why>" and a new job that names the file(s)',
                                f"argus retry {job.id} --not-a-conflict"] if blocked == "test_conflict"
+                              else [f"argus redraft {job.id}  (the agent says the draft's own tests cannot pass)",
+                                    f"argus retry {job.id}  (if you judge the tests right)", f'argus abandon {job.id} "<why>"'] if redraftable
                               else [f"argus retry {job.id}", f'argus abandon {job.id} "<why>"']),
                BLOCKED: [f'argus abandon {job.id} "<why>"'],
                RESEARCH_FAILED: [f'argus abandon {job.id} "<why>"']}.get(d["state"])
