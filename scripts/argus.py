@@ -200,7 +200,7 @@ def main(argv=None, deps=None):
     prr = sub.add_parser("patch-read-run", help="the patch reader of an Argus job: Tencent Hy4 Flash, then DeepSeek V4.1 Flash 1017 (both always, so one note holds the findings of both), outside a Claude session; costs money, has its own cap")
     prr.add_argument("job")
     prr.add_argument("--cap-usd", type=float, default=0.20, help="the TOTAL cap of this job's patch readings (a call starts only if billed so far + its worst case fits)")
-    prr.add_argument("--max-output", type=int, default=64000, help="output tokens a call may use, up to 100000 (a reasoning model spends them on thinking first)")
+    prr.add_argument("--max-output", type=int, default=100000, help="output tokens a call may use, up to 100000 (a reasoning model spends them on thinking first)")
     prr.add_argument("--first", choices=("hy4flash", "ds1017"), default="hy4flash", help="the reader asked first (default: the tested pair's first); another order is a measurement: the card says the pair is not tested")
     prr.add_argument("--second", choices=("hy4flash", "ds1017"), default="ds1017", help="the reader asked second (asked whatever the first said, unless the first reading was unusable)")
     p = sub.add_parser("applied")
