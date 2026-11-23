@@ -716,7 +716,8 @@ def test_a_failed_agent_says_why_what_failed_and_what_can_be_done(env, monkeypat
     text = rj.status("jtest", jobs_dir=env.jobs)
     assert "why: stagnant: the same criteria failed 2 attempts in a row" in text
     assert "agent result: FAILED_ACCEPTANCE, 2 attempt(s), failing: validation:target, claims" in text
-    assert 'next: argus retry jtest  |  argus abandon jtest "<why>"' in text and "redraft" not in text
+    # SPEC_REDRAFT_AFTER_AGENT: after a plain failure the draft may be the problem, so redraft (with a note) is offered between retry and abandon
+    assert 'next: argus retry jtest  |  argus redraft jtest --note "<what the draft got wrong>"  (if the draft itself is the problem)  |  argus abandon jtest "<why>"' in text
     assert job.file.read_bytes() == before
 
 

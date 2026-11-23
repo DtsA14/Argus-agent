@@ -914,10 +914,11 @@ def research_ok(job_id, *, sha, cfg, deps, jobs_dir=JOBS):
 NOTE_MAX = 1000                  # SPEC_DRAFT_CALL_PATH 2.4: characters of a reviewer's note to the drafter
 
 
-def _draft(job, cfg, deps, n, note=None, note_by=None):
+def _draft(job, cfg, deps, n, note=None, note_by=None, before_move=None, warn=None):
     """Start drafter stage n (its cap fixed now), or resume it with the cap it started with. note: a reviewer's note
     for a redraft, recorded with the stage when it starts (a resume takes the drafter run's own record); note_by "reader": the note is
-    the patch readers' findings (models), so the job is not marked as steered by a human."""
+    the patch readers' findings (models), so the job is not marked as steered by a human. before_move: called once, after the human confirmed and just before the job
+    moves to DRAFTING (a redraft after a stopped agent closes the agent's stage there, so a declined confirmation changes nothing); warn: one more line on the confirmation screen."""
     from codetask.drafter import DRAFTED, drafter_settings, run_drafter
     sid = f"d{n}"
     stage = job.data["stages"].get(sid)
@@ -936,9 +937,11 @@ def _draft(job, cfg, deps, n, note=None, note_by=None):
     text = _limits_text(job, f"drafter stage {sid}" + (" (resume)" if resume else ""),
                         [f"model {scfg['roles'][scfg['drafter']['role']]['model']}; stage cap ${cap:.4f}; one attempt "
                          f"${lim['attempt_usd']:.2f}; {scfg['drafter']['max_submits']} submits",
-                         f"overrides: {(cfg.get('router') or {}).get('overrides') or {}}", *environment_lines(job)])
+                         f"overrides: {(cfg.get('router') or {}).get('overrides') or {}}", *environment_lines(job), *([warn] if warn else [])])
     with live(deps, scfg, [scfg["drafter"]["role"]], text, job=job):
         if not resume:
+            if before_move is not None:
+                before_move()
             job.data["stages"][sid] = {"kind": "draft", "run_id": f"{job.id}-{sid}", "cap_usd": cap,
                                        "started_at": deps.clock(), **({"note": note} if note else {}), **({"note_by": note_by} if note and note_by else {})}
             if note and note_by == "conflict":
@@ -1579,9 +1582,63 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS, n
             return job, _agent(job, cfg, deps, sandbox_cfg, sid=sid, cap=cap, carry=carry)
 
 
+def _last_result(job):
+    """The committed result.json of the last agent stage's run, or None when there is none (or it cannot be read)."""
+    try:
+        _, stage = last_agent(job)
+        return json.loads((job.runs / stage["run_id"] / "result.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def _redraft_refusal(job):
+    """Why a human may NOT redraft after this agent failure (SPEC_REDRAFT_AFTER_AGENT), or None when they may, with words of their own. Two kinds of stop say the
+    draft is not the problem: a confirmed conflict with OLD tests (the way out is a new job that names the file(s), or `retry --not-a-conflict`) and a hit of the
+    test-detection gate (the agent's code recognises tests; shown to a human, never fed back). Anything else (max_iterations, stagnation, a budget stop) may be the
+    draft's fault, and the human says so by redrafting. Facts come from the run's committed result only."""
+    r = _last_result(job)
+    if r is None:
+        # no result on disk: the job's own record decides (a deleted or damaged file must not let a refused kind through)
+        why = str((_why(job) or {}).get("reason") or "")
+        if why.startswith("test_detection"):
+            return "its agent's code was caught recognising tests (test_detection): a new draft does not change that (`argus abandon` closes the job)"
+        if "the harness confirmed its shape" in why:
+            return ("its agent's run ended BLOCKED/test_conflict: the harness confirmed a conflict with OLD tests, so the draft is not the problem "
+                    "(`argus abandon` and a new job that names the file(s), or `argus retry --not-a-conflict`)")
+        return None
+    if r.get("blocked_reason") in ("contract_changed", "invalid_contract"):
+        return (f"its agent's run ended BLOCKED/{r['blocked_reason']}: the frozen contract or the input repository changed; that is an integrity stop, not a draft problem "
+                "(`argus abandon` and a new job)")
+    if r.get("blocked_reason") == "test_conflict":
+        return ("its agent's run ended BLOCKED/test_conflict: the harness confirmed a conflict with OLD tests, so the draft is not the problem "
+                "(`argus abandon` and a new job that names the file(s), or `argus retry --not-a-conflict`)")
+    if str(r.get("stop_reason") or "").startswith("test_detection"):
+        return "its agent's code was caught recognising tests (test_detection): a new draft does not change that (`argus abandon` closes the job)"
+    return None
+
+
+def _agent_room_warning(job, cfg):
+    """One line for the confirmation screen of a redraft after an agent: when the job cap left after the drafter's own cap is less than one agent attempt, the next approve
+    may end BLOCKED (budget). None when it fits or cannot be worked out."""
+    from codetask import run as ctrun
+    try:
+        contract = json.loads((job.root / "fixtures" / "contracts" / f"{job.data['approval']['task']}.json").read_text(encoding="utf-8"))
+        profile = contract.get("budget_profile")
+        left = left_usd(job)
+        cap = min(float((cfg.get("router") or {}).get("draft_max_usd", 0.75)), left)
+        need = ctrun.settings(stage_config(ctrun.apply_profile(cfg, profile) if profile else cfg, left))["attempt_usd"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if left - cap >= need:
+        return None
+    return (f"warning: ${left:.2f} of the job cap is left; after this drafter's cap (${cap:.2f}) ${max(left - cap, 0):.2f} could be left, less than one agent "
+            f"attempt (${need:.2f}): the next approve may end BLOCKED (budget)")
+
+
 def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
     """A new drafter stage; note: the reviewer's note it is told (SPEC_DRAFT_CALL_PATH 2.4), which marks the job
-    human-steered."""
+    human-steered. Also after an agent that failed (with a note of the human's own, SPEC_REDRAFT_AFTER_AGENT) and after an agent whose process is gone
+    (AGENT_RUNNING with nothing holding the job: the human stopped it; the stage is closed as INTERRUPTED first)."""
     if note is not None:
         note = clean(note).strip()
         if not note:
@@ -1591,12 +1648,24 @@ def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
     job = open_job(job_id, jobs_dir)
     with job.lock():
         _check_environment(job, cfg)
-        facts, note_by = None, None
-        if job.data["state"] not in (DRAFT_FAILED, AWAITING_APPROVAL, AGENT_FAILED):
-            raise Refused(f"job {job.id} is {job.data['state']}: only a failed or unapproved draft is redrafted")
-        if job.data["state"] == AGENT_FAILED and _draft_test_conflict_note(job) is None:
-            raise Refused(f"job {job.id} is AGENT_FAILED: only a failed or unapproved draft is redrafted, or a job whose agent "
-                          "reported that the draft's own tests cannot pass (retry runs the agent again; abandon closes the job)")
+        facts, note_by, interrupted = None, None, False
+        if job.data["state"] not in (DRAFT_FAILED, AWAITING_APPROVAL, AGENT_FAILED, AGENT_RUNNING):
+            raise Refused(f"job {job.id} is {job.data['state']}: only a failed or unapproved draft is redrafted, or a job whose agent failed or was stopped")
+        if job.data["state"] == AGENT_RUNNING:       # the lock is ours, so no process runs the agent: someone stopped it
+            if note is None:
+                raise Refused(f"job {job.id} is AGENT_RUNNING and nothing runs it (the agent was stopped): say why the draft must change with --note "
+                              "(`argus resume` continues the agent instead); nothing was started")
+            if _last_result(job) is not None:        # the run finished (its result is committed) and only the stage record is missing: that work is paid for and may be good
+                raise Refused(f"job {job.id} is AGENT_RUNNING but its agent run already finished (a result is on disk): `argus resume` records it; "
+                              "nothing was started")
+            interrupted = True
+        elif job.data["state"] == AGENT_FAILED and _draft_test_conflict_note(job) is None:
+            why = _redraft_refusal(job)
+            if why is not None:
+                raise Refused(f"job {job.id} is AGENT_FAILED and cannot be redrafted: {why}; nothing was started")
+            if note is None:
+                raise Refused(f"job {job.id} is AGENT_FAILED: a redraft after an agent that failed needs a note of your own (--note: what the draft got wrong); "
+                              "retry runs the agent again, abandon closes the job; nothing was started")
         if job.data.get("approval") and _draft_test_conflict_note(job) is not None:
             # the last agent stage stopped that way: every redraft of this job carries the facts, also one after a failed redraft
             room = NOTE_MAX - (len(" Reviewer (human): ") + len(note) if note else 0)
@@ -1607,9 +1676,23 @@ def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
             note = clean(facts + (" Reviewer (human): " + note if note else "")).strip()
             note_by = "conflict"
         n = 1 + max(int(k[1:]) for k, s in job.data["stages"].items() if s["kind"] == "draft")
+        warn, before_move = None, None
+        if job.data.get("approval") and job.data["state"] in (AGENT_FAILED, AGENT_RUNNING):
+            warn = _agent_room_warning(job, cfg)          # the money left after the drafter's cap, against one more agent attempt (shown, not enforced: the drafter rarely spends its cap)
+        if interrupted:
+            def before_move():      # after the human confirmed: close the stage the stopped process left open, with what its ledger shows it spent
+                sid, stage = last_agent(job)
+                stage.update(ended_at=deps.clock(), status="INTERRUPTED", usd=runs_spent_nano(job.runs, {sid: stage}) / 1e9)
+                if deps.validate is None:                      # a killed harness cannot time out the containers it started (as `resume` does)
+                    from tools import sandbox as sb
+                    try:
+                        sb.remove_labeled(cfg["sandbox"], {"argus.run": stage["run_id"]})
+                    except sb.SandboxUnavailable:
+                        pass
+                job.move(AGENT_FAILED, deps, stage=sid, reason="interrupted: the agent's process stopped before it finished; the draft is redone by a human")
         job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"), **({"note": True} if note else {}),
-                 **({"after": "draft_test_conflict"} if facts else {}))
-        return job, _draft(job, cfg, deps, n, note=note, note_by=note_by)
+                 **({"after": "draft_test_conflict"} if facts else {}), **({"after": "interrupted_agent"} if interrupted else {}))
+        return job, _draft(job, cfg, deps, n, note=note, note_by=note_by, before_move=before_move, warn=warn)
 
 
 VIA = ("ui",)                   # SPEC_CONTROL_UI F4: the only channel a decision is recorded as coming through
@@ -2001,11 +2084,19 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
             out += detection_lines(job)
         blocked = last[0] if d["state"] == AGENT_FAILED else None
         redraftable = d["state"] == AGENT_FAILED and _draft_test_conflict_note(job) is not None
+        _res = _last_result(job)
+        _killed = d["state"] == AGENT_FAILED and (last_agent(job)[1] or {}).get("status") == "INTERRUPTED"
+        may_redraft = (d["state"] == AGENT_FAILED and not redraftable and _redraft_refusal(job) is None
+                       and (_res or {}).get("blocked_reason") not in ("sandbox_unavailable", "provider_failed"))
         nxt = {DRAFT_FAILED: [f"argus redraft {job.id}", f'argus reject {job.id} "<why>"'],
                AGENT_FAILED: ([f'argus abandon {job.id} "<why>" and a new job that names the file(s)',
                                f"argus retry {job.id} --not-a-conflict"] if blocked == "test_conflict"
                               else [f"argus redraft {job.id}  (the agent says the draft's own tests cannot pass)",
                                     f"argus retry {job.id}  (if you judge the tests right)", f'argus abandon {job.id} "<why>"'] if redraftable
+                              else [f'argus redraft {job.id} --note "<what the draft got wrong>"  (the agent was stopped; it left no result, so retry cannot continue it)',
+                                    f'argus abandon {job.id} "<why>"'] if _killed and may_redraft
+                              else [f"argus retry {job.id}", f'argus redraft {job.id} --note "<what the draft got wrong>"  (if the draft itself is the problem)',
+                                    f'argus abandon {job.id} "<why>"'] if may_redraft
                               else [f"argus retry {job.id}", f'argus abandon {job.id} "<why>"']),
                BLOCKED: [f'argus abandon {job.id} "<why>"'],
                RESEARCH_FAILED: [f'argus abandon {job.id} "<why>"']}.get(d["state"])
