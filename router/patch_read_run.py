@@ -21,6 +21,7 @@ from harness.errors import LLMCallFailed, ReservationExhausted
 from harness.events import EventLog
 from harness.llm import LLMCaller, is_truncated, reconcile_ledger
 from router import job as rj
+from router import patch_context as pc
 from router import patch_read as pr
 from router import patch_trial as pt
 from router import t3b_run as tr
@@ -60,20 +61,30 @@ def package(job_id, jobs_dir):
     return job, sid, sha, text, issue
 
 
-def bundle(job_id, jobs_dir):
+def bundle(job_id, jobs_dir, info=None):
+    """(bundle text, sid, sha). `info`, when a dict, is filled with what the context holds (SPEC_READER_CONTEXT: the files the patch leans on, read at the job's base commit)."""
     job, sid, sha, text, issue = package(job_id, jobs_dir)
+    inputs = job.data.get("inputs") or {}
+    repo, commit = inputs.get("repo"), inputs.get("commit")
+    globs = (job.data.get("protected_repo") or {}).get("globs") or []
+    context, cinfo = pc.build(repo, commit, text, globs) if isinstance(repo, str) and isinstance(commit, str) and repo and commit else ("", {"shown": [], "not_shown": [], "not_shown_total": 0, "skipped": 0, "sha256": None, "absent": "no repo or commit in the job inputs"})
+    if info is not None:
+        info.update(cinfo)
     files = sorted(dict.fromkeys(DIFF_FILE.findall(text)))
     touches = ", ".join(files[:FILES_MAX]) + (f" (and {len(files) - FILES_MAX} more)" if len(files) > FILES_MAX else "") if files else "(none found in the patch)"
-    return pr.render(issue, touches, "the job is REVIEW_READY: a review package exists; passing examples do not prove the patch is clean", text), sid, sha
+    return pr.render(issue, touches, "the job is REVIEW_READY: a review package exists; passing examples do not prove the patch is clean", text, context), sid, sha
 
 
 def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=100000, first=FIRST, second=SECOND, models=None):
     """Read the patch of the job with the pair; returns a summary dict. `models` is for tests: {name: scripted chat model}."""
     if not (isinstance(cap_usd, (int, float)) and 0 < cap_usd <= 2) or not (isinstance(max_output, int) and 500 <= max_output <= 100000):
         raise rj.Refused("--cap-usd is above 0 and at most 2; --max-output is 500 to 100000")
-    text, sid, sha = bundle(job_id, jobs_dir)
+    cinfo = {}
+    text, sid, sha = bundle(job_id, jobs_dir, cinfo)
     job = rj.open_job(job_id, jobs_dir)
     summary = {"job": job_id, "sha12": sha[:12], "readings": [], "final": None, "billed_usd": 0.0, "stopped": None, "template_sha256": pr.TEMPLATE_SHA256}
+    if cinfo.get("failed"):
+        summary["context_failed"] = cinfo["failed"]                 # a person sees that the readers had no context because of an error, not because there was nothing to show
     kind0, rec0 = pr.load(job.dir, sid, sha)
     resume = (kind0 in ("one", "concerns") and isinstance(rec0, dict) and rec0["reader"].get("kind") == "argus"
               and rec0["reader"].get("id") == reader_id(first) and "second" not in rec0)      # the first reading stands (ok or concerns): only the second is asked
@@ -92,6 +103,7 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=100000,
                      f"template {pr.TEMPLATE_SHA256[:12]}; ledger {job.dir / LEDGER}"])
     with rj.live(deps, plan[0][1], [pt.ROLE], msg):
         log = EventLog(job.dir / LEDGER)
+        log.emit("patch_context", sha12=sha[:12], **cinfo)            # SPEC_READER_CONTEXT: what the readers were shown beside the diff (a failure shows as `failed`)
         verdicts = []
         for name, cfg_n, ref, worst in plan:
             n = 1 if name == second else 0

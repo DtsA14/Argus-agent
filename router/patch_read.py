@@ -47,6 +47,7 @@ Rules of this reading:
    blocker. When unsure: "blocker".
 5. You know only what is written here. Reply with ONLY one JSON object on one line: {"verdict": "ok" or "concerns", "note": "at most 500 characters: the
    line or hunk you rely on, and why", "severity": "blocker" or "nit" (only with concerns)}."""
+HEADER_CONTEXT = "context (read-only: these files as they were BEFORE the patch; the patch above changes some of them)"
 TEMPLATE_SHA256 = hashlib.sha256(TEMPLATE.encode("utf-8")).hexdigest()
 # The system message of every model reading: part of what was tested, so it has its own hash in the record of a pass.
 INSTRUCTION = ("You are the patch reader in a test. Follow the rules at the top of the bundle (before its first DATA header). Do not run any command. "
@@ -54,11 +55,15 @@ INSTRUCTION = ("You are the patch reader in a test. Follow the rules at the top 
 INSTRUCTION_SHA256 = hashlib.sha256(INSTRUCTION.encode("utf-8")).hexdigest()
 
 
-def render(issue, touches, fact, patch):
-    """The bundle a model reader is given: the template, then the issue, the files the patch touches, one machine fact and the patch, each as indented data."""
+def render(issue, touches, fact, patch, context=""):
+    """The bundle a model reader is given: the template, then the issue, the files the patch touches, one machine fact and the patch, each as indented data; then, only when
+    there is one, the context (SPEC_READER_CONTEXT: the files the patch leans on, as they were before it). Without a context the bundle is byte-identical to what it was."""
     ind = lambda t: "\n".join("  " + l for l in t.splitlines())          # noqa: E731
-    return "\n".join([TEMPLATE, "", "=== DATA issue ===", ind(issue), "", "=== DATA touches ===", "  " + touches, "", "=== FACTS (machine) ===", "  " + fact, "",
-                      "=== DATA patch ===", ind(patch)])
+    parts = [TEMPLATE, "", "=== DATA issue ===", ind(issue), "", "=== DATA touches ===", "  " + touches, "", "=== FACTS (machine) ===", "  " + fact, "",
+             "=== DATA patch ===", ind(patch)]
+    if context:
+        parts += ["", "=== DATA " + HEADER_CONTEXT + " ===", ind(context)]
+    return "\n".join(parts)
 
 
 def key(sid, patch_sha256):
