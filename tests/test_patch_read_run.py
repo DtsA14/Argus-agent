@@ -316,3 +316,122 @@ def test_a_missing_severity_on_a_concern_is_a_blocker_in_the_note(world):
     env, sha = world
     out = go(env, models(reply("ok"), reply("concerns", "a corner")))
     assert out["final"] == "concerns" and out["readings"][1]["severity"] == "blocker"
+
+
+# ---- SPEC_READER_CONTEXT: the files the patch leans on, beside the diff ----------------------------------------------------------------
+
+def real_commit(env):
+    """The fixture job names its base as `HEAD`; a real job holds the 40-digit sha (job.json), which is all the context reads."""
+    import subprocess
+    job = env.job()
+    job.data["inputs"]["commit"] = subprocess.run(["git", "-C", str(env.repo), "rev-parse", "HEAD"], capture_output=True, check=True, text=True).stdout.strip()
+    job.save()
+
+
+def humans(ms):
+    return {name: m.calls[0]["messages"][1].content for name, m in ms.items()}
+
+
+def test_both_readers_are_given_the_modified_file_as_it_was_before_the_patch_after_the_diff(world):
+    env, sha = world
+    real_commit(env)
+    ms = models(reply(), reply())
+    go(env, ms)
+    base = (env.repo / "src" / "shop.py").read_text()            # the repository still holds the base: the patch was only made on a copy
+    for name, human in humans(ms).items():
+        assert human.index("=== DATA patch ===") < human.index("=== DATA " + pr.HEADER_CONTEXT + " ===")
+        ctx = human.split("=== DATA " + pr.HEADER_CONTEXT + " ===\n", 1)[1]
+        assert ctx.startswith("  file: src/shop.py\n") and all(l.startswith("  ") for l in ctx.splitlines())
+        assert base.splitlines()[0] in ctx
+    assert humans(ms)["hy4flash"] == humans(ms)["ds1017"]
+
+
+def test_the_ledger_names_the_context_once_per_run_with_paths_and_sizes_and_no_file_text(world):
+    env, sha = world
+    real_commit(env)
+    go(env, models(reply(), reply()))
+    lines = [json.loads(l) for l in (env.job().dir / prr.LEDGER).read_text().splitlines()]
+    ctx = [l for l in lines if l["event"] == "patch_context"]
+    assert len(ctx) == 1 and ctx[0]["sha12"] == sha[:12] and [p for p, _ in ctx[0]["shown"]] == ["src/shop.py"] and ctx[0]["not_shown"] == []
+    assert len(ctx[0]["sha256"]) == 64 and "failed" not in ctx[0]
+    assert (env.repo / "src" / "shop.py").read_text().splitlines()[0] not in json.dumps(ctx[0])
+    assert lines.index(ctx[0]) < next(i for i, l in enumerate(lines) if l["event"] == "llm_call_started")
+
+
+def test_a_repository_that_cannot_be_read_does_not_stop_a_reading_and_the_bundle_has_no_context(world):
+    env, sha = world
+    real_commit(env)
+    job = env.job()
+    job.data["inputs"]["repo"] = str(env.repo) + "-gone"
+    job.save()
+    ms = models(reply(), reply())
+    s = go(env, ms)
+    assert s["final"] == "ok" and all("=== DATA context" not in h for h in humans(ms).values())
+    ctx = [json.loads(l) for l in (env.job().dir / prr.LEDGER).read_text().splitlines() if '"patch_context"' in l]
+    assert len(ctx) == 1 and ctx[0]["failed"] == "IntakeError" and ctx[0]["shown"] == []
+
+
+def test_a_job_without_a_repository_or_commit_in_its_inputs_is_read_without_a_context(world):
+    env, sha = world
+    job = env.job()
+    job.data["inputs"].pop("commit", None)
+    job.save()
+    ms = models(reply(), reply())
+    assert go(env, ms)["final"] == "ok" and all("=== DATA context" not in h for h in humans(ms).values())
+
+
+def test_the_context_comes_from_the_jobs_base_commit_not_from_the_working_tree(world):
+    env, sha = world
+    real_commit(env)
+    (env.repo / "src" / "shop.py").write_text("WORKING_TREE_ONLY = 1\n")
+    ms = models(reply(), reply())
+    go(env, ms)
+    assert all("WORKING_TREE_ONLY" not in h.split("=== DATA " + pr.HEADER_CONTEXT, 1)[1] for h in humans(ms).values())
+
+
+def test_the_ledger_sha_is_the_sha_of_the_context_text_the_readers_were_given(world):
+    import hashlib
+    env, sha = world
+    real_commit(env)
+    ms = models(reply(), reply())
+    go(env, ms)
+    human = humans(ms)["hy4flash"]
+    inner = human.split("=== DATA " + pr.HEADER_CONTEXT + " ===\n", 1)[1]
+    raw = "\n".join(l[2:] for l in inner.splitlines())
+    ctx = [json.loads(l) for l in (env.job().dir / prr.LEDGER).read_text().splitlines() if '"patch_context"' in l][0]
+    assert hashlib.sha256(raw.encode()).hexdigest() == ctx["sha256"]
+
+
+def test_a_bad_commit_in_the_job_is_a_value_error_in_the_ledger_and_in_the_summary_and_the_reading_goes_on(world):
+    env, sha = world
+    job = env.job()
+    job.data["inputs"]["commit"] = "HEAD"
+    job.save()
+    ms = models(reply(), reply())
+    s = go(env, ms)
+    ctx = [json.loads(l) for l in (env.job().dir / prr.LEDGER).read_text().splitlines() if '"patch_context"' in l][0]
+    assert s["final"] == "ok" and s["context_failed"] == "ValueError" and ctx["failed"] == "ValueError"
+    assert all("=== DATA context" not in h for h in humans(ms).values())
+
+
+def test_a_job_without_a_commit_says_in_the_ledger_that_there_was_no_context_to_build(world):
+    env, sha = world
+    job = env.job()
+    job.data["inputs"].pop("commit", None)
+    job.save()
+    go(env, models(reply(), reply()))
+    ctx = [json.loads(l) for l in (env.job().dir / prr.LEDGER).read_text().splitlines() if '"patch_context"' in l][0]
+    assert ctx["absent"] == "no repo or commit in the job inputs" and ctx["shown"] == [] and "failed" not in ctx
+
+
+def test_the_jobs_protected_list_reaches_the_context_builder(world, monkeypatch):
+    env, sha = world
+    real_commit(env)
+    job = env.job()
+    job.data["protected_repo"] = {"globs": ["src/components/ui/**", "docs/**"], "commit": "x"}
+    job.save()
+    seen = []
+    real = prr.pc.build
+    monkeypatch.setattr(prr.pc, "build", lambda repo, commit, text, protected=(): (seen.append(list(protected)), real(repo, commit, text, protected))[1])
+    go(env, models(reply(), reply()))
+    assert seen == [["src/components/ui/**", "docs/**"]]
