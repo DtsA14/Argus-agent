@@ -229,7 +229,7 @@ def test_an_empty_balance_is_not_retried(fake, tmp_path):
     r = res()
     with pytest.raises(LLMCallFailed):
         c.call([HumanMessage("hello")], r)
-    assert len(fake.requests) == 1 and events(log)[0]["status"] == "error" and r.used_nano > 0
+    assert len(fake.requests) == 1 and events(log)[0]["status"] == "error" and r.used_nano == 0     # SPEC_GATEWAY_REFUSED_FREE: a 402 is not billed
 
 
 def test_a_rate_limit_is_retried_on_the_same_model_only_and_never_by_the_sdk(fake, tmp_path):

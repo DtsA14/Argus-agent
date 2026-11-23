@@ -9,7 +9,8 @@ For every request:
      reservation's per-call limit `max_input` (reason input_limit); nothing is billed;
   4. write `llm_call_started` (call_id, worst case) to the ledger, then send with max_tokens = cap;
   5. write the final `llm_call` event (same call_id), then charge the reservation;
-  6. charge actual usage, or the worst case when usage is missing or the attempt failed.
+  6. charge actual usage, or the worst case when usage is missing or the attempt failed; except a gateway 401, 402 or 429 (refused before any model ran):
+     nothing (SPEC_GATEWAY_REFUSED_FREE, SPEC_RATE_LIMIT_RETRY R3).
 
 Ledger lifecycle, per call_id:
   refused                                -> one `llm_call` with status refused, nothing sent. Two shapes:
@@ -238,6 +239,8 @@ def http_status(exc):
     status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
     return status if isinstance(status, int) else None
 
+
+GATEWAY_REFUSED = (401, 402, 429)       # statuses a gateway answers before any model runs: nothing to bill
 
 # What a human reads when the provider failed: the HTTP status and what it usually means here. Never the provider's own text (it can carry
 # anything), only a fixed sentence per status; no status (a timeout, a dropped connection) keeps the old plain sentence.
@@ -570,9 +573,11 @@ class LLMCaller:
                 transient = is_transient(exc)
                 status_code = http_status(exc)
                 tok, nano = (worst_tokens, worst_nano) if self.failed_charge == "worst_case" else (0, 0)
-                if self.gateway is not None and status_code == 429:
+                if self.gateway is not None and status_code in GATEWAY_REFUSED:
                     # SPEC_RATE_LIMIT_RETRY R3 (free and paid models): the gateway refused it unprocessed, nothing
-                    # to bill. A direct provider's 429 stays worst case.
+                    # to bill. A direct provider's 401, 402 and 429 stay worst case. 401 (key refused) and 402 (credit limit or
+                    # balance used up) are the same kind of answer, decided by Atha 2026-11-23 ("429 ya"): the NEXUS-lite
+                    # pilot booked a 402 at $0.0645 that was never billed (SPEC_GATEWAY_REFUSED_FREE).
                     tok, nano = 0, 0
 
                 try:
