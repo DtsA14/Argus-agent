@@ -876,7 +876,7 @@ def test_redraft_is_still_refused_for_a_job_whose_agent_failed_in_any_other_way(
     env = conflicted_job(tmp_path, [BROKE_WRITE, ROUTER_REPORT])          # a confirmed report on an OLD test: BLOCKED/test_conflict
     with pytest.raises(rj.Refused) as e:
         rj.redraft("jtest", cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
-    assert "only a failed or unapproved draft is redrafted, or a job whose agent reported that the draft's own tests cannot pass" in str(e.value)
+    assert "cannot be redrafted" in str(e.value) and "BLOCKED/test_conflict" in str(e.value) and "--not-a-conflict" in str(e.value)   # SPEC_REDRAFT_AFTER_AGENT: the refusal names its reason
     assert env.job().data["state"] == rj.AGENT_FAILED and "d2" not in env.job().data["stages"]
 
 
