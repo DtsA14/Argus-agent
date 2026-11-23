@@ -29,6 +29,7 @@ the status of milestones and ADRs in `docs/Reconciliation.md`, review briefs in 
 - Every attempt must reach the ledger (`llm_call_started` before sending, `llm_call` after), and the
   reservation must be charged even when writing the ledger fails. Money is integer nano-dollars.
 - Unpriced models must stay refused while `budget.max_usd` is finite. Unknown cost is `null`, never `0`.
+- A failed attempt is booked at its worst case, except a gateway 401, 402 or 429 (refused before any model ran): that is booked as nothing (`SPEC_GATEWAY_REFUSED_FREE`). Do not flag those $0 rows as a bug.
 - Do not describe heuristic token counts (non-Anthropic) as an absolute financial cap.
 - **Known limit (E1, accepted by Atha 2026-11-11):** a call on a priced model whose reply reports usage the price cannot cost (a cache write without a write rate) is recorded
   with `usd_nano: null` and counts as 0 to the reservation and to `reconcile_ledger`. No configured model can reach it today (Anthropic must have a write rate, gateway models use the

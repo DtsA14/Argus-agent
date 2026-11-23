@@ -88,7 +88,7 @@ membuat harga itu salah. Karena itu setiap request membawa pin, dan request tanp
 - **Model gratis:** harga `0` eksplisit = biaya diketahui nol (beda dengan `null`). Tetap lewat reservasi (token),
   tetap tercatat di ledger dengan `free: true`. Kalau gateway melaporkan cost > 0 untuk model gratis → `price_drift` dan
   di-charge (aturan max di atas).
-- Saldo gateway habis (HTTP 402) = error provider pasti, tidak di-retry, stage BLOCKED.
+- Saldo gateway habis (HTTP 402) = error provider pasti, tidak di-retry, stage BLOCKED, dicatat $0 (SPEC_GATEWAY_REFUSED_FREE, Atha 2026-11-23).
 
 ### 4.1 Harga list dan `max_price` (Atha 2026-11-07, "Ledger = batas atas")
 
@@ -170,7 +170,7 @@ Server HTTP palsu (lokal) meniru endpoint chat completions vendor:
    model di luar `gateway_models` ditolak sebelum kirim (server tidak menerima apa pun).
 2. Uang: cost gateway > hitungan → yang di-charge cost gateway; < hitungan → hitungan; tidak ada → hitungan dan
    `usd_reported_nano: null`; selisih > ambang → `price_drift`; model tanpa harga + cap finite → ditolak; 402 → tidak
-   di-retry, BLOCKED; crash di antara started dan akhir → worst case (aturan yang sudah ada, untuk provider ini).
+   di-retry, BLOCKED, dicatat $0 (2026-11-23); crash di antara started dan akhir → worst case (aturan yang sudah ada, untuk provider ini).
 3. Gratis: role di luar `free_roles` ditolak sebelum kirim; role yang membaca repo dengan model gratis ditolak bila
    repo tidak di `free_repos`, tidak ada catatan scan untuk commit itu, catatannya untuk commit lain, atau working tree
    kotor; scan dengan temuan tidak menghasilkan catatan lolos; 429 berulang → BLOCKED, tidak ada request ke model lain;

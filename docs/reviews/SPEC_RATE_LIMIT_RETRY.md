@@ -31,7 +31,7 @@ transient lain (408/409/425/5xx, timeout) tetap memakai `base_delay` seperti sek
 error lain tetap `llm.attempts` (3). Batas keseluruhan per panggilan = maksimum keduanya; tidak ada loop tanpa batas.
 Total tunggu terburuk per panggilan ±4 menit.
 
-**R3. 429 dari gateway tidak ditagih** (K1). Panggilan lewat provider `kind: gateway` (OpenRouter) yang dijawab HTTP 429
+**R3. 429 dari gateway tidak ditagih** (K1; diperluas ke 401 dan 402 oleh Atha 2026-11-23, SPEC_GATEWAY_REFUSED_FREE). Panggilan lewat provider `kind: gateway` (OpenRouter) yang dijawab HTTP 429
 dicatat `charged: none`, `usd_nano` 0, `tokens` 0, dengan `delivery: received` dan `http_status: 429` seperti sekarang;
 reservasi tidak dikurangi. Ini memperluas aturan yang sudah ada untuk model `:free` ke model berbayar. Alasan: 429
 berarti ditolak sebelum diproses, dan OpenRouter tidak menagih request yang gagal. Provider langsung (Anthropic,
