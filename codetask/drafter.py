@@ -43,7 +43,7 @@ from harness.crash import Crasher
 from harness.errors import EstimateExceeded, InputLimitExceeded, LLMCallFailed, ReservationExhausted
 from harness.events import EventLog
 from harness.guard import guard
-from harness.llm import LLMCaller, check_long_context, is_truncated, reconcile_ledger
+from harness.llm import LLMCaller, check_long_context, http_status, is_truncated, provider_failure_reason, reconcile_ledger
 from harness.memo import Memo
 from harness.steps import (call_ids, invalid_call_errors, llm_step_key, message_from_json, message_to_json,
                            reservation_from_ledger, tool_step_key)
@@ -897,8 +897,8 @@ def make_drafting(caller, memo, log, *, lim, tool_versions, submit, crasher, run
                     return end("context_limit", step)
                 except ReservationExhausted:
                     return end("reservation_exhausted", step)
-                except LLMCallFailed:
-                    return end("llm_failed", step)
+                except LLMCallFailed as e:
+                    return end("llm_failed", step, http_status=http_status(e.__cause__) if e.__cause__ else None)
                 crasher.point("drafter@after_llm", step=step, **meta)
                 memo.put(key, message_to_json(msg))
                 log.emit("step_committed", kind="llm", step=step, **meta)
@@ -1308,7 +1308,7 @@ def build_graph(cfg, run_dir, log, checkpointer, inputs, *, root, crash_at=None,
         if a["end"] == "submitted":
             return {**out, **stop(DRAFTED, "a draft passed its check"), "draft": a["draft"], "report": a["report"]}
         if a["end"] == "llm_failed":
-            return {**out, **stop(BLOCKED, "the model provider failed", "provider_failed")}
+            return {**out, **stop(BLOCKED, provider_failure_reason(a.get("http_status")), "provider_failed")}
         return {**out, **stop(NO_DRAFT, a["end"])}
 
     def finalize(state):

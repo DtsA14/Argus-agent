@@ -39,7 +39,7 @@ from harness.crash import Crasher
 from harness.errors import EstimateExceeded
 from harness.events import EventLog, TaggedLog
 from harness.guard import guard
-from harness.llm import LLMCaller, check_long_context, reconcile_ledger, to_nano
+from harness.llm import LLMCaller, check_long_context, provider_failure_reason, reconcile_ledger, to_nano
 from harness.memo import Memo
 from harness.redact import scrub_value
 from models.registry import ModelRef, price_for
@@ -358,7 +358,8 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
                        policy=state.get("loop_policy"))
         return {"attempt": {"iteration": state["iteration"], "end": a["end"], "steps": a["steps"],
                             "wrote": a["wrote"], "read": a["read"],
-                            **({"conflict": a["conflict"]} if a.get("conflict") else {})},
+                            **({"conflict": a["conflict"]} if a.get("conflict") else {}),
+                            **({"http_status": a["http_status"]} if a.get("http_status") else {})},
                 "tokens_used": a["tokens_used"], "usd_used": a["usd_used"]}
 
     def acceptance(state):
@@ -410,7 +411,7 @@ def build_graph(cfg, run_dir, log, checkpointer, *, crash_at=None, models=None, 
             return move(state, st.BLOCKED, reason=why, blocked="sandbox_unavailable", verdict=summary,
                         failures=history)
         if (state.get("attempt") or {}).get("end") == "llm_failed":
-            return move(state, st.BLOCKED, reason="the model provider failed during the attempt",
+            return move(state, st.BLOCKED, reason=provider_failure_reason((state.get("attempt") or {}).get("http_status")) + " during the attempt",
                         blocked="provider_failed", verdict=summary, failures=history)
         # SPEC_TEST_DETECTION_TERMINAL: a hit of the test-detection gate ends the run. Told to the agent, it would learn which
         # pattern is caught; the human sees it (the summary's `detected`, then `status`), the agent never does.

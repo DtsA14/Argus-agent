@@ -13,6 +13,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from harness.llm import provider_failure_reason
 from research.loop import run_stage, tool_loop, with_fallbacks
 
 from . import issue_writer as iw
@@ -440,7 +441,7 @@ def run_prd_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=N
             why = "a PRD passed the gate" if a["result"]["items"] else "a reply without a PRD"
             return {**out, "status": WRITTEN, "stop_reason": why, "written": a["result"]}
         if a["end"] == "llm_failed":
-            return {**out, "status": BLOCKED, "stop_reason": "the model provider failed"}
+            return {**out, "status": BLOCKED, "stop_reason": provider_failure_reason(a.get("http_status"))}
         return {**out, "status": FAILED, "stop_reason": a["end"]}
 
     return run_stage(run_id=run_id, runs_dir=runs_dir, resume=resume, kind="prd_write", work=work,
