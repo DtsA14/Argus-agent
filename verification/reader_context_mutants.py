@@ -29,13 +29,17 @@ M = [
     ("every not-shown path is listed", PC, [('", ".join(not_shown[:MAX_LISTED])', '", ".join(not_shown)')]),
     ("no 'and N more'", PC, [('(f" (and {more} more)" if more > 0 else "")', '""')]),
     # the cut
-    ("a file of exactly the limit is cut", PC, [("if len(raw) <= MAX_FILE:", "if len(raw) < MAX_FILE:")]),
+    ("a file of exactly the limit is cut", PC, [("if len(raw) <= limit:", "if len(raw) < limit:")]),
     ("no line boundary", PC, [('        head = head[:head.rindex("\\n") + 1]', "        pass")]),
     ("the boundary drops the newline", PC, [('head[:head.rindex("\\n") + 1]', 'head[:head.rindex("\\n")]')]),
     ("characters instead of bytes", PC, [('len(raw) - len(head.encode("utf-8"))', "len(raw) - len(head)")]),
     ("a split character raises", PC, [('.decode("utf-8", "ignore")', '.decode("utf-8")')]),
     ("no cut marker", PC, [('(f"[cut: {rest} more bytes not shown]\\n" if rest else "")', '""')]),
     ("the cut line has no break before the marker", PC, [('return (head if head.endswith("\\n") else head + "\\n"),', "return head,")]),
+    ("a modified file gets the small cap too", PC, [("MAX_FILE_MODIFIED if path in modified else MAX_FILE", "MAX_FILE")]),
+    ("an imported file gets the big cap too", PC, [("MAX_FILE_MODIFIED if path in modified else MAX_FILE", "MAX_FILE_MODIFIED")]),
+    ("the modified cap is the small one", PC, [("MAX_FILE_MODIFIED = 20_000", "MAX_FILE_MODIFIED = 8_000")]),
+    ("the total is the old one", PC, [("MAX_TOTAL = 32_000", "MAX_TOTAL = 24_000")]),
     ("CRLF kept", PC, [('_cut(text.replace("\\r\\n", "\\n"))', "_cut(text)")]),
     # what is never shown
     ("no .env exclusion", PC, [('r"(^|/)\\.env|(^|/)id_', 'r"(^|/)id_')]),

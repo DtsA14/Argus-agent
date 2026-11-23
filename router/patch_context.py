@@ -12,8 +12,9 @@ from acceptance import intake
 from router import protected_files
 
 MAX_FILES = 6
-MAX_TOTAL = 24_000                 # bytes of file text over all files
-MAX_FILE = 8_000                   # bytes of one file before it is cut at a line boundary
+MAX_TOTAL = 32_000                 # bytes of file text over all files
+MAX_FILE = 8_000                   # bytes of one imported file before it is cut at a line boundary
+MAX_FILE_MODIFIED = 20_000         # the same for a file the patch modifies: the truth about a claim (a function the patch calls) is anywhere in it (the Markdown replay: 19 KB, cut at 8 KB, the sort was past the cut)
 MAX_BLOB = 200_000                 # a blob larger than this is not read at all
 MAX_LISTED = 10                    # paths named in the "not shown" line
 MAX_CANDIDATES = 50                # files looked at before the rest is only counted
@@ -163,19 +164,19 @@ def imports(source, lines):
     return found
 
 
-def _cut(text):
-    """(shown text, bytes not shown): at most MAX_FILE bytes, cut at a line boundary (a text with no line break in its first MAX_FILE bytes is cut where it is, and ends with one)."""
+def _cut(text, limit=MAX_FILE):
+    """(shown text, bytes not shown): at most `limit` bytes, cut at a line boundary (a text with no line break in its first MAX_FILE bytes is cut where it is, and ends with one)."""
     raw = text.encode("utf-8")
-    if len(raw) <= MAX_FILE:
+    if len(raw) <= limit:
         return text, 0
-    head = raw[:MAX_FILE].decode("utf-8", "ignore")             # a multi-byte character split at the limit is dropped, not guessed
+    head = raw[:limit].decode("utf-8", "ignore")             # a multi-byte character split at the limit is dropped, not guessed
     if "\n" in head:
         head = head[:head.rindex("\n") + 1]
     return (head if head.endswith("\n") else head + "\n"), len(raw) - len(head.encode("utf-8"))
 
 
 def _candidates(repo, commit, patch, protected=()):
-    """(paths to show in order, tree, how many names were left out). Order: the files the patch modifies; then the files its added lines import that the agent could have written (not
+    """(paths to show in order, tree, how many names were left out, the set of modified paths). Order: the files the patch modifies; then the files its added lines import that the agent could have written (not
     on the repository's protected list); then the imported files on that list (the scaffold: fixed, and never the place a false claim about the patch's own work hides). Within a
     group, order of first appearance."""
     modified, added, unread = parse_patch(patch)
@@ -192,7 +193,7 @@ def _candidates(repo, commit, patch, protected=()):
                 (fixed if protected and protected_files.match_of(hit, list(protected)) else open_).append(hit)
                 seen.add(hit)
     ordered = first + open_ + fixed
-    return [p for p in ordered if not EXCLUDED.search(p)], files, unread + sum(1 for p in ordered if EXCLUDED.search(p))
+    return [p for p in ordered if not EXCLUDED.search(p)], files, unread + sum(1 for p in ordered if EXCLUDED.search(p)), set(first)
 
 
 def build(repo, commit, patch, protected=()):
@@ -200,7 +201,7 @@ def build(repo, commit, patch, protected=()):
     names git quoted), "sha256": of the section text or None} - the ledger line; `failed` (the type of the error, never its text) when anything went wrong. Never raises. When every
     candidate is dropped by a cap the section is empty and the names are in the ledger only."""
     try:
-        order, files, skipped = _candidates(repo, commit, patch, protected)
+        order, files, skipped, modified = _candidates(repo, commit, patch, protected)
         shown, not_shown, parts, total = [], [], [], 0
         for n_seen, path in enumerate(order):
             sha, size = files[path]
@@ -219,7 +220,7 @@ def build(repo, commit, patch, protected=()):
             if SECRET_TEXT.search(text):
                 skipped += 1
                 continue
-            body, rest = _cut(text.replace("\r\n", "\n"))
+            body, rest = _cut(text.replace("\r\n", "\n"), MAX_FILE_MODIFIED if path in modified else MAX_FILE)
             piece = body + (f"[cut: {rest} more bytes not shown]\n" if rest else "")
             n = len(piece.encode("utf-8"))
             if total + n > MAX_TOTAL:

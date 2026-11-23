@@ -40,7 +40,7 @@ rule 1 already treats every DATA section as data; rule 5 ("you know only what is
 3. Never: a file the patch creates or deletes, a path outside the repository (`..` that leaves the root, an absolute path, a symlink), a file that is not valid UTF-8 or has a NUL byte,
    `.env*`, `*.pem`, `*.key`, `id_rsa*`, `node_modules/`, lock files (`package-lock.json`, `*.lock`), minified files (`*.min.*`).
 
-**Caps (visible, never silent):** at most 6 files and 24,000 bytes of file text in all; one file at most 8,000 bytes (cut at a line boundary, then the marker line
+**Caps (visible, never silent):** at most 6 files and 32,000 bytes of file text in all; one imported file at most 8,000 bytes, one file the patch modifies at most 20,000 (rev 4; cut at a line boundary, then the marker line
 `[cut: <n> more bytes not shown]`). When the caps drop a candidate, the section ends with `[not shown: <path>, <path>]` (at most 10 paths). Order: group 1 first, then group 2 in order of first
 appearance; within the caps, the first that fit.
 
@@ -97,3 +97,7 @@ Reader truncation as such (item 3), the model choice of the readers, any severit
 - **When every candidate is dropped by a cap** the section is empty and the names are in the ledger only (the bundle stays byte-identical to today's).
 - **Python:** `from . import x` names the package `__init__.py`; dots that climb past the repository root name nothing; `import a as b` uses `a`.
 - **Not done, on purpose:** the context is still built before `run` checks whether the patch already has a final reading (cheap git work, harmless); the broad `except` stays (the failure policy of section 3), made visible by `context_failed` in the summary.
+
+## 8. Rev 4: what the real replay showed (2026-11-23)
+
+The replay of the two real false-blocker patches with the real readers (2 runs each, $0.007–0.022 per run): **issue 3 patch: 4 of 4 readings `ok`** (both false blockers gone). **Markdown patch: Hy4 Flash gave `blocker` in both runs ("no sort")**, DeepSeek `ok` in both. The cause was in my design, not the model: `nexus.js` was 19,256 bytes, the context cut it at 8,000 and said "11,268 more bytes not shown", and `listItems()`, which holds the sort, was past the cut. So: **a file the patch modifies may use up to 20,000 bytes** (imported files stay at 8,000) and the total is 32,000. A modified file larger than that is still cut at its head with the visible marker; a context cannot show everything, and the marker tells the reader what it did not see.

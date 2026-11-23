@@ -174,7 +174,7 @@ def test_a_long_file_is_cut_at_a_line_boundary_with_a_visible_marker(tmp_path):
     text = "\n".join(lines) + "\n"
     repo, commit = make_repo(tmp_path, {"big.js": text})
     section, info = pc.build(repo, commit, diff("big.js", ["y"]))
-    assert info["shown"][0][1] <= pc.MAX_FILE + 80
+    assert info["shown"][0][1] <= pc.MAX_FILE_MODIFIED + 80
     body = section.split("\n", 1)[1]
     assert body.endswith("more bytes not shown]")
     kept = body.rsplit("\n[cut:", 1)[0].split("\n")
@@ -384,12 +384,33 @@ def test_when_x_and_x_js_are_both_tracked_the_first_of_the_probe_order_wins(tmp_
 
 # the caps, at their edges
 
-def test_a_file_of_exactly_the_per_file_limit_is_not_cut_and_one_byte_more_is(tmp_path):
-    exact = ("a" * 79 + "\n") * 100                                              # 8000 bytes
+def test_a_modified_file_of_exactly_the_per_file_limit_is_not_cut_and_two_bytes_more_are(tmp_path):
+    exact = ("a" * 79 + "\n") * 250                                              # 20000 bytes
+    assert len(exact.encode()) == pc.MAX_FILE_MODIFIED
     repo, commit = make_repo(tmp_path, {"exact.js": exact, "over.js": exact + "b\n"})
     section, info = pc.build(repo, commit, diff("exact.js", ["y"]) + diff("over.js", ["y"]))
-    exact_part, over_part = section.split("\n\nfile: over.js\n")
-    assert "[cut:" not in exact_part and "[cut: 2 more bytes not shown]" in over_part
+    assert files_of(info) == ["exact.js"] and "[cut:" not in section and info["not_shown"] == ["over.js"]       # 20000 + 20002 > the total
+    (tmp_path / "two").mkdir()
+    repo2, commit2 = make_repo(tmp_path / "two", {"over.js": exact + "b\n"})
+    section2, _ = pc.build(repo2, commit2, diff("over.js", ["y"]))
+    assert "[cut: 2 more bytes not shown]" in section2
+
+
+def test_an_imported_file_is_cut_at_the_smaller_limit_and_a_modified_one_is_not(tmp_path):
+    big = ("a" * 79 + "\n") * 150                                               # 12000 bytes: over MAX_FILE, under MAX_FILE_MODIFIED
+    repo, commit = make_repo(tmp_path, {"src/mod.js": big, "src/imp.js": big})
+    section, info = pc.build(repo, commit, diff("src/mod.js", ["import q from './imp.js'"]))
+    mod, imp = section.split("\n\nfile: src/imp.js\n")
+    assert files_of(info) == ["src/mod.js", "src/imp.js"] and "[cut:" not in mod and "[cut: " in imp
+
+
+def test_a_nineteen_kilobyte_modified_file_shows_its_tail(tmp_path):
+    """The Markdown replay: nexus.js was 19 KB, the head-only 8 KB cut hid `listItems`, which holds the sort a reader claimed was missing."""
+    text = ("// filler line\n" * 1200) + "function listItems() { return items.sort(byCreatedAt) }\n"
+    assert 17_000 < len(text.encode()) < pc.MAX_FILE_MODIFIED
+    repo, commit = make_repo(tmp_path, {"nexus.js": text})
+    section, _ = pc.build(repo, commit, diff("nexus.js", ["y"]))
+    assert "items.sort(byCreatedAt)" in section and "[cut:" not in section
 
 
 def test_a_blob_of_exactly_the_blob_limit_is_read(tmp_path):
@@ -399,10 +420,10 @@ def test_a_blob_of_exactly_the_blob_limit_is_read(tmp_path):
 
 
 def test_the_total_may_reach_exactly_the_limit_and_the_next_file_is_named_not_read(tmp_path):
-    full = ("a" * 79 + "\n") * 100
-    repo, commit = make_repo(tmp_path, {"p1.js": full, "p2.js": full, "p3.js": full, "p4.js": "export const z = 1\n"})
-    _, info = pc.build(repo, commit, "".join(diff(f"p{i}.js", ["y"]) for i in range(1, 5)))
-    assert files_of(info) == ["p1.js", "p2.js", "p3.js"] and sum(n for _, n in info["shown"]) == pc.MAX_TOTAL and info["not_shown"] == ["p4.js"]
+    full = ("a" * 79 + "\n") * 100                                              # 8000 bytes
+    repo, commit = make_repo(tmp_path, {"p1.js": full, "p2.js": full, "p3.js": full, "p4.js": full, "p5.js": "export const z = 1\n"})
+    _, info = pc.build(repo, commit, "".join(diff(f"p{i}.js", ["y"]) for i in range(1, 6)))
+    assert files_of(info) == ["p1.js", "p2.js", "p3.js", "p4.js"] and sum(n for _, n in info["shown"]) == pc.MAX_TOTAL and info["not_shown"] == ["p5.js"]
 
 
 def test_the_cut_counts_bytes_not_characters_and_never_splits_a_character(tmp_path):
@@ -413,14 +434,14 @@ def test_the_cut_counts_bytes_not_characters_and_never_splits_a_character(tmp_pa
     body = section.split("\n", 1)[1]
     kept, marker = body.rsplit("\n[cut: ", 1)
     assert all(l == "é" * 40 for l in kept.split("\n"))
-    assert int(marker.split(" ")[0]) == len(text.encode()) - len((kept + "\n").encode()) and info["shown"][0][1] <= pc.MAX_FILE + 40
+    assert int(marker.split(" ")[0]) == len(text.encode()) - len((kept + "\n").encode()) and info["shown"][0][1] <= pc.MAX_FILE_MODIFIED + 40
 
 
 def test_a_file_with_one_endless_line_is_cut_and_the_marker_is_on_its_own_line(tmp_path):
-    repo, commit = make_repo(tmp_path, {"one.js": "a" * 20_000})
+    repo, commit = make_repo(tmp_path, {"one.js": "a" * 30_000})
     section, _ = pc.build(repo, commit, diff("one.js", ["y"]))
     last = section.split("\n")
-    assert last[-1].startswith("[cut: ") and set(last[-2]) == {"a"} and len(last[-2]) == pc.MAX_FILE
+    assert last[-1].startswith("[cut: ") and set(last[-2]) == {"a"} and len(last[-2]) == pc.MAX_FILE_MODIFIED
 
 
 def test_carriage_returns_in_a_context_file_are_normalised_before_the_bytes_are_counted(tmp_path):
@@ -458,12 +479,12 @@ def test_a_file_imported_twice_is_shown_once(tmp_path):
 
 def test_no_file_is_read_once_the_total_is_full(tmp_path, monkeypatch):
     full = ("a" * 79 + "\n") * 100
-    repo, commit = make_repo(tmp_path, {"p1.js": full, "p2.js": full, "p3.js": full, "p4.js": "export const z = 1\n", "p5.js": "export const y = 1\n"})
+    repo, commit = make_repo(tmp_path, {"p1.js": full, "p2.js": full, "p3.js": full, "p4.js": full, "p5.js": "export const z = 1\n", "p6.js": "export const y = 1\n"})
     reads = []
     real = pc.intake.git
     monkeypatch.setattr(pc.intake, "git", lambda repo_, *a, **k: (reads.append(a) if a[:1] == ("cat-file",) else None, real(repo_, *a, **k))[1])
-    _, info = pc.build(repo, commit, "".join(diff(f"p{i}.js", ["y"]) for i in range(1, 6)))
-    assert len(reads) == 3 and info["not_shown"] == ["p4.js", "p5.js"]               # the full total stops the reading, it is not discovered after it
+    _, info = pc.build(repo, commit, "".join(diff(f"p{i}.js", ["y"]) for i in range(1, 7)))
+    assert len(reads) == 4 and info["not_shown"] == ["p5.js", "p6.js"]               # the full total stops the reading, it is not discovered after it
 
 
 def test_the_not_shown_line_lists_ten_names_and_counts_the_rest(tmp_path):
@@ -475,8 +496,8 @@ def test_the_not_shown_line_lists_ten_names_and_counts_the_rest(tmp_path):
 
 
 def test_a_file_of_exactly_the_limit_without_a_final_newline_is_not_cut(tmp_path):
-    exact = ("a" * 79 + "\n") * 99 + "b" * 80                                    # 8000 bytes, the last line has no newline
-    assert len(exact.encode()) == pc.MAX_FILE
+    exact = ("a" * 79 + "\n") * 249 + "b" * 80                                   # 20000 bytes, the last line has no newline
+    assert len(exact.encode()) == pc.MAX_FILE_MODIFIED
     repo, commit = make_repo(tmp_path, {"exact.js": exact})
     section, info = pc.build(repo, commit, diff("exact.js", ["y"]))
     assert "[cut:" not in section and section.endswith("b" * 80)
@@ -484,8 +505,8 @@ def test_a_file_of_exactly_the_limit_without_a_final_newline_is_not_cut(tmp_path
 
 def test_a_multibyte_character_split_by_the_limit_does_not_empty_the_context(tmp_path):
     line = "x" + "é" * 40                                                          # 81 bytes + newline: the limit falls in the middle of an é
-    text = "\n".join([line] * 200) + "\n"
-    assert text.encode()[: pc.MAX_FILE].decode("utf-8", "ignore") != text.encode()[: pc.MAX_FILE].decode("utf-8", "replace")      # the split really happens
+    text = "\n".join([line] * 400) + "\n"
+    assert text.encode()[: pc.MAX_FILE_MODIFIED].decode("utf-8", "ignore") != text.encode()[: pc.MAX_FILE_MODIFIED].decode("utf-8", "replace")      # the split really happens
     repo, commit = make_repo(tmp_path, {"u.js": text})
     section, info = pc.build(repo, commit, diff("u.js", ["y"]))
     assert files_of(info) == ["u.js"] and "failed" not in info and "�" not in section
