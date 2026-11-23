@@ -1,5 +1,7 @@
 # Pending
 
+**Urutan kerja perbaikan dari pilot NEXUS-lite: [`PENDING_PRIORITAS.md`](PENDING_PRIORITAS.md)** (berkas terpisah, dibuat 2026-11-23).
+
 Daftar kerja Argus yang **masih terbuka**, disusun menurut arah 2026-11-15. Status milestone dan ADR beserta buktinya ada di
 [`docs/Reconciliation.md`](docs/Reconciliation.md) (satu-satunya tempat status). Riwayat butir yang selesai (bukti, angka, PR) dan butir
 yang tidak lagi berkaitan dengan arah: [`docs/reviews/PENDING_ARCHIVE_2026-11-16.md`](docs/reviews/PENDING_ARCHIVE_2026-11-16.md)
