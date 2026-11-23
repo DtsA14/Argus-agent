@@ -106,7 +106,7 @@ def test_a_first_concerns_with_no_second_is_resumed_with_the_second_only(world):
 
 def test_the_default_output_limit_leaves_room_for_a_reasoning_model():
     import inspect
-    assert inspect.signature(prr.run).parameters["max_output"].default == 64000
+    assert inspect.signature(prr.run).parameters["max_output"].default == 100000
 
 
 def test_a_concerns_of_the_second_closes_and_both_are_kept(world):
@@ -168,7 +168,7 @@ def test_a_reasoning_model_may_be_given_up_to_100000_output_tokens_and_the_defau
     """The second reader (a reasoning model) spent 29,993 and 31,993 tokens on thinking alone on a 27 KB patch (2026-11-19): the ceiling is 100,000."""
     env, sha = world
     import inspect
-    assert inspect.signature(prr.run).parameters["max_output"].default == 64000
+    assert inspect.signature(prr.run).parameters["max_output"].default == 100000
     assert inspect.signature(prr.run).parameters["cap_usd"].default == 0.20
     s = go(env, models(reply(), reply()), max_output=100000, cap_usd=0.5)
     assert s["final"] == "ok" and s["stopped"] is None

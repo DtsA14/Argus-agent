@@ -67,7 +67,7 @@ def bundle(job_id, jobs_dir):
     return pr.render(issue, touches, "the job is REVIEW_READY: a review package exists; passing examples do not prove the patch is clean", text), sid, sha
 
 
-def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=64000, first=FIRST, second=SECOND, models=None):
+def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=100000, first=FIRST, second=SECOND, models=None):
     """Read the patch of the job with the pair; returns a summary dict. `models` is for tests: {name: scripted chat model}."""
     if not (isinstance(cap_usd, (int, float)) and 0 < cap_usd <= 2) or not (isinstance(max_output, int) and 500 <= max_output <= 100000):
         raise rj.Refused("--cap-usd is above 0 and at most 2; --max-output is 500 to 100000")
