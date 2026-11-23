@@ -17,7 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from acceptance.contract import SUMMARY
 from harness.crash import Crasher
 from harness.errors import InputLimitExceeded, LLMCallFailed, ReservationExhausted
-from harness.llm import is_truncated
+from harness.llm import http_status, is_truncated
 from harness.steps import (after_step_key, call_ids, invalid_call_errors, llm_step_key, message_from_json,
                            message_to_json, reservation_from_ledger, tool_step_key)
 
@@ -46,6 +46,11 @@ _EXCEPTION = re.compile(r"^E\s+[A-Za-z_][\w.]*(?:Error|Exception|Exit|Interrupt|
 _COMPARISON = re.compile(r"^E\s+assert ")                       # pytest's explanation of a failed comparison
 _SEPARATOR = re.compile(r"^(?:_{3,}|={3,})")                    # "____ test_x ____" and "==== summary ===="
 _SUMMARY = re.compile(r"^=+ .*\b(?:passed|failed|error|errors)\b.* =+$")
+
+
+def _status(e):
+    """The HTTP status of the provider's answer behind an LLMCallFailed, or None (a timeout, a dropped connection, a failure to count)."""
+    return http_status(e.__cause__) if e.__cause__ else None
 
 
 def _cap(line):
@@ -381,14 +386,15 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
             auto["noticed"] = auto["noticed"] or rec["limit_notice"]
             return rec["content"]
 
-        def end(reason, steps, conflict=None):
+        def end(reason, steps, conflict=None, status=None):
             wrote = toolbox.digest() != start["digest"]
             log.emit("attempt_end", reason=reason, steps=steps, **meta)
             # SPEC_AGENT_CONTEXT_RETRY: what the next attempt is told, beside attempt_end (whose fields stay as they were)
             log.emit("attempt_summary", reason=reason, steps=steps, wrote=wrote, read=read[:READ_MAX], **meta)
             return {"end": reason, "steps": steps, "wrote": wrote, "read": read[:READ_MAX],
                     "tokens_used": res.used_tokens, "usd_used": res.used_usd,
-                    **({"conflict": conflict} if conflict else {})}
+                    **({"conflict": conflict} if conflict else {}),
+                    **({"http_status": status} if status else {})}
 
         messages = [SystemMessage(system_prompt(tools)), HumanMessage(task_prompt(contract, feedback))]
         for step in range(max_steps):
@@ -404,8 +410,8 @@ def make_attempt(caller, memo, log, *, tokens, usd, max_steps, tool_versions, cr
                     return end("context_limit", step)
                 except ReservationExhausted:
                     return end("reservation_exhausted", step)
-                except LLMCallFailed:
-                    return end("llm_failed", step)
+                except LLMCallFailed as e:
+                    return end("llm_failed", step, status=_status(e))
                 crasher.point("agent@after_llm", step=step, **meta)          # reply not yet committed
                 memo.put(key, message_to_json(msg))
                 log.emit("step_committed", kind="llm", step=step, **meta)

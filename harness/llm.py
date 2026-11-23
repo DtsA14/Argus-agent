@@ -239,6 +239,25 @@ def http_status(exc):
     return status if isinstance(status, int) else None
 
 
+# What a human reads when the provider failed: the HTTP status and what it usually means here. Never the provider's own text (it can carry
+# anything), only a fixed sentence per status; no status (a timeout, a dropped connection) keeps the old plain sentence.
+_PROVIDER_WHY = {401: "the API key was refused",
+                 402: "payment required: the credit limit of the API key, or the account balance, is used up (check both)",
+                 403: "the API key may not use this model",
+                 404: "the model or the endpoint was not found",
+                 408: "the provider timed out",
+                 429: "the provider is rate limiting"}
+
+
+def provider_failure_reason(status):
+    """The line a human reads for a provider failure: "the model provider failed" and, when the HTTP status is known, "(HTTP 402: ...)"."""
+    base = "the model provider failed"
+    if not isinstance(status, int) or isinstance(status, bool):
+        return base
+    why = _PROVIDER_WHY.get(status) or ("the provider had an error on its side" if 500 <= status <= 599 else None)
+    return f"{base} (HTTP {status}{': ' + why if why else ''})"
+
+
 def retry_after_seconds(exc):
     headers = getattr(getattr(exc, "response", None), "headers", None) or {}
     try:

@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from acceptance import contract as ct
 from codetask import examples as ex
-from harness.llm import check_long_context
+from harness.llm import check_long_context, provider_failure_reason
 from models.registry import ModelRef
 from research.loop import run_stage, tool_loop, with_fallbacks
 from router import example_gate as eg
@@ -696,7 +696,7 @@ def run_writer(*, run_id, runs_dir, cfg, inputs=None, resume=False, models=None,
             why = "an issue passed the gate" if a["result"]["issue"] is not None else "a reply without an issue"
             return {**out, "status": WRITTEN, "stop_reason": why, "written": a["result"]}
         if a["end"] == "llm_failed":
-            return {**out, "status": BLOCKED, "stop_reason": "the model provider failed"}
+            return {**out, "status": BLOCKED, "stop_reason": provider_failure_reason(a.get("http_status"))}
         return {**out, "status": FAILED, "stop_reason": a["end"]}
 
     return run_stage(run_id=run_id, runs_dir=runs_dir, resume=resume, kind="issue_write", work=work,
