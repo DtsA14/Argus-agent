@@ -301,6 +301,9 @@ SYSTEM = "\n".join([
     "the issue relies on go in `fields`. The harness checks them against the running code and refuses what Argus does not "
     "publish or forward: change the PRD so it does not need it.",
     "- Write the word 'contract' in the PRD.",
+    "- Match the issues against each other before you submit: for every name, shape or behaviour that one item produces and a later "
+    "item uses (synchronous or asynchronous, what is returned, units, the order of arguments), the two issue texts must say the same "
+    "thing; make them agree. List under the contract, in the PRD, every assumption an item makes about an earlier one.",
     "- You choose neither the money nor the commit nor the repository: the harness sets them.",
     "",
     "The reply is in plain Indonesian for a reader who does not read code: what the PRD asks, the order, what changed, and the "
