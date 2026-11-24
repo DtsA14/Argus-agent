@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from router.job import JOBS, runs_spent_nano  # noqa: E402
+from router.job import ACTORS, JOBS, runs_spent_nano  # noqa: E402
 
 FAILED = {"DRAFT_FAILED", "AGENT_FAILED", "BLOCKED", "REVIEW_INVALID", "RESEARCH_FAILED", "RESEARCH_INCONCLUSIVE"}
 DECISION_WHATS = {"retry", "redraft", "research_ok"}
@@ -72,6 +72,25 @@ def hands_off(data):
     applied and deployed is not recorded (`by` is $USER), so a job that is True here may still have had Claude do each of those by hand."""
     category, _ = outcome(data)
     return category == "applied_untouched" and not data.get("human_steered") and decisions(data) == 2
+
+
+def actor_class(data):
+    """SPEC_ACTOR_RECORD: for one code job, "with_claude" (a decision record of the job says "claude"), "unknown" (it was applied and its approval or its APPLIED record has no valid actor:
+    a job from before the field), "without_claude" (hands off, applied by `argus apply`, and the approval and the APPLIED record both say "ui" or "terminal") or "other" (open,
+    failed, rejected, abandoned, applied with changes or by hand with no Claude on record: no claim either way). The approval is read from `data["approval"]`, the other records
+    from the log. Decisions upstream of the job (the queue's `go`, `prd approve`, `issue start`) and the staging deploy are NOT looked at."""
+    log = data.get("log") or []
+    approval = (data.get("approval") or {}).get("actor")
+    applied_entry = next((e for e in reversed(log) if e.get("what") == "state" and e.get("new") == "APPLIED"), {})
+    seen = [a for a in (approval, (data.get("research_ok") or {}).get("actor"), applied_entry.get("actor"),
+                        *(e.get("actor") for e in log if e.get("what") in DECISION_WHATS or (e.get("what") == "state" and e.get("new") in MOVES))) if a is not None]
+    if "claude" in seen:
+        return "with_claude"
+    if data.get("state") == "APPLIED" and (approval not in ACTORS or applied_entry.get("actor") not in ACTORS):
+        return "unknown"
+    if hands_off(data) and applied_by(data) == "command" and data.get("state") == "APPLIED" and all(a in ("ui", "terminal") for a in seen):
+        return "without_claude"
+    return "other"
 
 
 def decisions(data):
@@ -142,7 +161,7 @@ def build(jobs_dir):
             "usd_nano": nano[job], "issue_usd_nano": issue_money[job],
             "stage_usd_sum": round(stage_usd, 9), "decisions": decisions(data), "wait_s": human_wait(data),
             "judge": judge(data), "human_steered": bool(data.get("human_steered")),
-            "staged": staged(data), "applied_by": applied_by(data), "hands_off": hands_off(data),
+            "staged": staged(data), "applied_by": applied_by(data), "hands_off": hands_off(data), "actor_class": actor_class(data),
         })
     research = sum(nano[d["job"]] for _, d in jobs if d.get("kind") == "research")
     prd = sum(nano[d["job"]] for _, d in jobs if d.get("kind") == "prd")           # SPEC_PRD_WRITER: its own total
@@ -156,12 +175,21 @@ def build(jobs_dir):
     n_hands = sum(1 for r in rows if r["hands_off"])
     n_hands_staged = sum(1 for r in rows if r["hands_off"] and r["staged"])
     n_command = sum(1 for r in rows if r["applied_by"] == "command")
+    actors = Counter(r["actor_class"] for r in rows)
+    n_without_staged = sum(1 for r in rows if r["actor_class"] == "without_claude" and r["staged"])
     return {
         "jobs_dir": str(jobs_dir), "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "jobs_by_kind": dict(kinds), "code_jobs": len(rows), "outcomes": dict(counts),
         "staged": n_staged, "staged_share_of_code_jobs": round(n_staged / len(rows), 4) if rows else None,
         "hands_off_applied": n_hands, "hands_off_staged": n_hands_staged,
         "hands_off_to_staging_upper_bound": round(n_hands_staged / len(rows), 4) if rows else None,
+        "actor_classes": {k: actors.get(k, 0) for k in ("without_claude", "with_claude", "unknown", "other")},
+        "without_claude_share_of_code_jobs": round(actors["without_claude"] / len(rows), 4) if rows else None,
+        "without_claude_and_staged": n_without_staged,
+        "actor_meaning": "SPEC_ACTOR_RECORD: per code job, from the `actor` of its decision records (claude = a Claude Code session ran the command, `ui` = the chat, `terminal` = any other shell). "
+                         "without_claude = hands off, applied by `argus apply`, approval and APPLIED both ui or terminal; with_claude = any record says claude; unknown = applied with no "
+                         "actor on its approval or APPLIED record (before 2026-11-24); other = no claim (open, failed, rejected, abandoned, changed or applied by hand). The staging deploy "
+                         "and decisions upstream of the job (queue go, prd approve, issue start) are not covered, and a command that the human typed with `!` inside a Claude session reads as claude.",
         "applied_by_command": n_command, "applied_by_command_share_of_applied": round(n_command / applied, 4) if applied else None,
         "hands_off_meaning": "hands_off_to_staging_upper_bound = code jobs that reached staging with no retry, redraft, research ok or steering and applied as reviewed, "
                              "over all code jobs. It is an UPPER BOUND of 'to staging without Claude', not 'without Claude': who approved, applied and deployed is "
@@ -196,6 +224,7 @@ def text(report):
              f"applied: {report['applied']} = {report['applied_share_of_code_jobs']} of code jobs; of those, as reviewed (as_is) "
              f"{report['applied_untouched_share']}",
              f"staged: {report['staged']} = {report['staged_share_of_code_jobs']} of code jobs; applied by `argus apply`: {report['applied_by_command']}",
+             f"actors (SPEC_ACTOR_RECORD; deploy and upstream decisions not covered): {report['actor_classes']}; without Claude and staged: {report['without_claude_and_staged']} of {report['code_jobs']}",
              f"hands off to staging (UPPER BOUND of 'without Claude'): {report['hands_off_staged']} of {report['code_jobs']} = "
              f"{report['hands_off_to_staging_upper_bound']} (hands off and applied: {report['hands_off_applied']})",
              f"ledger vs job.json stage usd: {report['ledger_vs_stage_usd']}",

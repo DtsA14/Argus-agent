@@ -262,3 +262,13 @@ def test_a_deleted_result_does_not_let_a_confirmed_old_test_conflict_through(tmp
         redraft(env, note="try")
     assert "BLOCKED/test_conflict" in str(e.value) and "--not-a-conflict" in str(e.value)
     assert env.job().data["state"] == rj.AGENT_FAILED
+
+
+@pytest.mark.parametrize("claudecode,expect", [("1", "claude"), (None, "terminal")])
+def test_a_redraft_records_who_ran_the_command(tmp_path, monkeypatch, claudecode, expect):
+    (monkeypatch.setenv("CLAUDECODE", claudecode) if claudecode else monkeypatch.delenv("CLAUDECODE", raising=False))
+    env = Env(tmp_path)
+    failed_a1(env, monkeypatch)
+    env.drafter.script[:] = [SUBMIT_V2]
+    job, _ = redraft(env, note="the tests assume a cleared counter; ask for the reset")
+    assert [x["actor"] for x in job.data["log"] if x.get("what") == "redraft"] == [expect]

@@ -244,7 +244,7 @@ def go(qid, *, sha, deps, queues_dir=QUEUES, via=None, reason=None):
             raise Refused(f"the list is {want[:12]}, not the {sha!r} given; nothing was approved")
         for item in q["items"]:
             _issue_text(d, item)
-        q["approved"] = {"sha": want, "at": deps.clock(), "by": os.environ.get("USER"), **({"via": via} if via else {}),
+        q["approved"] = {"sha": want, "at": deps.clock(), "by": os.environ.get("USER"), "actor": rj.actor(via), **({"via": via} if via else {}),
                          **({"reason": reason} if reason else {})}
         _save(d, q)
         return q
@@ -255,7 +255,7 @@ def close(qid, note, *, deps, queues_dir=QUEUES):
     with _locked(queues_dir, qid) as (d, q):
         if q.get("closed"):
             raise Refused(f"queue {qid} is already closed")
-        q["closed"] = {"at": deps.clock(), "note": note, "by": os.environ.get("USER")}
+        q["closed"] = {"at": deps.clock(), "note": note, "by": os.environ.get("USER"), "actor": rj.actor()}
         _save(d, q)
         return q
 
@@ -306,7 +306,7 @@ def retry(qid, n, *, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
         spent = rj.spent_nano(job)
         if state == rj.AGENT_FAILED:        # last of the checks: a busy job (JobBusy) or a job that moved refuses here and nothing has changed
             rj.abandon(job.id, f"queue {qid}: item {n} is retried with a new job", deps=deps, jobs_dir=jobs_dir)
-        item.setdefault("retries", []).append({"job": job.id, "spent_nano": max(spent, rj.spent_nano(job)), "findings": text, "at": deps.clock(), "by": os.environ.get("USER")})
+        item.setdefault("retries", []).append({"job": job.id, "spent_nano": max(spent, rj.spent_nano(job)), "findings": text, "at": deps.clock(), "by": os.environ.get("USER"), "actor": rj.actor()})
         item["retry_note"], item["job"] = (text or None), None
         _save(d, q)
         return q

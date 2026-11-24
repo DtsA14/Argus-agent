@@ -548,3 +548,11 @@ def test_a_research_job_gets_the_research_cap_on_top_of_the_job_cap(env):
     r = env.cfg["router"]
     assert job.data["max_usd"] == pytest.approx(r["job_max_usd"] + r["research_max_usd"])
     assert env.code(job_id="jplain").data["max_usd"] == pytest.approx(r["job_max_usd"])
+
+
+@pytest.mark.parametrize("claudecode,expect", [("1", "claude"), (None, "terminal")])
+def test_research_ok_records_who_ran_the_command(env, monkeypatch, claudecode, expect):
+    (monkeypatch.setenv("CLAUDECODE", claudecode) if claudecode else monkeypatch.delenv("CLAUDECODE", raising=False))
+    research(env)
+    job, _ = rj.research_ok("jtest", sha=handoff_sha(env)[:12], cfg=env.cfg, deps=env.deps, jobs_dir=env.jobs)
+    assert job.data["research_ok"]["actor"] == expect and [x["actor"] for x in job.data["log"] if x["what"] == "research_ok"] == [expect]

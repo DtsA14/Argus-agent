@@ -902,12 +902,12 @@ def research_ok(job_id, *, sha, cfg, deps, jobs_dir=JOBS):
             raise Refused(f"the handoff is {seen[:12]}, not the {sha!r} given: accept the handoff status shows "
                           "(at least its first 12 characters)")
         job.data["research_ok"] = {"handoff_sha256": seen, "handoff": raw.decode("utf-8"), "at": deps.clock(),
-                                   "by": os.environ.get("USER")}
+                                   "by": os.environ.get("USER"), "actor": actor()}
         n = len(job_issue(job))                    # exactly what the drafter and the contract will get
         if n > MAX_ISSUE:
             del job.data["research_ok"]
             raise Refused(f"the issue with the handoff has {n} characters, more than {MAX_ISSUE}; nothing was accepted")
-        job.note(deps, "research_ok", handoff=seen[:12])
+        job.note(deps, "research_ok", handoff=seen[:12], actor=actor())
         return job, _draft(job, cfg, deps, 1)
 
 
@@ -1146,9 +1146,9 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             # once; every agent stage's first attempt is told it, a resume included.
             job.data["approval"] = {"draft_sha256": seen, "contract_sha256": record["contract_sha256"], "task": task,
                                     "max_usd": cap, "max_iterations": max_iterations, "at": deps.clock(),
-                                    "by": os.environ.get("USER"), "feasibility": record["feasibility"],
+                                    "by": os.environ.get("USER"), "actor": actor(), "feasibility": record["feasibility"],
                                     "baseline": baseline_errors(report), "web": bool(web)}
-            job.note(deps, "approved", draft=seen[:12], contract=record["contract_sha256"][:12])
+            job.note(deps, "approved", draft=seen[:12], contract=record["contract_sha256"][:12], actor=actor())
             last, _ = last_agent(job)         # a redraft after a draft_test_conflict leaves agent stages behind: this is the next one
             r = _agent(job, cfg, deps, sandbox_cfg, sid=f"a{int(last[1:]) + 1}" if last else "a1")
     return job, r
@@ -1578,7 +1578,7 @@ def retry(job_id, *, cfg, deps, sandbox_cfg=None, max_usd=None, jobs_dir=JOBS, n
                    if web else [])]
         text = _limits_text(job, "retry the agent", lines)
         with live(deps, acfg, [acfg["code_task"]["role"]], text, job=job):
-            job.note(deps, "retry", stage=sid, by=os.environ.get("USER"), **({"not_a_conflict": True} if not_a_conflict else {}))
+            job.note(deps, "retry", stage=sid, by=os.environ.get("USER"), actor=actor(), **({"not_a_conflict": True} if not_a_conflict else {}))
             return job, _agent(job, cfg, deps, sandbox_cfg, sid=sid, cap=cap, carry=carry)
 
 
@@ -1690,12 +1690,25 @@ def redraft(job_id, *, cfg, deps, jobs_dir=JOBS, note=None):
                     except sb.SandboxUnavailable:
                         pass
                 job.move(AGENT_FAILED, deps, stage=sid, reason="interrupted: the agent's process stopped before it finished; the draft is redone by a human")
-        job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"), **({"note": True} if note else {}),
+        job.note(deps, "redraft", stage=f"d{n}", by=os.environ.get("USER"), actor=actor(), **({"note": True} if note else {}),
                  **({"after": "draft_test_conflict"} if facts else {}), **({"after": "interrupted_agent"} if interrupted else {}))
         return job, _draft(job, cfg, deps, n, note=note, note_by=note_by, before_move=before_move, warn=warn)
 
 
 VIA = ("ui",)                   # SPEC_CONTROL_UI F4: the only channel a decision is recorded as coming through
+ACTORS = ("ui", "claude", "terminal")
+
+
+def actor(via=None):
+    """Who ran the command that records a decision (SPEC_ACTOR_RECORD, 2026-11-24): a fact about the process, never a guess about a person. "claude" when the environment has a
+    non-empty CLAUDECODE (Claude Code sets it in every shell it runs, so a command typed by Claude, or by the human with `!` inside its session, reads "claude"; checked FIRST,
+    so a Claude shell that passes --via ui is still "claude"); else "ui" when the chat started it (--via ui); else "terminal". It measures "did a Claude Code session run this";
+    it does not stop a process that unsets the variable."""
+    if os.environ.get("CLAUDECODE"):
+        return "claude"
+    return "ui" if via == "ui" else "terminal"
+
+
 SHA_SEEN = re.compile(r"[0-9a-f]{12,64}")             # fullmatch
 
 
@@ -1738,7 +1751,7 @@ def abandon(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
         if job.data.get("kind") == "prd":         # its folders can no longer be approved (SPEC_PRD_WRITER 4.4); marked first, so a
             from router import prd_job            # cut-off between the two leaves a job that is still open, never an ABANDONED one with approvable folders
             prd_job.mark_superseded(job)
-        job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"), **extra)
+        job.move(ABANDONED, deps, reason=reason, by=os.environ.get("USER"), actor=actor(via), **extra)
         return job
 
 
@@ -1751,7 +1764,7 @@ def reject(job_id, reason, *, deps, jobs_dir=JOBS, sha=None, via=None):
             raise Refused(f"job {job.id} is {job.data['state']}: only a research handoff or a draft waiting for review, "
                           "or a review package, is rejected (abandon closes the others)")
         extra = _seen(job, sha, via)
-        job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"), **extra)
+        job.move(REJECTED, deps, reason=reason, by=os.environ.get("USER"), actor=actor(via), **extra)
         return job
 
 
@@ -1782,7 +1795,7 @@ def _record_applied(job, commit, *, deps, note=None, require_as_is=False, allow_
     """applied() without the lock: the caller holds job.lock() (`argus apply` holds it across its git work). extra: more fields for the log entry."""
     if job.data["state"] != REVIEW_READY:
         raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
-    reserved = sorted(set(extra) & {"at", "what", "old", "new", "commit", "patch_sha256", "as_is", "by", "note", "examples_failed"})
+    reserved = sorted(set(extra) & {"at", "what", "old", "new", "commit", "patch_sha256", "as_is", "by", "actor", "note", "examples_failed"})
     if reserved:
         raise ValueError(f"_record_applied: {reserved} are fields of the log entry itself")
     repo = job.data["inputs"]["repo"]
@@ -1802,7 +1815,7 @@ def _record_applied(job, commit, *, deps, note=None, require_as_is=False, allow_
     if require_as_is and as_is is not True:             # `argus apply`: a commit that is not the patch is not recorded as the job's
         raise Refused(f"job {job.id}: the commit's changes are not the package's patch (as_is {as_is})")
     job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(data).hexdigest(),
-             as_is=as_is, by=os.environ.get("USER"),
+             as_is=as_is, by=os.environ.get("USER"), actor=actor(),
              **({"note": note} if note else {}), **({"examples_failed": failed} if failed else {}), **extra)
     return job
 
