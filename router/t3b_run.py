@@ -85,7 +85,7 @@ def _error(kd, **fields):
         f.write(json.dumps(fields, ensure_ascii=False) + "\n")
 
 
-def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, model=None, effort=None):
+def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, model=None, effort=None, reader_model=None):
     """Read the sets of `root` that have no reading `run_no` yet, one call each. Returns a summary dict."""
     root = Path(root)
     kd = t3.keydir(root)
@@ -100,6 +100,15 @@ def run(root, run_no, *, cfg, deps, cap_usd=0.50, max_output=6000, limit=None, m
     if limit is not None:
         todo = todo[:int(limit)]
     cfg = copy.deepcopy(cfg)
+    if reader_model is not None:                                # the paired number reader trial (C9): another reader than the config's, named as in the patch trial
+        from router.patch_trial import MODELS
+        if reader_model not in MODELS:
+            raise rj.Refused(f"--reader-model is one of {', '.join(MODELS)}")
+        ref_text, price, upstream = MODELS[reader_model]
+        if price is not None:
+            cfg.setdefault("prices", {})[ref_text] = dict(price)
+            cfg.setdefault("gateway_models", {})[ref_text] = {"upstream": list(upstream)}
+        cfg["roles"][ROLE]["model"] = ref_text
     cfg["roles"][ROLE]["max_output_tokens"] = max_output
     if effort is not None:                                      # the provider's reasoning effort for this run, in the copy of the config only
         if effort not in EFFORTS:
