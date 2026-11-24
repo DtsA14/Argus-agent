@@ -66,7 +66,7 @@ Model tidak pernah memegang `confirm` atau token (tidak ada rute dari keluaran m
 |---|---|---|
 | K1 | Jatah sesi sebagai satu konfirmasi (amandemen atas SPEC_CHAT_APP 11.5) | ya, $0,20 per sesi, $0,03 per giliran, dalam batas harian $2,00 |
 | K2 | Repo yang isinya boleh dibaca mandor | kosong dulu; tambah `bulking-app` hanya dengan kata Atha |
-| K3 | Model | ditentukan uji rute (bagian 8), bukan sebelumnya |
+| K3 | Model | ditentukan uji rute (bagian 8), bukan sebelumnya. **Diputuskan Atha 2026-11-24: DeepSeek V4.1 Flash 1017 (`openrouter:deepseek/deepseek-v4.1-flash-1017`) untuk P1**, atas hasil `pilots/route_eval_v0/RESULT.md` (45/45, $0,008 per 45 panggilan; GLM dan Haiku tidak diperlukan menurut bukti itu); keputusan config P1, belum ada perubahan config |
 | K4 | Urutan | P0 dulu; P1-P3 sesudah hasil uji; P4 paling akhir |
 
 ## 12. Yang belum dicek (rev 0 jujur)
