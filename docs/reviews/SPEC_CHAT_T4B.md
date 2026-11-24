@@ -50,7 +50,7 @@ Klien tidak dapat memilih antrean di luar antrean via ui, item, sha, uang atau a
 
 | | Pertanyaan | Usul Claude |
 |---|---|---|
-| K1 | Apakah ketukan "Setujui draf" memang harus dari kamu, atau draf yang semua tanda mesinnya hijau disetujui otomatis? | Ketukan manusia dulu. Kamu tidak menilai isi draf (tes dan kontrak), jadi ketukan itu mudah jadi stempel; alasannya tetap: persetujuan yang disengaja, dan kartu menaruh tanda merah di atas. Otomatis-bila-hijau adalah langkah berikutnya dan butuh data: berapa draf hijau yang akhirnya ditolak |
+| K1 | **Diputuskan Atha 2026-11-24: ketukan manusia dulu.** Pertanyaan: apakah ketukan "Setujui draf" memang harus dari kamu, atau draf yang semua tanda mesinnya hijau disetujui otomatis? | Ketukan manusia dulu. Kamu tidak menilai isi draf (tes dan kontrak), jadi ketukan itu mudah jadi stempel; alasannya tetap: persetujuan yang disengaja, dan kartu menaruh tanda merah di atas. Otomatis-bila-hijau adalah langkah berikutnya dan butuh data: berapa draf hijau yang akhirnya ditolak |
 | K2 | Antrean yang disetujui dari terminal boleh dijalankan dari chat? | Tidak (bagian 5), supaya uang tetap di batas harian |
 | K3 | Pembaca angka dan apply | Spek terpisah sesudah keputusan C6/C9; tidak dibuka di sini |
 
