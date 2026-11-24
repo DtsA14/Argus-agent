@@ -489,7 +489,8 @@ def test_real_spend_that_fills_the_money_still_stops_the_queue(svc):
 
 @pytest.mark.parametrize("retries,state,expect", [
     ([], "REJECTED", "argus queue retry"), ([{"job": "x", "spent_nano": 1, "findings": "x", "at": "t", "by": "u"}] * 2, "REJECTED", "ulangi issue ini dari PRD"),
-    ([], "AGENT_FAILED", "argus status"), ([], "REVIEW_INVALID", "argus status"), ([], "DRAFT_FAILED", "argus status"),
+    ([], "AGENT_FAILED", "argus queue retry"), ([{"job": "x", "spent_nano": 1, "findings": "", "at": "t", "by": "u"}] * 2, "AGENT_FAILED", "ulangi issue ini dari PRD"),
+    ([], "REVIEW_INVALID", "argus status"), ([], "DRAFT_FAILED", "argus status"),
 ])
 def test_a_stopped_card_says_what_to_do_per_cause(svc, retries, state, expect):
     t1 = issue_text(SAME, title="1")

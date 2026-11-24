@@ -15,7 +15,7 @@ import test_issue_writer as tiw  # noqa: E402
 
 from codetask import issue_writer as iw  # noqa: E402
 from codetask import prd_writer as pw  # noqa: E402
-from models.fake import StrictScriptedChatModel  # noqa: E402
+from models.fake import FakeHTTPError, StrictScriptedChatModel  # noqa: E402
 from router import issue as ri  # noqa: E402
 from router import job as rj  # noqa: E402
 from router import prd as rp  # noqa: E402
@@ -956,3 +956,27 @@ def test_the_hint_also_comes_with_the_unread_files_message(tmp_path, monkeypatch
     env.new()
     bounce = env.rejections()[0]
     assert "went unread" in bounce and f"the 'show_date' {HINT}" in bounce
+
+
+# ---- a provider failure is WRITE_FAILED, not BLOCKED (2026-11-24, SPEC_RETRY_AGENT_FAILED_AND_PRD_PROVIDER) -----------------------------------------
+
+def test_a_provider_failure_in_a_turn_leaves_a_job_that_a_reply_can_continue(tmp_path):
+    env = Env(tmp_path, [FakeHTTPError(402, "payment required"), submit()])
+    job = env.new()
+    assert job.data["state"] == pj.WRITE_FAILED and job.data["state"] != pj.BLOCKED
+    assert "402" in json.dumps(job.data["log"])                                                      # the reason says what the provider said
+    job = env.reply("coba lagi")
+    assert job.data["state"] == pj.AWAITING_HUMAN and job.data["stages"]["w1"]["status"] == pw.FAILED
+
+
+def test_a_failed_provider_call_ends_the_stage_failed_with_the_providers_reason_and_not_blocked(tmp_path):
+    env = Env(tmp_path, [FakeHTTPError(402, "payment required")])
+    job = env.new()
+    st = job.data["stages"]["w1"]
+    assert st["status"] == pw.FAILED and st["status"] != pw.BLOCKED and "402" in str(st.get("stop_reason") or json.dumps(job.data["log"]))
+
+
+def test_a_turn_that_cannot_be_funded_is_still_blocked_not_write_failed(tmp_path, monkeypatch):
+    env = Env(tmp_path, [submit()])
+    monkeypatch.setattr(rj, "left_usd", lambda job: 0.05)
+    assert env.new().data["state"] == pj.BLOCKED

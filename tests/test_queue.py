@@ -718,3 +718,117 @@ def test_a_retry_hands_the_drafter_only_the_blocker_findings_never_the_nits(qe):
     out = retry(qe, q)
     note = qe.q(q)["items"][0]["retry_note"]
     assert "deletes the parent directory" in note and "year 0-99" not in note
+
+
+# ---- queue retry after a failed agent (2026-11-24, SPEC_RETRY_AGENT_FAILED_AND_PRD_PROVIDER) -------------------------------------------------------
+
+def agent_failed(qe, q, i, usd=0.02, blocked=None):
+    """The item's job with an agent stage that failed (AGENT_FAILED); `blocked` writes the run's result.json with that blocked_reason."""
+    job = qe.job(q, i)
+    with job.lock():
+        job.data["stages"]["a1"] = {"kind": "agent", "status": "FAILED", "usd": usd, "run_id": f"{job.id}-a1"}
+        job.save()
+    if blocked:
+        run = job.runs / f"{job.id}-a1"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "result.json").write_text(json.dumps({"blocked_reason": blocked}))
+    qe.set_state(job, rj.AGENT_FAILED)
+    return job
+
+
+def test_an_item_whose_agent_failed_is_retried_with_the_issue_alone_and_the_old_job_is_abandoned(qe):
+    q = qe.ready()
+    qe.step(q)
+    old = agent_failed(qe, q, 0)
+    assert qe.status(q) == "STOPPED" and "argus queue retry" in rq.status_lines(qe.q(q), jobs_dir=qe.jobs)
+    got = retry(qe, q)
+    item = got["items"][0]
+    assert item["job"] is None and item["retry_note"] is None and item["retries"][0]["findings"] == ""
+    assert item["retries"][0]["job"] == old.id and item["retries"][0]["spent_nano"] > 0 and qe.status(q) == "WAITING"
+    assert rj.open_job(old.id, qe.jobs).data["state"] == rj.ABANDONED                                # it can no longer spend beside the new job
+    qe.step(q)
+    new = qe.job(q, 0)
+    assert new.id != old.id and new.data["inputs"]["issue"] == old.data["inputs"]["issue"]
+    assert "note" not in qe.calls[-1] and "note_by" not in qe.calls[-1]                               # no model or reader text reaches the new drafter
+
+
+def test_the_old_job_of_a_failed_agent_cannot_be_moved_on_after_the_retry(qe):
+    q = qe.ready()
+    qe.step(q)
+    old = agent_failed(qe, q, 0)
+    retry(qe, q)
+    with pytest.raises(rj.Refused):
+        rj.redraft(old.id, cfg=qe.env.cfg, deps=qe.env.deps, jobs_dir=qe.jobs, note="again")
+    assert rj.open_job(old.id, qe.jobs).data["state"] == rj.ABANDONED
+
+
+def test_a_retry_of_a_failed_agent_is_refused_and_changes_nothing_while_the_old_job_is_held(qe):
+    q = qe.ready()
+    qe.step(q)
+    old = agent_failed(qe, q, 0)
+    before = json.dumps(qe.q(q), sort_keys=True)
+    with old.lock():
+        with pytest.raises(rj.Refused):
+            retry(qe, q)
+    assert json.dumps(qe.q(q), sort_keys=True) == before and rj.open_job(old.id, qe.jobs).data["state"] == rj.AGENT_FAILED
+
+
+def test_a_note_left_by_an_earlier_reader_retry_is_not_carried_to_a_retry_of_a_failed_agent(qe):
+    q = qe.ready()
+    qe.step(q)
+    reject_on_findings(qe, q, 0)
+    retry(qe, q)
+    assert "TRACE" in qe.q(q)["items"][0]["retry_note"]
+    qe.step(q)
+    agent_failed(qe, q, 0)
+    got = retry(qe, q)
+    assert got["items"][0]["retry_note"] is None and len(got["items"][0]["retries"]) == 2
+    qe.step(q)
+    assert "note" not in qe.calls[-1]
+
+
+def test_the_two_retries_of_an_item_are_shared_by_both_kinds(qe):
+    q = qe.ready()
+    qe.step(q)
+    agent_failed(qe, q, 0)
+    retry(qe, q)
+    qe.step(q)
+    reject_on_findings(qe, q, 0)
+    retry(qe, q)
+    qe.step(q)
+    agent_failed(qe, q, 0)
+    with pytest.raises(rq.Refused, match="retried 2 times"):
+        retry(qe, q)
+    assert "argus queue retry" not in rq.status_lines(qe.q(q), jobs_dir=qe.jobs)
+
+
+@pytest.mark.parametrize("blocked", ["test_conflict", "sandbox_unavailable"])
+def test_a_failed_agent_that_a_new_job_would_fail_the_same_way_is_not_retried(qe, blocked):
+    q = qe.ready()
+    qe.step(q)
+    old = agent_failed(qe, q, 0, blocked=blocked)
+    with pytest.raises(rq.Refused, match=blocked):
+        retry(qe, q)
+    assert rj.open_job(old.id, qe.jobs).data["state"] == rj.AGENT_FAILED and qe.q(q)["items"][0]["job"] == old.id
+
+
+def test_other_failed_states_and_other_items_are_still_refused_for_a_retry_without_findings(qe):
+    q = qe.ready()
+    qe.step(q)
+    job = qe.job(q, 0)
+    qe.set_state(job, rj.DRAFT_FAILED)
+    with pytest.raises(rq.Refused, match="stopped at"):
+        retry(qe, q)
+    agent_failed(qe, q, 0)
+    with pytest.raises(rq.Refused, match="stopped at|no item"):
+        retry(qe, q, 2)
+    assert qe.q(q)["items"][1]["job"] is None
+
+
+def test_the_money_of_the_abandoned_old_job_stays_counted_at_what_it_spent(qe):
+    q = qe.ready(n=2, max_usd=2.0)
+    qe.step(q)
+    old = agent_failed(qe, q, 0, usd=0.5)
+    retry(qe, q)
+    spent = rj.spent_nano(rj.open_job(old.id, qe.jobs))
+    assert spent > 0 and rq.retired_nano(qe.q(q), qe.jobs) == spent

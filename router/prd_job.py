@@ -6,7 +6,7 @@
   ordinary `argus prd check|approve`, which this module never calls and never bypasses)
 
   NEW -> WRITING (wN) -> AWAITING_HUMAN -> WRITING (reply) -> ... ; WRITING -> WRITE_FAILED (a reply tries again)
-  BLOCKED when a turn cannot be funded, the repository's state refuses it or the provider fails; every state but
+  BLOCKED when a turn cannot be funded or the repository's state refuses it (a provider failure is WRITE_FAILED, 2026-11-24); every state but
   ABANDONED -> ABANDONED. There is no HANDED_OFF and no "approved": `argus prd approve` makes a queue from a folder and
   leaves the job as it is (it can still be replied to, until a queue is waiting on the repository).
 
