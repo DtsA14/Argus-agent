@@ -980,3 +980,12 @@ def test_a_turn_that_cannot_be_funded_is_still_blocked_not_write_failed(tmp_path
     env = Env(tmp_path, [submit()])
     monkeypatch.setattr(rj, "left_usd", lambda job: 0.05)
     assert env.new().data["state"] == pj.BLOCKED
+
+def test_the_prompt_tells_the_writer_to_match_the_issues_against_each_other_and_to_list_the_assumptions_under_the_contract():
+    # NEXUS-lite 2026-11-22: a contract that said "synchronous storage" and an issue that built an asynchronous one passed the writer and `prd check`
+    # (PENDING_PRIORITAS 8, the light step: a line in the prompt; the machine check waits for a repeated pattern).
+    for env_runs in (False, True):
+        text = pw.system_for(env_runs, env_runs)
+        assert "Match the issues against each other before you submit" in text
+        assert "synchronous or asynchronous" in text and "every assumption an item makes about an earlier one" in text
+        assert "Write the word 'contract' in the PRD." in text
