@@ -1,6 +1,10 @@
-# Prioritas perbaikan dari pilot NEXUS-lite
+# Prioritas dan semua butir terbuka
 
-Dibuat 2026-11-23 dari temuan pilot NEXUS-lite (16 issue, empat tahap; laporan: https://claude.ai/artifact/VLV3GLLrUSwcNGASRn42PD). Berkas ini **terpisah dari `PENDING.md`**: PENDING menyimpan semua butir, berkas ini hanya urutan kerjanya. Butir lama tetap di PENDING dengan rincian; di sini hanya ringkasan, alasan urutan, ruang lingkup, dan status.
+**Diperbarui 2026-11-24:** berkas ini sekarang memuat **semua butir yang belum dicentang** dari `PENDING.md` (tabel kategori B sampai J di bagian 2; kategori A adalah tabel urutan di bagian 1). `PENDING.md` hanya menyimpan arah, aturan, riwayat selesai dan catatan. Teks utuh tiap butir sebelum dipindah: [`docs/reviews/PENDING_ARCHIVE_2026-11-24.md`](docs/reviews/PENDING_ARCHIVE_2026-11-24.md) (kolom Ringkasan di sini dipadatkan; rincian, angka dan PR ada di arsip itu).
+
+## Bagian 1: urutan perbaikan dari pilot NEXUS-lite
+
+Dibuat 2026-11-23 dari temuan pilot NEXUS-lite (16 issue, empat tahap; laporan: https://claude.ai/artifact/VLV3GLLrUSwcNGASRn42PD). Sejak 2026-11-24 berkas ini menyimpan butir terbuka dan urutan kerjanya; `PENDING.md` menyimpan arah, aturan dan riwayat selesai.
 
 **Ukuran urutan:** seberapa sering membuat pekerjaan berhenti dan butuh Claude (penghalang "bisa ditinggal"), dibagi besar kerjanya. Datanya satu pilot, 16 issue, jadi angkanya kecil; pemakaian nyata tiga hari (mulai 2026-11-23) bisa mengubah urutan.
 
@@ -25,4 +29,146 @@ Dibuat 2026-11-23 dari temuan pilot NEXUS-lite (16 issue, empat tahap; laporan: 
 - **Gelombang C:** nomor 4, lalu ukur nomor 5 (tanpa mengubah config) dan tanyakan Atha.
 - **Menunggu data pakai:** 6 sampai 9.
 
-Tiap butir selesai: centang, tulis nomor PR dan hasil verifikasinya di kolom Status, dan perbarui butir terkait di `PENDING.md`.
+Tiap butir selesai: centang, tulis nomor PR dan hasil verifikasinya di kolom Status. Butir yang selesai dipindah ke arsip saat berkas ini dirapikan berikutnya.
+
+## Bagian 2: semua butir terbuka lain, per kategori
+
+Dicek terhadap kode dan mesin 2026-11-24 (butir yang basi ditandai di kolom ringkasan; yang tidak disebut dicek berarti belum dicek ulang). Dipindah dari `PENDING.md` 2026-11-24 (semua yang belum `[x]`: `[ ]`, `[~]`, dan butir Parkiran, Kandidat serta Ditunda yang belum dikerjakan). Kolom: **Jalur** = ketat atau ringan (aturan `AGENTS.md`), config, atau operasional; **Kata Atha** = butuh keputusan Atha sebelum jalan; **Status** = `[ ]` belum, `[~]` sebagian. Butir yang sudah tercakup nomor 1 sampai 9 di bagian 1 (green probe, konsistensi PRD, profil anggaran, `message_max`, kegagalan penyedia, pembaca terpotong, pembaca patch salah blocker, agen yang dihentikan, batas langkah agen) tidak diulang di sini. Butir yang punya tanggal titik cek: **2026-11-29**.
+
+### B. Mutu gerbang, patch dan drafter (dulu "Inti 1")
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| B1 | Pemalsu yang masih lolos (F1–F3, F6) | pemalsu terbatas pada sesi 1, tes kontrak, atau yang membaca nonce dari argv lolos (xfail-strict di `tests/test_vf_canary.py`); selama terbuka setiap patch harus dibaca manusia, itu batas atas "bisa ditinggal"; belum ada spek lanjutan | ketat | tidak | [ ] |
+| B2 | Approve atas patch akhir, bukan rencana | sebagian dicakup `argus apply --read-sha` (11-15); sisa: alur approve draf tetap atas rencana, `--read-sha` bukan bukti membaca; pembacaan acak 1 dari 3 oleh pembaca terdelegasi: 0 dari 3 terbalik (#504); belum alur baku (`pilots/outside_v2/PROTOCOL_FINAL_PATCH.md`) | ketat | tidak | [~] |
+| B3 | Urutan Fable 2026-11-13 butir 3–4: jangkar Atha | hampir semua selesai (judge mati #485, R1b, validitas v2 #487, nilai buta #505, `knowledge_check.py` #495); **sisa:** Atha sendiri menilai 3–4 patch sebagai jangkar (tidak ada buktinya di git log; pembaca terdelegasi bukan penilaian Atha). Catatan: Atha bukan penilai domain | ringan | **ya** | [~] |
+| B4 | R2 `ReportNoRepro` | hanya spek (`SPEC_REPRO_V0.md:25`); dibangun hanya bila ada perbandingan mekanis "harap X, dapat Y" | ketat | tidak | [ ] |
+| B5 | RC bagian (b) | `--from-conflict` dan layar (`FABLE_SPEC_REPORT_CONFLICT_v1.md:95`; layar sebagian lewat `47bcce6`); batas: RC tak bisa mengonfirmasi konflik "sekarang raise" atau yang melibatkan `subTest` | ketat | tidak | [ ] |
+| B6 | Paket 3: putaran sintetis kedua RC dan GATE | 10–15 kasus, model keluarga lain, adversarial, hanya dari spek; rerun setelah #527 sudah dilakukan (#529: 32 dari 35 cocok) | ringan | tidak | [ ] |
+| B7 | Tes lama bocor oleh fitur baru | gerbang `scope:no_test_detection` (#436) dan peringatan `leaks` (#437, penasihat) ada. **Belum:** pesan "terjepit tes lama" saat `FAILED_ACCEPTANCE`; ukur false positive `leaks` di job ledger nyata (sampel awal 3 draf issue 019: 2 benar, 0 positif palsu; bila tepat, usul menolak draf dengan jalan keluar = spek baru; `leaks` membedakan "tidak dicek" dari "tidak ada", B12); `leaks` untuk JS/vitest; pola belum dikenal (`os.environ["TESTING"]`, nama modul pemanggil); false positive `NODE_ENV: 'test'`; tes draf memasang `history.state` `{}` bukan `null` | ketat (penasihat: ringan) | tidak | [~] |
+| B8 | Stage mutan di job kode | Atha 2026-11-11: "yang bikin mutant kalo nanti Argus lu lepas siapa?"; model memilih 5–15 mutan untuk baris yang diubah, harness menjalankannya di sandbox dan melaporkan yang lolos sebelum applied | ketat | tidak | [ ] |
+| B9 | Mutu patch: dari B ke A | benar menurut tes, belum bisa di-merge tanpa dirapikan: letak tes (APPEND-TESTS #506, INSERT-INTO #514 diukur hanya pada data batch 3), pembungkus exception; belum ada batch sesudah perbaikan | ketat | tidak | [ ] |
+| B10 | Mutu drafter dan agen (kandidat) | tes lama yang diubah drafter otomatis wajib (`22456` d1); drafter mencari titik nilai salah pertama (`20428`); gerbang writable lebar vs regresi sempit; over-spesifikasi tes drafter (3 dari 8); DROP-OLD-REQUIRED (`SPEC_DROP_OLD_REQUIRED.md` bagian 5); baris submits (#519) menghitung jawaban pertanyaan merah sebagai submit; `remove_labeled` label kosong perlu penjaga; kontaminasi data latih | ketat | tidak | [ ] |
+| B11 | Vitest v0 | tes lama tidak bisa diubah (`changed_tests` hanya Python), tanpa `-t`; Playwright (tahap 3b) bila ada kebutuhan | ketat | tidak | [ ] |
+| B12 | Verifikasi: sisa `SPEC_VERIFY_HARDENING` | pangkas run kontainer `tests/test_draft.py` (322 detik; **cek 2026-11-24:** log terbaru 2026-11-23 punya tes terlama 50 detik dan `test_draft` setup 49 detik, total belum dijumlah, mungkin sudah jauh turun); penjaga pemakaian `docker` langsung tanpa fixture bersama | ringan | tidak | [ ] |
+
+### C. Bisa ditinggal: tahap T0–T6, apply, antrean, PRD (dulu "Inti 2")
+
+Induk: **tahapan "tanpa pusing Atha"** (perbaikan arah, bukan perubahan arah, Atha 2026-11-16). Ukuran yang diperbaiki: (1) Claude sebagai operator per job menyusut, dicatat per PRD di `RESULT.md` dan dipisah dari Claude sebagai pembangun Argus; (2) Atha menilai kartu dengan benar (T3). Pembaca patch tetap Claude atau model peninjau yang harus diuji dengan cacat tanam; tidak ada repo baru sampai T6 (athena tetap).
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| C1 | T0 catatan keputusan | **basi, kemungkinan sudah selesai (dicek 2026-11-24):** keputusannya sudah tertulis di `docs/Reconciliation.md` baris 369 ("tahapan tanpa pusing Atha", T1–T6); tinggal dicentang | ringan | tidak | [x] |
+| C2 | T1 gerbang contoh | **dibangun** (`SPEC_EXAMPLE_GATE.md`: PR1 #586, PR2 intake/audit/apply 11-17, PR3 penulis dan kartu dideploy 11-17, log publik diperbaiki, pilot Rp1 11-17: penulis memakai `RunExample`, stop 45,0 benar, $0,0177; tiga angka salah diblok di intake $0). **Belum dicentang:** audit sesudah agent belum diuji pada kasus nyata (n = 1); tingkat C yang salah baru ketahuan sesudah agent jalan | ketat | tidak | [ ] |
+| C3 | T2 kartu baca-saja di chat | **selesai 2026-11-17** (`SPEC_CHAT_CARDS.md` rev 1, `router/cards.py`); batas: kunci yang disusun lewat kode tidak terlihat mesin; JS tanpa tes runtime | ketat | tidak | [x] |
+| C4 | T3 kartu persetujuan dan uji cacat-ditanam | kartu dibangun dan live (rencana, pasang, `GET /api/approve/code/<job>`; `argus apply` menolak tanpa catatan pembaca patch dan angka); versi ringan 4 dari 6, Atha lanjut (11-21). Yang tersisa dipecah di C5–C9 | ketat | tidak | [~] |
+| C5 | T3a: Atha menilai 6 cacat + 6 baik | belum dikerjakan; gerbang T3 sungguhan selain pembaca; logistik tampilan belum diputuskan (12 kartu di instansi chat terpisah) | ringan | **ya** | [ ] |
+| C6 | T3b spek rev 3 | (1) `ok` pembaca angka hanya dihitung bila dua bacaan independen sama-sama `ok`; (2) aturan lulus untuk model stokastik (mis. tiap cacat tertangkap minimal satu bacaan, luput ≤ 5%), ditetapkan SEBELUM uji berikutnya; (3) pembaca dari model Argus (GLM) = keputusan D8 + hasil per model dan effort di `reader_tests.json`. Hasil sampai sekarang: putaran 1–3 FAIL (kesalahan hitung d6 konsisten, bukan acak), `reader_tests.json` untuk pembaca angka belum ditulis; Atha: "catat dulu jangan uji ulang" | ketat | **ya** | [ ] |
+| C7 | Set riwayat nyata untuk T3b (A lantai Rp50 basi, B buffer ARB basi, C aturan stop tak tertulis) | putaran 1–3 sudah memakai 2 cacat + 2 baik riwayat nyata athena, jadi syarat bagian 8 spek tampaknya terpenuhi; **butir belum dicentang**, cek dulu sebelum menutup. C: sebagian aturan angka (jarak stop 1,5x ATR) hanya ada di kode athena, tidak terjangkau pembaca | ringan | tidak | [ ] |
+| C8 | Jalur `examples-read` dan `t3b-run` memotong keterangan dalam kurung | jalur menolak sumber dengan keterangan di dalam kurung (h2 bacaan ke-2 hilang di putaran 3); potong keterangan atau beri tahu pembaca bentuk persisnya | ringan | tidak | [ ] |
+| C9 | Pembaca kartu angka: pilihan Atha | pembaca kartu = Claude (spek rev 2/3 apa adanya, uji T3b dengan pembaca Claude), atau GLM dengan penghitung mesin untuk aritmetika contoh (selisih "sisa" bisa dihitung kode) | ketat | **ya** | [ ] |
+| C10 | `DOMAIN.md` athena ke repo athena | draf di `verification/t3b_history/athena/DOMAIN.md` (Claude, dari kode); `CLAUDE.md` athena masih menulis "price floor Rp50" (basi sejak 11-16); usul belum disetujui: kartu menulis "repo ini tidak punya DOMAIN.md" bila PRD menyentuh angka; pola untuk semua repo dengan aturan angka | ringan | **ya** | [ ] |
+| C11 | Temuan untuk athena: buffer slippage basi | `DEFAULT_SLIPPAGE_BUFFER_PCT = 0.15` basi untuk saham di atas Rp10 (ARB 7% asimetris 19 Okt–31 Des 2026, Kep-00157/BEI/10-2026; Rp11–14 ARB Rp1, Kep-00158/BEI/10-2026); sumber media, SK asli belum dibaca; putuskan konstanta sementara; jalur issue/PRD sendiri. Terkait I1 | ringan | **ya** | [ ] |
+| C12 | T4 kartu aksi | T4a dibangun 11-21 (`prd_approve`, `queue_go`; T3 dilewati). **Sisa:** `queue_go` hanya placeholder di halaman (Atha); T4b (`queue step`, approve draf, apply dari chat) **ditahan** sampai kartu pasang membuat tanda mesin tidak bisa terlewat dan tombol mati secara mekanis | ketat | **ya** (T4b) | [~] |
+| C13 | T5 penyambung satu-prompt | research → penulis PRD/issue → antrean; berhenti hanya di gerbang manusia (pakai laporan?, approve PRD+uang, approve tiap draf, apply tiap patch), tiap gerbang satu ketukan di chat; spek sesudah Rp1 mengukur satu rantai nyata; belum diketahui: mutu penulis PRD untuk pekerjaan besar, biaya dan titik macet satu rantai | ketat | **ya** | [ ] |
+| C14 | T6 `argus env init`, environment node, repo baru | PR1 pengerasan builder selesai (#670, #668); `argus env init` langkah pertama sudah ada (`router/env_init.py`: kerangka Python dengan satu tes lulus, 7b912cd; kerangka React + vitest untuk `pwa_node22`, d3060ac) dan `env propose` (688ba0a, 2026-11-20); **PR2–5 ditahan** sampai ada repo Python dengan dependensi nyata | ketat | tidak | [ ] |
+| C15 | `argus env init <repo>` (Parkiran) | **sebagian dibangun (dicek 2026-11-24):** `env init` membuat kerangka repo baru dan mencetak baris config, tidak membangun image; **belum ada** bagian untuk repo luar yang sudah ada (baca dependensi, pilih versi lebih tua dari dua minggu, hash, bangun dan cek image, baseline). Usul asli: satu perintah tanpa model: baca dependensi, pilih versi lebih tua dari dua minggu, ambil hash, bangun dan cek image, jalankan baseline; latar: `athena_py312` dibuat tangan ±10 langkah; bahas di titik cek dengan angka pembanding waktu | ketat | **ya** (titik cek) | [~] |
+| C16 | Gerbang lint, type-check dan impor-bersih per repo (Parkiran) | tanpa model, opt-in lewat konfigurasi repo (`ruff`, `mypy`, `eslint`, `tsc`) + "impor modul utama dengan environment kosong"; `ACCEPTANCE_GENERAL.md:56` sudah memperbolehkan perintah validasi, drafter hanya menulis pytest dan vitest; bahas bersama C15 | ketat | **ya** (titik cek) | [ ] |
+| C17 | Environment node untuk repo frontend (Parkiran) | sandbox hanya Python, issue `frontend/` athena tak bisa divalidasi; paket dari lockfile, tanpa jaringan, image dikunci digest; dibuat saat ada issue frontend nyata | ketat | tidak | [ ] |
+| C18 | Screenshot sebelum dan sesudah untuk perubahan UI (Parkiran) | browser tanpa kepala di sandbox, kartu pasang menampilkan dua gambar berdampingan ditandai keluaran mesin; butuh C17; gambar = data tak tepercaya; bahas di titik cek | ketat | **ya** (titik cek) | [ ] |
+| C19 | PRD untuk repo dari nol (Parkiran) | penulis PRD tak bisa memulai repo kosong: `touches` item pertama ditolak, repo harus di `issue_writer.repos` dengan environment lulus `check_env_image.py`, pin `.sandbox_image_<env>*` di checkout chat, commit dasar dengan satu tes lulus, kerangka minimal; jalan pintas: kerangka dibuat tangan lalu PRD (kini kerangka bisa dibuat `argus env init`, lihat C14); bagian T6 | ketat | tidak | [ ] |
+| C20 | Uji lepas tangan | **ditunda dan digantikan T3** (Atha 11-16: "terlalu berat"); dibuka lagi bila ada cara membaca ringan di HP dan Atha mau; sementara Claude mencatat "koreksi Claude" di `RESULT.md` pilot | ringan | **ya** | [ ] |
+| C21 | Kartu apply di chat (K6) dan `argus applied --amend` | `--amend <commit>` hanya untuk `APPLIED` yang belum di-deploy (kasus viewer 021) | ketat | tidak | [ ] |
+| C22 | `argus applied` jalur manual dan catatan baca patch (Parkiran, ditemukan tinjau Opus PR 3 m1) | jalur `git apply` sendiri tidak memeriksa catatan baca; usul: jangan blokir, tulis bidang `reader` bila ada dan tampilkan "patch read: tidak ada (dipasang manual)"; alternatif ketat: wajib catatan kecuali flag eksplisit | ketat | **ya** (pilih usul) | [ ] |
+| C23 | PRD sampai staging: sisa | A, B1, B2 selesai (#555, #559, #566, #568). **Sisa:** dua PRD pilot lagi; tes CLI `queue new` dan `queue step` dengan konfigurasi sungguhan; catat kenapa venv Argus tanpa `fastapi` (lima commit athena yang dulu belum di-push sudah ada di `origin/master`, dicek 2026-11-24); pilot athena n = 1 tidak menunjukkan aturan urutan antar-issue, keinginan awal bukan tulisan Atha, perilaku saat item gagal, frontend athena (`ScanResultCard.jsx` masih Rp50) | ringan | tidak | [~] |
+| C24 | Kegagalan provider pada job `prd` (Parkiran) | `BLOCKED` terminal (tabel `LEGAL`): provider yang gagal mematikan percakapan dan uang yang sudah dibayar; **masih terbuka (dicek 2026-11-24):** `codetask/prd_writer.py:443` memetakan `llm_failed` ke `BLOCKED` (pesan penyebab sudah lebih jelas sejak #695, status tetap terminal); usul: petakan ke `WRITE_FAILED` (bisa `reply`), tanpa mengubah `LEGAL` | ketat | tidak | [ ] |
+| C25 | `argus fix <job>` dan redraft otomatis 3b | satu kali per job dari temuan yang dibekukan; redraft otomatis sekali bila d1 `submits_exhausted` (ditunda Atha 11-11 sampai kasusnya muncul lagi). Sebagian ditutup #702 dan A' | ketat | tidak | [ ] |
+| C26 | Operator rantai tetap (`argus chain`) | T1 → apply → S → T2; tunggu rantai lintas repo kedua dengan pola perekat sama | ketat | tidak | [ ] |
+| C27 | Pin image per checkout disalin manual | preflight `scripts/pin_status.py` ada, sinkronisasi (satu lokasi pin) belum; `lock_sha256` image tidak dibaca | ringan | tidak | [~] |
+| C28 | Smoke kandidat viewer tidak menguji lingkungan unit systemd | smoke live lewat 8710 hanya di monitor, bukan gerbang deploy; belum dicek ulang sejak 11-15: apakah `viewer-smoke` ikut gerbang `viewer-deploy` (`router/stage_viewer.py`) | ketat | tidak | [ ] |
+| C29 | Celah penulis issue | hanya membaca satu repo, tak tahu data yang dikirim repo lain; usul: daftar kontrak API ledger sebagai berkas baca di snapshot viewer | ketat | tidak | [ ] |
+| C30 | Agen kode 90% waktu menunggu sandbox | job 040: 527 dari 586 detik; ukur dulu jumlah dan durasi jalan tes per job | ringan | tidak | [ ] |
+| C31 | Pekerjaan paralel antar issue dan antar tahap (Parkiran) | bentuk aman: penanda ketergantungan per issue (grafik), issue independen di cabang terpisah, antar tahap hanya dengan antarmuka dibekukan, pemeriksaan gabungan sebelum merge, ulang bila kontrak berubah (di pilot 1 dari 4 tahap). **Tidak dikerjakan** sebelum gerbang konsistensi PRD (nomor 8) dan ada proyek berbagian terpisah | ketat | **ya** | [ ] |
+
+### D. Biaya terkunci (dulu "Inti 3")
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| D1 | E1 batas yang diketahui | biaya tak diketahui dihitung nol ke cap (diterima Atha 11-11, `AGENTS.md`); buka lagi bila penyedia langsung yang melaporkan token cache-write ditambahkan, atau `usd_complete = false` muncul di job nyata; perbaikan siap di cabang `fix-b-e1-draft` | ketat | tidak | [ ] |
+| D2 | `argus code` ditolak karena key tetap membuat job `NEW` | `start_code` membuat job sebelum pemeriksaan key di `live()`; `KEY_SHAPE` (`router/job.py`) hanya mengenal Anthropic, bentuk key DeepSeek belum dicek | ketat | tidak | [ ] |
+| D3 | Idempotency key sisi provider (ADR-004) | dampak rendah selama tidak ada aksi eksternal selain panggilan model; **naik prioritas** begitu ada kemampuan berefek ke luar | ketat | tidak | [ ] |
+
+### E. Ukuran (M5)
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| E1 | Angka utama papan skor: baru BATAS ATAS | 2026-11-15: dari 126 job kode, 30 sampai staging tanpa campur tangan terlihat = 23,8% (`verification/scoreboard-2026-11-15.json`); pelaku tidak tercatat; tepat bila approve via chat (`via=ui`) dan apply `method=apply`; hitung ulang di titik cek 2026-11-29. Lihat juga bagian "Angka bisa ditinggal" di `PENDING.md` (0 dari 10) | ringan | tidak | [~] |
+| E2 | Catat pelaku approve dan apply | `by` = `$USER` sama untuk Atha dan Claude; usul: penanda pelaku yang dinyatakan saat perintah dijalankan, dicatat di `job.json`, dibaca papan skor; belum dispek | ketat | tidak | [ ] |
+| E3 | Supervisi | menit kerja Atha per pilot dan pemakaian Claude belum dicatat (satu baris per minggu di papan skor) | ringan | tidak | [ ] |
+| E4 | Eval set yang tidak jenuh | Eval Set v1 16/16 hanya regresi; instance SWE terkontaminasi; perluas dari kegagalan nyata, bekukan hash | ringan | tidak | [ ] |
+| E5 | Efek petunjuk berhenti dan variasi model | #188, #200, #204 belum terpisah dari variasi model; pertanyaan B D5 (≥ 2 putaran perbaikan dalam satu attempt); approve tanpa oracle lebih lama (±5–7 menit per draf) | ringan | tidak | [ ] |
+
+### F. Permukaan: chat (pintu depan)
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| F1 | CHAT-APP (a): cabut `permitopen` 8712 | dicek 2026-11-24: `permitopen="127.0.0.1:8712"` masih ada di `authorized_keys`; Atha mencabut `permitopen` 8712 dari kunci `iphone-viewer` dan forward 8712 di Termius, setelah Reject-Batal dicoba di HP | operasional | **ya** | [ ] |
+| F2 | CHAT-APP (b): C5 poles | `PROMPT_CHAT_C5.md`: hapus kode `control` (**masih ada:** `router/control.py`, diimpor di `scripts/argus.py:341`; `--no-draft` belum ada di CLI), batas baca `Chat.thread` (11.13), pesan error berbahasa Indonesia, `--no-draft` di CLI reject/abandon, papan skor sebagai kartu, tes riset sungguhan dari HP | ketat | tidak | [~] |
+| F3 | Assistant atas Argus sendiri | "apa yang menunggu gue", "kenapa job ini gagal", "berapa habis minggu ini", "jelaskan draf ini"; hanya baca; perlu amandemen spek chat dulu (obrolan bebas memakai uang tiap pesan; usul satu konfirmasi untuk jatah sesi); belum diputuskan | ketat | **ya** | [ ] |
+| F4 | Approve dari HP lewat chat | ditahan; syarat buka: Atha menolak 4 dari 5 draf buruk yang ditanam; tombol staging butuh operator kedua | ketat | **ya** | [ ] |
+| F5 | Papan skor di HP terpotong | kolom `Terbuka` dan `Biaya`; perbaikan kecil di viewer lewat Argus (±$0,05–0,1); **cek:** `argus-viewer/src/jobs.css:162` sudah punya `overflow-x: auto`, belum dicek di HP apakah masih terpotong | ringan | tidak | [ ] |
+| F6 | "no draft to review" untuk `AWAITING_APPROVAL` | draf belum masuk snapshot → pesan "tunggu ≤ 15 menit" | ringan | tidak | [ ] |
+| F7 | Jawaban huruf demi huruf (streaming) | menyentuh `harness/llm.py` (jalur uang); ide issue ledger: biaya per model/role | ketat | tidak | [ ] |
+| F8 | Mandor di chat (Parkiran) | ngobrol, usulan rute, kartu langkah berikutnya; `SPEC_CHAT_MANAGER.md` rev 1 (Opus GO WITH CHANGES, 17 amandemen), enam PR ketat, P2a sudah dibangun; **diparkir sampai titik cek 2026-11-29** ("gw mencoba komitmen"); pemicu buka: kesulitan nyata yang mandor selesaikan; prasyarat: sesi masuk batas harian, satu sesi = satu job, `why` model tak masuk kartu, uji rute `route_eval_v0`, amandemen SPEC_CHAT_APP 11.5 | ketat | **ya** (titik cek) | [ ] |
+| F9 | Tampilan chat seperti aplikasi Claude di HP (Parkiran) | acuan `docs/refs/chat_ui_reference_2026-11-17.png`; satu aliran, tab bawah, gelembung, kegiatan alat dilipat; `app.js`/`index.html`/`app.css` dipin hash (`STATIC_SHA256`), tes UI mengunci baris JS; perlu spek pendek; bahas di titik cek | ringan (presentasi) | **ya** (titik cek) | [ ] |
+| F10 | Bundel pembaca angka: tandai pesan operator | pesan revisi PRD yang ditulis Claude tampil sebagai "kata-kata manusia" | ringan | tidak | [ ] |
+| F11 | Kartu rencana: tandai permintaan operator | "Claude (operator)" dan tampilkan lebih pendek; juga lipat ringkasan penulis dan label argumen lebih pendek | ringan | tidak | [ ] |
+| F12 | Kartu rencana dan halaman chat: tampilkan rujukan repo lain | `prd new --ref` (#646) sudah ada; kini hanya di layar konfirmasi dan `argus status` | ringan | tidak | [ ] |
+| F14 | Proses chat lama di 8712 | **dimatikan 2026-11-24 atas kata Atha (PID 394409; 8712 bebas; `~/t3a_run` 980 KB tidak dihapus).** Temuan awal: `scripts/argus.py ... chat serve --port 8712` dengan `--jobs-dir ~/t3a_run/jobs` (PID 394409, mulai 2026-11-19, dari uji T3a) masih mendengarkan di 127.0.0.1:8712, padahal `argus-control` dan port pembangunan dicatat mati; kunci `iphone-viewer` masih mengizinkan `permitopen` 8712 (F1). Sisa: cabut `permitopen` 8712 (F1) | operasional | tidak | [x] |
+| F13 | Dua slot kunci chat | `ARGUS_CHAT_KEY_FILE` (kode, OpenRouter) dan `ARGUS_CHAT_RESEARCH_KEY_FILE` (riset, DeepSeek) terpisah (#653); riset dari chat butuh saldo DeepSeek (saldo diisi 11-21) | operasional | tidak | [ ] |
+
+### G. Permukaan: kemampuan lain (satu per satu, hanya dengan gerbang)
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| G1 | Riset (`argus research`): pekerjaan baru tidak dimulai | tidak ada di urutan inti; dibahas paling cepat di titik cek 2026-11-29; sisa saat dibuka: eval riset independen (fakta terhadap sumber independen; `SUPPORTED` hanya berarti kutipan ada); ReadDocs titik buta config (`window.X = {...}`, `__NEXT_DATA__`), gate s1 menolak seluruh submit karena satu bagian kepanjangan, aturan "submit terakhir" tersalin di dua `gate_submit`, #314 belum diuji di job nyata; worker free NO_FINDINGS 4/9, satu worker berbayar memotong kutipan, pantau e1 `reasoning.effort: low` di 2–3 job `deepinfra` | ketat | **ya** | [~] |
+| G2 | Uji prompt injection lanjutan | v0 bersih (4 varian, n = 1); 16 rancangan di `FABLE_INJECTION_ATTACKS.md` belum dijalankan; injeksi di teks klaim dan fakta API palsu belum diuji; **prasyarat** sebelum kemampuan yang membaca teks luar sambil memegang data pribadi | ringan | tidak | [ ] |
+| G3 | Kemampuan berikutnya belum dipilih | kandidat 11-15: tanya-jawab cepat dengan web; email dan kalender hanya-baca dengan draf balasan; tindakan berefek ke luar butuh persetujuan manusia dan M8, M7, ADR-007 dulu | — | **ya** | [ ] |
+| G4 | Saran model untuk keberatan pembaca angka | satu model lain menilai keberatan (`bawaan wajar` atau `mengubah perilaku`) dan kartu menampilkannya; saran bukan keputusan, `examples-accept` tetap butuh alasan Atha; model yang meneruskan sendiri tidak dipakai (Atha 11-20); lanjutan: daftar aturan lolos otomatis ditulis Atha sekali | ketat | **ya** | [ ] |
+| G5 | Kemampuan Argus mendekati operator | usul Atha 11-21, urutan saran Claude: (1) aksi "buka PR" setelah apply (token GitHub hanya branch dan PR); (2) pilot kedua bulking-app sampai PR terbuka; (3) merge otomatis hanya repo pilot terdaftar dengan syarat tertulis dan token merge terpisah; (4) browser terisolasi hanya-baca (prasyarat G2) | ketat | **ya** | [ ] |
+| G6 | Eksperimen frontend: pustaka beta yang belum dikenal model | usul 11-22: satu issue memakai `vercel-labs/ui` hanya dari dokumennya; belum diverifikasi kompatibilitas React 18.3.1 dan nama paket; bersama itu tes browser (Playwright, tahap 3b) | ringan | tidak | [ ] |
+
+### H. Pilot dan repo luar (bulking-app, NEXUS-lite)
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| H1 | Pilot besar NEXUS-lite | tahap 1 (PR #1, 3 issue) dan tahap 4 (PR #4, 5 issue UI/PWA) selesai 11-22, E2E 38/38, total ±$1,98; **belum teruji:** Safari iOS nyata, offline penuh, tiga hari pemakaian (mulai 11-23); tahap 2 (ubah, hapus, status, cari) menunggu prompt berbahasa Atha; laporan https://claude.ai/artifact/VLV3GLLrUSwcNGASRn42PD. Kecepatan drafter: lihat nomor 5 | operasional | **ya** | [~] |
+| H2 | Issue "tes untuk kode yang sudah ada" tak lolos gerbang draf | pilot bulking-app 11-21 (`targetEngine.js`): `NO_DRAFT submits_exhausted` karena gerbang menuntut tes gagal di dasar; perlu jenis issue "karakterisasi" (tes lulus di dasar, kode tak berubah, diff hanya berkas tes baru, pemeriksa mesin) atau cabang gerbang; menunggu bukti kedua dan titik cek 2026-11-29 | ketat | **ya** | [ ] |
+| H3 | Mengulang satu issue terlalu panjang | `queue close` + `prd reply` + persetujuan PRD + `queue go` + `queue step` (dua kali di NEXUS-lite); usul: `queue retry` juga untuk item `AGENT_FAILED`, dan `prd reply --only N` yang membuat antrean baru sendiri | ketat | tidak | [ ] |
+| H4 | Merampingkan environment | satu image gabungan TIDAK aman (versi paket sengaja beda per repo); realistis: (A) gabung `ledger_staging*` ke `ledger_py312*`, (B) pensiunkan tahap `up1`; sebaiknya bersama pembaruan keamanan paket; **cek 2026-11-24:** `environments/` kini juga punya `nexus_node22` (repo NEXUS-lite), jadi "lima environment dipakai repo nyata" menjadi enam; tidak mendesak; ditahan sampai ada repo Python dengan dependensi nyata | ketat | tidak | [ ] |
+| H5 | `web.environments` belum memuat `bulking_node22` | `approve --web` ditolak untuk repo itu; tambahkan (keputusan config terpisah) hanya bila issue butuh dokumentasi | config | **ya** | [ ] |
+
+### I. Operasional dan pengingat bertanggal (Atha, di luar repo)
+
+| # | Butir | Ringkasan dan sisa | Jalur | Kata Atha | Status |
+|---|---|---|---|---|---|
+| I1 | Periksa ulang aturan ARB/ARA BEI pada **2 Januari 2027** | ARB 7% (Rp11–14 jadi Rp1) hanya berlaku sampai 31 Des 2026 menurut OJK; 2027 tidak jelas (satu judul Katadata menyebut ARB 35%); sumber primer idx.co.id belum ditemukan; `DEFAULT_SLIPPAGE_BUFFER_PCT = 0.15` sengaja tidak diubah sampai jelas (`jobs/j20261116_081333_0a18/REPORT.md`). Terkait C11 | operasional | **ya** | [ ] |
+| I2 | Sertifikat Let's Encrypt athena habis **2027-01-16** | dicek 2026-11-24: sertifikat `athena-backend.duckdns.org` sah, sisa 53 hari; nginx mendengarkan 80 dan 443 di mesin tetapi firewall ditutup dari luar (11-21), jadi perpanjangan tidak bisa dari luar; belum dicek apakah perpanjangan perlu port 80; putuskan sebelum tanggalnya | operasional | **ya** | [ ] |
+| I3 | Kunci HP di `authorized_keys` | baris `iphone-viewer` (`restrict,port-forwarding,permitopen=...`); cabut bila HP hilang; backup `~/.ssh/authorized_keys.bak-20261114-chat` | operasional | tidak | [ ] |
+| I4 | Deploy harness sebagai service (systemd) | operasional, bukan M9 | operasional | tidak | [ ] |
+
+### J. Ditunda sampai ada bukti kebutuhan
+
+Syarat buka ulang dari `docs/reviews/FABLE_PLAN_2026-11-11.md` bagian 4, kecuali disebut lain.
+
+| # | Butir | Syarat buka | Status |
+|---|---|---|---|
+| J1 | M4 penjadwalan multi-agent dengan dependensi; planner berhirarki | kelas job yang gagal oleh satu agen dan lolos bila dipecah tangan; planner: dua rantai dengan perekat "tidak bisa diotomasi" (tiga probe belum membenarkan: `from_research_v0`, `research_need_v0`, `chain_probe_v0`) | [ ] |
+| J2 | M7 registry kapabilitas dan policy (ADR-001), adapter MCP | approver kedua, atau jumlah tool membutuhkannya | [ ] |
+| J3 | M8 penemuan tool dan memori (ADR-003); catatan pelajaran per repo (`.argus/lessons.md`) | kegagalan berulang yang tidak bisa dijadikan cek; lessons hanya bila replay job lama membuktikannya | [ ] |
+| J4 | M9 production (DNS/TLS, pengguna, kredensial) | spek dan persetujuan terpisah; pemicu: pengguna kedua, akses tanpa Termius, atau latihan deploy production | [ ] |
+| J5 | Capability pack gambar, video/audio, game | gate non-kode (ADR-006) dulu; satu per kali | [ ] |
+| J6 | Artifact store dengan versioning (ADR-005); M5 sisanya (tracing/dashboard, benchmark single vs multi-agent) | belum ada | [ ] |
+| J7 | Git untuk agen otonom | sandbox tetap tanpa git; history read-only, repo sintetis, lalu branch/commit/push hanya dari harness | [ ] |
+| J8 | ENV lanjutan repo luar (cachetools: layout `src/`, repo ketiga); fase kedua eksperimen (issue yang benar-benar terbuka) | belum diputuskan | [ ] |
+| J9 | Ringkasan validasi untuk agen; D4 batas ListFiles + daftar berkas di issue; cakupan Python untuk repo kecil (butir "K2" lama) | bila `context_limit` karena output validasi | [ ] |
