@@ -280,7 +280,7 @@ def main(argv=None, deps=None):
     qs.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
     qs.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     qsub.add_parser("status").add_argument("queue")
-    qr = qsub.add_parser("retry", help="a new job of an item whose job was REJECTED on the patch readers' concerns: their findings go to the new drafter as data (at most 2 per item); the next `step` starts it")
+    qr = qsub.add_parser("retry", help="a new job of an item whose job was REJECTED on the patch readers' concerns (their findings go to the new drafter as data) or whose agent failed (AGENT_FAILED: the old job is abandoned, the new drafter gets the issue alone); at most 2 per item, both kinds together; the next `step` starts it")
     qr.add_argument("queue")
     qr.add_argument("--item", type=int, required=True)
     qc = qsub.add_parser("close", help="close a stuck queue; no job is touched")

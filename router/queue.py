@@ -4,7 +4,8 @@
   argus queue go      the human approves the list and the money (its sha)
   argus queue step    at most one drafter run (the next issue's code job), or what waits for a human; never approve, apply or push
   argus queue status  read only
-  argus queue retry   a new job of an item whose job was REJECTED on the patch readers' concerns; their findings go to its drafter as data (at most twice)
+  argus queue retry   a new job of an item whose job was REJECTED on the patch readers' concerns (their findings go to its drafter as data) or whose agent failed
+                      (AGENT_FAILED: the old job is abandoned, the new drafter gets the issue alone); at most twice per item, both kinds together
   argus queue close   the human closes a queue that is stuck (no job is touched)
 
 The queue's status is never stored: it is derived from the items' job.json each time (PENDING, WAITING, STOPPED, DONE,
@@ -262,8 +263,13 @@ def close(qid, note, *, deps, queues_dir=QUEUES):
 def retry(qid, n, *, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
     """The human asks for a new job of an item whose job was REJECTED on the patch readers' findings (2026-11-19). The findings of the readers (what the
     note of the rejected patch holds, both readers') are kept in the item and handed to the next drafter as data, labelled as models' statements; the rejected
-    job stays as it is, what it spent stays counted, and the next `step` starts the new job. At most MAX_RETRIES per item. Refused for any other state
-    (a job rejected for another reason is redone from the PRD), for an item that is not the one the queue stopped at, and for a note with no findings."""
+    job stays as it is, what it spent stays counted, and the next `step` starts the new job. At most MAX_RETRIES per item (both kinds together). Refused for any other state
+    (a job rejected for another reason is redone from the PRD), for an item that is not the one the queue stopped at, and for a note with no findings.
+
+    AGENT_FAILED (2026-11-24, SPEC_RETRY_AGENT_FAILED_AND_PRD_PROVIDER): the same, with no findings (the new drafter gets the issue and nothing else, and any note an earlier
+    retry left on the item is cleared). Unlike a REJECTED job, a failed agent's job can still spend (`retry`, `redraft`, `resume` move it on), so the old job is ABANDONED here,
+    under its own lock (a busy job refuses the retry), and from then on holds only what it spent. Refused after a confirmed test conflict and after an unavailable sandbox:
+    the same issue would buy the same failure."""
     with _locked(queues_dir, qid) as (d, q):
         if q.get("closed"):
             raise Refused(f"queue {qid} is closed")
@@ -277,20 +283,31 @@ def retry(qid, n, *, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
         item = items[0]
         status, detail, _, _, _ = derive(q)
         job = _open(item, jobs_dir) if item.get("job") else None
-        if job is None or status != STOPPED or not detail.startswith(f"item {n}: job {job.id} is {rj.REJECTED}"):
-            raise Refused(f"queue {qid}: item {n} is not the item the queue stopped at on a REJECTED job ({status}: {detail}); nothing was changed")
+        state = job.data["state"] if job is not None else None
+        if job is None or status != STOPPED or state not in (rj.REJECTED, rj.AGENT_FAILED) or not detail.startswith(f"item {n}: job {job.id} is {state}"):
+            raise Refused(f"queue {qid}: item {n} is not the item the queue stopped at on a REJECTED or AGENT_FAILED job ({status}: {detail}); nothing was changed")
         if len(item.get("retries") or []) >= MAX_RETRIES:
             raise Refused(f"queue {qid}: item {n} was retried {MAX_RETRIES} times already: redo it from the PRD; nothing was changed")
-        sid, stage = rj.last_agent(job)
-        sha = ((stage or {}).get("review") or {}).get("patch_sha256")
-        kind, rec = pr.load(job.dir, sid, sha) if isinstance(sid, str) and isinstance(sha, str) else ("none", None)
-        found = pr.findings(rec, blockers_only=True) if kind == "concerns" and isinstance(rec, dict) else []          # nits never go to a drafter
-        if not found:
-            raise Refused(f"queue {qid}: job {job.id} was not rejected on a patch reader's concerns (its note is {kind}): there is nothing to hand to a new drafter; nothing was changed")
-        text = "\n".join(f"- [{who}] {note}" for who, note in found)
-        text = text if len(text) <= FINDINGS_MAX else text[:FINDINGS_MAX - 12] + " [cut]"
-        item.setdefault("retries", []).append({"job": job.id, "spent_nano": rj.spent_nano(job), "findings": text, "at": deps.clock(), "by": os.environ.get("USER")})
-        item["retry_note"], item["job"] = text, None
+        if state == rj.AGENT_FAILED:
+            blocked, _ = rj._last_conflict(job)
+            if blocked in ("test_conflict", "sandbox_unavailable"):
+                raise Refused(f"queue {qid}: job {job.id} ended BLOCKED/{blocked}: a new job of the same issue would fail the same way "
+                              f"({'name the file(s) in a revised PRD' if blocked == 'test_conflict' else 'wait until the sandbox is back'}); nothing was changed")
+            text = ""
+        else:
+            sid, stage = rj.last_agent(job)
+            sha = ((stage or {}).get("review") or {}).get("patch_sha256")
+            kind, rec = pr.load(job.dir, sid, sha) if isinstance(sid, str) and isinstance(sha, str) else ("none", None)
+            found = pr.findings(rec, blockers_only=True) if kind == "concerns" and isinstance(rec, dict) else []          # nits never go to a drafter
+            if not found:
+                raise Refused(f"queue {qid}: job {job.id} was not rejected on a patch reader's concerns (its note is {kind}): there is nothing to hand to a new drafter; nothing was changed")
+            text = "\n".join(f"- [{who}] {note}" for who, note in found)
+            text = text if len(text) <= FINDINGS_MAX else text[:FINDINGS_MAX - 12] + " [cut]"
+        spent = rj.spent_nano(job)
+        if state == rj.AGENT_FAILED:        # last of the checks: a busy job (JobBusy) or a job that moved refuses here and nothing has changed
+            rj.abandon(job.id, f"queue {qid}: item {n} is retried with a new job", deps=deps, jobs_dir=jobs_dir)
+        item.setdefault("retries", []).append({"job": job.id, "spent_nano": max(spent, rj.spent_nano(job)), "findings": text, "at": deps.clock(), "by": os.environ.get("USER")})
+        item["retry_note"], item["job"] = (text or None), None
         _save(d, q)
         return q
 
@@ -349,8 +366,9 @@ def derive(q, *, jobs_dir=None):
             commit = nxt
             continue
         if state in FAILED:
-            hint = ([f"argus queue retry {q['id']} --item {item['n']}   (a new job of this issue; the patch readers' findings go to its drafter)"]
-                    if state == rj.REJECTED and len(item.get("retries") or []) < MAX_RETRIES else [])
+            why = ("the patch readers' findings go to its drafter" if state == rj.REJECTED else "the failed agent's job is abandoned; its drafter gets the issue alone")
+            hint = ([f"argus queue retry {q['id']} --item {item['n']}   (a new job of this issue; {why})"]
+                    if state in (rj.REJECTED, rj.AGENT_FAILED) and len(item.get("retries") or []) < MAX_RETRIES else [])
             return STOPPED, f"item {item['n']}: job {job.id} is {state}", [f"argus status {job.id}", *hint], forget, None
         if state == rj.AWAITING_APPROVAL:
             sha = rj.draft_sha(rj._last_draft(job)[1])[:12]
@@ -364,7 +382,7 @@ def derive(q, *, jobs_dir=None):
 
 def retired_nano(q, jobs_dir=None):
     """What the retired attempts of the items (`retry`) spent, read from their jobs now (the number recorded at the retry only when a job cannot be opened).
-    A retired job is REJECTED and holds no more of the queue's money than it spent: a judge run on it later is a separate act of the human with the job's own cap."""
+    A retired job is REJECTED (a judge run on it later is a separate act of the human with the job's own cap) or ABANDONED by the retry (AGENT_FAILED): either holds no more of the queue's money than it spent."""
     total = 0
     for it in q["items"]:
         for r in it.get("retries") or []:

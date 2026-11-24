@@ -516,6 +516,10 @@ class Cards:
             if len(item.get("retries") or []) < rq.MAX_RETRIES:
                 return f"Coba lagi dengan temuan pembaca: argus queue retry {self.s(q.get('id'))} --item {item['n']} (di terminal)"
             return "Retry habis: ulangi issue ini dari PRD"
+        if st == "AGENT_FAILED":
+            if len(item.get("retries") or []) < rq.MAX_RETRIES:
+                return f"Coba lagi dengan job baru (job agen yang gagal ditutup, tanpa temuan): argus queue retry {self.s(q.get('id'))} --item {item['n']} (di terminal)"
+            return "Retry habis: ulangi issue ini dari PRD"
         return f"Lihat: argus status {j} (di terminal)"
 
     def _derive(self, q):
