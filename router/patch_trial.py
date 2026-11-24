@@ -38,6 +38,7 @@ MODELS = {
     "glm53": ("openrouter:z-ai/glm-5.3", None, None),
     "qwen3c": ("openrouter:qwen/qwen3-coder-next", {"input": 0.12, "output": 0.80}, ["parasail/bf16"]),
     "hy4flash": ("openrouter:tencent/hy4-flash", {"input": 0.04, "output": 0.15}, ["tencent/fp8"]),
+    "glm53flash": ("openrouter:z-ai/glm-5.3-flash", {"input": 0.15, "output": 0.50}, ["z-ai/fp8", "novita/fp8"]),     # checked on openrouter.ai/api/v1/models/z-ai/glm-5.3-flash/endpoints on 2026-11-24: the price is the highest of the two pins
     "kimi27": ("openrouter:moonshotai/kimi-k2.7-code", {"input": 0.75, "output": 3.75}, ["coreweave/int4", "inceptron/int4"]),
 }
 
