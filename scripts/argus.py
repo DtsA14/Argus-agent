@@ -162,6 +162,7 @@ def main(argv=None, deps=None):
     t3b.add_argument("--limit", type=int, help="read at most this many sets (a measuring call first)")
     t3b.add_argument("--cap-usd", type=float, default=0.50, help="the TOTAL cap of this T3b directory (run 1 and run 2 share one ledger): a call starts only if billed so far + its worst case fits")
     t3b.add_argument("--max-output", type=int, default=6000, help="output tokens a call may use (a reasoning model spends them on thinking first)")
+    t3b.add_argument("--reader-model", help="read with this model of router/patch_trial.MODELS (ds1017, hy4flash, ...) instead of the role's (the paired number reader trial: run 1 with one model, run 2 with the other)")
     t3b.add_argument("--effort", choices=("low", "medium", "high"), help="the provider's reasoning effort for this run (OpenRouter reasoning.effort, set in a copy of the config; default: the provider's)")
     re_ = sub.add_parser("route-eval", help="does a model choose the right route (research, prd, ask, none, or only talk) for what the user wrote? 15 frozen cases, scored by code (SPEC_CHAT_MANAGER 8); outside any job: costs money, has its own cap")
     re_.add_argument("root", help="the directory of this evaluation (created): readings and ledger of all models")
@@ -464,7 +465,7 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "t3b-run":
             from router import t3b_run
-            summary = t3b_run.run(o.root, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, limit=o.limit, effort=o.effort)
+            summary = t3b_run.run(o.root, o.run, cfg=load_config(o.config), deps=deps, cap_usd=o.cap_usd, max_output=o.max_output, limit=o.limit, effort=o.effort, reader_model=o.reader_model)
             print(json.dumps(summary, indent=1))
             return 0
         if o.cmd == "examples-read":

@@ -410,11 +410,15 @@ def _right_reason(set_id, r):
     return r["verdict"] == "concerns" and (not need or any(t in " ".join(r["sources"] + [r["note"]]).lower().replace(".", "") for t in need))
 
 
-def score(root, printed_hash, min_history=HISTORY_MIN):
+def score(root, printed_hash, min_history=HISTORY_MIN, pair=False):
     """(passed, lines), the rule of SPEC_KARTU_SETUJU 13 (a stochastic reader): the key must hash to `printed_hash` (what `build` printed before any
     reading); every set read twice; (a) each defect set has at least one reading `concerns` for the right reason (what the card needs: it opens only when both
     readings are ok); (b) at most 5% of the defect readings miss; (c) at most one good set flagged in either reading; (d) at least `min_history` defect and
-    good sets from real history. Every condition is printed."""
+    good sets from real history. Every condition is printed.
+
+    pair=True (the paired number reader trial, C9, 2026-11-24): run 1 and run 2 are two DIFFERENT readers and the verdict of a set is `ok` only when both say ok. The rule, written
+    before the trial: (a) every defect set has at least one right-reason concerns (no defect passes the pair); (b) is not a condition (the misses of each reader are printed); (c) at
+    most 2 good sets flagged by either reader; (d) as before."""
     root = Path(root)
     body = (keydir(root) / KEY_FILE).read_text()
     if hashlib.sha256(body.encode()).hexdigest() != printed_hash:
@@ -422,6 +426,7 @@ def score(root, printed_hash, min_history=HISTORY_MIN):
     key = json.loads(body)["sets"]
     reads = read_all(root)
     lines, unread, defect_sets_missed, defect_readings, readings_missed, flagged = [], 0, 0, 0, 0, 0
+    missed_by_run = [0, 0]
     for jid, k in sorted(key.items(), key=lambda kv: kv[1]["set"]):
         mine = [r for r in reads if r["job"] == jid]
         runs = sorted({r["run"] for r in mine})
@@ -438,6 +443,7 @@ def score(root, printed_hash, min_history=HISTORY_MIN):
             if not any(good):
                 defect_sets_missed += 1
             lines.append(f"{k['set']} ({k['class']}): defect, readings {verdicts}" + ("" if all(good) else "  one reading missed" if any(good) else "  MISSED"))
+            missed_by_run = [missed_by_run[0] + (not good[0]), missed_by_run[1] + (not good[1])]
         else:
             if "concerns" in verdicts:
                 flagged += 1
@@ -446,12 +452,15 @@ def score(root, printed_hash, min_history=HISTORY_MIN):
     hist_good = sum(1 for k in key.values() if k["set"] in GOOD_HISTORY)
     conds = [("(a) sets not read twice, or defect sets with no right-reason concerns reading: 0", defect_sets_missed == 0 and unread == 0, defect_sets_missed + unread),
              (f"(b) defect readings missed: at most {int(MISS_RATE_MAX * 100)}% of {defect_readings}", readings_missed * 20 <= defect_readings and defect_readings > 0, readings_missed),
-             ("(c) good sets flagged: at most 1", flagged <= 1, flagged),
+             (f"(c) good sets flagged: at most {2 if pair else 1}", flagged <= (2 if pair else 1), flagged),
              (f"(d) real-history sets: at least {min_history} defect and {min_history} good", hist_defect >= min_history and hist_good >= min_history, f"{hist_defect} defect, {hist_good} good")]
+    if pair:
+        conds = [c for c in conds if not c[0].startswith("(b)")]
+        lines.append(f"info (b) defect readings missed by each reader: run 1 {missed_by_run[0]}, run 2 {missed_by_run[1]} of {defect_readings // 2} defect sets each (not a condition in pair mode)")
     for text, ok, got in conds:
         lines.append(f"{'ok  ' if ok else 'FAIL'} {text} (got {got})")
     passed = all(c[1] for c in conds)
-    if not passed and defect_sets_missed == 0 and unread == 0 and readings_missed * 20 <= defect_readings and defect_readings > 0 and flagged <= 1:
+    if not passed and defect_sets_missed == 0 and unread == 0 and (pair or readings_missed * 20 <= defect_readings) and defect_readings > 0 and flagged <= (2 if pair else 1):
         lines.append(f"INCOMPLETE: {hist_defect} defect and {hist_good} good sets from real history; not a pass")
         return False, lines
     lines.append("PASS" if passed else "FAIL")
@@ -518,6 +527,7 @@ def main(argv=None):
     c = sub.add_parser("score")
     c.add_argument("root")
     c.add_argument("--hash", required=True, help="the key hash `build` printed before any reading")
+    c.add_argument("--pair", action="store_true", help="the paired number reader trial: run 1 and run 2 are two different readers; a defect must be caught by at least one, at most 2 good sets flagged")
     c.add_argument("--min-history", type=int, default=HISTORY_MIN, help="for a dry run only: the sets of real history required (a lower number is not a pass)")
     w = sub.add_parser("write-tests")
     w.add_argument("root")
@@ -540,7 +550,7 @@ def main(argv=None):
         record(o.root, o.job, o.run, o.bundle_sha, o.verdict, o.source, o.note, o.reader_id)
         print("recorded")
     else:
-        passed, lines = score(o.root, o.hash, o.min_history)
+        passed, lines = score(o.root, o.hash, o.min_history, o.pair)
         print(*lines, sep="\n")
         return 0 if passed else 1
     return 0
