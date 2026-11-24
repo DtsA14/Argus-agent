@@ -153,3 +153,21 @@ def test_the_report_gives_the_hands_off_figure_as_an_upper_bound_with_what_it_ca
 def test_the_hands_off_figure_is_none_without_code_jobs(tmp_path):
     r = sb.build(tmp_path)
     assert r["hands_off_to_staging_upper_bound"] is None and r["staged_share_of_code_jobs"] is None
+
+
+def test_the_report_counts_jobs_by_who_ran_the_commands_and_leaves_the_upper_bound_alone(tmp_path):
+    def with_actor(name, who, staged=False, **kw):
+        log = [entry("approved", "t"), entry("state", "t", old="REVIEW_READY", new="APPLIED", as_is=True, method="apply", actor=who)]
+        if staged:
+            log.append(entry("staged", "t"))
+        make(tmp_path, name, log=log, approval={"draft_sha256": "A", "actor": who, "at": "2026-11-01T00:01:00Z"}, **kw)
+    with_actor("a", "terminal", staged=True)
+    with_actor("b", "claude", staged=True)
+    make(tmp_path, "c", log=applied_log(True), approval={"draft_sha256": "A", "at": "2026-11-01T00:01:00Z"})          # before the field
+    make(tmp_path, "d", state="REJECTED", log=[entry("state", "t", old="AWAITING_APPROVAL", new="REJECTED")])
+    r = sb.build(tmp_path)
+    assert r["actor_classes"] == {"without_claude": 1, "with_claude": 1, "unknown": 1, "other": 1}
+    assert r["without_claude_share_of_code_jobs"] == 0.25 and r["without_claude_and_staged"] == 1
+    assert r["hands_off_staged"] == 2 and r["hands_off_to_staging_upper_bound"] == 0.5          # the upper bound is as before
+    assert "claude" in r["actor_meaning"] and "not covered" in r["actor_meaning"]
+    assert "without Claude and staged: 1 of 4" in sb.text(r)

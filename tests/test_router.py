@@ -1046,3 +1046,34 @@ def test_the_approve_screen_and_status_say_which_old_tests_may_break(tmp_path, m
     assert asked and asked[0][0] == "base" and asked[0][1] == e.job().data["inputs"]["issue"]
     monkeypatch.setattr(rj.leaks, "find", lambda *a: [])
     assert "old tests that may break" not in rj.status("jtest", jobs_dir=e.jobs)
+
+
+# ---- who ran the command (SPEC_ACTOR_RECORD, 2026-11-24): every decision record carries `actor` ---------------------------------------------------
+
+@pytest.mark.parametrize("claudecode,expect", [("1", "claude"), (None, "terminal"), ("", "terminal")])
+def test_an_approval_and_a_retry_record_who_ran_the_command(env, monkeypatch, claudecode, expect):
+    if claudecode is None:
+        monkeypatch.delenv("CLAUDECODE", raising=False)
+    else:
+        monkeypatch.setenv("CLAUDECODE", claudecode)
+    job = failed_a1(env, monkeypatch)
+    assert job.data["approval"]["actor"] == expect and [e["actor"] for e in job.data["log"] if e["what"] == "approved"] == [expect]
+    job, _ = retry(env)
+    assert [e["actor"] for e in job.data["log"] if e["what"] == "retry"] == [expect]
+
+
+@pytest.mark.parametrize("claudecode,expect", [("1", "claude"), (None, "terminal")])
+def test_an_abandon_records_who_ran_the_command(env, monkeypatch, claudecode, expect):
+    (monkeypatch.setenv("CLAUDECODE", claudecode) if claudecode else monkeypatch.delenv("CLAUDECODE", raising=False))
+    failed_a1(env, monkeypatch)
+    job = rj.abandon("jtest", "done with it", deps=env.deps, jobs_dir=env.jobs)
+    assert [e["actor"] for e in job.data["log"] if e["what"] == "state" and e["new"] == rj.ABANDONED] == [expect]
+
+
+@pytest.mark.parametrize("claudecode,expect", [("1", "claude"), (None, "terminal")])
+def test_a_reject_records_who_ran_the_command(tmp_path, monkeypatch, claudecode, expect):
+    (monkeypatch.setenv("CLAUDECODE", claudecode) if claudecode else monkeypatch.delenv("CLAUDECODE", raising=False))
+    e = Env(tmp_path)
+    e.code()
+    job = rj.reject("jtest", "tests look wrong", deps=e.deps, jobs_dir=e.jobs)
+    assert [x["actor"] for x in job.data["log"] if x["what"] == "state" and x["new"] == rj.REJECTED] == [expect]

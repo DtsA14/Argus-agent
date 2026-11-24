@@ -221,9 +221,17 @@ def test_the_recorded_sha_is_of_the_bytes_that_were_compared(env, tmp_path):
     assert len(reads) == 1
 
 
-@pytest.mark.parametrize("field", ["at", "what", "old", "new", "patch_sha256", "as_is", "by"])
+@pytest.mark.parametrize("field", ["at", "what", "old", "new", "patch_sha256", "as_is", "by", "actor"])
 def test_the_recorder_refuses_fields_that_are_the_log_entrys_own(env, tmp_path, field):
     commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# q\n")))
     job = rj.open_job("jtest", env.jobs)
     with job.lock(), pytest.raises(ValueError, match="log entry itself"):
         rj._record_applied(job, "HEAD", deps=env.deps, **{field: "x"})
+
+
+@pytest.mark.parametrize("claudecode,expect", [("1", "claude"), (None, "terminal")])
+def test_the_applied_record_says_who_ran_the_command(env, tmp_path, monkeypatch, claudecode, expect):
+    (monkeypatch.setenv("CLAUDECODE", claudecode) if claudecode else monkeypatch.delenv("CLAUDECODE", raising=False))
+    commit_patch(env, make_patch(env, tmp_path, lambda r: (r / "src" / "shop.py").write_text(td.FIXED + "\n# q\n")))
+    job = rj.applied("jtest", "HEAD", deps=env.deps, jobs_dir=env.jobs)
+    assert job.data["log"][-1]["actor"] == expect

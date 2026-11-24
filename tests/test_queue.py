@@ -832,3 +832,25 @@ def test_the_money_of_the_abandoned_old_job_stays_counted_at_what_it_spent(qe):
     retry(qe, q)
     spent = rj.spent_nano(rj.open_job(old.id, qe.jobs))
     assert spent > 0 and rq.retired_nano(qe.q(q), qe.jobs) == spent
+
+
+# ---- who ran the command (SPEC_ACTOR_RECORD) ----------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("claudecode,expect", [("1", "claude"), (None, "terminal")])
+def test_the_queues_approval_close_and_retry_record_who_ran_the_command(qe, monkeypatch, claudecode, expect):
+    (monkeypatch.setenv("CLAUDECODE", claudecode) if claudecode else monkeypatch.delenv("CLAUDECODE", raising=False))
+    q = qe.ready()
+    assert qe.q(q)["approved"]["actor"] == expect
+    qe.step(q)
+    reject_on_findings(qe, q, 0)
+    got = retry(qe, q)
+    assert got["items"][0]["retries"][0]["actor"] == expect
+    rq.close(q["id"], "stop", deps=qe.env.deps, queues_dir=qe.queues)
+    assert qe.q(q)["closed"]["actor"] == expect
+
+
+def test_a_queue_approval_through_the_chat_records_ui_unless_a_claude_shell_ran_it(qe, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    assert rj.actor("ui") == "ui" and rj.actor() == "terminal"
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert rj.actor("ui") == "claude"
