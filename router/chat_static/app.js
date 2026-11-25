@@ -14,6 +14,9 @@
   var filter = "all";                                   // the panel's filter: all | waiting | research
   var groupOpen = Object.create(null);                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
   var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
+  var waitingRows = [];                                 // what waits for the person (/api/waiting); the Decisions tab and the badge count it with the open jobs
+  var waitingMeta = { capped: false, unknown: false };
+  var decideSeq = 0;
   var lastChat = "status";                              // the mode the Chat tab returns to
 
   function el(tag, cls, text) {
@@ -64,6 +67,7 @@
   function waitingIds() {
     var w = {};
     (typeof decisionRows === "undefined" ? [] : decisionRows).forEach(function (d) { w[d.id] = true; });
+    waitingRows.forEach(function (r) { if (r.job) { w[r.job] = true; } if (r.card === "plan") { w[r.id] = true; } });
     return w;
   }
   function jobButton(t) {
@@ -483,7 +487,7 @@
     var row = el("div", "row");
     row.appendChild(el("span", "state " + stateClass(r.state), r.state));
     if (r.kind) { row.appendChild(el("span", null, r.kind)); }
-    if (typeof r.spent_usd === "number") { row.appendChild(el("span", null, usd(r.spent_usd) + " dari " + usd(r.cap_usd))); }
+    if (typeof r.spent_usd === "number") { row.appendChild(el("span", null, usd(r.spent_usd) + " of " + usd(r.cap_usd))); }
     c.appendChild(row);
     c.appendChild(el("p", "muted mono", r.id));
     c.appendChild(el("p", "note", r.sha12 ? "Draf " + r.sha12 + ". Baca draf di viewer sebelum memutuskan." : "Belum ada draf."));
@@ -524,14 +528,65 @@
       return i.value.trim() !== "" || i === document.activeElement;
     });
   }
+  // SPEC_CHAT_UI3B: what waits for the person. The label is fixed here; a tap opens the card that already holds the button (the Queue tab), nothing is prepared from this list.
+  function waitLabel(r) {
+    if (r.action === "prd_approve") { return "Plan ready for your decision"; }
+    if (r.action === "queue_go") { return "Queue waits for your go (money)"; }
+    if (r.action === "queue_step") { return "Start issue " + r.item + " (drafter)"; }
+    return "Draft of issue " + r.item + " is ready for you";
+  }
+  function waitingCard(r) {
+    var c = el("article", "card compact waiting");
+    c.appendChild(el("h2", null, waitLabel(r)));
+    var row = el("div", "row");
+    if (r.repo) { row.appendChild(el("span", null, r.repo)); }
+    if (r.title) { row.appendChild(el("span", null, r.title)); }
+    c.appendChild(row);
+    c.addEventListener("click", function () {
+      setMode("cards");
+      if (r.card === "plan") { showPlan(r.id); } else { showCard("queue", r.id); }
+    });
+    return c;
+  }
+  function waitingJobs() {                              // the code jobs behind the draft rows: they are also open jobs, and count once
+    var w = {};
+    waitingRows.forEach(function (r) { if (r.job) { w[r.job] = true; } });
+    return w;
+  }
+  function openJobs() {
+    var w = waitingJobs();
+    return decisionRows.filter(function (d) { return !w[d.id]; });
+  }
+  function needCount() { return waitingRows.length + openJobs().length; }
   function renderDecisions() {
     clear(stream);
-    if (!decisionRows.length) { stream.appendChild(el("p", "muted", "No jobs are waiting for a decision.")); }
-    decisionRows.forEach(function (r) { stream.appendChild(decideCard(r)); });
+    var rows = openJobs();
+    if (waitingRows.length) {
+      stream.appendChild(el("h2", "sec-title", "Waiting for you"));
+      waitingRows.forEach(function (r) { stream.appendChild(waitingCard(r)); });
+    }
+    if (waitingMeta.unknown) { stream.appendChild(el("p", "note", "The daily cap could not be computed: steps that spend money are not listed.")); }
+    if (waitingMeta.capped) { stream.appendChild(el("p", "note", "Not everything was checked: this list may be incomplete.")); }
+    if (rows.length) {
+      stream.appendChild(el("h2", "sec-title", "Open jobs"));
+      rows.forEach(function (r) { stream.appendChild(decideCard(r)); });
+    }
+    if (!waitingRows.length && !rows.length) { stream.appendChild(el("p", "muted", "Nothing is waiting for you.")); }
   }
   function loadDecisions(rerender) {                    // rerender false: the poll in load() only refreshes the rows, the badge and the panel; the guarded poll and setMode draw the page
+    var seq = ++decideSeq;
+    var w = get("/api/waiting").catch(function () { return null; });
     get("/api/decisions").then(function (d) {
-      decisionRows = d.decisions || [];
+      return w.then(function (wd) { return [d, wd]; });
+    }).then(function (both) {
+      if (seq !== decideSeq) { return; }                // an older answer
+      decisionRows = both[0].decisions || [];
+      if (both[1]) {
+        waitingRows = both[1].waiting || [];
+        waitingMeta = { capped: !!both[1].capped, unknown: !!both[1].cap_unknown };
+      } else {
+        waitingMeta = { capped: true, unknown: false };   // the list could not be read: the rows stay as they were and the page says it may be incomplete
+      }
       updateBadge();
       renderList();
       if (rerender !== false && mode === "decide" && openDecision === null) { renderDecisions(); }
@@ -885,11 +940,19 @@
     var c = el("article", "card");
     c.appendChild(el("h2", "mono", r.id));
     var row = el("div", "row");
-    row.appendChild(el("span", null, r.kind === "queue" ? "antrean" : "PRD"));
+    row.appendChild(el("span", null, r.kind === "queue" ? "queue" : "PRD"));
     if (r.state) { row.appendChild(el("span", "state " + stateClass(r.state), r.state)); }
     if (r.repo) { row.appendChild(el("span", null, r.repo)); }
-    if (r.items !== null && r.items !== undefined) { row.appendChild(el("span", null, r.items + " item")); }
+    if (r.items !== null && r.items !== undefined) { row.appendChild(el("span", null, r.items === 1 ? "1 item" : r.items + " items")); }
     c.appendChild(row);
+    if (r.kind === "queue" && r.state !== "CLOSED" && typeof r.applied_n === "number" && typeof r.items === "number" && r.items > 0) {      // only items whose card shows a commit count; nothing running or failed is called done
+      var bar = el("progress", "pbar");
+      bar.max = r.items;
+      bar.value = r.applied_n;
+      bar.setAttribute("aria-label", r.applied_n + " of " + r.items + " applied");
+      c.appendChild(bar);
+      c.appendChild(el("p", "small", r.applied_n + " of " + r.items + " applied"));
+    }
     if (r.title) { c.appendChild(el("p", "small", r.title)); }                  // the human's own first message (queues: the repo's name)
     if (r.why) { c.appendChild(el("p", "note", r.why)); }
     if (!r.why) { c.addEventListener("click", function () { showCard(r.kind, r.id); }); }
@@ -1001,8 +1064,8 @@
       stream.appendChild(back);
     });
   }
-  function updateSummary() {                            // the line under the title: how many jobs, and how many wait for a decision
-    summary.textContent = nJobs(threads.length) + (decisionRows.length ? " · " + decisionRows.length + " waiting" : "");
+  function updateSummary() {                            // the line under the title: how many jobs, and how many items wait for the person (the same number as the badge)
+    summary.textContent = nJobs(threads.length) + (needCount() ? " · " + needCount() + " waiting" : "");
     var spent = 0;
     threads.forEach(function (t) { spent += typeof t.stages_usd === "number" ? t.stages_usd : 0; });
     document.getElementById("panel-cost").textContent = "Recorded stage cost: " + usd(spent);
@@ -1024,11 +1087,11 @@
   }
   function closePanel() { panel.classList.remove("open"); document.getElementById("scrim").hidden = true; }
   function updateBadge() {                              // the number of jobs that wait for a decision, from the same list the Keputusan tab shows
-    var b = document.getElementById("decide-badge"), n = decisionRows.length;
+    var b = document.getElementById("decide-badge"), n = needCount();
     b.hidden = n === 0;
     b.textContent = n > 9 ? "9+" : String(n);
     updateSummary();
-    b.setAttribute("aria-label", n + " jobs awaiting a decision");
+    b.setAttribute("aria-label", n + (n === 1 ? " item" : " items") + " waiting for you");
   }
   function renderCost() {                               // what the job list already carries: the cost of finished stages. Not the daily cap, not what is booked (a later change).
     clear(stream);

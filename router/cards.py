@@ -463,14 +463,16 @@ class Cards:
                 q, dfd = got
                 os.close(dfd)
                 ok = self._same_jobs_dir(q)
-                state = None
+                state, applied_n = None, None
                 if ok and derive and len(rows) < DERIVE_ROWS:
                     try:
-                        state = self._derive(q)[0]
+                        d = self._derive(q)
+                        state = d[0]
+                        applied_n = sum(1 for f in d[2] if isinstance(f, dict) and f.get("applied"))       # SPEC_CHAT_UI3B 3: the items whose commit the card shows
                     except Exception:
                         state = None
                 rows.append({"id": qid, "kind": "queue", "title": self.s(q["name"]), "state": state, "repo": self.s(q["name"]),
-                             "at": _queue_time(qid), "items": len(q["items"]) if ok else None,
+                             "at": _queue_time(qid), "items": len(q["items"]) if ok else None, "applied_n": applied_n,
                              **({} if ok else {"why": "jobs dir lain"}), "prd_job": self._prd_job_of(q) if ok else None})
         finally:
             os.close(qfd)

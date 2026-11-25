@@ -51,6 +51,9 @@ ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
+WAIT_SCAN_MAX, WAIT_BUDGET_S, WAIT_TTL_S = 12, 2.0, 20.0     # SPEC_CHAT_UI3B: candidates looked at, seconds spent, seconds an answer is kept
+WAITING_ACTIONS = ("prd_approve", "queue_go", "queue_step", "draft_approve")
+AWAITING_HUMAN = pj.AWAITING_HUMAN
 PENDING_S = 600                    # a confirmed start the job directory does not show yet still counts this long
 MAX_PREPARED = 50
 DEFAULT_CAP_USD = 2.0
@@ -159,6 +162,9 @@ class Actions:
         self.run = run or (lambda action, job_id, reason, sha="": control_cli(action, job_id, reason, sha, self.jobs_dir))
         self.last_exit = None                      # the exit code of the last CLI run of a job decision, for the audit line
         self.audit_path = self.state / "audit.jsonl"
+        self._exposure_once = None                 # SPEC_CHAT_UI3B: set only inside waiting(): the exposure computed once for that request
+        self._waiting_cache = None                 # (monotonic time, answer): the list of what waits, for WAIT_TTL_S
+        self.mono = time.monotonic
         self.prepared = {}                         # token -> the prepared action
         self.pending = []                          # (at, ("new"|"start", job id), usd): confirms the job directories may not show yet
 
@@ -648,6 +654,63 @@ class Actions:
                 skipped += 1
         return {"decisions": rows, "capped": False, "skipped": skipped}
 
+    # ---- what waits for the person (SPEC_CHAT_UI3B 1) --------------------------------------------------------------------
+
+    def waiting(self):
+        """{waiting, scanned, skipped, capped, cap_unknown}: the buttons the builders offer now (the plan's, the queue's money, a step, a draft), from the same
+        `plans.state` and `steps.state` the cards use. Display only: prepare and confirm rebuild and re-check everything. Bounded: WAIT_SCAN_MAX candidates,
+        WAIT_BUDGET_S seconds, the exposure computed once, the answer kept WAIT_TTL_S seconds. No reason text and no path is ever copied into a row."""
+        t0 = self.mono()
+        cached = self._waiting_cache
+        if cached is not None and t0 - cached[0] < WAIT_TTL_S:
+            return cached[1]
+        out = self._waiting_scan(t0)
+        self._waiting_cache = (t0, out)
+        return out
+
+    def _waiting_scan(self, t0):
+        rows, skipped, capped = [], 0, False
+        try:
+            listing = self.cards.listing()
+            qrows, _qtrunc = self.cards._queue_rows()
+        except Exception:
+            return {"waiting": [], "scanned": 0, "skipped": 0, "capped": True, "cap_unknown": False}
+        capped = False                             # the newest rows are looked at: older rows than the listing keeps are weeks old and not a reason to warn; the limit and the time budget below are
+        blocked = {r.get("prd_job") for r in qrows if r.get("prd_job") and r.get("state") in ("WAITING", "STOPPED", "DONE")}   # the plan is already a running or finished queue: no button to offer
+        cands = [("plan", r) for r in listing.get("rows") or [] if r.get("kind") == "prd" and r.get("state") == AWAITING_HUMAN and r.get("id") not in blocked]
+        cands += [("queue", r) for r in qrows if r.get("state") == "WAITING"]
+        cands.sort(key=lambda c: (c[1].get("at") or "", c[1].get("id") or ""), reverse=True)
+        if len(cands) > WAIT_SCAN_MAX:
+            cands, capped = cands[:WAIT_SCAN_MAX], True
+        try:
+            self._exposure_once = ("ok", self._exposure_scan())
+        except Refusal as e:
+            self._exposure_once = ("err", e)
+        cap_unknown = self._exposure_once[0] == "err"
+        try:
+            for kind, r in cands:
+                if self.mono() - t0 > WAIT_BUDGET_S:
+                    capped = True
+                    break
+                try:
+                    if kind == "plan":
+                        st = self.plans.state(r["id"])
+                        job, item = None, None
+                    else:
+                        st = self.steps.state(r["id"], with_job=True)
+                        job, item = st.get("job"), st.get("item")
+                    action = st.get("action")
+                    if action not in WAITING_ACTIONS:
+                        continue
+                    rows.append({"action": action, "card": "plan" if kind == "plan" else "queue", "id": r["id"], "job": job if isinstance(job, str) and UI_ID.fullmatch(job) else None,
+                                 "repo": r.get("repo") if isinstance(r.get("repo"), str) else None, "title": r.get("title") if isinstance(r.get("title"), str) else None,
+                                 "item": item if isinstance(item, int) and not isinstance(item, bool) else None})
+                except Exception:
+                    skipped += 1
+        finally:
+            self._exposure_once = None
+        return {"waiting": rows, "scanned": len(cands), "skipped": skipped, "capped": capped, "cap_unknown": cap_unknown}
+
     def decision(self, job_id):
         """One job for the Decide link: its row with what it allows; an issue job is only named, the page opens its thread."""
         got = self._read_data(job_id)
@@ -749,6 +812,16 @@ class Actions:
     # ---- exposure (11.8): the full cap of every job a UI action started, from the moment it was confirmed ---------------
 
     def exposure(self):
+        """The exposure of the last 24 hours. waiting() computes it once for its whole request and sets `_exposure_once` (and clears it in `finally`); every other caller gets
+        the scan below, as before: prepare and confirm never see a remembered value."""
+        once = self._exposure_once
+        if once is not None:
+            if once[0] == "ok":
+                return once[1]
+            raise once[1]
+        return self._exposure_scan()
+
+    def _exposure_scan(self):
         """USD of exposure in the last 24 hours: the writer, PRD and research jobs created via the UI (their max_usd, at least the configured cap of PRD and research) and the code jobs their
         starts made via the UI (the code cap), read from the job directories of any service, plus this service's own recent
         confirms the directories do not show yet. A job directory that cannot be read means the exposure is unknown: Refusal."""
@@ -912,6 +985,7 @@ class Actions:
     def confirm(self, token):
         """(action, card, run params, digest) of a confirmed action, or Refusal. A token is spent by the first confirm that is not too soon."""
         now = self.clock()
+        self._waiting_cache = None                 # what waits changes with every confirm
         p = self.prepared.get(token) if isinstance(token, str) else None
         if p is None or now - p["issued"] > TOKEN_TTL:
             self.prepared.pop(token, None) if isinstance(token, str) else None

@@ -23,10 +23,12 @@ var nodes = {}; var document = { getElementById: function (id) { return nodes[id
 var badge = document.getElementById("decide-badge"); var summary = document.getElementById("summary");
 var list = new Node("ul"), stream = new Node("section"), panel = { classList: { remove: function () {} } };
 var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
+function decideCard(r) { var c = el("article", "card"); c.appendChild(el("h2", null, r.title || r.id)); return c; }
+var waitingRows = [], waitingMeta = { capped: false, unknown: false };
 var query = { value: "" }, mode = "status", current = null, threads = [], decisionRows = [], filter = "all", groupOpen = Object.create(null);
 function setMode() {} function open() {}
 `;
-const code = helpers + "var NO_REPO = \"No repo\";\n" + ["waitingIds", "jobButton", "renderList", "updateSummary", "updateBadge", "renderCost"].map(grab).join("\n");
+const code = helpers + "var NO_REPO = \"No repo\";\n" + ["waitingIds", "jobButton", "renderList", "waitLabel", "waitingCard", "waitingJobs", "openJobs", "needCount", "renderDecisions", "updateSummary", "updateBadge", "renderCost"].map(grab).join("\n");
 const ctx = vm.createContext({ Math, String, Array, JSON, Object });
 vm.runInContext(code, ctx);
 const run = (s) => vm.runInContext(s, ctx);
@@ -48,5 +50,12 @@ run("query.value = ''; updateBadge();"); out.badge1 = run("badge.hidden + '|' + 
 run("decisionRows = []; updateBadge();"); out.badge0 = run("badge.hidden + '|' + badge.textContent");
 run("decisionRows = new Array(12).fill({ id: 'x' }); updateBadge();"); out.badge12 = run("badge.hidden + '|' + badge.textContent");
 out.summary = run("summary.textContent"); out.panelcost = run("document.getElementById('panel-cost').textContent");
+run("decisionRows = [{ id: 'jd', title: 'old job', state: 'REVIEW_READY' }, { id: 'jc', title: 'draft job', state: 'AWAITING_APPROVAL' }]; waitingRows = [{ action: 'prd_approve', card: 'plan', id: 'jp', job: null, repo: 'ledger-cli', title: 'a <b>plan</b>', item: null }, { action: 'draft_approve', card: 'queue', id: 'qa', job: 'jc', repo: 'athena', title: null, item: 2 }, { action: 'queue_step', card: 'queue', id: 'qb', job: null, repo: null, title: null, item: 3 }, { action: 'queue_go', card: 'plan', id: 'jq', job: null, repo: null, title: null, item: null }]; updateBadge();");
+out.need = run("badge.hidden + '|' + badge.textContent + '|' + summary.textContent + '|' + badge.attrs['aria-label']");
+run("renderDecisions();"); out.decisions = run("html(stream)");
+run("waitingMeta = { capped: true, unknown: true }; renderDecisions();"); out.decisionsNotes = run("html(stream)");
+run("waitingRows = []; decisionRows = []; waitingMeta = { capped: false, unknown: false }; renderDecisions();"); out.nothing = run("html(stream)");
+run("waitingRows = [{ action: 'draft_approve', card: 'queue', id: 'qa', job: 'jc', repo: null, title: null, item: 2 }]; decisionRows = [{ id: 'jc', title: 'draft job', state: 'X' }]; filter = 'waiting'; threads = [{ id: 'jc', repo: 'athena', kind: 'code', state: 'AWAITING_APPROVAL', title: 'draft job' }, { id: 'jx', repo: 'athena', kind: 'code', state: 'DONE', title: 'other' }]; renderList();"); out.panelwaiting = run("html(list)");
+run("threads = " + JSON.stringify(T) + "; filter = 'all';");
 run("renderCost();"); out.cost = run("html(stream)");
 console.log(JSON.stringify(out, null, 1));

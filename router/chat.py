@@ -42,8 +42,8 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "819ab6bfe2c399e7afddde65c8a8f57260163c9a19b2e83d4a0d4c9d3e16bedf",
-    "app.js": "fcba91526d74ae9c0143776cfab033adc56b358ec2b81065e1346a39647e6330",
-    "app.css": "6447bcc3b11f6feef499b69cc7368abb878d2283a1ebe26c09c96d877505654f",
+    "app.js": "557fff2dd9071bddf0b1f7040ee72a2487d8559cb970499782cffbd43f7a2571",
+    "app.css": "3c6ce7fd1e2b75373ac67953412ee021f8db66ecf4494ab6cac17f7bd337e268",
 }
 
 
@@ -286,6 +286,8 @@ class Handler(BaseHTTPRequestHandler):
         if a is not None and m:
             got = a.thread(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        if a is not None and path == "/api/waiting":                # SPEC_CHAT_UI3B: what waits for the person, read only
+            return self._json(200, a.waiting())
         if a is not None and path == "/api/decisions":
             return self._json(200, a.decisions())
         m = re.fullmatch(r"/api/decisions/([^/?#%]+)", path)
