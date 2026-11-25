@@ -160,6 +160,17 @@
     if (card.draft_sha) { fact(c, "Sha draf", String(card.draft_sha).slice(0, 12)); }
     if (card.writable) { fact(c, "Berkas yang boleh disentuh (tulisan model)", card.writable.join(", ")); }
     (card.validations || []).forEach(function (v) { fact(c, "Pemeriksaan " + v.id + " (tulisan model)", (v.must_pass || []).join(", ") || "tanpa nama tes"); });
+    if (card.changed_tests_n) { say(c, "mesin", "tanda mesin", "Draf ini mengubah tes yang sudah ada: " + card.changed_tests.join(", ") + (card.changed_tests_n > card.changed_tests.length ? " dan " + (card.changed_tests_n - card.changed_tests.length) + " lagi" : ""), "say warn"); }
+    if (card.summary_note) { say(c, "mesin", "tanda mesin", "Ringkasan rencana tidak tersedia untuk draf ini; isinya bisa dibaca di terminal (DRAFT_REVIEW.md).", "say warn"); }
+    if (card.plan) {
+      var more = el("details", "more");
+      more.appendChild(el("summary", null, "Teks penulis (model), bukan bukti: rencana, risiko, catatan"));
+      [["rencana", card.plan.steps], ["berkas rencana", card.plan.files], ["risiko", card.plan.risks], ["peringatan", card.warnings], ["tidak terbukti otomatis", card.unverifiable]].forEach(function (kv) {
+        (kv[1] || []).forEach(function (s) { say(more, "model", kv[0] + " (tulisan model)", s, "say"); });
+      });
+      if (card.baseline_note) { say(more, "mesin", "tanda mesin", card.baseline_note, "say warn"); }
+      c.appendChild(more);
+    }
     if (card.request) { say(c, "atha", "permintaan", card.request, "say"); }
     if (card.item_text) { say(c, "model", "isi issue (tulisan model, dari penulis PRD)", card.item_text, "say"); }
     if (card.summary) { say(c, "model", "ringkasan penulis (tulisan model)", card.summary, "say"); }

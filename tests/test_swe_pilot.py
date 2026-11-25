@@ -36,8 +36,10 @@ OTHER = "sha256:" + "f" * 64
 
 
 @pytest.fixture(autouse=True)
-def no_image_overrides(monkeypatch):
-    """The machine's image overrides (verify.sh sets them) must not decide these tests; some set them on purpose."""
+def no_image_overrides(monkeypatch, tmp_path_factory):
+    """The machine's image overrides (verify.sh sets them) must not decide these tests; some set them on purpose.
+    Nor may the machine's pin files: the pin lookup reads them from the repo root, so point it at an empty one."""
+    monkeypatch.setattr(rj, "ROOT", tmp_path_factory.mktemp("noroot"))
     for var in ("ARGUS_SANDBOX_IMAGE", "ARGUS_SANDBOX_IMAGE_ARGUS", "ARGUS_SANDBOX_IMAGE_SYMPY"):
         monkeypatch.delenv(var, raising=False)
 

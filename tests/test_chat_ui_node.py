@@ -28,6 +28,11 @@ def test_the_step_button_and_the_two_confirmation_cards_draw_and_prepare_the_que
     assert json.loads(out["draft_approve"]["prepared"]) == [{"action": "draft_approve", "queue": "q20261117T100400Z-abcd"}]
     assert out["null"]["prepared"] is None and "<button" not in out["null"]["html"]
     assert "Sha draf: </b>aaaaaaaaaaaa" in out["card:draft_approve"] and "tests/test_a.py::test_x" in out["card:draft_approve"] and "(tulisan model)" in out["card:draft_approve"]
+    rich, note = out["card:draft_approve:3"], out["card:draft_approve:4"]
+    assert "Draf ini mengubah tes yang sudah ada: tests/test_old.py dan 2 lagi" in rich and "<details.more>" in rich
+    assert "Teks penulis (model), bukan bukti" in rich and "it may break b" in rich and "no baseline recorded" in rich
+    assert "<b>do</b> the thing" in rich and "<b>do</b>" not in rich.replace("&lt;", "").replace("<b>do</b> the thing", "")   # a tag in the text stays text: it is a text node, never markup
+    assert "Ringkasan rencana tidak tersedia" in note and "<details" not in note and "mengubah tes" not in note
     assert "Batas drafter" in out["card:queue_step"] and "isi issue" in out["card:queue_step"] + out["card:draft_approve"]
 
 

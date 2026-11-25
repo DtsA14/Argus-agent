@@ -192,13 +192,48 @@ class Steps:
         flags = list(advisories)
         if profile in (None, "default"):
             flags.append("budget profile: default")
+        extra = self._summary(draft, path, seen)
         card = {"action": "draft_approve", "title": "Approve the draft (the agent starts)", "queue": q["id"], "item": item["n"], "job": job_id, "repo": scrub(str(q["name"])),
                 "item_text": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
                 "agent_cap_usd": cap, "attempt_usd": float(need), "flags": flags, "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"],
                 "retry": bool(item.get("retries")) and bool(item.get("retry_note")), "agent_max_usd_config": want,
                 "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them. "
-                         "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not"}
+                         "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not",
+                **extra}
         return card, {"queue": q["id"], "job": job_id, "sha": seen, "item": item["n"]}
+
+    SUMMARY_MAX = 1_000_000
+
+    def _summary(self, draft, path, seen):
+        """What the card adds (SPEC_CHAT_UI1 F17): the paths of the existing tests the draft changes (from the draft itself) and,
+        from check_report.json of the same run, the plan, risks, warnings and the writer's unverifiable notes. All model text. Never
+        raises: a report that is missing, linked, large, mismatched or hostile gives `summary_note` and the button stays."""
+        from router.chat_actions import scrub
+        out = {"changed_tests": [], "changed_tests_n": 0}
+        try:
+            ct = [x.get("path") for x in (draft.get("changed_tests") or []) if isinstance(x, dict) and isinstance(x.get("path"), str)]
+            out["changed_tests"], out["changed_tests_n"] = [scrub(x)[:200] for x in ct[:40]], len(ct)
+        except (AttributeError, TypeError):
+            pass
+        try:
+            raw = _read_file(os.path.join(os.path.dirname(path), "check_report.json"))
+            if len(raw) > self.SUMMARY_MAX:
+                raise ValueError("large")
+            rep = json.loads(raw)
+            if not isinstance(rep, dict) or rep.get("draft_sha256") != seen:
+                raise ValueError("report is not this draft's")
+            from router import stage_data as sd
+            s = sd.draft_summary(draft, rep, {})
+            if sd._has_key(s):
+                raise ValueError("key-like text")
+            cut = lambda xs, n=500: [scrub(str(x))[:n] for x in (xs or [])][:50]
+            out["plan"] = {k: cut(s["plan"].get(k), 300) for k in ("files", "steps", "risks")}
+            out["warnings"], out["unverifiable"] = cut(s.get("warnings")), cut(s.get("unverifiable"))
+            if not (rep.get("baseline") or {}):
+                out["baseline_note"] = "no baseline recorded"
+        except Exception:                                    # a hostile report must not take the card (and its button) away
+            out["summary_note"] = "summary unavailable"
+        return out
 
     # ---- the state of the button, for the queue card ----------------------------------------------------------------------
 

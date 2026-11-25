@@ -76,6 +76,42 @@ def environment_image(cfg, name):
     return os.environ.get(f"ARGUS_SANDBOX_IMAGE_{name.upper()}") or envs[name].get("image"), None
 
 
+PIN_FILE = re.compile(r"(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}")
+
+
+def pinned_image(cfg, name, root):
+    """(image, problem) of a named environment as the CLI sees it after `sandbox_cfg`, without writing the environment:
+    the variable ARGUS_SANDBOX_IMAGE_<NAME>, else the pin file `<root>/.sandbox_image_<name>`, else the configured image
+    (SPEC_CHAT_UI1). A pin file that is a link, not a regular file, too large or not a digest is a problem, never a
+    fallback to another image."""
+    image, problem = environment_image(cfg, name)
+    if problem or os.environ.get(f"ARGUS_SANDBOX_IMAGE_{name.upper()}"):
+        return image, problem
+    path = os.path.join(str(root), f".sandbox_image_{name}")
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return image, None
+    except OSError:
+        return None, f"the pin file of sandbox environment {name!r} is unreadable"
+    try:
+        import stat
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None, f"the pin file of sandbox environment {name!r} is unreadable"
+        raw = os.read(fd, 301)
+    except OSError:
+        return None, f"the pin file of sandbox environment {name!r} is unreadable"
+    finally:
+        os.close(fd)
+    try:
+        text = raw.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        text = ""
+    if len(raw) > 300 or not PIN_FILE.fullmatch(text):
+        return None, f"the pin file of sandbox environment {name!r} is unreadable"
+    return text, None
+
+
 def settings(cfg):
     s = {**DEFAULTS, **(cfg or {})}
     if s.get("environment") is not None:

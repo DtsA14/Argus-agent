@@ -40,9 +40,14 @@ for (const t of [{ action: "queue_step", item: 2, why: null }, { action: "draft_
 const cards = [
   { action: "queue_step", title: "Start the issue (a drafter run)", queue: "q1", item: 1, job: null, repo: "athena", commit: "abc", item_text: "One", flags: ["x"], job_cap_usd: 1, queue_usd: 3, drafter_cap_usd: 0.75, money: "m" },
   { action: "draft_approve", title: "Approve the draft (the agent starts)", queue: "q1", item: 1, job: "j1", repo: "athena", item_text: "One", draft_sha: "a".repeat(64), writable: ["src/a.py", "tests/test_a.py"], validations: [{ id: "v1", must_pass: ["tests/test_a.py::test_x"] }], profile: "default", agent_cap_usd: 0.5, attempt_usd: 0.1, flags: ["profile: default"], money: "m" },
+  { action: "draft_approve", title: "Approve the draft (the agent starts)", queue: "q1", item: 1, job: "j1", repo: "athena", item_text: "One", draft_sha: "b".repeat(64), writable: ["src/a.py"], validations: [],
+    changed_tests: ["tests/test_old.py"], changed_tests_n: 3, plan: { files: ["src/a.py"], steps: ["<b>do</b> the thing"], risks: ["it may break b"] }, warnings: ["w1"], unverifiable: ["the page stays"], baseline_note: "no baseline recorded", flags: [], exposure_usd: 0 },
+  { action: "draft_approve", title: "Approve the draft (the agent starts)", queue: "q1", item: 1, job: "j1", repo: "athena", item_text: "One", draft_sha: "c".repeat(64), writable: ["src/a.py"], validations: [],
+    changed_tests: [], changed_tests_n: 0, summary_note: "summary unavailable", flags: [] },
 ];
+let n = 0;
 for (const c of cards) {
   run("var r = renderCard({ card: " + JSON.stringify(c) + ", exposure_usd: 0, min_delay_s: 1, expires_s: 300, token: 't' }, function () {}); var rh = html(r);");
-  out["card:" + c.action] = run("rh");
+  out["card:" + c.action + (n++ > 1 ? ":" + n : "")] = run("rh");
 }
 console.log(JSON.stringify(out, null, 1));
