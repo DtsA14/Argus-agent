@@ -42,7 +42,7 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "73bb8127bbaca5c0ec83de89c54992ff446a285474d16a70c51090a6d6b0519f",
-    "app.js": "bdd0cea26f17e1b5f02bad06c79f4b556da3488a634404466de2aed09fc5020a",
+    "app.js": "6eb612928cef6d6e615440cd869469e0c9404520708d516fd63250155d9cd2d5",
     "app.css": "dfebd9fc195499c15efceb00ed08abdcef4e23647b283333af7bd183fcb28d1f",
 }
 
@@ -271,6 +271,8 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/cards/queue/([^/?#%]+)", path)
         if a is not None and m:
             got = a.cards.queue(m.group(1))
+            if got is not None:
+                got["t4b"] = a.steps.state(m.group(1))                  # SPEC_CHAT_T4B: the button the same builders would let through
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         m = re.fullmatch(r"/api/approve/prd/([^/?#%]+)", path)         # SPEC_KARTU_SETUJU: the plan card, read only, GET only
         if a is not None and m:

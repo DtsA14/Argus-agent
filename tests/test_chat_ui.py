@@ -72,7 +72,7 @@ def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
     assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
-    assert JS.count("action:") == 9                                 # the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
+    assert JS.count("action:") == 10                                # (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -252,6 +252,11 @@ def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_b
     assert JS.count("/api/approve/") == 2 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
     assert 'get("/api/approve/code/" + encodeURIComponent(id))' in JS
     js = JS.replace('get("/api/approve/prd/" + encodeURIComponent(id))', "").replace('get("/api/approve/code/" + encodeURIComponent(id))', "")
+    # SPEC_CHAT_T4B: the queue card's step button is the one other approval the page has, cut out here and pinned below (queue id only, never a sha, a job or an amount)
+    step = "function stepActions" + js.split("function stepActions")[1].split("function showCard")[0]
+    assert step.count('prepare({ action: t4b.action, queue: id })') == 1 and step.count("prepare(") == 1 and "sha" not in step and "job" not in step
+    assert step.count("Setujui draf issue") == 1 and step.count("Mulai issue") == 1
+    js = js.replace(step, "")
     # SPEC_CHAT_T4A: exactly one live approval, the plan's, prepared with the job id and nothing else (the server reads the rest); never a draft approval
     assert js.count('prepare({ action: "prd_approve", job: id })') == 1 and js.count("prd_approve") == 2          # the call, and the server's name for the button
     assert "job_approve" not in js and "Approve" not in js and "approve" not in js.replace("prd_approve", "")
@@ -272,7 +277,7 @@ def test_the_machine_flags_come_before_every_fact_of_a_confirmation_card():
 
 def test_the_page_offers_the_button_the_server_names_and_refreshes_the_plan_after_it():
     assert "stream.appendChild(planActions(id, d.t4));" in JS and 'if (t4.action === "prd_approve") {' in JS
-    assert 'if (mode === "cards" && openCard !== null) { showPlan(openCard); return; }' in JS
+    assert 'if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else { showPlan(openCard); } return; }' in JS
 
 
 def test_a_decision_is_prepared_from_a_button_with_the_sha_the_card_showed_and_the_reason_of_its_own_card():
@@ -288,6 +293,7 @@ def test_the_decide_link_reads_the_path_once_matches_it_and_opens_a_card_without
     body = JS.split("function showDecision")[1].split("function setMode")[0]
     pre, rest = body.split("function planActions")                           # the plan's own button (SPEC_CHAT_T4A) is the one prepare of the cards; the decide link never reaches it
     body = pre + "function showPlan" + rest.split("function showPlan")[1]
+    body = body.split("function stepActions")[0] + "function showCard" + body.split("function stepActions")[1].split("function showCard")[1]       # the queue card's own button (SPEC_CHAT_T4B)
     assert "prepare(" not in body and "post(" not in body and "message.value" not in body
     assert 'if (deep) { setMode("decide"); showDecision(deep[1]); }' in JS
 
