@@ -758,3 +758,22 @@ def test_an_accepted_item_offers_the_money_button(svc, monkeypatch):
     _concerns(monkeypatch, lambda n: {"reason": "ok"})
     card = svc.request("GET", f"/api/approve/prd/{PJOB}")[1]
     assert card["t4"]["action"] == "queue_go" and card["t4"]["needs"] == ["reason"]
+
+
+def test_the_acceptance_is_asked_for_this_job_and_item_with_the_jobs_dir(svc, monkeypatch):
+    _two_with_calls(svc)
+    seen = []
+    from router import examples_read as er
+    _concerns(monkeypatch, lambda n: {"reason": "ok"})
+    monkeypatch.setattr(er, "accepted_for", lambda jobs_dir, job, n: seen.append((str(jobs_dir), job, n)) or {"reason": "ok"})
+    assert prep_go(svc, reason=REASON)[0] == 200
+    assert seen and all(j == PJOB and d == str(svc.jobs) for d, j, _ in seen) and sorted({n for *_, n in seen}) == [1, 2]
+
+
+def test_an_accepted_item_prints_the_accepted_line_only_and_the_reason_is_cut_and_scrubbed(svc, monkeypatch):
+    _two_with_calls(svc)
+    _concerns(monkeypatch, lambda n: {"reason": "x" * 900 + " sk-or-v1-" + "a" * 40})
+    out = prep_go(svc, reason=REASON)[1]
+    mine = [f for f in out["card"]["flags"] if f.startswith("issue 1:")]
+    assert len(mine) == 1 and "accepted in writing" in mine[0] and "no two agreeing" not in mine[0]
+    assert len(mine[0]) < 450 and "sk-or-v1" not in " ".join(out["card"]["flags"])

@@ -217,7 +217,7 @@ class Plan:
         cf = self.card_facts(f)
         bad = [i["n"] for i in cf["items"] if i["read"] not in ("ok", "tidak_berlaku", "accepted")]
         if bad:
-            raise self._no(409, "read", "the numbers of issue " + ", ".join(map(str, bad)) + " have no two agreeing readings (`ok`) yet, or cannot be read")
+            raise self._no(409, "read", "the numbers of issue " + ", ".join(map(str, bad)) + " have no two agreeing readings (`ok`) yet, or cannot be read; if both readers' concerns are fine with you, accept them in writing in the terminal (argus examples-accept)")
         need_ack = [i["n"] for i in cf["items"] if i["warning"]]
         each = float(q["max_usd"]) / len(q["items"])
         ratio, ratio_text = self.ratio_of(each, cf["cost"].get("reference"))
