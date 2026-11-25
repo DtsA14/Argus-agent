@@ -41,9 +41,9 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
                 "app.css": "text/css; charset=utf-8"}
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
-    "index.html": "5fa31c86fbadf0d2ae68f847f4bd6f5dbade909f7c3c50ec67aef73c45ce1880",
-    "app.js": "bf1e5bc4533563f4675f945b83cebe110f73ff03b2d53a7613368eb612268e33",
-    "app.css": "a69082da6612c3929415b0ac47e9d292cbf83a11ce5c02811f45466a01391b21",
+    "index.html": "6a025470c829667a1695d3da09d8a002cf0e578dcdd149c5de54ec817d9f1301",
+    "app.js": "b93c75c2877c856d61c6c98b05237179052bf64aec17c9fc1001cc1624a29cc8",
+    "app.css": "10e809805e1a04ab2e19b74e9442515b13ffab0dcb5139b1e2a405b5df38e585",
 }
 
 
@@ -91,12 +91,22 @@ def load_static():
 REPO_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
-def repo_of(source):
-    """The repository a job was made for (inputs.repo_name of the job file), only when it has the shape of a registered name; else None.
-    Read from the job file itself, not from the projection (which drops inputs): a name is a label the page groups by, never a path."""
+def repo_of(source, names=None):
+    """The repository a job was made for, only when it has the shape of a registered name: inputs.repo_name of the job file, else (a code job has
+    only the path) the last part of inputs.repo when it is one of `names`, the repositories the config registers. Read from the job file itself, not
+    from the projection (which drops inputs); a label the page groups by, never a path."""
     inputs = source.get("inputs") if isinstance(source, dict) else None
-    name = inputs.get("repo_name") if isinstance(inputs, dict) else None
-    return name if isinstance(name, str) and REPO_NAME.fullmatch(name) else None
+    if not isinstance(inputs, dict):
+        return None
+    name = inputs.get("repo_name")
+    if isinstance(name, str) and REPO_NAME.fullmatch(name):
+        return name
+    path = inputs.get("repo")
+    if names and isinstance(path, str) and len(path) <= 4096:
+        base = os.path.basename(path.rstrip("/"))
+        if REPO_NAME.fullmatch(base) and base in names:
+            return base
+    return None
 
 
 def card(raw, name, repo=None):
@@ -105,7 +115,8 @@ def card(raw, name, repo=None):
     done_usd = sum(s["usd"] for s in stages.values() if isinstance(s.get("usd"), (int, float)))
     return {"id": name, "repo": repo, "kind": raw.get("kind"), "state": raw.get("state"), "created_at": raw.get("created_at"),
             "title": raw.get("title"), "max_usd": raw.get("max_usd"), "stages_usd": round(done_usd, 6),
-            "stages": len(stages), "viewer": f"{VIEWER_ORIGIN}/jobs/{name}"}   # a fixed origin and the directory name that matched UI_ID, never text
+            "stages": len(stages), "stages_unknown": sum(1 for s in stages.values() if not isinstance(s.get("usd"), (int, float))),
+            "viewer": f"{VIEWER_ORIGIN}/jobs/{name}"}   # a fixed origin and the directory name that matched UI_ID, never text
 
 
 class Chat:
@@ -123,8 +134,16 @@ class Chat:
         except OSError:
             return []
 
+    def _repo_names(self):
+        """The repositories the config registers (the chat's actions hold it); none when the chat is read only."""
+        try:
+            return set(self.actions._repo_names()) if self.actions is not None else set()
+        except Exception:
+            return set()
+
     def threads(self):
         out, skipped = [], 0
+        names = self._repo_names()
         try:
             sfd = self._source()
         except OSError:
@@ -137,7 +156,7 @@ class Chat:
                         raw = json.loads(sd._read_at(jfd, "job.json", limit=sd.READ_MAX))
                     finally:
                         os.close(jfd)
-                    out.append(card(sd.project_job(raw, name), name, repo_of(raw)))
+                    out.append(card(sd.project_job(raw, name), name, repo_of(raw, names)))
                 except (OSError, ValueError, sd.Excluded):
                     skipped += 1                   # never with a value: a job that cannot be shown is counted
         finally:

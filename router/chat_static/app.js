@@ -12,7 +12,7 @@
   var threads = [];
   var current = null;
   var filter = "all";                                   // the panel's filter: all | waiting | research
-  var groupOpen = {};                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
+  var groupOpen = Object.create(null);                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
   var lastChat = "status";                              // the mode the Obrolan tab returns to
 
   function el(tag, cls, text) {
@@ -79,7 +79,7 @@
   function renderList() {
     var q = query.value.trim().toLowerCase();
     var wait = waitingIds();
-    var groups = {}, order = [];
+    var groups = Object.create(null), order = [];
     clear(list);
     threads.forEach(function (t) {
       var hay = [t.id, t.state, t.title, t.kind, t.repo].join(" ").toLowerCase();
@@ -157,7 +157,7 @@
       if (current === null && mode === "status") { renderOverview(); }
       if (mode === "cost") { renderCost(); }
     }).catch(function () { summary.textContent = "gagal memuat"; });
-    loadDecisions();
+    if (!(mode === "decide" && openDecision === null)) { loadDecisions(false); }       // in the Keputusan list the guarded poll below does it, once
   }
 
   // ---- C2b: issue mode. The card is the server's, shown field by field as text; Confirm sends only the token. -------------
@@ -523,13 +523,13 @@
     if (!decisionRows.length) { stream.appendChild(el("p", "muted", "Tidak ada job yang menunggu keputusan.")); }
     decisionRows.forEach(function (r) { stream.appendChild(decideCard(r)); });
   }
-  function loadDecisions() {
+  function loadDecisions(rerender) {                    // rerender false: the poll in load() only refreshes the rows, the badge and the panel; the guarded poll and setMode draw the page
     get("/api/decisions").then(function (d) {
       decisionRows = d.decisions || [];
       updateBadge();
       renderList();
-      if (mode === "decide" && openDecision === null) { renderDecisions(); }
-    }).catch(function () { summary.textContent = "gagal memuat keputusan"; });
+      if (rerender !== false && mode === "decide" && openDecision === null) { renderDecisions(); }
+    }).catch(function () { if (rerender !== false) { summary.textContent = "gagal memuat keputusan"; } });
   }
   function showDecision(id) {                           // the Decide link of the viewer: opens a card, chooses and prepares nothing
     openDecision = id;
@@ -999,21 +999,25 @@
     var b = document.getElementById("decide-badge"), n = decisionRows.length;
     b.hidden = n === 0;
     b.textContent = n > 9 ? "9+" : String(n);
+    b.setAttribute("aria-label", n + " job menunggu keputusan");
   }
+  var KIND_LABEL = { code: "Kode", prd: "PRD", research: "Riset", issue: "Issue" };
   function renderCost() {                               // what the job list already carries: the cost of finished stages. Not the daily cap, not what is booked (a later change).
     clear(stream);
-    var total = 0, by = {};
+    var total = 0, by = Object.create(null), unknown = 0;
     threads.forEach(function (t) {
+      if (t.stages_unknown) { unknown++; }
       var u = typeof t.stages_usd === "number" ? t.stages_usd : 0;
       total += u;
-      var k = t.kind || "lain";
+      var k = KIND_LABEL[t.kind] || "Lain";
       by[k] = (by[k] || 0) + u;
     });
     var c = el("article", "card");
-    c.appendChild(el("h2", null, "Biaya tahap yang selesai"));
-    fact(c, "Total (job di daftar)", usd(total));
+    c.appendChild(el("h2", null, "Biaya tahap yang tercatat"));
+    fact(c, "Total (" + threads.length + " job di daftar)", usd(total));
     Object.keys(by).sort().forEach(function (k) { fact(c, k, usd(by[k])); });
-    c.appendChild(el("p", "note", "Hanya tahap yang sudah selesai, dari daftar job. Batas harian dan uang yang sudah dipesan belum ditampilkan di layar ini."));
+    if (unknown) { c.appendChild(el("p", "note", unknown + " job punya tahap tanpa angka biaya: angkanya tidak dihitung, bukan nol.")); }
+    c.appendChild(el("p", "note", "Hanya angka tahap yang tercatat di daftar job (yang terbaru saja). Batas harian dan uang yang sudah dipesan belum ditampilkan di layar ini."));
     stream.appendChild(c);
     var rows = threads.filter(function (t) { return typeof t.stages_usd === "number" && t.stages_usd > 0; })
       .sort(function (x, y) { return y.stages_usd - x.stages_usd; }).slice(0, 15);
@@ -1043,6 +1047,7 @@
       b.setAttribute("aria-pressed", (inChat ? t === "chat" : t === m) ? "true" : "false");
     });
     document.getElementById("chips").hidden = !inChat;
+    document.getElementById("dock").hidden = !inChat;
     issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";
     query.hidden = m !== "status";
     researchSeq++;

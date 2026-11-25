@@ -20,7 +20,8 @@ function stateClass(s) { return /FAILED/.test(String(s)) ? "bad" : "warn"; }
 function fact(c, k, v) { c.appendChild(el("p", "fact", k + ": " + v)); }
 var badge = new Node("span"); var document = { getElementById: function () { return badge; } };
 var list = new Node("ul"), stream = new Node("section"), panel = { classList: { remove: function () {} } };
-var query = { value: "" }, mode = "status", current = null, threads = [], decisionRows = [], filter = "all", groupOpen = {};
+var KIND_LABEL = { code: "Kode", prd: "PRD", research: "Riset", issue: "Issue" };
+var query = { value: "" }, mode = "status", current = null, threads = [], decisionRows = [], filter = "all", groupOpen = Object.create(null);
 function setMode() {} function open() {}
 `;
 const code = helpers + "var NO_REPO = \"Tanpa repo\";\n" + ["waitingIds", "jobButton", "renderList", "updateBadge", "renderCost"].map(grab).join("\n");
@@ -32,14 +33,15 @@ const T = [
   { id: "j2", repo: "ledger-cli", kind: "prd", state: "DONE", title: "PRD kategori", stages_usd: 0.07 },
   { id: "j3", repo: "athena", kind: "code", state: "APPLIED", title: "buffer", stages_usd: 0 },
   { id: "j4", repo: null, kind: "research", state: "DONE", title: "Dexie atau idb", stages_usd: 0.14 },
+  { id: "j5", repo: "constructor", kind: "code", state: "DONE", title: "a prototype name", stages_usd: 0, stages_unknown: 2 },
 ];
 const out = {};
 run("threads = " + JSON.stringify(T) + "; decisionRows = [{ id: 'j1' }];");
 run("renderList();"); out.all = run("html(list)");
 run("filter = 'waiting'; renderList();"); out.waiting = run("html(list)");
 run("filter = 'research'; renderList();"); out.research = run("html(list)");
-run("filter = 'all'; groupOpen = { 'athena': true, 'ledger-cli': false }; renderList();"); out.toggled = run("html(list)");
-run("groupOpen = {}; query.value = 'zzz'; renderList();"); out.none = run("html(list)");
+run("filter = 'all'; groupOpen = Object.create(null); groupOpen['athena'] = true; groupOpen['ledger-cli'] = false; renderList();"); out.toggled = run("html(list)");
+run("groupOpen = Object.create(null); query.value = 'zzz'; renderList();"); out.none = run("html(list)");
 run("query.value = ''; updateBadge();"); out.badge1 = run("badge.hidden + '|' + badge.textContent");
 run("decisionRows = []; updateBadge();"); out.badge0 = run("badge.hidden + '|' + badge.textContent");
 run("decisionRows = new Array(12).fill({ id: 'x' }); updateBadge();"); out.badge12 = run("badge.hidden + '|' + badge.textContent");

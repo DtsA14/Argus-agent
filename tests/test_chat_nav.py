@@ -79,3 +79,80 @@ def test_the_script_looks_up_only_ids_and_selectors_the_page_has():
         base = sel.split(" ")[0]
         assert base.lstrip("#.") in HTML or base.lstrip("#.") in ("stream",), sel
     assert 'document.getElementById("decide-badge")' in js and 'id="decide-badge"' in HTML
+
+
+# ---- the repository of a code job (it has only a path) and the cost marks, from the Opus review --------------------------------
+
+class Names:
+    def __init__(self, *names):
+        self.names = names
+
+    def _repo_names(self):
+        return list(self.names)
+
+
+def listed(svc, names):
+    chat = rc.Chat(svc.jobs, actions=Names(*names))
+    return chat.threads()["threads"][0]
+
+
+@pytest.mark.parametrize("path, names, want", [("/home/ubuntu/ledger-cli", ("ledger-cli",), "ledger-cli"), ("~/athena/", ("athena",), "athena"),
+                                               ("/home/ubuntu/ledger-cli", ("athena",), None), ("/home/ubuntu/ledger-cli", (), None),
+                                               ("/home/ubuntu/other", ("ledger-cli",), None), ("/x/..", ("..",), None), (3, ("ledger-cli",), None),
+                                               ("/home/ubuntu/ledger-cli\n", ("ledger-cli",), None), ("/" + "a" * 5000, ("a",), None)])
+def test_a_code_job_has_the_repo_of_the_last_part_of_its_path_only_when_it_is_a_registered_name(svc, path, names, want):
+    set_inputs(svc, repo=path)
+    got = listed(svc, names)
+    assert got["repo"] == want and path not in json.dumps(got) if isinstance(path, str) and want is None else got["repo"] == want
+
+
+def test_the_repo_name_of_the_job_wins_and_the_path_never_travels(svc):
+    set_inputs(svc, repo="/home/ubuntu/ledger-cli", repo_name="athena")
+    got = listed(svc, ("ledger-cli", "athena"))
+    assert got["repo"] == "athena" and "/home/ubuntu" not in json.dumps(got)
+
+
+def test_a_chat_without_actions_lists_the_name_but_never_guesses_from_a_path(svc):
+    set_inputs(svc, repo="/home/ubuntu/ledger-cli")
+    assert rc.Chat(svc.jobs).threads()["threads"][0]["repo"] is None
+    set_inputs(svc, repo_name="ledger-cli")
+    assert rc.Chat(svc.jobs).threads()["threads"][0]["repo"] == "ledger-cli"
+
+
+def test_a_failing_names_source_means_no_guess_and_no_error(svc):
+    class Broken:
+        def _repo_names(self):
+            raise RuntimeError("config")
+    set_inputs(svc, repo="/home/ubuntu/ledger-cli")
+    assert rc.Chat(svc.jobs, actions=Broken()).threads()["threads"][0]["repo"] is None
+
+
+def test_a_stage_without_a_cost_is_counted_as_unknown_not_as_nothing(svc):
+    p = svc.jobs / tc.JOB / "job.json"
+    data = json.loads(p.read_text())
+    data["stages"] = {"d1": {"kind": "draft", "status": "DRAFTED", "usd": 0.25}, "d2": {"kind": "draft", "status": "DRAFTED"},
+                      "d3": {"kind": "draft", "status": "DRAFTED", "usd": None}}
+    p.write_text(json.dumps(data))
+    got = svc.get_json("/api/threads")[1]["threads"][0]
+    assert got["stages_usd"] == 0.25 and got["stages_unknown"] == 2
+
+
+# ---- the page: the poll must not draw over a reason being typed ---------------------------------------------------------------
+
+JS = (rc.STATIC_DIR / "app.js").read_text()
+
+
+def test_the_poll_in_load_only_refreshes_and_never_redraws_the_decisions_page():
+    load = JS.split("  function load() {")[1].split("  // ---- C2b")[0]
+    assert "loadDecisions(false)" in load and "renderDecisions" not in load and "loadDecisions()" not in load
+    ld = JS.split("  function loadDecisions(rerender) {")[1].split("  function showDecision")[0]
+    assert 'if (rerender !== false && mode === "decide" && openDecision === null) { renderDecisions(); }' in ld
+    assert 'if (rerender !== false) { summary.textContent' in ld                          # a background refresh that fails says nothing on the page
+    assert 'if (!(mode === "decide" && openDecision === null)) { loadDecisions(false); }' in load
+
+
+def test_the_composer_strip_is_hidden_outside_the_chat_tab_and_the_accent_has_its_own_ink():
+    assert 'document.getElementById("dock").hidden = !inChat;' in JS
+    css = (rc.STATIC_DIR / "app.css").read_text()
+    assert "--on-accent:#120d2b" in css and "--on-accent:#f6f8fa" in css and "#120d2b;" not in css.split("/* UI-3a")[1] and "env(" not in css
+    assert "Object.create(null)" in JS.split("function renderList")[1].split("function renderOverview")[0]
