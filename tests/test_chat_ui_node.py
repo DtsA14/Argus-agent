@@ -27,19 +27,19 @@ def test_the_step_button_and_the_two_confirmation_cards_draw_and_prepare_the_que
     assert json.loads(out["queue_step"]["prepared"]) == [{"action": "queue_step", "queue": "q20261117T100400Z-abcd"}]
     assert json.loads(out["draft_approve"]["prepared"]) == [{"action": "draft_approve", "queue": "q20261117T100400Z-abcd"}]
     assert out["null"]["prepared"] is None and "<button" not in out["null"]["html"]
-    assert "Sha draf: </b>aaaaaaaaaaaa" in out["card:draft_approve"] and "tests/test_a.py::test_x" in out["card:draft_approve"] and "(tulisan model)" in out["card:draft_approve"]
+    assert "Draft sha: </b>aaaaaaaaaaaa" in out["card:draft_approve"] and "tests/test_a.py::test_x" in out["card:draft_approve"] and "(written by a model)" in out["card:draft_approve"]
     rich, note = out["card:draft_approve:3"], out["card:draft_approve:4"]
-    assert "Draf ini mengubah tes yang sudah ada: tests/test_old.py dan 2 lagi" in rich and "<details.more>" in rich
-    assert "Teks penulis (model), bukan bukti" in rich and "it may break b" in rich and "no baseline recorded" in rich
+    assert "This draft changes existing tests: tests/test_old.py and 2 more" in rich and "<details.more>" in rich
+    assert "Text by the writer (a model), not proof" in rich and "it may break b" in rich and "no baseline recorded" in rich
     assert "<b>do</b> the thing" in rich and "<b>do</b>" not in rich.replace("&lt;", "").replace("<b>do</b> the thing", "")   # a tag in the text stays text: it is a text node, never markup
-    assert "Ringkasan rencana tidak tersedia" in note and "<details" not in note and "mengubah tes" not in note
+    assert "The plan summary is not available" in note and "<details" not in note and "changes existing tests" not in note
     chat, term = out["card:prd_approve:5"], out["card:prd_approve:6"]
-    assert "permintaan pertama, dimulai lewat chat (tercatat via ui)" in chat and "… (dipotong)" in chat and "2 balasan dari terminal tidak ditampilkan" in chat
-    assert "repo rujukan (dibaca penulis, hanya baca)" in chat and "ledger-cli@abcdef123456, athena@123456abcdef" in chat
-    assert "<details.more>" in chat and "Ringkasan penulis (tulisan model, bukan bukti)" in chat and "</span>ringkasan <b>penulis</b></p></details>" in chat   # the tag is the text of a text node inside the fold
-    assert "permintaan pertama, dari terminal (manusia atau sesi Claude, tidak tercatat)" in term and "dipotong" not in term and "balasan dari terminal" not in term
-    assert "Rujukan repo lain tidak terbaca" in term and "<details" not in term
-    assert "Drafter limit" in out["card:queue_step"] and "isi issue" in out["card:queue_step"] + out["card:draft_approve"]
+    assert "first request, started from the chat (recorded via the UI)" in chat and "… (cut)" in chat and "2 replies from the terminal are not shown" in chat
+    assert "reference repos (read by the writer, read only)" in chat and "ledger-cli@abcdef123456, athena@123456abcdef" in chat
+    assert "<details.more>" in chat and "Writer's summary (written by a model, not proof)" in chat and "</span>ringkasan <b>penulis</b></p></details>" in chat   # the tag is the text of a text node inside the fold
+    assert "first request, from the terminal (a person or a Claude session, not recorded)" in term and "(cut)" not in term and "replies from the terminal" not in term
+    assert "The reference repos cannot be read" in term and "<details" not in term
+    assert "Drafter limit" in out["card:queue_step"] and "issue text" in out["card:queue_step"] + out["card:draft_approve"]
 
 
 def test_the_money_button_waits_for_the_ack_and_the_reason_and_sends_only_what_the_server_named():

@@ -177,7 +177,7 @@ def test_the_report_goes_on_the_page_as_text_under_the_servers_banner_and_the_la
     body = research_part()
     assert 'el("pre", "report", d.report.text)' in body
     assert body.index("d.banner") < body.index("d.report.text")
-    assert 'd.checked ? "Sudah dicek oleh e1' in body and "Belum dicek oleh e1." in body
+    assert 'd.checked ? "Checked by e1' in body and "Not checked by e1." in body
     assert "report.text.indexOf" not in JS and "match(" not in body and "replace(" not in body       # the text is never read for a label
 
 
@@ -196,7 +196,7 @@ def test_a_research_job_has_no_action_buttons_only_a_viewer_link():
 
 def test_starting_refused_and_stalled_jobs_are_said_so():
     body = research_part()
-    for text in ("Riset sedang dimulai", "Ditolak sebelum dimulai", "berjalan dari terminal atau terhenti"):
+    for text in ("The research is starting", "Refused before it started", "it is running from the terminal or has stalled"):
         assert text in body
 
 
@@ -226,7 +226,7 @@ def test_the_report_box_wraps_and_is_bounded():
 
 def test_the_e1_tally_is_shown_so_a_report_with_unsupported_claims_does_not_look_clean():
     body = research_part()
-    assert "tidak didukung" in body and "n.UNSUPPORTED" in body and body.index("tally") < body.index("Belum dicek oleh e1")
+    assert "unsupported" in body and "n.UNSUPPORTED" in body and body.index("tally") < body.index("Not checked by e1")
 
 
 def test_the_poll_redraws_a_research_job_only_while_it_can_change_and_an_older_answer_draws_nothing():
@@ -258,12 +258,12 @@ def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_b
     # SPEC_CHAT_T4B: the queue card's step button is the one other approval the page has, cut out here and pinned below (queue id only, never a sha, a job or an amount)
     step = "function stepActions" + js.split("function stepActions")[1].split("function showCard")[0]
     assert step.count('prepare({ action: t4b.action, queue: id })') == 1 and step.count("prepare(") == 1 and "sha" not in step and "job" not in step
-    assert step.count("Setujui draf issue") == 1 and step.count("Mulai issue") == 1
+    assert step.count("Accept draft of issue") == 1 and step.count("Start issue") == 1
     js = js.replace(step, "")
     # SPEC_CHAT_T4A: exactly one live approval, the plan's, prepared with the job id and nothing else (the server reads the rest); never a draft approval
     assert js.count('prepare({ action: "prd_approve", job: id })') == 1 and js.count("prd_approve") == 2          # the call, and the server's name for the button
     assert "job_approve" not in js and "Approve" not in js and "approve" not in js.replace("prd_approve", "")
-    assert js.count("Setujui") == 1 and 'el("button", "go", "Setujui rencana")' in js and "setujui" not in js
+    assert js.count("Accept plan") == 1 and 'el("button", "go", "Accept plan")' in js and "setujui" not in js
     assert "setujui" not in HTML and "approve" not in HTML.lower()
 
 
@@ -274,7 +274,7 @@ def test_run_the_queue_is_prepared_with_the_job_id_the_ack_the_server_names_and_
     assert 'body.ack = ackItems.join(",")' in body and "body.reason = why.value.trim()" in body
     assert "sha" not in body and "usd" not in body.lower() and "queue:" not in body
     assert 'p.disabled = (tick !== null && !tick.checked) || (why !== null && why.value.trim().length < 10);' in body and "ready();" in body
-    assert 'var p = el("button", "go", "Jalankan antrean (uang keluar)");' in body and JS.count("Jalankan antrean") == 1
+    assert 'var p = el("button", "go", "Run queue (money is spent)");' in body and JS.count("Run queue") == 1
     assert "belum aktif" not in JS
 
 
@@ -317,7 +317,7 @@ def test_a_late_answer_for_another_job_or_mode_draws_nothing():
 def test_the_reason_is_a_field_inside_each_card_and_a_reject_without_one_is_not_prepared():
     body = decide_part()
     assert 'var why = el("input", "reason");' in body and 'why.placeholder = "Reason (required for Reject)";' in body
-    assert 'why.setAttribute("aria-label", "Alasan");' in body and "why.maxLength = 300;" in body
+    assert 'why.setAttribute("aria-label", "Reason");' in body and "why.maxLength = 300;" in body
     assert 'if (needReason && why.value.trim() === "") { hint.textContent = "Fill in the reason in the field above the button first."; return; }' in body
     assert body.index("why.value.trim()") < body.index("prepare({ action: action")
     assert "issueForm.hidden = !inChat;" in JS                    # the composer is not shown in decisions or in the read-only cards (T2)
@@ -328,7 +328,7 @@ def test_the_poll_refreshes_the_list_only_when_no_confirm_is_on_its_way():
 
 def test_the_decision_card_shows_the_cost_the_draft_and_a_viewer_link_only():
     body = decide_part()
-    assert "Baca draf di viewer" in body and "viewerLink(VIEWER + r.id)" in body
+    assert "Read the draft in the viewer" in body and "viewerLink(VIEWER + r.id)" in body
     assert 'el("a"' not in body and "href" not in body
 
 

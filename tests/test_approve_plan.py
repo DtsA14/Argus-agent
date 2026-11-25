@@ -295,8 +295,8 @@ def test_the_listing_of_the_other_cards_is_unchanged_and_the_t2_card_still_answe
 def test_the_page_has_a_plan_view_reached_from_the_prd_card_and_writes_only_text():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     assert 'get("/api/approve/prd/" + encodeURIComponent(id))' in js
-    assert 'plan.addEventListener("click", function () { showPlan(id); });' in js and '"Kartu rencana (angka)"' in js
-    for title in ("Yang tidak boleh berubah", "Kalau ... maka", "Yang berubah"):
+    assert 'plan.addEventListener("click", function () { showPlan(id); });' in js and '"Plan card (numbers)"' in js
+    for title in ("What must not change", "If ... then", "What changes"):
         assert title in js
     part = js[js.index("function planExample"):js.index("// ---- T2: read-only cards")]
     assert "innerHTML" not in part and "insertAdjacentHTML" not in part and "document.write" not in part
@@ -341,7 +341,7 @@ def test_the_cost_says_the_proposal_is_a_cap_for_all_issues_and_gives_it_per_iss
     cost = plan(svc)[1]["cost"]
     assert cost["proposed"] == 2.0 and cost["proposed_each"] == 1.0
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
-    assert '"; batas antrean untuk "' in js and "(acuan: satu job)" in js
+    assert '"; queue limit for "' in js and "(reference: one job)" in js
 
 
 def test_a_key_prefix_never_survives_the_cut_of_the_request(svc):
@@ -437,8 +437,8 @@ def test_the_plan_page_guards_old_answers_and_marks_the_author_honestly():
     part = js[js.index("function showPlan"):js.index("function installReader")]
     assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2
     assert "if (d.defects) {" in part and 'el("p", "note", it.warning)' in js
-    assert 'd.request_by === "chat"' in part and '"permintaan, dimulai lewat chat (tercatat via ui):"' in part and '"permintaan (pembuat tidak tercatat):"' in part
-    assert "d.defects" in part and 'say(s2, "model", MODEL, d.summary, "say")' in part and 'say(d, "mesin", "mesin", e.proof.wording' in js
+    assert 'd.request_by === "chat"' in part and '"request, started from the chat (recorded via the UI):"' in part and '"request (author not recorded):"' in part
+    assert "d.defects" in part and 'say(s2, "model", MODEL, d.summary, "say")' in part and 'say(d, "mesin", "machine", e.proof.wording' in js
     assert 'function planItem' in js and '["same", "whatif", "after"].forEach' in js
     assert "function setMode(m) {\n    mode = m;\n    cardSeq++;" in js
 
@@ -632,7 +632,7 @@ def test_the_page_shows_the_reading_with_its_label_and_the_ratio():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     part = js[js.index("var DOMAIN_LABEL"):js.index("// ---- T2: read-only cards")]
     assert "it.domain_read" in part and "d.domain_read_label" in part and "d.cost.ratio_text" in part
-    for word in ("Dibaca Claude", "ada yang meragukan"):
+    for word in ("Read by Claude", "something is doubtful"):
         assert word in part
     assert "innerHTML" not in part
 
@@ -696,14 +696,14 @@ def test_the_page_shows_the_label_next_to_every_reading_and_never_a_reading_with
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     reading = js[js.index("function planReading"):js.index("function planItem")]
     assert reading.count('box.appendChild(el("p", "small", DOMAIN_LABEL));') == 1                 # one fresh branch: ok and concerns are told apart inside it
-    assert reading.index("if (!DOMAIN_LABEL)") < reading.index("Dibaca Claude")                  # no label, no reading
-    assert "if (r.fresh) {" in reading and 'r.verdict === "ok" ? "sesuai permintaan" : "ada yang meragukan"' in reading
+    assert reading.index("if (!DOMAIN_LABEL)") < reading.index("Read by Claude")                  # no label, no reading
+    assert "if (r.fresh) {" in reading and 'r.verdict === "ok" ? "matches the request" : "something is doubtful"' in reading
     assert reading.index("modelLine(box, r.note)") < reading.index('el("p", "small", DOMAIN_LABEL)')
     assert reading.count("modelLine(box, r.note)") == 1
     assert "r.note" not in reading.split("} else {")[-1]                                          # a stale or missing reading never shows a note
     plan_js = js[js.index("function showPlan"):js.index("function installReader")]
     assert plan_js.index("DOMAIN_LABEL = d.domain_read_label") < plan_js.index("(d.items || []).forEach")
-    assert 'el("p", "note", "Dibaca Claude: basi' not in js and "batas itu pagar, bukan perkiraan biaya" in js
+    assert 'el("p", "note", "Read by Claude: stale' not in js and "the limit is a fence, not an estimate of cost" in js
 
 
 def test_an_unexpected_failure_of_the_reading_never_breaks_the_card_or_shows_a_reading(svc, monkeypatch):
