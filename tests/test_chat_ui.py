@@ -72,7 +72,7 @@ def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
     assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
-    assert JS.count("action:") == 10                                # (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
+    assert JS.count("action:") == 11                                # (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -264,10 +264,15 @@ def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_b
     assert "setujui" not in HTML and "approve" not in HTML.lower()
 
 
-def test_run_the_queue_is_only_a_placeholder_for_now():
-    assert JS.count('"queue_go"') == 1 and 'action: "queue_go"' not in JS and "queue_go" not in JS.replace('t4.action === "queue_go"', "")
-    assert 'var p = el("button", null, "Jalankan antrean (belum aktif)");' in JS and "p.disabled = true;" in JS
-    assert JS.count("Jalankan antrean") == 1
+def test_run_the_queue_is_prepared_with_the_job_id_the_ack_the_server_names_and_the_typed_reason_only():
+    # Atha 2026-11-25: the money button is live. The page never sends a queue, a sha or an amount; the server reads them (SPEC_CHAT_T4A 10)
+    body = JS.split('t4.action === "queue_go"')[1].split("} else if (t4.why)")[0]
+    assert body.count("prepare(") == 1 and 'var body = { action: "queue_go", job: id };' in body and "prepare(body)" in body
+    assert 'body.ack = ackItems.join(",")' in body and "body.reason = why.value.trim()" in body
+    assert "sha" not in body and "usd" not in body.lower() and "queue:" not in body
+    assert 'p.disabled = (tick !== null && !tick.checked) || (why !== null && why.value.trim().length < 10);' in body and "ready();" in body
+    assert 'var p = el("button", "go", "Jalankan antrean (uang keluar)");' in body and JS.count("Jalankan antrean") == 1
+    assert "belum aktif" not in JS
 
 
 def test_the_machine_flags_come_before_every_fact_of_a_confirmation_card():

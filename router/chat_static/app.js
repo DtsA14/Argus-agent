@@ -161,6 +161,7 @@
     if (card.writable) { fact(c, "Berkas yang boleh disentuh (tulisan model)", card.writable.join(", ")); }
     (card.validations || []).forEach(function (v) { fact(c, "Pemeriksaan " + v.id + " (tulisan model)", (v.must_pass || []).join(", ") || "tanpa nama tes"); });
     if (card.request) { say(c, "atha", "permintaan", card.request, "say"); }
+    if (card.item_text) { say(c, "model", "isi issue (tulisan model, dari penulis PRD)", card.item_text, "say"); }
     if (card.summary) { say(c, "model", "ringkasan penulis (tulisan model)", card.summary, "say"); }
     (card.issues || []).forEach(function (i) { fact(c, "Issue " + i.n, i.title + (i.warning ? " (tanpa contoh perilaku baru)" : "")); });
     if (card.message) { c.appendChild(el("p", "msg human", card.message)); }
@@ -188,7 +189,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Dijalankan"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.draft_sha ? "Agen kode berjalan (5 sampai 17 menit). Hasilnya muncul di kartu antrean; apply tetap lewat terminal." : (card.queue && card.item) ? "Drafter sedang menulis tes dan kontrak (beberapa menit). Draf muncul di kartu antrean; kamu tetap menyetujuinya sendiri." : card.action === "prd_new" ? "PRD sedang ditulis (satu giliran). Hasilnya muncul di tab Kartu. Penolakan sebelum job dibuat (antrean menunggu, repo berubah) hanya terlihat di terminal. Menyetujui dan menjalankan antrean masih lewat terminal." : card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
+        c.appendChild(el("p", "note", card.action === "queue_go" ? "Uang antrean sudah dibuka sampai batas di kartu. Belum ada yang berjalan; mulai issue pertama dari kartu antrean di tab Kartu." : card.draft_sha ? "Agen kode berjalan (5 sampai 17 menit). Hasilnya muncul di kartu antrean; apply tetap lewat terminal." : (card.queue && card.item) ? "Drafter sedang menulis tes dan kontrak (beberapa menit). Draf muncul di kartu antrean; kamu tetap menyetujuinya sendiri." : card.action === "prd_new" ? "PRD sedang ditulis (satu giliran). Hasilnya muncul di tab Kartu. Penolakan sebelum job dibuat (antrean menunggu, repo berubah) hanya terlihat di terminal. Menyetujui dan menjalankan antrean masih lewat terminal." : card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
         var close = el("button", null, "Tutup");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -582,12 +583,40 @@
       b.addEventListener("click", function () { prepare({ action: "prd_approve", job: id }); });
       box.appendChild(b);
       box.appendChild(el("p", "small", "Tidak ada uang yang keluar: ini membuat antrean yang masih menunggu persetujuan uang."));
-    } else if (t4.action === "queue_go") {
-      var p = el("button", null, "Jalankan antrean (belum aktif)");
+    } else if (t4.action === "queue_go") {                // SPEC_CHAT_T4A: the money. The page sends the job id, the acknowledgement the server names and the typed reason, nothing else
+      var needs = t4.needs || [], ackItems = t4.ack_items || [], tick = null, why = null;
+      var p = el("button", "go", "Jalankan antrean (uang keluar)");
       p.type = "button";
-      p.disabled = true;
+      if (needs.indexOf("ack") >= 0) {
+        var lab = el("label", "small");
+        tick = el("input");
+        tick.type = "checkbox";
+        lab.appendChild(tick);
+        lab.appendChild(document.createTextNode(" Saya terima: issue " + ackItems.join(", ") + " tidak punya contoh perilaku baru, jadi mesin tidak bisa memeriksa angkanya."));
+        box.appendChild(lab);
+      }
+      if (needs.indexOf("reason") >= 0) {
+        why = el("input", "reason");
+        why.type = "text";
+        why.maxLength = 500;
+        why.autocomplete = "off";
+        why.placeholder = "Alasan menerima biaya ini (10 sampai 500 karakter)";
+        why.setAttribute("aria-label", "Alasan");
+        box.appendChild(why);
+      }
+      var ready = function () { p.disabled = (tick !== null && !tick.checked) || (why !== null && why.value.trim().length < 10); };
+      if (tick) { tick.addEventListener("change", ready); }
+      if (why) { why.addEventListener("input", ready); }
+      ready();
+      p.addEventListener("click", function () {
+        if (p.disabled) { return; }
+        var body = { action: "queue_go", job: id };
+        if (tick) { body.ack = ackItems.join(","); }
+        if (why) { body.reason = why.value.trim(); }
+        prepare(body);
+      });
       box.appendChild(p);
-      box.appendChild(el("p", "small", "Menyetujui uang antrean masih lewat terminal; tombol ini belum diaktifkan." + (t4.needs && t4.needs.length ? " Nanti akan meminta: " + t4.needs.join(", ") + "." : "")));
+      box.appendChild(el("p", "small", "Menyetujui uang untuk seluruh antrean, sampai batas yang tertera di kartu berikutnya. Belum ada yang berjalan; issue pertama dimulai dari kartu antrean."));
     } else if (t4.why) {
       box.appendChild(el("p", "note", t4.why));
     }

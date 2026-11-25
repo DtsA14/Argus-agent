@@ -129,7 +129,7 @@ class Steps:
         if not in_window:
             flags.append("the queue was approved more than 24 hours ago: this step counts one whole job cap in the daily cap")
         card = {"action": "queue_step", "title": "Start the issue (a drafter run)", "queue": q["id"], "item": item["n"], "job": None, "repo": scrub(str(q["name"])),
-                "commit": str(q["base_commit"])[:12], "request": scrub(f["text"]), "flags": flags, "job_cap_usd": float(q["job_cap_usd"]),
+                "commit": str(q["base_commit"])[:12], "item_text": scrub(f["text"]), "flags": flags, "job_cap_usd": float(q["job_cap_usd"]),
                 "queue_usd": float(q["max_usd"]), "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"], "outside_window": not in_window,
                 "retry": retry, "drafter_cap_usd": cap,
                 "money": "a drafter writes the tests and the contract; nothing is applied. You still approve the draft yourself. HEAD is checked by the command, not by this card"}
@@ -193,7 +193,7 @@ class Steps:
         if profile in (None, "default"):
             flags.append("budget profile: default")
         card = {"action": "draft_approve", "title": "Approve the draft (the agent starts)", "queue": q["id"], "item": item["n"], "job": job_id, "repo": scrub(str(q["name"])),
-                "request": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
+                "item_text": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
                 "agent_cap_usd": cap, "attempt_usd": float(need), "flags": flags, "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"],
                 "retry": bool(item.get("retries")) and bool(item.get("retry_note")), "agent_max_usd_config": want,
                 "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them. "

@@ -611,7 +611,7 @@ def test_a_timed_out_queue_go_still_counts_its_money_as_pending(svc):
 def test_the_page_state_names_both_inputs_when_both_are_needed_and_the_cap(svc):
     setup(svc, texts=TWO[:1], max_usd=5.0)
     card = svc.request("GET", f"/api/approve/prd/{PJOB}")[1]
-    assert card["t4"] == {"action": "queue_go", "why": None, "needs": ["ack", "reason"]}
+    assert card["t4"] == {"action": "queue_go", "why": None, "needs": ["ack", "reason"], "ack_items": [1]}
     svc.actions._cfg["chat"]["daily_cap_usd"] = 1.0                      # 5.00 would pass the cap: no button
     card = svc.request("GET", f"/api/approve/prd/{PJOB}")[1]
     assert card["t4"]["action"] is None and "daily cap" in card["t4"]["why"]
