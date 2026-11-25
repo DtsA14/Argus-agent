@@ -463,14 +463,17 @@ class Cards:
                 q, dfd = got
                 os.close(dfd)
                 ok = self._same_jobs_dir(q)
-                state = None
+                state, applied_n = None, None
                 if ok and derive and len(rows) < DERIVE_ROWS:
                     try:
-                        state = self._derive(q)[0]
+                        d = self._derive(q)
+                        state = d[0]
+                        if state is not None:                                                               # no state (too many items): no count either, never "0 of N"
+                            applied_n = sum(1 for f in d[2] if isinstance(f, dict) and f.get("applied"))       # SPEC_CHAT_UI3B 3: the items whose commit the card shows
                     except Exception:
                         state = None
                 rows.append({"id": qid, "kind": "queue", "title": self.s(q["name"]), "state": state, "repo": self.s(q["name"]),
-                             "at": _queue_time(qid), "items": len(q["items"]) if ok else None,
+                             "at": _queue_time(qid), "items": len(q["items"]) if ok else None, "applied_n": applied_n,
                              **({} if ok else {"why": "jobs dir lain"}), "prd_job": self._prd_job_of(q) if ok else None})
         finally:
             os.close(qfd)
@@ -651,13 +654,13 @@ class Cards:
 
     # ---- the list -----------------------------------------------------------------------------------------------------------------
 
-    def listing(self):
+    def listing(self, queue_rows=None):
         try:
-            return self._listing()
+            return self._listing(queue_rows)
         except Exception:
             return {"rows": [], "truncated": True}
 
-    def _listing(self):
+    def _listing(self, queue_rows=None):
         rows, truncated, spent = [], False, 0
         try:
             sfd = _open_dir(str(self.jobs_dir))
@@ -694,7 +697,7 @@ class Cards:
                                  "items": turns[-1].get("items") if turns and isinstance(turns[-1].get("items"), int) else None})
             finally:
                 os.close(sfd)
-        qrows, qtrunc = self._queue_rows()
+        qrows, qtrunc = queue_rows if queue_rows is not None else self._queue_rows()
         rows += [{k: v for k, v in r.items() if k != "prd_job"} for r in qrows]
         rows.sort(key=lambda r: (r["at"] or "", r["id"]), reverse=True)
         return {"rows": rows[:ROWS_MAX], "truncated": truncated or qtrunc or len(rows) > ROWS_MAX}

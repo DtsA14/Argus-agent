@@ -71,3 +71,26 @@ def test_the_panel_groups_by_repo_filters_and_the_cost_view_and_badge_say_what_t
     assert "Recorded stage cost" in c and "Total (5 jobs in the list): $0.2400" in c and "Code: $0.0300" in c and "Research: $0.1400" in c and "PRD: $0.0700" in c
     assert "1 job has a stage with no cost figure: not counted, not zero." in c
     assert "The daily cap and the money already booked are not shown" in c and "ledger-cli: PRD kategori" in c and "athena: buffer" not in c   # a job that cost nothing is not listed
+
+
+def test_the_decisions_page_lists_what_waits_with_fixed_labels_counts_a_draft_job_once_and_says_when_it_may_be_incomplete():
+    out = json.loads(node(HERE / "chat_ui_smoke_nav.js", APP))
+    assert out["need"] == "false|5|5 jobs · 5 waiting|5 items waiting for you"            # 4 waiting rows + the one open job that is not the draft's own job (jc counts once)
+    d = out["decisions"]
+    assert d.index("Waiting for you") < d.index("Open jobs") and "Plan ready for your decision" in d and "Draft of issue 2 is ready for you" in d
+    assert "Start issue 3 (drafter)" in d and "Queue waits for your go (money)" in d and "a <b>plan</b>" in d and "old job" in d and "draft job" not in d
+    n = out["decisionsNotes"]
+    assert "The daily cap could not be computed: the queue's go and the steps of queues whose go was more than 24 hours ago are not listed." in n and "Not everything was checked: this list may be incomplete." in n
+    assert "Nothing is waiting for you." in out["nothing"] and "Waiting for you" not in out["nothing"] and "Open jobs" not in out["nothing"]
+    w = out["panelwaiting"]
+    assert "draft job" in w and "other" not in w                                          # the panel's Waiting filter follows the waiting rows' jobs too
+
+
+def test_the_queue_progress_bar_counts_only_applied_items_and_is_absent_without_a_state_or_a_count_or_when_closed():
+    out = json.loads(node(HERE / "chat_ui_smoke_nav.js", APP))
+    bars = [b.split("|")[0] for b in out["bars"]]
+    assert bars == ["5/5", "", "", "3/1", "", ""]                                  # DONE 5/5, CLOSED none, no state none, WAITING 3/1, a PRD none, a queue of 0 items none
+    n = out["nulls"]
+    assert "Start the next issue (drafter)" in n and "Draft of the next issue is ready for you" in n and "null" not in n and "undefined" not in n
+    assert "Could not refresh this list: the rows shown may be out of date." in n
+    assert n.count("athena") == 1                                                    # a queue row whose title is its repository's name shows it once

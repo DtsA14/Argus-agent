@@ -143,3 +143,9 @@ pre.code{white-space:pre-wrap;overflow-wrap:anywhere;font:.8rem ui-monospace,Men
 #more-menu button,#more-menu a{display:flex;align-items:center;min-height:2.75rem;padding:0 .9rem;text-align:left;background:none;border:0;border-radius:.75rem;color:var(--text);font:inherit;text-decoration:none}
 #more-menu button:hover,#more-menu a:hover{background:var(--line)}
 main{position:relative}
+.sec-title{font-size:.8rem;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin:.9rem .25rem .5rem}
+.card.waiting{border-color:var(--accent);cursor:pointer}
+progress.pbar{appearance:none;-webkit-appearance:none;width:100%;height:.5rem;margin:.5rem 0 .1rem;border:0;border-radius:.25rem;background:var(--line);accent-color:var(--ok)}
+progress.pbar::-webkit-progress-bar{background:var(--line);border-radius:.25rem}
+progress.pbar::-webkit-progress-value{background:var(--ok);border-radius:.25rem}
+progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}

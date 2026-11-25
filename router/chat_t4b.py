@@ -237,7 +237,7 @@ class Steps:
 
     # ---- the state of the button, for the queue card ----------------------------------------------------------------------
 
-    def state(self, qid):
+    def state(self, qid, with_job=False):
         """{action, item, why}: the button the queue card offers now, from the same builders the actions use (and the daily cap), so the page never offers what prepare refuses.
         Never raises. A queue the chat did not approve, a closed or pending one: no button and no sentence (the card already says its state)."""
         try:
@@ -245,7 +245,7 @@ class Steps:
             build, name = (self.build_step, "queue_step") if f["kind"] == "start" else (self.build_approve, "draft_approve")
             card, _ = build({"queue": qid})
             self.a.check_cap(card)
-            return {"action": name, "item": card["item"], "why": None}
+            return {"action": name, "item": card["item"], "why": None, **({"job": card.get("job")} if with_job else {})}
         except self.Refusal as e:
             return {"action": None, "item": None, "why": None if e.gate in ("queue", "path", "form") else e.why}
         except Exception:                                       # a file that does not have the shape: nothing is offered, the card is still shown

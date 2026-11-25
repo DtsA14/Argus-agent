@@ -252,6 +252,9 @@ def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_b
     assert JS.count("/api/approve/") == 2 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
     assert 'get("/api/approve/code/" + encodeURIComponent(id))' in JS
     js = JS.replace('get("/api/approve/prd/" + encodeURIComponent(id))', "").replace('get("/api/approve/code/" + encodeURIComponent(id))', "")
+    waiting = "function waitLabel" + js.split("function waitLabel")[1].split("function waitingCard")[0]            # SPEC_CHAT_UI3B: the fixed labels of the waiting list, pinned below; nothing in them prepares
+    assert "prepare(" not in waiting and "approve" not in waiting.replace("prd_approve", "").replace("draft_approve", "") and "Approve" not in waiting and "Setujui" not in waiting
+    js = js.replace(waiting, "")
     # SPEC_CHAT_T4B: the queue card's step button is the one other approval the page has, cut out here and pinned below (queue id only, never a sha, a job or an amount)
     step = "function stepActions" + js.split("function stepActions")[1].split("function showCard")[0]
     assert step.count('prepare({ action: t4b.action, queue: id })') == 1 and step.count("prepare(") == 1 and "sha" not in step and "job" not in step
