@@ -92,7 +92,7 @@ def test_a_step_card_shows_the_item_the_cap_and_what_will_happen_and_runs_nothin
     assert status == 200 and svc.spawner.calls == []
     c = out["card"]
     assert c["action"] == "queue_step" and c["queue"] == QID and c["item"] == 1 and c["job_cap_usd"] == 1.0 and c["queue_usd"] == 3.0
-    assert c["request"].startswith("One") or "One" in c["request"]
+    assert "One" in c["item_text"] and "request" not in c
     assert "approve the draft yourself" in c["money"] and out["exposure_usd"] == 0.0 and c["outside_window"] is False
 
 

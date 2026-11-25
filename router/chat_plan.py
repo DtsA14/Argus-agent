@@ -268,17 +268,17 @@ class Plan:
         try:
             try:
                 self.build_approve({"job": job_id})
-                return {"action": "prd_approve", "why": None, "needs": []}
+                return {"action": "prd_approve", "why": None, "needs": [], "ack_items": []}
             except self.Refusal as e:
                 if e.gate not in ("queue", "state", "busy"):
-                    return {"action": None, "why": e.why, "needs": []}
+                    return {"action": None, "why": e.why, "needs": [], "ack_items": []}
             f, q, cf, need_ack, need_reason, _ratio = self.go_facts(job_id)
             self.a.check_cap({"action": "queue_go", "queue_usd": float(q["max_usd"])})
-            return {"action": "queue_go", "why": None, "needs": (["ack"] if need_ack else []) + (["reason"] if need_reason else [])}
+            return {"action": "queue_go", "why": None, "needs": (["ack"] if need_ack else []) + (["reason"] if need_reason else []), "ack_items": [int(n) for n in need_ack]}
         except self.Refusal as e:
-            return {"action": None, "why": e.why, "needs": []}
+            return {"action": None, "why": e.why, "needs": [], "ack_items": []}
         except Exception:                                        # a file that does not have the shape: nothing is offered, the card is still shown
-            return {"action": None, "why": "the plan's files cannot be read for a button", "needs": []}
+            return {"action": None, "why": "the plan's files cannot be read for a button", "needs": [], "ack_items": []}
 
     # ---- run ---------------------------------------------------------------------------------------------------------
 
