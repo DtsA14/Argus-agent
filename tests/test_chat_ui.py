@@ -207,7 +207,7 @@ def test_the_confirm_card_shows_the_go_live_screen_fields():
 
 def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden():
     assert 'var r = mode === "research", p = mode === "prd";' in JS and "Prepare research" in JS and "Prepare PRD" in JS
-    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS
+    assert "issueForm.hidden = !inChat;" in JS
 
 
 def test_a_finished_research_confirm_opens_the_job_in_research_mode_only():
@@ -317,7 +317,7 @@ def test_the_reason_is_a_field_inside_each_card_and_a_reject_without_one_is_not_
     assert 'why.setAttribute("aria-label", "Alasan");' in body and "why.maxLength = 300;" in body
     assert 'if (needReason && why.value.trim() === "") { hint.textContent = "Fill in the reason in the field above the button first."; return; }' in body
     assert body.index("why.value.trim()") < body.index("prepare({ action: action")
-    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS                    # the composer is not shown in decisions or in the read-only cards (T2)
+    assert "issueForm.hidden = !inChat;" in JS                    # the composer is not shown in decisions or in the read-only cards (T2)
 
 def test_the_poll_refreshes_the_list_only_when_no_confirm_is_on_its_way():
     assert 'if (mode === "decide" && openDecision === null && !(pending && pending.sent) && !reasonTyped()) { loadDecisions(); }' in JS

@@ -14,7 +14,6 @@
   var filter = "all";                                   // the panel's filter: all | waiting | research
   var groupOpen = Object.create(null);                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
   var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
-  var chipsOpen = false;                                // the mode chips are a choice under "New request", closed by default
   var lastChat = "status";                              // the mode the Chat tab returns to
 
   function el(tag, cls, text) {
@@ -358,7 +357,9 @@
   function formState() {
     var r = mode === "research", p = mode === "prd";
     repoSel.hidden = r || (!p && openIssue !== null);
-    document.getElementById("prepare").textContent = r ? "Prepare research" : (p ? "Prepare PRD" : (openIssue !== null ? "Prepare reply" : "Prepare new issue"));
+    var what = r ? "Prepare research" : (p ? "Prepare PRD" : (openIssue !== null ? "Prepare reply" : "Prepare new issue"));
+    document.getElementById("prepare").setAttribute("aria-label", what);
+    document.getElementById("type-label").textContent = r ? "Research" : (p ? "PRD" : (openIssue !== null ? "Reply to this issue" : "New issue"));
     message.placeholder = r ? "Write the research question (20 to 2000 characters)" : (p ? "Write the PRD request: what changes and why" : "Write a message");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
@@ -1006,17 +1007,18 @@
     threads.forEach(function (t) { spent += typeof t.stages_usd === "number" ? t.stages_usd : 0; });
     document.getElementById("panel-cost").textContent = "Recorded stage cost: " + usd(spent);
   }
-  function setChrome() {                              // what sits above the tab bar: nothing in most tabs; the form in the writing modes; the chips only after "New request"
+  function setChrome() {                              // the box sits above the tab bar in the Chat tab only; the "+" menu closes with every move
     var inChat = mode === "status" || mode === "issue" || mode === "prd" || mode === "research";
-    chipsOpen = chipsOpen && inChat;
-    document.getElementById("chips").hidden = !chipsOpen;
-    document.getElementById("dock").hidden = document.getElementById("chips").hidden && issueForm.hidden;
+    document.getElementById("dock").hidden = !inChat;
+    closeMenu();
   }
-  function openNew() {
+  function closeMenu() {
+    document.getElementById("plus-menu").hidden = true;
+    document.getElementById("plus").setAttribute("aria-expanded", "false");
+  }
+  function openNew() {                                // the panel's New request: the Chat tab, writing a new issue
     closePanel();
-    if (!(mode === "status" || mode === "issue" || mode === "prd" || mode === "research")) { setMode(lastChat); }
-    chipsOpen = true;
-    setChrome();
+    setMode("issue");
   }
   function closePanel() { panel.classList.remove("open"); document.getElementById("scrim").hidden = true; }
   function updateBadge() {                              // the number of jobs that wait for a decision, from the same list the Keputusan tab shows
@@ -1063,14 +1065,11 @@
     dropPending();
     var inChat = m === "status" || m === "issue" || m === "prd" || m === "research";
     if (inChat) { lastChat = m; }
-    Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
-      b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");
-    });
     Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
       var t = b.getAttribute("data-tab");
       b.setAttribute("aria-pressed", (inChat ? t === "chat" : t === m) ? "true" : "false");
     });
-    issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";
+    issueForm.hidden = !inChat;
     setChrome();
     researchSeq++;
     openCard = null;
@@ -1085,12 +1084,16 @@
     else if (m === "cost") { renderCost(); }
     else { renderOverview(); }
   }
-  Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
-    if (b.disabled) { return; }
-    b.addEventListener("click", function () { chipsOpen = false; setMode(b.getAttribute("data-mode")); });
+  Array.prototype.forEach.call(document.querySelectorAll("#plus-menu button"), function (b) {
+    b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+  });
+  document.getElementById("plus").addEventListener("click", function () {
+    var menu = document.getElementById("plus-menu"), now = menu.hidden;
+    menu.hidden = !now;
+    this.setAttribute("aria-expanded", now ? "true" : "false");
   });
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
-    b.addEventListener("click", function () { var t = b.getAttribute("data-tab"); chipsOpen = false; setMode(t === "chat" ? (mode === lastChat && lastChat !== "status" ? "status" : lastChat) : t); });
+    b.addEventListener("click", function () { var t = b.getAttribute("data-tab"); setMode(t === "chat" ? (mode === lastChat && lastChat !== "status" ? "status" : lastChat) : t); });
   });
   Array.prototype.forEach.call(document.querySelectorAll("#filters button"), function (b) {
     b.addEventListener("click", function () {
@@ -1112,8 +1115,11 @@
   document.getElementById("open-panel").addEventListener("click", function () { panel.classList.add("open"); document.getElementById("scrim").hidden = false; });
   document.getElementById("close-panel").addEventListener("click", closePanel);
   document.getElementById("scrim").addEventListener("click", closePanel);
-  document.getElementById("new-request").addEventListener("click", openNew);
   document.getElementById("new-request-panel").addEventListener("click", openNew);
+  issueForm.hidden = false;                           // the page opens in the Chat tab: the box is there from the start
+  setChrome();
+  formState();
+  loadIssues();                                       // the repositories the box offers
   var deep = /^\/jobs\/(j[0-9]{8}_[0-9]{6}_[0-9a-f]{4})$/.exec(location.pathname);
   if (deep) { setMode("decide"); showDecision(deep[1]); }
   load();
