@@ -26,6 +26,7 @@ from router import card_numbers as cn
 from router import example_gate as eg
 from router import job as rj
 from router import prd as rp
+from router import request_by as rb
 from router.cards import (DOC_MAX, ISSUE_MAX, ITEMS_MAX, JOB_JSON_MAX, NOT_RUN_WHY, OPEN_DIR, SCAN_BYTES, SCAN_JOBS, TURN, UI_ID, _open_dir,
                           _read)
 
@@ -200,10 +201,11 @@ class Approve:
             writer = [m for m in data.get("conversation") or [] if isinstance(m, dict) and m.get("from") == "writer" and isinstance(m.get("text"), str)]
             request, cut = self._cut(c.s(human[0]["text"]), REQUEST_MAX) if human else (None, False)       # scrubbed whole, then cut: no key prefix survives
             summary = None
-            via_ui = any(isinstance(e, dict) and e.get("what") == "created" and e.get("via") == "ui" for e in data.get("log") or [])
+            via_ui = rb.via_ui(data)
+            humans = rb.human_messages(data)
             card = {"kind": "plan", "id": job_id, "state": data.get("state"), "repo": i.get("repo_name"), "turn": None, "stale": None,
                     "superseded": None, "folder_sha12": None, "why": None, "request": request, "request_truncated": cut,
-                    "request_by": "chat" if via_ui else "tidak_tercatat", "summary": summary, "summary_by": "model", "issue_count": 0,
+                    "request_by": "chat" if via_ui else "tidak_tercatat", "request_count": len(humans), "refs": rb.ref_facts(data), "summary": summary, "summary_by": "model", "issue_count": 0,
                     "cost": {"spent": None, "proposed": None, "proposed_each": None, "reference": None, "ratio": None, "ratio_text": None},
                     "items": [], "defects": 0, "fixed_line": FIXED_LINE, "domain_read_label": DOMAIN_LABEL}
             spent = c._spent(data)

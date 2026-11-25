@@ -171,9 +171,19 @@
       if (card.baseline_note) { say(more, "mesin", "tanda mesin", card.baseline_note, "say warn"); }
       c.appendChild(more);
     }
-    if (card.request) { say(c, "atha", "permintaan", card.request, "say"); }
+    if (card.refs === "unreadable") { say(c, "mesin", "tanda mesin", "Rujukan repo lain tidak terbaca di catatan job ini.", "say warn"); }
+    else if (card.refs && card.refs.length) { say(c, "mesin", "repo rujukan (dibaca penulis, hanya baca)", card.refs.map(function (r) { return r.name + "@" + r.commit12; }).join(", "), "say"); }
+    if (card.request) {
+      say(c, card.request_by === "chat" ? "atha" : "tak", card.request_by === "chat" ? "permintaan pertama, dimulai lewat chat (tercatat via ui)" : "permintaan pertama, dari terminal (manusia atau sesi Claude, tidak tercatat)", card.request + (card.request_cut ? " … (dipotong)" : ""), "say");
+      if (card.request_count > 1) { c.appendChild(el("p", "note", (card.request_count - 1) + " balasan dari terminal tidak ditampilkan di kartu ini.")); }
+    }
     if (card.item_text) { say(c, "model", "isi issue (tulisan model, dari penulis PRD)", card.item_text, "say"); }
-    if (card.summary) { say(c, "model", "ringkasan penulis (tulisan model)", card.summary, "say"); }
+    if (card.summary) {
+      var sum = el("details", "more");
+      sum.appendChild(el("summary", null, "Ringkasan penulis (tulisan model, bukan bukti)"));
+      say(sum, "model", "ringkasan penulis (tulisan model)", card.summary, "say");
+      c.appendChild(sum);
+    }
     (card.issues || []).forEach(function (i) { fact(c, "Issue " + i.n, i.title + (i.warning ? " (tanpa contoh perilaku baru)" : "")); });
     if (card.message) { c.appendChild(el("p", "msg human", card.message)); }
     if (card.issue_text) { c.appendChild(el("p", "msg", card.issue_text)); }
@@ -649,7 +659,7 @@
       if (d.why) { card.appendChild(el("p", "note", d.why)); }
       var s1 = sec(card, "1. Apa yang diminta?");
       if (d.request) {
-        say(s1, d.request_by === "chat" ? "atha" : "tak", d.request_by === "chat" ? "permintaan, ditulis lewat chat:" : "permintaan (pembuat tidak tercatat):", d.request, "say");
+        say(s1, d.request_by === "chat" ? "atha" : "tak", d.request_by === "chat" ? "permintaan, dimulai lewat chat (tercatat via ui):" : "permintaan (pembuat tidak tercatat):", d.request, "say");
         if (d.request_truncated) { s1.appendChild(el("p", "note", "permintaan dipotong")); }
       } else { s1.appendChild(el("p", "note", "permintaan tidak tercatat")); }
       var s2 = sec(card, "2. Apa yang akan dikerjakan?");

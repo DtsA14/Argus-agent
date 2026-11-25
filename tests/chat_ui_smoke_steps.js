@@ -44,6 +44,10 @@ const cards = [
     changed_tests: ["tests/test_old.py"], changed_tests_n: 3, plan: { files: ["src/a.py"], steps: ["<b>do</b> the thing"], risks: ["it may break b"] }, warnings: ["w1"], unverifiable: ["the page stays"], baseline_note: "no baseline recorded", flags: [], exposure_usd: 0 },
   { action: "draft_approve", title: "Approve the draft (the agent starts)", queue: "q1", item: 1, job: "j1", repo: "athena", item_text: "One", draft_sha: "c".repeat(64), writable: ["src/a.py"], validations: [],
     changed_tests: [], changed_tests_n: 0, summary_note: "summary unavailable", flags: [] },
+  { action: "prd_approve", title: "Approve the plan", job: "j1", repo: "athena", flags: [], request: "<i>mulai</i> dari chat", request_cut: true, request_by: "chat", request_count: 3,
+    refs: [{ name: "ledger-cli", commit12: "abcdef123456" }, { name: "athena", commit12: "123456abcdef" }], summary: "ringkasan <b>penulis</b>", issues: [], queue_usd: 1, folder_sha: "a".repeat(64), commit: "abc", money: "m" },
+  { action: "prd_approve", title: "Approve the plan", job: "j1", repo: "athena", flags: [], request: "dari terminal", request_cut: false, request_by: "tidak_tercatat", request_count: 1,
+    refs: "unreadable", summary: null, issues: [], queue_usd: 1, folder_sha: "b".repeat(64), commit: "abc", money: "m" },
 ];
 let n = 0;
 for (const c of cards) {

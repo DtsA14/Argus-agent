@@ -19,8 +19,10 @@ from router import prd_job as pj
 from router import queue as rq
 from router import reason as reason_rule
 from router.cards import ISSUE_MAX, ITEMS_MAX, QUEUE_MAX, TURN, UI_ID, _open_dir, _read
+from router import request_by as rb
 from router.control import ARGUS, CLI_TIMEOUT, strip_refused
 
+REQUEST_SHOWN = 400                # SPEC_CHAT_UI2: characters of the request the plan cards show (cut by code points on the server)
 PLAN_TIMEOUT = 30                  # the two commands read files and write one; the chat's server is single threaded, so a stuck run must not hold it for CLI_TIMEOUT
 RATIO_REASON = 3.0                 # the shown, rounded ratio from here asks for a typed reason (SPEC_KARTU_SETUJU M1)
 NEW_QUEUE = re.compile(r"queue (q[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}) PENDING")
@@ -158,7 +160,10 @@ class Plan:
                     read, accepted = "accepted", a_scrub(str(acc.get("reason")))[:300]
             items.append({"n": it["n"], "title": it["title"], "calls": it["counts"]["calls"], "warning": bool(it.get("warning")),
                           "read": read, **({"accepted": accepted} if accepted is not None else {})})
-        return {"request": c.get("request"), "summary": c.get("summary"), "items": items, "cost": c["cost"]}
+        req, req_cut = rb.excerpt(c["request"], REQUEST_SHOWN) if isinstance(c.get("request"), str) else (None, False)       # SPEC_CHAT_UI2: cut here, by code points; the page never slices
+        return {"request": req, "request_cut": bool(req_cut or c.get("request_truncated")), "request_by": c.get("request_by"),
+                "request_count": c.get("request_count"), "refs": c.get("refs"),
+                "summary": c.get("summary"), "items": items, "cost": c["cost"]}
 
     @staticmethod
     def ratio_of(each, reference):
@@ -187,10 +192,16 @@ class Plan:
         cf = self.card_facts(f)
         t = f["turn"]
         card = {"action": "prd_approve", "title": "Approve the plan", "job": f["job"], "repo": f["data"]["inputs"].get("repo_name"),
-                "flags": self.flags(cf, None), "request": cf["request"], "summary": cf["summary"], "issues": cf["items"],
+                "flags": self.flags(cf, None), **self.request_fields(cf), "summary": cf["summary"], "issues": cf["items"],
                 "queue_usd": float(t["max_usd"]), "folder_sha": t["folder_sha"], "commit": str(t.get("commit"))[:12],
                 "money": "no money is spent by this step: it makes a PENDING queue; the money is the next step"}
         return card, {"job": f["job"], "dir": f["folder"], "sha": t["folder_sha"]}
+
+    @staticmethod
+    def request_fields(cf):
+        """What the plan cards say about the request and the repositories the writer read: copied field by field, like the rest of the card."""
+        return {"request": cf["request"], "request_cut": cf["request_cut"], "request_by": cf["request_by"],
+                "request_count": cf["request_count"], "refs": cf["refs"]}
 
     def go_facts(self, job_id):
         """Everything `queue_go` needs from the harness, or a Refusal: the PRD job waits for the human, the one open queue made from exactly this plan, its
@@ -245,7 +256,7 @@ class Plan:
         elif reason is not None:
             raise self._no(400, "form", "this plan needs no reason")
         card = {"action": "queue_go", "title": "Start the queue (the money)", "job": f["job"], "queue": q["id"], "repo": q["name"],
-                "commit": q["base_commit"][:12], "flags": self.flags(cf, ratio_text, need_ack, bool(need_reason)), "request": cf["request"],
+                "commit": q["base_commit"][:12], "flags": self.flags(cf, ratio_text, need_ack, bool(need_reason)), **self.request_fields(cf),
                 "summary": cf["summary"], "issues": cf["items"], "queue_usd": float(q["max_usd"]), "job_cap_usd": float(q["job_cap_usd"]),
                 "list_sha": rq.list_sha(q), "ratio_text": ratio_text, "ack": ack or None,
                 "reason": reason if need_reason else None, "money": "approves up to this much for the queue; nothing runs yet"}

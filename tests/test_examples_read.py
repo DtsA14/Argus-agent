@@ -382,7 +382,7 @@ def test_every_human_message_the_writer_of_the_turn_had_is_shown_and_a_later_one
                             {"from": "human", "text": "third: for a later turn"}]
     (d / "job.json").write_text(json.dumps(data))
     text, info = bundle(jobs)
-    assert "message 1 of 2" in text and "message 2 of 2" in text and "  first: use the lot rule" in text and "  second: drop the lot rule" in text
+    assert "DATA request 1 of 2: " in text and "DATA request 2 of 2: " in text and "  first: use the lot rule" in text and "  second: drop the lot rule" in text
     assert "third" not in text
     data["conversation"][2]["text"] = "second: keep it"                                # a changed message is another bundle
     (d / "job.json").write_text(json.dumps(data))
