@@ -135,6 +135,7 @@ def main(argv=None, deps=None):
     a.add_argument("--reference-patch")
     a.add_argument("--web", action="store_true", help="grant the agent ReadDocs (documentation pages from the hosts in "
                    "config web.hosts); refused for an environment off web.environments")
+    a.add_argument("--via", choices=rj.VIA, help="where the approval was decided (SPEC_CHAT_T4B 6: recorded as the actor)")
     jg = sub.add_parser("judge", help="advice on a finished code job: PASS or BLOCK from another model; the job is not "
                         "changed (docs/reviews/SPEC_JUDGE.md)")
     jg.add_argument("job")
@@ -285,6 +286,8 @@ def main(argv=None, deps=None):
     qg.add_argument("--reason-file", help="the human's reason (10-500 characters), stored with the approval; the chat asks for one when a machine flag is raised")
     qs = qsub.add_parser("step", help="at most one drafter run; otherwise what waits for a human. Never approves or applies")
     qs.add_argument("queue")
+    qs.add_argument("--item", type=int, help="only if this is the next item (SPEC_CHAT_T4B 3); refused before anything is written otherwise")
+    qs.add_argument("--via", choices=rj.VIA, help="where the start was decided (SPEC_CHAT_T4B 6: recorded as the actor)")
     qs.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
     qs.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
     qsub.add_parser("status").add_argument("queue")
@@ -622,7 +625,7 @@ def main(argv=None, deps=None):
                 print(f"queue {q['id']}: {len(q['items'])} issues on {q['name']} at {q['base_commit'][:12]}, up to ${q['max_usd']:.2f}\n"
                       f"list sha {rq.list_sha(q)}\napprove the list and the money: argus queue go {q['id']} --sha {rq.list_sha(q)[:12]}")
             else:
-                text = rq.step(o.queue, cfg=cfg, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir)
+                text = rq.step(o.queue, cfg=cfg, deps=deps, queues_dir=o.queues_dir, jobs_dir=o.jobs_dir, via=o.via, item_n=o.item)
                 print(text)
                 return 1 if " STOPPED " in text.splitlines()[0] else 0      # a /loop can tell a stopped queue from a waiting one
             return 0
@@ -643,7 +646,7 @@ def main(argv=None, deps=None):
         elif o.cmd == "approve":
             job, _ = rj.approve(o.job, sha=o.sha, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
                                 max_iterations=o.max_iterations, reference_patch=o.reference_patch, jobs_dir=o.jobs_dir,
-                                web=o.web)
+                                web=o.web, via=o.via)
         elif o.cmd == "retry":
             job, _ = rj.retry(o.job, cfg=cfg, deps=deps, sandbox_cfg=cfg["sandbox"], max_usd=o.max_usd,
                               jobs_dir=o.jobs_dir, not_a_conflict=o.not_a_conflict)
