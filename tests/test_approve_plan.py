@@ -437,7 +437,7 @@ def test_the_plan_page_guards_old_answers_and_marks_the_author_honestly():
     part = js[js.index("function showPlan"):js.index("function installReader")]
     assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2
     assert "if (d.defects) {" in part and 'el("p", "note", it.warning)' in js
-    assert 'd.request_by === "chat"' in part and '"permintaan, ditulis lewat chat:"' in part and '"permintaan (pembuat tidak tercatat):"' in part
+    assert 'd.request_by === "chat"' in part and '"permintaan, dimulai lewat chat (tercatat via ui):"' in part and '"permintaan (pembuat tidak tercatat):"' in part
     assert "d.defects" in part and 'say(s2, "model", MODEL, d.summary, "say")' in part and 'say(d, "mesin", "mesin", e.proof.wording' in js
     assert 'function planItem' in js and '["same", "whatif", "after"].forEach' in js
     assert "function setMode(m) {\n    mode = m;\n    cardSeq++;" in js
