@@ -13,7 +13,7 @@
   var current = null;
   var filter = "all";                                   // the panel's filter: all | waiting | research
   var groupOpen = Object.create(null);                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
-  var lastChat = "status";                              // the mode the Obrolan tab returns to
+  var lastChat = "status";                              // the mode the Chat tab returns to
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -22,6 +22,7 @@
     return e;
   }
   function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } }
+  function nJobs(n) { return n + (n === 1 ? " job" : " jobs"); }
   function usd(n) { return typeof n === "number" ? "$" + n.toFixed(4) : "-"; }
   function stateClass(s) {
     if (s === "APPLIED" || s === "DONE" || s === "REVIEW_READY") { return "ok"; }
@@ -37,7 +38,7 @@
   // for an id of plain characters; never built from text of a job, an issue or a report.
   function viewerLink(url) {
     if (typeof url !== "string" || url.indexOf(VIEWER) !== 0 || !/^[a-z0-9_]+$/.test(url.slice(VIEWER.length))) { return null; }
-    var a = el("a", "link", "Buka di viewer");
+    var a = el("a", "link", "Open in viewer");
     a.rel = "noopener noreferrer";
     a.href = url;
     a.addEventListener("click", function (e) { e.stopPropagation(); });
@@ -50,13 +51,13 @@
     row.appendChild(el("span", "state " + stateClass(t.state), t.state));
     row.appendChild(el("span", null, t.kind));
     row.appendChild(el("span", null, t.created_at));
-    row.appendChild(el("span", null, spent !== undefined ? usd(spent) + " dari " + usd(t.max_usd) : usd(t.stages_usd) + " tahap selesai, batas " + usd(t.max_usd)));
+    row.appendChild(el("span", null, spent !== undefined ? usd(spent) + " dari " + usd(t.max_usd) : usd(t.stages_usd) + " in finished stages, limit " + usd(t.max_usd)));
     c.appendChild(row);
     var link = viewerLink(t.viewer);
     if (link) { c.appendChild(link); }
     return c;
   }
-  var NO_REPO = "Tanpa repo";
+  var NO_REPO = "No repo";
   function waitingIds() {
     var w = {};
     (typeof decisionRows === "undefined" ? [] : decisionRows).forEach(function (d) { w[d.id] = true; });
@@ -100,7 +101,7 @@
       h.type = "button";
       h.setAttribute("aria-expanded", isOpen ? "true" : "false");
       h.appendChild(el("span", "gn", g));
-      if (n) { h.appendChild(el("span", "gw", n + " menunggu")); } else { h.appendChild(el("span", "gc", items.length + " job")); }
+      if (n) { h.appendChild(el("span", "gw", n + " waiting")); } else { h.appendChild(el("span", "gc", nJobs(items.length))); }
       h.addEventListener("click", function () { groupOpen[g] = !isOpen; renderList(); });
       gl.appendChild(h);
       if (isOpen) {
@@ -110,13 +111,13 @@
       }
       list.appendChild(gl);
     });
-    if (!order.length) { list.appendChild(el("li", "muted", "Tidak ada job yang cocok.")); }
+    if (!order.length) { list.appendChild(el("li", "muted", "No matching jobs.")); }
   }
   function renderOverview() {
     clear(stream);
     var q = query.value.trim().toLowerCase();
     var shown = threads.filter(function (t) { return !q || [t.id, t.state, t.title, t.kind].join(" ").toLowerCase().indexOf(q) !== -1; });
-    if (!shown.length) { stream.appendChild(el("p", "muted", "Tidak ada job yang cocok.")); }
+    if (!shown.length) { stream.appendChild(el("p", "muted", "No matching jobs.")); }
     shown.slice(0, 20).forEach(function (t) {
       var c = jobCard(t);
       c.addEventListener("click", function () { open(t.id); });
@@ -142,21 +143,21 @@
         c.appendChild(tb);
       }
       stream.appendChild(c);
-      var back = el("button", null, "Semua job");
+      var back = el("button", null, "All jobs");
       back.type = "button";
       back.addEventListener("click", function () { current = null; renderList(); renderOverview(); });
       stream.appendChild(back);
-    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Job tidak dapat dibaca.")); });
+    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Cannot read this job.")); });
   }
   function load() {
     get("/api/threads").then(function (d) {
       threads = d.threads || [];
-      skipped.textContent = d.skipped ? d.skipped + " job tidak dapat ditampilkan" : "";
-      summary.textContent = threads.length + " job";
+      skipped.textContent = d.skipped ? d.skipped + " jobs cannot be shown" : "";
+      summary.textContent = nJobs(threads.length);
       renderList();
       if (current === null && mode === "status") { renderOverview(); }
       if (mode === "cost") { renderCost(); }
-    }).catch(function () { summary.textContent = "gagal memuat"; });
+    }).catch(function () { summary.textContent = "failed to load"; });
     if (!(mode === "decide" && openDecision === null)) { loadDecisions(false); }       // in the Keputusan list the guarded poll below does it, once
   }
 
@@ -180,10 +181,10 @@
         });
       });
   }
-  var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Lingkungan"], ["commit", "Commit"],
-    ["turn", "Giliran"], ["turn_cap_usd", "Batas giliran"], ["job_cap_usd", "Batas job"], ["reason", "Alasan"],
-    ["profile", "Profil"], ["model", "Model"], ["stage_models", "Model"], ["stage_caps", "Batas tahap"], ["web", "Web"], ["data_sent", "Data keluar"],
-    ["free_models", "Model gratis"], ["runs_code", "Kode contoh"], ["kind", "Jenis"], ["job_title", "Judul"], ["sha12", "Draf"], ["spent_usd", "Biaya"], ["cap_usd", "Batas"], ["queue_usd", "Uang antrean"], ["queue", "Antrean"], ["item", "Issue ke"], ["drafter_cap_usd", "Batas drafter"], ["agent_cap_usd", "Batas agen"], ["attempt_usd", "Satu percobaan agen"], ["money", "Catatan uang"]];
+  var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Environment"], ["commit", "Commit"],
+    ["turn", "Turn"], ["turn_cap_usd", "Turn limit"], ["job_cap_usd", "Job limit"], ["reason", "Reason"],
+    ["profile", "Profile"], ["model", "Model"], ["stage_models", "Model"], ["stage_caps", "Stage limits"], ["web", "Web"], ["data_sent", "Data sent"],
+    ["free_models", "Free models"], ["runs_code", "Example code"], ["kind", "Kind"], ["job_title", "Title"], ["sha12", "Draft"], ["spent_usd", "Cost"], ["cap_usd", "Limit"], ["queue_usd", "Queue money"], ["queue", "Queue"], ["item", "Issue no."], ["drafter_cap_usd", "Drafter limit"], ["agent_cap_usd", "Agent limit"], ["attempt_usd", "One agent attempt"], ["money", "Money note"]];
   var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1, queue_usd: 1, drafter_cap_usd: 1, agent_cap_usd: 1, attempt_usd: 1 };
   function fact(parent, label, value) {
     var p = el("p", "fact");
@@ -235,13 +236,13 @@
     if (card.issue_text) { c.appendChild(el("p", "msg", card.issue_text)); }
     c.appendChild(el("p", "note", "Eksposur biaya yang dihitung: " + usd(prep.exposure_usd) + ". Tidak ada yang berjalan sebelum Konfirmasi."));
     var row = el("div", "actions");
-    var ok = el("button", "go", "Konfirmasi");
+    var ok = el("button", "go", "Confirm");
     ok.type = "button";
     ok.disabled = true;                                 // armed after the server's minimum delay; never the default of a key press
-    var no = el("button", null, "Batal");
+    var no = el("button", null, "Cancel");
     no.type = "button";
     var armed = setTimeout(function () { ok.disabled = false; }, Math.ceil((prep.min_delay_s || 1) * 1000) + 300);
-    var expire = setTimeout(function () { ok.disabled = true; c.appendChild(el("p", "note", "Kartu kedaluwarsa: siapkan lagi.")); }, ((prep.expires_s || 300) - 5) * 1000);
+    var expire = setTimeout(function () { ok.disabled = true; c.appendChild(el("p", "note", "Card expired: prepare it again.")); }, ((prep.expires_s || 300) - 5) * 1000);
     function settle() { clearTimeout(armed); clearTimeout(expire); ok.disabled = true; no.disabled = true; }
     no.addEventListener("click", function () { removeCard(c); });
     c.settle = settle;
@@ -256,7 +257,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Dijalankan"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.action === "queue_go" ? "Uang antrean sudah dibuka sampai batas di kartu. Belum ada yang berjalan; mulai issue pertama dari kartu antrean di tab Kartu." : card.draft_sha ? "Agen kode berjalan (5 sampai 17 menit). Hasilnya muncul di kartu antrean; apply tetap lewat terminal." : (card.queue && card.item) ? "Drafter sedang menulis tes dan kontrak (beberapa menit). Draf muncul di kartu antrean; kamu tetap menyetujuinya sendiri." : card.action === "prd_new" ? "PRD sedang ditulis (satu giliran). Hasilnya muncul di tab Kartu. Penolakan sebelum job dibuat (antrean menunggu, repo berubah) hanya terlihat di terminal. Menyetujui dan menjalankan antrean masih lewat terminal." : card.action === "research_new" ? "Hasilnya ada di daftar riset." : (card.action.indexOf("job_") === 0 ? "Keputusan tercatat; keadaan job ada di daftar keputusan." : "Hasilnya ada di daftar issue.")));
+        c.appendChild(el("p", "note", card.action === "queue_go" ? "Queue money is released up to the limit on the card. Nothing runs yet; start the first issue from the queue card in the Queue tab." : card.draft_sha ? "The code agent is running (5 to 17 minutes). The result appears on the queue card; apply is still done from the terminal." : (card.queue && card.item) ? "The drafter is writing tests and the contract (a few minutes). The draft appears on the queue card; you still confirm it yourself." : card.action === "prd_new" ? "The PRD is being written (one turn). The result appears in the Queue tab. A refusal before the job is made (queue waiting, repo changed) shows only in the terminal. Running the queue is still done from the terminal." : card.action === "research_new" ? "The result is in the research list." : (card.action.indexOf("job_") === 0 ? "Decision recorded; the job state is in the Decisions tab." : "The result is in the issue list.")));
         var close = el("button", null, "Tutup");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -269,7 +270,7 @@
           c.appendChild(el("p", "note", "Ditolak: " + e.message));
           no.disabled = false;
         } else {                                        // no answer: the server may have run it; do not prepare the same thing again blind
-          c.appendChild(el("p", "note", "Status tidak diketahui, mungkin sudah berjalan. Cek daftar " + (card.action === "prd_new" ? "kartu" : card.action === "research_new" ? "riset" : (card.action.indexOf("job_") === 0 ? "keputusan" : "issue")) + " sebelum mencoba lagi."));
+          c.appendChild(el("p", "note", "Status unknown, it may already be running. Check the " + (card.action === "prd_new" ? "Queue tab" : card.action === "research_new" ? "research list" : (card.action.indexOf("job_") === 0 ? "Decisions tab" : "issue list")) + " before trying again."));
           no.disabled = false;
           if (card.action === "research_new") { loadResearch(); }
           else if (card.action.indexOf("job_") === 0) { loadDecisions(); }
@@ -341,7 +342,7 @@
   }
   function renderIssues() {
     clear(stream);
-    if (!issues.length) { stream.appendChild(el("p", "muted", "Belum ada issue. Tulis satu di bawah.")); }
+    if (!issues.length) { stream.appendChild(el("p", "muted", "No issues yet. Write one below.")); }
     issues.slice(0, 20).forEach(function (t) { stream.appendChild(issueCard(t)); });
   }
   function act(label, build, cls) {
@@ -353,8 +354,8 @@
   function formState() {
     var r = mode === "research", p = mode === "prd";
     repoSel.hidden = r || (!p && openIssue !== null);
-    document.getElementById("prepare").textContent = r ? "Siapkan riset" : (p ? "Siapkan PRD" : (openIssue !== null ? "Siapkan balasan" : "Siapkan issue baru"));
-    message.placeholder = r ? "Tulis pertanyaan riset (20 sampai 2000 karakter)" : (p ? "Tulis permintaan PRD: apa yang diubah dan kenapa" : "Tulis pesan");
+    document.getElementById("prepare").textContent = r ? "Prepare research" : (p ? "Prepare PRD" : (openIssue !== null ? "Prepare reply" : "Prepare new issue"));
+    message.placeholder = r ? "Write the research question (20 to 2000 characters)" : (p ? "Write the PRD request: what changes and why" : "Write a message");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
@@ -388,11 +389,11 @@
       }
       c.appendChild(acts);
       stream.appendChild(c);
-      var back = el("button", null, "Semua issue");
+      var back = el("button", null, "All issues");
       back.type = "button";
       back.addEventListener("click", function () { dropPending(); openIssue = null; formState(); renderIssues(); });
       stream.appendChild(back);
-    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Issue tidak dapat dibaca.")); });
+    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Cannot read this issue.")); });
   }
   function loadIssues() {
     get("/api/issues").then(function (d) {
@@ -402,7 +403,7 @@
       (d.repos || []).forEach(function (r) { var o = el("option", null, r); o.value = r; repoSel.appendChild(o); });
       if (keep) { repoSel.value = keep; }
       if (mode === "issue" && openIssue === null) { renderIssues(); }
-    }).catch(function () { summary.textContent = "gagal memuat issue"; });
+    }).catch(function () { summary.textContent = "failed to load issues"; });
   }
   // ---- C3: research mode. A report is text from the web and a model: it goes on the page as text under the server's banner. ----------
   var researchJobs = [];
@@ -421,14 +422,14 @@
   }
   function renderResearchList() {
     clear(stream);
-    if (!researchJobs.length) { stream.appendChild(el("p", "muted", "Belum ada riset. Tulis pertanyaan di bawah.")); }
+    if (!researchJobs.length) { stream.appendChild(el("p", "muted", "No research yet. Write a question below.")); }
     researchJobs.slice(0, 20).forEach(function (t) { stream.appendChild(researchCard(t)); });
   }
   function loadResearch() {
     get("/api/research").then(function (d) {
       researchJobs = d.research || [];
       if (mode === "research" && openResearch === null) { renderResearchList(); }
-    }).catch(function () { summary.textContent = "gagal memuat riset"; });
+    }).catch(function () { summary.textContent = "failed to load research"; });
   }
   function showResearch(id) {
     var my = ++researchSeq;
@@ -462,11 +463,11 @@
       var link = viewerLink(d.state === "starting" || d.state === "refused" ? null : VIEWER + d.id);
       if (link) { c.appendChild(link); }
       stream.appendChild(c);
-      var back = el("button", null, "Semua riset");
+      var back = el("button", null, "All research");
       back.type = "button";
       back.addEventListener("click", function () { researchSeq++; openResearch = null; renderResearchList(); loadResearch(); });
       stream.appendChild(back);
-    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Riset tidak dapat dibaca.")); });
+    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Cannot read this research.")); });
   }
   // ---- C4: decisions. Reject and abandon of a job through the same prepare and confirm; no draft is accepted here. ------------------------
   var decisionRows = [];
@@ -491,7 +492,7 @@
       why.type = "text";
       why.maxLength = 300;
       why.autocomplete = "off";
-      why.placeholder = "Alasan (wajib untuk Reject)";
+      why.placeholder = "Reason (required for Reject)";
       why.setAttribute("aria-label", "Alasan");
       c.appendChild(why);
       var hint = el("p", "note");
@@ -501,7 +502,7 @@
         var b = el("button", null, label);
         b.type = "button";
         b.addEventListener("click", function () {
-          if (needReason && why.value.trim() === "") { hint.textContent = "Isi alasan dulu di kolom di atas tombol."; return; }
+          if (needReason && why.value.trim() === "") { hint.textContent = "Fill in the reason in the field above the button first."; return; }
           hint.textContent = "";
           prepare({ action: action, job: r.id, sha: r.sha12 || "", reason: why.value });
         });
@@ -520,7 +521,7 @@
   }
   function renderDecisions() {
     clear(stream);
-    if (!decisionRows.length) { stream.appendChild(el("p", "muted", "Tidak ada job yang menunggu keputusan.")); }
+    if (!decisionRows.length) { stream.appendChild(el("p", "muted", "No jobs are waiting for a decision.")); }
     decisionRows.forEach(function (r) { stream.appendChild(decideCard(r)); });
   }
   function loadDecisions(rerender) {                    // rerender false: the poll in load() only refreshes the rows, the badge and the panel; the guarded poll and setMode draw the page
@@ -529,7 +530,7 @@
       updateBadge();
       renderList();
       if (rerender !== false && mode === "decide" && openDecision === null) { renderDecisions(); }
-    }).catch(function () { if (rerender !== false) { summary.textContent = "gagal memuat keputusan"; } });
+    }).catch(function () { if (rerender !== false) { summary.textContent = "failed to load decisions"; } });
   }
   function showDecision(id) {                           // the Decide link of the viewer: opens a card, chooses and prepares nothing
     openDecision = id;
@@ -538,11 +539,11 @@
       if (d.kind === "issue") { setMode("issue"); showIssue(id); return; }
       clear(stream);
       stream.appendChild(decideCard(d));
-      var back = el("button", null, "Semua keputusan");
+      var back = el("button", null, "All decisions");
       back.type = "button";
       back.addEventListener("click", function () { openDecision = null; renderDecisions(); loadDecisions(); });
       stream.appendChild(back);
-    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Job tidak dapat dibaca.")); });
+    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Cannot read this job.")); });
   }
   // ---- T3: the plan card and the install card (SPEC_KARTU_SETUJU), read only. Presentation only: every field is the server's, put on the page as text, in
   // sections that are questions; who speaks is a label (atha, model, mesin, pembaca). Nothing here chooses a colour from a number or a class of the test.
@@ -637,7 +638,7 @@
       b.addEventListener("click", x.fn);
       wrap.appendChild(b);
     });
-    var back = el("button", null, "Semua kartu");
+    var back = el("button", null, "All cards");
     back.type = "button";
     back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
     wrap.appendChild(back);
@@ -891,7 +892,7 @@
   }
   function renderCards() {
     clear(stream);
-    if (!cardRows.length) { stream.appendChild(el("p", "muted", "Belum ada PRD atau antrean.")); }
+    if (!cardRows.length) { stream.appendChild(el("p", "muted", "No PRD or queue yet.")); }
     cardRows.forEach(function (r) { stream.appendChild(cardRow(r)); });
   }
   function loadCards() {
@@ -900,7 +901,7 @@
       if (seq !== cardSeq) { return; }
       cardRows = d.rows || [];
       if (mode === "cards") { renderCards(); }
-    }).catch(function () { summary.textContent = "gagal memuat kartu"; });
+    }).catch(function () { summary.textContent = "failed to load cards"; });
   }
   function itemCard(it, dim) {
     var c = el("article", "card" + (dim ? " stale" : ""));
@@ -921,7 +922,7 @@
       b.type = "button";
       b.addEventListener("click", function () { prepare({ action: t4b.action, queue: id }); });
       box.appendChild(b);
-      box.appendChild(el("p", "small", t4b.action === "queue_step" ? "Drafter menulis tes dan kontrak. Belum ada yang di-apply; draf tetap kamu setujui sendiri." : "Kartu berikutnya menampilkan draf; tes dan kontraknya tulisan model. Apply tetap lewat terminal."));
+      box.appendChild(el("p", "small", t4b.action === "queue_step" ? "The drafter writes tests and the contract. Nothing is applied yet; you still confirm the draft yourself." : "The next card shows the draft; its tests and contract are model text. Apply is still done from the terminal."));
     } else if (t4b.why) {
       box.appendChild(el("p", "note", t4b.why));
     }
@@ -981,15 +982,15 @@
         } else { stream.appendChild(itemCard(it, d.stale || d.superseded)); }
       });
       if (kind === "queue") { stream.appendChild(stepActions(id, d.t4b)); }
-      var back = el("button", null, "Semua kartu");
+      var back = el("button", null, "All cards");
       back.type = "button";
       back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
       stream.appendChild(back);
     }).catch(function () {
       if (seq !== cardSeq || mode !== "cards") { return; }                      // an older answer, or the user moved to another page
       clear(stream);
-      stream.appendChild(el("p", "muted", "Kartu tidak dapat dibaca."));
-      var back = el("button", null, "Semua kartu");
+      stream.appendChild(el("p", "muted", "Cannot read this card."));
+      var back = el("button", null, "All cards");
       back.type = "button";
       back.addEventListener("click", function () { cardSeq++; openCard = null; renderCards(); loadCards(); });
       stream.appendChild(back);
@@ -999,9 +1000,9 @@
     var b = document.getElementById("decide-badge"), n = decisionRows.length;
     b.hidden = n === 0;
     b.textContent = n > 9 ? "9+" : String(n);
-    b.setAttribute("aria-label", n + " job menunggu keputusan");
+    b.setAttribute("aria-label", n + " jobs awaiting a decision");
   }
-  var KIND_LABEL = { code: "Kode", prd: "PRD", research: "Riset", issue: "Issue" };
+  var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
   function renderCost() {                               // what the job list already carries: the cost of finished stages. Not the daily cap, not what is booked (a later change).
     clear(stream);
     var total = 0, by = Object.create(null), unknown = 0;
@@ -1009,15 +1010,15 @@
       if (t.stages_unknown) { unknown++; }
       var u = typeof t.stages_usd === "number" ? t.stages_usd : 0;
       total += u;
-      var k = KIND_LABEL[t.kind] || "Lain";
+      var k = KIND_LABEL[t.kind] || "Other";
       by[k] = (by[k] || 0) + u;
     });
     var c = el("article", "card");
-    c.appendChild(el("h2", null, "Biaya tahap yang tercatat"));
-    fact(c, "Total (" + threads.length + " job di daftar)", usd(total));
+    c.appendChild(el("h2", null, "Recorded stage cost"));
+    fact(c, "Total (" + nJobs(threads.length) + " in the list)", usd(total));
     Object.keys(by).sort().forEach(function (k) { fact(c, k, usd(by[k])); });
-    if (unknown) { c.appendChild(el("p", "note", unknown + " job punya tahap tanpa angka biaya: angkanya tidak dihitung, bukan nol.")); }
-    c.appendChild(el("p", "note", "Hanya angka tahap yang tercatat di daftar job (yang terbaru saja). Batas harian dan uang yang sudah dipesan belum ditampilkan di layar ini."));
+    if (unknown) { c.appendChild(el("p", "note", nJobs(unknown) + (unknown === 1 ? " has" : " have") + " a stage with no cost figure: not counted, not zero.")); }
+    c.appendChild(el("p", "note", "Only stage figures recorded in the job list (the newest only). The daily cap and the money already booked are not shown on this screen yet."));
     stream.appendChild(c);
     var rows = threads.filter(function (t) { return typeof t.stages_usd === "number" && t.stages_usd > 0; })
       .sort(function (x, y) { return y.stages_usd - x.stages_usd; }).slice(0, 15);
@@ -1025,7 +1026,7 @@
       var d = el("article", "card");
       d.appendChild(el("h2", null, "Per job"));
       rows.forEach(function (t) {
-        var kv = el("div", "kv");
+        var kv = el("div", "kv cost");
         kv.appendChild(el("span", "k", (t.repo ? t.repo + ": " : "") + (t.title || t.id)));
         kv.appendChild(el("span", "v", usd(t.stages_usd)));
         d.appendChild(kv);
@@ -1056,7 +1057,7 @@
     openDecision = null;
     formState();
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
-    else if (m === "prd") { openIssue = null; formState(); loadIssues(); clear(stream); stream.appendChild(el("p", "muted", "Tulis permintaan di bawah untuk penulis PRD. Satu giliran; hasilnya muncul di tab Kartu.")); }
+    else if (m === "prd") { openIssue = null; formState(); loadIssues(); clear(stream); stream.appendChild(el("p", "muted", "Write a request for the PRD writer below. One turn; the result appears in the Queue tab.")); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else if (m === "cards") { loadCards(); renderCards(); }

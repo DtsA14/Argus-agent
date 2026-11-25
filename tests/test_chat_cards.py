@@ -612,7 +612,7 @@ def test_the_page_marks_a_stale_folder_item_by_item_and_a_failed_card_has_a_way_
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     part = js[js.index("// ---- T2: read-only cards"):js.index("  function setMode(m) {")]
     assert "itemCard(it, d.stale || d.superseded)" in part and 'if (seq !== cardSeq || mode !== "cards") { return; }' in part
-    assert part.count('"Semua kartu"') == 2 and 'r.status === "pass"' in part
+    assert part.count('"All cards"') == 2 and 'r.status === "pass"' in part
 
 
 # ---- the survivors of the first mutant run --------------------------------------------------------------------------------------

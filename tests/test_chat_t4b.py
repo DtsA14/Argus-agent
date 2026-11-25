@@ -567,7 +567,7 @@ def test_the_page_sends_only_the_queue_id_and_has_no_apply_button():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     assert "prepare({ action: t4b.action, queue: id })" in js
     assert "Mulai issue" in js and "Setujui draf issue" in js
-    assert "apply" not in js.lower().replace("apply tetap lewat terminal", "").replace("belum ada yang di-apply", "").replace("apply (belum", "")
+    assert "apply" not in js.lower().replace("apply is still done from the terminal", "").replace("nothing is applied yet", "").replace("apply (belum", "")
 
 
 # ---- SPEC_CHAT_UI1 F17: the draft card shows the plan, the writer's notes and the tests the draft changes -------------------------
