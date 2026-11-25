@@ -286,6 +286,8 @@ class Handler(BaseHTTPRequestHandler):
         if a is not None and m:
             got = a.thread(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        if a is not None and path == "/api/cap":                    # SPEC_CHAT_UI3C: the daily cap and the booked exposure, read only
+            return self._json(200, a.cap_status())
         if a is not None and path == "/api/waiting":                # SPEC_CHAT_UI3B: what waits for the person, read only
             return self._json(200, a.waiting())
         if a is not None and path == "/api/decisions":

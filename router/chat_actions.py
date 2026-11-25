@@ -164,6 +164,7 @@ class Actions:
         self.audit_path = self.state / "audit.jsonl"
         self._exposure_once = None                 # SPEC_CHAT_UI3B: set only inside waiting(): the exposure computed once for that request
         self._waiting_cache = None                 # (monotonic time, answer): the list of what waits, for WAIT_TTL_S
+        self._cap_cache = None                     # the same, for cap_status()
         self.mono = time.monotonic
         self.prepared = {}                         # token -> the prepared action
         self.pending = []                          # (at, ("new"|"start", job id), usd): confirms the job directories may not show yet
@@ -654,6 +655,27 @@ class Actions:
                 skipped += 1
         return {"decisions": rows, "capped": False, "skipped": skipped}
 
+    # ---- the daily cap, for the Cost tab (SPEC_CHAT_UI3C) -----------------------------------------------------------------------------
+
+    def cap_status(self):
+        """{cap_usd, booked_usd, unknown}: the daily cap and the exposure the cap counts (the full limit of every job a UI action started in the last 24 hours, not what
+        they spent). The same numbers `check_cap` uses. Never raises: when the exposure cannot be computed, `booked_usd` is null and `unknown` is true (never 0). Kept WAIT_TTL_S seconds."""
+        now = self.mono()
+        cached = self._cap_cache
+        if cached is not None and now - cached[0] < WAIT_TTL_S:
+            return cached[1]
+        try:
+            cap = self.daily_cap()
+            try:
+                booked, unknown = round(float(self.exposure()), 6), False
+            except Exception:
+                booked, unknown = None, True
+            out = {"cap_usd": cap, "booked_usd": booked, "unknown": unknown}
+        except Exception:
+            out = {"cap_usd": None, "booked_usd": None, "unknown": True}
+        self._cap_cache = (now, out)
+        return out
+
     # ---- what waits for the person (SPEC_CHAT_UI3B 1) --------------------------------------------------------------------
 
     def waiting(self):
@@ -992,6 +1014,7 @@ class Actions:
         """(action, card, run params, digest) of a confirmed action, or Refusal. A token is spent by the first confirm that is not too soon."""
         now = self.clock()
         self._waiting_cache = None                 # what waits changes with every confirm
+        self._cap_cache = None                     # and so does the booked money
         p = self.prepared.get(token) if isinstance(token, str) else None
         if p is None or now - p["issued"] > TOKEN_TTL:
             self.prepared.pop(token, None) if isinstance(token, str) else None
