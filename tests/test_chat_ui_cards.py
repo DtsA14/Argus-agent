@@ -30,11 +30,11 @@ def test_every_field_the_old_cards_showed_is_still_read_by_the_drawing_code(fiel
 
 # one line of the drawing code per displayed thing: a deleted or disabled line fails here even when its field name is read elsewhere
 SNIPPETS = ['r.verdict === "ok" ? "say" : "say warn"', 'x.verdict === "ok" || nit ? "say" : "say warn"', 's5.appendChild(el("p", "say", d.fixed_line))', 's7.appendChild(el("p", "say", d.fixed_line))', 'if (d.why) { card.appendChild(el("p", "note", d.why)); }', 'if (d.stale) {', 'if (d.superseded) {', 'if (d.request_truncated)', "s2.appendChild(el(\"p\", \"note\", d.summary_why))",
-            'if (d.defects) {', 'kv(d, "Andaikan", a.name + " = " + a.shown)', 'kv(d, "masukan " + i.name, i.shown)', 'kv(d, "fungsi", e.call)', "e.proof.wording",
-            'if (it.warning) { c.appendChild(el("p", "note", it.warning)); }', 'modelLine(c, "tanpa contoh: " + it.no_examples)', 'if (it.why) {', '"contoh ditahan harness"',
+            'if (d.defects) {', 'kv(d, "Assume", a.name + " = " + a.shown)', 'kv(d, "input " + i.name, i.shown)', 'kv(d, "function", e.call)', "e.proof.wording",
+            'if (it.warning) { c.appendChild(el("p", "note", it.warning)); }', 'modelLine(c, "no examples: " + it.no_examples)', 'if (it.why) {', '"examples withheld by the harness"',
             'if (r.second) { line(r.second, 2); }', 'who_(r.reader2)', "(r.sources || []).join", "r.at + \": \"", "if (d.approval) {", 'f.marks.join("; ")', 'if (d.files_cut)', 'if (d.scope_note)',
-            'd.patch_sha12 ? [{ text: "patch " + d.patch_sha12', 'd.turn ? [{ text: "giliran " + d.turn }]', "c.why ? \" - \" + c.why : \"\"", 'modelLine(s1, d.purpose.text)',
-            'd.patch_reader_tested ?', 'c.ok === false ? "cond bad"', 'p.appendChild(who("mesin", "mesin"))', '"say big"', 'd.domain_reader_tested ?', "if (d.item) { s2.appendChild(planItem(d.item, false)); }", "d.cost.reference.cap_median"]
+            'd.patch_sha12 ? [{ text: "patch " + d.patch_sha12', 'd.turn ? [{ text: "turn " + d.turn }]', "c.why ? \" - \" + c.why : \"\"", 'modelLine(s1, d.purpose.text)',
+            'd.patch_reader_tested ?', 'c.ok === false ? "cond bad"', 'p.appendChild(who("mesin", "machine"))', '"say big"', 'd.domain_reader_tested ?', "if (d.item) { s2.appendChild(planItem(d.item, false)); }", "d.cost.reference.cap_median"]
 
 
 @pytest.mark.parametrize("snippet", SNIPPETS)
@@ -68,10 +68,10 @@ def test_no_colour_or_class_comes_from_a_number_or_from_the_cost_ratio():
 
 
 def test_the_cards_still_have_no_button_that_decides_anything():
-    # SPEC_CHAT_T4A: the plan card has one live button ("Setujui rencana", prepared with the job id only) and one disabled placeholder; nothing else decides
+    # SPEC_CHAT_T4A: the plan card has one live button ("Accept plan", prepared with the job id only) and one disabled placeholder; nothing else decides
     # (Atha 2026-11-25: the second button, the money, is live: prepared with the job id, the ack and the typed reason only; see test_chat_ui.py)
-    assert re.findall(r'el\("button", null, "([^"]+)"', BLOCK) == ["All cards"] and re.findall(r'\{ text: "([^"]+)", fn:', BLOCK) == ["Kartu teknis"]
-    assert re.findall(r'el\("button", "go", "([^"]+)"', BLOCK) == ["Setujui rencana", "Jalankan antrean (uang keluar)"]
+    assert re.findall(r'el\("button", null, "([^"]+)"', BLOCK) == ["All cards"] and re.findall(r'\{ text: "([^"]+)", fn:', BLOCK) == ["Technical card"]
+    assert re.findall(r'el\("button", "go", "([^"]+)"', BLOCK) == ["Accept plan", "Run queue (money is spent)"]
     assert not re.search(r'method:\s*"POST"|\.post\(', BLOCK) and BLOCK.count("prepare(") == 2 and 'prepare({ action: "prd_approve", job: id })' in BLOCK and "prepare(body)" in BLOCK
 
 

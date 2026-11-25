@@ -414,7 +414,7 @@ def test_the_cards_part_of_the_page_only_reads_and_only_writes_text():
     for banned in ("post(", "innerHTML", "outerHTML", "insertAdjacentHTML", "localStorage", "sessionStorage", "document.cookie", "fetch(",
                    "XMLHttpRequest", "method:", "eval(", "new Function", "document.write"):
         assert banned not in part, banned
-    assert part.count('get("/api/cards') == 2 and "ditulis model" in part and "kode itu ditulis model dan bisa memalsukannya" in part
+    assert part.count('get("/api/cards') == 2 and "written by a model" in part and "that code is written by a model and can fake it" in part
     html = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "index.html").read_text()
     assert 'data-tab="cards"' in html                      # UI-3a: the Kartu chip is the Antrean tab
 
@@ -743,7 +743,7 @@ def test_a_long_first_message_is_cut_in_the_list_and_whole_in_the_card(svc):
 def test_the_page_shows_the_summary_once_the_label_once_and_no_title_twice():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     part = js[js.index("// ---- T2: read-only cards"):js.index("  function setMode(m) {")]
-    assert "Ringkasan mesin: " in part and "perilaku baru (after): " in part and "sm.after === 0" in part
+    assert "Machine summary: " in part and "new behaviour (after): " in part and "sm.after === 0" in part
     assert part.count("output of the example's own code") == 1 and "if (it.title && !it.text)" in part
 
 

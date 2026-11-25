@@ -566,7 +566,7 @@ def test_the_button_never_offers_what_prepare_refuses(svc):
 def test_the_page_sends_only_the_queue_id_and_has_no_apply_button():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     assert "prepare({ action: t4b.action, queue: id })" in js
-    assert "Mulai issue" in js and "Setujui draf issue" in js
+    assert "Start issue" in js and "Accept draft of issue" in js
     assert "apply" not in js.lower().replace("apply is still done from the terminal", "").replace("nothing is applied yet", "").replace("apply (belum", "")
 
 

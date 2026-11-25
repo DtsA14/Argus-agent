@@ -533,7 +533,7 @@ def test_a_confirm_whose_run_is_alive_but_whose_directory_is_not_there_yet_count
 def test_the_stalled_line_does_not_claim_the_job_is_dead():
     js = (ROOT / "router" / "chat_static" / "app.js").read_text()
     line = [x for x in js.split("\n") if "if (d.stalled)" in x][0]
-    assert "argus resume" not in line and "argus status" in line and "berjalan dari terminal atau terhenti" in line
+    assert "argus resume" not in line and "argus status" in line and "it is running from the terminal or has stalled" in line
 
 
 def test_the_cut_note_is_only_for_the_harness_marker_at_the_end(svc):

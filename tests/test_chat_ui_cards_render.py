@@ -85,4 +85,4 @@ def test_a_warning_class_appears_only_where_the_server_marks_something(world):
     assert "cond bad" in draw(k["i2"], s, root)
     ok_card = draw(k["i3"], s, root)
     assert "cond bad" not in ok_card and "file flagged" not in ok_card                  # a condition that does not apply is not drawn as a failed one
-    assert '<span class="who mesin">mesin</span>' in flagged
+    assert '<span class="who mesin">machine</span>' in flagged
