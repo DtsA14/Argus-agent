@@ -135,10 +135,41 @@ def test_a_candidate_whose_builder_raises_is_counted_not_a_500(svc, monkeypatch)
     assert st == 200 and body["waiting"] == [] and body["skipped"] == 1
 
 
-def test_an_unreadable_listing_is_capped_not_empty_and_fine(svc, monkeypatch):
-    monkeypatch.setattr(svc.actions.cards, "listing", lambda: (_ for _ in ()).throw(OSError("gone")))
-    body = get(svc)[1]
-    assert body["waiting"] == [] and body["capped"] is True
+def test_an_unreadable_jobs_directory_is_capped_not_nothing_waits(svc, monkeypatch):
+    def boom(self_):
+        raise OSError("gone")
+    monkeypatch.setattr(type(svc.actions.cards), "_listing", lambda self, queue_rows=None: boom(self))      # `listing` swallows it and comes back with no rows and truncated
+    st, body = get(svc)
+    assert st == 200 and body["waiting"] == [] and body["capped"] is True
+
+
+def test_a_scan_that_blows_up_anywhere_still_answers_200_and_says_it_may_be_incomplete(svc, monkeypatch):
+    monkeypatch.setattr(svc.actions.cards, "_queue_rows", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("hostile")))
+    st, body = get(svc)
+    assert st == 200 and body["waiting"] == [] and body["capped"] is True and svc.actions._exposure_once is None
+
+
+def test_a_job_file_that_is_nested_too_deep_for_the_exposure_scan_is_an_unknown_cap_not_a_dropped_answer(svc, monkeypatch):
+    t4.queue(svc)
+
+    def deep():
+        raise RecursionError("maximum recursion depth exceeded")
+    monkeypatch.setattr(svc.actions, "_exposure_scan", deep)
+    st, body = get(svc)
+    assert st == 200 and body["cap_unknown"] is True and svc.actions._exposure_once is None
+
+
+def test_the_plan_row_is_still_listed_when_the_cap_is_unknown_because_it_spends_nothing(plan_svc, monkeypatch):
+    tp.setup(plan_svc, queue=False)
+    monkeypatch.setattr(plan_svc.actions, "_exposure_scan", lambda: (_ for _ in ()).throw(ca.Refusal(503, "cap", "unknown")))
+    body = get(plan_svc)[1]
+    assert body["cap_unknown"] is True and [r["action"] for r in body["waiting"]] == ["prd_approve"]
+
+
+def test_the_candidates_are_ordered_by_the_time_in_the_id_not_by_a_field_a_file_can_forge():
+    f = ca.Actions._id_time
+    assert f("j20261121_150231_cbce") == "20261121150231" and f("q20261125T074538Z-310a") == "20261125074538"
+    assert f("q20261125T074538Z-310a") > f("j20261121_150231_cbce") and f("") == ""
 
 
 def test_the_route_needs_the_chat_actions_and_answers_no_other_method(svc):
@@ -219,3 +250,46 @@ def test_the_plan_of_a_running_queue_is_not_counted_as_a_candidate(plan_svc):
     p.write_text(json.dumps(data))
     body = get(plan_svc)[1]
     assert body["scanned"] == 1                                                         # the queue only: its plan has no button to offer
+
+
+# ---- the applied count -------------------------------------------------------------------------------------------------------
+
+def applied_job(svc, job_id, text):
+    jd = t4.awaiting(svc, job_id, text, state="APPLIED")
+    p = jd / "job.json"
+    data = json.loads(p.read_text())
+    data["log"] = [{"what": "state", "new": "APPLIED", "commit": "a" * 40, "as_is": True}]
+    p.write_text(json.dumps(data))
+    return jd
+
+
+def test_an_applied_item_is_counted(svc):
+    applied_job(svc, t4.J1, t4.TEXT)
+    t4.queue(svc, jobs=(t4.J1, None))
+    q = [r for r in svc.request("GET", "/api/cards")[1]["rows"] if r["kind"] == "queue"][0]
+    assert q["state"] == "WAITING" and q["items"] == 2 and q["applied_n"] == 1
+
+
+def test_a_queue_with_too_many_items_has_no_state_and_no_count_never_zero_of_n(svc):
+    texts = tuple(tc.issue_text(title=f"item {n}") for n in range(1, 23))
+    t4.queue(svc, texts=texts, jobs=tuple(None for _ in texts))
+    q = [r for r in svc.request("GET", "/api/cards")[1]["rows"] if r["kind"] == "queue"][0]
+    assert q["state"] is None and q["applied_n"] is None
+
+
+def test_the_plan_of_a_finished_queue_is_not_a_candidate(plan_svc, monkeypatch):
+    tp.setup(plan_svc, queue=False)
+    done = {"id": "q20261117T100400Z-abcd", "kind": "queue", "state": "DONE", "prd_job": tc.PJOB, "at": "2026-11-17T10:04:00Z", "repo": "athena", "title": "athena", "items": 2, "applied_n": 2}
+    monkeypatch.setattr(plan_svc.actions.cards, "_queue_rows", lambda *a, **k: ([done], False))
+    body = get(plan_svc)[1]
+    assert body["scanned"] == 0 and body["waiting"] == []
+
+
+def test_the_queues_are_read_and_derived_once_per_scan(svc):
+    t4.queue(svc)
+    calls = []
+    real = svc.actions.cards._queue_rows
+    svc.actions.cards._queue_rows = lambda *a, **k: calls.append(1) or real(*a, **k)
+    fresh(svc)
+    get(svc)
+    assert len(calls) == 1

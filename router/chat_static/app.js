@@ -15,7 +15,7 @@
   var groupOpen = Object.create(null);                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
   var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
   var waitingRows = [];                                 // what waits for the person (/api/waiting); the Decisions tab and the badge count it with the open jobs
-  var waitingMeta = { capped: false, unknown: false };
+  var waitingMeta = { capped: false, unknown: false, stale: false };
   var decideSeq = 0;
   var lastChat = "status";                              // the mode the Chat tab returns to
 
@@ -532,15 +532,16 @@
   function waitLabel(r) {
     if (r.action === "prd_approve") { return "Plan ready for your decision"; }
     if (r.action === "queue_go") { return "Queue waits for your go (money)"; }
-    if (r.action === "queue_step") { return "Start issue " + r.item + " (drafter)"; }
-    return "Draft of issue " + r.item + " is ready for you";
+    var n = typeof r.item === "number" ? "issue " + r.item : "the next issue";
+    if (r.action === "queue_step") { return "Start " + n + " (drafter)"; }
+    return "Draft of " + n + " is ready for you";
   }
   function waitingCard(r) {
     var c = el("article", "card compact waiting");
     c.appendChild(el("h2", null, waitLabel(r)));
     var row = el("div", "row");
     if (r.repo) { row.appendChild(el("span", null, r.repo)); }
-    if (r.title) { row.appendChild(el("span", null, r.title)); }
+    if (r.title && r.title !== r.repo) { row.appendChild(el("span", null, r.title)); }     // a queue's title is its repository's name: not twice
     c.appendChild(row);
     c.addEventListener("click", function () {
       setMode("cards");
@@ -565,8 +566,9 @@
       stream.appendChild(el("h2", "sec-title", "Waiting for you"));
       waitingRows.forEach(function (r) { stream.appendChild(waitingCard(r)); });
     }
-    if (waitingMeta.unknown) { stream.appendChild(el("p", "note", "The daily cap could not be computed: steps that spend money are not listed.")); }
+    if (waitingMeta.unknown) { stream.appendChild(el("p", "note", "The daily cap could not be computed: the queue's go and the steps of queues whose go was more than 24 hours ago are not listed.")); }
     if (waitingMeta.capped) { stream.appendChild(el("p", "note", "Not everything was checked: this list may be incomplete.")); }
+    if (waitingMeta.stale) { stream.appendChild(el("p", "note", "Could not refresh this list: the rows shown may be out of date.")); }
     if (rows.length) {
       stream.appendChild(el("h2", "sec-title", "Open jobs"));
       rows.forEach(function (r) { stream.appendChild(decideCard(r)); });
@@ -583,9 +585,9 @@
       decisionRows = both[0].decisions || [];
       if (both[1]) {
         waitingRows = both[1].waiting || [];
-        waitingMeta = { capped: !!both[1].capped, unknown: !!both[1].cap_unknown };
+        waitingMeta = { capped: !!both[1].capped, unknown: !!both[1].cap_unknown, stale: false };
       } else {
-        waitingMeta = { capped: true, unknown: false };   // the list could not be read: the rows stay as they were and the page says it may be incomplete
+        waitingMeta = { capped: waitingMeta.capped, unknown: waitingMeta.unknown, stale: true };   // the list could not be read: the rows stay as they were and the page says they may be out of date
       }
       updateBadge();
       renderList();
@@ -945,7 +947,7 @@
     if (r.repo) { row.appendChild(el("span", null, r.repo)); }
     if (r.items !== null && r.items !== undefined) { row.appendChild(el("span", null, r.items === 1 ? "1 item" : r.items + " items")); }
     c.appendChild(row);
-    if (r.kind === "queue" && r.state !== "CLOSED" && typeof r.applied_n === "number" && typeof r.items === "number" && r.items > 0) {      // only items whose card shows a commit count; nothing running or failed is called done
+    if (r.kind === "queue" && r.state && r.state !== "CLOSED" && typeof r.applied_n === "number" && typeof r.items === "number" && r.items > 0) {      // only items whose card shows a commit count; nothing running or failed is called done
       var bar = el("progress", "pbar");
       bar.max = r.items;
       bar.value = r.applied_n;

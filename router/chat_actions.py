@@ -659,56 +659,62 @@ class Actions:
     def waiting(self):
         """{waiting, scanned, skipped, capped, cap_unknown}: the buttons the builders offer now (the plan's, the queue's money, a step, a draft), from the same
         `plans.state` and `steps.state` the cards use. Display only: prepare and confirm rebuild and re-check everything. Bounded: WAIT_SCAN_MAX candidates,
-        WAIT_BUDGET_S seconds, the exposure computed once, the answer kept WAIT_TTL_S seconds. No reason text and no path is ever copied into a row."""
+        WAIT_BUDGET_S seconds, the exposure computed once, the answer kept WAIT_TTL_S seconds. No reason text and no path is ever copied into a row.
+        Never raises: whatever the files hold, the answer says it may be incomplete."""
         t0 = self.mono()
         cached = self._waiting_cache
         if cached is not None and t0 - cached[0] < WAIT_TTL_S:
             return cached[1]
-        out = self._waiting_scan(t0)
+        try:
+            out = self._waiting_scan(t0)
+        except Exception:
+            out = {"waiting": [], "scanned": 0, "skipped": 0, "capped": True, "cap_unknown": False}
+        finally:
+            self._exposure_once = None
         self._waiting_cache = (t0, out)
         return out
 
+    @staticmethod
+    def _id_time(row_id):
+        """The time written in a job or queue id as digits (j20261121_150231_cbce, q20261125T074538Z-310a), for one order over both; a forged created_at cannot move a row."""
+        return re.sub(r"\D", "", str(row_id)[1:16])
+
     def _waiting_scan(self, t0):
-        rows, skipped, capped = [], 0, False
-        try:
-            listing = self.cards.listing()
-            qrows, _qtrunc = self.cards._queue_rows()
-        except Exception:
-            return {"waiting": [], "scanned": 0, "skipped": 0, "capped": True, "cap_unknown": False}
-        capped = False                             # the newest rows are looked at: older rows than the listing keeps are weeks old and not a reason to warn; the limit and the time budget below are
+        rows, skipped = [], 0
+        qrows, qtrunc = self.cards._queue_rows()
+        listing = self.cards.listing(queue_rows=(qrows, qtrunc))
+        capped = not listing.get("rows") and bool(listing.get("truncated"))       # `listing` never raises: an unreadable directory comes back as no rows and truncated. The newest rows are looked at; older ones are weeks old and not a reason to warn.
         blocked = {r.get("prd_job") for r in qrows if r.get("prd_job") and r.get("state") in ("WAITING", "STOPPED", "DONE")}   # the plan is already a running or finished queue: no button to offer
         cands = [("plan", r) for r in listing.get("rows") or [] if r.get("kind") == "prd" and r.get("state") == AWAITING_HUMAN and r.get("id") not in blocked]
         cands += [("queue", r) for r in qrows if r.get("state") == "WAITING"]
-        cands.sort(key=lambda c: (c[1].get("at") or "", c[1].get("id") or ""), reverse=True)
+        cands.sort(key=lambda c: self._id_time(c[1].get("id")), reverse=True)
         if len(cands) > WAIT_SCAN_MAX:
             cands, capped = cands[:WAIT_SCAN_MAX], True
+        cap_unknown = False
         try:
             self._exposure_once = ("ok", self._exposure_scan())
-        except Refusal as e:
-            self._exposure_once = ("err", e)
-        cap_unknown = self._exposure_once[0] == "err"
-        try:
-            for kind, r in cands:
-                if self.mono() - t0 > WAIT_BUDGET_S:
-                    capped = True
-                    break
-                try:
-                    if kind == "plan":
-                        st = self.plans.state(r["id"])
-                        job, item = None, None
-                    else:
-                        st = self.steps.state(r["id"], with_job=True)
-                        job, item = st.get("job"), st.get("item")
-                    action = st.get("action")
-                    if action not in WAITING_ACTIONS:
-                        continue
-                    rows.append({"action": action, "card": "plan" if kind == "plan" else "queue", "id": r["id"], "job": job if isinstance(job, str) and UI_ID.fullmatch(job) else None,
-                                 "repo": r.get("repo") if isinstance(r.get("repo"), str) else None, "title": r.get("title") if isinstance(r.get("title"), str) else None,
-                                 "item": item if isinstance(item, int) and not isinstance(item, bool) else None})
-                except Exception:
-                    skipped += 1
-        finally:
-            self._exposure_once = None
+        except Exception as e:                          # a Refusal, or a file the scan could not take (a RecursionError is not a ValueError): the exposure is unknown
+            self._exposure_once = ("err", e if isinstance(e, Refusal) else Refusal(503, "cap", "the daily exposure cannot be computed"))
+            cap_unknown = True
+        for kind, r in cands:
+            if self.mono() - t0 > WAIT_BUDGET_S:
+                capped = True
+                break
+            try:
+                if kind == "plan":
+                    st = self.plans.state(r["id"])
+                    job, item = None, None
+                else:
+                    st = self.steps.state(r["id"], with_job=True)
+                    job, item = st.get("job"), st.get("item")
+                action = st.get("action")
+                if action not in WAITING_ACTIONS:
+                    continue
+                rows.append({"action": action, "card": "plan" if kind == "plan" else "queue", "id": r["id"], "job": job if isinstance(job, str) and UI_ID.fullmatch(job) else None,
+                             "repo": r.get("repo") if isinstance(r.get("repo"), str) else None, "title": r.get("title") if isinstance(r.get("title"), str) else None,
+                             "item": item if isinstance(item, int) and not isinstance(item, bool) else None})
+            except Exception:
+                skipped += 1
         return {"waiting": rows, "scanned": len(cands), "skipped": skipped, "capped": capped, "cap_unknown": cap_unknown}
 
     def decision(self, job_id):
