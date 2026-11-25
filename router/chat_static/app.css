@@ -79,7 +79,7 @@ pre.code{white-space:pre-wrap;overflow-wrap:anywhere;font:.8rem ui-monospace,Men
 
 /* UI-3a: bottom tabs, the side panel by repository, the cost view (presentation only) */
 .brand{font-size:1rem;letter-spacing:.02em}
-#chips[hidden],#tabs button .badge[hidden],#panel-foot a[hidden]{display:none}
+#tabs button .badge[hidden],#panel-foot a[hidden]{display:none}
 #tabs{display:flex;gap:.25rem;width:calc(100% - 1.5rem);max-width:48rem;margin:.25rem auto .75rem;padding:.35rem;background:var(--card);border:1px solid var(--line);border-radius:2rem}
 #tabs button{flex:1;position:relative;min-height:3.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;background:none;border:0;border-radius:1.6rem;color:var(--muted);font:inherit;font-size:.75rem}
 #tabs button svg{order:-1;width:1.4rem;height:1.4rem;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -122,6 +122,20 @@ pre.code{white-space:pre-wrap;overflow-wrap:anywhere;font:.8rem ui-monospace,Men
 .card.compact h2{font-size:.95rem;font-weight:600;margin:0 0 .3rem}
 .card.compact .row{gap:.6rem}
 @media (min-width:60rem){#scrim{display:none}}
-#chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4rem}
-#chips[hidden]{display:none}
-#chips button{padding:0 .25rem;font-size:.85rem;white-space:nowrap}
+
+/* the one box: a + for the request type, the text, an arrow; the menu opens above it */
+#dock{position:relative;padding:.5rem .75rem .25rem;border-top:0}
+#box{display:flex;align-items:flex-end;gap:.5rem}
+#plus{flex:none;width:2.75rem;height:2.75rem;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--text);font:inherit;font-size:1.5rem;line-height:1}
+#issue-form{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.3rem .5rem;align-items:end;background:var(--card);border:1px solid var(--line);border-radius:1.5rem;padding:.5rem .6rem .5rem .9rem}
+#issue-form[hidden]{display:none}
+#issue-form #typebar{grid-column:1 / -1;display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:var(--muted)}
+#type-label{font-weight:600;color:var(--accent2)}
+#issue-form #typebar select{width:auto;max-width:12rem;padding:0;border:0;border-radius:0;background:none;color:var(--muted);font:inherit;font-size:.75rem}
+#issue-form textarea{padding:.2rem 0;border:0;border-radius:0;background:none;resize:none;min-height:2.4rem;max-height:7rem}
+#issue-form #prepare{width:2.4rem;height:2.4rem;min-height:0;padding:0;border:0;border-radius:50%;background:var(--accent);color:var(--on-accent);font-size:1.25rem;font-weight:700;line-height:1}
+#plus-menu{position:absolute;left:.75rem;bottom:calc(100% - .2rem);z-index:3;min-width:11rem;display:flex;flex-direction:column;padding:.35rem;background:var(--card);border:1px solid var(--line);border-radius:1rem;box-shadow:0 .5rem 1.5rem rgba(0,0,0,.45)}
+#plus-menu[hidden]{display:none}
+#plus-menu button{min-height:2.75rem;padding:0 .9rem;text-align:left;background:none;border:0;border-radius:.75rem;color:var(--text);font:inherit}
+#plus-menu button:hover{background:var(--line)}
+.spacer{visibility:hidden}

@@ -57,7 +57,7 @@ def test_the_repo_is_read_from_the_job_file_and_the_path_of_the_repo_is_never_li
 def test_the_bottom_bar_has_the_four_tabs_in_order_and_the_chips_only_the_chat_modes():
     tabs = re.findall(r'<button type="button" data-tab="(\w+)"[^>]*>([A-Za-z]+)<', HTML)
     assert tabs == [("chat", "Chat"), ("cards", "Queue"), ("decide", "Decisions"), ("cost", "Cost")]
-    assert re.findall(r'data-mode="(\w+)"', HTML) == ["status", "issue", "prd", "research"]
+    assert re.findall(r'data-mode="(\w+)"', HTML) == ["issue", "prd", "research"]               # the "+" menu of the one box: no chips, no Status (the Chat tab is the overview)
     assert 'id="tabs"' in HTML and 'aria-label="Main navigation"' in HTML
 
 
@@ -151,9 +151,11 @@ def test_the_poll_in_load_only_refreshes_and_never_redraws_the_decisions_page():
     assert 'if (!(mode === "decide" && openDecision === null)) { loadDecisions(false); }' in load
 
 
-def test_the_composer_strip_is_hidden_outside_the_chat_tab_and_the_accent_has_its_own_ink():
-    assert 'document.getElementById("dock").hidden = document.getElementById("chips").hidden && issueForm.hidden;' in JS
-    assert 'document.getElementById("chips").hidden = !chipsOpen;' in JS and "chipsOpen = chipsOpen && inChat;" in JS
+def test_the_box_is_in_the_chat_tab_only_and_the_plus_menu_closes_with_every_move():
+    assert 'document.getElementById("dock").hidden = !inChat;' in JS and "closeMenu();" in JS.split("function setChrome")[1].split("function closeMenu")[0]
+    assert "issueForm.hidden = !inChat;" in JS and "chipsOpen" not in JS and "#chips" not in JS
+    assert re.search(r'<button id="plus"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"', HTML) and 'id="plus-menu" role="menu"' in HTML
+    assert HTML.index('id="plus"') < HTML.index('<form id="issue-form"') and HTML.count("<button") - HTML.count('data-tab=') >= 8
     css = (rc.STATIC_DIR / "app.css").read_text()
     assert "--on-accent:#120d2b" in css and "--on-accent:#f6f8fa" in css and "#120d2b;" not in css.split("/* UI-3a")[1] and "env(" not in css
     assert "Object.create(null)" in JS.split("function renderList")[1].split("function renderOverview")[0]
