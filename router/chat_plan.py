@@ -378,7 +378,7 @@ class Plan:
 
     def audited(self, now):
         """(queue id, usd, time) of the queues this chat approved in the last 24 hours, from its audit file: the net under the directory count."""
-        from router.chat_actions import parse_time
+        from router.chat_actions import finite_usd, parse_time
         try:
             with open(self.a.audit_path, "rb") as f:
                 f.seek(0, os.SEEK_END)
@@ -394,7 +394,11 @@ class Plan:
                 r = json.loads(line)
                 if r.get("action") == "queue_go" and r.get("ok") == "confirm" and rq.QUEUE_ID.fullmatch(str(r.get("queue"))) \
                         and parse_time(r["at"]) >= now - DAY:
-                    out.append((r["queue"], float(r["usd"]), parse_time(r["at"])))
+                    try:
+                        usd = finite_usd(r["usd"])
+                    except (KeyError, ValueError):                 # a confirm line whose money cannot be read must not be skipped: that undercounts (F25)
+                        raise self._no(503, "cap", "the daily exposure cannot be computed (a confirmed queue_go line of the audit has no valid amount)") from None
+                    out.append((r["queue"], usd, parse_time(r["at"])))
             except (ValueError, KeyError, TypeError, AttributeError):
                 continue
         return out

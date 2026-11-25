@@ -78,7 +78,7 @@ def test_a_research_or_prd_cap_that_is_not_finite_makes_the_exposure_unknown(svc
 def test_an_amount_a_card_adds_that_is_not_a_finite_number_is_refused(svc, bad):
     with pytest.raises(ca.Refusal) as e:
         svc.actions.check_cap({"action": "issue_new", "job_cap_usd": bad})
-    assert e.value.status == 403 and e.value.gate == "cap"
+    assert e.value.status == 503 and e.value.gate == "cap"
 
 
 def test_a_sum_that_is_not_a_finite_number_is_unknown_whatever_fed_it(svc, monkeypatch):
@@ -134,3 +134,71 @@ def test_a_queue_approved_via_the_ui_with_a_bad_amount_makes_the_exposure_unknow
             d.rmdir()
     finally:
         s.stop()
+
+
+# ---- the second review: the audit lines, the guard's place, the message, the handoff and the pending money -------------------------------------
+
+def write_audit(svc, *lines):
+    svc.actions.audit_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(svc.actions.audit_path, "a") as f:
+        for ln in lines:
+            f.write(json.dumps(ln) + "\n")
+
+
+@pytest.mark.parametrize("bad", [-5.0, float("nan"), float("inf"), "x", True, 10 ** 400])
+def test_a_confirmed_step_line_of_the_audit_with_a_bad_amount_is_unknown_not_skipped_and_not_negative(svc, bad):
+    write_audit(svc, {"action": "queue_step", "attempt": "confirm", "at": t.iso(NOW - 60), "usd": bad, "queue": "q20261115T100000Z-abcd"})
+    with pytest.raises(ca.Refusal) as e:
+        svc.actions.steps.audited(NOW)
+    assert e.value.status == 503
+
+
+@pytest.mark.parametrize("bad", [-5.0, float("nan"), float("inf"), "x", True, 10 ** 400, None])
+def test_a_confirmed_queue_go_line_of_the_audit_with_a_bad_amount_is_unknown_not_skipped(svc, bad):
+    write_audit(svc, {"action": "queue_go", "ok": "confirm", "at": t.iso(NOW - 60), "usd": bad, "queue": "q20261115T100000Z-abcd"})
+    with pytest.raises(ca.Refusal) as e:
+        svc.actions.plans.audited(NOW)
+    assert e.value.status == 503
+
+
+def test_a_good_step_and_go_line_still_count(svc):
+    write_audit(svc, {"action": "queue_step", "attempt": "confirm", "at": t.iso(NOW - 60), "usd": 0.75, "queue": "q20261115T100000Z-abcd"},
+                {"action": "queue_go", "ok": "confirm", "at": t.iso(NOW - 60), "usd": 2.0, "queue": "q20261115T100000Z-abcd"},
+                {"action": "queue_step", "attempt": "confirm", "at": t.iso(NOW - 3 * 24 * 3600), "usd": float("nan"), "queue": "q20261115T100000Z-abcd"})   # outside the window: not read
+    assert svc.actions.steps.audited(NOW) == pytest.approx(0.75)
+    assert [u for _, u, _ in svc.actions.plans.audited(NOW)] == [2.0]
+
+
+@pytest.mark.parametrize("kind", ["issue", "research", "prd"])
+def test_the_message_names_the_job_with_the_bad_amount(svc, kind):
+    raw_job(svc, "j20261115_200000_aaaa", kind, float("nan"))
+    with pytest.raises(ca.Refusal) as e:
+        svc.actions.exposure()
+    assert "j20261115_200000_aaaa" in e.value.why and "max_usd" in e.value.why
+
+
+def test_a_pending_amount_that_is_not_a_finite_number_is_caught_by_the_last_guard(svc):
+    svc.actions.pending.append((svc.actions.clock(), ("go", "q20261115T100000Z-abcd"), float("nan")))
+    with pytest.raises(ca.Refusal):
+        svc.actions.exposure()
+    for small in (-9.0, -0.5, -1e-9):                                                                 # a negative sum of any size is no exposure
+        svc.actions.pending[:] = [(svc.actions.clock(), ("go", "q20261115T100000Z-abcd"), small)]
+        with pytest.raises(ca.Refusal):
+            svc.actions.exposure()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), -1.0, "x", True])
+def test_a_bad_code_max_usd_in_the_handoff_makes_the_exposure_unknown(svc, bad, monkeypatch):
+    monkeypatch.setitem(svc.actions.cfg["issue_writer"], "code_max_usd", bad)
+    t.make_issue(svc.jobs, "j20261115_200000_aaaa", state=ca.ri.HANDED_OFF, created=NOW - 3600,
+                 handoff={"job": "j20261115_230000_beef", "at": t.iso(NOW - 600), "via": "ui"})
+    with pytest.raises(ca.Refusal):
+        svc.actions.exposure()
+
+
+def test_a_cap_of_zero_blocks_every_paid_card_and_lets_a_free_one_through(svc, monkeypatch):
+    monkeypatch.setitem(svc.actions.cfg, "chat", {"daily_cap_usd": 0})
+    with pytest.raises(ca.Refusal) as e:
+        svc.actions.check_cap({"action": "issue_new", "job_cap_usd": 0.5})
+    assert e.value.status == 403
+    svc.actions.check_cap({"action": "prd_approve"})                                                 # spends nothing: through

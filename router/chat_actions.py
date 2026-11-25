@@ -884,6 +884,7 @@ class Actions:
             names = []
         unknown = Refusal(503, "cap", "the daily exposure cannot be computed (a job could not be read)")
         for n in names:
+            bad = Refusal(503, "cap", f"the daily exposure cannot be computed (job {n}: its max_usd is not a valid amount, or its log cannot be read)")
             try:
                 named = calendar.timegm(time.strptime(n[1:16], "%Y%m%d_%H%M%S"))
             except ValueError:
@@ -903,9 +904,9 @@ class Actions:
             except FileNotFoundError:
                 continue
             except (OSError, ValueError):
-                raise unknown from None
+                raise Refusal(503, "cap", f"the daily exposure cannot be computed (job {n} could not be read)") from None
             if not isinstance(data, dict):
-                raise unknown
+                raise Refusal(503, "cap", f"the daily exposure cannot be computed (job {n} is not a job file)")
             if data.get("kind") == "research":
                 try:
                     for entry in data.get("log") or []:
@@ -914,7 +915,7 @@ class Actions:
                             total += max(finite_usd(data["max_usd"]), rcap)
                             seen.add(("new", n))
                 except (KeyError, TypeError, ValueError):
-                    raise unknown from None
+                    raise bad from None
                 continue
             if data.get("kind") == "prd":                     # SPEC_CHAT_MANAGER 13.2: a PRD job started via the UI is exposure too
                 try:
@@ -924,7 +925,7 @@ class Actions:
                             total += max(finite_usd(data["max_usd"]), pcap)
                             seen.add(("new", n))
                 except (KeyError, TypeError, ValueError):
-                    raise unknown from None
+                    raise bad from None
                 continue
             if data.get("kind") != "issue":
                 continue
@@ -939,15 +940,13 @@ class Actions:
                     total += finite_usd(self.writer.get("code_max_usd") or 0)
                     seen.add(("start", n))
             except (KeyError, TypeError, ValueError):
-                raise unknown from None
+                raise bad from None
         total += self.plans.exposure(now, seen)               # queues approved via the UI (SPEC_CHAT_T4A 4)
         total += self.steps.audited(now)                      # steps of a queue approved more than 24 hours ago: one job cap each (SPEC_CHAT_T4B 5, K4)
         for job_id, usd, at in self.plans.audited(now):       # the net under it: a `via` lost from the queue file
             if ("go", job_id) not in seen and os.path.lexists(self.cards.queues_dir / job_id):
                 total += usd
                 seen.add(("go", job_id))
-        if not math.isfinite(total) or total < 0:                # whatever fed it, a sum that is not a finite, non-negative number is no exposure: unknown, never a number that passes every check
-            raise unknown
         for action, cap in (("research_new", rcap), ("prd_new", pcap)):
             for job_id, at in self.audited_jobs(now, action):        # the net under the directory count: a `via` lost from the CLI
                 if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
@@ -955,6 +954,8 @@ class Actions:
                     seen.add(("new", job_id))
         self.pending = [(at, key, usd) for at, key, usd in self.pending if now - at < PENDING_S]
         total += sum(usd for _, key, usd in self.pending if key not in seen)
+        if not math.isfinite(total) or total < 0:                # whatever fed it, a sum that is not a finite, non-negative number is no exposure: unknown, never a number that passes every check
+            raise unknown
         return total
 
     def research_cap(self):
@@ -1013,7 +1014,7 @@ class Actions:
     def check_cap(self, card):
         extra = self.exposure_of(card)
         if not math.isfinite(extra) or extra < 0:
-            raise Refusal(403, "cap", "the amount this adds is not a valid number")
+            raise Refusal(503, "cap", f"the daily exposure cannot be checked (the amount a {card.get('action')} adds is not a valid number: a configured cap)")
         if extra:
             used = self.exposure()
             if used + extra > self.daily_cap() + 1e-9:
