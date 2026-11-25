@@ -15,16 +15,17 @@ Node.prototype.setAttribute = function (k, v) { this.attrs[k] = v; };
 function html(n) { if (n.tag === "#text") return n.text; var a = n.attrs["aria-expanded"] ? "[" + n.attrs["aria-expanded"] + "]" : ""; return "<" + n.tag + (n.className ? "." + n.className : "") + a + ">" + (n.text !== null ? n.text : "") + n.children.map(html).join("") + "</" + n.tag + ">"; }
 function el(tag, cls, text) { var e = new Node(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.text = String(text); return e; }
 function clear(node) { node.children = []; }
+function nJobs(n) { return n + (n === 1 ? " job" : " jobs"); }
 function usd(n) { return typeof n === "number" ? "$" + n.toFixed(4) : "-"; }
 function stateClass(s) { return /FAILED/.test(String(s)) ? "bad" : "warn"; }
 function fact(c, k, v) { c.appendChild(el("p", "fact", k + ": " + v)); }
 var badge = new Node("span"); var document = { getElementById: function () { return badge; } };
 var list = new Node("ul"), stream = new Node("section"), panel = { classList: { remove: function () {} } };
-var KIND_LABEL = { code: "Kode", prd: "PRD", research: "Riset", issue: "Issue" };
+var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
 var query = { value: "" }, mode = "status", current = null, threads = [], decisionRows = [], filter = "all", groupOpen = Object.create(null);
 function setMode() {} function open() {}
 `;
-const code = helpers + "var NO_REPO = \"Tanpa repo\";\n" + ["waitingIds", "jobButton", "renderList", "updateBadge", "renderCost"].map(grab).join("\n");
+const code = helpers + "var NO_REPO = \"No repo\";\n" + ["waitingIds", "jobButton", "renderList", "updateBadge", "renderCost"].map(grab).join("\n");
 const ctx = vm.createContext({ Math, String, Array, JSON, Object });
 vm.runInContext(code, ctx);
 const run = (s) => vm.runInContext(s, ctx);

@@ -56,9 +56,9 @@ def test_the_repo_is_read_from_the_job_file_and_the_path_of_the_repo_is_never_li
 
 def test_the_bottom_bar_has_the_four_tabs_in_order_and_the_chips_only_the_chat_modes():
     tabs = re.findall(r'<button type="button" data-tab="(\w+)"[^>]*>([A-Za-z]+)<', HTML)
-    assert tabs == [("chat", "Obrolan"), ("cards", "Antrean"), ("decide", "Keputusan"), ("cost", "Biaya")]
+    assert tabs == [("chat", "Chat"), ("cards", "Queue"), ("decide", "Decisions"), ("cost", "Cost")]
     assert re.findall(r'data-mode="(\w+)"', HTML) == ["status", "issue", "prd", "research"]
-    assert 'id="tabs"' in HTML and 'aria-label="Navigasi utama"' in HTML
+    assert 'id="tabs"' in HTML and 'aria-label="Main navigation"' in HTML
 
 
 def test_the_page_makes_one_link_out_and_it_is_the_viewer_on_its_own_port_with_no_text_from_a_job():

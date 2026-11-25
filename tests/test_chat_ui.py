@@ -39,7 +39,7 @@ def test_the_confirm_button_is_off_until_the_servers_delay_and_not_a_submit():
 
 def test_the_confirm_button_is_never_focused_or_a_default():
     assert ".focus(" not in JS and "autofocus" not in JS and "autofocus" not in HTML
-    assert 'el("button", "go", "Konfirmasi")' in JS and JS.count("\"Konfirmasi\")") == 1
+    assert 'el("button", "go", "Confirm")' in JS and JS.count("\"Confirm\")") == 1
     # the card is built outside the form: the form holds the composer only, and its one button is Siapkan (prepare: spends nothing)
     form = re.search(r'<form id="issue-form".*?</form>', HTML, re.S).group(0)
     assert "Konfirmasi" not in form and form.count("<button") == 1 and 'id="prepare"' in form
@@ -59,9 +59,9 @@ def test_the_page_does_not_build_the_action_from_the_card():
 
 
 def test_the_issue_chip_is_on_and_the_composer_starts_hidden():
-    assert re.search(r'data-mode="issue"[^>]*>Issue<', HTML) and not re.search(r'data-mode="issue"[^>]*disabled', HTML)
+    assert re.search(r'data-mode="issue"[^>]*>New issue<', HTML) and not re.search(r'data-mode="issue"[^>]*disabled', HTML)
     assert re.search(r'<form id="issue-form" hidden[ >]', HTML)
-    assert re.search(r'data-mode="research"[^>]*>Riset<', HTML) and not re.search(r'data-mode="research"[^>]*disabled', HTML)   # C3
+    assert re.search(r'data-mode="research"[^>]*>Research<', HTML) and not re.search(r'data-mode="research"[^>]*disabled', HTML)   # C3
 
 
 def test_an_enter_in_the_message_box_does_not_prepare_by_a_hidden_default():
@@ -126,13 +126,13 @@ def test_batal_is_off_once_confirm_was_sent_and_a_card_with_a_confirm_on_its_way
 
 
 def test_a_failed_fetch_is_not_shown_as_a_refusal():
-    assert "err.answered = true" in JS and "        if (e.answered) {" in JS and "Status tidak diketahui" in JS
-    after = JS.split("Status tidak diketahui")[1].split("});")[0]
+    assert "err.answered = true" in JS and "        if (e.answered) {" in JS and "Status unknown" in JS
+    after = JS.split("Status unknown")[1].split("});")[0]
     assert "loadIssues()" in after
 
 
 def test_the_form_says_whether_it_makes_a_new_issue_or_a_reply():
-    assert "Siapkan balasan" in JS and "Siapkan issue baru" in JS and "repoSel.hidden = r || (!p && openIssue !== null)" in JS
+    assert "Prepare reply" in JS and "Prepare new issue" in JS and "repoSel.hidden = r || (!p && openIssue !== null)" in JS
     assert re.search(r'encodeURIComponent\(id\)\)\.then\(function \(d\) \{\n(\s+if \(mode === "prd"\) \{ return; \}[^\n]*\n)?\s+openIssue = id;', JS)      # set when the thread was read, not before (nothing drawn if the user moved to the PRD form)
 
 
@@ -206,7 +206,7 @@ def test_the_confirm_card_shows_the_go_live_screen_fields():
 
 
 def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden():
-    assert 'var r = mode === "research", p = mode === "prd";' in JS and "Siapkan riset" in JS and "Siapkan PRD" in JS
+    assert 'var r = mode === "research", p = mode === "prd";' in JS and "Prepare research" in JS and "Prepare PRD" in JS
     assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS and 'query.hidden = m !== "status";' in JS
 
 
@@ -235,7 +235,7 @@ def test_the_poll_redraws_a_research_job_only_while_it_can_change_and_an_older_a
 
 
 def test_the_card_wording_follows_the_action():
-    assert 'card.action === "research_new" ? "Hasilnya ada di daftar riset."' in JS
+    assert 'card.action === "research_new" ? "The result is in the research list."' in JS
     assert 'card.action === "research_new") { loadResearch(); }' in JS
 
 
@@ -246,7 +246,7 @@ def decide_part():
 
 
 def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_button():
-    assert re.search(r'data-tab="decide"[^>]*>Keputusan<', HTML)             # UI-3a: the chip became a tab of the bottom bar
+    assert re.search(r'data-tab="decide"[^>]*>Decisions<', HTML)             # UI-3a: the chip became a tab of the bottom bar
     assert not re.search(r'data-tab="decide"[^>]*disabled', HTML)
     # the addresses of the READ-ONLY plan and install cards (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else
     assert JS.count("/api/approve/") == 2 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
@@ -313,9 +313,9 @@ def test_a_late_answer_for_another_job_or_mode_draws_nothing():
 
 def test_the_reason_is_a_field_inside_each_card_and_a_reject_without_one_is_not_prepared():
     body = decide_part()
-    assert 'var why = el("input", "reason");' in body and 'why.placeholder = "Alasan (wajib untuk Reject)";' in body
+    assert 'var why = el("input", "reason");' in body and 'why.placeholder = "Reason (required for Reject)";' in body
     assert 'why.setAttribute("aria-label", "Alasan");' in body and "why.maxLength = 300;" in body
-    assert 'if (needReason && why.value.trim() === "") { hint.textContent = "Isi alasan dulu di kolom di atas tombol."; return; }' in body
+    assert 'if (needReason && why.value.trim() === "") { hint.textContent = "Fill in the reason in the field above the button first."; return; }' in body
     assert body.index("why.value.trim()") < body.index("prepare({ action: action")
     assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS                    # the composer is not shown in decisions or in the read-only cards (T2)
 
@@ -333,7 +333,7 @@ def test_the_decision_card_shows_the_cost_the_draft_and_a_viewer_link_only():
 
 def test_after_a_decision_the_opened_card_is_read_again_and_the_texts_name_the_decision_list():
     assert 'if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); }' in JS
-    assert 'card.action.indexOf("job_") === 0 ? "Keputusan tercatat' in JS
+    assert 'card.action.indexOf("job_") === 0 ? "Decision recorded' in JS
     assert 'else if (card.action.indexOf("job_") === 0) { loadDecisions(); }' in JS
 
 
