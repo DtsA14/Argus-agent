@@ -323,7 +323,7 @@
         message.value = "";
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
         if (mode === "prd") { return; }
-        if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else { showPlan(openCard); } return; }
+        if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }
         if (mode === "decide") { if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); } return; }
         loadIssues();
         if (r.job && mode === "issue") { showIssue(r.job, true); }
@@ -812,6 +812,69 @@
     if (r.second) { line(r.second, 2); }
     box.appendChild(el("p", "small", label));
   }
+  // SPEC_CHAT_UI3D: the detail of a job's last draft. Read only: GET only, text nodes only. The diff lines carry their own + and - so colour is never the only mark;
+  // the writer's words are labelled model text; what the machine checked (the old text's hash) is labelled machine.
+  function diffBlock(text) {
+    var box = el("div", "diff");
+    String(text).split("\n").forEach(function (ln, i) {
+      var head = i < 2 && (ln.indexOf("--- ") === 0 || ln.indexOf("+++ ") === 0);       // only the two header lines: a changed line that starts with ++ is still a changed line
+      var k = head ? "hdr" : (ln.charAt(0) === "+" ? "add" : (ln.charAt(0) === "-" ? "del" : (ln.charAt(0) === "@" ? "hunk" : "ctx")));
+      box.appendChild(el("div", "dl " + k, ln === "" ? " " : ln));
+    });
+    return box;
+  }
+  function showDraft(job) {
+    var seq = ++cardSeq;
+    openCard = job;
+    openKind = "draft";
+    get("/api/draft/" + encodeURIComponent(job)).then(function (d) {
+      if (seq !== cardSeq || mode !== "cards") { return; }
+      clear(stream);
+      var c = el("article", "card");
+      c.appendChild(el("h2", null, "Draft details"));
+      fact(c, "Job", d.job);
+      fact(c, "Draft sha", d.draft_sha12);
+      fact(c, "State", d.state);
+      var s2 = sec(c, "Existing tests this draft changes");
+      if (d.tests_ok === false) { s2.appendChild(el("p", "note", "The list of changed tests cannot be read.")); }
+      else if (!d.tests_n) { s2.appendChild(el("p", "muted", "None: the draft only adds new tests.")); }
+      (d.tests || []).forEach(function (t) {
+        var box = el("div", "ex2");
+        box.appendChild(el("p", "mono", t.path || "(path not shown)"));
+        if (t.diff !== null && t.diff !== undefined) {
+          if (t.before === "matches") { say(box, "mesin", "old text matches the recorded hash", "", "small"); }
+          else if (t.before === "differs") { say(box, "mesin", "warning", "the old text does NOT match the recorded hash: this diff may not be against the version the drafter saw", "say warn"); }
+          else { say(box, "mesin", "no recorded hash to check the old text against", "", "small"); }
+          if (t.diff === "") { box.appendChild(el("p", "muted", "No difference between the old text and the new text.")); }
+          else { box.appendChild(diffBlock(t.diff)); }
+          if (t.diff_cut) { box.appendChild(el("p", "note", "The diff is cut here: it is longer than the page shows.")); }
+        }
+        if (t.note) { box.appendChild(el("p", "note", t.note)); }
+        (t.removed || []).forEach(function (n) { say(box, "model", "removed (written by a model)", n.node + ": " + n.reason, "say"); });
+        (t.modified || []).forEach(function (n) { say(box, "model", "modified (written by a model)", n.node + ": " + n.reason, "say"); });
+        s2.appendChild(box);
+      });
+      if (d.tests_n > (d.tests || []).length) { s2.appendChild(el("p", "note", "Only the first " + d.tests.length + " of " + d.tests_n + " files are shown.")); }
+      if (d.summary_note) { s2.appendChild(el("p", "note", "The writer's plan is not available for this draft.")); }
+      var s1 = el("details", "more");                      // the list can be long: folded, after the diff the person came for
+      s1.appendChild(el("summary", null, "May write " + (d.writable || []).length + " files, must pass " + (d.must_pass || []).length + " tests"));
+      (d.writable || []).forEach(function (w) { say(s1, "mesin", "may write", w, "say"); });
+      (d.must_pass || []).forEach(function (w) { say(s1, "mesin", "must pass", w, "say"); });
+      c.appendChild(s1);
+      var s3 = sec(c, "The writer's text (written by a model, not proof)");
+      var pl = d.plan || {};
+      [["step", pl.steps], ["file", pl.files], ["risk", pl.risks], ["warning", d.warnings], ["not proven by the machine", d.unverifiable]].forEach(function (kv) {
+        (kv[1] || []).forEach(function (x) { say(s3, "model", kv[0] + " (written by a model)", x, "say"); });
+      });
+      stream.appendChild(c);
+      stream.appendChild(cardButtons());
+    }).catch(function () {
+      if (seq !== cardSeq || mode !== "cards") { return; }
+      clear(stream);
+      stream.appendChild(el("p", "muted", "The draft details cannot be read."));
+      stream.appendChild(cardButtons());
+    });
+  }
   function showInstall(id) {
     var seq = ++cardSeq;
     openCard = id;
@@ -1041,6 +1104,12 @@
           if (it.applied) { r2.appendChild(el("span", "mono", "applied " + it.applied)); }
           if (!it.text_matches) { r2.appendChild(el("span", "note", "the issue file changed")); }
           q.appendChild(r2);
+          if (it.job && (it.job_state === "AWAITING_APPROVAL" || it.job_state === "REVIEW_READY" || it.job_state === "APPLIED")) {
+            var det = el("button", null, "Draft details");
+            det.type = "button";
+            det.addEventListener("click", function () { showDraft(it.job); });
+            q.appendChild(det);
+          }
           if (it.job && it.job_state === "REVIEW_READY") {
             var inst = el("button", null, "Install card (numbers)");
             inst.type = "button";

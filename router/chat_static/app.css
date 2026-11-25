@@ -149,3 +149,9 @@ progress.pbar{appearance:none;-webkit-appearance:none;width:100%;height:.5rem;ma
 progress.pbar::-webkit-progress-bar{background:var(--line);border-radius:.25rem}
 progress.pbar::-webkit-progress-value{background:var(--ok);border-radius:.25rem}
 progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
+.diff{font:.8rem ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:.6rem;overflow:auto;max-height:60vh;margin:.4rem 0}
+.diff .dl{white-space:pre;padding:.05rem .6rem}
+.diff .dl.add{background:rgba(127,209,160,.14);color:var(--ok)}
+.diff .dl.del{background:rgba(242,109,109,.14);color:var(--bad)}
+.diff .dl.hunk{color:var(--accent2)}
+.diff .dl.hdr{color:var(--muted)}

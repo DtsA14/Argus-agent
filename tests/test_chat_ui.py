@@ -285,7 +285,7 @@ def test_the_machine_flags_come_before_every_fact_of_a_confirmation_card():
 
 def test_the_page_offers_the_button_the_server_names_and_refreshes_the_plan_after_it():
     assert "stream.appendChild(planActions(id, d.t4));" in JS and 'if (t4.action === "prd_approve") {' in JS
-    assert 'if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else { showPlan(openCard); } return; }' in JS
+    assert 'if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }' in JS
 
 
 def test_a_decision_is_prepared_from_a_button_with_the_sha_the_card_showed_and_the_reason_of_its_own_card():

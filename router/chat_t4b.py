@@ -6,6 +6,7 @@ keeps its own gates (sha, check, lock, HEAD, `dr.check`). Apply, reject, abandon
 import hashlib
 import json
 import os
+import re
 import stat
 
 from router import issue as ri
@@ -235,6 +236,88 @@ class Steps:
             out["summary_note"] = "summary unavailable"
         return out
 
+    # ---- the draft's detail page (SPEC_CHAT_UI3D) ---------------------------------------------------------------------------------
+
+    TEST_FILES_MAX, TEXT_MAX, DIFF_CHARS, DIFF_LINES_IN = 5, 256 * 1024, 60_000, 5000
+    PATH_OK = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.\-/]{0,198}")
+
+    def draft_detail(self, job_id):
+        """The detail of a job's last draft for the Draft page, or None when there is no readable draft. Read only; never raises. The draft is found as the card finds it
+        (the last DRAFTED stage, its run id of the one shape a run has, its run directory not reached through a link); the existing tests it changes are shown as a diff of
+        the intake's version (the run's frozen `source/`, read one name at a time without following a link) against the draft's new text, with the removed and modified notes
+        the writer gave. Everything the writer wrote is model text, scrubbed and cut; a file that cannot be read is `unavailable` for that test only; a text that is too long
+        gets no diff (difflib is quadratic in lines); a text that looks like a key is withheld by the scrubber."""
+        from acceptance import changed as ch
+        from router.chat_actions import scrub
+        a = self.a
+        try:
+            if not UI_ID.fullmatch(job_id or ""):
+                return None
+            root = os.path.realpath(a.jobs_dir)
+            if os.path.realpath(os.path.join(root, job_id)) != os.path.join(root, job_id):
+                return None
+            job = rj.open_job(job_id, a.jobs_dir)
+            st, path = rj._last_draft(job)
+            run_id = st["run_id"]
+            if not (isinstance(run_id, str) and re.fullmatch(re.escape(job_id) + r"-[A-Za-z0-9_]{1,40}", run_id)):          # an absolute or odd run id is no run of this job
+                return None
+            run_dir = os.path.join(root, job_id, "runs", run_id)
+            if os.path.realpath(path) != os.path.join(run_dir, "draft.json"):
+                return None
+            draft = json.loads(_read_file(path))
+            seen = rj.draft_sha_of(draft)
+            c = draft["contract"]
+            out = {"job": job_id, "draft_sha": seen, "draft_sha12": seen[:12], "state": scrub(str(job.data.get("state")))[:40],
+                   "writable": [scrub(str(w))[:200] for w in list(c["scope"]["writable"])[:50]],
+                   "must_pass": [scrub(str(t))[:300] for t in [t for v in list(c["validation"])[:50] if isinstance(v, dict) for t in list(v.get("must_pass") or [])[:50]][:50]],
+                   "tests": [], "tests_n": 0, "tests_ok": True}
+        except Exception:
+            return None
+        out.update({k: v for k, v in self._summary(draft, path, seen).items() if k not in ("changed_tests", "changed_tests_n")})
+        report = None
+        try:
+            rep = json.loads(_read_file(os.path.join(os.path.dirname(path), "check_report.json")))
+            report = rep if isinstance(rep, dict) and rep.get("draft_sha256") == seen else None
+        except Exception:
+            report = None
+        raw_list = draft.get("changed_tests")
+        if raw_list is not None and not isinstance(raw_list, list):
+            out["tests_ok"] = False                                    # the page must not say "only new tests" about a field it cannot read
+            raw_list = []
+        entries = [x for x in (raw_list or []) if isinstance(x, dict)]
+        out["tests_n"] = len(entries)
+        for x in entries[:self.TEST_FILES_MAX]:
+            item = {"path": None, "diff": None, "diff_cut": False, "note": None, "before": "no_record", "removed": [], "modified": []}
+            out["tests"].append(item)
+            try:
+                p = x.get("path")
+                if not (isinstance(p, str) and self.PATH_OK.fullmatch(p) and ".." not in p.split("/")):
+                    item["note"] = "the path is not shown"
+                    continue
+                item["path"] = scrub(p)[:200]
+                for k in ("removed", "modified"):
+                    notes = x.get(k) if isinstance(x.get(k), list) else []
+                    item[k] = [{"node": scrub(str(n.get("node")))[:200], "reason": scrub(str(n.get("reason")))[:500]} for n in notes[:50] if isinstance(n, dict)]
+                new = x.get("content")
+                if not isinstance(new, str) or len(new.encode("utf-8", "replace")) > self.TEXT_MAX:
+                    item["note"] = "the new text is too large to show"
+                    continue
+                raw = _read_below(os.path.join(run_dir, "source"), p.split("/"), self.TEXT_MAX)
+                old = raw.decode("utf-8", "replace")
+                want = (((report or {}).get("changed") or {}).get(p) or {}).get("before")
+                if isinstance(want, str):
+                    item["before"] = "matches" if hashlib.sha256(raw).hexdigest() == want else "differs"
+                if old.count("\n") > self.DIFF_LINES_IN or new.count("\n") > self.DIFF_LINES_IN:
+                    item["note"] = "the text is too long to diff here"
+                    continue
+                text = scrub(ch.unified(p, old, new))
+                if len(text) > self.DIFF_CHARS:
+                    text, item["diff_cut"] = text[:self.DIFF_CHARS].rsplit("\n", 1)[0], True
+                item["diff"] = text
+            except Exception:
+                item["diff"], item["note"] = None, "unavailable"
+        return out
+
     # ---- the state of the button, for the queue card ----------------------------------------------------------------------
 
     def state(self, qid, with_job=False):
@@ -300,8 +383,8 @@ class Steps:
         return total
 
 
-def _read_file(path, limit=4 * 1024 * 1024):
-    """A regular file, never a link, a FIFO or a device, at most `limit` bytes."""
+def _read_bytes(path, limit=4 * 1024 * 1024):
+    """A regular file, never a link, a FIFO or a device, at most `limit` bytes, as bytes."""
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as f:
         if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
@@ -309,4 +392,31 @@ def _read_file(path, limit=4 * 1024 * 1024):
         data = f.read(limit + 1)
     if len(data) > limit:
         raise OSError("too large")
-    return data.decode("utf-8")
+    return data
+
+
+def _read_below(dirpath, parts, limit):
+    """The bytes of the regular file `parts` under the directory `dirpath`, opened one name at a time from a directory descriptor with O_NOFOLLOW: a link at any
+    level (the directory itself, a middle directory, the file) is an OSError, never followed, and there is no gap between a check and the open."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fd = os.open(dirpath, flags)
+    try:
+        for name in parts[:-1]:
+            nxt = os.open(name, flags, dir_fd=fd)
+            os.close(fd)
+            fd = nxt
+        ffd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+    finally:
+        os.close(fd)
+    with os.fdopen(ffd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            raise OSError("not a regular file")
+        data = f.read(limit + 1)
+    if len(data) > limit:
+        raise OSError("too large")
+    return data
+
+
+def _read_file(path, limit=4 * 1024 * 1024):
+    """The same, as text (utf-8)."""
+    return _read_bytes(path, limit).decode("utf-8")
