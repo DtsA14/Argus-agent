@@ -152,7 +152,8 @@ def test_the_poll_in_load_only_refreshes_and_never_redraws_the_decisions_page():
 
 
 def test_the_composer_strip_is_hidden_outside_the_chat_tab_and_the_accent_has_its_own_ink():
-    assert 'document.getElementById("dock").hidden = !inChat;' in JS
+    assert 'document.getElementById("dock").hidden = document.getElementById("chips").hidden && issueForm.hidden;' in JS
+    assert 'document.getElementById("chips").hidden = !chipsOpen;' in JS and "chipsOpen = chipsOpen && inChat;" in JS
     css = (rc.STATIC_DIR / "app.css").read_text()
     assert "--on-accent:#120d2b" in css and "--on-accent:#f6f8fa" in css and "#120d2b;" not in css.split("/* UI-3a")[1] and "env(" not in css
     assert "Object.create(null)" in JS.split("function renderList")[1].split("function renderOverview")[0]

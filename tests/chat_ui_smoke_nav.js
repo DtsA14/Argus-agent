@@ -19,13 +19,14 @@ function nJobs(n) { return n + (n === 1 ? " job" : " jobs"); }
 function usd(n) { return typeof n === "number" ? "$" + n.toFixed(4) : "-"; }
 function stateClass(s) { return /FAILED/.test(String(s)) ? "bad" : "warn"; }
 function fact(c, k, v) { c.appendChild(el("p", "fact", k + ": " + v)); }
-var badge = new Node("span"); var document = { getElementById: function () { return badge; } };
+var nodes = {}; var document = { getElementById: function (id) { return nodes[id] || (nodes[id] = new Node("span")); } };
+var badge = document.getElementById("decide-badge"); var summary = document.getElementById("summary");
 var list = new Node("ul"), stream = new Node("section"), panel = { classList: { remove: function () {} } };
 var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
 var query = { value: "" }, mode = "status", current = null, threads = [], decisionRows = [], filter = "all", groupOpen = Object.create(null);
 function setMode() {} function open() {}
 `;
-const code = helpers + "var NO_REPO = \"No repo\";\n" + ["waitingIds", "jobButton", "renderList", "updateBadge", "renderCost"].map(grab).join("\n");
+const code = helpers + "var NO_REPO = \"No repo\";\n" + ["waitingIds", "jobButton", "renderList", "updateSummary", "updateBadge", "renderCost"].map(grab).join("\n");
 const ctx = vm.createContext({ Math, String, Array, JSON, Object });
 vm.runInContext(code, ctx);
 const run = (s) => vm.runInContext(s, ctx);
@@ -46,5 +47,6 @@ run("groupOpen = Object.create(null); query.value = 'zzz'; renderList();"); out.
 run("query.value = ''; updateBadge();"); out.badge1 = run("badge.hidden + '|' + badge.textContent");
 run("decisionRows = []; updateBadge();"); out.badge0 = run("badge.hidden + '|' + badge.textContent");
 run("decisionRows = new Array(12).fill({ id: 'x' }); updateBadge();"); out.badge12 = run("badge.hidden + '|' + badge.textContent");
+out.summary = run("summary.textContent"); out.panelcost = run("document.getElementById('panel-cost').textContent");
 run("renderCost();"); out.cost = run("html(stream)");
 console.log(JSON.stringify(out, null, 1));

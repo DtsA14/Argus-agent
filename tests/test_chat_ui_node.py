@@ -66,6 +66,7 @@ def test_the_panel_groups_by_repo_filters_and_the_cost_view_and_badge_say_what_t
     assert "[false]" in t and "PRD kategori" not in t and "buffer" in t                                          # a closed group shows no job; an opened one does
     assert "No matching jobs." in out["none"]
     assert out["badge1"] == "false|1" and out["badge0"] == "true|0" and out["badge12"] == "false|9+"
+    assert out["summary"] == "5 jobs · 12 waiting" and out["panelcost"] == "Recorded stage cost: $0.2400"
     c = out["cost"]
     assert "Recorded stage cost" in c and "Total (5 jobs in the list): $0.2400" in c and "Code: $0.0300" in c and "Research: $0.1400" in c and "PRD: $0.0700" in c
     assert "1 job has a stage with no cost figure: not counted, not zero." in c

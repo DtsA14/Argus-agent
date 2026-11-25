@@ -12,7 +12,7 @@ body{background:var(--bg);color:var(--text);font:16px system-ui,sans-serif}
 #threads button:hover,#threads button[aria-current="true"]{background:var(--card)}
 .muted{color:var(--muted);font-size:.85rem}
 main{flex:1;display:flex;flex-direction:column;min-width:0}
-.bar{display:flex;gap:.75rem;align-items:center;padding:.5rem 1rem;border-bottom:1px solid var(--line)}
+.bar{display:flex;gap:.75rem;align-items:center;padding:.6rem .75rem;border-bottom:1px solid var(--line)}
 .bar button,#close-panel{background:none;border:0;color:inherit;font:inherit;min-width:2.75rem;min-height:2.75rem;border-radius:.75rem}
 #stream{flex:1;overflow:auto;padding:1rem;max-width:48rem;width:100%;margin:0 auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:1.25rem;padding:1rem;margin:0 0 .75rem}
@@ -104,3 +104,24 @@ pre.code{white-space:pre-wrap;overflow-wrap:anywhere;font:.8rem ui-monospace,Men
 #panel-foot a{display:flex;align-items:center;min-height:2.75rem}
 #dock[hidden]{display:none}
 .kv.cost .v{white-space:nowrap;flex:none}
+
+/* the mockup's shell: round header buttons, a title with one status line, a dimmed page behind the panel, a New request button, compact job cards */
+.bar .round,#close-panel.round{width:2.75rem;height:2.75rem;min-width:2.75rem;border-radius:50%;background:var(--card);border:1px solid var(--line);font-size:1.15rem;line-height:1;display:flex;align-items:center;justify-content:center}
+.titles{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1.25}
+.titles .muted{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1}
+#scrim[hidden]{display:none}
+#panel{display:flex;flex-direction:column}
+#panel header{flex:none}
+#panel #threads{flex:1;overflow:auto}
+.cta{margin:.75rem .75rem 0;min-height:2.9rem;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600}
+#panel #composer{padding:.6rem .75rem 0}
+#panel #query{min-height:2.6rem}
+#panel-cost{margin:.25rem 0 .1rem;font-variant-numeric:tabular-nums}
+.card.compact{padding:.75rem 1rem;margin-bottom:.6rem}
+.card.compact h2{font-size:.95rem;font-weight:600;margin:0 0 .3rem}
+.card.compact .row{gap:.6rem}
+@media (min-width:60rem){#scrim{display:none}}
+#chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4rem}
+#chips[hidden]{display:none}
+#chips button{padding:0 .25rem;font-size:.85rem;white-space:nowrap}
