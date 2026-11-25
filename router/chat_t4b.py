@@ -6,6 +6,7 @@ keeps its own gates (sha, check, lock, HEAD, `dr.check`). Apply, reject, abandon
 import hashlib
 import json
 import os
+import stat
 
 from router import issue as ri
 from router import job as rj
@@ -158,7 +159,7 @@ class Steps:
         cfg = a.cfg
         try:
             st, path = rj._last_draft(job)
-            if os.path.realpath(path) != os.path.join(os.path.realpath(job.runs), st["run_id"], "draft.json"):
+            if os.path.realpath(path) != os.path.join(root, job_id, "runs", st["run_id"], "draft.json"):
                 raise self._no(409, "folder", "the draft is reached through a link")
             raw = _read_file(path)
             draft = json.loads(raw)
@@ -186,7 +187,7 @@ class Steps:
             writable = [scrub(str(w)) for w in c["scope"]["writable"]][:50]
         except self.Refusal:
             raise
-        except (OSError, ValueError, KeyError, TypeError, AttributeError, rj.Refused) as e:
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError, rj.Refused) as e:
             raise self._no(409, "folder", f"the draft cannot be read for this card ({type(e).__name__})") from None
         flags = list(advisories)
         if profile in (None, "default"):
@@ -195,7 +196,8 @@ class Steps:
                 "request": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
                 "agent_cap_usd": cap, "attempt_usd": float(need), "flags": flags, "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"],
                 "retry": bool(item.get("retries")) and bool(item.get("retry_note")), "agent_max_usd_config": want,
-                "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them"}
+                "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them. "
+                         "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not"}
         return card, {"queue": q["id"], "job": job_id, "sha": seen, "item": item["n"]}
 
     # ---- run ------------------------------------------------------------------------------------------------------------
@@ -221,7 +223,8 @@ class Steps:
         return 0.0
 
     def audited(self, now):
-        """The usd of the steps this chat confirmed in the last 24 hours (the net: nothing else records them), from its audit file."""
+        """The usd of the steps this chat confirmed in the last 24 hours (the net: nothing else records them), from its audit file: the `attempt` line, written before the run starts
+        and whose failure stops it (chat.py _confirm), never the `ok` line after it."""
         from router.chat_actions import parse_time
         try:
             with open(self.a.audit_path, "rb") as f:
@@ -236,7 +239,7 @@ class Steps:
         for line in raw.decode("utf-8", "replace").splitlines():
             try:
                 r = json.loads(line)
-                if r.get("action") == "queue_step" and r.get("ok") == "confirm" and parse_time(r["at"]) >= now - DAY:
+                if r.get("action") == "queue_step" and r.get("attempt") == "confirm" and parse_time(r["at"]) >= now - DAY:
                     total += float(r.get("usd") or 0)
             except (ValueError, KeyError, TypeError, AttributeError):
                 continue
@@ -244,12 +247,12 @@ class Steps:
 
 
 def _read_file(path, limit=4 * 1024 * 1024):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    try:
-        with os.fdopen(fd, "rb") as f:
-            data = f.read(limit + 1)
-    except Exception:
-        raise
+    """A regular file, never a link, a FIFO or a device, at most `limit` bytes."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            raise OSError("not a regular file")
+        data = f.read(limit + 1)
     if len(data) > limit:
         raise OSError("too large")
     return data.decode("utf-8")

@@ -65,7 +65,7 @@ it is strict-lane. A hint that becomes a gate (refuses, fails or blocks somethin
   acknowledgement, the cost reason) are enforced on the server, not only in a page; the queue's money counts in the daily cap. For the items of a queue that the chat
   itself approved (`approved.via == "ui"`) there are two more, `queue_step` and `draft_approve` (SPEC_CHAT_T4B; the client sends only the queue id, the server derives
   the item, the job and the full draft sha, and the card's digest binds them). Flag any chat route that approves a draft or starts a drafter of a queue not approved via
-  the UI, applies a patch, rejects, retries, redrafts or abandons a code job, passes `--max-usd`, `--web`, `--reference-patch` or `--max-iterations`, or lets the client
+  the UI, applies a patch, retries or redrafts a code job (rejecting or abandoning one stays only `job_reject` and `job_abandon`, SPEC_CONTROL_UI), passes `--max-usd`, `--web`, `--reference-patch` or `--max-iterations`, or lets the client
   pick a queue's item, a job, a sha or an amount. A step of a queue approved more than 24 hours ago counts one job cap in the daily cap (K4). A terminal `queue go` does not enforce them (known).
 
 ### Proportional process and real use first (Atha, 2026-11-19)

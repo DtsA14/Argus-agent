@@ -36,6 +36,12 @@ def svc(tmp_path):
     s.queues = tmp_path / "queues"
     s.queues.mkdir()
     s.actions.cards.queues_dir = s.queues
+    real = s.spawner.spawn
+
+    def spawn(job_id, *a, **kw):                               # a real spawner is busy for the job until the process ends
+        real(job_id, *a, **kw)
+        s.spawner.busy_ids.add(job_id)
+    s.spawner.spawn = spawn
     yield s
     s.stop()
 
@@ -311,7 +317,7 @@ def test_a_draft_that_changed_between_prepare_and_confirm_is_not_approved(svc):
     waiting(svc)
     token = prep(svc, "draft_approve")[1]["token"]
     run = svc.jobs / J1 / "runs" / "d1-run"
-    (run / "draft.json").write_text(json.dumps(draft(budget_profile="large_usd")))
+    (run / "draft.json").write_text(json.dumps({**draft(), "base": "other"}))      # a byte the card does not show but the sha does
     status, _ = svc.confirm(token)
     assert status == 409 and svc.spawner.calls == []
 
@@ -355,10 +361,7 @@ def test_an_approval_that_would_block_the_job_is_refused_before_the_tap(svc):
 def test_a_step_card_for_an_item_that_has_a_draft_and_a_draft_card_for_an_item_that_has_none_are_refused(svc):
     waiting(svc)
     assert prep(svc, "queue_step")[0] == 409
-    for p in svc.queues.glob("*"):
-        pass
-    d = svc.queues / QID
-    (d / "queue.json").unlink()
+    (svc.queues / QID / "queue.json").unlink()
     queue(svc)
     assert prep(svc, "draft_approve")[0] == 409
 
@@ -379,6 +382,112 @@ def test_a_draft_job_reached_through_a_link_is_refused(svc, tmp_path):
     assert prep(svc, "draft_approve")[0] == 409
 
 
+def test_a_draft_file_that_is_a_link_or_not_a_regular_file_is_refused(svc, tmp_path):
+    waiting(svc)
+    run = svc.jobs / J1 / "runs" / "d1-run"
+    (tmp_path / "elsewhere.json").write_text(json.dumps(draft()))
+    (run / "draft.json").unlink()
+    (run / "draft.json").symlink_to(tmp_path / "elsewhere.json")
+    assert prep(svc, "draft_approve")[0] == 409
+    (run / "draft.json").unlink()
+    import os
+    os.mkfifo(run / "draft.json")
+    assert prep(svc, "draft_approve")[0] == 409                 # and the server is not hung by it
+
+
+def test_a_runs_directory_that_is_a_link_is_refused(svc, tmp_path):
+    waiting(svc)
+    runs = svc.jobs / J1 / "runs"
+    runs.rename(tmp_path / "runs_elsewhere")
+    runs.symlink_to(tmp_path / "runs_elsewhere")
+    assert prep(svc, "draft_approve")[0] == 409
+
+
+def test_a_config_change_between_prepare_and_confirm_refuses_the_confirm(svc):
+    waiting(svc)
+    token = prep(svc, "draft_approve")[1]["token"]
+    svc.actions.cfg["router"]["agent_max_usd"] = {"default": 0.40, "large_usd": 0.75}
+    status, _ = svc.confirm(token)
+    assert status == 409 and svc.spawner.calls == []
+
+
+def test_an_environment_that_changed_since_the_job_started_is_refused(svc):
+    queue(svc, jobs=(J1, None))
+    jd = awaiting(svc, J1, TEXT)
+    p = jd / "job.json"
+    data = json.loads(p.read_text())
+    data["inputs"]["environment"] = "athena_py312"
+    data["environment_image"] = "sha256:" + "1" * 64
+    p.write_text(json.dumps(data))
+    status, out = prep(svc, "draft_approve")
+    assert status == 409 and "token" not in out
+
+
+def test_a_drafter_that_cannot_afford_one_attempt_is_refused_at_the_step(svc):
+    queue(svc)
+    svc.actions.cfg["router"]["draft_max_usd"] = 0.0001
+    status, out = prep(svc, "queue_step")
+    assert status == 409 and "drafter" in out["refused"] and "token" not in out
+
+
+def test_the_window_closing_between_prepare_and_confirm_changes_the_card(svc):
+    queue(svc, at=t.NOW - 86400 + 5)                           # five seconds inside the 24 hours at prepare
+    token = prep(svc, "queue_step")[1]["token"]
+    svc.clock.t += 10
+    status, _ = svc.confirm(token)
+    assert status == 409 and svc.spawner.calls == []
+
+
+def test_a_draft_approval_adds_nothing_even_when_its_queue_is_old(svc):
+    queue(svc, jobs=(J1, None), at=t.NOW - 5 * 86400)
+    awaiting(svc, J1, TEXT)
+    status, out = prep(svc, "draft_approve")
+    assert status == 200 and out["exposure_usd"] == 0.0
+    svc.confirm(out["token"])
+    assert svc.actions.exposure() == 0.0
+
+
+def test_the_code_key_is_the_slot_even_when_a_writer_key_is_set(svc):
+    svc.actions.environ[ca.WRITER_KEY_ENV] = "/keys/writer.key"
+    svc.actions.environ[ca.RESEARCH_KEY_ENV] = "/keys/research.key"
+    queue(svc)
+    svc.confirm(prep(svc, "queue_step")[1]["token"])
+    assert t.KEY in svc.spawner.calls[0]["argv"] and "/keys/writer.key" not in svc.spawner.calls[0]["argv"] and "/keys/research.key" not in svc.spawner.calls[0]["argv"]
+
+
+def test_a_draft_of_a_queue_on_another_jobs_directory_is_refused(svc):
+    d = queue(svc, jobs=(J1, None))
+    awaiting(svc, J1, TEXT)
+    p = d / "queue.json"
+    q = json.loads(p.read_text())
+    q["jobs_dir"] = "/elsewhere"
+    p.write_text(json.dumps(q))
+    assert prep(svc, "draft_approve")[0] == 409
+
+
+def test_two_prepares_and_two_confirms_start_one_agent(svc):
+    waiting(svc)
+    a, b = prep(svc, "draft_approve")[1]["token"], prep(svc, "draft_approve")[1]["token"]
+    assert svc.confirm(a)[0] == 200
+    assert svc.confirm(b)[0] == 409                              # the queue is busy now
+    assert len(svc.spawner.calls) == 1
+
+
+def test_a_step_stays_counted_when_the_line_written_after_it_is_lost(svc):
+    queue(svc, at=t.NOW - 2 * 86400)
+    svc.confirm(prep(svc, "queue_step")[1]["token"])
+    lines = [json.loads(x) for x in svc.actions.audit_path.read_text().splitlines()]
+    svc.actions.audit_path.write_text("".join(json.dumps(r) + "\n" for r in lines if r.get("ok") != "confirm"))
+    assert svc.actions.exposure() == 1.0
+
+
+def test_a_step_older_than_a_day_is_no_longer_counted(svc):
+    queue(svc, at=t.NOW - 2 * 86400)
+    svc.confirm(prep(svc, "queue_step")[1]["token"])
+    svc.clock.t += 86400 + 60
+    assert svc.actions.exposure() == 0.0
+
+
 # ---- what stays out -------------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("action", ["apply", "queue_retry", "queue_close", "draft_reject", "job_apply", "redraft", "agent_retry", "pr_merge"])
@@ -393,7 +502,3 @@ def test_the_action_list_has_exactly_the_two_new_approvals_and_no_apply():
     assert not any("apply" in a or "retry" in a or "redraft" in a for a in ca.ACTIONS)
 
 
-def test_the_new_actions_have_a_branch_in_execute_and_build():
-    src = Path(ca.__file__).read_text()
-    for a in ("queue_step", "draft_approve"):
-        assert f'"{a}"' in src
