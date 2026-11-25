@@ -25,14 +25,13 @@ def raw_job(svc, job_id, kind, max_usd, via="ui", created=None):
                                             "inputs": {"repo_name": "athena"}, "log": [{"at": at, "what": "created", "via": via}]}))
 
 
-FALSY = ([], {})                                                                 # absent or empty counts as no money, as it always did (`max_usd or 0`)
+def cases():
+    """(kind, bad value): an empty list or dict counts as no money for an issue job, as it always did (`max_usd or 0`), so it is not a bad value there."""
+    return [(k, b) for k in ("issue", "research", "prd") for b in BAD if not (k == "issue" and b in ([], {}))]
 
 
-@pytest.mark.parametrize("bad", BAD, ids=lambda b: repr(b)[:12])
-@pytest.mark.parametrize("kind", ["issue", "research", "prd"])
+@pytest.mark.parametrize("kind, bad", cases(), ids=lambda b: repr(b)[:12])
 def test_a_bad_max_usd_in_a_job_started_from_the_ui_makes_the_exposure_unknown_and_the_cap_refuses(svc, kind, bad):
-    if kind == "issue" and bad in FALSY:
-        pytest.skip("an empty value is no money for an issue job")
     raw_job(svc, "j20261115_200000_aaaa", kind, bad)
     with pytest.raises(ca.Refusal) as e:
         svc.actions.exposure()
