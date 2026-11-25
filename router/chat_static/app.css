@@ -138,4 +138,8 @@ pre.code{white-space:pre-wrap;overflow-wrap:anywhere;font:.8rem ui-monospace,Men
 #plus-menu[hidden]{display:none}
 #plus-menu button{min-height:2.75rem;padding:0 .9rem;text-align:left;background:none;border:0;border-radius:.75rem;color:var(--text);font:inherit}
 #plus-menu button:hover{background:var(--line)}
-.spacer{visibility:hidden}
+#more-menu{position:absolute;right:.75rem;top:3.6rem;z-index:3;min-width:12rem;display:flex;flex-direction:column;padding:.35rem;background:var(--card);border:1px solid var(--line);border-radius:1rem;box-shadow:0 .5rem 1.5rem rgba(0,0,0,.45)}
+#more-menu[hidden]{display:none}
+#more-menu button,#more-menu a{display:flex;align-items:center;min-height:2.75rem;padding:0 .9rem;text-align:left;background:none;border:0;border-radius:.75rem;color:var(--text);font:inherit;text-decoration:none}
+#more-menu button:hover,#more-menu a:hover{background:var(--line)}
+main{position:relative}

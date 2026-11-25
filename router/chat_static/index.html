@@ -31,7 +31,11 @@
     <header class="bar">
       <button id="open-panel" class="round" type="button" aria-label="Open list">☰</button>
       <div class="titles"><strong class="brand">Argus</strong><span id="summary" class="muted">loading…</span></div>
-      <span class="round spacer" aria-hidden="true"></span>
+      <button id="more" class="round" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More">⋯</button>
+      <div id="more-menu" role="menu" aria-label="More" hidden>
+        <button id="refresh" type="button" role="menuitem">Refresh</button>
+        <a class="plain" role="menuitem" href="http://localhost:8710/" rel="noopener noreferrer">Open viewer (read-only)</a>
+      </div>
     </header>
     <section id="stream"></section>
     <div id="slot" role="status" aria-live="polite"></div>

@@ -63,8 +63,8 @@ def test_the_bottom_bar_has_the_four_tabs_in_order_and_the_chips_only_the_chat_m
 
 def test_the_page_makes_one_link_out_and_it_is_the_viewer_on_its_own_port_with_no_text_from_a_job():
     anchors = re.findall(r"<a\b[^>]*>", HTML)
-    assert len(anchors) == 1 and 'href="http://localhost:8710/"' in anchors[0] and 'rel="noopener noreferrer"' in anchors[0]
-    assert "8711" not in anchors[0] and "8712" not in anchors[0]
+    assert len(anchors) == 2 and all('href="http://localhost:8710/"' in a and 'rel="noopener noreferrer"' in a for a in anchors)      # the panel's footer and the ... menu: the same viewer, nothing else
+    assert all("8711" not in a and "8712" not in a for a in anchors)
 
 
 def test_the_tab_icons_are_inline_vectors_with_no_script_and_no_external_image():
@@ -159,3 +159,11 @@ def test_the_box_is_in_the_chat_tab_only_and_the_plus_menu_closes_with_every_mov
     css = (rc.STATIC_DIR / "app.css").read_text()
     assert "--on-accent:#120d2b" in css and "--on-accent:#f6f8fa" in css and "#120d2b;" not in css.split("/* UI-3a")[1] and "env(" not in css
     assert "Object.create(null)" in JS.split("function renderList")[1].split("function renderOverview")[0]
+
+
+def test_the_header_has_an_ellipsis_menu_with_refresh_and_the_viewer_and_no_plus():
+    head = HTML.split('<header class="bar">')[1].split("</header>")[0]
+    assert 'id="more"' in head and "⋯" in head and 'id="new-request"' not in HTML and ">+<" not in head
+    assert 'id="more-menu" role="menu"' in head and 'id="refresh"' in head
+    assert 'document.getElementById("refresh").addEventListener("click", function () { closeMenu(); load(); });' in JS
+    assert 'document.getElementById("more-menu").hidden = true;' in JS.split("function closeMenu")[1].split("function openNew")[0]
