@@ -30,7 +30,7 @@ PORTS = (8711, 8712)                              # SPEC_CHAT_APP 13.4: 8712 whi
 HOSTS = (f"{BIND}:{PORT}",)
 ORIGINS = (f"http://{BIND}:{PORT}",)                  # the one origin a POST may come from (11.2)
 POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm"}   # the only POST routes; any other POST is a 405
-PARAMS = {"repo", "message", "job", "reason", "sha", "ack"}
+PARAMS = {"repo", "message", "job", "reason", "sha", "ack", "queue"}
 BODY_MAX = 16 * 1024                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
@@ -360,6 +360,8 @@ class Handler(BaseHTTPRequestHandler):
         if set(params) - PARAMS or any(not isinstance(v, str) for v in params.values()):
             raise Refusal(400, "form", "unknown or non-text fields")
         rec.update(action=action if isinstance(action, str) else None, job=params.get("job") or None)
+        if action in ("queue_step", "draft_approve") and isinstance(params.get("queue"), str):
+            rec["queue"] = params["queue"][:AUDIT_STR]
         if "sha" in params:
             if action in ACTIONS and not action.startswith("job_"):
                 raise Refusal(400, "form", "only a decision of a job takes a draft sha")
@@ -379,6 +381,10 @@ class Handler(BaseHTTPRequestHandler):
             rec.update(queue=card["queue"], usd=card["queue_usd"])
             if card.get("reason"):
                 rec["reason_sha256"] = hashlib.sha256(card["reason"].encode()).hexdigest()
+        if action in ("queue_step", "draft_approve"):                     # SPEC_CHAT_T4B 5: the audit net of the daily cap reads usd (non-zero only outside the 24 hours)
+            rec.update(queue=card["queue"], item=card["item"], usd=a.exposure_of(card))
+            if card.get("draft_sha"):
+                rec["sha"] = card["draft_sha"][:12]
         if card.get("sha12"):
             rec["sha"] = card["sha12"]
         if not self._audit(a, **rec, attempt="confirm"):
