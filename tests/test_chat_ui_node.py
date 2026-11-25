@@ -70,7 +70,7 @@ def test_the_panel_groups_by_repo_filters_and_the_cost_view_and_badge_say_what_t
     c = out["cost"]
     assert "Recorded stage cost" in c and "Total (5 jobs in the list): $0.2400" in c and "Code: $0.0300" in c and "Research: $0.1400" in c and "PRD: $0.0700" in c
     assert "1 job has a stage with no cost figure: not counted, not zero." in c
-    assert "The daily cap and the money already booked are not shown" in c and "ledger-cli: PRD kategori" in c and "athena: buffer" not in c   # a job that cost nothing is not listed
+    assert "Only stage figures recorded in the job list (the newest only)." in c and "ledger-cli: PRD kategori" in c and "athena: buffer" not in c   # a job that cost nothing is not listed
 
 
 def test_the_decisions_page_lists_what_waits_with_fixed_labels_counts_a_draft_job_once_and_says_when_it_may_be_incomplete():
@@ -94,3 +94,30 @@ def test_the_queue_progress_bar_counts_only_applied_items_and_is_absent_without_
     assert "Start the next issue (drafter)" in n and "Draft of the next issue is ready for you" in n and "null" not in n and "undefined" not in n
     assert "Could not refresh this list: the rows shown may be out of date." in n
     assert n.count("athena") == 1                                                    # a queue row whose title is its repository's name shows it once
+
+
+def test_the_cost_view_has_two_different_numbers_booked_and_recorded_and_never_shows_unknown_as_zero():
+    out = json.loads(node(HERE / "chat_ui_smoke_nav.js", APP))
+    assert "Loading…" in out["costNull"] and "Booked against the daily cap" in out["costNull"]
+    ok = out["costOk"]
+    assert "Booked (last 24 hours): $1.08 of $7.00" in ok and "Left: $5.92" in ok and out["bar"] == "7/1.08"
+    assert "The cap counts the full limit of every job, start, reply and queue started from this chat in the last 24 hours, not what they spent. A request whose own limit is more than Left is refused." in ok
+    assert "Left: $0.00" in out["costOver"] and out["barOver"] == "7/7"                 # over the cap: the bar stops at full, nothing is negative
+    for key in ("costUnknown", "costFailed"):
+        assert "The daily cap could not be computed right now." in out[key] and "Booked (last 24 hours)" not in out[key] and "$0.00" not in out[key].split("Recorded in the last 24 hours")[0]
+    assert "Booked (last 24 hours)" in out["costZero"] and "$0.00 of $0.00" in out["costZero"] and "<progress" not in out["costZero"]       # a cap of 0 has no bar
+    day = out["cost"].split("Recorded in the last 24 hours")[1].split("Recorded stage cost")[0]
+    assert "Total (3 jobs created): $0.1700" in day and "Code: $0.0300" in day and "Research: $0.1400" in day and "PRD" not in day.replace("Recorded", "")     # j2 is 25 hours old, j5 has no readable date
+    assert "Money still being spent by a running stage is not in it yet." in day
+    allj = out["cost"].split("Recorded stage cost")[1]
+    assert "Total (5 jobs in the list): $0.2400" in allj and "PRD: $0.0700" in allj and "1 job has a stage with no cost figure: not counted, not zero." in allj
+
+
+def test_the_cost_view_survives_odd_numbers_and_reads_the_24_hours_from_the_job_id():
+    out = json.loads(node(HERE / "chat_ui_smoke_nav.js", APP))
+    s = out["costStrings"]
+    assert "The daily cap could not be computed right now." in s and "Booked (last 24 hours)" not in s and "The cap counts the full limit" in s     # a number that arrives as text is no number; the note stays
+    assert "Booked (last 24 hours): $7.00 of $7.00" in out["costRound"] and "Left: $0.00" in out["costRound"]
+    # 12:00 on 2026-11-25 is "now": 4 h old yes; 25 h no; exactly 24 h yes; 23 h 59 min 59 s yes; 2027 no; one second in the future no; not a job id no; upper case hex no
+    assert out["recent"] == "10110000"
+    assert "The list holds only the newest 100 jobs: this total may be incomplete." in out["cost100"] and "may be incomplete" not in out["cost"]

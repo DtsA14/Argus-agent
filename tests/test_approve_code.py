@@ -361,8 +361,8 @@ def test_the_page_has_an_install_view_reached_from_a_review_ready_queue_item_and
     assert part.count('if (seq !== cardSeq || mode !== "cards") { return; }') == 2 and part.count("cardButtons()") == 2
     assert "innerHTML" not in part and "insertAdjacentHTML" not in part and "document.write" not in part
     assert "d.patch_read_label" in part and "d.domain_read_label" in part and "d.fixed_line" in part
-    assert "pembaca patch belum diuji" in part and "pembaca angka belum diuji" in part and "TIDAK" in part
-    assert "aman" not in part.replace("Ini bukan jaminan aman", "")              # the one place the word is, to deny it
+    assert "patch reader has not been tested" in part and "number reader has not been tested" in part and "This is not a guarantee of safety." in part
+    assert "safe" not in part.replace("This is not a guarantee of safety.", "")              # the one place the word is, to deny it
     assert "fetch(" not in part and "XMLHttpRequest" not in part and "localStorage" not in part
 
 
