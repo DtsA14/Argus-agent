@@ -114,3 +114,22 @@ def test_the_command_line_passes_item_and_via_and_refuses_a_bad_via(qe, monkeypa
     with pytest.raises(SystemExit) as e:
         argus.main(["queue", "step", "q1", "--via", "phone"])
     assert e.value.code == 2
+
+
+def test_the_command_line_passes_via_to_approve(qe, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    import argus
+    seen = {}
+    monkeypatch.setattr(rj, "approve", lambda job, **kw: seen.update(kw) or (_FakeJob(), None))
+    monkeypatch.setattr(argus, "load_config", lambda *a, **k: qe.cfg)
+    monkeypatch.setattr(rj, "status", lambda *a, **k: "status")
+    argus.main(["--jobs-dir", str(qe.jobs), "approve", "j1", "--sha", "a" * 64, "--via", "ui"], deps=qe.env.deps)
+    assert seen["via"] == "ui" and seen["sha"] == "a" * 64
+    seen.clear()
+    argus.main(["--jobs-dir", str(qe.jobs), "approve", "j1", "--sha", "a" * 64], deps=qe.env.deps)
+    assert seen["via"] is None
+
+
+class _FakeJob:
+    id = "j1"
+    data = {"state": "REVIEW_READY"}
