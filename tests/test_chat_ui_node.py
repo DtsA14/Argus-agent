@@ -129,12 +129,16 @@ def test_the_draft_page_marks_every_diff_line_by_its_first_character_shows_notes
     assert "<div.dl.add>+<b>tag</b></div>" in out["blockText"]                              # a tag in the text is the text of a text node
     p = out["page"]
     assert "Draft details" in p and "Draft sha: </b>aaaaaaaaaaaa" in p and "may write" in p and "tests/test_a.py::test_x" in p
-    assert "old text matches the recorded hash" in p and "old text not verified against a recorded hash" in p
+    assert "old text matches the recorded hash" in p and "no recorded hash to check the old text against" in p
+    assert "the old text does NOT match the recorded hash: this diff may not be against the version the drafter saw" in p and "The diff is cut here: it is longer than the page shows." in p
+    assert "No difference between the old text and the new text." in p
     assert "removed (written by a model)" in p and "no <i>longer</i> true" in p and "modified (written by a model)" in p
     assert "(path not shown)" in p and "the path is not shown" in p and "unavailable" in p
-    assert "Only the first 4 of 7 files are shown." in p and "The writer's plan is not available for this draft." in p
+    assert "Only the first 6 of 7 files are shown." in p and "The writer's plan is not available for this draft." in p
     assert "step (written by a model)" in p and "risk (written by a model)" in p and "not proven by the machine (written by a model)" in p
     assert out["state"] == "1;j20261117_110000_aaa1;draft;/api/draft/j20261117_110000_aaa1"
     assert "None: the draft only adds new tests." in out["none"] and "Only the first" not in out["none"]
     assert "The draft details cannot be read." in out["failed"]
     assert out["leftTab"] == "<section></section>"                                            # an answer that arrives after the person left the Queue tab draws nothing
+    assert out["stale"] == "<section></section>" and out["fresh"] is True                      # an older answer draws nothing; the newest does
+    assert "The list of changed tests cannot be read." in out["unreadable"] and "None: the draft only adds new tests." not in out["unreadable"]

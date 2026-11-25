@@ -17,7 +17,8 @@ var document = { createTextNode: function (t) { var n = new Node("#text"); n.tex
 function el(tag, cls, text) { var e = new Node(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.text = String(text); return e; }
 function clear(node) { node.children = []; }
 var stream = new Node("section"), cardSeq = 0, mode = "cards", openCard = null, openKind = null, reply = null, failed = false, requested = [];
-function get(path) { requested.push(path); return { then: function (f) { if (!failed) { f(reply); } return { catch: function (g) { if (failed) { g(new Error("x")); } } }; } }; }
+var pendingAnswers = [], hold = false;
+function get(path) { requested.push(path); return { then: function (f) { if (hold) { pendingAnswers.push(f); } else if (!failed) { f(reply); } return { catch: function (g) { if (failed && !hold) { g(new Error("x")); } } }; } }; }
 function cardButtons() { var n = new Node("div"); n.className = "nav"; return n; }
 `;
 const code = helpers + ["fact", "who", "say", "sec", "diffBlock", "showDraft"].map(grab).join("\n");
@@ -29,11 +30,13 @@ out.blockLines = run(`html(diffBlock("--- a/t.py\\n+++ b/t.py\\n@@ -1,2 +1,3 @@\
 out.blockText = run(`html(diffBlock("+<b>tag</b>"))`);
 const full = {
   job: "j20261117_110000_aaa1", draft_sha: "a".repeat(64), draft_sha12: "a".repeat(12), state: "AWAITING_APPROVAL", writable: ["src/a.py", "tests/test_a.py"], must_pass: ["tests/test_a.py::test_x"], tests_n: 7,
-  tests: [{ path: "tests/test_a.py", diff: "--- a/tests/test_a.py\n+++ b/tests/test_a.py\n+def test_z():", before_verified: true, note: null, removed: [{ node: "test_old", reason: "no <i>longer</i> true" }], modified: [{ node: "test_y", reason: "moved" }] },
-          { path: null, diff: null, note: "the path is not shown", before_verified: false, removed: [], modified: [] },
-          { path: "tests/test_b.py", diff: null, note: "unavailable", before_verified: false, removed: [], modified: [] },
-          { path: "tests/test_c.py", diff: "--- a/c\n+++ b/c\n-x", before_verified: false, note: null, removed: [], modified: [] }],
-  plan: { steps: ["add test_z"], files: ["tests/test_a.py"], risks: ["it may break"] }, warnings: ["w1"], unverifiable: ["the page stays"], summary_note: "summary unavailable" };
+  tests: [{ path: "tests/test_a.py", diff: "--- a/tests/test_a.py\n+++ b/tests/test_a.py\n+def test_z():", before: "matches", note: null, removed: [{ node: "test_old", reason: "no <i>longer</i> true" }], modified: [{ node: "test_y", reason: "moved" }] },
+          { path: null, diff: null, note: "the path is not shown", before: "no_record", removed: [], modified: [] },
+          { path: "tests/test_b.py", diff: null, note: "unavailable", before: "no_record", removed: [], modified: [] },
+          { path: "tests/test_c.py", diff: "--- a/c\n+++ b/c\n-x", before: "differs", diff_cut: true, note: null, removed: [], modified: [] },
+          { path: "tests/test_d.py", diff: "", before: "matches", note: null, removed: [], modified: [] },
+          { path: "tests/test_e.py", diff: "--- a/e\n+++ b/e\n+x", before: "no_record", note: null, removed: [], modified: [] }],
+  tests_ok: true, plan: { steps: ["add test_z"], files: ["tests/test_a.py"], risks: ["it may break"] }, warnings: ["w1"], unverifiable: ["the page stays"], summary_note: "summary unavailable" };
 run("reply = " + JSON.stringify(full) + "; showDraft('j20261117_110000_aaa1');");
 out.page = run("html(stream)");
 out.state = run("[cardSeq, openCard, openKind, requested.join('|')].join(';')");
@@ -41,4 +44,13 @@ run("reply = { job: 'j', draft_sha12: 'b'.repeat(12), draft_sha: 'b'.repeat(64),
 out.none = run("html(stream)");
 run("failed = true; showDraft('j');"); out.failed = run("html(stream)");
 run("failed = false; mode = 'chat'; clear(stream); reply = " + JSON.stringify(full) + "; showDraft('j');"); out.leftTab = run("html(stream)");
+// out of order: the first answer arrives after a second request was made and after the tab was left
+run("failed = false; hold = true; mode = 'cards'; clear(stream); reply = " + JSON.stringify(full) + "; showDraft('first');");
+run("showDraft('second');");
+run("var first = pendingAnswers.shift(); first(" + JSON.stringify(full) + ");");
+out.stale = run("html(stream)");
+run("var second = pendingAnswers.shift(); second(" + JSON.stringify(full) + ");");
+out.fresh = run("html(stream).indexOf('Draft details') >= 0");
+run("hold = false; mode = 'cards'; clear(stream); reply = { job: 'j', draft_sha12: 'c'.repeat(12), draft_sha: 'c'.repeat(64), state: 'X', writable: [], must_pass: [], tests: [], tests_n: 0, tests_ok: false }; showDraft('j');");
+out.unreadable = run("html(stream)");
 console.log(JSON.stringify(out, null, 1));

@@ -323,7 +323,7 @@
         message.value = "";
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
         if (mode === "prd") { return; }
-        if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else { showPlan(openCard); } return; }
+        if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }
         if (mode === "decide") { if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); } return; }
         loadIssues();
         if (r.job && mode === "issue") { showIssue(r.job, true); }
@@ -836,13 +836,18 @@
       fact(c, "Draft sha", d.draft_sha12);
       fact(c, "State", d.state);
       var s2 = sec(c, "Existing tests this draft changes");
-      if (!d.tests_n) { s2.appendChild(el("p", "muted", "None: the draft only adds new tests.")); }
+      if (d.tests_ok === false) { s2.appendChild(el("p", "note", "The list of changed tests cannot be read.")); }
+      else if (!d.tests_n) { s2.appendChild(el("p", "muted", "None: the draft only adds new tests.")); }
       (d.tests || []).forEach(function (t) {
         var box = el("div", "ex2");
         box.appendChild(el("p", "mono", t.path || "(path not shown)"));
         if (t.diff !== null && t.diff !== undefined) {
-          say(box, "mesin", t.before_verified ? "old text matches the recorded hash" : "old text not verified against a recorded hash", "", "small");
-          box.appendChild(diffBlock(t.diff));
+          if (t.before === "matches") { say(box, "mesin", "old text matches the recorded hash", "", "small"); }
+          else if (t.before === "differs") { say(box, "mesin", "warning", "the old text does NOT match the recorded hash: this diff may not be against the version the drafter saw", "say warn"); }
+          else { say(box, "mesin", "no recorded hash to check the old text against", "", "small"); }
+          if (t.diff === "") { box.appendChild(el("p", "muted", "No difference between the old text and the new text.")); }
+          else { box.appendChild(diffBlock(t.diff)); }
+          if (t.diff_cut) { box.appendChild(el("p", "note", "The diff is cut here: it is longer than the page shows.")); }
         }
         if (t.note) { box.appendChild(el("p", "note", t.note)); }
         (t.removed || []).forEach(function (n) { say(box, "model", "removed (written by a model)", n.node + ": " + n.reason, "say"); });
