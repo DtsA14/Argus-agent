@@ -101,7 +101,7 @@ def test_the_cost_view_has_two_different_numbers_booked_and_recorded_and_never_s
     assert "Loading…" in out["costNull"] and "Booked against the daily cap" in out["costNull"]
     ok = out["costOk"]
     assert "Booked (last 24 hours): $1.08 of $7.00" in ok and "Left: $5.92" in ok and out["bar"] == "7/1.08"
-    assert "The cap counts the full limit of every job started from this chat in the last 24 hours, not what the jobs spent." in ok
+    assert "The cap counts the full limit of every job, start, reply and queue started from this chat in the last 24 hours, not what they spent. A request whose own limit is more than Left is refused." in ok
     assert "Left: $0.00" in out["costOver"] and out["barOver"] == "7/7"                 # over the cap: the bar stops at full, nothing is negative
     for key in ("costUnknown", "costFailed"):
         assert "The daily cap could not be computed right now." in out[key] and "Booked (last 24 hours)" not in out[key] and "$0.00" not in out[key].split("Recorded in the last 24 hours")[0]
@@ -111,3 +111,13 @@ def test_the_cost_view_has_two_different_numbers_booked_and_recorded_and_never_s
     assert "Money still being spent by a running stage is not in it yet." in day
     allj = out["cost"].split("Recorded stage cost")[1]
     assert "Total (5 jobs in the list): $0.2400" in allj and "PRD: $0.0700" in allj and "1 job has a stage with no cost figure: not counted, not zero." in allj
+
+
+def test_the_cost_view_survives_odd_numbers_and_reads_the_24_hours_from_the_job_id():
+    out = json.loads(node(HERE / "chat_ui_smoke_nav.js", APP))
+    s = out["costStrings"]
+    assert "The daily cap could not be computed right now." in s and "Booked (last 24 hours)" not in s and "The cap counts the full limit" in s     # a number that arrives as text is no number; the note stays
+    assert "Booked (last 24 hours): $7.00 of $7.00" in out["costRound"] and "Left: $0.00" in out["costRound"]
+    # 12:00 on 2026-11-25 is "now": 4 h old yes; 25 h no; exactly 24 h yes; 23 h 59 min 59 s yes; 2027 no; one second in the future no; not a job id no; upper case hex no
+    assert out["recent"] == "10110000"
+    assert "The list holds only the newest 100 jobs: this total may be incomplete." in out["cost100"] and "may be incomplete" not in out["cost"]

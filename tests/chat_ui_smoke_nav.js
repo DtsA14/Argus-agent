@@ -30,20 +30,20 @@ var waitingRows = [], waitingMeta = { capped: false, unknown: false };
 var query = { value: "" }, mode = "status", current = null, threads = [], decisionRows = [], filter = "all", groupOpen = Object.create(null);
 function setMode() {} function open() {}
 `;
-const code = helpers + "var NO_REPO = \"No repo\";\n" + ["waitingIds", "jobButton", "renderList", "waitLabel", "waitingCard", "waitingJobs", "openJobs", "needCount", "renderDecisions", "cardRow", "updateSummary", "updateBadge", "usd2", "recentJob", "renderCost"].map(grab).join("\n");
+const code = helpers + "var NO_REPO = \"No repo\";\n" + src.match(/  var JOB_TIME = .*;\n/)[0] + ["waitingIds", "jobButton", "renderList", "waitLabel", "waitingCard", "waitingJobs", "openJobs", "needCount", "renderDecisions", "cardRow", "updateSummary", "updateBadge", "usd2", "recentJob", "renderCost"].map(grab).join("\n");
 const NOW = Date.parse("2026-11-25T12:00:00Z");
-const ctx = vm.createContext({ Math, String, Array, JSON, Object, Date: { now: () => NOW, parse: Date.parse } });
+const ctx = vm.createContext({ Math, String, Array, JSON, Object, Date: { now: () => NOW, parse: Date.parse, UTC: Date.UTC } });
 vm.runInContext(code, ctx);
 const run = (s) => vm.runInContext(s, ctx);
 const T = [
-  { id: "j1", repo: "ledger-cli", created_at: "2026-11-25T08:00:00Z", kind: "code", state: "AWAITING_APPROVAL", title: "Antrean <b>x</b>", stages_usd: 0.03 },
-  { id: "j2", repo: "ledger-cli", created_at: "2026-11-24T08:00:00Z", kind: "prd", state: "DONE", title: "PRD kategori", stages_usd: 0.07 },
-  { id: "j3", repo: "athena", created_at: "2026-11-25T09:00:00Z", kind: "code", state: "APPLIED", title: "buffer", stages_usd: 0 },
-  { id: "j4", repo: null, created_at: "2026-11-25T10:00:00Z", kind: "research", state: "DONE", title: "Dexie atau idb", stages_usd: 0.14 },
-  { id: "j5", repo: "constructor", created_at: "garbage", kind: "code", state: "DONE", title: "a prototype name", stages_usd: 0, stages_unknown: 2 },
+  { id: "j20261125_080000_aaa1", repo: "ledger-cli", kind: "code", state: "AWAITING_APPROVAL", title: "Antrean <b>x</b>", stages_usd: 0.03 },
+  { id: "j20261124_080000_aaa2", repo: "ledger-cli", kind: "prd", state: "DONE", title: "PRD kategori", stages_usd: 0.07 },
+  { id: "j20261125_090000_aaa3", repo: "athena", kind: "code", state: "APPLIED", title: "buffer", stages_usd: 0 },
+  { id: "j20261125_100000_aaa4", repo: null, kind: "research", state: "DONE", title: "Dexie atau idb", stages_usd: 0.14 },
+  { id: "not-a-job-id", repo: "constructor", kind: "code", state: "DONE", title: "a prototype name", stages_usd: 0, stages_unknown: 2 },
 ];
 const out = {};
-run("threads = " + JSON.stringify(T) + "; decisionRows = [{ id: 'j1' }];");
+run("threads = " + JSON.stringify(T) + "; decisionRows = [{ id: 'j20261125_080000_aaa1' }];");
 run("renderList();"); out.all = run("html(list)");
 run("filter = 'waiting'; renderList();"); out.waiting = run("html(list)");
 run("filter = 'research'; renderList();"); out.research = run("html(list)");
@@ -70,5 +70,9 @@ out.barOver = run("stream.children[0].children.filter(function (x) { return x.ta
 run("capInfo = { cap_usd: 7, booked_usd: null, unknown: true }; renderCost();"); out.costUnknown = run("html(stream)");
 run("capInfo = { failed: true }; renderCost();"); out.costFailed = run("html(stream)");
 run("capInfo = { cap_usd: 0, booked_usd: 0, unknown: false }; renderCost();"); out.costZero = run("html(stream)");
-run("capInfo = null; renderCost();"); out.cost = run("html(stream)");
+run("capInfo = { cap_usd: '7', booked_usd: '1', unknown: false }; renderCost();"); out.costStrings = run("html(stream)");
+run("capInfo = { cap_usd: 7, booked_usd: 6.996, unknown: false }; renderCost();"); out.costRound = run("html(stream)");
+out.recent = run("['j20261125_080000_aaa1', 'j20261124_110000_aaa1', 'j20261124_120000_aaa1', 'j20261124_120001_aaa1', 'j20271125_080000_aaa1', 'j20261125_120001_aaa1', 'x', 'j20261125_080000_AAAA'].map(function (id) { return recentJob({ id: id }) ? 1 : 0; }).join('')");
+run("var keep = threads; threads = []; for (var i = 0; i < 100; i++) { threads.push({ id: 'j20261125_080000_aaa1', kind: 'code', stages_usd: 0.01 }); } capInfo = null; renderCost();"); out.cost100 = run("html(stream)");
+run("threads = keep; capInfo = null; renderCost();"); out.cost = run("html(stream)");
 console.log(JSON.stringify(out, null, 1));

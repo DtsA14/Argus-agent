@@ -88,3 +88,28 @@ def test_the_route_needs_the_chat_actions(svc):
         assert ro.request("GET", "/api/cap")[0] == 404
     finally:
         ro.stop()
+
+
+def test_an_infinite_or_nan_number_is_no_number_it_cannot_be_written_as_json(svc, monkeypatch):
+    monkeypatch.setattr(svc.actions, "daily_cap", lambda: float("inf"))
+    st, body = cap(svc)
+    assert st == 200 and body == {"cap_usd": None, "booked_usd": None, "unknown": True}
+    svc.actions._cap_cache = None
+    monkeypatch.setattr(svc.actions, "daily_cap", lambda: 7.0)
+    monkeypatch.setattr(svc.actions, "_exposure_scan", lambda: float("nan"))
+    st, body = cap(svc)
+    assert st == 200 and body == {"cap_usd": None, "booked_usd": None, "unknown": True}
+
+
+def test_a_waiting_scan_before_the_cap_leaves_nothing_behind_and_the_cap_is_the_live_scan(svc):
+    svc.request("GET", "/api/waiting")
+    assert svc.actions._exposure_once is None
+    t.make_issue(svc.jobs, "j20261115_100000_aaaa", created=NOW - 3600)
+    svc.actions._cap_cache = None
+    assert cap(svc)[1]["booked_usd"] == pytest.approx(0.5)
+
+
+def test_a_float_cap_is_kept_as_is(svc):
+    svc.actions.cfg["chat"] = {"daily_cap_usd": 7.25}
+    svc.actions._cap_cache = None
+    assert cap(svc)[1]["cap_usd"] == 7.25

@@ -1098,11 +1098,19 @@
   var capInfo = null;                                    // {cap_usd, booked_usd, unknown} from /api/cap; null until read; {failed: true} when it could not be read
   var DAY_MS = 24 * 3600 * 1000;
   function usd2(n) { return "$" + n.toFixed(2); }
+  var capSeq = 0;
   function loadCap() {
-    get("/api/cap").then(function (d) { capInfo = d; if (mode === "cost") { renderCost(); } })
-      .catch(function () { capInfo = { failed: true }; if (mode === "cost") { renderCost(); } });
+    var seq = ++capSeq;
+    get("/api/cap").then(function (d) { if (seq === capSeq) { capInfo = d; if (mode === "cost") { renderCost(); } } })
+      .catch(function () { if (seq === capSeq) { capInfo = { failed: true }; if (mode === "cost") { renderCost(); } } });
   }
-  function recentJob(t) { var ms = Date.parse(t.created_at); return !isNaN(ms) && Date.now() - ms <= DAY_MS; }
+  var JOB_TIME = /^j(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})_[0-9a-f]{4}$/;
+  function recentJob(t) {                               // the time written in the job's id (UTC), not a field of the file: a forged or local-time date cannot move a job into or out of the window
+    var m = JOB_TIME.exec(String(t.id));
+    if (!m) { return false; }
+    var ms = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]), age = Date.now() - ms;
+    return age >= 0 && age <= DAY_MS;
+  }
   function renderCost() {                               // two different numbers: what the cap counts (booked, from the server) and what the jobs recorded (from the job list). Never merged, unknown never shown as zero.
     clear(stream);
     var booked = el("article", "card");
@@ -1122,7 +1130,7 @@
       }
       fact(booked, "Left", usd2(Math.max(0, capInfo.cap_usd - capInfo.booked_usd)));
     }
-    booked.appendChild(el("p", "note", "The cap counts the full limit of every job started from this chat in the last 24 hours, not what the jobs spent. A new request that would pass it is refused."));
+    booked.appendChild(el("p", "note", "The cap counts the full limit of every job, start, reply and queue started from this chat in the last 24 hours, not what they spent. A request whose own limit is more than Left is refused."));
     stream.appendChild(booked);
     var day = threads.filter(recentJob), dayTotal = 0, dayBy = Object.create(null), dayUnknown = 0;
     day.forEach(function (t) {
@@ -1138,6 +1146,7 @@
     Object.keys(dayBy).sort().forEach(function (k) { fact(spent, k, usd(dayBy[k])); });
     if (dayUnknown) { spent.appendChild(el("p", "note", nJobs(dayUnknown) + (dayUnknown === 1 ? " has" : " have") + " a stage with no cost figure: not counted, not zero.")); }
     spent.appendChild(el("p", "note", "Stage costs written in the job files of jobs created in the last 24 hours. Money still being spent by a running stage is not in it yet."));
+    if (threads.length >= 100) { spent.appendChild(el("p", "note", "The list holds only the newest 100 jobs: this total may be incomplete.")); }       // LIST_MAX of the server
     stream.appendChild(spent);
     var total = 0, by = Object.create(null), unknown = 0;
     threads.forEach(function (t) {
@@ -1190,7 +1199,7 @@
     else if (m === "research") { loadResearch(); renderResearchList(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else if (m === "cards") { loadCards(); renderCards(); }
-    else if (m === "cost") { renderCost(); loadCap(); }
+    else if (m === "cost") { capInfo = null; renderCost(); loadCap(); }
     else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#plus-menu button"), function (b) {

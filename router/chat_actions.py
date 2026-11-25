@@ -11,6 +11,7 @@ state gate and its sha check stay under it. This module holds no key (it passes 
 no model and keeps its own state and audit directory, not the control service's (11.10, 11.14).
 """
 import calendar
+import math
 import hashlib
 import json
 import os
@@ -670,7 +671,10 @@ class Actions:
                 booked, unknown = round(float(self.exposure()), 6), False
             except Exception:
                 booked, unknown = None, True
-            out = {"cap_usd": cap, "booked_usd": booked, "unknown": unknown}
+            if not (isinstance(cap, float) and math.isfinite(cap)) or (booked is not None and not math.isfinite(booked)):
+                out = {"cap_usd": None, "booked_usd": None, "unknown": True}          # an infinite or NaN number cannot be written as JSON and is no number to show
+            else:
+                out = {"cap_usd": cap, "booked_usd": booked, "unknown": unknown}
         except Exception:
             out = {"cap_usd": None, "booked_usd": None, "unknown": True}
         self._cap_cache = (now, out)
