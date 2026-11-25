@@ -1015,6 +1015,8 @@
   function closeMenu() {
     document.getElementById("plus-menu").hidden = true;
     document.getElementById("plus").setAttribute("aria-expanded", "false");
+    document.getElementById("more-menu").hidden = true;
+    document.getElementById("more").setAttribute("aria-expanded", "false");
   }
   function openNew() {                                // the panel's New request: the Chat tab, writing a new issue
     closePanel();
@@ -1087,6 +1089,13 @@
   Array.prototype.forEach.call(document.querySelectorAll("#plus-menu button"), function (b) {
     b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
   });
+  document.getElementById("more").addEventListener("click", function () {
+    var menu = document.getElementById("more-menu"), now = menu.hidden;
+    closeMenu();
+    menu.hidden = !now;
+    this.setAttribute("aria-expanded", now ? "true" : "false");
+  });
+  document.getElementById("refresh").addEventListener("click", function () { closeMenu(); load(); });
   document.getElementById("plus").addEventListener("click", function () {
     var menu = document.getElementById("plus-menu"), now = menu.hidden;
     menu.hidden = !now;
