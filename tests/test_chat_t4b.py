@@ -502,3 +502,14 @@ def test_the_action_list_has_exactly_the_two_new_approvals_and_no_apply():
     assert not any("apply" in a or "retry" in a or "redraft" in a for a in ca.ACTIONS)
 
 
+
+
+def test_a_queue_on_another_jobs_directory_is_refused_even_when_its_approval_names_that_list(svc):
+    d = queue(svc)
+    p = d / "queue.json"
+    q = json.loads(p.read_text())
+    q["jobs_dir"] = "/elsewhere"
+    q["approved"]["sha"] = rq.list_sha(q)                      # the approval matches the changed list: only the directory check can refuse it
+    p.write_text(json.dumps(q))
+    status, out = prep(svc, "queue_step")
+    assert status == 409 and "jobs directory" in out["refused"]
