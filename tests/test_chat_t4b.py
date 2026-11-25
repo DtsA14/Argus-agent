@@ -600,6 +600,7 @@ def test_the_draft_card_shows_plan_risks_unverifiable_notes_and_the_tests_it_cha
     c, _ = card_of(svc, rich())
     assert c["plan"] == {"files": ["src/a.py"], "steps": ["do the thing"], "risks": ["it may break b"]}
     assert c["unverifiable"] == ["the page stays unchanged"] and "summary_note" not in c
+    assert any("looks like a test path" in w for w in c["warnings"]) and any("tests/test_a.py" in w for w in c["warnings"])   # the fixture writes tests/test_a.py, which the scope warns about
     assert c["changed_tests"] == ["tests/test_old.py"] and c["changed_tests_n"] == 1
 
 

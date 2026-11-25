@@ -76,3 +76,13 @@ def test_environment_pin_reads_the_file_in_its_root(tmp_path):
     pin(tmp_path, "envx", SHA)
     image, problem = rj.environment_pin({"sandbox": CFG}, "envx", tmp_path)
     assert (image, problem) == (SHA, None)
+
+
+def test_a_pin_file_padded_beyond_300_bytes_is_refused_even_when_the_digest_is_in_it(tmp_path):
+    pin(tmp_path, "envx", SHA + " " * 320)
+    assert sb.pinned_image(CFG, "envx", tmp_path)[0] is None
+
+
+def test_a_pin_file_that_is_a_fifo_is_refused_and_does_not_hang(tmp_path):
+    os.mkfifo(tmp_path / ".sandbox_image_envx")
+    assert sb.pinned_image(CFG, "envx", tmp_path)[0] is None
