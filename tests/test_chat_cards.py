@@ -416,7 +416,7 @@ def test_the_cards_part_of_the_page_only_reads_and_only_writes_text():
         assert banned not in part, banned
     assert part.count('get("/api/cards') == 2 and "ditulis model" in part and "kode itu ditulis model dan bisa memalsukannya" in part
     html = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "index.html").read_text()
-    assert 'data-mode="cards"' in html
+    assert 'data-tab="cards"' in html                      # UI-3a: the Kartu chip is the Antrean tab
 
 
 # ---- the review of the T2 code (Opus) -------------------------------------------------------------------------------------------

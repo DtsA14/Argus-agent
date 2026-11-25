@@ -11,6 +11,9 @@
   var query = document.getElementById("query");
   var threads = [];
   var current = null;
+  var filter = "all";                                   // the panel's filter: all | waiting | research
+  var groupOpen = Object.create(null);                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
+  var lastChat = "status";                              // the mode the Obrolan tab returns to
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -53,20 +56,61 @@
     if (link) { c.appendChild(link); }
     return c;
   }
+  var NO_REPO = "Tanpa repo";
+  function waitingIds() {
+    var w = {};
+    (typeof decisionRows === "undefined" ? [] : decisionRows).forEach(function (d) { w[d.id] = true; });
+    return w;
+  }
+  function jobButton(t) {
+    var li = el("li");
+    var b = el("button", "job");
+    b.type = "button";
+    b.appendChild(el("span", "jt", t.title || t.id));
+    var sub = el("span", "js");
+    sub.appendChild(el("span", "kt", t.kind || "job"));
+    sub.appendChild(el("span", "state " + stateClass(t.state), t.state));
+    b.appendChild(sub);
+    if (current === t.id) { b.setAttribute("aria-current", "true"); }
+    b.addEventListener("click", function () { if (mode !== "status") { setMode("status"); } open(t.id); panel.classList.remove("open"); });
+    li.appendChild(b);
+    return li;
+  }
   function renderList() {
     var q = query.value.trim().toLowerCase();
+    var wait = waitingIds();
+    var groups = Object.create(null), order = [];
     clear(list);
     threads.forEach(function (t) {
-      var hay = [t.id, t.state, t.title, t.kind].join(" ").toLowerCase();
+      var hay = [t.id, t.state, t.title, t.kind, t.repo].join(" ").toLowerCase();
       if (q && hay.indexOf(q) === -1) { return; }
-      var li = el("li");
-      var b = el("button", null, (t.title || t.id) + " · " + t.state);
-      b.type = "button";
-      if (current === t.id) { b.setAttribute("aria-current", "true"); }
-      b.addEventListener("click", function () { if (mode !== "status") { setMode("status"); } open(t.id); panel.classList.remove("open"); });
-      li.appendChild(b);
-      list.appendChild(li);
+      if (filter === "waiting" && !wait[t.id]) { return; }
+      if (filter === "research" && t.kind !== "research") { return; }
+      var g = t.repo || NO_REPO;
+      if (!groups[g]) { groups[g] = []; order.push(g); }
+      groups[g].push(t);
     });
+    order.sort(function (x, y) { return (x === NO_REPO) - (y === NO_REPO); });      // the jobs without a repo last; the rest in the order the newest job put them
+    order.forEach(function (g, i) {
+      var items = groups[g];
+      var n = items.filter(function (t) { return wait[t.id]; }).length;
+      var isOpen = groupOpen[g] !== undefined ? groupOpen[g] : (n > 0 || i === 0 || items.some(function (t) { return t.id === current; }));
+      var gl = el("li", "group");
+      var h = el("button", "gh");
+      h.type = "button";
+      h.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      h.appendChild(el("span", "gn", g));
+      if (n) { h.appendChild(el("span", "gw", n + " menunggu")); } else { h.appendChild(el("span", "gc", items.length + " job")); }
+      h.addEventListener("click", function () { groupOpen[g] = !isOpen; renderList(); });
+      gl.appendChild(h);
+      if (isOpen) {
+        var inner = el("ul", "jobs");
+        items.forEach(function (t) { inner.appendChild(jobButton(t)); });
+        gl.appendChild(inner);
+      }
+      list.appendChild(gl);
+    });
+    if (!order.length) { list.appendChild(el("li", "muted", "Tidak ada job yang cocok.")); }
   }
   function renderOverview() {
     clear(stream);
@@ -111,7 +155,9 @@
       summary.textContent = threads.length + " job";
       renderList();
       if (current === null && mode === "status") { renderOverview(); }
+      if (mode === "cost") { renderCost(); }
     }).catch(function () { summary.textContent = "gagal memuat"; });
+    if (!(mode === "decide" && openDecision === null)) { loadDecisions(false); }       // in the Keputusan list the guarded poll below does it, once
   }
 
   // ---- C2b: issue mode. The card is the server's, shown field by field as text; Confirm sends only the token. -------------
@@ -477,11 +523,13 @@
     if (!decisionRows.length) { stream.appendChild(el("p", "muted", "Tidak ada job yang menunggu keputusan.")); }
     decisionRows.forEach(function (r) { stream.appendChild(decideCard(r)); });
   }
-  function loadDecisions() {
+  function loadDecisions(rerender) {                    // rerender false: the poll in load() only refreshes the rows, the badge and the panel; the guarded poll and setMode draw the page
     get("/api/decisions").then(function (d) {
       decisionRows = d.decisions || [];
-      if (mode === "decide" && openDecision === null) { renderDecisions(); }
-    }).catch(function () { summary.textContent = "gagal memuat keputusan"; });
+      updateBadge();
+      renderList();
+      if (rerender !== false && mode === "decide" && openDecision === null) { renderDecisions(); }
+    }).catch(function () { if (rerender !== false) { summary.textContent = "gagal memuat keputusan"; } });
   }
   function showDecision(id) {                           // the Decide link of the viewer: opens a card, chooses and prepares nothing
     openDecision = id;
@@ -947,14 +995,60 @@
       stream.appendChild(back);
     });
   }
+  function updateBadge() {                              // the number of jobs that wait for a decision, from the same list the Keputusan tab shows
+    var b = document.getElementById("decide-badge"), n = decisionRows.length;
+    b.hidden = n === 0;
+    b.textContent = n > 9 ? "9+" : String(n);
+    b.setAttribute("aria-label", n + " job menunggu keputusan");
+  }
+  var KIND_LABEL = { code: "Kode", prd: "PRD", research: "Riset", issue: "Issue" };
+  function renderCost() {                               // what the job list already carries: the cost of finished stages. Not the daily cap, not what is booked (a later change).
+    clear(stream);
+    var total = 0, by = Object.create(null), unknown = 0;
+    threads.forEach(function (t) {
+      if (t.stages_unknown) { unknown++; }
+      var u = typeof t.stages_usd === "number" ? t.stages_usd : 0;
+      total += u;
+      var k = KIND_LABEL[t.kind] || "Lain";
+      by[k] = (by[k] || 0) + u;
+    });
+    var c = el("article", "card");
+    c.appendChild(el("h2", null, "Biaya tahap yang tercatat"));
+    fact(c, "Total (" + threads.length + " job di daftar)", usd(total));
+    Object.keys(by).sort().forEach(function (k) { fact(c, k, usd(by[k])); });
+    if (unknown) { c.appendChild(el("p", "note", unknown + " job punya tahap tanpa angka biaya: angkanya tidak dihitung, bukan nol.")); }
+    c.appendChild(el("p", "note", "Hanya angka tahap yang tercatat di daftar job (yang terbaru saja). Batas harian dan uang yang sudah dipesan belum ditampilkan di layar ini."));
+    stream.appendChild(c);
+    var rows = threads.filter(function (t) { return typeof t.stages_usd === "number" && t.stages_usd > 0; })
+      .sort(function (x, y) { return y.stages_usd - x.stages_usd; }).slice(0, 15);
+    if (rows.length) {
+      var d = el("article", "card");
+      d.appendChild(el("h2", null, "Per job"));
+      rows.forEach(function (t) {
+        var kv = el("div", "kv");
+        kv.appendChild(el("span", "k", (t.repo ? t.repo + ": " : "") + (t.title || t.id)));
+        kv.appendChild(el("span", "v", usd(t.stages_usd)));
+        d.appendChild(kv);
+      });
+      stream.appendChild(d);
+    }
+  }
   function setMode(m) {
     mode = m;
     cardSeq++;
     dropPending();
+    var inChat = m === "status" || m === "issue" || m === "prd" || m === "research";
+    if (inChat) { lastChat = m; }
     Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
       b.setAttribute("aria-pressed", b.getAttribute("data-mode") === m ? "true" : "false");
     });
-    issueForm.hidden = m === "status" || m === "decide" || m === "cards";
+    Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
+      var t = b.getAttribute("data-tab");
+      b.setAttribute("aria-pressed", (inChat ? t === "chat" : t === m) ? "true" : "false");
+    });
+    document.getElementById("chips").hidden = !inChat;
+    document.getElementById("dock").hidden = !inChat;
+    issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";
     query.hidden = m !== "status";
     researchSeq++;
     openCard = null;
@@ -966,11 +1060,22 @@
     else if (m === "research") { loadResearch(); renderResearchList(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else if (m === "cards") { loadCards(); renderCards(); }
+    else if (m === "cost") { renderCost(); }
     else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
     if (b.disabled) { return; }
     b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
+    b.addEventListener("click", function () { var t = b.getAttribute("data-tab"); setMode(t === "chat" ? lastChat : t); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#filters button"), function (b) {
+    b.addEventListener("click", function () {
+      filter = b.getAttribute("data-filter");
+      Array.prototype.forEach.call(document.querySelectorAll("#filters button"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      renderList();
+    });
   });
   issueForm.addEventListener("submit", function (e) {
     e.preventDefault();
