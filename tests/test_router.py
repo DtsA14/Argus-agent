@@ -1081,10 +1081,10 @@ def test_a_reject_records_who_ran_the_command(tmp_path, monkeypatch, claudecode,
 
 # ---- SPEC_CHAT_T4B PR1: `approve --via ui` -------------------------------------------------------------------------------------------------------
 
-def test_an_approval_via_ui_is_recorded_as_ui_and_claude_still_wins(env, monkeypatch):
+def test_an_approval_via_ui_is_recorded_as_ui_with_the_via(env, monkeypatch):
     monkeypatch.delenv("CLAUDECODE", raising=False)
     job = failed_a1(env, monkeypatch, via="ui")
-    assert job.data["approval"]["actor"] == "ui" and [e["actor"] for e in job.data["log"] if e["what"] == "approved"] == ["ui"]
+    assert job.data["approval"]["via"] == "ui" and job.data["approval"]["actor"] == "ui" and [e["actor"] for e in job.data["log"] if e["what"] == "approved"] == ["ui"]
 
 
 def test_an_approval_via_ui_from_a_claude_shell_is_claude(env, monkeypatch):

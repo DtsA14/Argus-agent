@@ -459,9 +459,11 @@ def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS, via=None, item_
             return status_lines(q)
         item = nxt["item"]
         job_id = rj.new_job_id()
-        item["job"], item["at"] = job_id, deps.clock()
+        item["job"], item["at"] = job_id, deps.clock()  # recorded before the job exists: a start cut off never starts a second one
+        item["actor"] = rj.actor(via)                   # the actor of THIS start: a retried item's next step overwrites the earlier one's
+        item.pop("via", None)
         if via:
-            item["actor"] = rj.actor(via)  # recorded before the job exists: a start cut off never starts a second one
+            item["via"] = via
         _save(d, q)
         try:
             note = item.get("retry_note") if isinstance(item.get("retry_note"), str) and item.get("retry_note") else None
