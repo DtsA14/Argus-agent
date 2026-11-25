@@ -276,7 +276,7 @@ class Steps:
     def audited(self, now):
         """The usd of the steps this chat confirmed in the last 24 hours (the net: nothing else records them), from its audit file: the `attempt` line, written before the run starts
         and whose failure stops it (chat.py _confirm), never the `ok` line after it."""
-        from router.chat_actions import parse_time
+        from router.chat_actions import finite_usd, parse_time
         try:
             with open(self.a.audit_path, "rb") as f:
                 f.seek(0, os.SEEK_END)
@@ -291,7 +291,10 @@ class Steps:
             try:
                 r = json.loads(line)
                 if r.get("action") == "queue_step" and r.get("attempt") == "confirm" and parse_time(r["at"]) >= now - DAY:
-                    total += float(r.get("usd") or 0)
+                    try:
+                        total += finite_usd(r.get("usd") or 0)
+                    except ValueError:                             # a confirmed step whose money cannot be read must not be skipped: that undercounts (F25)
+                        raise self._no(503, "cap", "the daily exposure cannot be computed (a confirmed queue_step line of the audit has no valid amount)") from None
             except (ValueError, KeyError, TypeError, AttributeError):
                 continue
         return total

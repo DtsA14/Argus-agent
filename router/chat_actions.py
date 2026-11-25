@@ -97,6 +97,20 @@ def scrub(text):
         return f"[withheld by the harness: {e}]"
 
 
+def finite_usd(v):
+    """A money value read from a file or the config: a finite number that is not negative (F25). NaN, infinity, a negative number, a bool, text that is not a number and an integer
+    too big for a float all raise ValueError, which every caller turns into the unknown exposure (the cap refuses); a NaN used to make `used + extra > cap` false for ever."""
+    if isinstance(v, bool):
+        raise ValueError("money")
+    try:
+        x = float(v)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("money") from None
+    if not math.isfinite(x) or x < 0:
+        raise ValueError("money")
+    return x
+
+
 def parse_time(s):
     return calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ"))
 
@@ -191,7 +205,10 @@ class Actions:
 
     def daily_cap(self):
         v = (self.cfg.get("chat") or {}).get("daily_cap_usd", DEFAULT_CAP_USD)
-        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else DEFAULT_CAP_USD
+        try:
+            return finite_usd(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else DEFAULT_CAP_USD       # an infinite or NaN cap is no cap: the default stands
+        except ValueError:
+            return DEFAULT_CAP_USD
 
     def key_file(self, writer, research=False):
         """The key file a paid action is given: the writer's turns WRITER_KEY_ENV, research RESEARCH_KEY_ENV, each when set, else KEY_ENV (the code key)."""
@@ -867,6 +884,7 @@ class Actions:
             names = []
         unknown = Refusal(503, "cap", "the daily exposure cannot be computed (a job could not be read)")
         for n in names:
+            bad = Refusal(503, "cap", f"the daily exposure cannot be computed (job {n}: its max_usd is not a valid amount, or its log cannot be read)")
             try:
                 named = calendar.timegm(time.strptime(n[1:16], "%Y%m%d_%H%M%S"))
             except ValueError:
@@ -886,28 +904,28 @@ class Actions:
             except FileNotFoundError:
                 continue
             except (OSError, ValueError):
-                raise unknown from None
+                raise Refusal(503, "cap", f"the daily exposure cannot be computed (job {n} could not be read)") from None
             if not isinstance(data, dict):
-                raise unknown
+                raise Refusal(503, "cap", f"the daily exposure cannot be computed (job {n} is not a job file)")
             if data.get("kind") == "research":
                 try:
                     for entry in data.get("log") or []:
                         if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
                                 and parse_time(entry["at"]) >= now - DAY:
-                            total += max(float(data["max_usd"]), rcap)
+                            total += max(finite_usd(data["max_usd"]), rcap)
                             seen.add(("new", n))
                 except (KeyError, TypeError, ValueError):
-                    raise unknown from None
+                    raise bad from None
                 continue
             if data.get("kind") == "prd":                     # SPEC_CHAT_MANAGER 13.2: a PRD job started via the UI is exposure too
                 try:
                     for entry in data.get("log") or []:
                         if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
                                 and parse_time(entry["at"]) >= now - DAY:
-                            total += max(float(data["max_usd"]), pcap)
+                            total += max(finite_usd(data["max_usd"]), pcap)
                             seen.add(("new", n))
                 except (KeyError, TypeError, ValueError):
-                    raise unknown from None
+                    raise bad from None
                 continue
             if data.get("kind") != "issue":
                 continue
@@ -915,14 +933,14 @@ class Actions:
                 for entry in data.get("log") or []:
                     if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
                             and parse_time(entry["at"]) >= now - DAY:
-                        total += float(data.get("max_usd") or 0)
+                        total += finite_usd(data.get("max_usd") or 0)
                         seen.add(("new", n))
                 h = data.get("handoff")
                 if isinstance(h, dict) and h.get("via") == "ui" and parse_time(h["at"]) >= now - DAY:
-                    total += float(self.writer.get("code_max_usd") or 0)
+                    total += finite_usd(self.writer.get("code_max_usd") or 0)
                     seen.add(("start", n))
             except (KeyError, TypeError, ValueError):
-                raise unknown from None
+                raise bad from None
         total += self.plans.exposure(now, seen)               # queues approved via the UI (SPEC_CHAT_T4A 4)
         total += self.steps.audited(now)                      # steps of a queue approved more than 24 hours ago: one job cap each (SPEC_CHAT_T4B 5, K4)
         for job_id, usd, at in self.plans.audited(now):       # the net under it: a `via` lost from the queue file
@@ -936,17 +954,19 @@ class Actions:
                     seen.add(("new", job_id))
         self.pending = [(at, key, usd) for at, key, usd in self.pending if now - at < PENDING_S]
         total += sum(usd for _, key, usd in self.pending if key not in seen)
+        if not math.isfinite(total) or total < 0:                # whatever fed it, a sum that is not a finite, non-negative number is no exposure: unknown, never a number that passes every check
+            raise unknown
         return total
 
     def research_cap(self):
         try:
-            return float((self.cfg.get("research_job") or {}).get("max_usd", 1.0))
+            return finite_usd((self.cfg.get("research_job") or {}).get("max_usd", 1.0))
         except (TypeError, ValueError):
             raise Refusal(503, "cap", "the daily exposure cannot be computed (the research cap is not a number)") from None
 
     def prd_cap(self):
         try:
-            return float((self.cfg.get("prd_writer") or {}).get("max_usd", 1.5))
+            return finite_usd((self.cfg.get("prd_writer") or {}).get("max_usd", 1.5))
         except (TypeError, ValueError):
             raise Refusal(503, "cap", "the daily exposure cannot be computed (the PRD cap is not a number)") from None
 
@@ -993,6 +1013,8 @@ class Actions:
 
     def check_cap(self, card):
         extra = self.exposure_of(card)
+        if not math.isfinite(extra) or extra < 0:
+            raise Refusal(503, "cap", f"the daily exposure cannot be checked (the amount a {card.get('action')} adds is not a valid number: a configured cap)")
         if extra:
             used = self.exposure()
             if used + extra > self.daily_cap() + 1e-9:
