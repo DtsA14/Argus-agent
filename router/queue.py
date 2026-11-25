@@ -428,8 +428,12 @@ def status(qid, *, queues_dir=QUEUES, jobs_dir=None):
 
 # ---- step ---------------------------------------------------------------------------------------------------------
 
-def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
-    """At most one drafter run. Returns the text for the human. Never approves, applies, pushes or merges."""
+def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS, via=None, item_n=None):
+    """At most one drafter run. Returns the text for the human. Never approves, applies, pushes or merges.
+    via: where the start was decided (SPEC_CHAT_T4B 6; recorded as the item's and the job's actor). item_n: the item number the human saw as next (SPEC_CHAT_T4B 3):
+    refused, before anything is written, unless that is the item `derive` says is next now."""
+    if via is not None and via not in rj.VIA:
+        raise Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was started")
     with _locked(queues_dir, qid) as (d, q):
         if q.get("closed"):
             raise Refused(f"queue {qid} is closed")
@@ -442,6 +446,8 @@ def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
         for item in q["items"]:
             _issue_text(d, item)
         status, detail, actions, forget, nxt = derive(q)
+        if item_n is not None and (nxt is None or nxt["item"]["n"] != item_n):
+            raise Refused(f"queue {qid}: item {item_n} is not the next one ({'item ' + str(nxt['item']['n']) + ' is' if nxt else 'nothing is startable: ' + status}); nothing was started")
         for item in forget:                             # B1: a job that ended before its first stage is not the item's
             job = _open(item, jobs_dir)
             if job is not None and job.data["state"] == rj.NEW:
@@ -454,12 +460,16 @@ def step(qid, *, cfg, deps, queues_dir=QUEUES, jobs_dir=rj.JOBS):
         item = nxt["item"]
         job_id = rj.new_job_id()
         item["job"], item["at"] = job_id, deps.clock()  # recorded before the job exists: a start cut off never starts a second one
+        item["actor"] = rj.actor(via)                   # the actor of THIS start: a retried item's next step overwrites the earlier one's
+        item.pop("via", None)
+        if via:
+            item["via"] = via
         _save(d, q)
         try:
             note = item.get("retry_note") if isinstance(item.get("retry_note"), str) and item.get("retry_note") else None
             rj.start_code(repo=q["repo"], commit=nxt["commit"], issue=_issue_text(d, item), cfg=cfg, deps=deps,
                           max_usd=q["job_cap_usd"], jobs_dir=jobs_dir, job_id=job_id,
-                          environment=q["environment"], **({"note": note, "note_by": "reader"} if note else {}))
+                          environment=q["environment"], via=via, **({"note": note, "note_by": "reader"} if note else {}))
         except rj.Refused:
             raise                                       # the id stays recorded: the next step settles it (forget, abandon NEW)
         return status_lines(q)

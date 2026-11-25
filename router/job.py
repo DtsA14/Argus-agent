@@ -488,14 +488,16 @@ def new_job_id():
 
 
 def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs_dir=JOBS, job_id=None,
-               environment=None, research=False, from_research=None, research_items=None, note=None, note_by=None):
-    """A new job: intake, then the first drafter stage. Returns the job. environment: the sandbox environment its
+               environment=None, research=False, from_research=None, research_items=None, note=None, note_by=None, via=None):
+    """A new job: intake, then the first drafter stage. Returns the job. via: where the start was decided (recorded with the actor on `created`). environment: the sandbox environment its
     validations run in, with the image it resolves to now pinned for the whole job; None is the job as before
     (the drafter's configured environment, nothing pinned). research: the human grants the research stage r1 and its
     ReadDocs (SPEC_RESEARCH_STAGE); r1 runs instead of the drafter, which starts at research-ok. from_research: a
     finished research job in jobs_dir whose SUPPORTED items (research_items: some of them) are frozen into the job as
     its research context (SPEC_FROM_RESEARCH), for the drafter and the agent's contract. note, note_by: findings of the patch readers on a
     rejected attempt of this same issue (`argus queue retry`), given to the first drafter as data, not a human's note."""
+    if via is not None and via not in VIA:
+        raise Refused(f"via {via!r} is not one of {', '.join(VIA)}; nothing was started")
     if not isinstance(issue, str) or not issue.strip():
         raise Refused("the issue is empty")
     context = None
@@ -560,7 +562,7 @@ def start_code(*, repo, commit, issue, cfg, deps, exclude=(), max_usd=None, jobs
             tmp = job.dir / (RESEARCH_CONTEXT + ".tmp")     # the exact bytes whose sha was recorded, atomically
             tmp.write_bytes(context[0].encode("utf-8"))
             os.replace(tmp, job.dir / RESEARCH_CONTEXT)
-        job.note(deps, "created", by=os.environ.get("USER"))
+        job.note(deps, "created", by=os.environ.get("USER"), **({"via": via, "actor": actor(via)} if via else {}))
         try:
             rec = (intake.intake(repo, full, BASE, exclude=exclude, root=job.root, protected=protected) if full
                    else intake.intake(repo, commit, BASE, exclude=exclude, root=job.root))
@@ -1072,10 +1074,12 @@ def call_path_lines(draft_path, draft):
 
 
 def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_iterations=3, reference_patch=None,
-            jobs_dir=JOBS, web=False):
+            jobs_dir=JOBS, web=False, via=None):
     """Approve the draft the human saw (sha, as status shows it), then run the agent and build the review package.
     web: the human grants ReadDocs (SPEC_WEB_TOOLS 3), refused for an environment off web.environments."""
     from codetask import run as ctrun
+    if via is not None and via not in VIA:
+        raise Refused(f"via {via!r} is not one of {', '.join(VIA)}; nothing was approved")
     job = open_job(job_id, jobs_dir)
     with job.lock():
         _check_environment(job, cfg)
@@ -1146,9 +1150,9 @@ def approve(job_id, *, sha, cfg, deps, sandbox_cfg=None, max_usd=None, max_itera
             # once; every agent stage's first attempt is told it, a resume included.
             job.data["approval"] = {"draft_sha256": seen, "contract_sha256": record["contract_sha256"], "task": task,
                                     "max_usd": cap, "max_iterations": max_iterations, "at": deps.clock(),
-                                    "by": os.environ.get("USER"), "actor": actor(), "feasibility": record["feasibility"],
+                                    "by": os.environ.get("USER"), "actor": actor(via), **({"via": via} if via else {}), "feasibility": record["feasibility"],
                                     "baseline": baseline_errors(report), "web": bool(web)}
-            job.note(deps, "approved", draft=seen[:12], contract=record["contract_sha256"][:12], actor=actor())
+            job.note(deps, "approved", draft=seen[:12], contract=record["contract_sha256"][:12], actor=actor(via), **({"via": via} if via else {}))
             last, _ = last_agent(job)         # a redraft after a draft_test_conflict leaves agent stages behind: this is the next one
             r = _agent(job, cfg, deps, sandbox_cfg, sid=f"a{int(last[1:]) + 1}" if last else "a1")
     return job, r

@@ -798,7 +798,7 @@ A1_ENDS = [{"event": "attempt_end", "iteration": 0, "reason": "context_limit", "
            {"event": "attempt_summary", "iteration": 1, "reason": "context_limit", "steps": 5, "wrote": False}]
 
 
-def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None, **code):
+def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None, via=None, **code):
     """A job whose first agent stage failed like router pilot #3's: approved, then AGENT_FAILED."""
     env.code(**code)
 
@@ -814,7 +814,7 @@ def failed_a1(env, monkeypatch, result=A1, ends=A1_ENDS, verdict=None, **code):
                 "usd_billed": 0.0}
     with monkeypatch.context() as m:                   # undo only this patch, never the caller's or the fixtures'
         m.setattr(ctrun, "run_code_task", run)
-        env.approve()
+        env.approve(**({"via": via} if via else {}))
     assert env.job().data["state"] == rj.AGENT_FAILED
     return env.job()
 
@@ -1077,3 +1077,24 @@ def test_a_reject_records_who_ran_the_command(tmp_path, monkeypatch, claudecode,
     e.code()
     job = rj.reject("jtest", "tests look wrong", deps=e.deps, jobs_dir=e.jobs)
     assert [x["actor"] for x in job.data["log"] if x["what"] == "state" and x["new"] == rj.REJECTED] == [expect]
+
+
+# ---- SPEC_CHAT_T4B PR1: `approve --via ui` -------------------------------------------------------------------------------------------------------
+
+def test_an_approval_via_ui_is_recorded_as_ui_with_the_via(env, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    job = failed_a1(env, monkeypatch, via="ui")
+    assert job.data["approval"]["via"] == "ui" and job.data["approval"]["actor"] == "ui" and [e["actor"] for e in job.data["log"] if e["what"] == "approved"] == ["ui"]
+
+
+def test_an_approval_via_ui_from_a_claude_shell_is_claude(env, monkeypatch):
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert failed_a1(env, monkeypatch, via="ui").data["approval"]["actor"] == "claude"
+
+
+def test_a_via_that_is_not_ui_is_refused_before_anything_is_read_or_written(env):
+    env.code()
+    before = env.job().data["state"]
+    with pytest.raises(rj.Refused, match="not one of"):
+        env.approve(via="phone")
+    assert env.job().data["state"] == before and env.job().data["approval"] is None
