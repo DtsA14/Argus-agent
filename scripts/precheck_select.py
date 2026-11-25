@@ -9,13 +9,28 @@ selected, and `verify_at` is what decides. Only files that exist are returned.""
 import sys
 from pathlib import Path
 
+# A change under one of these directories is read by tests that do not carry its name (F26: the chat page's script is pinned and locked line by line by
+# fifteen test files, most named for what they test, not for the page): every test file whose text names one of the markers is selected.
+READERS = {"router/chat_static/": ("chat_static", "STATIC_DIR")}
+
 FIXED = ("tests/test_acceptance_sandbox.py", "tests/test_verification_names.py", "tests/test_verify_at.py",
          "tests/test_verify_provenance.py", "tests/test_xdist_groups.py")
 
 
-def select(changed, existing):
+def reads(test, markers):
+    try:
+        text = Path(test).read_text(errors="replace")
+    except OSError:
+        return False
+    return any(m in text for m in markers)
+
+
+def select(changed, existing, read=reads):
     existing = set(existing)
     out = {t for t in FIXED if t in existing}
+    for prefix, markers in READERS.items():
+        if any(str(c).startswith(prefix) for c in changed):
+            out |= {t for t in existing if read(t, markers)}
     for path in changed:
         p = Path(path)
         if p.suffix != ".py":
