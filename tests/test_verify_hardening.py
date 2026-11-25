@@ -264,3 +264,27 @@ def test_a_fixture_of_the_conftest_is_not_a_sandbox_fixture_unless_it_comes_from
 
 def test_the_closure_of_a_test_without_fixtures_is_empty_and_never_breaks_the_hook(tmp_path):
     assert grouped(tmp_path, {"test_e.py": "def test_e():\n    pass\n"}) == {"test_e.py::test_e": False}
+
+
+# ---- F26: a change to the chat page selects the tests that read it, whatever their names ------------------------------------------------
+
+def test_a_change_under_the_chat_static_directory_selects_every_test_that_reads_the_page():
+    existing = ["tests/test_chat_ui.py", "tests/test_approve_code.py", "tests/test_unrelated.py", "tests/test_chat_nav.py"]
+    reads = {"tests/test_chat_ui.py": "x STATIC_DIR y", "tests/test_approve_code.py": 'Path("router") / "chat_static" / "app.js"', "tests/test_unrelated.py": "nothing here",
+             "tests/test_chat_nav.py": "rc.STATIC_DIR"}
+    got = ps.select(["router/chat_static/app.js"], existing, read=lambda t, markers: any(m in reads[t] for m in markers))
+    assert "tests/test_approve_code.py" in got and "tests/test_chat_ui.py" in got and "tests/test_chat_nav.py" in got and "tests/test_unrelated.py" not in got
+
+
+def test_a_change_elsewhere_does_not_pull_in_the_page_readers():
+    existing = ["tests/test_approve_code.py"]
+    got = ps.select(["router/job.py"], existing, read=lambda t, markers: True)
+    assert "tests/test_approve_code.py" not in got
+
+
+def test_the_real_page_readers_of_this_repository_are_all_selected_by_a_page_change():
+    existing = [p.as_posix() for p in Path("tests").glob("test_*.py")]
+    got = set(ps.select(["router/chat_static/app.js"], existing))
+    must = {"tests/test_approve_code.py", "tests/test_chat.py", "tests/test_chat_ui.py", "tests/test_chat_nav.py", "tests/test_chat_ui_node.py", "tests/test_chat_cards.py",
+            "tests/test_approve_plan.py", "tests/test_chat_t4b.py"}
+    assert must <= got, must - got
