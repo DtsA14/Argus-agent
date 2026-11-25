@@ -97,6 +97,20 @@ def scrub(text):
         return f"[withheld by the harness: {e}]"
 
 
+def finite_usd(v):
+    """A money value read from a file or the config: a finite number that is not negative (F25). NaN, infinity, a negative number, a bool, text that is not a number and an integer
+    too big for a float all raise ValueError, which every caller turns into the unknown exposure (the cap refuses); a NaN used to make `used + extra > cap` false for ever."""
+    if isinstance(v, bool):
+        raise ValueError("money")
+    try:
+        x = float(v)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("money") from None
+    if not math.isfinite(x) or x < 0:
+        raise ValueError("money")
+    return x
+
+
 def parse_time(s):
     return calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ"))
 
@@ -191,7 +205,10 @@ class Actions:
 
     def daily_cap(self):
         v = (self.cfg.get("chat") or {}).get("daily_cap_usd", DEFAULT_CAP_USD)
-        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else DEFAULT_CAP_USD
+        try:
+            return finite_usd(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else DEFAULT_CAP_USD       # an infinite or NaN cap is no cap: the default stands
+        except ValueError:
+            return DEFAULT_CAP_USD
 
     def key_file(self, writer, research=False):
         """The key file a paid action is given: the writer's turns WRITER_KEY_ENV, research RESEARCH_KEY_ENV, each when set, else KEY_ENV (the code key)."""
@@ -894,7 +911,7 @@ class Actions:
                     for entry in data.get("log") or []:
                         if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
                                 and parse_time(entry["at"]) >= now - DAY:
-                            total += max(float(data["max_usd"]), rcap)
+                            total += max(finite_usd(data["max_usd"]), rcap)
                             seen.add(("new", n))
                 except (KeyError, TypeError, ValueError):
                     raise unknown from None
@@ -904,7 +921,7 @@ class Actions:
                     for entry in data.get("log") or []:
                         if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
                                 and parse_time(entry["at"]) >= now - DAY:
-                            total += max(float(data["max_usd"]), pcap)
+                            total += max(finite_usd(data["max_usd"]), pcap)
                             seen.add(("new", n))
                 except (KeyError, TypeError, ValueError):
                     raise unknown from None
@@ -915,11 +932,11 @@ class Actions:
                 for entry in data.get("log") or []:
                     if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
                             and parse_time(entry["at"]) >= now - DAY:
-                        total += float(data.get("max_usd") or 0)
+                        total += finite_usd(data.get("max_usd") or 0)
                         seen.add(("new", n))
                 h = data.get("handoff")
                 if isinstance(h, dict) and h.get("via") == "ui" and parse_time(h["at"]) >= now - DAY:
-                    total += float(self.writer.get("code_max_usd") or 0)
+                    total += finite_usd(self.writer.get("code_max_usd") or 0)
                     seen.add(("start", n))
             except (KeyError, TypeError, ValueError):
                 raise unknown from None
@@ -929,6 +946,8 @@ class Actions:
             if ("go", job_id) not in seen and os.path.lexists(self.cards.queues_dir / job_id):
                 total += usd
                 seen.add(("go", job_id))
+        if not math.isfinite(total) or total < 0:                # whatever fed it, a sum that is not a finite, non-negative number is no exposure: unknown, never a number that passes every check
+            raise unknown
         for action, cap in (("research_new", rcap), ("prd_new", pcap)):
             for job_id, at in self.audited_jobs(now, action):        # the net under the directory count: a `via` lost from the CLI
                 if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
@@ -940,13 +959,13 @@ class Actions:
 
     def research_cap(self):
         try:
-            return float((self.cfg.get("research_job") or {}).get("max_usd", 1.0))
+            return finite_usd((self.cfg.get("research_job") or {}).get("max_usd", 1.0))
         except (TypeError, ValueError):
             raise Refusal(503, "cap", "the daily exposure cannot be computed (the research cap is not a number)") from None
 
     def prd_cap(self):
         try:
-            return float((self.cfg.get("prd_writer") or {}).get("max_usd", 1.5))
+            return finite_usd((self.cfg.get("prd_writer") or {}).get("max_usd", 1.5))
         except (TypeError, ValueError):
             raise Refusal(503, "cap", "the daily exposure cannot be computed (the PRD cap is not a number)") from None
 
@@ -993,6 +1012,8 @@ class Actions:
 
     def check_cap(self, card):
         extra = self.exposure_of(card)
+        if not math.isfinite(extra) or extra < 0:
+            raise Refusal(403, "cap", "the amount this adds is not a valid number")
         if extra:
             used = self.exposure()
             if used + extra > self.daily_cap() + 1e-9:

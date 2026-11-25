@@ -363,7 +363,7 @@ class Plan:
                         usd = float(q["max_usd"])
                         if not math.isfinite(usd) or usd <= 0:
                             raise ValueError("money")
-                    except (KeyError, TypeError, ValueError):
+                    except (KeyError, TypeError, ValueError, OverflowError):
                         raise self._no(503, "cap", f"the daily exposure cannot be computed (queue {name}: the approval time or the money cannot be read)") from None
                     if at >= now - DAY:
                         total += usd
