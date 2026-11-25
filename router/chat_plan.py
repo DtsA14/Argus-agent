@@ -150,8 +150,14 @@ class Plan:
         items = []
         for it in c["items"]:
             dr = it.get("domain_read") or {}
+            read, accepted = dr.get("kind"), None
+            if read == "concerns":                                  # SPEC_CHAT_T4A_ACCEPTED: a human's written acceptance of these very concerns (two readers, this bundle) counts like apply's, and is shown as it is
+                from router import examples_read as er
+                acc = er.accepted_for(self.a.jobs_dir, f["job"], it["n"])
+                if acc is not None:
+                    read, accepted = "accepted", a_scrub(str(acc.get("reason")))[:300]
             items.append({"n": it["n"], "title": it["title"], "calls": it["counts"]["calls"], "warning": bool(it.get("warning")),
-                          "read": dr.get("kind")})
+                          "read": read, **({"accepted": accepted} if accepted is not None else {})})
         return {"request": c.get("request"), "summary": c.get("summary"), "items": items, "cost": c["cost"]}
 
     @staticmethod
@@ -209,7 +215,7 @@ class Plan:
         if to_nano(q["max_usd"]) != to_nano(t["max_usd"]) or len(q["items"]) != f["n"]:
             raise self._no(409, "queue", "the queue is not the plan's: its money or its issues differ")
         cf = self.card_facts(f)
-        bad = [i["n"] for i in cf["items"] if i["read"] not in ("ok", "tidak_berlaku")]
+        bad = [i["n"] for i in cf["items"] if i["read"] not in ("ok", "tidak_berlaku", "accepted")]
         if bad:
             raise self._no(409, "read", "the numbers of issue " + ", ".join(map(str, bad)) + " have no two agreeing readings (`ok`) yet, or cannot be read")
         need_ack = [i["n"] for i in cf["items"] if i["warning"]]
@@ -252,7 +258,9 @@ class Plan:
         for i in cf["items"]:
             if i["warning"]:
                 out.append(f"issue {i['n']}: no example of the new behaviour; the machine cannot check its numbers")
-            if i["read"] not in ("ok", "tidak_berlaku"):
+            if i["read"] == "accepted":
+                out.append(f"issue {i['n']}: the readers' concerns about the numbers were accepted in writing, they are not an ok: {i['accepted']}")
+            elif i["read"] not in ("ok", "tidak_berlaku"):
                 out.append(f"issue {i['n']}: the numbers have no two agreeing readings, or cannot be read")
         if ratio_text:
             out.append("cost: " + ratio_text + (" (a reason is required)" if need_reason else ""))

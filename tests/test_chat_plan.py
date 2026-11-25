@@ -699,3 +699,62 @@ def test_the_page_state_never_raises_whatever_a_builder_hits(svc, monkeypatch):
     monkeypatch.setattr(svc.actions.plans, "build_approve", lambda params: (_ for _ in ()).throw(TypeError("shape")))
     status, card = svc.request("GET", f"/api/approve/prd/{PJOB}")
     assert status == 200 and card["t4"]["action"] is None
+
+
+# ---- SPEC_CHAT_T4A_ACCEPTED: the human's written acceptance of two readers' concerns opens the numbers gate, and says so on the card ----------------
+
+def _two_with_calls(svc):
+    texts = [tc.issue_text(tc.SAME, tc.AFTER, title="One"), tc.issue_text(tc.SAME, tc.AFTER, title="Two")]
+    d, files = tc.write_prd(svc.jobs, texts, [tc.stored_for([tc.SAME, tc.AFTER])] * 2, max_usd=2.0)
+    tc.write_queue(svc, [(x, None) for x in texts], max_usd=2.0, prd={"sha": rp.folder_sha(files), "dir": str(d / "prd-w1")})
+
+
+def _concerns(monkeypatch, accepted):
+    from router import examples_read as er
+    monkeypatch.setattr(er, "status", lambda *a: ("concerns", {"verdict": "concerns", "reader": "r", "reader2": "r2", "at": "x", "sources": [], "note": ""}))
+    monkeypatch.setattr(er, "accepted_for", lambda jobs_dir, job, n: accepted(n))
+
+
+REASON = "the cost is as expected, checked"
+
+
+def test_accepted_concerns_open_the_numbers_gate_and_the_card_says_they_are_not_an_ok(svc, monkeypatch):
+    _two_with_calls(svc)
+    _concerns(monkeypatch, lambda n: {"reason": f"Atha said ok to rules of item {n}"})
+    status, out = prep_go(svc, reason=REASON)
+    assert status == 200, out
+    flags = " ".join(out["card"]["flags"])
+    assert "accepted in writing, they are not an ok: Atha said ok to rules of item 1" in flags and "rules of item 2" in flags
+    assert [i["read"] for i in out["card"]["issues"]] == ["accepted", "accepted"]
+
+
+def test_concerns_without_a_holding_acceptance_still_close_the_gate(svc, monkeypatch):
+    _two_with_calls(svc)
+    _concerns(monkeypatch, lambda n: None)
+    status, out = prep_go(svc, reason=REASON)
+    assert status == 409 and "two agreeing readings" in out["refused"]
+
+
+def test_one_item_accepted_and_the_other_not_still_closes_the_gate(svc, monkeypatch):
+    _two_with_calls(svc)
+    _concerns(monkeypatch, lambda n: {"reason": "ok"} if n == 1 else None)
+    status, out = prep_go(svc, reason=REASON)
+    assert status == 409 and "issue 2 " in out["refused"] and "issue 1 " not in out["refused"]
+
+
+def test_the_acceptance_is_part_of_what_the_confirm_holds(svc, monkeypatch):
+    _two_with_calls(svc)
+    state = {"reason": "first"}
+    _concerns(monkeypatch, lambda n: dict(state) if state else None)
+    token = prep_go(svc, reason=REASON)[1]["token"]
+    state["reason"] = "someone rewrote the acceptance"
+    assert svc.confirm(token)[0] == 409 and svc.cli == []
+    state.clear()
+    assert prep_go(svc, reason=REASON)[0] == 409                          # the acceptance is gone: the gate closes again
+
+
+def test_an_accepted_item_offers_the_money_button(svc, monkeypatch):
+    _two_with_calls(svc)
+    _concerns(monkeypatch, lambda n: {"reason": "ok"})
+    card = svc.request("GET", f"/api/approve/prd/{PJOB}")[1]
+    assert card["t4"]["action"] == "queue_go" and card["t4"]["needs"] == ["reason"]
