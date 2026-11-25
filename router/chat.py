@@ -41,9 +41,9 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
                 "app.css": "text/css; charset=utf-8"}
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
-    "index.html": "73bb8127bbaca5c0ec83de89c54992ff446a285474d16a70c51090a6d6b0519f",
-    "app.js": "24dc6baba1ebd675c7ea364745ee6d2d0ef5226b947e8caa21d00339cc4fa9bc",
-    "app.css": "dfebd9fc195499c15efceb00ed08abdcef4e23647b283333af7bd183fcb28d1f",
+    "index.html": "5fa31c86fbadf0d2ae68f847f4bd6f5dbade909f7c3c50ec67aef73c45ce1880",
+    "app.js": "bf1e5bc4533563f4675f945b83cebe110f73ff03b2d53a7613368eb612268e33",
+    "app.css": "a69082da6612c3929415b0ac47e9d292cbf83a11ce5c02811f45466a01391b21",
 }
 
 
@@ -88,11 +88,22 @@ def load_static():
     return out
 
 
-def card(raw, name):
+REPO_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def repo_of(source):
+    """The repository a job was made for (inputs.repo_name of the job file), only when it has the shape of a registered name; else None.
+    Read from the job file itself, not from the projection (which drops inputs): a name is a label the page groups by, never a path."""
+    inputs = source.get("inputs") if isinstance(source, dict) else None
+    name = inputs.get("repo_name") if isinstance(inputs, dict) else None
+    return name if isinstance(name, str) and REPO_NAME.fullmatch(name) else None
+
+
+def card(raw, name, repo=None):
     """One job of the list: the projected job's few fields (the projection already checked every value and the title)."""
     stages = raw.get("stages") or {}
     done_usd = sum(s["usd"] for s in stages.values() if isinstance(s.get("usd"), (int, float)))
-    return {"id": name, "kind": raw.get("kind"), "state": raw.get("state"), "created_at": raw.get("created_at"),
+    return {"id": name, "repo": repo, "kind": raw.get("kind"), "state": raw.get("state"), "created_at": raw.get("created_at"),
             "title": raw.get("title"), "max_usd": raw.get("max_usd"), "stages_usd": round(done_usd, 6),
             "stages": len(stages), "viewer": f"{VIEWER_ORIGIN}/jobs/{name}"}   # a fixed origin and the directory name that matched UI_ID, never text
 
@@ -126,7 +137,7 @@ class Chat:
                         raw = json.loads(sd._read_at(jfd, "job.json", limit=sd.READ_MAX))
                     finally:
                         os.close(jfd)
-                    out.append(card(sd.project_job(raw, name), name))
+                    out.append(card(sd.project_job(raw, name), name, repo_of(raw)))
                 except (OSError, ValueError, sd.Excluded):
                     skipped += 1                   # never with a value: a job that cannot be shown is counted
         finally:

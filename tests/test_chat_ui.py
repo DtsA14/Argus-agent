@@ -207,7 +207,7 @@ def test_the_confirm_card_shows_the_go_live_screen_fields():
 
 def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden():
     assert 'var r = mode === "research", p = mode === "prd";' in JS and "Siapkan riset" in JS and "Siapkan PRD" in JS
-    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards";' in JS and 'query.hidden = m !== "status";' in JS
+    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS and 'query.hidden = m !== "status";' in JS
 
 
 def test_a_finished_research_confirm_opens_the_job_in_research_mode_only():
@@ -246,8 +246,8 @@ def decide_part():
 
 
 def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_button():
-    assert re.search(r'data-mode="decide"[^>]*>Keputusan<', HTML)
-    assert not re.search(r'data-mode="decide"[^>]*disabled', HTML)
+    assert re.search(r'data-tab="decide"[^>]*>Keputusan<', HTML)             # UI-3a: the chip became a tab of the bottom bar
+    assert not re.search(r'data-tab="decide"[^>]*disabled', HTML)
     # the addresses of the READ-ONLY plan and install cards (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else
     assert JS.count("/api/approve/") == 2 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
     assert 'get("/api/approve/code/" + encodeURIComponent(id))' in JS
@@ -317,7 +317,7 @@ def test_the_reason_is_a_field_inside_each_card_and_a_reject_without_one_is_not_
     assert 'why.setAttribute("aria-label", "Alasan");' in body and "why.maxLength = 300;" in body
     assert 'if (needReason && why.value.trim() === "") { hint.textContent = "Isi alasan dulu di kolom di atas tombol."; return; }' in body
     assert body.index("why.value.trim()") < body.index("prepare({ action: action")
-    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards";' in JS                    # the composer is not shown in decisions or in the read-only cards (T2)
+    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS                    # the composer is not shown in decisions or in the read-only cards (T2)
 
 def test_the_poll_refreshes_the_list_only_when_no_confirm_is_on_its_way():
     assert 'if (mode === "decide" && openDecision === null && !(pending && pending.sent) && !reasonTyped()) { loadDecisions(); }' in JS

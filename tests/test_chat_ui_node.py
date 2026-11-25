@@ -49,3 +49,23 @@ def test_the_money_button_waits_for_the_ack_and_the_reason_and_sends_only_what_t
     assert lines["unticked: disabled and nothing sent"] == "true"
     assert lines["no needs: enabled, sends job only"] == json.dumps({"action": "queue_go", "job": "j20261117_100000_aaaa"}, separators=(",", ":"))
     assert json.loads(lines["ack only"]) == {"action": "queue_go", "job": "j20261117_100000_aaaa", "ack": "2"}
+
+
+def test_the_panel_groups_by_repo_filters_and_the_cost_view_and_badge_say_what_they_know():
+    out = json.loads(node(HERE / "chat_ui_smoke_nav.js", APP))
+    a = out["all"]
+    assert a.index("ledger-cli") < a.index("athena") < a.index("Tanpa repo")                                      # the jobs without a repo come last
+    assert "<span.gn>ledger-cli</span><span.gw>1 menunggu</span>" in a and "<span.gn>athena</span><span.gc>1 job</span>" in a
+    assert "[true]" in a and "Antrean <b>x</b>" in a and "Dexie atau idb" not in a.split("Tanpa repo")[0]       # a tag in a title is the text of a text node
+    assert "PRD kategori" in a and "<span.kt>research</span>" not in a.split("athena")[0]
+    w = out["waiting"]
+    assert "Antrean <b>x</b>" in w and "PRD kategori" not in w and "athena" not in w and "Tanpa repo" not in w
+    r = out["research"]
+    assert "Dexie atau idb" in r and "ledger-cli" not in r
+    t = out["toggled"]
+    assert "[false]" in t and "PRD kategori" not in t and "buffer" in t                                          # a closed group shows no job; an opened one does
+    assert "Tidak ada job yang cocok." in out["none"]
+    assert out["badge1"] == "false|1" and out["badge0"] == "true|0" and out["badge12"] == "false|9+"
+    c = out["cost"]
+    assert "Biaya tahap yang selesai" in c and "Total (job di daftar): $0.2400" in c and "code: $0.0300" in c and "research: $0.1400" in c
+    assert "Batas harian dan uang yang sudah dipesan belum ditampilkan" in c and "ledger-cli: PRD kategori" in c and "athena: buffer" not in c   # a job that cost nothing is not listed
