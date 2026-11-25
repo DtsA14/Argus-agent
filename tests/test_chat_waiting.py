@@ -125,6 +125,7 @@ def test_more_candidates_than_the_scan_limit_are_capped(svc, monkeypatch):
         (other / f"issue-{n}.md").write_text((svc.queues / t4.QID / f"issue-{n}.md").read_text())
     body = get(svc)[1]
     assert body["capped"] is True and body["scanned"] == 1
+    assert [r["id"] for r in body["waiting"]] == ["q20261117T100500Z-bbbb"]                 # the newest candidate is the one kept
 
 
 def test_a_candidate_whose_builder_raises_is_counted_not_a_500(svc, monkeypatch):
@@ -182,3 +183,39 @@ def test_a_queue_row_counts_the_items_whose_card_shows_a_commit(svc):
     rows_ = svc.request("GET", "/api/cards")[1]["rows"]
     q = [r for r in rows_ if r["kind"] == "queue"][0]
     assert q["items"] == 2 and q["applied_n"] == 0 and isinstance(q["applied_n"], int) and not isinstance(q["applied_n"], bool)
+
+
+def test_a_row_never_carries_a_bool_item_or_a_job_that_is_not_a_job_id(svc, monkeypatch):
+    t4.queue(svc)
+    monkeypatch.setattr(svc.actions.steps, "state", lambda qid, with_job=False: {"action": "queue_step", "item": True, "job": "../etc/passwd", "why": None})
+    row = get(svc)[1]["waiting"][0]
+    assert row["item"] is None and row["job"] is None and row["action"] == "queue_step"
+
+
+def test_a_plan_in_a_failed_write_is_not_a_candidate(plan_svc):
+    tp.setup(plan_svc, queue=False)
+    p = plan_svc.jobs / tc.PJOB / "job.json"
+    data = json.loads(p.read_text())
+    data["state"] = "WRITE_FAILED"
+    p.write_text(json.dumps(data))
+    body = get(plan_svc)[1]
+    assert body["scanned"] == 0 and body["waiting"] == []
+
+
+def test_a_queue_that_is_stopped_is_not_a_candidate(svc):
+    t4.awaiting(svc, t4.J1, "another issue text")                        # a job that is not this queue item: the queue is stopped
+    t4.queue(svc, jobs=(t4.J1, None))
+    rows_ = svc.request("GET", "/api/cards")[1]["rows"]
+    assert [r["state"] for r in rows_ if r["kind"] == "queue"] == ["STOPPED"]
+    body = get(svc)[1]
+    assert body["scanned"] == 0 and body["waiting"] == []
+
+
+def test_the_plan_of_a_running_queue_is_not_counted_as_a_candidate(plan_svc):
+    tp.setup(plan_svc)
+    p = plan_svc.queues / tc.QID / "queue.json"
+    data = json.loads(p.read_text())
+    data["approved"] = {"sha": "x", "at": t.iso(t.NOW - 100), "by": "x", "via": "ui"}
+    p.write_text(json.dumps(data))
+    body = get(plan_svc)[1]
+    assert body["scanned"] == 1                                                         # the queue only: its plan has no button to offer
