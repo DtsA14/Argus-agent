@@ -13,6 +13,8 @@
   var current = null;
   var filter = "all";                                   // the panel's filter: all | waiting | research
   var groupOpen = Object.create(null);                                   // repo label -> the person's choice; absent: open when something waits, the job is open, or it is the first
+  var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
+  var chipsOpen = false;                                // the mode chips are a choice under "New request", closed by default
   var lastChat = "status";                              // the mode the Chat tab returns to
 
   function el(tag, cls, text) {
@@ -44,17 +46,19 @@
     a.addEventListener("click", function (e) { e.stopPropagation(); });
     return a;
   }
-  function jobCard(t, spent) {
-    var c = el("article", "card");
-    c.appendChild(el("h2", "mono", t.title || t.id));
+  function jobCard(t, spent, compact) {
+    var c = el("article", "card" + (compact ? " compact" : ""));
+    c.appendChild(el("h2", t.title ? null : "mono", t.title || t.id));
     var row = el("div", "row");
     row.appendChild(el("span", "state " + stateClass(t.state), t.state));
-    row.appendChild(el("span", null, t.kind));
-    row.appendChild(el("span", null, t.created_at));
-    row.appendChild(el("span", null, spent !== undefined ? usd(spent) + " dari " + usd(t.max_usd) : usd(t.stages_usd) + " in finished stages, limit " + usd(t.max_usd)));
+    row.appendChild(el("span", null, (KIND_LABEL[t.kind] || t.kind) + (t.repo ? " · " + t.repo : "")));
+    if (!compact) { row.appendChild(el("span", null, t.created_at)); }
+    row.appendChild(el("span", null, spent !== undefined ? usd(spent) + " of " + usd(t.max_usd) : usd(t.stages_usd) + " in finished stages, limit " + usd(t.max_usd)));
     c.appendChild(row);
-    var link = viewerLink(t.viewer);
-    if (link) { c.appendChild(link); }
+    if (!compact) {
+      var link = viewerLink(t.viewer);
+      if (link) { c.appendChild(link); }
+    }
     return c;
   }
   var NO_REPO = "No repo";
@@ -73,7 +77,7 @@
     sub.appendChild(el("span", "state " + stateClass(t.state), t.state));
     b.appendChild(sub);
     if (current === t.id) { b.setAttribute("aria-current", "true"); }
-    b.addEventListener("click", function () { if (mode !== "status") { setMode("status"); } open(t.id); panel.classList.remove("open"); });
+    b.addEventListener("click", function () { if (mode !== "status") { setMode("status"); } open(t.id); closePanel(); });
     li.appendChild(b);
     return li;
   }
@@ -119,7 +123,7 @@
     var shown = threads.filter(function (t) { return !q || [t.id, t.state, t.title, t.kind].join(" ").toLowerCase().indexOf(q) !== -1; });
     if (!shown.length) { stream.appendChild(el("p", "muted", "No matching jobs.")); }
     shown.slice(0, 20).forEach(function (t) {
-      var c = jobCard(t);
+      var c = jobCard(t, undefined, true);
       c.addEventListener("click", function () { open(t.id); });
       stream.appendChild(c);
     });
@@ -153,7 +157,7 @@
     get("/api/threads").then(function (d) {
       threads = d.threads || [];
       skipped.textContent = d.skipped ? d.skipped + " jobs cannot be shown" : "";
-      summary.textContent = nJobs(threads.length);
+      updateSummary();
       renderList();
       if (current === null && mode === "status") { renderOverview(); }
       if (mode === "cost") { renderCost(); }
@@ -996,13 +1000,32 @@
       stream.appendChild(back);
     });
   }
+  function updateSummary() {                            // the line under the title: how many jobs, and how many wait for a decision
+    summary.textContent = nJobs(threads.length) + (decisionRows.length ? " · " + decisionRows.length + " waiting" : "");
+    var spent = 0;
+    threads.forEach(function (t) { spent += typeof t.stages_usd === "number" ? t.stages_usd : 0; });
+    document.getElementById("panel-cost").textContent = "Recorded stage cost: " + usd(spent);
+  }
+  function setChrome() {                              // what sits above the tab bar: nothing in most tabs; the form in the writing modes; the chips only after "New request"
+    var inChat = mode === "status" || mode === "issue" || mode === "prd" || mode === "research";
+    chipsOpen = chipsOpen && inChat;
+    document.getElementById("chips").hidden = !chipsOpen;
+    document.getElementById("dock").hidden = document.getElementById("chips").hidden && issueForm.hidden;
+  }
+  function openNew() {
+    closePanel();
+    if (!(mode === "status" || mode === "issue" || mode === "prd" || mode === "research")) { setMode(lastChat); }
+    chipsOpen = true;
+    setChrome();
+  }
+  function closePanel() { panel.classList.remove("open"); document.getElementById("scrim").hidden = true; }
   function updateBadge() {                              // the number of jobs that wait for a decision, from the same list the Keputusan tab shows
     var b = document.getElementById("decide-badge"), n = decisionRows.length;
     b.hidden = n === 0;
     b.textContent = n > 9 ? "9+" : String(n);
+    updateSummary();
     b.setAttribute("aria-label", n + " jobs awaiting a decision");
   }
-  var KIND_LABEL = { code: "Code", prd: "PRD", research: "Research", issue: "Issue" };
   function renderCost() {                               // what the job list already carries: the cost of finished stages. Not the daily cap, not what is booked (a later change).
     clear(stream);
     var total = 0, by = Object.create(null), unknown = 0;
@@ -1047,10 +1070,8 @@
       var t = b.getAttribute("data-tab");
       b.setAttribute("aria-pressed", (inChat ? t === "chat" : t === m) ? "true" : "false");
     });
-    document.getElementById("chips").hidden = !inChat;
-    document.getElementById("dock").hidden = !inChat;
     issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";
-    query.hidden = m !== "status";
+    setChrome();
     researchSeq++;
     openCard = null;
     openResearch = null;
@@ -1066,10 +1087,10 @@
   }
   Array.prototype.forEach.call(document.querySelectorAll("#chips button"), function (b) {
     if (b.disabled) { return; }
-    b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+    b.addEventListener("click", function () { chipsOpen = false; setMode(b.getAttribute("data-mode")); });
   });
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
-    b.addEventListener("click", function () { var t = b.getAttribute("data-tab"); setMode(t === "chat" ? lastChat : t); });
+    b.addEventListener("click", function () { var t = b.getAttribute("data-tab"); chipsOpen = false; setMode(t === "chat" ? (mode === lastChat && lastChat !== "status" ? "status" : lastChat) : t); });
   });
   Array.prototype.forEach.call(document.querySelectorAll("#filters button"), function (b) {
     b.addEventListener("click", function () {
@@ -1088,8 +1109,11 @@
   });
   query.addEventListener("input", function () { renderList(); if (current === null) { renderOverview(); } });
   document.getElementById("composer").addEventListener("submit", function (e) { e.preventDefault(); });
-  document.getElementById("open-panel").addEventListener("click", function () { panel.classList.add("open"); });
-  document.getElementById("close-panel").addEventListener("click", function () { panel.classList.remove("open"); });
+  document.getElementById("open-panel").addEventListener("click", function () { panel.classList.add("open"); document.getElementById("scrim").hidden = false; });
+  document.getElementById("close-panel").addEventListener("click", closePanel);
+  document.getElementById("scrim").addEventListener("click", closePanel);
+  document.getElementById("new-request").addEventListener("click", openNew);
+  document.getElementById("new-request-panel").addEventListener("click", openNew);
   var deep = /^\/jobs\/(j[0-9]{8}_[0-9]{6}_[0-9a-f]{4})$/.exec(location.pathname);
   if (deep) { setMode("decide"); showDecision(deep[1]); }
   load();

@@ -207,7 +207,7 @@ def test_the_confirm_card_shows_the_go_live_screen_fields():
 
 def test_the_form_is_the_research_form_in_research_mode_and_the_repo_is_hidden():
     assert 'var r = mode === "research", p = mode === "prd";' in JS and "Prepare research" in JS and "Prepare PRD" in JS
-    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS and 'query.hidden = m !== "status";' in JS
+    assert 'issueForm.hidden = m === "status" || m === "decide" || m === "cards" || m === "cost";' in JS
 
 
 def test_a_finished_research_confirm_opens_the_job_in_research_mode_only():
