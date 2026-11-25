@@ -3,6 +3,7 @@ spawner is a recorder (no process starts), the real config supplies the code tas
 import copy
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -567,3 +568,91 @@ def test_the_page_sends_only_the_queue_id_and_has_no_apply_button():
     assert "prepare({ action: t4b.action, queue: id })" in js
     assert "Mulai issue" in js and "Setujui draf issue" in js
     assert "apply" not in js.lower().replace("apply tetap lewat terminal", "").replace("belum ada yang di-apply", "").replace("apply (belum", "")
+
+
+# ---- SPEC_CHAT_UI1 F17: the draft card shows the plan, the writer's notes and the tests the draft changes -------------------------
+
+def rich(**kw):
+    d = draft(**kw)
+    d["contract"]["scope"]["protected"] = ["README.md"]
+    d.update({"new_tests": [], "plan": {"files": ["src/a.py"], "steps": ["do the thing"], "risks": ["it may break b"]}, "for_human": "one sentence",
+              "changed_tests": [{"path": "tests/test_old.py", "content": "x"}], "unverifiable": ["the page stays unchanged"]})
+    return d
+
+
+def write_report(jd, d, **over):
+    rep = {"draft_sha256": rj.draft_sha_of(d), "baseline": {"v1": {"must_pass": {}}}}
+    rep.update(over)
+    (jd / "runs" / "d1-run" / "check_report.json").write_text(json.dumps(rep))
+
+
+def card_of(svc, d, report=True, **over):
+    queue(svc, jobs=(J1, None))
+    jd = awaiting(svc, J1, TEXT, d=d)
+    if report:
+        write_report(jd, d, **over)
+    status, out = prep(svc, "draft_approve")
+    assert status == 200, (out, json.dumps(svc.audit()[-1:]))
+    return out["card"], jd
+
+
+def test_the_draft_card_shows_plan_risks_unverifiable_notes_and_the_tests_it_changes(svc):
+    c, _ = card_of(svc, rich())
+    assert c["plan"] == {"files": ["src/a.py"], "steps": ["do the thing"], "risks": ["it may break b"]}
+    assert c["unverifiable"] == ["the page stays unchanged"] and "summary_note" not in c
+    assert c["changed_tests"] == ["tests/test_old.py"] and c["changed_tests_n"] == 1
+
+
+def test_without_a_baseline_the_card_says_so(svc):
+    c, _ = card_of(svc, rich(), baseline={})
+    assert c["baseline_note"] == "no baseline recorded"
+
+
+@pytest.mark.parametrize("how", ["missing", "other_draft", "huge", "link", "not_json", "list", "hostile_baseline", "key"])
+def test_a_report_that_is_missing_linked_large_mismatched_or_hostile_leaves_the_button_and_says_so(svc, how, tmp_path):
+    d = rich()
+    queue(svc, jobs=(J1, None))
+    jd = awaiting(svc, J1, TEXT, d=d)
+    f = jd / "runs" / "d1-run" / "check_report.json"
+    if how == "other_draft":
+        write_report(jd, d, draft_sha256="0" * 64)
+    elif how == "huge":
+        f.write_text(json.dumps({"draft_sha256": rj.draft_sha_of(d), "pad": "x" * 1_100_000}))
+    elif how == "link":
+        (tmp_path / "elsewhere.json").write_text(json.dumps({"draft_sha256": rj.draft_sha_of(d)}))
+        os.symlink(tmp_path / "elsewhere.json", f)
+    elif how == "not_json":
+        f.write_text("{not json")
+    elif how == "list":
+        f.write_text("[]")
+    elif how == "hostile_baseline":
+        write_report(jd, d, baseline={"v1": "not a dict", "v2": [1]})
+    elif how == "key":
+        d["plan"]["steps"] = ["use sk-or-v1-" + "a" * 40]
+        (jd / "runs" / "d1-run" / "draft.json").write_text(json.dumps(d))
+        write_report(jd, d)
+    status, out = prep(svc, "draft_approve")
+    c = out["card"]
+    assert status == 200 and c["action"] == "draft_approve" and c["draft_sha"]
+    assert c["summary_note"] == "summary unavailable" and "plan" not in c and c["changed_tests"] == ["tests/test_old.py"]
+    assert card_t4b(svc)["action"] == "draft_approve"
+
+
+def test_the_summary_strings_are_scrubbed_and_cut(svc):
+    d = rich()
+    d["plan"]["steps"] = ["a" * 900] + [f"step {i}" for i in range(80)]
+    c, _ = card_of(svc, d)
+    assert len(c["plan"]["steps"]) <= 50 and all(len(s) <= 300 for s in c["plan"]["steps"])
+
+
+def test_many_changed_tests_are_counted_and_cut(svc):
+    d = rich()
+    d["changed_tests"] = [{"path": f"tests/t{i}.py", "content": "x"} for i in range(60)]
+    c, _ = card_of(svc, d)
+    assert len(c["changed_tests"]) == 40 and c["changed_tests_n"] == 60
+
+
+def test_the_card_does_not_write_the_environment(svc):
+    before = dict(os.environ)
+    card_of(svc, rich())
+    assert dict(os.environ) == before

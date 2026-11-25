@@ -260,7 +260,7 @@ def environment_pin(cfg, name, root=None):
     unknown name or one without an image is a problem, never another environment's or the default image; so is an
     environment from environments/ whose image has not passed its check (SPEC_ENV_FROM_PYTHON_IMAGE)."""
     from tools import sandbox as sb
-    image, problem = sb.environment_image(cfg.get("sandbox") or {}, name)
+    image, problem = sb.pinned_image(cfg.get("sandbox") or {}, name, ROOT if root is None else root)
     if problem:
         return None, problem
     if not image:
