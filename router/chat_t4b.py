@@ -200,6 +200,22 @@ class Steps:
                          "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not"}
         return card, {"queue": q["id"], "job": job_id, "sha": seen, "item": item["n"]}
 
+    # ---- the state of the button, for the queue card ----------------------------------------------------------------------
+
+    def state(self, qid):
+        """{action, item, why}: the button the queue card offers now, from the same builders the actions use (and the daily cap), so the page never offers what prepare refuses.
+        Never raises. A queue the chat did not approve, a closed or pending one: no button and no sentence (the card already says its state)."""
+        try:
+            f = self.facts({"queue": qid})
+            build, name = (self.build_step, "queue_step") if f["kind"] == "start" else (self.build_approve, "draft_approve")
+            card, _ = build({"queue": qid})
+            self.a.check_cap(card)
+            return {"action": name, "item": card["item"], "why": None}
+        except self.Refusal as e:
+            return {"action": None, "item": None, "why": None if e.gate in ("queue", "path", "form") else e.why}
+        except Exception:                                       # a file that does not have the shape: nothing is offered, the card is still shown
+            return {"action": None, "item": None, "why": None}
+
     # ---- run ------------------------------------------------------------------------------------------------------------
 
     def execute(self, action, card, rp):

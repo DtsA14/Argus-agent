@@ -513,3 +513,57 @@ def test_a_queue_on_another_jobs_directory_is_refused_even_when_its_approval_nam
     p.write_text(json.dumps(q))
     status, out = prep(svc, "queue_step")
     assert status == 409 and "jobs directory" in out["refused"]
+
+
+# ---- the queue card's button (PR3) --------------------------------------------------------------------------------------------------
+
+def card_t4b(s):
+    status, got = s.request("GET", f"/api/cards/queue/{QID}")
+    assert status == 200
+    return got["t4b"]
+
+
+def test_the_queue_card_offers_the_step_for_a_queue_the_chat_approved(svc):
+    queue(svc)
+    assert card_t4b(svc) == {"action": "queue_step", "item": 1, "why": None}
+
+
+def test_the_queue_card_offers_the_draft_approval_when_a_draft_waits(svc):
+    waiting(svc)
+    assert card_t4b(svc) == {"action": "draft_approve", "item": 1, "why": None}
+
+
+def test_the_queue_card_offers_nothing_and_says_nothing_for_a_queue_approved_from_the_terminal(svc):
+    queue(svc, via=None)
+    assert card_t4b(svc) == {"action": None, "item": None, "why": None}
+
+
+def test_the_queue_card_says_why_while_a_step_runs_and_when_the_cap_is_passed(tmp_path):
+    s = t.Service(tmp_path, cfg=make_cfg(daily_cap_usd=0.5))
+    s.queues = tmp_path / "queues"
+    s.queues.mkdir()
+    s.actions.cards.queues_dir = s.queues
+    try:
+        queue(s)
+        s.spawner.busy_ids.add(QID)
+        got = card_t4b(s)
+        assert got["action"] is None and "still running" in got["why"]
+        s.spawner.busy_ids.clear()
+        queue(s, at=t.NOW - 2 * 86400)
+        got = card_t4b(s)
+        assert got["action"] is None and "daily cap" in got["why"]
+    finally:
+        s.stop()
+
+
+def test_the_button_never_offers_what_prepare_refuses(svc):
+    waiting(svc, d=draft(unverifiable=["existing test conflicts with the new rule"]))
+    got = card_t4b(svc)
+    assert got["action"] is None and "conflict" in got["why"] and prep(svc, "draft_approve")[0] == 409
+
+
+def test_the_page_sends_only_the_queue_id_and_has_no_apply_button():
+    js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+    assert "prepare({ action: t4b.action, queue: id })" in js
+    assert "Mulai issue" in js and "Setujui draf issue" in js
+    assert "apply" not in js.lower().replace("apply tetap lewat terminal", "").replace("belum ada yang di-apply", "").replace("apply (belum", "")
