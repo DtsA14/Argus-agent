@@ -42,8 +42,8 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "819ab6bfe2c399e7afddde65c8a8f57260163c9a19b2e83d4a0d4c9d3e16bedf",
-    "app.js": "946b9615c4c61e1531ca8369661cfae9a816ff789158fcfd907adf30f04713fa",
-    "app.css": "3c6ce7fd1e2b75373ac67953412ee021f8db66ecf4494ab6cac17f7bd337e268",
+    "app.js": "ca965f085a409f98c95a3a30c9bdf5d6876cd361474e21baa7682511cc56e528",
+    "app.css": "02f3a661f7327b98606e3f65f351814d64a8f863b08bde6225cba87cf940baa1",
 }
 
 
@@ -285,6 +285,10 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/issues/([^/?#%]+)", path)
         if a is not None and m:
             got = a.thread(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        m = re.fullmatch(r"/api/draft/([^/?#%]+)", path)
+        if a is not None and m:                                     # SPEC_CHAT_UI3D: the detail of a job's last draft, read only
+            got = a.steps.draft_detail(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if a is not None and path == "/api/cap":                    # SPEC_CHAT_UI3C: the daily cap and the booked exposure, read only
             return self._json(200, a.cap_status())

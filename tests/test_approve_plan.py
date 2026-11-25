@@ -301,7 +301,7 @@ def test_the_page_has_a_plan_view_reached_from_the_prd_card_and_writes_only_text
     part = js[js.index("function planExample"):js.index("// ---- T2: read-only cards")]
     assert "innerHTML" not in part and "insertAdjacentHTML" not in part and "document.write" not in part
     assert 'say(d, "model", MODEL, e.says)' in part and "e.proof.wording" in part and "it.warning" in part
-    assert part.count('"All cards"') == 1 and part.count("cardButtons(") == 5                 # one definition, two cards, each with its failure path
+    assert part.count('"All cards"') == 1 and part.count("cardButtons(") == 7                 # one definition, three cards (plan, draft details, install), each with its failure path
 
 
 def test_the_chat_serves_the_pinned_files():
