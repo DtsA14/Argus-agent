@@ -163,7 +163,7 @@
       updateSummary();
       renderList();
       if (current === null && mode === "status") { renderOverview(); }
-      if (mode === "cost") { renderCost(); }
+      if (mode === "cost") { renderCost(); loadCap(); }
     }).catch(function () { summary.textContent = "failed to load"; });
     if (!(mode === "decide" && openDecision === null)) { loadDecisions(false); }       // in the Keputusan list the guarded poll below does it, once
   }
@@ -1095,8 +1095,50 @@
     updateSummary();
     b.setAttribute("aria-label", n + (n === 1 ? " item" : " items") + " waiting for you");
   }
-  function renderCost() {                               // what the job list already carries: the cost of finished stages. Not the daily cap, not what is booked (a later change).
+  var capInfo = null;                                    // {cap_usd, booked_usd, unknown} from /api/cap; null until read; {failed: true} when it could not be read
+  var DAY_MS = 24 * 3600 * 1000;
+  function usd2(n) { return "$" + n.toFixed(2); }
+  function loadCap() {
+    get("/api/cap").then(function (d) { capInfo = d; if (mode === "cost") { renderCost(); } })
+      .catch(function () { capInfo = { failed: true }; if (mode === "cost") { renderCost(); } });
+  }
+  function recentJob(t) { var ms = Date.parse(t.created_at); return !isNaN(ms) && Date.now() - ms <= DAY_MS; }
+  function renderCost() {                               // two different numbers: what the cap counts (booked, from the server) and what the jobs recorded (from the job list). Never merged, unknown never shown as zero.
     clear(stream);
+    var booked = el("article", "card");
+    booked.appendChild(el("h2", null, "Booked against the daily cap"));
+    if (capInfo === null) {
+      booked.appendChild(el("p", "muted", "Loading…"));
+    } else if (capInfo.failed || capInfo.unknown || typeof capInfo.booked_usd !== "number" || typeof capInfo.cap_usd !== "number") {
+      booked.appendChild(el("p", "note", "The daily cap could not be computed right now."));
+    } else {
+      fact(booked, "Booked (last 24 hours)", usd2(capInfo.booked_usd) + " of " + usd2(capInfo.cap_usd));
+      if (capInfo.cap_usd > 0) {
+        var bar = el("progress", "pbar");
+        bar.max = capInfo.cap_usd;
+        bar.value = Math.min(capInfo.booked_usd, capInfo.cap_usd);
+        bar.setAttribute("aria-label", usd2(capInfo.booked_usd) + " of " + usd2(capInfo.cap_usd) + " booked");
+        booked.appendChild(bar);
+      }
+      fact(booked, "Left", usd2(Math.max(0, capInfo.cap_usd - capInfo.booked_usd)));
+    }
+    booked.appendChild(el("p", "note", "The cap counts the full limit of every job started from this chat in the last 24 hours, not what the jobs spent. A new request that would pass it is refused."));
+    stream.appendChild(booked);
+    var day = threads.filter(recentJob), dayTotal = 0, dayBy = Object.create(null), dayUnknown = 0;
+    day.forEach(function (t) {
+      if (t.stages_unknown) { dayUnknown++; }
+      var u = typeof t.stages_usd === "number" ? t.stages_usd : 0;
+      dayTotal += u;
+      var k = KIND_LABEL[t.kind] || "Other";
+      dayBy[k] = (dayBy[k] || 0) + u;
+    });
+    var spent = el("article", "card");
+    spent.appendChild(el("h2", null, "Recorded in the last 24 hours"));
+    fact(spent, "Total (" + nJobs(day.length) + " created)", usd(dayTotal));
+    Object.keys(dayBy).sort().forEach(function (k) { fact(spent, k, usd(dayBy[k])); });
+    if (dayUnknown) { spent.appendChild(el("p", "note", nJobs(dayUnknown) + (dayUnknown === 1 ? " has" : " have") + " a stage with no cost figure: not counted, not zero.")); }
+    spent.appendChild(el("p", "note", "Stage costs written in the job files of jobs created in the last 24 hours. Money still being spent by a running stage is not in it yet."));
+    stream.appendChild(spent);
     var total = 0, by = Object.create(null), unknown = 0;
     threads.forEach(function (t) {
       if (t.stages_unknown) { unknown++; }
@@ -1110,7 +1152,7 @@
     fact(c, "Total (" + nJobs(threads.length) + " in the list)", usd(total));
     Object.keys(by).sort().forEach(function (k) { fact(c, k, usd(by[k])); });
     if (unknown) { c.appendChild(el("p", "note", nJobs(unknown) + (unknown === 1 ? " has" : " have") + " a stage with no cost figure: not counted, not zero.")); }
-    c.appendChild(el("p", "note", "Only stage figures recorded in the job list (the newest only). The daily cap and the money already booked are not shown on this screen yet."));
+    c.appendChild(el("p", "note", "Only stage figures recorded in the job list (the newest only)."));
     stream.appendChild(c);
     var rows = threads.filter(function (t) { return typeof t.stages_usd === "number" && t.stages_usd > 0; })
       .sort(function (x, y) { return y.stages_usd - x.stages_usd; }).slice(0, 15);
@@ -1148,7 +1190,7 @@
     else if (m === "research") { loadResearch(); renderResearchList(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else if (m === "cards") { loadCards(); renderCards(); }
-    else if (m === "cost") { renderCost(); }
+    else if (m === "cost") { renderCost(); loadCap(); }
     else { renderOverview(); }
   }
   Array.prototype.forEach.call(document.querySelectorAll("#plus-menu button"), function (b) {
