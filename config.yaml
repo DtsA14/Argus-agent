@@ -211,7 +211,9 @@ research_job:
   # PR C: s1 writes the report from the findings, e1 flags each item (v0: flags only). No web, one Submit tool each.
   synthesis: {cap_usd: 0.15, attempt_tokens: 250000, max_input_tokens: 40000, max_steps: 4, max_submits: 3}
   checker: {cap_usd: 0.10, attempt_tokens: 200000, max_input_tokens: 40000, max_steps: 4, max_submits: 3,
-            max_output_tokens_by_model: {"openrouter:deepseek/deepseek-v4.1-flash": 32000}}
+            # 2026-11-26 (Atha "Naikan aja"): job j20261126_052522_fcc7's e1 on deepseek-flash used all 16,000 output tokens (stop: output_truncated, NOT_CHECKED, $0.011);
+            # the same 32,000 the OpenRouter deepseek checker already has. The checker's cap_usd 0.10 still bounds the stage.
+            max_output_tokens_by_model: {"openrouter:deepseek/deepseek-v4.1-flash": 32000, "deepseek:deepseek-flash": 32000}}
 
 # SPEC_JUDGE: argus judge <job> reads the issue, the approved draft and the review package and says PASS or BLOCK
 # (advice only). max_input_chars: a larger prompt ends the stage NOT_JUDGED before any request. 120,000 characters are
