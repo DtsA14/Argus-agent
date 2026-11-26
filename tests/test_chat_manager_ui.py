@@ -1,0 +1,127 @@
+"""P3 (SPEC_CHAT_MANAGER_P3): the foreman on the page. The page's own functions run in node on a tiny DOM (skipped without `node`); the static facts are read from the files."""
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve().parent
+STATIC = HERE.parent / "router" / "chat_static"
+JS = (STATIC / "app.js").read_text()
+HTML = (STATIC / "index.html").read_text()
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+
+
+@pytest.fixture(scope="module")
+def out():
+    r = subprocess.run(["node", str(HERE / "chat_ui_smoke_manager.js"), str(STATIC / "app.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_the_plus_menu_offers_the_foreman_and_the_script_knows_the_mode():
+    assert re.search(r'data-mode="manager"[^>]*>Foreman<', HTML) and not re.search(r'data-mode="manager"[^>]*disabled', HTML)
+    assert 'm === "manager"' in JS and 'else if (m === "manager") { openIssue = null; formState(); loadManager(); }' in JS
+    chrome = JS.split("function setChrome()")[1].split("function closeMenu")[0]
+    assert 'mode === "manager"' in chrome and 'mode === "manager"' in JS.split("function updateSummary")[1].split("function setChrome")[0] + chrome
+    assert "message.maxLength = f ? 2000 : 6000;" in JS
+
+
+def test_the_turn_is_posted_with_the_session_and_the_message_and_nothing_else():
+    assert re.findall(r'post\("/api/manager/turn", (\{[^}]*\})\)', JS) == ['{ session: job, message: text }']
+    assert JS.count('post("/api/manager/turn"') == 1
+
+
+def test_nothing_of_a_proposal_goes_to_confirm_and_the_proposal_text_is_only_ever_a_text_node():
+    box = JS.split("function proposalBox")[1].split("function renderManager")[0]
+    assert "/api/confirm" not in box and "token" not in box and "innerHTML" not in JS
+    assert box.count("prepare(body)") == 1 and 'el("button", "go", "Prepare")' in box
+    assert re.findall(r'\{ action: "(\w+)"', box) == ["prd_new", "research_new"]
+    assert "body.source_job = mgr.job" in box and "body.source_turn = String(e.n)" in box
+
+
+def test_the_source_is_added_to_a_form_only_from_a_proposal_and_every_move_clears_it():
+    assert JS.count("fromProposal = null;") >= 2 and "fromProposal = { job: job, turn: e.n }" in JS
+    prep = JS.split("function prepare(body)")[1].split("var ctx")[0]
+    assert 'body.action === "research_new" || body.action === "prd_new"' in prep and "body.source_job === undefined" in prep
+    setmode = JS.split("function setMode(m)")[1].split("issueForm.hidden")[0]
+    assert "fromProposal = null;" in setmode and "mgrStop();" in setmode
+
+
+def test_the_card_of_a_session_shows_what_one_confirmation_covers_and_where_a_text_came_from():
+    for k in ("ttl_hours", "max_turns", "turn_note", "confirms", "source_note"):
+        assert f'["{k}"' in JS
+    assert "the foreman's proposal" in JS and "edited by you" in JS
+
+
+@needs_node
+def test_the_foreman_view_is_text_with_its_speaker_and_the_budget_and_time_left(out):
+    h = out["open"]
+    assert "left $0.1996 of $0.2000" in h and "time left 11 h 59 min" in h
+    assert "<p.msg human>You: ide <b>x</b></p>" in h                    # a tag in the text is text, not markup (the fake DOM prints text as it is)
+    assert h.count("foreman (a model, not Argus)") == 5 and "reason (written by the model)" in h
+    assert "The foreman is waiting for your answer." in h and "The foreman sees no route for this in Argus." in h
+    assert "This turn failed: unusable" in h and "Nothing is started." in h
+    assert "The foreman is answering." in out["busy"] and "left unknown" in out["blocked"]
+    assert "Prepare a session" in out["none"] and "Prepare a session" not in out["starting"] and "The session is starting." in out["starting"]
+
+
+@needs_node
+def test_a_proposal_button_prepares_the_form_with_its_source_and_starts_nothing(out):
+    assert out["buttons"] == ["Prepare", "Edit first", "Prepare", "Edit first"]
+    assert [json.loads(x) for x in out["prepared"]] == [
+        {"action": "prd_new", "repo": "ledger-cli", "message": "Tambah <b>ringkasan</b>", "source_job": "j20261126_023857_708b", "source_turn": "1"},
+        {"action": "research_new", "message": "Bandingkan dua pustaka", "source_job": "j20261126_023857_708b", "source_turn": "4"}]
+    assert out["norepo"] == ["Prepare[off]", "Edit first"]
+
+
+@needs_node
+def test_edit_first_opens_the_form_filled_and_remembers_the_source(out):
+    modes, text, repo, src = json.loads(out["edit"])
+    assert modes == ["prd"] and text == "Tambah <b>ringkasan</b>" and repo == "ledger-cli" and src == {"job": "j20261126_023857_708b", "turn": 1}
+
+
+@needs_node
+def test_a_turn_is_sent_only_into_an_open_idle_session_with_a_message(out):
+    for k in ("sendNoSession", "sendBusy", "sendEnded", "sendEmpty"):
+        assert json.loads(out[k])[0] == []
+    assert "no open foreman session" in out["sendNoSession"] and "still answering" in out["sendBusy"]
+    posted, notes, box, left, polling = json.loads(out["sendOk"])
+    assert posted == ['/api/manager/turn {"session":"j20261126_023857_708b","message":"halo mandor"}'] and notes == [] and box == "" and left == 59 and polling is True
+    posted, notes, kept, stuck = json.loads(out["sendRefused"])
+    assert notes == ["Could not send: the session is busy"] and kept == "halo lagi" and stuck is True          # a refused turn keeps what was typed, and the card then offers a new session
+    assert out["timeLeft"] == "11 h 59 min|0 h 1 min|unknown|unknown"
+
+
+@needs_node
+def test_a_session_that_cannot_take_a_turn_offers_a_new_one(out):
+    o = out["over"]
+    assert o["healthy"] is False and o["fine"] is False and o["busy"] is False
+    assert o["expired"] is True and o["poor"] is True and o["turns"] is True and o["stuck"] is True
+
+
+@needs_node
+def test_two_quick_sends_post_once(out):
+    assert json.loads(out["double"]) == [1, "The foreman is still answering."]
+
+
+@needs_node
+def test_a_turn_answered_after_the_person_left_the_mode_draws_and_polls_nothing(out):
+    box, timer, timers, sending = json.loads(out["leave"])
+    assert box == "form lain" and timer is None and timers == 0 and sending is False
+
+
+@needs_node
+def test_the_polls_and_the_session_search_are_bounded(out):
+    assert out["pollDone"] == "0|"                               # the answer is in: no read, no timer
+    assert out["pollBound"] == "2|"                              # three reads allowed: two taken, then it stops
+    assert out["search"] == "13|0"                               # one read and twelve retries, then none
+
+
+def test_the_source_is_cleared_after_a_confirm_and_the_new_session_card_has_its_own_texts():
+    cb = JS.split("var c = renderCard(prep, function (r) {")[1].split("mgr.expect = 12")[0]
+    assert "fromProposal = null;" in cb
+    assert 'card.action === "manager_new" ? "The session is being made' in JS and 'card.action === "manager_new" ? "Foreman view"' in JS
+    assert 'p.route !== "research" && p.route !== "prd"' in JS
