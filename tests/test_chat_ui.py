@@ -175,7 +175,7 @@ def research_part():
 
 def test_the_report_goes_on_the_page_as_text_under_the_servers_banner_and_the_label_comes_from_the_server():
     body = research_part()
-    assert 'el("pre", "report", d.report.text)' in body
+    assert 'el("pre", "report", sec.text)' in body and "reportSections(d.report.text)" in body          # 3e: the text is shown by sections, every one a text node
     assert body.index("d.banner") < body.index("d.report.text")
     assert 'd.checked ? "Checked by e1' in body and "Not checked by e1." in body
     assert "report.text.indexOf" not in JS and "match(" not in body and "replace(" not in body       # the text is never read for a label
