@@ -77,8 +77,9 @@ class Spawner:
             line = last_line(run["log"])
             self.ended[job_id] = {"code": code, "line": line, "action": run["action"],
                                   "text": run["text"] if code not in (0, 1) else None}
-            if run["message"] is not None:
-                Path(run["message"]).unlink(missing_ok=True)
+            for f in (run["message"] if isinstance(run["message"], (list, tuple)) else [run["message"]]):      # a turn has two files: the message and the jobs
+                if f is not None:
+                    Path(f).unlink(missing_ok=True)
             del self.runs[job_id]
 
     def busy(self, job_id):

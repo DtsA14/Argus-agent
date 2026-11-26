@@ -34,6 +34,7 @@ from models.registry import ConfigError
 from research.stages import QUESTION_MAX, QUESTION_MIN
 from router import job as rj
 from router import manager_job as mj
+from router import manager_route as mr
 from router import prd_job as pj
 from router.chat_plan import Plan
 from router.chat_t4b import Steps
@@ -54,9 +55,7 @@ ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research
 SOURCE_KEYS = {"source_job", "source_turn"}   # SPEC_CHAT_MANAGER_P2B: the foreman's proposal a form was filled from, as two text fields
 SOURCE_NOTE = "the text was first written by the foreman (a model): read it before you confirm"
 ROUTE_ACTION = {"research": "research_new", "prd": "prd_new"}
-NEXT_MAX = 10                       # P4: the jobs a session started that the page lists
-STATE_SHAPE = re.compile(r"[A-Z][A-Z_]{0,39}")
-ENDED_STATE = re.compile(r"FAILED|ABANDONED|REJECTED|INVALID|BLOCKED|STOPPED")
+NEXT_MAX = mr.STEPS_MAX             # P4: the jobs a session started that the page lists (and, P4b, the foreman is told about)
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -1077,11 +1076,19 @@ class Actions:
         """Start the turn: the one argv this route ever builds (an expired session is only moved to BLOCKED by the CLI's turn, not here: the route refuses it). The message goes by a 0600 file of the state directory, removed when the run ends."""
         key = self.key_file(False, manager=True)
         path = self.spawner.message_file(message)
-        argv = self.with_config(manager_cli(self.jobs_dir, "turn", job_id, "--message-file", str(path), key_file=key))
+        files = [path]
         try:
-            self.spawner.spawn(job_id, argv, path, action="manager_turn", text=message)
+            steps = [{k: n[k] for k in sorted(mr.STEP_KEYS)} for n in self.next_steps(job_id)]
+            extra = []
+            if steps:                                       # P4b: the jobs the session started, from the harness, in a second 0600 file of the state directory
+                jobs = self.spawner.message_file(json.dumps(steps))
+                files.append(jobs)
+                extra = ["--jobs-file", str(jobs)]
+            argv = self.with_config(manager_cli(self.jobs_dir, "turn", job_id, "--message-file", str(path), *extra, key_file=key))
+            self.spawner.spawn(job_id, argv, tuple(files), action="manager_turn", text=message)
         except BaseException:
-            Path(path).unlink(missing_ok=True)           # no run owns the file: it is not left behind
+            for f in files:
+                Path(f).unlink(missing_ok=True)          # no run owns the files: they are not left behind
             raise
         return {"job": job_id, "started": True}
 
@@ -1139,15 +1146,8 @@ class Actions:
                     continue
                 d, usd = got
                 kind, state = d["kind"], d.get("state")
-                state = state if isinstance(state, str) and STATE_SHAPE.fullmatch(state) else "UNKNOWN"
-                if kind == "research" and state == "REPORT_READY":
-                    hint, text = "research", "The research is done. Read the report in the Research view."
-                elif kind == "prd" and state == "AWAITING_HUMAN":
-                    hint, text = "queue", "The PRD is written and waits in the Queue tab. Accepting its plan and running the queue are two separate confirmations of yours; nothing runs by itself."
-                elif ENDED_STATE.search(state):
-                    hint, text = "none", f"This {kind} job ended: {state}."
-                else:
-                    hint, text = "wait", f"This {kind} job is still going: {state}."
+                state = state if isinstance(state, str) and mr.STATE_SHAPE.fullmatch(state) else "UNKNOWN"
+                hint, text = mr.step_hint(kind, state)
                 out.append({"job": job, "kind": kind, "state": state, "usd": usd if isinstance(usd, (int, float)) and math.isfinite(usd) and usd >= 0 else None, "hint": hint, "text": text})
                 if len(out) >= NEXT_MAX:
                     break

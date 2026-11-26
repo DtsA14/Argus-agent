@@ -94,3 +94,7 @@ Whether `LLMCaller` + `tr.reservation` with a one-shot JSON reply behave as in `
 10. **job.py:** `status` gets a `manager` branch (no `inputs.repo` read); `decision()` treats `manager` like `("issue", "prd")` (name only, no abandon row); `job_abandon` from the chat on a manager job is allowed on purpose (it only closes the session); `resume`, `approve`, `retry`, `redraft`, `reject`, `applied` refuse by state: one test per command proves it.
 11. **Process:** this PR also amends in writing SPEC_CHAT_APP 1.3, 7 and 11.5 and the chat rule of AGENTS.md (which flags a chat route that spends without prepare/confirm) with the turn route and its limits (K1).
 12. **Extra tests:** the session's spend appears in `list`, `status` and the chat's remaining; `manager new` spawned from the chat succeeds without a key; `argus status` on a manager job does not crash; `decision()` shows only the name; the unknown-action test covers `manager_new`.
+
+## 11. Amendment by P4b (2026-11-26)
+
+The turn argv of sections 5 and 10.3 has two shapes with P4b: the one above, and the same with `--jobs-file G` between `--message-file F` and `--via ui` when the session started jobs (`SPEC_CHAT_MANAGER_P4B.md` sections 2 and 3). No other argv is ever built; the text of a message is still never in it.
