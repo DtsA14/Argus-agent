@@ -236,7 +236,7 @@ def test_the_read_route_shows_the_conversation_as_data(svc):
     status, out = svc.request("GET", f"/api/manager/{JOB}")
     assert status == 200 and out["state"] == "OPEN" and out["spent_usd"] > 0 and 0 < out["expires_in_s"] <= 12 * 3600 and out["busy"] is False
     h, m = out["conversation"]
-    assert h == {"from": "human", "at": h["at"], "text": "bikin sesuatu"}
+    assert h == {"from": "human", "n": 0, "at": h["at"], "text": "bikin sesuatu"} and m["n"] == 1
     assert m["source"] == "manager" and "\x07" not in m["say"] and m["propose"]["route"] == "research"
     assert svc.request("GET", "/api/manager/turn")[0] == 404 and svc.request("GET", "/api/manager/j20260101_000000_ffff")[0] == 404
 

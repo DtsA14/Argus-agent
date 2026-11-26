@@ -23,14 +23,14 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from router import stage_data as sd
-from router.chat_actions import ACTIONS, AUDIT_STR, Refusal, strict_json
+from router.chat_actions import ACTIONS, AUDIT_STR, UI_ID, Refusal, strict_json
 
 BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while the chat is built, 8711 at C4 (one value)
 PORTS = (8711, 8712)                              # SPEC_CHAT_APP 13.4: 8712 while the chat is built, 8711 after C4b; nothing else
 HOSTS = (f"{BIND}:{PORT}",)
 ORIGINS = (f"http://{BIND}:{PORT}",)                  # the one origin a POST may come from (11.2)
 POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm", "/api/manager/turn": "manager_turn"}   # the only POST routes; any other POST is a 405 (the turn route: SPEC_CHAT_MANAGER_P1 5)
-PARAMS = {"repo", "message", "job", "reason", "sha", "ack", "queue"}
+PARAMS = {"repo", "message", "job", "reason", "sha", "ack", "queue", "source_job", "source_turn"}
 BODY_MAX = 16 * 1024                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
@@ -426,6 +426,9 @@ class Handler(BaseHTTPRequestHandler):
             if action in ACTIONS and not action.startswith("job_"):
                 raise Refusal(400, "form", "only a decision of a job takes a draft sha")
             rec["sha"] = params["sha"]
+        if "source_job" in params:
+            rec["source_job"] = params["source_job"] if UI_ID.fullmatch(params["source_job"]) else "bad"     # a new free-text channel: only an id is written
+            rec["source_turn"] = int(params["source_turn"]) if params.get("source_turn", "").isascii() and params.get("source_turn", "").isdigit() and len(params["source_turn"]) <= 3 else -1
         out, digest = a.prepare(action, params)
         if not self._audit(a, **rec, ok="prepare", digest=digest):
             a.prepared.pop(out["token"], None)             # a token that was never given out is not kept either
@@ -447,6 +450,8 @@ class Handler(BaseHTTPRequestHandler):
                 rec["sha"] = card["draft_sha"][:12]
         if card.get("sha12"):
             rec["sha"] = card["sha12"]
+        if card.get("source"):                                            # SPEC_CHAT_MANAGER 13.6: the audit tells a form from a proposal from one the human typed
+            rec.update(source="manager", source_job=card["source"]["job"], source_turn=card["source"]["turn"], edited=card["source"]["edited"])
         if not self._audit(a, **rec, attempt="confirm"):
             raise Refusal(503, "audit", "the audit could not be written: nothing was run")
         a.last_exit = None
