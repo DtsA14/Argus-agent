@@ -447,6 +447,15 @@
       if (mode === "research" && openResearch === null) { renderResearchList(); }
     }).catch(function () { summary.textContent = "failed to load research"; });
   }
+  var SECTIONS_MAX = 40;
+  function reportSections(text) {                       // 3e: the report cut into its own parts for folding. Only the places a line starts with "## " are used, never what the line says: nothing is read for a label.
+    var out = [{ title: "Report header", body: [] }];
+    String(text).split("\n").forEach(function (ln) {
+      if (ln.slice(0, 3) === "## " && out.length < SECTIONS_MAX) { out.push({ title: ln.slice(3, 123).trim(), body: [] }); }
+      else { out[out.length - 1].body.push(ln); }
+    });
+    return out.map(function (x) { return { title: x.title, text: x.body.join("\n").trim() }; }).filter(function (x, i) { return x.text !== "" || i > 0; });
+  }
   function showResearch(id) {
     var my = ++researchSeq;
     openResearch = id;
@@ -473,7 +482,16 @@
         if (d.report.withheld) { c.appendChild(el("p", "note", d.report.withheld)); }
         else {
           if (d.report.cut) { c.appendChild(el("p", "note", "Cut: sources at the end may be missing.")); }
-          c.appendChild(el("pre", "report", d.report.text));
+          say(c, "model", "report text (written by a model from web pages; not proof)", "", "say");
+          var secs = reportSections(d.report.text);
+          if (!secs.length) { c.appendChild(el("p", "note", "The report file is empty.")); }
+          secs.forEach(function (sec, i) {
+            var det = el("details", "more");
+            if (i === (secs[0].title === "Report header" ? 1 : 0)) { det.open = true; }      // the first section after the header (the summary comes first): by position only
+            det.appendChild(el("summary", null, sec.title));
+            det.appendChild(el("pre", "report", sec.text));
+            c.appendChild(det);
+          });
         }
       }
       var link = viewerLink(d.state === "starting" || d.state === "refused" ? null : VIEWER + d.id);
