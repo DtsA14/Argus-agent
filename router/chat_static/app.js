@@ -1396,6 +1396,32 @@
     b.appendChild(row);
     return b;
   }
+  function nextStepsBox(items) {                        // P4: what the jobs this session started are doing; the harness's sentences, not the foreman's. A button only moves you to the place.
+    var b = el("div", "proposal");
+    b.appendChild(el("h3", null, "Next steps (from the harness, not the foreman)"));
+    items.forEach(function (n) {
+      var p = el("p", "fact");
+      p.appendChild(el("b", null, (n.kind === "prd" ? "PRD" : "Research") + " · " + n.state + (typeof n.usd === "number" ? " · " + usd(n.usd) : "") + ": "));
+      p.appendChild(document.createTextNode(String(n.text)));
+      b.appendChild(p);
+      if (n.hint === "research") {
+        var r = el("button", null, "Open the report");
+        r.type = "button";
+        r.addEventListener("click", function () { setMode("research"); showResearch(n.job); });
+        var ra = el("div", "actions");
+        ra.appendChild(r);
+        b.appendChild(ra);
+      } else if (n.hint === "queue") {
+        var q = el("button", null, "Open the Queue tab");
+        q.type = "button";
+        q.addEventListener("click", function () { setMode("cards"); });
+        var qa = el("div", "actions");
+        qa.appendChild(q);
+        b.appendChild(qa);
+      }
+    });
+    return b;
+  }
   function renderManager() {
     clear(stream);
     var d = mgr.data;
@@ -1413,6 +1439,7 @@
     row.appendChild(el("span", null, "time left " + timeLeft(d.expires_in_s)));
     c.appendChild(row);
     if (d.busy) { c.appendChild(el("p", "note", "The foreman is answering.")); }
+    if (Array.isArray(d.next_steps) && d.next_steps.length) { c.appendChild(nextStepsBox(d.next_steps)); }
     var turns = (d.conversation || []).filter(function (e) { return e.from === "human"; }).length;
     var over = mgr.stuck || d.expires_in_s === 0 || (typeof d.turn_cap_usd === "number" && typeof d.max_usd === "number" && typeof d.spent_usd === "number" && d.max_usd - d.spent_usd < d.turn_cap_usd) || (typeof d.max_turns === "number" && turns >= d.max_turns);
     if (!(d.conversation || []).length) { c.appendChild(el("p", "muted", "Say something below.")); }

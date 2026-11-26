@@ -54,6 +54,9 @@ ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research
 SOURCE_KEYS = {"source_job", "source_turn"}   # SPEC_CHAT_MANAGER_P2B: the foreman's proposal a form was filled from, as two text fields
 SOURCE_NOTE = "the text was first written by the foreman (a model): read it before you confirm"
 ROUTE_ACTION = {"research": "research_new", "prd": "prd_new"}
+NEXT_MAX = 10                       # P4: the jobs a session started that the page lists
+STATE_SHAPE = re.compile(r"[A-Z][A-Z_]{0,39}")
+ENDED_STATE = re.compile(r"FAILED|ABANDONED|REJECTED|INVALID|BLOCKED|STOPPED")
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -1105,8 +1108,52 @@ class Actions:
                 p = e.get("propose")
                 out.append({"from": "manager", "n": n, "source": "manager", "at": e.get("at"), "say": scrub(str(e.get("say") or "")), "calls": e.get("calls"), "usd": e.get("usd"),
                             "error": e.get("error"), "propose": ({k: scrub(str(p.get(k) or "")) if k != "repo" else p.get(k) for k in ("route", "repo", "text", "why")} if isinstance(p, dict) else None)})
-        return {"job": job_id, "state": d.get("state"), "max_usd": d.get("max_usd"), "spent_usd": spent, "expires_in_s": left_s, "turn_cap_usd": turn_cap, "max_turns": max_turns,
+        return {"job": job_id, "state": d.get("state"), "max_usd": d.get("max_usd"), "spent_usd": spent, "expires_in_s": left_s, "turn_cap_usd": turn_cap, "max_turns": max_turns, "next_steps": self.next_steps(job_id),
                 "busy": self.spawner.busy(job_id), "conversation": out}
+
+    def next_steps(self, session):
+        """P4 (SPEC_CHAT_MANAGER_P4): what the jobs this session started are doing and where the person goes next, from the harness only: the jobs are those the chat's own
+        audit says were confirmed from a proposal of this session, their state is read from their job.json, the sentence is one of the fixed ones below. No model text,
+        no report, no money beyond the stages' recorded cost; a hint is a pointer to a place, never an action."""
+        try:
+            with open(self.audit_path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                f.seek(max(0, f.tell() - (1 << 20)))
+                raw = f.read()
+        except OSError:
+            return []
+        seen, out = set(), []
+        for line in reversed(raw.decode("utf-8", "replace").splitlines()):
+            try:
+                if session not in line:                       # cheap: most lines are another session's or none
+                    continue
+                r = json.loads(line)
+                if not (r.get("ok") == "confirm" and r.get("source_job") == session and r.get("action") in ROUTE_ACTION.values()):
+                    continue
+                job = r.get("job")
+                if not isinstance(job, str) or not UI_ID.fullmatch(job) or job in seen:
+                    continue
+                seen.add(job)
+                got = self._read_data(job, ledgers=False)
+                if got is None or got[0].get("kind") not in ("research", "prd"):
+                    continue
+                d, usd = got
+                kind, state = d["kind"], d.get("state")
+                state = state if isinstance(state, str) and STATE_SHAPE.fullmatch(state) else "UNKNOWN"
+                if kind == "research" and state == "REPORT_READY":
+                    hint, text = "research", "The research is done. Read the report in the Research view."
+                elif kind == "prd" and state == "AWAITING_HUMAN":
+                    hint, text = "queue", "The PRD is written and waits in the Queue tab. Accepting its plan and running the queue are two separate confirmations of yours; nothing runs by itself."
+                elif ENDED_STATE.search(state):
+                    hint, text = "none", f"This {kind} job ended: {state}."
+                else:
+                    hint, text = "wait", f"This {kind} job is still going: {state}."
+                out.append({"job": job, "kind": kind, "state": state, "usd": usd if isinstance(usd, (int, float)) and math.isfinite(usd) and usd >= 0 else None, "hint": hint, "text": text})
+                if len(out) >= NEXT_MAX:
+                    break
+            except (ValueError, KeyError, TypeError, AttributeError, ArithmeticError):      # one hostile job.json (a huge number) costs its item, not the view
+                continue
+        return out
 
     def research_cap(self):
         try:
