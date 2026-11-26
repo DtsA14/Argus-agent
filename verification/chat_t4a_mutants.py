@@ -6,7 +6,7 @@ from pathlib import Path
 
 WT, PY = Path(sys.argv[1]), sys.argv[2]
 P, A, C, Q, R, S = "router/chat_plan.py", "router/chat_actions.py", "router/chat.py", "router/queue.py", "router/reason.py", "scripts/argus.py"
-T = ["-rfEs", "tests/test_chat_plan.py", "tests/test_chat_actions.py", "tests/test_chat_prd_new.py", "tests/test_apply_cmd.py", "tests/test_queue.py"]
+T = ["-rfEs", "tests/test_chat_plan.py", "tests/test_chat_actions.py", "tests/test_chat_prd_new.py", "tests/test_apply_cmd.py", "tests/test_queue.py", "tests/test_chat_money_inputs.py"]
 # Result 2026-11-21: 54/55 killed; the one survivor, "the plan approval dir is the client's", is equivalent (a `dir` param is a 400 before the line is reached).
 M = [
     ("an approved queue can be approved again", P, [('        if q.get("approved"):\n            raise self._no(409, "queue", f"queue {q[\'id\']} is already approved")\n        if not ok:', '        if not ok:')]),
@@ -40,10 +40,12 @@ M = [
     ("the CLI line is not scrubbed", P, [('(a_scrub(line)[:300]) or "the command failed"', '(line[:300]) or "the command failed"')]),
     ("a failed queue go is counted as pending", P, [('        a.pending.append((a.clock(), ("go", rp_["queue"]), float(card["queue_usd"])))\n        return {"job": rp_["job"], "queue": rp_["queue"], "done": True}', '        return {"job": rp_["job"], "queue": rp_["queue"], "done": True}')]),
     ("a terminal approval counts", P, [('if isinstance(ap, dict) and ap.get("via") == "ui":', 'if isinstance(ap, dict):')]),
-    ("an approval outside 24 hours counts", P, [('                    if at >= now - DAY:\n                        total += usd', '                    if True:\n                        total += usd')]),
-    ("an approved queue is counted twice", P, [('                        total += usd\n                        seen.add(("go", name))', '                        total += usd')]),
+    ("an approval outside 24 hours counts", P, [('                    if at < now - DAY:\n                        continue', '                    if False:\n                        continue')]),
+    ("an approved queue is counted twice", P, [('                    total += usd\n                    seen.add(("go", name))', '                    total += usd')]),
     ("an unreadable queue is skipped in the exposure", P, [('raise self._no(503, "cap", f"the daily exposure cannot be computed (queue {name} could not be read)")', 'continue')]),
-    ("an unreadable approval is skipped in the exposure", P, [('raise self._no(503, "cap", f"the daily exposure cannot be computed (queue {name}: the approval time or the money cannot be read)") from None', 'continue')]),
+    ("an unreadable approval is skipped in the exposure", P, [('raise self._no(503, "cap", f"the daily exposure cannot be computed (queue {name}: the approval time cannot be read)") from None', 'continue')]),
+    ("an unreadable amount is skipped in the exposure", P, [('raise self._no(503, "cap", f"the daily exposure cannot be computed (queue {name}: the money cannot be read)") from None', 'continue')]),
+    ("the window edge is skipped", P, [('if at < now - DAY:', 'if at <= now - DAY:')]),
     ("negative money is accepted in the exposure", P, [('if not math.isfinite(usd) or usd <= 0:', 'if not math.isfinite(usd):')]),
     ("the audit net counts attempts", P, [('r.get("action") == "queue_go" and r.get("ok") == "confirm"', 'r.get("action") == "queue_go"')]),
     ("the audit net is dropped", A, [('        for job_id, usd, at in self.plans.audited(now):', '        for job_id, usd, at in []:')]),

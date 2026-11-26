@@ -16,6 +16,9 @@ NOW = t.NOW
 BAD = [float("nan"), float("inf"), float("-inf"), -0.5, -1e-9, True, "nan", "inf", "-1", "abc", [], {}, 10 ** 400]
 
 
+ITEM = {"issue_sha256": "a" * 64, "n": 1}                                  # shape_ok needs a non-empty list: with [] every queue was refused for its shape, not its money
+
+
 def raw_job(svc, job_id, kind, max_usd, via="ui", created=None):
     """A job file whose max_usd is written as given (json.dumps writes NaN, Infinity and huge integers as the real files can hold them)."""
     d = svc.jobs / job_id
@@ -124,13 +127,61 @@ def test_a_queue_approved_via_the_ui_with_a_bad_amount_makes_the_exposure_unknow
             d = s.queues / qid
             d.mkdir()
             (d / "queue.json").write_text(json.dumps({"id": qid, "repo": "/secret/path", "name": "athena", "base_commit": "c" * 40, "jobs_dir": str(s.jobs),
-                                                      "max_usd": bad, "job_cap_usd": 0.5, "items": [],
+                                                      "max_usd": bad, "job_cap_usd": 0.5, "items": [ITEM],
                                                       "approved": {"sha": "x", "at": t.iso(NOW - 100), "by": "x", "via": "ui"}}))
             with pytest.raises(ca.Refusal) as e:
                 s.actions.exposure()
             assert e.value.status == 503
             (d / "queue.json").unlink()
             d.rmdir()
+    finally:
+        s.stop()
+
+
+def test_f27_a_queue_approved_more_than_a_day_ago_is_not_read_for_money_but_a_bad_time_still_refuses(tmp_path):
+    s = t.Service(tmp_path, cfg={**t.CFG, "chat": {"daily_cap_usd": 7.0}})
+    s.queues = tmp_path / "queues"
+    s.queues.mkdir()
+    s.actions.cards.queues_dir = s.queues
+
+    def put(qid, usd, at):
+        d = s.queues / qid
+        d.mkdir()
+        (d / "queue.json").write_text(json.dumps({"id": qid, "repo": "/x", "name": "athena", "base_commit": "c" * 40, "jobs_dir": str(s.jobs), "max_usd": usd,
+                                                  "job_cap_usd": 0.5, "items": [ITEM], "approved": {"sha": "x", "at": at, "by": "x", "via": "ui"}}))
+    try:
+        put("q20261110T100000Z-aaa1", float("nan"), t.iso(NOW - 3 * 86400))      # old and bad: ignored
+        put("q20261110T100100Z-aaa2", 2.0, t.iso(NOW - 3 * 86400))               # old and fine: not counted
+        put("q20261125T100000Z-aaa3", 1.5, t.iso(NOW - 100))                     # in the window: counted
+        assert s.actions.exposure() == pytest.approx(1.5)
+        put("q20261125T100100Z-aaa4", 1.0, "not a time")                         # a bad time still means unknown
+        with pytest.raises(ca.Refusal) as e:
+            s.actions.exposure()
+        assert e.value.status == 503
+    finally:
+        s.stop()
+
+
+def test_f27_the_window_edge_a_future_time_and_an_old_bad_time(tmp_path):
+    s = t.Service(tmp_path, cfg={**t.CFG, "chat": {"daily_cap_usd": 7.0}})
+    s.queues = tmp_path / "queues"
+    s.queues.mkdir()
+    s.actions.cards.queues_dir = s.queues
+
+    def put(qid, usd, at):
+        d = s.queues / qid
+        d.mkdir()
+        (d / "queue.json").write_text(json.dumps({"id": qid, "repo": "/x", "name": "athena", "base_commit": "c" * 40, "jobs_dir": str(s.jobs), "max_usd": usd,
+                                                  "job_cap_usd": 0.5, "items": [ITEM], "approved": {"sha": "x", "at": at, "by": "x", "via": "ui"}}))
+    try:
+        put("q20261124T100000Z-bbb1", 1.0, t.iso(NOW - 86400))                  # exactly on the edge: counted
+        put("q20261124T100100Z-bbb2", 2.0, t.iso(NOW - 86400 - 1))              # one second outside: not counted
+        put("q20261126T100000Z-bbb3", 0.5, t.iso(NOW + 3600))                   # in the future: counted
+        assert s.actions.exposure() == pytest.approx(1.5)
+        put("q20261101T100000Z-bbb4", 1.0, "2026-13-45")                        # old, but its time is bad: the time check comes first
+        with pytest.raises(ca.Refusal) as e:
+            s.actions.exposure()
+        assert e.value.status == 503
     finally:
         s.stop()
 
