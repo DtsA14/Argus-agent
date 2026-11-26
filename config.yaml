@@ -248,6 +248,19 @@ issue_writer:
 # 2026-11-21, K3 A) so a PRD and its queue fit; it is a fence, not a spend: real code jobs cost about $0.04.
 chat:
   daily_cap_usd: 7.00
+  # SPEC_CHAT_MANAGER_P1 (Atha 2026-11-26, K1 and K3): the foreman, one chat session = one job = one confirmation. session_cap_usd is the job's max_usd and counts as
+  # exposure from the confirm; a turn is one model call (a second only to repair an unusable reply), each reserved at its worst case against turn_cap_usd and what the
+  # session has left. ttl_hours stays below the 24 h exposure window. readable_repos: no repository content reaches the model until Atha names one (K2).
+  manager:
+    role: manager
+    session_cap_usd: 0.20
+    turn_cap_usd: 0.03
+    max_output_tokens: 3000
+    ttl_hours: 12
+    message_max: 2000
+    summary_bytes: 4096
+    max_turns: 40
+    readable_repos: []
 
 # SPEC_PRD_WRITER 5: the PRD writer (job kind prd, `argus prd new|reply`). It reads the same repos (issue_writer.repos, K2) and
 # the same role as the issue writer (D6). The numbers are guesses to be measured on the first three PRDs (D8): max_usd is one
@@ -402,6 +415,11 @@ roles:
     max_output_tokens: 16000
     timeout_s: 180
     params: {extra_body: {thinking: {type: enabled}}}
+  manager:
+    # SPEC_CHAT_MANAGER_P1: the chat's foreman; DeepSeek V4.1 Flash through OpenRouter (Atha 2026-11-24, K3: 45/45 in pilots/route_eval_v0). Thinking tokens count in the output limit.
+    model: "openrouter:deepseek/deepseek-v4.1-flash-1017"
+    max_output_tokens: 3000
+    timeout_s: 120
   issue_writer:
     # SPEC_ISSUE_WRITER amendment 5 (Atha 2026-11-11, pilots/issue_writer_models_v1): Haiku 5.5 through OpenRouter,
     # the only model that flagged the API data the issue needs (3/3; DeepSeek 0/3), 5x faster. K4 was DeepSeek V4.1

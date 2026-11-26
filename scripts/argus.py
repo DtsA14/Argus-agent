@@ -318,6 +318,19 @@ def main(argv=None, deps=None):
         pm.add_argument("--message-file")
         pn.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it")
         pn.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
+    mg = sub.add_parser("manager", help="the chat's foreman: a session job and its turns (docs/reviews/SPEC_CHAT_MANAGER_P1.md); started from the chat only (--via ui --yes)")
+    msub = mg.add_subparsers(dest="manager_cmd", required=True)
+    mn = msub.add_parser("new", help="a new session job (the chat's confirm is its one confirmation; no model is called, no key is taken)")
+    mn.add_argument("--job-id", required=True, help="the new job's id (the exact shape of a harness id, now)")
+    mn.add_argument("--via", choices=rj.VIA, required=True)
+    mn.add_argument("--yes", action="store_true", required=True, help="the session was confirmed in chat")
+    mt = msub.add_parser("turn", help="one message and the foreman's answer (one model call; a second only to repair an unusable reply)")
+    mt.add_argument("job")
+    mt.add_argument("--message-file", required=True, help="the message is read from this file, never from an argument")
+    mt.add_argument("--via", choices=rj.VIA, required=True)
+    mt.add_argument("--key-file", action="append", required=True, help="read the API key from this 0600 file")
+    mt.add_argument("--yes", action="store_true", required=True, help="the turn is inside the session the chat confirmed")
+    msub.add_parser("status", help="read only: state, spent, turns").add_argument("job")
     cs = sub.add_parser("control", help="the phone's control service (docs/reviews/SPEC_CONTROL_UI.md 4a)")
     cs.add_subparsers(dest="control_cmd", required=True).add_parser(
         "serve", help="reject and abandon from the phone, forever, on 127.0.0.1:8711 only (systemd --user); retired at C4b by `chat serve --port 8711`, code removed at C5")
@@ -420,7 +433,7 @@ def main(argv=None, deps=None):
         return 0
     if getattr(o, "key_file", None) or getattr(o, "yes", False):
         try:
-            deps.key_file, deps.assume_yes = rj.key_files(o.key_file), o.yes
+            deps.key_file, deps.assume_yes = rj.key_files(getattr(o, "key_file", None)), o.yes
         except rj.Refused as e:
             print(f"refused: {e}", file=sys.stderr)
             return 2
@@ -593,6 +606,21 @@ def main(argv=None, deps=None):
                 job = ri.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
             print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0 if job.data["state"] == ri.AWAITING_HUMAN else 1
+        elif o.cmd == "manager":
+            from router import manager_job as mj
+            if o.manager_cmd == "status":
+                print(rj.status(o.job, jobs_dir=o.jobs_dir, cfg=cfg))
+                return 0
+            if o.manager_cmd == "new":
+                job = mj.new(cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, job_id=o.job_id, via=o.via)
+                print(f"manager session {job.id} is open (cap ${job.data['max_usd']:.2f})")
+                return 0
+            try:
+                entry = mj.turn(o.job, Path(o.message_file).read_text(encoding="utf-8"), cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
+            except ValueError as e:                      # an undecodable message file or a model name that does not parse: a sentence, never a traceback (the spawner shows the last line)
+                raise rj.Refused(f"the turn could not be run ({type(e).__name__}); nothing was recorded") from None
+            print(f"turn done: {entry['calls']} call(s), ${entry['usd']:.4f}" + (f"; {entry['error']}" if entry.get("error") else ""))   # no model text: the spawner's last line reaches the page
+            return 0 if not entry.get("error") else 1
         elif o.cmd == "prd":
             from router import prd as rp
             if o.prd_cmd in ("new", "reply"):

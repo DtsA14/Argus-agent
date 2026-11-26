@@ -60,6 +60,10 @@ it is strict-lane. A hint that becomes a gate (refuses, fails or blocks somethin
   agents) stays read only on its own origin and never calls a chat route; the two are linked by navigation only, never by `fetch`.
 - Flag any chat route that changes a job, spends money or starts a process without the spec's two steps (prepare, then confirm with a token bound to the card),
   any Host check that skips a method, any cookie, any HTML sink or storage in `chat_static/app.js`.
+- One exception, and only one (SPEC_CHAT_MANAGER_P1, Atha 2026-11-26, K1): `POST /api/manager/turn` sends a message inside a foreman session that was confirmed once (`manager_new`, up to its fixed
+  cap). It takes exactly `{session, message}`, passes every gate of a POST, writes one audit line before the run starts (no text), builds one fixed argv (`argus manager turn`), and refuses when
+  the session is not `via ui`, not open, expired, busy or out of budget. Flag any other route that spends without prepare and confirm, any model output that reaches `confirm` or a token, and any
+  change that lets a turn start anything but that argv.
 - The chat's only approvals are `prd_approve` and `queue_go` (SPEC_CHAT_T4A), each through prepare and confirm; the client sends only the PRD job's id (plus `ack`
   and `reason` when a machine flag asks), the server reads the folder, the queue, the shas and the money; the machine's refusals (two agreeing readings, the
   acknowledgement, the cost reason) are enforced on the server, not only in a page; the queue's money counts in the daily cap. For the items of a queue that the chat
