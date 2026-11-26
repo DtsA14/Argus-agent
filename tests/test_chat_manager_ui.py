@@ -125,3 +125,24 @@ def test_the_source_is_cleared_after_a_confirm_and_the_new_session_card_has_its_
     assert "fromProposal = null;" in cb
     assert 'card.action === "manager_new" ? "The session is being made' in JS and 'card.action === "manager_new" ? "Foreman view"' in JS
     assert 'p.route !== "research" && p.route !== "prd"' in JS
+
+
+@needs_node
+def test_next_steps_are_the_harness_sentences_as_text_and_their_buttons_only_move_the_person(out):
+    h = out["next"]
+    assert "Next steps (from the harness, not the foreman)" in h and "Research · REPORT_READY · $0.1050:" in h and "PRD · AWAITING_HUMAN · $0.0000:" in h
+    assert "Research · RESEARCHING:" in h and "<b>x</b>" in h                # no figure when there is none; a tag in the text is text
+    assert out["nextButtons"][:2] == ["Open the report", "Open the Queue tab"] and out["nextNone"] is False
+    modes, shown, prepared, posted = json.loads(out["nextClicks"])
+    assert modes == ["research", "cards"] and shown == ["j20261126_052522_fcc7"]
+    assert prepared == len(out["prepared"]) == 2 and posted == 0              # only the two proposal clicks of the earlier scenario prepared anything; a next-step button adds none
+
+
+def test_the_next_steps_box_posts_and_prepares_nothing():
+    box = JS.split("function nextStepsBox")[1].split("function renderManager")[0]
+    assert "post(" not in box and "prepare(" not in box and "/api/" not in box and "innerHTML" not in box
+    assert 'setMode("research"); showResearch(n.job);' in box and 'setMode("cards");' in box
+
+
+def test_a_next_steps_value_that_is_not_a_list_draws_no_box():
+    assert "Array.isArray(d.next_steps) && d.next_steps.length" in JS
