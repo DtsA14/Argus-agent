@@ -238,6 +238,7 @@ def test_the_read_route_shows_the_conversation_as_data(svc):
     h, m = out["conversation"]
     assert h == {"from": "human", "n": 0, "at": h["at"], "text": "bikin sesuatu"} and m["n"] == 1
     assert m["source"] == "manager" and "\x07" not in m["say"] and m["propose"]["route"] == "research"
+    assert out["turn_cap_usd"] == 0.03 and out["max_turns"] == 40                      # P3: what the page needs to offer a new session
     assert svc.request("GET", "/api/manager/turn")[0] == 404 and svc.request("GET", "/api/manager/j20260101_000000_ffff")[0] == 404
 
 

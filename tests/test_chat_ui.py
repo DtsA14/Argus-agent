@@ -24,7 +24,7 @@ def test_confirm_sends_the_token_and_nothing_else():
 
 
 def test_only_two_paths_are_posted_and_every_post_omits_credentials():
-    assert sorted(set(re.findall(r'post\("(/[^"]*)"', JS))) == ["/api/confirm", "/api/prepare"]
+    assert sorted(set(re.findall(r'post\("(/[^"]*)"', JS))) == ["/api/confirm", "/api/manager/turn", "/api/prepare"]      # P3: the foreman's turn is the third, with the session and the message only
     assert JS.count('method: "POST"') == 1 and JS.count('credentials: "omit"') == 2      # get() and post()
     assert 'headers: { "Content-Type": "application/json"' in JS
 
@@ -72,7 +72,7 @@ def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
     assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
-    assert JS.count("action:") == 11                                # (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
+    assert JS.count("action:") == 15                                # (P3: + manager_new twice, the proposal buttons) (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -183,7 +183,7 @@ def test_the_report_goes_on_the_page_as_text_under_the_servers_banner_and_the_la
 
 def test_research_mode_prepares_the_question_and_nothing_else():
     assert 'prepare({ action: "research_new", message: message.value })' in JS
-    assert re.findall(r'\{ action: "research_new"[^}]*\}', JS) == ['{ action: "research_new", message: message.value }']
+    assert re.findall(r'\{ action: "research_new"[^}]*\}', JS) == ['{ action: "research_new", message: message.value }', '{ action: "research_new", message: p.text }']      # the composer, and the foreman's proposal button (P3, with its source)
     assert "profile:" not in JS and "job: openResearch" not in JS
 
 

@@ -155,3 +155,6 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 .diff .dl.del{background:rgba(242,109,109,.14);color:var(--bad)}
 .diff .dl.hunk{color:var(--accent2)}
 .diff .dl.hdr{color:var(--muted)}
+.say.foreman{border-left:3px solid var(--line);padding-left:.5rem}
+.proposal{border:1px dashed var(--line);border-radius:1rem;padding:.6rem .75rem;margin:.4rem 0}
+.proposal h3{font-size:.9rem;margin:0 0 .25rem}

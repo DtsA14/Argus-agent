@@ -1088,8 +1088,10 @@ class Actions:
         if got is None or got[0].get("kind") != "manager":
             return None
         d, spent = got
+        turn_cap = max_turns = None
         try:
             m = mj.settings(self.cfg)
+            turn_cap, max_turns = m["turn_cap_usd"], m["max_turns"]
             left_s = max(0, int(m["ttl_hours"] * 3600 - (self.clock() - parse_time(d["created_at"]))))
         except (rj.Refused, KeyError, TypeError, ValueError, AttributeError, ConfigError):
             left_s = None
@@ -1103,7 +1105,7 @@ class Actions:
                 p = e.get("propose")
                 out.append({"from": "manager", "n": n, "source": "manager", "at": e.get("at"), "say": scrub(str(e.get("say") or "")), "calls": e.get("calls"), "usd": e.get("usd"),
                             "error": e.get("error"), "propose": ({k: scrub(str(p.get(k) or "")) if k != "repo" else p.get(k) for k in ("route", "repo", "text", "why")} if isinstance(p, dict) else None)})
-        return {"job": job_id, "state": d.get("state"), "max_usd": d.get("max_usd"), "spent_usd": spent, "expires_in_s": left_s,
+        return {"job": job_id, "state": d.get("state"), "max_usd": d.get("max_usd"), "spent_usd": spent, "expires_in_s": left_s, "turn_cap_usd": turn_cap, "max_turns": max_turns,
                 "busy": self.spawner.busy(job_id), "conversation": out}
 
     def research_cap(self):

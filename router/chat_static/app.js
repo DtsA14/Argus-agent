@@ -191,7 +191,7 @@
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Environment"], ["commit", "Commit"],
     ["turn", "Turn"], ["turn_cap_usd", "Turn limit"], ["job_cap_usd", "Job limit"], ["reason", "Reason"],
     ["profile", "Profile"], ["model", "Model"], ["stage_models", "Model"], ["stage_caps", "Stage limits"], ["web", "Web"], ["data_sent", "Data sent"],
-    ["free_models", "Free models"], ["runs_code", "Example code"], ["kind", "Kind"], ["job_title", "Title"], ["sha12", "Draft"], ["spent_usd", "Cost"], ["cap_usd", "Limit"], ["queue_usd", "Queue money"], ["queue", "Queue"], ["item", "Issue no."], ["drafter_cap_usd", "Drafter limit"], ["agent_cap_usd", "Agent limit"], ["attempt_usd", "One agent attempt"], ["money", "Money note"]];
+    ["free_models", "Free models"], ["runs_code", "Example code"], ["kind", "Kind"], ["job_title", "Title"], ["sha12", "Draft"], ["spent_usd", "Cost"], ["cap_usd", "Limit"], ["queue_usd", "Queue money"], ["queue", "Queue"], ["item", "Issue no."], ["drafter_cap_usd", "Drafter limit"], ["agent_cap_usd", "Agent limit"], ["attempt_usd", "One agent attempt"], ["money", "Money note"], ["ttl_hours", "Session lasts (hours)"], ["max_turns", "Turns at most"], ["turn_note", "One turn"], ["confirms", "This confirmation covers"], ["source_note", "Where the text comes from"]];
   var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1, queue_usd: 1, drafter_cap_usd: 1, agent_cap_usd: 1, attempt_usd: 1 };
   function fact(parent, label, value) {
     var p = el("p", "fact");
@@ -209,6 +209,7 @@
       if (v === undefined || v === null || v === "") { return; }
       fact(c, kv[1], USD_KEYS[kv[0]] ? usd(v) : v);
     });
+    if (card.source) { fact(c, "Started from", "the foreman's proposal" + (card.source.edited ? ", edited by you" : ", as written")); }
     if (card.issue_title) { fact(c, "Issue title", card.issue_title); }
     if (card.folder_sha) { fact(c, "Folder sha", String(card.folder_sha).slice(0, 12)); }
     if (card.draft_sha) { fact(c, "Draft sha", String(card.draft_sha).slice(0, 12)); }
@@ -264,7 +265,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Started"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.action === "queue_go" ? "Queue money is released up to the limit on the card. Nothing runs yet; start the first issue from the queue card in the Queue tab." : card.draft_sha ? "The code agent is running (5 to 17 minutes). The result appears on the queue card; apply is still done from the terminal." : (card.queue && card.item) ? "The drafter is writing tests and the contract (a few minutes). The draft appears on the queue card; you still confirm it yourself." : card.action === "prd_new" ? "The PRD is being written (one turn). The result appears in the Queue tab. A refusal before the job is made (queue waiting, repo changed) shows only in the terminal. Running the queue is still done from the terminal." : card.action === "research_new" ? "The result is in the research list." : (card.action.indexOf("job_") === 0 ? "Decision recorded; the job state is in the Decisions tab." : "The result is in the issue list.")));
+        c.appendChild(el("p", "note", card.action === "manager_new" ? "The session is being made; it appears in the Foreman view in a few seconds. Its turns are not confirmed again." : card.action === "queue_go" ? "Queue money is released up to the limit on the card. Nothing runs yet; start the first issue from the queue card in the Queue tab." : card.draft_sha ? "The code agent is running (5 to 17 minutes). The result appears on the queue card; apply is still done from the terminal." : (card.queue && card.item) ? "The drafter is writing tests and the contract (a few minutes). The draft appears on the queue card; you still confirm it yourself." : card.action === "prd_new" ? "The PRD is being written (one turn). The result appears in the Queue tab. A refusal before the job is made (queue waiting, repo changed) shows only in the terminal. Running the queue is still done from the terminal." : card.action === "research_new" ? "The result is in the research list." : (card.action.indexOf("job_") === 0 ? "Decision recorded; the job state is in the Decisions tab." : "The result is in the issue list.")));
         var close = el("button", null, "Close");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -277,9 +278,10 @@
           c.appendChild(el("p", "note", "Refused: " + e.message));
           no.disabled = false;
         } else {                                        // no answer: the server may have run it; do not prepare the same thing again blind
-          c.appendChild(el("p", "note", "Status unknown, it may already be running. Check the " + (card.action === "prd_new" ? "Queue tab" : card.action === "research_new" ? "research list" : (card.action.indexOf("job_") === 0 ? "Decisions tab" : "issue list")) + " before trying again."));
+          c.appendChild(el("p", "note", "Status unknown, it may already be running. Check the " + (card.action === "prd_new" ? "Queue tab" : card.action === "manager_new" ? "Foreman view" : card.action === "research_new" ? "research list" : (card.action.indexOf("job_") === 0 ? "Decisions tab" : "issue list")) + " before trying again."));
           no.disabled = false;
           if (card.action === "research_new") { loadResearch(); }
+          else if (card.action === "manager_new") { mgr.expect = 12; if (mode === "manager") { loadManager(); } }
           else if (card.action.indexOf("job_") === 0) { loadDecisions(); }
           else {
             loadIssues();
@@ -313,6 +315,7 @@
   function prepare(body) {
     if (busy || (pending && pending.sent)) { return; }
     busy = true;
+    if (fromProposal && (body.action === "research_new" || body.action === "prd_new") && body.source_job === undefined) { body.source_job = fromProposal.job; body.source_turn = String(fromProposal.turn); }
     var ctx = { mode: mode, open: openIssue };
     post("/api/prepare", body).then(function (prep) {
       busy = false;
@@ -321,6 +324,8 @@
       dropPending();
       var c = renderCard(prep, function (r) {
         message.value = "";
+        fromProposal = null;                            // the source belongs to the one form it filled: a later form is the person's own
+        if (mode === "manager") { if (body.action === "manager_new") { mgr.expect = 12; loadManager(); } return; }       // a job from a proposal: the Started card says where it went
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
         if (mode === "prd") { return; }
         if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }
@@ -360,11 +365,13 @@
   }
   function formState() {
     var r = mode === "research", p = mode === "prd";
-    repoSel.hidden = r || (!p && openIssue !== null);
-    var what = r ? "Prepare research" : (p ? "Prepare PRD" : (openIssue !== null ? "Prepare reply" : "Prepare new issue"));
+    var f = mode === "manager";
+    message.maxLength = f ? 2000 : 6000;                // the server refuses a foreman message over 2000 characters
+    repoSel.hidden = r || (!p && openIssue !== null) || f;
+    var what = f ? "Send to the foreman" : r ? "Prepare research" : (p ? "Prepare PRD" : (openIssue !== null ? "Prepare reply" : "Prepare new issue"));
     document.getElementById("prepare").setAttribute("aria-label", what);
-    document.getElementById("type-label").textContent = r ? "Research" : (p ? "PRD" : (openIssue !== null ? "Reply to this issue" : "New issue"));
-    message.placeholder = r ? "Write the research question (20 to 2000 characters)" : (p ? "Write the PRD request: what changes and why" : "Write a message");
+    document.getElementById("type-label").textContent = f ? "Foreman" : r ? "Research" : (p ? "PRD" : (openIssue !== null ? "Reply to this issue" : "New issue"));
+    message.placeholder = f ? "Talk with the foreman (2000 characters at most)" : r ? "Write the research question (20 to 2000 characters)" : (p ? "Write the PRD request: what changes and why" : "Write a message");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
@@ -1142,7 +1149,7 @@
     document.getElementById("panel-cost").textContent = "Recorded stage cost: " + usd(spent);
   }
   function setChrome() {                              // the box sits above the tab bar in the Chat tab only; the "+" menu closes with every move
-    var inChat = mode === "status" || mode === "issue" || mode === "prd" || mode === "research";
+    var inChat = mode === "status" || mode === "issue" || mode === "prd" || mode === "research" || mode === "manager";
     document.getElementById("dock").hidden = !inChat;
     closeMenu();
   }
@@ -1249,8 +1256,10 @@
   function setMode(m) {
     mode = m;
     cardSeq++;
+    fromProposal = null;
+    mgrStop();
     dropPending();
-    var inChat = m === "status" || m === "issue" || m === "prd" || m === "research";
+    var inChat = m === "status" || m === "issue" || m === "prd" || m === "research" || m === "manager";
     if (inChat) { lastChat = m; }
     Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
       var t = b.getAttribute("data-tab");
@@ -1266,6 +1275,7 @@
     if (m === "issue") { openIssue = null; formState(); loadIssues(); renderIssues(); }
     else if (m === "prd") { openIssue = null; formState(); loadIssues(); clear(stream); stream.appendChild(el("p", "muted", "Write a request for the PRD writer below. One turn; the result appears in the Queue tab.")); }
     else if (m === "research") { loadResearch(); renderResearchList(); }
+    else if (m === "manager") { openIssue = null; formState(); loadManager(); }
     else if (m === "decide") { loadDecisions(); renderDecisions(); }
     else if (m === "cards") { loadCards(); renderCards(); }
     else if (m === "cost") { capInfo = null; renderCost(); loadCap(); }
@@ -1298,6 +1308,7 @@
   });
   issueForm.addEventListener("submit", function (e) {
     e.preventDefault();
+    if (mode === "manager") { sendTurn(); return; }
     if (mode === "decide") { return; }
     if (mode === "research") { prepare({ action: "research_new", message: message.value }); }
     else if (mode === "prd") { prepare({ action: "prd_new", repo: repoSel.value, message: message.value }); }
@@ -1310,6 +1321,141 @@
   document.getElementById("close-panel").addEventListener("click", closePanel);
   document.getElementById("scrim").addEventListener("click", closePanel);
   document.getElementById("new-request-panel").addEventListener("click", openNew);
+  // ---- P3: the foreman (SPEC_CHAT_MANAGER_P1, P2b). A session is one confirmation; its turns are POST /api/manager/turn with the session and the message, nothing else.
+  // The foreman's words and its proposals are text from a model: put on the page as text, labelled, never as a card. A proposal is not a start: its button only
+  // PREPARES (the same card, the same Confirm as a typed form), and says where the text came from.
+  var mgr = { job: null, data: null, seq: 0, epoch: 0, sending: false, stuck: false, timer: null, left: 0, before: 0, expect: 0, retry: null };
+  var fromProposal = null;                              // {job, turn}: the form was filled from a proposal; every move of the mode clears it
+  function mgrStop() {
+    mgr.seq++;
+    mgr.epoch++;
+    mgr.stuck = false;
+    if (mgr.timer) { clearTimeout(mgr.timer); mgr.timer = null; }
+    if (mgr.retry) { clearTimeout(mgr.retry); mgr.retry = null; }
+    mgr.left = 0;
+  }
+  function timeLeft(s) {
+    if (typeof s !== "number") { return "unknown"; }
+    var m = Math.floor(s / 60);
+    return Math.floor(m / 60) + " h " + (m % 60) + " min";
+  }
+  function loadManager() {
+    var my = ++mgr.seq;
+    get("/api/threads").then(function (d) {
+      if (mode !== "manager" || my !== mgr.seq) { return; }
+      var open = (d.threads || []).filter(function (t) { return t.kind === "manager" && t.state === "OPEN"; })[0];
+      if (!open) {
+        mgr.job = null;
+        mgr.data = null;
+        renderManager();
+        if (mgr.expect > 0) { mgr.expect--; if (mgr.retry) { clearTimeout(mgr.retry); } mgr.retry = setTimeout(loadManager, 2000); }
+        return;
+      }
+      mgr.expect = 0;
+      if (mgr.job !== open.id) { mgr.stuck = false; }
+      mgr.job = open.id;
+      return get("/api/manager/" + encodeURIComponent(open.id)).then(function (m) {
+        if (mode !== "manager" || my !== mgr.seq) { return; }
+        mgr.data = m;
+        renderManager();
+      });
+    }).catch(function () { if (mode === "manager" && my === mgr.seq) { clear(stream); stream.appendChild(el("p", "muted", "Cannot read the foreman session.")); } });
+  }
+  function proposalBox(e) {
+    var p = e.propose;
+    var b = el("div", "proposal");
+    if (p.route === "ask") { b.appendChild(el("p", "note", "The foreman is waiting for your answer.")); return b; }
+    if (p.route !== "research" && p.route !== "prd") { b.appendChild(el("p", "note", "The foreman sees no route for this in Argus.")); return b; }
+    b.appendChild(el("h3", null, "The foreman proposes: " + (p.route === "prd" ? "a PRD" : "research")));
+    if (p.route === "prd") { fact(b, "Repo", p.repo || "none named: use Edit first"); }
+    b.appendChild(el("p", "msg", p.text));
+    say(b, "model", "reason (written by the model)", p.why, "say");
+    b.appendChild(el("p", "note", "Nothing is started. Prepare shows a card; you read it and confirm it yourself."));
+    var row = el("div", "actions");
+    var ready = p.route === "research" || !!p.repo;
+    var go = el("button", "go", "Prepare");
+    go.type = "button";
+    go.disabled = !ready;
+    go.addEventListener("click", function () {
+      var body = p.route === "prd" ? { action: "prd_new", repo: p.repo, message: p.text } : { action: "research_new", message: p.text };
+      body.source_job = mgr.job;
+      body.source_turn = String(e.n);
+      prepare(body);
+    });
+    var edit = el("button", null, "Edit first");
+    edit.type = "button";
+    edit.addEventListener("click", function () {
+      var job = mgr.job;
+      setMode(p.route);                                // clears fromProposal; the form is then filled, and its submit carries the source
+      message.value = p.text;
+      if (p.route === "prd" && p.repo) { repoSel.value = p.repo; }
+      fromProposal = { job: job, turn: e.n };
+    });
+    row.appendChild(go);
+    row.appendChild(edit);
+    b.appendChild(row);
+    return b;
+  }
+  function renderManager() {
+    clear(stream);
+    var d = mgr.data;
+    var c = el("article", "card");
+    c.appendChild(el("h2", null, "Foreman"));
+    if (!mgr.job || !d) {
+      c.appendChild(el("p", "note", mgr.expect > 0 ? "The session is starting." : "Think an idea through with the foreman, a model. It can propose research or a PRD, but it starts nothing: you prepare, read and confirm. One confirmation covers the whole session, up to its limit."));
+      if (mgr.expect <= 0) { c.appendChild(act("Prepare a session", function () { return { action: "manager_new" }; }, "go")); }
+      stream.appendChild(c);
+      return;
+    }
+    var row = el("div", "row");
+    row.appendChild(el("span", "state " + stateClass(d.state), d.state));
+    row.appendChild(el("span", null, "left " + (typeof d.max_usd === "number" && typeof d.spent_usd === "number" ? usd(Math.max(0, d.max_usd - d.spent_usd)) + " of " + usd(d.max_usd) : "unknown")));
+    row.appendChild(el("span", null, "time left " + timeLeft(d.expires_in_s)));
+    c.appendChild(row);
+    if (d.busy) { c.appendChild(el("p", "note", "The foreman is answering.")); }
+    var turns = (d.conversation || []).filter(function (e) { return e.from === "human"; }).length;
+    var over = mgr.stuck || d.expires_in_s === 0 || (typeof d.turn_cap_usd === "number" && typeof d.max_usd === "number" && typeof d.spent_usd === "number" && d.max_usd - d.spent_usd < d.turn_cap_usd) || (typeof d.max_turns === "number" && turns >= d.max_turns);
+    if (!(d.conversation || []).length) { c.appendChild(el("p", "muted", "Say something below.")); }
+    (d.conversation || []).forEach(function (e) {
+      if (e.from === "human") { c.appendChild(el("p", "msg human", "You: " + e.text)); return; }
+      say(c, "model", "foreman (a model, not Argus)", e.say, "say foreman");
+      if (e.error) { c.appendChild(el("p", "note", "This turn failed: " + e.error)); }
+      if (e.propose) { c.appendChild(proposalBox(e)); }
+    });
+    if (over && !d.busy) {                              // the server leaves an expired or used-up session OPEN and refuses its turns: the way on is a new session (a new confirmation)
+      c.appendChild(el("p", "note", "This session cannot take another turn (time, budget or turns used up, or refused). Start a new one: the old one stays as it is."));
+      c.appendChild(act("Prepare a new session", function () { return { action: "manager_new" }; }, "go"));
+    }
+    stream.appendChild(c);
+  }
+  function pollManager() {                              // after a turn is sent: read the session every 2 s until the answer is in, or 2 minutes
+    var n = mgr.data && mgr.data.conversation ? mgr.data.conversation.length : 0;
+    mgr.left--;
+    if (mgr.left <= 0 || (mgr.data && !mgr.data.busy && n >= mgr.before + 2)) { mgr.timer = null; return; }
+    loadManager();
+    mgr.timer = setTimeout(pollManager, 2000);
+  }
+  function sendTurn() {
+    var text = message.value;
+    if (!mgr.job || !mgr.data || mgr.data.state !== "OPEN") { showNote("There is no open foreman session: prepare one first."); return; }
+    if (mgr.data.busy || mgr.timer || mgr.sending) { showNote("The foreman is still answering."); return; }
+    if (!text.trim()) { return; }
+    var job = mgr.job, epoch = mgr.epoch;
+    mgr.sending = true;
+    mgr.before = (mgr.data.conversation || []).length;
+    post("/api/manager/turn", { session: job, message: text }).then(function () {
+      mgr.sending = false;
+      if (mode !== "manager" || epoch !== mgr.epoch) { return; }        // the person moved on while it was sent: nothing is drawn, the box is theirs
+      message.value = "";
+      mgr.left = 60;
+      pollManager();
+    }).catch(function (e) {
+      mgr.sending = false;
+      if (mode !== "manager" || epoch !== mgr.epoch) { return; }
+      if (e.answered) { mgr.stuck = true; renderManager(); }            // refused: expired, used up or busy; the card then offers a new session
+      showNote("Could not send: " + e.message);
+    });
+  }
   issueForm.hidden = false;                           // the page opens in the Chat tab: the box is there from the start
   setChrome();
   formState();
@@ -1322,6 +1468,7 @@
     load();
     if (mode === "decide" && openDecision === null && !(pending && pending.sent) && !reasonTyped()) { loadDecisions(); }
     if (mode === "cards" && openCard === null) { loadCards(); }
+    if (mode === "manager" && !(pending && pending.sent)) { loadManager(); }
     if (mode === "research" && !(pending && pending.sent)) { if (openResearch === null) { loadResearch(); } else if (researchLive) { showResearch(openResearch); } }
   }, 30000);
 })();

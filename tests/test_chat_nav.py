@@ -57,7 +57,7 @@ def test_the_repo_is_read_from_the_job_file_and_the_path_of_the_repo_is_never_li
 def test_the_bottom_bar_has_the_four_tabs_in_order_and_the_chips_only_the_chat_modes():
     tabs = re.findall(r'<button type="button" data-tab="(\w+)"[^>]*>([A-Za-z]+)<', HTML)
     assert tabs == [("chat", "Chat"), ("cards", "Queue"), ("decide", "Decisions"), ("cost", "Cost")]
-    assert re.findall(r'data-mode="(\w+)"', HTML) == ["issue", "prd", "research"]               # the "+" menu of the one box: no chips, no Status (the Chat tab is the overview)
+    assert re.findall(r'data-mode="(\w+)"', HTML) == ["issue", "prd", "research", "manager"]               # the "+" menu of the one box: no chips, no Status (the Chat tab is the overview)
     assert 'id="tabs"' in HTML and 'aria-label="Main navigation"' in HTML
 
 
