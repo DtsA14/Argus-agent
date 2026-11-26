@@ -51,6 +51,9 @@ RESEARCH_KEY_ENV = "ARGUS_CHAT_RESEARCH_KEY_FILE"   # research uses DeepSeek's o
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
 ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "manager_new", "prd_approve", "queue_go", "queue_step", "draft_approve", "job_reject", "job_abandon")   # no apply, no retry/redraft of a code job from here (job_reject and job_abandon are the control UI's); the only approvals are prd_approve and queue_go (SPEC_CHAT_T4A, amending 13.7 item 9) and, for a queue the chat itself approved, queue_step and draft_approve (SPEC_CHAT_T4B)
+SOURCE_KEYS = {"source_job", "source_turn"}   # SPEC_CHAT_MANAGER_P2B: the foreman's proposal a form was filled from, as two text fields
+SOURCE_NOTE = "the text was first written by the foreman (a model): read it before you confirm"
+ROUTE_ACTION = {"research": "research_new", "prd": "prd_new"}
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -456,13 +459,15 @@ class Actions:
         """(card, argv builder inputs) for an action, from live data; Refusal when it cannot be run."""
         if action not in ACTIONS:
             raise Refusal(404, "path", "no such action")
+        if SOURCE_KEYS & set(params) and action not in ("research_new", "prd_new"):
+            raise Refusal(400, "form", "only a research or PRD job can start from the foreman's proposal")
         if action in ("job_reject", "job_abandon"):
             return self.build_job(action, params)                # no config, no exposure: a broken config.yaml must not stop a reject (13.7 item 5)
         cfg = self.cfg
-        if action == "research_new":
-            return self.build_research(cfg, params)
-        if action == "prd_new":
-            return self.build_prd(cfg, params)
+        if action in ("research_new", "prd_new"):
+            src, params = self.manager_source(action, params)
+            card, rp = self.build_research(cfg, params) if action == "research_new" else self.build_prd(cfg, params)
+            return ({**card, "source": src, "source_note": SOURCE_NOTE} if src else card), rp
         if action == "manager_new":
             return self.build_manager(cfg, params)
         if action == "prd_approve":
@@ -812,6 +817,29 @@ class Actions:
                 "data_sent": "the repository's files and this conversation go to the model provider; do not put secrets in the message"}
         return card, {"repo": repo, "message": text}
 
+    def manager_source(self, action, params):
+        """(source, params without the source fields): source is None for a form the human typed. A form filled from a proposal names the session and the
+        turn; both must be there and must be a foreman turn that proposed something (the card then says so, and the digest and the audit carry it).
+        Nothing from the proposal is trusted: the text, repo and route are the form's own and go through the action's own checks; `why` never reaches the card."""
+        got = {k: params[k] for k in SOURCE_KEYS if k in params}
+        rest = {k: v for k, v in params.items() if k not in SOURCE_KEYS}
+        if not got:
+            return None, rest
+        job, turn = got.get("source_job"), got.get("source_turn")
+        if not isinstance(job, str) or not isinstance(turn, str) or not re.fullmatch(r"0|[1-9][0-9]{0,2}", turn):
+            raise Refusal(400, "form", "a form filled from the foreman names the session and the turn, and nothing else")
+        d = self._read_data(job, ledgers=False)
+        conv = d[0].get("conversation") if d is not None and d[0].get("kind") == "manager" else None
+        i = int(turn)
+        e = conv[i] if isinstance(conv, list) and i < len(conv) else None
+        p = e.get("propose") if isinstance(e, dict) and e.get("from") == "manager" else None
+        if not isinstance(p, dict) or p.get("route") not in ROUTE_ACTION:
+            raise Refusal(404, "source", "the foreman proposed no research or PRD job in that turn")
+        same_route = ROUTE_ACTION.get(p.get("route")) == action
+        edited = (not same_route or normalize(scrub(str(p.get("text") or ""))) != normalize(rest.get("message") or "")
+                  or (action == "prd_new" and p.get("repo") != rest.get("repo")))
+        return {"from": "manager", "job": job, "turn": i, "edited": edited}, rest
+
     def build_manager(self, cfg, params):
         """(card, run params) of a new foreman session (SPEC_CHAT_MANAGER_P1 5): no parameters; every number from the one function the CLI reads (manager_job.settings). The one
         confirmation of the session: the turns that follow are inside its budget and are not confirmed again."""
@@ -1066,14 +1094,14 @@ class Actions:
         except (rj.Refused, KeyError, TypeError, ValueError, AttributeError, ConfigError):
             left_s = None
         out = []
-        for e in d.get("conversation") or []:
+        for n, e in enumerate(d.get("conversation") or []):
             if not isinstance(e, dict):
                 continue
             if e.get("from") == "human":
-                out.append({"from": "human", "at": e.get("at"), "text": scrub(str(e.get("text") or ""))})
+                out.append({"from": "human", "n": n, "at": e.get("at"), "text": scrub(str(e.get("text") or ""))})
             else:
                 p = e.get("propose")
-                out.append({"from": "manager", "source": "manager", "at": e.get("at"), "say": scrub(str(e.get("say") or "")), "calls": e.get("calls"), "usd": e.get("usd"),
+                out.append({"from": "manager", "n": n, "source": "manager", "at": e.get("at"), "say": scrub(str(e.get("say") or "")), "calls": e.get("calls"), "usd": e.get("usd"),
                             "error": e.get("error"), "propose": ({k: scrub(str(p.get(k) or "")) if k != "repo" else p.get(k) for k in ("route", "repo", "text", "why")} if isinstance(p, dict) else None)})
         return {"job": job_id, "state": d.get("state"), "max_usd": d.get("max_usd"), "spent_usd": spent, "expires_in_s": left_s,
                 "busy": self.spawner.busy(job_id), "conversation": out}
