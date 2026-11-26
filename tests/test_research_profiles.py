@@ -319,3 +319,12 @@ def test_the_paid_deepseek_pin_keeps_deepinfra_first_and_morph_only_behind_it():
         p = gateway.request_params(c, ModelRef.parse(r["model"]), r.get("params") or {})["extra_body"]["provider"]
         assert p["order"] == p["only"] == ["deepinfra/fp8", "morph/fp8"] and p["allow_fallbacks"] is False
         assert p["data_collection"] == "deny" and p["max_price"] == {"prompt": 0.20, "completion": 0.60}
+
+
+def test_the_deepseek_checker_has_32000_output_tokens_and_the_other_stages_keep_16000():
+    """2026-11-26: e1 on deepseek-flash used all 16,000 and ended NOT_CHECKED (output_truncated); Atha raised it to 32,000 for the checker only."""
+    c = load_config()
+    assert st.with_output_cap(c, "checker")["roles"]["researcher"]["max_output_tokens"] == 32000
+    for which in ("planner", "worker", "synthesis"):
+        assert st.with_output_cap(c, which)["roles"]["researcher"]["max_output_tokens"] == 16000
+    assert c["research_job"]["checker"]["cap_usd"] == 0.10                     # the stage's money limit is unchanged
