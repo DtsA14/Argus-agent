@@ -29,7 +29,7 @@ BIND, PORT = "127.0.0.1", 8712                    # SPEC_CHAT_APP 2: 8712 while 
 PORTS = (8711, 8712)                              # SPEC_CHAT_APP 13.4: 8712 while the chat is built, 8711 after C4b; nothing else
 HOSTS = (f"{BIND}:{PORT}",)
 ORIGINS = (f"http://{BIND}:{PORT}",)                  # the one origin a POST may come from (11.2)
-POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm"}   # the only POST routes; any other POST is a 405
+POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm", "/api/manager/turn": "manager_turn"}   # the only POST routes; any other POST is a 405 (the turn route: SPEC_CHAT_MANAGER_P1 5)
 PARAMS = {"repo", "message", "job", "reason", "sha", "ack", "queue"}
 BODY_MAX = 16 * 1024                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
@@ -286,6 +286,10 @@ class Handler(BaseHTTPRequestHandler):
         if a is not None and m:
             got = a.thread(m.group(1))
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        m = re.fullmatch(r"/api/manager/([^/?#%]+)", path)
+        if a is not None and m:                                     # SPEC_CHAT_MANAGER_P1 5: one session, read only
+            got = a.read_manager(m.group(1))
+            return self._json(200, got) if got is not None else self._refuse(404, "no such session")
         m = re.fullmatch(r"/api/draft/([^/?#%]+)", path)
         if a is not None and m:                                     # SPEC_CHAT_UI3D: the detail of a job's last draft, read only
             got = a.steps.draft_detail(m.group(1))
@@ -391,8 +395,24 @@ class Handler(BaseHTTPRequestHandler):
             raise Refusal(400, "form", f"not a JSON object with different keys ({type(e).__name__})") from None
         if route == "prepare":
             self._prepare(a, body, rec)
+        elif route == "manager_turn":
+            self._manager_turn(a, body, rec)
         else:
             self._confirm(a, body, rec)
+
+    def _manager_turn(self, a, body, rec):
+        """One message to the foreman (SPEC_CHAT_MANAGER_P1 5): exactly {session, message}; every gate of the route, ONE audit line BEFORE the run starts (no text), then the one argv
+        `argus manager turn JOB --message-file F --via ui --key-file K --yes`. No token, no card, no confirm: the session was confirmed once."""
+        if set(body) != {"session", "message"} or not all(isinstance(body[k], str) for k in body):
+            raise Refusal(400, "form", "a turn carries the session and the message and nothing else")
+        rec.update(action="manager_turn", job=body["session"][:AUDIT_STR])
+        a.manager_turn_check(body["session"], body["message"])
+        if not self._audit(a, **rec, attempt="manager_turn"):
+            raise Refusal(503, "audit", "the audit could not be written: nothing was run")
+        out = a.manager_turn_start(body["session"], body["message"])
+        rec["executed"] = True
+        self._audit(a, **{**rec, "ok": "manager_turn"})
+        self._json(200, out)
 
     def _prepare(self, a, body, rec):
         action = body.get("action")

@@ -33,6 +33,7 @@ from harness.events import parse_lines
 from models.registry import ConfigError
 from research.stages import QUESTION_MAX, QUESTION_MIN
 from router import job as rj
+from router import manager_job as mj
 from router import prd_job as pj
 from router.chat_plan import Plan
 from router.chat_t4b import Steps
@@ -45,10 +46,11 @@ from router.control_issues import Spawner, issue_cli, normalize
 STATE = Path.home() / ".local" / "state" / "argus-chat"
 KEY_ENV = "ARGUS_CHAT_KEY_FILE"
 WRITER_KEY_ENV = "ARGUS_CHAT_WRITER_KEY_FILE"
+MANAGER_KEY_ENV = "ARGUS_CHAT_MANAGER_KEY_FILE"      # SPEC_CHAT_MANAGER_P1 10.7: the foreman's turns; falls back to the writer's slot, then the code key
 RESEARCH_KEY_ENV = "ARGUS_CHAT_RESEARCH_KEY_FILE"   # research uses DeepSeek's own search and fetch API: its own key, when the code key is another provider's
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
-ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "prd_approve", "queue_go", "queue_step", "draft_approve", "job_reject", "job_abandon")   # no apply, no retry/redraft of a code job from here (job_reject and job_abandon are the control UI's); the only approvals are prd_approve and queue_go (SPEC_CHAT_T4A, amending 13.7 item 9) and, for a queue the chat itself approved, queue_step and draft_approve (SPEC_CHAT_T4B)
+ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "manager_new", "prd_approve", "queue_go", "queue_step", "draft_approve", "job_reject", "job_abandon")   # no apply, no retry/redraft of a code job from here (job_reject and job_abandon are the control UI's); the only approvals are prd_approve and queue_go (SPEC_CHAT_T4A, amending 13.7 item 9) and, for a queue the chat itself approved, queue_step and draft_approve (SPEC_CHAT_T4B)
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
@@ -135,6 +137,12 @@ def prd_cli(jobs_dir, queues_dir, key_file, *args):
             "--via", "ui", "--key-file", str(key_file), "--yes"]
 
 
+def manager_cli(jobs_dir, *args, key_file=None):
+    """The argv of an `argus manager new|turn ...` run from the chat (SPEC_CHAT_MANAGER_P1 4, 5): `new` takes no key, `turn` the manager's key file; always --via ui --yes; the message only by file."""
+    return [sys.executable, str(rj.ROOT / "scripts" / "argus.py"), "--jobs-dir", str(jobs_dir), "manager", *args, "--via", "ui",
+            *(["--key-file", str(key_file)] if key_file else []), "--yes"]
+
+
 def research_cli(jobs_dir, key_file, *args):
     """The argv of an `argus research ...` run: no --max-usd and no --profile (the config's), from the chat."""
     return [sys.executable, str(rj.ROOT / "scripts" / "argus.py"), "--jobs-dir", str(jobs_dir), "research", *args,
@@ -210,8 +218,10 @@ class Actions:
         except ValueError:
             return DEFAULT_CAP_USD
 
-    def key_file(self, writer, research=False):
-        """The key file a paid action is given: the writer's turns WRITER_KEY_ENV, research RESEARCH_KEY_ENV, each when set, else KEY_ENV (the code key)."""
+    def key_file(self, writer, research=False, manager=False):
+        """The key file a paid action is given: the writer's turns WRITER_KEY_ENV, research RESEARCH_KEY_ENV, the foreman MANAGER_KEY_ENV then WRITER_KEY_ENV, each when set, else KEY_ENV (the code key)."""
+        if manager:
+            return self.environ.get(MANAGER_KEY_ENV) or self.environ.get(WRITER_KEY_ENV) or self.environ.get(KEY_ENV) or None
         first = WRITER_KEY_ENV if writer else RESEARCH_KEY_ENV if research else None
         return (self.environ.get(first) if first else None) or self.environ.get(KEY_ENV) or None
 
@@ -430,9 +440,9 @@ class Actions:
 
     # ---- the card ---------------------------------------------------------------------------------------------------
 
-    def _need_key(self, writer, research=False):
-        if self.key_file(writer, research) is None:
-            first = WRITER_KEY_ENV if writer else RESEARCH_KEY_ENV if research else None
+    def _need_key(self, writer, research=False, manager=False):
+        if self.key_file(writer, research, manager) is None:
+            first = MANAGER_KEY_ENV if manager else WRITER_KEY_ENV if writer else RESEARCH_KEY_ENV if research else None
             raise Refusal(409, "key", f"{first} (or {KEY_ENV}) is not set for the service" if first else f"{KEY_ENV} is not set for the service")
 
     @staticmethod
@@ -453,6 +463,8 @@ class Actions:
             return self.build_research(cfg, params)
         if action == "prd_new":
             return self.build_prd(cfg, params)
+        if action == "manager_new":
+            return self.build_manager(cfg, params)
         if action == "prd_approve":
             return self.plans.build_approve(params)
         if action == "queue_go":
@@ -765,7 +777,7 @@ class Actions:
         got = self._read_data(job_id)
         if got is None:
             return None
-        if got[0].get("kind") in ("issue", "prd"):          # a prd job is read only here: the writer's turns are started from the PRD form, its plan card is the Kartu tab (SPEC_PRD_WRITER D5, opened 2026-11-21)
+        if got[0].get("kind") in ("issue", "prd", "manager"):          # a prd job is read only here: the writer's turns are started from the PRD form, its plan card is the Kartu tab (SPEC_PRD_WRITER D5, opened 2026-11-21)
             return {"id": job_id, "kind": got[0]["kind"], "state": got[0].get("state")}
         return self.decision_row(job_id, *got)
 
@@ -799,6 +811,26 @@ class Actions:
                 **({"runs_code": self.runs_code(cfg, repos[repo].get("environment"))["runs_code"]} if f["has_runner"] else {}),
                 "data_sent": "the repository's files and this conversation go to the model provider; do not put secrets in the message"}
         return card, {"repo": repo, "message": text}
+
+    def build_manager(self, cfg, params):
+        """(card, run params) of a new foreman session (SPEC_CHAT_MANAGER_P1 5): no parameters; every number from the one function the CLI reads (manager_job.settings). The one
+        confirmation of the session: the turns that follow are inside its budget and are not confirmed again."""
+        if params:
+            raise Refusal(400, "form", "a foreman session takes no fields")
+        try:
+            m = mj.settings(cfg)
+            model = cfg["roles"][m["role"]]["model"]
+        except rj.Refused as e:
+            raise Refusal(409, "config", strip_refused(str(e))) from None
+        except (KeyError, TypeError, AttributeError, ConfigError):
+            raise Refusal(409, "config", "the foreman's configuration is not complete") from None
+        self._need_key(False, manager=True)
+        card = {"action": "manager_new", "title": "Start a chat session with the foreman", "model": model, "job_cap_usd": m["session_cap_usd"],
+                "turn_cap_usd": m["turn_cap_usd"], "turn_note": "one turn is one model call; a second call only when the first reply is unusable, so a turn can cost up to two turn caps",
+                "ttl_hours": m["ttl_hours"], "max_turns": m["max_turns"],
+                "confirms": "this one confirmation covers the whole session: its turns are not confirmed again, and the foreman can propose but cannot approve, apply, merge or start anything",
+                "data_sent": "your messages and the earlier turns of the session go to the model provider (OpenRouter, then DeepSeek) and may be kept by it; no repository content is sent; do not put secrets in a message"}
+        return card, {}
 
     def build_research(self, cfg, params):
         """(card, run params) of a new research job (12.2, 12.10 items 2, 7, 8, 12): everything the CLI's own go-live screen shows,
@@ -878,6 +910,7 @@ class Actions:
         total, seen = 0.0, set()
         rcap = self.research_cap()                 # read once: the config is loaded for every call
         pcap = self.prd_cap()
+        mcap = self.manager_cap()
         try:
             names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
         except OSError:
@@ -917,6 +950,16 @@ class Actions:
                 except (KeyError, TypeError, ValueError):
                     raise bad from None
                 continue
+            if data.get("kind") == "manager":                 # SPEC_CHAT_MANAGER_P1 10.6: a session started via the UI is exposure for its whole cap, its turns add nothing
+                try:
+                    for entry in data.get("log") or []:
+                        if isinstance(entry, dict) and entry.get("what") == "created" and entry.get("via") == "ui" \
+                                and parse_time(entry["at"]) >= now - DAY:
+                            total += max(finite_usd(data["max_usd"]), mcap)
+                            seen.add(("new", n))
+                except (KeyError, TypeError, ValueError):
+                    raise bad from None
+                continue
             if data.get("kind") == "prd":                     # SPEC_CHAT_MANAGER 13.2: a PRD job started via the UI is exposure too
                 try:
                     for entry in data.get("log") or []:
@@ -947,7 +990,7 @@ class Actions:
             if ("go", job_id) not in seen and os.path.lexists(self.cards.queues_dir / job_id):
                 total += usd
                 seen.add(("go", job_id))
-        for action, cap in (("research_new", rcap), ("prd_new", pcap)):
+        for action, cap in (("research_new", rcap), ("prd_new", pcap), ("manager_new", mcap)):
             for job_id, at in self.audited_jobs(now, action):        # the net under the directory count: a `via` lost from the CLI
                 if ("new", job_id) not in seen and (os.path.lexists(self.jobs_dir / job_id) or self.spawner.busy(job_id)):
                     total += cap
@@ -958,11 +1001,94 @@ class Actions:
             raise unknown
         return total
 
+    # ---- the foreman's turns (SPEC_CHAT_MANAGER_P1 5): not a card; the session was confirmed once, each turn is inside its budget ----------------------------
+
+    def manager_turn_check(self, job_id, message):
+        """Refuse (Refusal) unless a turn may start now; returns the (data, spent) read. The CLI checks all of it again under the job's lock."""
+        if not UI_ID.fullmatch(job_id or ""):
+            raise Refusal(400, "form", "not a session id")
+        try:
+            m = mj.settings(self.cfg)
+        except rj.Refused as e:
+            raise Refusal(409, "config", strip_refused(str(e))) from None
+        except (KeyError, TypeError, AttributeError, ConfigError):
+            raise Refusal(409, "config", "the foreman's configuration is not complete") from None
+        self._need_key(False, manager=True)
+        why = mj.message_problem(m, message)
+        if why:
+            raise Refusal(400, "form", why)
+        got = self._read_data(job_id)
+        if got is None or got[0].get("kind") != "manager":
+            raise Refusal(404, "job", "no such session")
+        d, spent = got
+        if not any(isinstance(e, dict) and e.get("what") == "created" and e.get("via") == "ui" for e in d.get("log") or []):
+            raise Refusal(409, "job", "this session was not started from the chat")
+        if d.get("state") != mj.OPEN:
+            raise Refusal(409, "job", f"the session is {d.get('state')}, not open")
+        try:
+            age = self.clock() - parse_time(d["created_at"])
+            max_usd = finite_usd(d["max_usd"])
+        except (KeyError, TypeError, ValueError):
+            raise Refusal(503, "cap", "the session's age or budget cannot be read") from None
+        if age > m["ttl_hours"] * 3600:
+            raise Refusal(409, "job", f"the session has expired ({m['ttl_hours']:g} h): start a new one")
+        if spent is None:
+            raise Refusal(503, "cap", "what the session has spent cannot be read")
+        if sum(1 for e in d.get("conversation") or [] if isinstance(e, dict) and e.get("from") == "human") >= m["max_turns"]:
+            raise Refusal(409, "job", f"the session has reached its {m['max_turns']} turns: start a new one")
+        if max_usd - spent + 1e-12 < m["turn_cap_usd"]:
+            raise Refusal(409, "cap", "the session budget cannot fund another turn: start a new one")
+        if self.spawner.busy(job_id):
+            raise Refusal(409, "busy", "the foreman is still answering the last message")
+        return d, spent
+
+    def manager_turn_start(self, job_id, message):
+        """Start the turn: the one argv this route ever builds (an expired session is only moved to BLOCKED by the CLI's turn, not here: the route refuses it). The message goes by a 0600 file of the state directory, removed when the run ends."""
+        key = self.key_file(False, manager=True)
+        path = self.spawner.message_file(message)
+        argv = self.with_config(manager_cli(self.jobs_dir, "turn", job_id, "--message-file", str(path), key_file=key))
+        try:
+            self.spawner.spawn(job_id, argv, path, action="manager_turn", text=message)
+        except BaseException:
+            Path(path).unlink(missing_ok=True)           # no run owns the file: it is not left behind
+            raise
+        return {"job": job_id, "started": True}
+
+    def read_manager(self, job_id):
+        """The session as the page reads it: the conversation as data (the model's words carry source "manager"), state, money, expiry; None when it is not a session."""
+        got = self._read_data(job_id)
+        if got is None or got[0].get("kind") != "manager":
+            return None
+        d, spent = got
+        try:
+            m = mj.settings(self.cfg)
+            left_s = max(0, int(m["ttl_hours"] * 3600 - (self.clock() - parse_time(d["created_at"]))))
+        except (rj.Refused, KeyError, TypeError, ValueError, AttributeError, ConfigError):
+            left_s = None
+        out = []
+        for e in d.get("conversation") or []:
+            if not isinstance(e, dict):
+                continue
+            if e.get("from") == "human":
+                out.append({"from": "human", "at": e.get("at"), "text": scrub(str(e.get("text") or ""))})
+            else:
+                p = e.get("propose")
+                out.append({"from": "manager", "source": "manager", "at": e.get("at"), "say": scrub(str(e.get("say") or "")), "calls": e.get("calls"), "usd": e.get("usd"),
+                            "error": e.get("error"), "propose": ({k: scrub(str(p.get(k) or "")) if k != "repo" else p.get(k) for k in ("route", "repo", "text", "why")} if isinstance(p, dict) else None)})
+        return {"job": job_id, "state": d.get("state"), "max_usd": d.get("max_usd"), "spent_usd": spent, "expires_in_s": left_s,
+                "busy": self.spawner.busy(job_id), "conversation": out}
+
     def research_cap(self):
         try:
             return finite_usd((self.cfg.get("research_job") or {}).get("max_usd", 1.0))
         except (TypeError, ValueError):
             raise Refusal(503, "cap", "the daily exposure cannot be computed (the research cap is not a number)") from None
+
+    def manager_cap(self):
+        try:
+            return finite_usd(((self.cfg.get("chat") or {}).get("manager") or {}).get("session_cap_usd", 0.20))
+        except (TypeError, ValueError):
+            raise Refusal(503, "cap", "the daily exposure cannot be computed (the foreman's session cap is not a number)") from None
 
     def prd_cap(self):
         try:
@@ -993,7 +1119,7 @@ class Actions:
         return out
 
     def exposure_of(self, card):
-        if card["action"] in ("issue_new", "issue_start", "research_new", "prd_new"):
+        if card["action"] in ("issue_new", "issue_start", "research_new", "prd_new", "manager_new"):
             return float(card["job_cap_usd"])
         if card["action"] in ("queue_step", "draft_approve"):
             return self.steps.exposure_of(card)              # 0 inside the 24 hours of its queue's approval (that money is counted), else one job cap
@@ -1083,6 +1209,12 @@ class Actions:
             message = self.spawner.message_file(rp["message"])
             argv = self.with_config(research_cli(c, key, "--question-file", str(message), "--job-id", new_id))
             self.spawner.spawn(new_id, argv, message, action="research", text=rp["message"])
+            self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))
+            return {"job": new_id, "started": True}
+        if a == "manager_new":                                # no key: the CLI makes the job, no model is called; the turns take the key
+            new_id = rj.new_job_id()
+            argv = self.with_config(manager_cli(c, "new", "--job-id", new_id))
+            self.spawner.spawn(new_id, argv, None, action="manager")
             self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))
             return {"job": new_id, "started": True}
         if a == "prd_new":
