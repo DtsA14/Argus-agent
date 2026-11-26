@@ -137,8 +137,9 @@ def _context(conversation, limit):
     return "\n".join(reversed(out)) or None
 
 
-def turn(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS):
-    """One human message and the foreman's answer, under the job's lock. Returns the manager entry. Every refusal is a `Refused` with a sentence and nothing is called."""
+def turn(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, steps=None):
+    """One human message and the foreman's answer, under the job's lock. Returns the manager entry. Every refusal is a `Refused` with a sentence and nothing is called.
+    `steps`: the jobs this session started, as parse_steps returns them (SPEC_CHAT_MANAGER_P4B): they join the context as facts from the harness; they are not kept in the job."""
     m = settings(cfg)
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
@@ -176,6 +177,8 @@ def turn(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS):
             return worst, worst <= m["turn_cap_usd"] + 1e-12 and worst <= left() + 1e-12
 
         context = _context(d["conversation"], m["summary_bytes"])
+        if steps:
+            context = "Jobs this conversation started (facts from the harness):\n" + mr.steps_context(steps) + ("\nEarlier turns:\n" + context if context else "")
         user = mr.user_prompt(message, context)
         worst, ok = fits(user)
         if not ok:

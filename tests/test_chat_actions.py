@@ -46,7 +46,8 @@ class FakeSpawner:
         return None
 
     def message_file(self, text):
-        p = self.state / "messages" / f"m{len(self.calls)}.txt"
+        self.files = getattr(self, "files", -1) + 1         # one name a file: a turn writes two (the message, the jobs)
+        p = self.state / "messages" / f"m{self.files}.txt"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text)
         return p

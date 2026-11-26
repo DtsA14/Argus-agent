@@ -327,6 +327,7 @@ def main(argv=None, deps=None):
     mt = msub.add_parser("turn", help="one message and the foreman's answer (one model call; a second only to repair an unusable reply)")
     mt.add_argument("job")
     mt.add_argument("--message-file", required=True, help="the message is read from this file, never from an argument")
+    mt.add_argument("--jobs-file", default=None, help="the jobs this session started (a JSON list the chat writes; docs/reviews/SPEC_CHAT_MANAGER_P4B.md); read, checked, never run")
     mt.add_argument("--via", choices=rj.VIA, required=True)
     mt.add_argument("--key-file", action="append", required=True, help="read the API key from this 0600 file")
     mt.add_argument("--yes", action="store_true", required=True, help="the turn is inside the session the chat confirmed")
@@ -608,6 +609,7 @@ def main(argv=None, deps=None):
             return 0 if job.data["state"] == ri.AWAITING_HUMAN else 1
         elif o.cmd == "manager":
             from router import manager_job as mj
+            from router.manager_route import parse_steps as mr_parse_steps, STEPS_FILE_MAX
             if o.manager_cmd == "status":
                 print(rj.status(o.job, jobs_dir=o.jobs_dir, cfg=cfg))
                 return 0
@@ -615,8 +617,18 @@ def main(argv=None, deps=None):
                 job = mj.new(cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, job_id=o.job_id, via=o.via)
                 print(f"manager session {job.id} is open (cap ${job.data['max_usd']:.2f})")
                 return 0
+            steps = None
+            if getattr(o, "jobs_file", None):
+                try:
+                    with open(o.jobs_file, "rb") as f:
+                        raw = f.read(STEPS_FILE_MAX + 1)
+                    steps, problem = mr_parse_steps(raw.decode("utf-8"))
+                except (OSError, ValueError):
+                    steps, problem = None, "the jobs file cannot be read"
+                if problem:
+                    raise rj.Refused(f"{problem}; no turn was run")
             try:
-                entry = mj.turn(o.job, Path(o.message_file).read_text(encoding="utf-8"), cfg=cfg, deps=deps, jobs_dir=o.jobs_dir)
+                entry = mj.turn(o.job, Path(o.message_file).read_text(encoding="utf-8"), cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, steps=steps)
             except ValueError as e:                      # an undecodable message file or a model name that does not parse: a sentence, never a traceback (the spawner shows the last line)
                 raise rj.Refused(f"the turn could not be run ({type(e).__name__}); nothing was recorded") from None
             print(f"turn done: {entry['calls']} call(s), ${entry['usd']:.4f}" + (f"; {entry['error']}" if entry.get("error") else ""))   # no model text: the spawner's last line reaches the page
