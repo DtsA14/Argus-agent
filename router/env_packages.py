@@ -55,7 +55,7 @@ def parse_lines(text):
         return None, "the request is not text"
     if len(text) > TEXT_MAX:
         return None, f"the request is longer than {TEXT_MAX} characters"
-    lines = [l.strip() for l in text.replace("\r", "").split("\n")]
+    lines = [l.strip() for l in text.split("\n")]       # a CRLF ends in a \r that strip removes; a lone \r inside a line stays and fails the shape (it is never joined)
     lines = [l for l in lines if l]
     if not lines:
         return None, "the request has no package line"

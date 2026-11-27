@@ -1,4 +1,5 @@
 """Mutants for SPEC_CHAT_PACKAGES S1 (router/env_packages.py, the pure part of the package request). Applied alone; killed = a test FAILED.
+Equivalent in behaviour (documented): "a name of 33 characters is accepted" (the environment shape allows at most 32, a second guard).
 Run in a throwaway worktree. Usage: <this> <worktree> <python> [name-part ...]   (a name part re-runs only the mutants whose name contains it)"""
 import subprocess
 import sys
@@ -18,7 +19,7 @@ M = [
     ("a name may repeat", F, [("        if name in seen:\n            return None, f\"{name} appears twice\"\n", "")]),
     ("blank lines are kept", F, [("    lines = [l for l in lines if l]\n", "")]),
     ("lines are not stripped", F, [("    lines = [l.strip() for l in text.replace(\"\\r\", \"\").split(\"\\n\")]", "    lines = [l for l in text.replace(\"\\r\", \"\").split(\"\\n\")]")]),
-    ("a carriage return stays in the line", F, [('text.replace("\\r", "").split("\\n")', 'text.split("\\n")')]),
+    ("a lone carriage return is removed", F, [('text.split("\\n")]       #', 'text.replace("\\r", "").split("\\n")]       #')]),
     ("a request that is not text crashes", F, [("    if not isinstance(text, str):\n        return None, \"the request is not text\"\n", "")]),
     ("a nested locked name is read wrongly", F, [('names.add(key.rsplit("node_modules/", 1)[1])', 'names.add(key.split("node_modules/")[1])')]),
     ("a locked name is not refused", F, [("        if it[\"name\"] in have:\n            return f\"{it['name']} is already in the environment: an upgrade is not offered\"", "        if False:\n            return None")]),

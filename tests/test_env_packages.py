@@ -100,6 +100,20 @@ def test_a_request_that_is_not_text_is_refused(bad):
     assert ep.parse_lines(bad)[0] is None
 
 
+def test_a_lone_carriage_return_is_never_joined_into_a_name():
+    for text in ("a\rb", "foo\rbar@1.0.0", "\rfoo\rbar"):
+        assert ep.parse_lines(text)[0] is None
+    assert ep.parse_lines("foo\r\nbar\r\n")[0] == [{"name": "foo", "version": None}, {"name": "bar", "version": None}]
+
+
+def test_five_long_valid_lines_beyond_the_text_limit_are_refused():
+    long = "@" + "a" * 63 + "/" + "b" * 63
+    text = "\n".join([long] * 5)
+    assert len(text) > ep.TEXT_MAX and ep.parse_lines("\n".join([long + str(n) for n in range(5)]))[0] is None
+    assert ep.parse_lines(" " * 601 + "foo")[0] is None                       # padding counts: the whole text is bounded
+    assert ep.parse_lines(" " * 590 + "foo")[0] == [{"name": "foo", "version": None}]
+
+
 def test_the_text_and_a_line_are_bounded():
     assert ep.parse_lines("a\n" * 300)[0] is None                              # over 600 characters
     assert ep.parse_lines("a" * 64)[0] is not None
@@ -317,6 +331,8 @@ def test_parse_view():
     assert ep.parse_view('{"a": 1}') == {"a": 1}
     for junk in ("", "  ", "null", "[]", "5", "not json", '{"a": 1, "a": 2}', None, 5, "x" * 5_000_001, '{"a":'):
         assert ep.parse_view(junk) is None
+    assert ep.parse_view('{"a": "' + "x" * 4_000_000 + '"}') is not None
+    assert ep.parse_view('{"a": "' + "x" * 5_000_000 + '"}') is None             # valid JSON, but over the cap
 
 
 # ---- the report -------------------------------------------------------------------------------------------------------
@@ -376,6 +392,25 @@ def test_the_age_gate_covers_a_transitive_package_the_human_never_named():
     assert r["status"] == "REFUSED" and any(b.startswith("dep@1.0.0 is 2 days old") for b in r["blocks"])
     assert {p["name"]: p["direct"] for p in r["packages"]} == {"dep": False, "foo": True}
     assert r["totals"]["new"] == 2 and r["totals"]["direct"] == 1
+
+
+def test_only_the_top_level_package_of_a_requested_name_is_direct():
+    extra = [("node_modules/foo", entry("2.0.0")), ("node_modules/dep", entry("1.0.0")), ("node_modules/dep/node_modules/foo", entry("1.5.0"))]
+    views = {"foo@2.0.0": view(), "dep@1.0.0": view("1.0.0"), "foo@1.5.0": view("1.5.0")}
+    r = report(extra, views)
+    assert [(p["name"], p["version"], p["direct"]) for p in r["packages"]] == [("dep", "1.0.0", False), ("foo", "1.5.0", False), ("foo", "2.0.0", True)]
+    assert r["totals"]["direct"] == 1
+
+
+def test_a_warning_about_a_name_is_shown_once_even_with_two_copies():
+    recent = (NOW - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    old = (NOW - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    extra = [("node_modules/foo", entry("2.0.0")), ("node_modules/a/node_modules/dep", entry("1.0.0")), ("node_modules/b/node_modules/dep", entry("2.0.0")),
+             ("node_modules/a", entry()), ("node_modules/b", entry())]
+    views = {"foo@2.0.0": view(), "dep@1.0.0": view("1.0.0", published=old, created=recent), "dep@2.0.0": view("2.0.0", published=old, created=recent),
+             "a@1.0.0": view("1.0.0"), "b@1.0.0": view("1.0.0")}
+    r = report(extra, views)
+    assert r["status"] == "OK" and [w for w in r["warns"] if w.startswith("dep ")] == ["dep was first published 5 days ago"]
 
 
 def test_more_new_packages_than_the_limit_is_a_block():
@@ -509,7 +544,8 @@ def test_a_name_over_thirty_two_characters_is_refused_not_cut():
 
 
 def test_there_is_a_last_number_and_then_no_name():
-    taken = [f"x_up{n}" for n in range(1, ep.UP_MAX + 1)]
+    assert ep.UP_MAX == 99
+    taken = [f"x_up{n}" for n in range(1, 100)]
     name, problem = ep.next_env_name("x", taken)
     assert name is None and "no free number" in problem
 
