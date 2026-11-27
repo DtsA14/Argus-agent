@@ -159,9 +159,11 @@ def new(*, repo, message, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, job
     return job
 
 
-def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, rebase=False):
+def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES, rebase=False, via=None):
     """The human's next message, recorded before its turn starts, then the writer's next turn. rebase: the commit is frozen
     again at the repository's HEAD now, the notes (about the old commit) are dropped and the whole gate runs again."""
+    if via is not None and via not in rj.VIA:
+        raise rj.Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was started")
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
         if job.data.get("kind") != "prd":
@@ -194,7 +196,7 @@ def reply(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, queues_dir=rq.QUEUES,
                 i["commit"] = commit
                 job.data["repo_notes"] = None
             job.data["conversation"].append({"from": "human", "at": deps.clock(), "text": message.strip()})
-            job.move(WRITING, deps, stage=ri._next_sid(job), by=os.environ.get("USER"))
+            job.move(WRITING, deps, stage=ri._next_sid(job), by=os.environ.get("USER"), actor=rj.actor(via), **({"via": via} if via else {}))
             if rebase:
                 mark_superseded(job)            # the folders of the old commit can no longer be the one to check
             job.data["queues_dir"] = str(queues_dir)

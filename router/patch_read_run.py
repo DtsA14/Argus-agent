@@ -5,14 +5,17 @@ unless every `concerns` is an explicit `nit` of the two Argus readers (SPEC_PATC
 touches and the patch, as data, and nothing else; the reply must be one JSON object {verdict, note, severity (only with concerns)}. Every call goes through LLMCaller (a reservation before sending, an
 entry in the ledger before and after, integer nano-dollars) and the cap of the run (`--cap-usd`) is TOTAL for the job's patch readings: the ledger sits in the job
 directory (`patch_read_ledger.jsonl`) and a call starts only if the money already billed plus its worst case fits. The readings are written through
-`patch_read.record` (reader kind `argus`, id `argus:<model>`), so the card and `argus apply` read them like any note; nothing is added to the log of the job.
+`patch_read.record` (reader kind `argus`, id `argus:<model>`), so the card and `argus apply` read them like any note; the only thing added to the job's log is one `patch_read_run` note (who started the reading: SPEC_CHAT_APPLY_REPLY 12 F2).
 
 The card says what this is: statements of two models, not a proof that the patch was read, and not a human. The pair counts as TESTED only for these two models and
 this template (`verification/reader_tests.json`, written by `python -m router.patch_trial write-tests` after a passing trial).
 A reply that is not usable (not the asked JSON, cut at the output limit, an error) is not a reading: nothing is written and the run says so."""
+import fcntl
 import hashlib
 import json
+import os
 import re
+from contextlib import contextmanager
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -75,8 +78,32 @@ def bundle(job_id, jobs_dir, info=None):
     return pr.render(issue, touches, "the job is REVIEW_READY: a review package exists; passing examples do not prove the patch is clean", text, context), sid, sha
 
 
-def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=100000, first=FIRST, second=SECOND, models=None):
-    """Read the patch of the job with the pair; returns a summary dict. `models` is for tests: {name: scripted chat model}."""
+@contextmanager
+def _one_run_at_a_time(job_id, jobs_dir):
+    """One patch reading of a job at a time, across processes (the chat and a terminal): the reader holds no job lock during its model calls (`patch_read.record`
+    takes it for each write), so the ledger check "billed so far + worst case fits" is not atomic without this one (SPEC_CHAT_APPLY_REPLY 12 F14)."""
+    job = rj.open_job(job_id, jobs_dir)
+    fd = os.open(job.dir / ".patch_read_run.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise rj.JobBusy(f"job {job_id} already has a patch reading running; nothing was started") from None
+        yield
+    finally:
+        os.close(fd)
+
+
+def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=100000, first=FIRST, second=SECOND, models=None, via=None):
+    """Read the patch of the job with the pair; returns a summary dict. `models` is for tests: {name: scripted chat model}. via: where it was started ("ui": the chat);
+    the job log says who ran it."""
+    if via is not None and via not in rj.VIA:
+        raise rj.Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was started")
+    with _one_run_at_a_time(job_id, jobs_dir):
+        return _run(job_id, cfg=cfg, deps=deps, jobs_dir=jobs_dir, cap_usd=cap_usd, max_output=max_output, first=first, second=second, models=models, via=via)
+
+
+def _run(job_id, *, cfg, deps, jobs_dir, cap_usd, max_output, first, second, models, via):
     if not (isinstance(cap_usd, (int, float)) and 0 < cap_usd <= 2) or not (isinstance(max_output, int) and 500 <= max_output <= 100000):
         raise rj.Refused("--cap-usd is above 0 and at most 2; --max-output is 500 to 100000")
     cinfo = {}
@@ -102,6 +129,10 @@ def run(job_id, *, cfg, deps, jobs_dir=rj.JOBS, cap_usd=0.20, max_output=100000,
                      f"worst case per call up to ${max(p[3] for p in plan):.4f}; cap TOTAL for this job's patch readings ${cap_usd:.2f}",
                      f"template {pr.TEMPLATE_SHA256[:12]}; ledger {job.dir / LEDGER}"])
     with rj.live(deps, plan[0][1], [pt.ROLE], msg):
+        with job.lock():                                      # who started this reading, in the job log: written only once the run is confirmed (`live` can still refuse or be answered N); the readings are notes written under the lock, one by one
+            if job.data["state"] != rj.REVIEW_READY:
+                raise rj.Refused(f"job {job_id} is {job.data['state']}: only a REVIEW_READY job's patch is read; nothing was read")
+            job.note(deps, "patch_read_run", sha12=sha[:12], cap_usd=cap_usd, actor=rj.actor(via), **({"via": via} if via else {}))
         log = EventLog(job.dir / LEDGER)
         log.emit("patch_context", sha12=sha[:12], **cinfo)            # SPEC_READER_CONTEXT: what the readers were shown beside the diff (a failure shows as `failed`)
         verdicts = []

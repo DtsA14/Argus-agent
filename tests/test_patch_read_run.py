@@ -178,7 +178,7 @@ def test_only_a_job_with_a_review_package_is_read_and_the_ledger_is_beside_the_j
     env, sha = world
     go(env, models(reply(), reply()))
     assert (env.job().dir / prr.LEDGER).exists()
-    assert "patch_read_ledger" not in json.dumps(env.job().data)                           # nothing is added to job.json or its log
+    assert "patch_read_ledger" not in json.dumps(env.job().data)                           # the ledger is not in job.json; the log gets only the one `patch_read_run` note
 
 
 def test_a_first_note_written_by_a_claude_session_with_the_ids_of_the_pair_is_not_resumed_as_the_pairs(world):
@@ -435,3 +435,91 @@ def test_the_jobs_protected_list_reaches_the_context_builder(world, monkeypatch)
     monkeypatch.setattr(prr.pc, "build", lambda repo, commit, text, protected=(): (seen.append(list(protected)), real(repo, commit, text, protected))[1])
     go(env, models(reply(), reply()))
     assert seen == [["src/components/ui/**", "docs/**"]]
+
+
+# ---- SPEC_CHAT_APPLY_REPLY 12 F1, F2, F14: `--via ui`, who started it, one reading at a time -----------------------------------------------
+
+def test_via_ui_is_written_in_the_job_log_and_a_terminal_run_says_terminal(world, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    env, sha = world
+    go(env, models(reply(), reply()), via="ui")
+    notes = [e for e in env.job().data["log"] if e.get("what") == "patch_read_run"]
+    assert len(notes) == 1 and notes[0]["actor"] == "ui" and notes[0]["sha12"] == sha[:12] and notes[0]["cap_usd"] == 0.20
+
+
+def test_a_run_that_stops_at_a_final_reading_writes_no_note(world):
+    env, sha = world
+    go(env, models(reply(), reply()))
+    n = len(env.job().data["log"])
+    s = go(env, models(reply(), reply()))
+    assert s["stopped"] and len(env.job().data["log"]) == n
+
+
+def test_a_via_that_is_not_ui_is_refused_before_anything_is_read(world):
+    env, sha = world
+    ms = models(reply(), reply())
+    with pytest.raises(rj.Refused, match="via"):
+        go(env, ms, via="web")
+    assert not ms["hy4flash"].calls and not [p for p in env.job().dir.iterdir() if p.name.startswith("patch_read")]
+
+
+def test_a_second_reading_of_the_same_job_at_the_same_time_is_refused_and_no_model_is_called(world):
+    import fcntl
+    import os
+    env, sha = world
+    fd = os.open(env.job().dir / ".patch_read_run.lock", os.O_RDWR | os.O_CREAT, 0o644)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        ms = models(reply(), reply())
+        with pytest.raises(rj.JobBusy, match="already has a patch reading"):
+            go(env, ms)
+        assert not ms["hy4flash"].calls and not ms["ds1017"].calls
+    finally:
+        os.close(fd)
+    assert go(env, models(reply(), reply()))["final"] == "ok"           # the lock is released with the run: the next one goes
+
+
+def test_the_cli_takes_via_ui_and_keeps_its_key_file_and_yes_options(world, capsys):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    with pytest.raises(SystemExit):
+        argus.main(["--jobs-dir", str(world[0].jobs), "patch-read-run", "jtest", "--via", "web"], deps=world[0].deps)
+    out = __import__("subprocess").run([sys.executable, str(tr.ROOT / "scripts" / "argus.py"), "patch-read-run", "--help"], capture_output=True, text=True).stdout
+    assert "--via" in out and "--key-file" in out and "--yes" in out
+
+
+def test_a_run_the_human_answers_no_or_live_refuses_writes_no_note(world):
+    env, sha = world
+    env.deps.confirm = lambda text: False
+    ms = models(reply(), reply())
+    with pytest.raises(rj.Refused):
+        go(env, ms, via="ui")
+    assert not ms["hy4flash"].calls and not [e for e in env.job().data["log"] if e.get("what") == "patch_read_run"]
+
+
+def test_the_note_carries_via_beside_the_actor(world, monkeypatch):
+    monkeypatch.setenv("CLAUDECODE", "1")
+    env, sha = world
+    go(env, models(reply(), reply()), via="ui")
+    n = [e for e in env.job().data["log"] if e.get("what") == "patch_read_run"][0]
+    assert n["actor"] == "claude" and n["via"] == "ui"                      # a Claude shell stays "claude", the chat origin is still said
+
+
+def test_the_one_at_a_time_lock_is_released_when_the_run_raises_inside_it(world):
+    env, sha = world
+    with pytest.raises(rj.Refused):
+        go(env, models(reply(), reply()), cap_usd=5)                        # refused inside the lock: the next run must not find it held
+    assert go(env, models(reply(), reply()))["final"] == "ok"
+
+
+def test_the_cli_passes_via_to_the_reader(world, monkeypatch):
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    seen = {}
+    monkeypatch.setattr(prr, "run", lambda job, **kw: seen.update(kw) or {"job": job})
+    env, sha = world
+    assert argus.main(["--jobs-dir", str(env.jobs), "patch-read-run", "jtest", "--via", "ui"], deps=env.deps) == 0
+    assert seen["via"] == "ui"
+    seen.clear()
+    argus.main(["--jobs-dir", str(env.jobs), "patch-read-run", "jtest"], deps=env.deps)
+    assert seen["via"] is None

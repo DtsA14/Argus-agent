@@ -155,6 +155,7 @@ def main(argv=None, deps=None):
     ap_.add_argument("--reader", choices=("claude", "argus"), help="who wrote the patch-read note (a statement, not a proof that the patch was read): recorded as a field of the log entries (SPEC_KARTU_SETUJU 5)")
     ap_.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="apply although these examples of the issue failed on the patch: "
                      "name exactly the ids that failed (status lists them); recorded in the job log (SPEC_EXAMPLE_GATE)")
+    ap_.add_argument("--via", choices=rj.VIA, help="where the apply was decided (SPEC_CHAT_APPLY_REPLY: recorded as the actor in the log)")
     ap_.add_argument("--accept-concerns", metavar="REASON", help="apply although a patch reader said `concerns` (both readings must exist, by two readers; two `ok` needs no flag): "
                      "REASON is YOUR words, 10-500 characters, quoted by you, never written by a model; every other check of apply still runs; recorded in the job log and in the commit message")
     t3b = sub.add_parser("t3b-run", help="one round of the T3b test of the domain reader with an Argus model (GLM, role code_judge) as the reader, outside the approval card: costs money, has its own cap (SPEC_KARTU_SETUJU 8)")
@@ -208,6 +209,7 @@ def main(argv=None, deps=None):
     pr_.add_argument("--second", action="store_true", help="the second reading, by another --reader-id than the first (SPEC_KARTU_SETUJU 13.5)")
     prr = sub.add_parser("patch-read-run", help="the patch reader of an Argus job: Tencent Hy4 Flash, then DeepSeek V4.1 Flash 1017 (both always, so one note holds the findings of both), outside a Claude session; costs money, has its own cap")
     prr.add_argument("job")
+    prr.add_argument("--via", choices=rj.VIA, help="where the reading was started (SPEC_CHAT_APPLY_REPLY: recorded in the job log)")
     prr.add_argument("--cap-usd", type=float, default=0.20, help="the TOTAL cap of this job's patch readings (a call starts only if billed so far + its worst case fits)")
     prr.add_argument("--max-output", type=int, default=100000, help="output tokens a call may use, up to 100000 (a reasoning model spends them on thinking first)")
     prr.add_argument("--first", choices=("hy4flash", "ds1017"), default="hy4flash", help="the reader asked first (default: the tested pair's first); another order is a measurement: the card says the pair is not tested")
@@ -331,6 +333,7 @@ def main(argv=None, deps=None):
             pn.add_argument("--ref", action="append", default=[], metavar="REPO", help="a registered repository whose README.md and file list the writer reads as data (at most 2; docs/reviews/SPEC_PRD_REFS.md)")
         else:
             pn.add_argument("job")
+            pn.add_argument("--via", choices=rj.VIA, help="where the reply was written (SPEC_CHAT_APPLY_REPLY: recorded as the actor)")
             pn.add_argument("--rebase", action="store_true", help="freeze the commit again at the repository's HEAD now (the notes are dropped)")
         pm = pn.add_mutually_exclusive_group(required=True)
         pm.add_argument("--message")
@@ -610,7 +613,7 @@ def main(argv=None, deps=None):
             return 0
         if o.cmd == "patch-read-run":
             from router import patch_read_run
-            summary = patch_read_run.run(o.job, cfg=load_config(o.config), deps=deps, jobs_dir=o.jobs_dir, cap_usd=o.cap_usd, max_output=o.max_output, first=o.first, second=o.second)
+            summary = patch_read_run.run(o.job, cfg=load_config(o.config), deps=deps, jobs_dir=o.jobs_dir, cap_usd=o.cap_usd, max_output=o.max_output, first=o.first, second=o.second, via=o.via)
             print(json.dumps(summary, indent=1))
             return 0
         if o.cmd == "patch-read":
@@ -627,7 +630,7 @@ def main(argv=None, deps=None):
             except Exception as e:              # a message only: the gate itself is in `apply`
                 print(f"domain reader's note: could not be looked at ({type(e).__name__})")
             done = ra.apply(o.job, o.read_sha, deps=deps, jobs_dir=o.jobs_dir, note=o.note, allow_failed_examples=o.allow_failed_examples,
-                            reader=o.reader, queues_dir=o.queues_dir, accept_concerns=o.accept_concerns)
+                            reader=o.reader, queues_dir=o.queues_dir, accept_concerns=o.accept_concerns, via=o.via)
             print(rj.status(done.id, jobs_dir=o.jobs_dir))
             e = done.data["log"][-1]
             print(f"applied on branch {e.get('branch')} (the commit above; was {str(e.get('head_before'))[:12]}; if the branch name starts with argus/, apply made it and the repository stays on it); not pushed, not deployed.\n"
@@ -697,7 +700,7 @@ def main(argv=None, deps=None):
                                  queues_dir=o.queues_dir, job_id=o.job_id, refs=o.ref, via=o.via)
                 else:
                     job = pj.reply(o.job, message, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, queues_dir=o.queues_dir,
-                                   rebase=o.rebase)
+                                   rebase=o.rebase, via=o.via)
                 print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
                 return 0 if job.data["state"] == pj.AWAITING_HUMAN else 1
             if o.prd_cmd == "check":

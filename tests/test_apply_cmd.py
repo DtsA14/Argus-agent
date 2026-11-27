@@ -1083,3 +1083,63 @@ def test_when_the_undo_fails_the_repository_stays_on_the_own_branch_and_the_mess
         run_apply(env, sha)
     monkeypatch.setattr(ra, "run_git", real)
     assert g(env.repo, "symbolic-ref", "--short", "HEAD") == "argus/jtest"
+
+
+# ---- SPEC_CHAT_APPLY_REPLY 12 F2: `--via ui` records the actor on the apply path -------------------------------------------------------
+
+def test_via_ui_records_the_actor_in_the_started_note_and_the_state_entry_and_a_plain_apply_stays_terminal(env, tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    patch, sha = package(env, tmp_path, edit_shop())
+    job = run_apply(env, sha, via="ui")
+    started = [e for e in job.data["log"] if e.get("what") == "apply_started"][0]
+    assert started["via"] == "ui" and job.data["log"][-1]["actor"] == "ui" and "via" not in job.data["log"][-1]
+
+
+def test_a_plain_apply_records_terminal_and_a_claude_shell_stays_claude_even_with_via_ui(env, tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    patch, sha = package(env, tmp_path, edit_shop())
+    assert run_apply(env, sha).data["log"][-1]["actor"] == "terminal"
+
+
+def test_a_claude_shell_that_passes_via_ui_is_still_claude(env, tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDECODE", "1")
+    patch, sha = package(env, tmp_path, edit_shop())
+    assert run_apply(env, sha, via="ui").data["log"][-1]["actor"] == "claude"
+
+
+def test_a_via_that_is_not_ui_is_refused_before_anything_is_opened(env, tmp_path):
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_ok(env, sha)
+    before = head(env)
+    with pytest.raises(rj.Refused, match="via"):
+        ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs, via="web")
+    assert head(env) == before and env.job().data["state"] == rj.REVIEW_READY
+
+
+def test_a_crash_after_the_commit_heals_with_the_actor_of_the_rerun(env, tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_ok(env, sha)
+    real = rj._record_applied
+
+    def crash(*a, **k):
+        raise KeyboardInterrupt("killed after the commit")
+    monkeypatch.setattr(rj, "_record_applied", crash)
+    with pytest.raises(KeyboardInterrupt):
+        ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs, via="ui")
+    monkeypatch.setattr(rj, "_record_applied", real)
+    job = ra.apply("jtest", sha[:12], deps=env.deps, jobs_dir=env.jobs, via="ui")
+    e = job.data["log"][-1]
+    assert e["recovered"] is True and e["actor"] == "ui"
+
+
+def test_the_cli_takes_via_ui_and_refuses_another_value(env, tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    sys.path.insert(0, str(tr.ROOT / "scripts"))
+    import argus
+    patch, sha = package(env, tmp_path, edit_shop())
+    read_ok(env, sha)
+    with pytest.raises(SystemExit):
+        argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12], "--via", "web"], deps=env.deps)
+    assert argus.main(["--jobs-dir", str(env.jobs), "apply", "jtest", "--read-sha", sha[:12], "--via", "ui"], deps=env.deps) == 0
+    assert env.job().data["log"][-1]["actor"] == "ui"
