@@ -23,6 +23,7 @@ function say(parent, kind, label, text, cls) { var p = el("p", cls || "say"); p.
 function act(label, build, cls) { var b = el("button", cls, label); b.type = "button"; b.addEventListener("click", function () { prepare(build()); }); return b; }
 var document = { createTextNode: function (t) { return { tag: "#text", text: String(t), children: [] }; } };
 var stream = new Node("section"), notes = [], prepared = [], posted = [], modes = [], timers = [];
+function grow() {}
 var message = { value: "" }, repoSel = { value: "", hidden: false };
 var mode = "manager", fromProposal = null, pending = null;
 function prepare(b) { prepared.push(JSON.stringify(b)); }
