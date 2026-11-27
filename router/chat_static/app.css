@@ -167,3 +167,10 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 #box[data-mode="manager"] #typebar{display:none}
 .msg.mine{width:fit-content;max-width:85%;margin:.6rem 0 .6rem auto;padding:.5rem .85rem;border-radius:1.1rem 1.1rem .3rem 1.1rem;background:var(--line);color:var(--text);text-align:left}
 .say.foreman{max-width:92%;border-left:0;padding-left:0}
+
+/* the foreman view: no card, no rules; translucent bubbles and tab bar */
+#stream .card.flat{background:none;border:0;border-radius:0;padding:0 0 .5rem;margin:0}
+#stream .card.flat > h2{display:none}
+.msg.mine,.say.foreman{border:0;outline:0;-webkit-tap-highlight-color:transparent}
+.msg.mine{background:color-mix(in srgb,var(--line) 55%,transparent)}
+#tabs{background:color-mix(in srgb,var(--card) 55%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}

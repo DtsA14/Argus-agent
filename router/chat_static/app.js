@@ -1457,7 +1457,7 @@
   function renderManager() {
     clear(stream);
     var d = mgr.data;
-    var c = el("article", "card");
+    var c = el("article", "card flat");                 // no card around the talk: text on the page, so the chat is longer
     c.appendChild(el("h2", null, "Foreman"));
     if (!mgr.job || !d) {
       c.appendChild(el("p", "note", mgr.expect > 0 ? "The session is starting." : "Think an idea through with the foreman, a model. It can propose research or a PRD, but it starts nothing: you prepare, read and confirm. One confirmation covers the whole session, up to its limit."));
