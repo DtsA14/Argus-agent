@@ -60,7 +60,7 @@ def test_the_card_of_a_session_shows_what_one_confirmation_covers_and_where_a_te
 def test_the_foreman_view_is_text_with_its_speaker_and_the_budget_and_time_left(out):
     h = out["open"]
     assert "left $0.1996 of $0.2000" in h and "time left 11 h 59 min" in h
-    assert "<p.msg human>You: ide <b>x</b></p>" in h                    # a tag in the text is text, not markup (the fake DOM prints text as it is)
+    assert "<p.msg human mine>ide <b>x</b></p>" in h                    # a tag in the text is text, not markup (the fake DOM prints text as it is)
     assert h.count("foreman (a model, not Argus)") == 5 and "reason (written by the model)" in h
     assert "The foreman is waiting for your answer." in h and "The foreman sees no route for this in Argus." in h
     assert "This turn failed: unusable" in h and "Nothing is started." in h

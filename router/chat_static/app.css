@@ -158,3 +158,12 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 .say.foreman{border-left:3px solid var(--line);padding-left:.5rem}
 .proposal{border:1px dashed var(--line);border-radius:1rem;padding:.6rem .75rem;margin:.4rem 0}
 .proposal h3{font-size:.9rem;margin:0 0 .25rem}
+
+/* the box is one rounded line with the + inside it; it grows with the text. Your turns are bubbles on the right, the foreman answers on the left */
+#box{align-items:flex-end;gap:0;background:var(--card);border:1px solid var(--line);border-radius:1.5rem;padding:.3rem .35rem .3rem .3rem}
+#box #plus{width:2.4rem;height:2.4rem;background:none;border:0;font-size:1.6rem}
+#box #issue-form{background:none;border:0;border-radius:0;padding:0 0 0 .1rem;gap:0 .4rem;align-items:center}
+#box #issue-form textarea{min-height:0;height:auto;max-height:7rem;overflow-y:auto;line-height:1.4;padding:.45rem 0}
+#box[data-mode="manager"] #typebar{display:none}
+.msg.mine{width:fit-content;max-width:85%;margin:.6rem 0 .6rem auto;padding:.5rem .85rem;border-radius:1.1rem 1.1rem .3rem 1.1rem;background:var(--line);color:var(--text);text-align:left}
+.say.foreman{max-width:92%;border-left:0;padding-left:0}

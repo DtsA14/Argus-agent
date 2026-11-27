@@ -177,3 +177,10 @@ def test_the_chat_tab_opens_on_the_foreman_and_prd_and_research_start_folded():
         assert re.search(r'data-mode="%s" class="more-type" hidden' % m, HTML)
     for m in ("manager", "issue"):
         assert re.search(r'data-mode="%s"(?! class="more-type")(?![^>]*hidden)' % m, HTML)
+
+
+def test_the_box_is_one_line_with_the_plus_inside_and_the_foreman_turns_are_bubbles():
+    css = (rc.STATIC_DIR / "app.css").read_text()
+    assert 'id="message" rows="1"' in HTML and "function grow()" in JS and 'message.addEventListener("input", grow)' in JS
+    assert re.search(r"#box\{[^}]*border-radius:1\.5rem", css) and "#box #plus{" in css and '#box[data-mode="manager"] #typebar{display:none}' in css
+    assert '"msg human mine"' in JS and ".msg.mine{" in css and "margin:.6rem 0 .6rem auto" in css

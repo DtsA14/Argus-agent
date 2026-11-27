@@ -324,6 +324,7 @@
       dropPending();
       var c = renderCard(prep, function (r) {
         message.value = "";
+        grow();
         fromProposal = null;                            // the source belongs to the one form it filled: a later form is the person's own
         if (mode === "manager") { if (body.action === "manager_new") { mgr.expect = 12; loadManager(); } return; }       // a job from a proposal: the Started card says where it went
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
@@ -363,7 +364,13 @@
     b.addEventListener("click", function () { prepare(build()); });
     return b;
   }
+  function grow() {                                    // one line at first; it grows with the text up to the CSS limit and shrinks back when sent
+    message.style.height = "auto";
+    if (message.value !== "") { message.style.height = Math.min(message.scrollHeight, 112) + "px"; }
+  }
   function formState() {
+    document.getElementById("box").setAttribute("data-mode", mode);
+    grow();
     var r = mode === "research", p = mode === "prd";
     var f = mode === "manager";
     message.maxLength = f ? 2000 : 6000;                // the server refuses a foreman message over 2000 characters
@@ -1329,6 +1336,7 @@
       renderList();
     });
   });
+  message.addEventListener("input", grow);
   issueForm.addEventListener("submit", function (e) {
     e.preventDefault();
     if (mode === "manager") { sendTurn(); return; }
@@ -1411,6 +1419,7 @@
       var job = mgr.job;
       setMode(p.route);                                // clears fromProposal; the form is then filled, and its submit carries the source
       message.value = p.text;
+      grow();
       if (p.route === "prd" && p.repo) { repoSel.value = p.repo; }
       fromProposal = { job: job, turn: e.n };
     });
@@ -1467,7 +1476,7 @@
     var over = mgr.stuck || d.expires_in_s === 0 || (typeof d.turn_cap_usd === "number" && typeof d.max_usd === "number" && typeof d.spent_usd === "number" && d.max_usd - d.spent_usd < d.turn_cap_usd) || (typeof d.max_turns === "number" && turns >= d.max_turns);
     if (!(d.conversation || []).length) { c.appendChild(el("p", "muted", "Say something below.")); }
     (d.conversation || []).forEach(function (e) {
-      if (e.from === "human") { c.appendChild(el("p", "msg human", "You: " + e.text)); return; }
+      if (e.from === "human") { c.appendChild(el("p", "msg human mine", e.text)); return; }          // your turn: a bubble on the right; the foreman answers on the left, with its label
       say(c, "model", "foreman (a model, not Argus)", e.say, "say foreman");
       if (e.error) { c.appendChild(el("p", "note", "This turn failed: " + e.error)); }
       if (e.propose) { c.appendChild(proposalBox(e)); }
@@ -1497,6 +1506,7 @@
       mgr.sending = false;
       if (mode !== "manager" || epoch !== mgr.epoch) { return; }        // the person moved on while it was sent: nothing is drawn, the box is theirs
       message.value = "";
+      grow();
       mgr.left = 60;
       pollManager();
     }).catch(function (e) {
