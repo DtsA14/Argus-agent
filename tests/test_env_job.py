@@ -687,3 +687,18 @@ def test_the_chat_reads_a_jobs_directory_that_holds_an_env_job(world, tmp_path):
         assert body == {"booked_usd": 0.0, "cap_usd": 7.0, "unknown": False}          # a package request books no money and does not make the cap unknown
     finally:
         svc.stop()
+
+
+def test_the_second_step_gets_only_what_is_left_of_the_time(world, monkeypatch):
+    clock = iter([0.0, 10.0, 120.0])                                          # the start, then the two times the budget is read
+    monkeypatch.setattr(ej.time, "monotonic", lambda: next(clock))
+    job, docker, c = run_one(world)
+    a, b = docker.calls
+    assert (a["timeout"], b["timeout"]) == (290, 180)                         # 300 s in all for the two steps
+
+
+def test_the_candidate_sha_is_the_sha_of_the_bytes_the_container_wrote(world):
+    lock = json.dumps(lock_with(("node_modules/foo", entry("2.0.0"))), indent=4).encode()          # not the bytes json.dumps would give back
+    job, docker, c = run_one(world, FakeDocker(lock=lock))
+    assert job.data["candidate"]["lock_sha256"] == ep.lock_sha(lock) != ep.lock_sha(json.dumps(json.loads(lock)).encode())
+    assert (job.dir / "candidate" / "package-lock.json").read_bytes() == lock
