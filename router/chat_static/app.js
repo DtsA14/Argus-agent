@@ -378,7 +378,7 @@
     var what = f ? "Send to the foreman" : r ? "Prepare research" : (p ? "Prepare PRD" : (openIssue !== null ? "Prepare reply" : "Prepare new issue"));
     document.getElementById("prepare").setAttribute("aria-label", what);
     document.getElementById("type-label").textContent = f ? "Foreman" : r ? "Research" : (p ? "PRD" : (openIssue !== null ? "Reply to this issue" : "New issue"));
-    message.placeholder = f ? "Talk with the foreman (2000 characters at most)" : r ? "Write the research question (20 to 2000 characters)" : (p ? "Write the PRD request: what changes and why" : "Write a message");
+    message.placeholder = f ? "Message the foreman" : r ? "Write the research question (20 to 2000 characters)" : (p ? "Write the PRD request: what changes and why" : "Write a message");
   }
   function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
     if (!keep && id !== openIssue) { dropPending(); }
