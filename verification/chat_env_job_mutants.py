@@ -1,4 +1,6 @@
 """Mutants for SPEC_CHAT_PACKAGES S2 (router/env_job.py, the env job kind, `argus env add|abandon`, the snapshot rule). Applied alone; killed = a test FAILED.
+Equivalent in behaviour (documented, not mutated further): "an existing job is overwritten" (a second guard, the job lock re-reads the file and refuses a job that
+exists); "the key shape is not checked before the registry step" (the analysis returns no new entries for a lock with a key of the wrong shape, so no view is wanted).
 Run in a throwaway worktree. Usage: <this> <worktree> <python> [name-part ...]"""
 import subprocess
 import sys
@@ -8,9 +10,9 @@ WT, PY = Path(sys.argv[1]), sys.argv[2]
 ONLY = sys.argv[3:]
 E, J, S, A = "router/env_job.py", "router/job.py", "router/stage_data.py", "scripts/argus.py"
 T = ["-rfEs", "tests/test_env_job.py", "tests/test_env_cli.py"]
-FLAGS = [("--cap-drop", '"--cap-drop", "ALL", '), ("--security-opt", '"--security-opt", "no-new-privileges", '), ("--read-only", '"--read-only", '),
+FLAGS = [("--cap-drop", '"--cap-drop", "ALL", '), ("--security-opt", '"--security-opt", "no-new-privileges", '), ("--read-only", ' "--read-only",'),
          ("--user", '"--user", f"{uid}:{gid}", '), ("--memory", '"--memory", f"{s[\'memory_mb\']}m", "--memory-swap", f"{s[\'memory_mb\']}m", '),
-         ("--pids-limit", '"--pids-limit", str(s["pids_limit"]), '), ("the read-only definition mount", '"-v", f"{in_dir}:/in:ro", '),
+         ("--pids-limit", '"--pids-limit", str(s["pids_limit"]),'), ("the read-only definition mount", '"-v", f"{in_dir}:/in:ro", '),
          ("the tmpfs", '"--tmpfs", f"/tmp:rw,size={s[\'tmp_mb\']}m,mode=1777",\n'), ("--entrypoint", '"--entrypoint", "node", ')]
 M = [
     ("a bool is a setting", E, [("if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:", "if not isinstance(v, int) or not lo <= v <= hi:")]),
@@ -18,8 +20,8 @@ M = [
     ("a setting has no lower bound", E, [("or not lo <= v <= hi:", "or not v <= hi:")]),
     ("an unknown setting key is accepted", E, [("    if extra:\n        raise rj.Refused(f\"config env_packages has unknown keys", "    if False:\n        raise rj.Refused(f\"config env_packages has unknown keys")]),
     ("a missing setting key is accepted", E, [("    if miss:\n        raise rj.Refused(f\"config env_packages lacks", "    if False:\n        raise rj.Refused(f\"config env_packages lacks")]),
-    ("BUILDING cannot fail", E, [(", (BUILDING, READY), (BUILDING, REFUSED), (BUILDING, FAILED)}", ", (BUILDING, READY), (BUILDING, REFUSED)}")]),
-    ("a built environment can be abandoned in the table", E, [(", (BUILDING, READY), (BUILDING, REFUSED), (BUILDING, FAILED)}", ", (BUILDING, READY), (BUILDING, REFUSED), (BUILDING, FAILED), (READY, ABANDONED)}")]),
+    ("BUILDING cannot fail", E, [("(BUILDING, READY), (BUILDING, REFUSED), (BUILDING, FAILED)}", "(BUILDING, READY), (BUILDING, REFUSED)}")]),
+    ("a built environment can be abandoned in the table", E, [("(BUILDING, READY), (BUILDING, REFUSED), (BUILDING, FAILED)}", "(BUILDING, READY), (BUILDING, REFUSED), (BUILDING, FAILED), (READY, ABANDONED)}")]),
     ("a report that waits is not live", E, [("LIVE = (NEW, RESOLVING, AWAITING_HUMAN, BUILDING)", "LIVE = (NEW, RESOLVING, BUILDING)")]),
     ("the creation lock is shared", E, [("fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n        except OSError:\n            raise rj.Refused(\"another package", "fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)\n        except OSError:\n            raise rj.Refused(\"another package")]),
     ("a report expires at the limit", E, [("if at is not None and now is not None and now - at > s[\"report_ttl_hours\"] * 3600:", "if at is not None and now is not None and now - at >= s[\"report_ttl_hours\"] * 3600:")]),

@@ -250,9 +250,10 @@ def test_the_job_id_must_be_a_harness_id_of_now(world, bad):
     assert snapshot(jobs) == []
 
 
-@pytest.mark.parametrize("repo", ["nope", "py-repo", "x", None, 5, ""])
-def test_the_repository_must_be_registered_with_a_node_environment(world, repo):
-    with pytest.raises(rj.Refused):
+@pytest.mark.parametrize("repo, why", [("nope", "not a registered repository"), ("py-repo", "does not run on a Node environment"), ("x", "not a registered repository"),
+                                       (None, "not a registered repository"), (5, "not a registered repository"), ("", "not a registered repository")])
+def test_the_repository_must_be_registered_with_a_node_environment(world, repo, why):
+    with pytest.raises(rj.Refused, match=why):
         begin(world, repo=repo)[0].__enter__()
     assert snapshot(world[1]) == []
 
@@ -269,6 +270,10 @@ def test_a_base_that_is_not_pinned_or_a_missing_lock_refuses(world):
     (root / "environments" / "bulking_node22" / "base").write_text("node:22")
     with pytest.raises(rj.Refused, match="pinned by digest"):
         begin(world)[0].__enter__()
+    for bad in (BASE + "x", BASE + " extra", "x" + BASE, BASE.upper(), BASE[:-1]):
+        (root / "environments" / "bulking_node22" / "base").write_text(bad)
+        with pytest.raises(rj.Refused, match="pinned by digest"):
+            begin(world)[0].__enter__()
     (root / "environments" / "bulking_node22" / "base").write_text(BASE)
     (root / "environments" / "bulking_node22" / "package-lock.json").write_text("not json")
     with pytest.raises(rj.Refused, match="package-lock"):
@@ -534,7 +539,7 @@ def test_a_young_package_refuses_with_its_report_and_keeps_the_candidate(world):
     assert (job.dir / "candidate" / "package-lock.json").is_file() and job.data["candidate"]["lock_sha256"]
 
 
-@pytest.mark.parametrize("views", [{"foo@2.0.0": (1, "")}, {"foo@2.0.0": (0, "")}, {"foo@2.0.0": (0, "not json")}, {"foo@2.0.0": (0, "[]")},
+@pytest.mark.parametrize("views", [{"foo@2.0.0": (1, view_text())}, {"foo@2.0.0": (1, "")}, {"foo@2.0.0": (0, "")}, {"foo@2.0.0": (0, "not json")}, {"foo@2.0.0": (0, "[]")},
                                    {"foo@2.0.0": (0, '{"a": 1, "a": 2}')}])
 def test_a_package_without_a_usable_registry_record_refuses(world, views):
     job, docker, c = run_one(world, FakeDocker(views=views))
