@@ -121,7 +121,7 @@ penjaga di bagian 6 dibuang satu per satu; sha dari klien; kartu tidak dihitung 
 
 ## 9. PR (jalur ketat; tinjau Opus spek lalu kode; mutan sekali; precheck; `verify_at`)
 
-- **PR1 (CLI):** `argus apply --via ui` dan `argus prd reply --via ui` (divalidasi, `actor` ui tercatat), tes.
+- **PR1 (CLI):** `--via ui` untuk `apply`, `prd reply` dan `patch-read-run` (divalidasi; pelaku dan `via` tercatat), satu kunci per pembacaan patch; rincian di bagian 12.
 - **PR2 (chat, tanpa UI):** tiga aksi di `chat_actions`, config `chat.patch_read_cap_usd`, tes, mutan; amandemen aturan dalam PR yang sama.
 - **PR3 (UI):** kolom balas di halaman rencana, tiga tombol di kartu pasang, pin hash statis.
 - Urutan bangun (K3): `prd_reply` dulu (kecil, tidak menyentuh repo), lalu `patch_read_run`, lalu `code_apply`.
@@ -152,8 +152,10 @@ nama aksi berawalan `job_`), F5 (`router/patch_read.py:212`: tanpa `raw_pair` ba
 **Nama aksi:** `job_apply` diganti **`code_apply`** (F4), dan tiap pembangun memeriksa himpunan kunci miliknya (`set(params) - {"job","reason"}` memberi 400,
 pola `chat_plan.py:179`). Aturan `job_*` di `chat.py:426` tidak diperlebar.
 
-**F1 (penghalang) `patch_read_run`:** PR1 menambah `--key-file openrouter=PATH`, `--yes` dan `--via ui` pada `patch-read-run` (dicatat sebagai catatan job).
-Kedua pembaca memakai OpenRouter (`router/patch_trial.py:36-40`), jadi satu berkas kunci cukup. Slot baru `ARGUS_CHAT_READER_KEY_FILE` dan cabang `_need_key`.
+**F1 (dikoreksi 2026-11-27 saat membangun PR1) `patch_read_run`:** tinjauan menyebut `patch-read-run` tidak punya `--key-file` dan `--yes`; itu **keliru**:
+keduanya ditambahkan lewat loop perintah hidup di `scripts/argus.py:376-381` (`argus patch-read-run --help` menunjukkannya), jadi anak proses chat bisa
+menjalankannya. Yang kurang hanya `--via ui` (PR1, dicatat sebagai catatan `patch_read_run` di log job, dengan pelaku) dan slot kunci chat
+`ARGUS_CHAT_READER_KEY_FILE` + cabang `_need_key` (PR2). Kedua pembaca memakai OpenRouter (`router/patch_trial.py:36-40`), jadi satu berkas kunci cukup.
 Argv: `argus patch-read-run JOB --cap-usd C --via ui --key-file openrouter=K --yes`. Kunci hanya dari slot, bentuk yang diizinkan hook.
 
 **F2 (penghalang) pelaku `ui`:** PR1 meneruskan `via` ke `_record_applied` (`job.py:1847`), ke catatan `apply_started` (`apply.py:285`) dan ke `_recovered`, dan
@@ -199,7 +201,7 @@ putaran ulang tidak mungkin, dan batas dua kali per 24 jam hanya sabuk tambahan.
 tidak cukup untuk dua panggilan terburuk. `chat.patch_read_cap_usd` dijepit ≤ 2 (`run()` menolak di atas 2).
 
 **F14 balapan dan restart:** `spawner.busy` hilang saat restart dan `patch-read-run` tidak memegang kunci job selama panggilan model: pembaca mengambil
-`job.lock()` (atau flock ledger) agar chat dan terminal tidak berlomba. Sesudah crash: kartu memperingatkan "apply_started tanpa APPLIED"; confirm baru
+satu `flock` sendiri per job (`.patch_read_run.lock`; bukan `job.lock()`, yang diambil `patch_read.record` pada tiap tulisan) agar chat dan terminal tidak berlomba. Sesudah crash: kartu memperingatkan "apply_started tanpa APPLIED"; confirm baru
 menjalankan ulang apply yang sembuh lewat `_recovered` (`apply.py:344-357`); pohon kotor sesudah pemulihan gagal tampil dan tombol tidak ditawarkan lagi.
 
 **F15 ancaman tambahan:** apply memindahkan checkout Atha ke `argus/<job>` dan membiarkannya di sana (kartu mengatakannya sebelum konfirmasi); karakter
@@ -211,7 +213,7 @@ teks model atau foreman** (tes pada `app.js`).
 mengharapkan 404 untuk `job_apply`), `:499-503` (tidak ada nama aksi berisi "apply"), `tests/test_chat_ui2.py:64-65` (`prd_reply` bukan aksi); di PR3:
 `tests/test_chat_t4b.py:570` dan teks `app.js` "apply is still done from the terminal".
 
-**PR1 (CLI) jadi:** `apply --via ui`, `prd reply --via ui`, `patch-read-run --via ui --key-file --yes`, dan tiga tempat pelaku di atas, dengan tes.
+**PR1 (CLI) jadi:** `apply --via ui`, `prd reply --via ui`, `patch-read-run --via ui` (`--key-file` dan `--yes` sudah ada), tiga tempat pelaku di atas, dan satu kunci `flock` per job untuk pembacaan patch (F14; berkas `.patch_read_run.lock`, bukan `job.lock()`, karena `patch_read.record` mengambil `job.lock()` sendiri pada tiap tulisan dan akan menolak), dengan tes.
 
 **Mutan wajib (tulis dan jalankan sekali sesudah tinjauan kode):** (1) `exposure_of` tanpa cabang untuk dua aksi berbayar; (2) jaring audit dibuang, hanya
 `pending` (tes melewati 600 detik); (3) `code_apply` menerima sha, repo, cap, cabang, pembaca atau `allow` dari klien; (4) awalan `job_` membiarkan sha

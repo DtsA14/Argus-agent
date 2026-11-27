@@ -989,3 +989,63 @@ def test_the_prompt_tells_the_writer_to_match_the_issues_against_each_other_and_
         assert "Match the issues against each other before you submit" in text
         assert "synchronous or asynchronous" in text and "every assumption an item makes about an earlier one" in text
         assert "Write the word 'contract' in the PRD." in text
+
+
+# ---- SPEC_CHAT_APPLY_REPLY 12 F2: `prd reply --via ui` records the actor when the job moves to WRITING ------------------------------------
+
+def _writing_actors(job):
+    return [e.get("actor") for e in job.data["log"] if e.get("what") == "state" and e.get("new") == pj.WRITING]
+
+
+def test_a_reply_via_ui_records_ui_and_a_plain_reply_records_terminal(tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    env = Env(tmp_path, [submit(prd_args()), submit(), submit()])
+    env.new()
+    env.reply("update", via="ui")
+    env.reply("again")
+    assert _writing_actors(env.job())[-2:] == ["ui", "terminal"]
+
+
+def test_a_claude_shell_that_replies_via_ui_is_recorded_as_claude(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDECODE", "1")
+    env = Env(tmp_path, [submit(prd_args()), submit()])
+    env.new()
+    env.reply("update", via="ui")
+    assert _writing_actors(env.job())[-1] == "claude"
+
+
+def test_a_reply_with_another_via_is_refused_and_nothing_starts(tmp_path):
+    env = Env(tmp_path, [submit(prd_args()), submit()])
+    env.new()
+    with pytest.raises(rj.Refused, match="via"):
+        env.reply("update", via="web")
+    assert len(env.model.calls) == 1 and env.job().data["state"] == pj.AWAITING_HUMAN
+
+
+def test_the_cli_reply_has_a_via_option_that_only_takes_ui():
+    out = subprocess.run([sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "argus.py"), "prd", "reply", "--help"], capture_output=True, text=True).stdout
+    assert "--via {ui}" in out
+
+
+def test_the_cli_passes_via_to_the_reply_and_the_log_says_via_beside_the_actor(tmp_path, monkeypatch):
+    import types
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import argus
+    seen = {}
+    monkeypatch.setattr(pj, "reply", lambda job, message, **kw: seen.update(kw) or types.SimpleNamespace(id=job, data={"state": pj.AWAITING_HUMAN}))
+    monkeypatch.setattr(rj, "status", lambda *a, **k: "status")
+    env = Env(tmp_path, [submit(prd_args())])
+    assert argus.main(["--jobs-dir", str(env.jobs), "prd", "reply", "jp", "--message", "x", "--via", "ui"], deps=env.deps) == 0
+    assert seen["via"] == "ui"
+    seen.clear()
+    argus.main(["--jobs-dir", str(env.jobs), "prd", "reply", "jp", "--message", "x"], deps=env.deps)
+    assert seen["via"] is None
+
+
+def test_the_writing_move_carries_via_when_the_chat_replied(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDECODE", "1")
+    env = Env(tmp_path, [submit(prd_args()), submit()])
+    env.new()
+    env.reply("update", via="ui")
+    e = [x for x in env.job().data["log"] if x.get("what") == "state" and x.get("new") == pj.WRITING][-1]
+    assert e["actor"] == "claude" and e["via"] == "ui"

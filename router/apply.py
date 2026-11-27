@@ -104,13 +104,15 @@ def _accepted_reason(text):
     return reason_rule.check(text, "--accept-concerns")
 
 
-def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None, queues_dir=None, accept_concerns=None):
+def apply(job_id, read_sha, *, deps, jobs_dir=rj.JOBS, note=None, allow_failed_examples=(), reader=None, queues_dir=None, accept_concerns=None, via=None):
+    if via is not None and via not in rj.VIA:                  # before anything is opened or locked (SPEC_CHAT_APPLY_REPLY 12 F2)
+        raise rj.Refused(f"via {via!r} is not one of {', '.join(rj.VIA)}; nothing was changed")
     reason = None if accept_concerns is None else _accepted_reason(accept_concerns)    # before anything is opened or locked
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
         repo = job.data["inputs"]["repo"]
         with lock_repo(jobs_dir, repo):
-            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader, queues_dir=queues_dir, accept=reason)
+            return _apply(job, read_sha, deps=deps, note=note, allow=tuple(allow_failed_examples or ()), reader=reader, queues_dir=queues_dir, accept=reason, via=via)
 
 
 def _leave_own_branch(repo, first, own):
@@ -143,7 +145,7 @@ def _title(review_dir, job_id):
     return f"job {job_id}"
 
 
-def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None, accept=None):
+def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None, accept=None, via=None):
     def refuse(why):
         raise rj.Refused(f"job {job.id}: {why}; nothing was changed")
 
@@ -174,6 +176,8 @@ def _apply(job, read_sha, *, deps, note, allow=(), reader=None, queues_dir=None,
     except rj.Refused as e:
         refuse(str(e).split(": ", 1)[1] if ": " in str(e) else str(e))
     extra = {"reader": reader} if reader else {}
+    if via:
+        extra["via"] = via                                          # the apply_started entry says it, and `_record_applied` records the actor from it (also on the recovery path)
     if accept is None and nits:
         extra = {**extra, "accepted_nits": [list(f) for f in nits]}
     if accept is not None:

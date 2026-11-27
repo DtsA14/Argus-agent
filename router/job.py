@@ -1820,7 +1820,7 @@ def applied(job_id, commit, *, deps, jobs_dir=JOBS, note=None, allow_failed_exam
         return _record_applied(job, commit, deps=deps, note=note, allow_failed_examples=allow_failed_examples)
 
 
-def _record_applied(job, commit, *, deps, note=None, require_as_is=False, allow_failed_examples=(), **extra):
+def _record_applied(job, commit, *, deps, note=None, require_as_is=False, allow_failed_examples=(), via=None, **extra):
     """applied() without the lock: the caller holds job.lock() (`argus apply` holds it across its git work). extra: more fields for the log entry."""
     if job.data["state"] != REVIEW_READY:
         raise Refused(f"job {job.id} is {job.data['state']}: only a valid review package is applied")
@@ -1844,7 +1844,7 @@ def _record_applied(job, commit, *, deps, note=None, require_as_is=False, allow_
     if require_as_is and as_is is not True:             # `argus apply`: a commit that is not the patch is not recorded as the job's
         raise Refused(f"job {job.id}: the commit's changes are not the package's patch (as_is {as_is})")
     job.move(APPLIED, deps, commit=sha, patch_sha256=hashlib.sha256(data).hexdigest(),
-             as_is=as_is, by=os.environ.get("USER"), actor=actor(),
+             as_is=as_is, by=os.environ.get("USER"), actor=actor(via),
              **({"note": note} if note else {}), **({"examples_failed": failed} if failed else {}), **extra)
     return job
 
