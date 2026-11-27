@@ -54,10 +54,14 @@ if lock.get("lockfileVersion") != 3 or bad:
              + ", ".join(bad[:10]))
 EOF
 mkdir -p "$CACHE"
+# ARGUS_ENV_CONTAINER (SPEC_CHAT_PACKAGES S3): the builder container's name, so a caller that gives up can `docker rm -f` it (killing the client leaves a
+# --rm container running). Unset: no name, as before.
+NAME_ARGS=()
+[ -z "${ARGUS_ENV_CONTAINER:-}" ] || NAME_ARGS=(--name "$ARGUS_ENV_CONTAINER")
 W="$(mktemp -d)"
 trap 'rm -rf "$W"' EXIT
 mkdir -p "$W/root"
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_update_notifier=false \
+docker run --rm ${NAME_ARGS[@]+"${NAME_ARGS[@]}"} --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_update_notifier=false \
   -v "$(cd "$DEF" && pwd):/def:ro" -v "$CACHE:/cache" -v "$W:/out" "$BASE" \
   sh -c 'set -e; mkdir /tmp/b && cp /def/package.json /def/package-lock.json /tmp/b/ && cd /tmp/b \
          && npm ci --ignore-scripts --no-audit --no-fund --loglevel=error --cache /cache \

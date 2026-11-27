@@ -16,7 +16,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
+import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -44,6 +47,11 @@ NPM_SENTENCES = (("ERESOLVE", "npm reports a peer-dependency conflict"),
                  ("E404", "npm found no such package or version"))
 LS_PROBLEM = re.compile(r"\b(invalid|missing)\b")
 SCRIPT_VERSION = 1
+SHA12 = re.compile(r"[0-9a-f]{12}")
+SHA64 = re.compile(r"[0-9a-f]{64}")
+PIN_DIGEST = re.compile(r"(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}")
+DISK_MIN_BYTES = 3 * 1024 ** 3                         # the spec's 3 GB, for Docker's root and the host /tmp (the build copies node_modules there)
+PIN_SUFFIXES = ("", ".json", ".check.json")           # the three pin files of an environment; the check record is moved last
 
 # The two scripts the container runs. They are fixed text, written into the job's directory by the harness, never built from a request: the package
 # specs reach them as JSON data and npm is started with an argument list (no shell). Output goes to /out only.
@@ -166,7 +174,7 @@ def _remove_containers(job_id, docker):
             pass
 
 
-def settle(job, deps, cfg, *, docker=None):
+def settle(job, deps, cfg, *, docker=None, builder=None):
     """Bring one env job's state up to date on a read: AWAITING_HUMAN older than report_ttl_hours becomes ABANDONED; a job in NEW, RESOLVING or BUILDING whose
     lock nobody holds is a job whose process died and becomes FAILED (its containers removed). A job whose lock is held is alive and is not touched.
     Returns the state. Never raises for a job that is busy or gone."""
@@ -192,8 +200,11 @@ def settle(job, deps, cfg, *, docker=None):
             with job.lock():
                 job.data = rj.open_job(job.id, job.dir.parent).data
                 if job.data.get("state") in (NEW, RESOLVING, BUILDING):
+                    was_building = job.data.get("state") == BUILDING
                     job.move(FAILED, deps, reason="the process that ran it is gone")
                     _remove_containers(job.id, docker)
+                    if was_building:
+                        _clean_build(job, builder or Builder(), docker, rj.ROOT, remove_container=False)
         except rj.JobBusy:
             pass
     return job.data.get("state")
@@ -539,6 +550,271 @@ def abandon(job_id, *, cfg, deps, jobs_dir=rj.JOBS, via=None, docker=None):
     return job
 
 
+# ---- the build (S3) ------------------------------------------------------------------------------------------------------------------
+
+class PinsExist(Exception):
+    """A pin file of the new environment is already in the checkout: nothing was moved and nothing was overwritten."""
+
+
+def pin_names(name):
+    return [f".sandbox_image_{name}{suffix}" for suffix in PIN_SUFFIXES]
+
+
+def move_pins(out, root, name):
+    """Move the three pin files of a built and checked environment from the job's build directory into the checkout. `os.link` then unlink, file by file: a
+    plain rename would overwrite silently (a by-hand build writes straight to the checkout and takes no lock), `os.link` refuses with EEXIST. On any
+    refusal what was linked is unlinked again, nothing in the checkout was overwritten and the sources stay where they were. The check record goes last."""
+    out, root = Path(out), Path(root)
+    names = pin_names(name)
+    linked = []
+    try:
+        for n in names:
+            if not (out / n).is_file():
+                raise PinsExist(f"{n} is missing from the build directory")
+            try:
+                os.link(out / n, root / n)
+            except FileExistsError:
+                raise PinsExist(f"{n} already exists in the checkout") from None
+            except OSError as e:
+                raise PinsExist(f"{n} could not be linked into the checkout ({type(e).__name__})") from None
+            linked.append(n)
+    except PinsExist:
+        for n in linked:
+            (root / n).unlink(missing_ok=True)
+        raise
+    for n in names:
+        (out / n).unlink(missing_ok=True)
+
+
+class Builder:
+    """The one place that runs the build script and the check script: child processes in their own process group, killed whole on a timeout (the build script
+    has no timeout of its own), with the builder container removed by name. `free_bytes()` is the smaller of the free space of Docker's root and of /tmp.
+    Tests pass a fake with the same methods."""
+
+    def __init__(self, root=None):
+        self.root = Path(rj.ROOT if root is None else root)
+
+    def free_bytes(self):
+        paths = [tempfile.gettempdir()]
+        try:
+            r = subprocess.run(["docker", "info", "--format", "{{.DockerRootDir}}"], capture_output=True, text=True, timeout=30)
+            if r.returncode == 0 and r.stdout.strip():
+                paths.append(r.stdout.strip())
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        sizes = []
+        for p in paths:
+            try:
+                st = os.statvfs(p)
+                sizes.append(st.f_bavail * st.f_frsize)
+            except OSError:
+                continue
+        return min(sizes) if sizes else 0
+
+    def build(self, name, defs, out, container, timeout_s):
+        env = {**os.environ, "ARGUS_ENV_DEFS": str(defs), "ARGUS_ENV_OUT": str(out), "ARGUS_ENV_CONTAINER": container}
+        return self._run(["bash", str(self.root / "scripts" / "build_env_node.sh"), name], env, timeout_s, container)
+
+    def check(self, name, defs, out, like, timeout_s):
+        argv = [sys.executable, str(self.root / "scripts" / "check_env_image.py"), name, "--defs", str(defs), "--out", str(out), "--like", like]
+        return self._run(argv, dict(os.environ), timeout_s, None)
+
+    def _run(self, argv, env, timeout_s, container):
+        p = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True, cwd=str(self.root))
+        try:
+            text, _ = p.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            p.communicate()
+            if container:
+                Docker().remove(container)
+            raise Docker.Timeout(container or argv[1]) from None
+        return p.returncode, (text or "")[-LOG_MAX:]
+
+    def remove_image(self, image):
+        subprocess.run(["docker", "rmi", image], capture_output=True, text=True, timeout=120)
+
+
+def _pin_of(out, name):
+    """The image id in OUT/.sandbox_image_NAME (a regular file holding one digest), else None."""
+    path = Path(out) / f".sandbox_image_{name}"
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 512:
+            return None
+        text = path.read_text().strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return text if PIN_DIGEST.fullmatch(text) else None
+
+
+def _clean_build(job, builder, docker, root, *, keep_image_of=None, remove_container=True):
+    """Remove what a build that did not finish left: its container, the image it made (never one a pin file of the checkout names) and the pins in its
+    own directory. Best effort; a refusal to remove is not an error here."""
+    name = job.data.get("inputs", {}).get("name")
+    out = job.dir / "build" / "out"
+    image = _pin_of(out, name) if isinstance(name, str) else None
+    if remove_container:
+        try:
+            docker.remove(container_name(job.id, "-b"))
+        except Exception:      # noqa: BLE001
+            pass
+    if image is not None:
+        existing = _pin_of(root, name)
+        if existing != image and image != keep_image_of:
+            try:
+                builder.remove_image(image)
+            except Exception:      # noqa: BLE001
+                pass
+    if isinstance(name, str):
+        for n in pin_names(name):
+            (out / n).unlink(missing_ok=True)
+
+
+def adoption_text(job, cfg, built, report):
+    """The printed adoption bundle (never applied): the files to put under environments/, the config.yaml lines, the repository's dependency lines and the
+    hashes to check. Only the harness's own values: names and versions that matched their shapes, the environment's own block and hashes."""
+    inp = job.data["inputs"]
+    name, base, repo = inp["name"], inp["base_environment"], inp["repo"]
+    block = _environments(cfg).get(base) or {}
+    deps_lines = [f'    "{p["name"]}": "{p["version"]}",' for p in (report.get("packages") or []) if p.get("direct")]
+    return "\n".join([
+        f"Adoption of the environment {name} (a pull request of its own; nothing here was applied, and nothing in the checkout changed except the three pin files).",
+        "",
+        "1. Copy the folder adoption/environments/" + name + " to environments/" + name + " WITHOUT reading the lock (it holds registry text), and check:",
+        f"   sha256sum environments/{name}/package-lock.json   must be   {built['lock_sha256']}",
+        f"   sha256sum environments/{name}/package.json        must be   {job.data['candidate']['package_sha256']}",
+        f"   the image {built['image']} was built from exactly that lock and passed scripts/check_env_image.py (its pins are in the checkout).",
+        "",
+        f"2. config.yaml, under sandbox: environments:",
+        f"    {name}:",
+        "      image: null",
+        f"      runner: {block.get('runner')}",
+        f"      protected_required: {str(block.get('protected_required')).lower()}",
+        f"   and under issue_writer: repos: change `environment: {base}` to `environment: {name}` on the line of {repo}. grep config.yaml for {base} for any other use.",
+        "",
+        f"3. The repository {repo}: add to package.json under dependencies (exact versions; the environment's lock holds them, and a repository whose",
+        "   package.json is not a subset of the lock is refused at deploy):",
+        *(deps_lines or ["    (no direct package)"]),
+        "",
+        "Until the pull request is merged nothing running changes, and the old image and its pins are untouched.",
+        "",
+    ])
+
+
+def build(job_id, *, sha, cfg, deps, jobs_dir=rj.JOBS, via=None, root=None, docker=None, builder=None):
+    """The second confirm: build the image of a report the human accepted, check it, move its pins into the checkout and leave the job READY with an adoption bundle.
+    Every refusal before BUILDING leaves the job as it was. `sha` is the 12 hex of the candidate lock the card showed; the full 64 hex stored in the job is what the
+    candidate's bytes must hash to, now, and the build uses those verified bytes and never reads the original again."""
+    if via != "ui":
+        raise rj.Refused("a package build is started from the chat (--via ui); nothing was changed")
+    root = Path(rj.ROOT if root is None else root)
+    docker = docker or Docker()
+    builder = builder or Builder(root)
+    s = settings(cfg)
+    if not isinstance(sha, str) or not SHA12.fullmatch(sha):
+        raise rj.Refused("--sha must be the 12 hex digits of the candidate lock's sha256 that the card showed; nothing was changed")
+    job = rj.open_job(job_id, jobs_dir)
+    if job.data.get("kind") == KIND:
+        settle(job, deps, cfg, docker=docker, builder=builder)
+    with job.lock():
+        d = job.data
+        if d.get("kind") != KIND:
+            raise rj.Refused(f"job {job_id} is not a package request; nothing was changed")
+        if not _created_via_ui(job):
+            raise rj.Refused(f"job {job_id} was not started from the chat; nothing was changed")
+        if d["state"] != AWAITING_HUMAN:
+            raise rj.Refused(f"job {job_id} is {d['state']}, not AWAITING_HUMAN: only a report that waits can be built; nothing was changed")
+        report, cand = d.get("report"), d.get("candidate")
+        if not isinstance(report, dict) or report.get("status") != "OK" or not isinstance(cand, dict):
+            raise rj.Refused(f"job {job_id} has no accepted report; nothing was changed")
+        want, want_pkg = cand.get("lock_sha256"), cand.get("package_sha256")
+        if not (isinstance(want, str) and SHA64.fullmatch(want) and isinstance(want_pkg, str) and SHA64.fullmatch(want_pkg)):
+            raise rj.Refused(f"job {job_id} has no recorded candidate hash; nothing was changed")
+        if want[:12] != sha:
+            raise rj.Refused(f"the sha {sha} is not the candidate lock's ({want[:12]}); nothing was changed")
+        try:
+            lock_raw = (job.dir / "candidate" / "package-lock.json").read_bytes()
+            pkg_raw = (job.dir / "candidate" / "package.json").read_bytes()
+        except OSError:
+            raise rj.Refused("the candidate files cannot be read; nothing was changed") from None
+        if ep.lock_sha(lock_raw) != want or ep.lock_sha(pkg_raw) != want_pkg:
+            raise rj.Refused("the candidate changed since the report: abandon this request and make it again; nothing was changed")
+        if builder.free_bytes() < DISK_MIN_BYTES:
+            raise rj.Refused(f"less than {DISK_MIN_BYTES // 1024 ** 3} GB free in Docker's root or /tmp; nothing was changed")
+        inp = d["inputs"]
+        name = inp["name"]
+        if any((root / n).exists() or (root / n).is_symlink() for n in pin_names(name)):
+            raise rj.Refused(f"pin files of {name} already exist in the checkout; nothing was changed")
+        job.move(BUILDING, deps)
+        work = job.dir / "build"
+        if work.exists():
+            shutil.rmtree(work)
+        defs, out = work / "defs" / name, work / "out"
+        defs.mkdir(parents=True)
+        out.mkdir()
+        (defs / "base").write_text(inp["base_image"] + "\n")
+        (defs / "package.json").write_bytes(pkg_raw)
+        (defs / "package-lock.json").write_bytes(lock_raw)
+        t0 = time.monotonic()
+
+        def fail(reason):
+            _clean_build(job, builder, docker, root)
+            job.move(FAILED, deps, reason=reason)
+            return None
+
+        try:
+            rc, log = builder.build(name, work / "defs", out, container_name(job.id, "-b"), s["build_timeout_s"])
+        except Docker.Timeout:
+            return fail(f"the build took longer than {s['build_timeout_s']} s")
+        except OSError:
+            return fail("the build could not be started")
+        (work / "build.log").write_text(log)
+        image = _pin_of(out, name)
+        try:
+            meta = json.loads((out / f".sandbox_image_{name}.json").read_text())
+        except (OSError, ValueError):
+            meta = None
+        if rc != 0 or image is None or not isinstance(meta, dict):
+            return fail("the build did not finish")
+        if meta.get("lock_sha256") != want or meta.get("image") != image:
+            return fail("the build recorded another lock or image than the candidate")
+        left = max(30, int(s["build_timeout_s"] - (time.monotonic() - t0)))
+        try:
+            rc, log = builder.check(name, work / "defs", out, inp["base_environment"], left)
+        except Docker.Timeout:
+            return fail("the environment check took too long")
+        except OSError:
+            return fail("the environment check could not be started")
+        (work / "check.log").write_text(log)
+        try:
+            rec = json.loads((out / f".sandbox_image_{name}.check.json").read_text())
+        except (OSError, ValueError):
+            rec = None
+        if rc != 0 or not isinstance(rec, dict) or rec.get("result") != "pass" or rec.get("image") != image or rec.get("environment") != name:
+            return fail("the environment did not pass its check")
+        try:
+            move_pins(out, root, name)
+        except PinsExist as e:
+            _clean_build(job, builder, docker, root, keep_image_of=None)
+            job.move(FAILED, deps, reason=f"the pins could not be moved: {e}")
+            return None
+        built = {"name": name, "image": image, "lock_sha256": want, "node": meta.get("node") if isinstance(meta.get("node"), str) else None, "built_at": deps.clock()}
+        adoption = job.dir / "adoption" / "environments" / name
+        if adoption.parent.parent.exists():
+            shutil.rmtree(adoption.parent.parent)
+        adoption.mkdir(parents=True)
+        for f in ("base", "package.json", "package-lock.json"):
+            shutil.copyfile(defs / f, adoption / f)
+        (job.dir / "adoption" / "ADOPT.txt").write_text(adoption_text(job, cfg, built, report))
+        d["built"] = built
+        job.save()
+        job.move(READY, deps)
+        return built
+
+
 def status_lines(job):
     """The env job's lines for `argus status`: facts from the harness only; the report's strings are the harness's own sentences and shaped values."""
     d = job.data
@@ -557,4 +833,7 @@ def status_lines(job):
     c = d.get("candidate")
     if isinstance(c, dict):
         lines.append(f"candidate lock sha256 {c.get('lock_sha256')}")
+    b = d.get("built")
+    if isinstance(b, dict):
+        lines.append(f"built and checked: {b.get('name')}, image {b.get('image')}, node {b.get('node')}; the pins are in the checkout; adoption bundle: {job.dir / 'adoption' / 'ADOPT.txt'}")
     return lines

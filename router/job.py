@@ -256,6 +256,23 @@ def check_problem(name, image, root=None):
     if r.get("image") != image:
         return (f"sandbox environment {name!r} was checked with image {r.get('image')}, not {image}: run "
                 f"scripts/check_env_image.py {name} again")
+    lock = Path(root) / "environments" / name / "package-lock.json"
+    if lock.is_file():                       # SPEC_CHAT_PACKAGES S3: a Node environment's image was built from one lock; a different lock under the same name is not that image
+        try:
+            meta = json.loads((Path(root) / f".sandbox_image_{name}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return f"sandbox environment {name!r} has no readable build metadata (.sandbox_image_{name}.json): build it again"
+        want = meta.get("lock_sha256") if isinstance(meta, dict) else None
+        if not isinstance(want, str) or not re.fullmatch(r"[0-9a-f]{64}", want):
+            return f"sandbox environment {name!r}: the build metadata names no lock hash: build it again"
+        if meta.get("image") != image:
+            return f"sandbox environment {name!r}: the build metadata is of image {meta.get('image')}, not {image}: build it again"
+        try:
+            have = hashlib.sha256(lock.read_bytes()).hexdigest()
+        except OSError:
+            return f"sandbox environment {name!r}: environments/{name}/package-lock.json cannot be read"
+        if have != want:
+            return f"sandbox environment {name!r}: environments/{name}/package-lock.json is not the lock its image was built from: build it again"
     return None
 
 
