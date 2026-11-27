@@ -43,7 +43,7 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 STATIC_SHA256 = {
     "index.html": "c3bed137415b002ed2a3dbb7976b3fabf3f9b9c984b3db9f0ecf7d9bfcf1c9bf",
     "app.js": "7ae1df1e7cbde68492545f5584484fe0762c0f1497af250c8a33163a5311a79e",
-    "app.css": "6338d7b3efa46a0da55288352b37c69307f3a19b4a62d06762f913746361e8cd",
+    "app.css": "9c894c86ccc2ca151ea4dbc61c28b89a57b560cc1b911bdc078d26298797d48a",
 }
 
 

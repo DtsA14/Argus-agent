@@ -179,3 +179,7 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 #box #issue-form textarea:focus,#box #issue-form textarea:focus-visible{outline:none;box-shadow:none}
 #box:focus-within{border-color:var(--muted)}
 @media (max-width:59.99rem){#panel:not(.open){visibility:hidden;transition:transform .2s,visibility 0s .2s}#panel.open{visibility:visible}}
+
+/* the foreman's text reads like a book page: the phone's serif (New York on iOS), 17 px, line height 1.6; your bubbles stay in the sans */
+.say.foreman{font-family:ui-serif,"New York",Georgia,serif;font-size:1.0625rem;line-height:1.6}
+.msg.mine{line-height:1.45}
