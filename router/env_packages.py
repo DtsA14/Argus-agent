@@ -28,7 +28,8 @@ PERMISSIVE = {"MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD"
 REGISTRY = "https://registry.npmjs.org/"
 SIZE_MAX = 10 ** 12
 MAINTAINERS_MAX = 1000
-COMPARED = ("version", "resolved", "integrity", "dev", "optional", "devOptional", "peer")
+HARD = ("version", "resolved", "integrity")           # what a change of an existing entry may not touch: it alters the installed code
+FLAGS = ("dev", "optional", "devOptional", "peer")      # metadata only (a dev-only package that a runtime package now needs): the files are the same
 ENV_NAME = re.compile(r"[a-z][a-z0-9_]{0,31}")
 UP_SUFFIX = re.compile(r"_up[0-9]+$")
 ENV_NAME_MAX = 32
@@ -111,18 +112,20 @@ def _fetched(entry):
     return str(entry.get("integrity", "")).startswith("sha512-") and str(entry.get("resolved", "")).startswith(REGISTRY)
 
 
-def analyse(old, new, requested=()):
-    """The facts of a candidate lock against the environment's lock, as a dict: `blocks` (strings, each a reason to refuse), `new` ({key: entry}),
-    `changed` and `removed` (keys), `warns` is not here (the registry facts add them). Pure; the lock is data and nothing from it is returned
-    except keys that matched the key shape and the checked fields of entries."""
+def analyse(old, new, requested=(), direct=None):
+    """The facts of a candidate lock against the environment's lock, as a dict: `blocks` (strings, each a reason to refuse), `warns`, `new` ({key: entry}),
+    `changed` (keys whose version, download or hash changed: always a block), `flags` (keys whose only change is a dev, optional or peer flag: no file
+    differs, so it is a note and no block) and `removed` (keys). `direct`: the names of the environment's own dependencies (a second copy of one of those
+    at another version is a block, as two copies of react break tests; of any other name it is a warning, as duplicates are normal in npm); None means
+    every name is direct. Pure; the lock is data and nothing from it is returned except keys that matched the key shape and the checked fields of entries."""
     blocks = []
     if not isinstance(old, dict) or not isinstance(new, dict):
-        return {"blocks": ["a lock is not an object"], "new": {}, "changed": [], "removed": []}
+        return {"blocks": ["a lock is not an object"], "warns": [], "new": {}, "changed": [], "flags": [], "removed": []}
     if new.get("lockfileVersion") != 3 or old.get("lockfileVersion") != 3:
         blocks.append("a lock is not lockfile version 3")
     po, pn = old.get("packages"), new.get("packages")
     if not isinstance(po, dict) or not isinstance(pn, dict):
-        return {"blocks": blocks + ["a lock has no packages"], "new": {}, "changed": [], "removed": []}
+        return {"blocks": blocks + ["a lock has no packages"], "warns": [], "new": {}, "changed": [], "flags": [], "removed": []}
     for key, entry in pn.items():
         if key == "":
             continue
@@ -137,8 +140,8 @@ def analyse(old, new, requested=()):
         if "name" in entry and entry.get("name") != key_name(key):
             blocks.append(f"{key_name(key)} is an alias of another package")
     if blocks and any("shape of a package path" in b or "is not an object" in b for b in blocks):
-        return {"blocks": _dedupe(blocks), "new": {}, "changed": [], "removed": []}
-    new_entries, changed, removed = {}, [], []
+        return {"blocks": _dedupe(blocks), "warns": [], "new": {}, "changed": [], "flags": [], "removed": []}
+    new_entries, changed, flags, removed, warns = {}, [], [], [], []
     for key in po:
         if key == "":
             continue
@@ -149,8 +152,10 @@ def analyse(old, new, requested=()):
             continue
         if key in po:
             before = po[key] if isinstance(po[key], dict) else {}
-            if any(before.get(f) != entry.get(f) for f in COMPARED):
+            if any(before.get(f) != entry.get(f) for f in HARD):
                 changed.append(key)
+            elif any(before.get(f) != entry.get(f) for f in FLAGS):
+                flags.append(key)
         else:
             new_entries[key] = entry
     if changed:
@@ -168,7 +173,10 @@ def analyse(old, new, requested=()):
             blocks.append(f"{n} has a version that is not a version")
             continue
         if n in old_versions and v not in old_versions[n]:
-            blocks.append(f"a second copy of {n} at another version would be added")
+            if direct is None or n in direct:
+                blocks.append(f"a second copy of {n}, a dependency of the environment, at another version would be added")
+            else:
+                warns.append(f"a second copy of {n} at another version would be added")
         if entry.get("inBundle") is not True and not _fetched(entry):
             blocks.append(f"{n} is not from the registry with a sha512")
     top = {key_name(k): e for k, e in new_entries.items() if k == f"node_modules/{key_name(k)}"}
@@ -178,7 +186,7 @@ def analyse(old, new, requested=()):
             blocks.append(f"{r['name']} is not a top-level package of the candidate")
         elif r["version"] is not None and e.get("version") != r["version"]:
             blocks.append(f"{r['name']} is not locked at the requested version")
-    return {"blocks": _dedupe(blocks), "new": new_entries, "changed": sorted(changed), "removed": sorted(removed)}
+    return {"blocks": _dedupe(blocks), "warns": _dedupe(warns), "new": new_entries, "changed": sorted(changed), "flags": sorted(flags), "removed": sorted(removed)}
 
 
 def _dedupe(items):
@@ -265,14 +273,16 @@ def lock_sha(text):
     return hashlib.sha256(text.encode("utf-8") if isinstance(text, str) else text).hexdigest()
 
 
-def build_report(requested, old, new, views, now, lim=None):
+def build_report(requested, old, new, views, now, lim=None, direct=None):
     """The report of a candidate: {"status": "OK"|"REFUSED", "blocks": [..], "warns": [..], "packages": [..], "totals": {..}}.
     `views` maps "name@version" to the parsed `npm view` of each new package (absent or None: no registry record). Every package of the candidate
     that is new is judged, not only the requested ones: a fresh release as a transitive is where harm would land. The age is from time[version];
     a missing time is a block; a package younger than min_age_days is a block; and the other facts are warnings the human weighs."""
     lim = {**DEFAULTS, **(lim or {})}
-    a = analyse(old, new, requested)
-    blocks, warns, packages = list(a["blocks"]), [], []
+    a = analyse(old, new, requested, direct)
+    blocks, warns, packages = list(a["blocks"]), list(a["warns"]), []
+    notes = ([f"{len(a['flags'])} existing package(s) are now also needed at runtime or are no longer optional: a flag changed, no version or file did"]
+             if a["flags"] else [])
     entries = a["new"]
     if len(entries) > lim["max_new"]:
         blocks.append(f"{len(entries)} new packages: more than {lim['max_new']}")
@@ -304,9 +314,9 @@ def build_report(requested, old, new, views, now, lim=None):
             warns.append(f"{label} has the license {f['license']}, not a common permissive one")
         if f["created_days"] is not None and f["created_days"] < lim["new_package_days"]:
             warns.append(f"{n} was first published {f['created_days']} days ago")
-    return {"status": "REFUSED" if blocks else "OK", "blocks": _dedupe(blocks), "warns": _dedupe(warns), "packages": packages,
+    return {"status": "REFUSED" if blocks else "OK", "blocks": _dedupe(blocks), "warns": _dedupe(warns), "notes": notes, "packages": packages,
             "totals": {"new": len(entries), "direct": sum(1 for p in packages if p["direct"]), "changed": len(a["changed"]),
-                       "removed": len(a["removed"])}}
+                       "flags": len(a["flags"]), "removed": len(a["removed"])}}
 
 
 # ---- the name of the new environment -----------------------------------------------------------------------------------
