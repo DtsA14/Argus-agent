@@ -270,7 +270,7 @@ def test_a_base_that_is_not_pinned_or_a_missing_lock_refuses(world):
     (root / "environments" / "bulking_node22" / "base").write_text("node:22")
     with pytest.raises(rj.Refused, match="pinned by digest"):
         begin(world)[0].__enter__()
-    for bad in (BASE + "x", BASE + " extra", "x" + BASE, BASE.upper(), BASE[:-1]):
+    for bad in (BASE + "x", BASE + " extra", BASE.upper(), BASE[:-1], BASE + "\nnode@sha256:" + "b" * 64):
         (root / "environments" / "bulking_node22" / "base").write_text(bad)
         with pytest.raises(rj.Refused, match="pinned by digest"):
             begin(world)[0].__enter__()
