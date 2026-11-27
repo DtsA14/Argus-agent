@@ -4,6 +4,7 @@ refusals, the money the audit counts, and what the foreman cannot do."""
 import copy
 import hashlib
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -24,7 +25,7 @@ PJOB = "j20261127_100000_aaaa"
 READER_KEY = "/keys/reader.key"
 
 
-def cfg_with_athena(path="/secret/path", **chat):
+def cfg_with_athena(path="~/athena", **chat):
     cfg = t4.make_cfg(**chat)
     cfg["issue_writer"] = copy.deepcopy(cfg["issue_writer"])
     cfg["issue_writer"]["repos"]["athena"] = {"path": path, "environment": "athena_py312"}
@@ -33,7 +34,11 @@ def cfg_with_athena(path="/secret/path", **chat):
 
 @pytest.fixture
 def svc(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / "athena").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))                                # the registry says "~/athena", as config.yaml does; a code job records the resolved path
     s = t.Service(tmp_path, cfg=cfg_with_athena())
+    s.home = home
     s.queues = tmp_path / "queues"
     s.queues.mkdir()
     s.actions.cards.queues_dir = s.queues
@@ -63,7 +68,9 @@ def confirm(s, out):
 def code_job(s, **kw):
     kw.setdefault("by_reader", "argus")
     shutil.rmtree(s.jobs / kw.get("jid", CJOB), ignore_errors=True)               # a test may make the same job again with other contents
-    return tac.make(s, **kw)
+    d = tac.make(s, **kw)
+    tac.edit_job(d, lambda j: (j["inputs"].pop("repo_name", None), j["inputs"].update(repo=str((s.home / "athena").resolve()))))     # a real code job records the resolved path and no repo_name
+    return d
 
 
 def card(s):
@@ -265,7 +272,16 @@ def test_a_final_reading_state_or_a_busy_run_or_a_spent_cap_refuses_a_reading(sv
     two_readings(d, "concerns", "concerns")
     assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 409                  # a concern of both readers is final too
     one_reading(d)
-    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 200                  # one reading: the second is asked
+    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 409                  # a lone `concerns` of another reader than the first of the pair: the run would read nothing
+    from router import patch_read_run as prr
+    two_readings(d, "concerns", "concerns", ids=(prr.reader_id(prr.FIRST), "argus:other"))
+    one_reading(d)
+    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 200                  # the first reader's own `concerns` with no second: only the second is asked (`resume`)
+    two_readings(d, "concerns", "concerns", ids=("claude-1", "claude-2"), kind="claude")
+    one_reading(d)
+    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 409                  # a Claude reading is not resumed: the run reads nothing, so the page must not offer it
+    code_job(svc, read=None)
+    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 200                  # no reading at all
     svc.spawner.busy_ids.add(CJOB)
     assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 409
     svc.spawner.busy_ids.clear()
@@ -299,14 +315,21 @@ def test_the_readers_run_at_most_twice_for_a_job_in_24_hours(svc):
 
 def test_the_limit_counts_the_job_and_the_money_of_a_reading_counts_to_the_daily_cap(svc):
     code_job(svc, read=None)
-    confirm(svc, svc.prepare(action="patch_read_run", job=CJOB)[1])
-    svc.spawner.busy_ids.clear()
-    assert svc.actions.exposure() == pytest.approx(0.2)
-    svc.clock.t += ca.PENDING_S + 60
-    assert svc.actions.exposure() == pytest.approx(0.2)                               # still, from the audit
     other = "j20261127_120000_eeee"
     code_job(svc, jid=other, read=None)
-    assert svc.prepare(action="patch_read_run", job=other)[0] == 200                  # a second job has its own count
+    for _ in range(2):
+        s, out = svc.prepare(action="patch_read_run", job=CJOB)
+        assert s == 200 and confirm(svc, out)[0] == 200
+        svc.spawner.busy_ids.clear()
+    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 409                    # this job is at its two
+    assert svc.prepare(action="patch_read_run", job=other)[0] == 200                   # another job has its own count (per job, not per action)
+    prd_job(svc, via=None)
+    confirm(svc, reply(svc)[1])
+    svc.spawner.busy_ids.clear()
+    assert svc.prepare(action="patch_read_run", job=other)[0] == 200                   # a PRD reply is not a reading
+    assert svc.actions.exposure() == pytest.approx(2 * 0.2 + 0.3)
+    svc.clock.t += ca.PENDING_S + 60
+    assert svc.actions.exposure() == pytest.approx(2 * 0.2 + 0.3)                      # still, from the audit
 
 
 def test_a_reading_that_would_pass_the_daily_cap_is_refused_at_prepare(svc):
@@ -445,15 +468,26 @@ def test_a_reason_with_two_ok_readings_is_refused_because_there_is_nothing_to_ac
 
 
 def test_a_nit_pair_is_applied_like_ok(svc):
+    from router import patch_read_run as prr
     d = code_job(svc)
-    two_readings(d, "concerns", "concerns", severity="nit")
+    ids = (prr.reader_id(prr.FIRST), prr.reader_id(prr.SECOND))
+    two_readings(d, "concerns", "concerns", ids=ids)
     f = [p for p in d.iterdir() if p.name.startswith("patch_read")][0]
     rec = json.loads(f.read_text())
-    rec["severity"] = "nit"
+    rec["severity"] = rec["second"]["severity"] = "nit"
     f.write_text(json.dumps(rec))
-    c = card(svc)
-    if c["patch_read_kind"] == "nit":
-        assert svc.prepare(**apply_params(svc))[0] == 200
+    assert card(svc)["patch_read_kind"] == "nit"
+    status, out = svc.prepare(**apply_params(svc))
+    assert status == 200 and "accepted_concerns" not in out["card"]
+    assert svc.prepare(**{**apply_params(svc), "reason": REASON})[0] == 400              # a nit pair needs no reason
+
+
+def test_the_repository_is_found_by_path_with_the_tilde_expanded_and_a_real_job_has_no_repo_name(svc):
+    d = code_job(svc)
+    assert "repo_name" not in json.loads((d / "job.json").read_text())["inputs"]
+    s, out = svc.prepare(**apply_params(svc))
+    assert s == 200 and out["card"]["repo"] == "athena" and "repo_path" not in out["card"] and "/home" not in json.dumps(out["card"])
+    assert out["card"]["repo_realpath_sha256"] == hashlib.sha256(str((svc.home / "athena").resolve()).encode()).hexdigest()
 
 
 def test_the_repository_must_be_the_registered_one_and_never_argus_itself(svc):
@@ -464,8 +498,18 @@ def test_the_repository_must_be_the_registered_one_and_never_argus_itself(svc):
     svc.actions._cfg = cfg_with_athena(path=str(rj.ROOT))
     s, out = svc.prepare(**apply_params(svc))
     assert s == 409 and "Argus itself" in json.dumps(out)
-    tac.edit_job(d, lambda j: j["inputs"].update(repo="/secret/path", repo_name="unregistered"))
+    tac.edit_job(d, lambda j: j["inputs"].update(repo=str(rj.ROOT / "router")))                  # a subdirectory of the checkout is Argus too
+    svc.actions._cfg = cfg_with_athena(path=str(rj.ROOT / "router"))
+    s, out = svc.prepare(**apply_params(svc))
+    assert s == 409 and "Argus itself" in json.dumps(out)
     svc.actions._cfg = cfg_with_athena()
+    tac.edit_job(d, lambda j: j["inputs"].update(repo=str((svc.home / "athena").resolve())))
+    assert svc.prepare(**apply_params(svc))[0] == 200
+    cfg = cfg_with_athena()
+    cfg["issue_writer"]["repos"]["twin"] = {"path": str(svc.home / "athena"), "environment": "x"}      # two names for one repository: not exactly one entry
+    svc.actions._cfg = cfg
+    assert svc.prepare(**apply_params(svc))[0] == 409
+    svc.actions._cfg = cfg_with_athena(path="~/other")
     assert svc.prepare(**apply_params(svc))[0] == 409
 
 
@@ -525,3 +569,98 @@ def test_the_cli_runs_are_started_through_the_spawner_and_not_inside_the_request
     status, out = svc.prepare(**apply_params(svc))
     confirm(svc, out)
     assert len(svc.spawner.calls) == 1 and svc.runs == []                               # no synchronous control CLI: the spawner holds the run, the page reads the job file
+
+
+def test_the_apply_card_binds_the_sid_the_full_sha_the_kind_and_every_check_so_a_change_in_any_of_them_is_a_409_at_confirm(svc):
+    d = code_job(svc)
+    status, out = svc.prepare(**apply_params(svc))
+    c = out["card"]
+    assert c["sid"] == "a1" and len(c["patch_sha256"]) == 64 and c["patch_read_kind"] == "ok" and {x["key"] for x in c["checks"]} == set("abcdefghi")
+    tac.edit_job(d, lambda j: j.pop("approval"))                                    # conditions (d) and (e) change from True/None to another value
+    status2, _ = confirm(svc, out)
+    assert status2 == 409 and svc.spawner.calls == []
+
+
+def test_the_reader_card_binds_the_sid_and_the_full_sha(svc):
+    code_job(svc, read=None)
+    c = svc.prepare(action="patch_read_run", job=CJOB)[1]["card"]
+    assert c["sid"] == "a1" and c["patch_sha256"] == full_sha(svc)
+
+
+def test_the_card_names_the_target_branch_as_the_command_will_choose_it_and_says_when_there_is_none(svc, monkeypatch):
+    code_job(svc)
+    for state, target in ((("main", "h" * 40, True), f"argus/{CJOB}"), (("develop", "h" * 40, True), f"argus/{CJOB}"), (("feature", "h" * 40, False), "feature")):
+        monkeypatch.setattr(cap.ApplyReply, "_git_state", lambda self, repo, st=state: st)
+        c = svc.prepare(**apply_params(svc))[1]["card"]
+        assert c["target_branch"] == target and c["detached_note"] is None
+    monkeypatch.setattr(cap.ApplyReply, "_git_state", lambda self, repo: (None, None, None))
+    c = svc.prepare(**apply_params(svc))[1]["card"]
+    assert c["target_branch"] is None and "detached" in c["detached_note"]
+
+
+def test_one_get_of_the_install_card_builds_it_once_for_the_button(svc, monkeypatch):
+    code_job(svc)
+    n = {"c": 0}
+    real = type(svc.actions.approve_code)._code
+
+    def counting(self, *a, **k):
+        n["c"] += 1
+        return real(self, *a, **k)
+    monkeypatch.setattr(type(svc.actions.approve_code), "_code", counting)
+    assert svc.request("GET", f"/api/approve/code/{CJOB}")[0] == 200
+    assert n["c"] == 2                                                              # the card itself, and the one the button decision reads (not four)
+
+
+def test_git_is_asked_with_a_short_timeout_and_a_hung_repository_gives_no_state_not_a_stall(svc, monkeypatch):
+    from router import apply as ra
+    seen = []
+
+    def run_git(repo, *a, **k):
+        seen.append(k.get("timeout"))
+        raise OSError("hung")
+    monkeypatch.setattr(ra, "run_git", run_git)
+    assert svc.actions.apply_reply._git_state("/x") == (None, None, None) and seen and all(x == cap.GIT_TIMEOUT_S for x in seen)
+
+
+def ledger_events(usd_nano=40_000_000, final=True):
+    ev = [{"event": "llm_call_started", "call_id": "c1", "worst_usd_nano": 90_000_000, "worst_tokens": 10}]
+    if final:
+        ev.append({"event": "llm_call", "call_id": "c1", "status": "ok", "usd_nano": usd_nano, "tokens": 10})
+    return "\n".join(json.dumps(e) for e in ev) + "\n"
+
+
+def test_the_billed_money_is_read_from_a_real_ledger_through_the_job_directory(svc):
+    code_job(svc, read=None)
+    (svc.jobs / CJOB / "patch_read_ledger.jsonl").write_text(ledger_events())
+    assert svc.actions.apply_reply._billed(CJOB) == (pytest.approx(0.04), True)
+    c = svc.prepare(action="patch_read_run", job=CJOB)[1]["card"]
+    assert c["billed_usd"] == pytest.approx(0.04) and c["remaining_usd"] == pytest.approx(0.16)
+    (svc.jobs / CJOB / "patch_read_ledger.jsonl").write_text(ledger_events(final=False))            # a call that never finished is charged at its worst case
+    assert svc.actions.apply_reply._billed(CJOB) == (pytest.approx(0.09), True)
+
+
+def test_a_ledger_that_is_a_link_or_damaged_or_missing_is_handled_without_following_it(svc, tmp_path):
+    code_job(svc, read=None)
+    assert svc.actions.apply_reply._billed(CJOB) == (0.0, True)                                     # no ledger: nothing billed
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text(ledger_events())
+    (svc.jobs / CJOB / "patch_read_ledger.jsonl").symlink_to(outside)
+    s, out = svc.prepare(action="patch_read_run", job=CJOB)
+    assert s == 503 and "ledger" in json.dumps(out)
+    (svc.jobs / CJOB / "patch_read_ledger.jsonl").unlink()
+    (svc.jobs / CJOB / "patch_read_ledger.jsonl").write_text("not json\n")
+    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 503
+
+
+def test_a_huge_integer_cap_in_the_config_is_the_default_not_a_crash(svc):
+    svc.actions._cfg = cfg_with_athena(patch_read_cap_usd=10 ** 400)
+    assert svc.actions.apply_reply.read_cap() == 0.2
+
+
+def test_an_audit_line_with_a_bad_time_or_amount_is_a_503_at_prepare_never_a_500_and_never_skipped(svc):
+    code_job(svc, read=None)
+    svc.actions.audit_path.parent.mkdir(parents=True, exist_ok=True)
+    for bad in ({"action": "patch_read_run", "attempt": "confirm", "at": "not a time", "usd": 0.2}, {"action": "prd_reply", "attempt": "confirm", "at": t.iso(t.NOW), "usd": "x"}):
+        svc.actions.audit_path.write_text(json.dumps(bad) + "\n")
+        s, out = svc.prepare(action="patch_read_run", job=CJOB)
+        assert s == 503 and "cannot be computed" in json.dumps(out)

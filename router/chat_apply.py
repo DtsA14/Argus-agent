@@ -7,6 +7,7 @@ harness here, through the directory descriptors of the install card (one read of
 a dirty tree, a protected file, a stale reading...), and its refusal is shown as it is; this module does not copy them. The foreman cannot start any of these (`ROUTE_ACTION` lists
 research and prd only). Nothing here pushes, opens a pull request, merges or deploys.
 """
+import hashlib
 import json
 import os
 import re
@@ -17,6 +18,7 @@ from types import SimpleNamespace
 from router import job as rj
 from router import prd_job as pj
 from router import reason as rreason
+from router import stage_data as sd
 from router.cards import UI_ID
 
 ACTIONS = ("prd_reply", "patch_read_run", "code_apply")
@@ -29,6 +31,8 @@ PATCH_TEXT_MAX = 512 * 1024                         # a patch the page cannot sh
 SHA12 = re.compile(r"[0-9a-f]{12}")
 SHA64 = re.compile(r"[0-9a-f]{64}")
 FINAL_KINDS = ("ok", "nit")
+LEDGER_MAX = 4 * 1024 * 1024
+GIT_TIMEOUT_S = 5                                   # a hung repository must not stall the single-threaded chat (the CLI has its own, longer one)
 
 
 class ApplyReply:
@@ -43,7 +47,8 @@ class ApplyReply:
     # ---- the key of the readers --------------------------------------------------------------------------------------------
 
     def reader_key(self):
-        """ARGUS_CHAT_READER_KEY_FILE, else the code key (both readers are OpenRouter models: one key file is enough), else None."""
+        """ARGUS_CHAT_READER_KEY_FILE, else the code key, else None. Both readers are OpenRouter models, so one OpenRouter key file is enough; the code key is one on this machine
+        (the service unit sets it to the OpenRouter key). If it were another provider's, the CLI would refuse the run and the page would say so."""
         from router.chat_actions import KEY_ENV, READER_KEY_ENV
         return self.a.environ.get(READER_KEY_ENV) or self.a.environ.get(KEY_ENV) or None
 
@@ -117,30 +122,48 @@ class ApplyReply:
         return pr_.get("second") if isinstance(pr_, dict) and isinstance(pr_.get("second"), dict) else None
 
     def final_readings(self, card):
-        """True when `patch-read-run` would read nothing (a final reading stands): two `ok` or `nit`, or a concern of both readers."""
+        """True when `patch-read-run` would read nothing, decided as the run decides (`patch_read_run._run`): `ok` or `nit` stand; a `concerns` stands unless it is the first reader's own
+        reading with no second (then only the second is asked, `resume`)."""
+        from router import patch_read_run as prr
         k = card.get("patch_read_kind")
-        return k in FINAL_KINDS or (k == "concerns" and self._second(card) is not None)
+        if k in FINAL_KINDS:
+            return True
+        if k == "concerns":
+            pr_ = card.get("patch_read") if isinstance(card.get("patch_read"), dict) else {}
+            r = pr_.get("reader") if isinstance(pr_.get("reader"), dict) else {}
+            resume = r.get("kind") == "argus" and r.get("id") == prr.reader_id(prr.FIRST) and self._second(card) is None
+            return not resume
+        return False
 
     # ---- patch_read_run -----------------------------------------------------------------------------------------------------
 
     def read_cap(self):
         v = (self.a.cfg.get("chat") or {}).get("patch_read_cap_usd", DEFAULT_READ_CAP_USD)
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 < float(v) <= READ_CAP_MAX_USD or v != v:
+        try:
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 < float(v) <= READ_CAP_MAX_USD:       # NaN fails the comparison; a huge integer raises OverflowError
+                return DEFAULT_READ_CAP_USD
+            return float(v)
+        except (OverflowError, ValueError):
             return DEFAULT_READ_CAP_USD
-        return float(v)
 
     def _billed(self, job_id):
-        """The patch readings' ledger of the job, as the run itself counts it (`reconcile_ledger`); (usd, complete)."""
-        from harness.events import EventLog
+        """The patch readings' ledger of the job, as the run itself counts it (`reconcile_ledger`); (usd, complete). Read through the job's directory descriptor, never through a link."""
         from harness.llm import reconcile_ledger
         from router.patch_read_run import LEDGER
-        path = Path(self.a.jobs_dir) / job_id / LEDGER
         try:
-            if os.path.islink(path):
-                raise OSError("a link")
-            if not path.exists():
-                return 0.0, True
-            totals = reconcile_ledger(EventLog(path).read())[1]
+            sfd = os.open(self.a.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                jfd = sd._open_dir(job_id, sfd)
+                try:
+                    try:
+                        raw = sd._read_at(jfd, LEDGER, limit=LEDGER_MAX)
+                    except FileNotFoundError:
+                        return 0.0, True
+                finally:
+                    os.close(jfd)
+            finally:
+                os.close(sfd)
+            totals = reconcile_ledger([json.loads(ln) for ln in raw.decode("utf-8").splitlines() if ln.strip()])[1]
             return float(totals["usd"]), bool(totals["usd_complete"])
         except Exception:
             raise self._no(503, "cap", "the patch readings' ledger cannot be read") from None
@@ -177,11 +200,11 @@ class ApplyReply:
                 out.append(r)
         return out
 
-    def build_read(self, params):
+    def build_read(self, params, have=None):
         a = self.a
         if set(params) != {"job"}:
             raise self._no(400, "form", "running the patch readers takes the job and nothing else")
-        card, _raw, _disk = self._install(params["job"])
+        card, _raw, _disk = have if have is not None else self._install(params["job"])
         job_id = params["job"]
         if self.final_readings(card):
             raise self._no(409, "read", "this patch already has its final readings: nothing is read again")
@@ -200,7 +223,7 @@ class ApplyReply:
         if remaining <= 1e-9:
             raise self._no(409, "cap", f"the cap of this job's patch readings (${cap:.2f}) is spent")
         from router import patch_read_run as prr
-        return ({"action": "patch_read_run", "title": "Run the two patch readers", "job": job_id, "sha12": card["patch_sha12"],
+        return ({"action": "patch_read_run", "title": "Run the two patch readers", "job": job_id, "sha12": card["patch_sha12"], "patch_sha256": card["patch_sha256"], "sid": card.get("sid"),
                  "readers": [prr.reader_id(prr.FIRST), prr.reader_id(prr.SECOND)], "cap_usd": cap, "billed_usd": round(billed, 6), "remaining_usd": round(remaining, 6),
                  "note": "two models (not a person) read the patch; what they say is not proof that it is right. The run stops by itself when a call would pass the cap, and a reading that "
                          "already stands is not read again"},
@@ -209,37 +232,44 @@ class ApplyReply:
     # ---- code_apply ---------------------------------------------------------------------------------------------------------
 
     def _repo_ok(self, job_id):
-        """The job's repository is the registered one of its name (realpath on both sides), and not the checkout of Argus."""
+        """(name, realpath) of the registered repository the job's `inputs.repo` is (a code job records the resolved path, not the name: the registry is searched by path, `~` expanded, both
+        sides through realpath, exactly one entry), and never the checkout of Argus."""
         from router.chat_actions import ROOT_REAL
         got = self.a._read_data(job_id, ledgers=False)
         if got is None:
             raise self._no(404, "path", "no such job")
         i = got[0].get("inputs") if isinstance(got[0].get("inputs"), dict) else {}
-        reg = (self.a.repos().get(i.get("repo_name")) or {}) if isinstance(self.a.repos(), dict) else {}
         try:
-            mine, want = os.path.realpath(str(i.get("repo"))), os.path.realpath(str(reg.get("path")))
-        except (TypeError, ValueError):
+            mine = os.path.realpath(str(i.get("repo")))
+            regs = self.a.repos()
+            names = [n for n, r in regs.items() if isinstance(r, dict) and r.get("path") and os.path.realpath(str(Path(str(r["path"])).expanduser())) == mine] if isinstance(regs, dict) else []
+        except (TypeError, ValueError, OSError, RuntimeError):
             raise self._no(409, "repo", "the job's repository cannot be read") from None
-        if not reg.get("path") or mine != want:
-            raise self._no(409, "repo", "the job's repository is not the one registered under its name")
+        if len(names) != 1:
+            raise self._no(409, "repo", "the job's repository is not exactly one of the registered repositories")
         if mine == ROOT_REAL or mine.startswith(ROOT_REAL + os.sep):
             raise self._no(409, "repo", "this repository is Argus itself: apply from the terminal")
-        return i.get("repo_name"), mine
+        return names[0], mine
 
     def _git_state(self, repo):
-        """(branch, head) read-only, for the card; (None, None) when git cannot answer (the CLI decides; this is information)."""
+        """(branch, head, main_line) read-only, for the card; (None, None, None) when git cannot answer in a few seconds (the CLI decides; this is information). The main line is the one
+        `apply._is_main_line` means: main, master, or the branch origin's HEAD points at."""
         try:
             from router import apply as ra
-            branch = ra.run_git(repo, "symbolic-ref", "--short", "-q", "HEAD", ok=(0, 1)).decode().strip() or None
-            head = ra.run_git(repo, "rev-parse", "HEAD").decode().strip()
-            return branch, head
+            branch = ra.run_git(repo, "symbolic-ref", "--short", "-q", "HEAD", ok=(0, 1), timeout=GIT_TIMEOUT_S).decode().strip() or None
+            head = ra.run_git(repo, "rev-parse", "HEAD", timeout=GIT_TIMEOUT_S).decode().strip()
+            if branch is None:
+                return None, head, None
+            main = branch in ("main", "master") or ra.run_git(repo, "symbolic-ref", "-q", "refs/remotes/origin/HEAD", ok=(0, 1), timeout=GIT_TIMEOUT_S).decode().strip() == f"refs/remotes/origin/{branch}"
+            return branch, head, main
         except Exception:
-            return None, None
+            return None, None, None
 
-    def patch_text(self, job_id):
-        """(sha256, text, why) of the patch as the install card read it: text only when it is whole, small enough and the scrubber changes nothing in it (SPEC_CHAT_APPLY_REPLY 12 F7)."""
+    def patch_text(self, job_id, have=None):
+        """(sha256, text, why) of the patch as the install card read it: text only when it is whole, small enough and the scrubber changes nothing in it (SPEC_CHAT_APPLY_REPLY 12 F7).
+        have: the (card, bytes, disk sha) already read by the caller, so one request builds the card once."""
         from router.chat_actions import scrub
-        card, raw, disk = self._install(job_id)
+        card, raw, disk = have if have is not None else self._install(job_id)
         full = card.get("patch_sha256")
         if not (isinstance(full, str) and SHA64.fullmatch(full)) or disk != full or raw is None:
             return full, None, "the review, the provenance and the patch on the disk do not name the same patch"
@@ -253,13 +283,14 @@ class ApplyReply:
             return full, None, "the patch holds characters the page cannot show as they are (hidden, bidirectional or key-like): read it from the terminal"
         return full, text, None
 
-    def build_apply(self, params):
+    def build_apply(self, params, have=None):
         a = self.a
         keys = set(params)
         if not {"job", "sha"} <= keys or keys - {"job", "sha", "reason"}:
             raise self._no(400, "form", "an apply takes the job, the sha12 you were shown and, for a concern, your reason")
         job_id, seen = params["job"], params["sha"]
-        card, _raw, disk = self._install(job_id)
+        have = have if have is not None else self._install(job_id)
+        card, _raw, disk = have
         if not isinstance(seen, str) or not SHA12.fullmatch(seen) or card.get("patch_sha12") != seen:
             raise self._no(409, "sha", "the patch changed since you saw it: open the card again")
         full = card.get("patch_sha256")
@@ -290,17 +321,18 @@ class ApplyReply:
         else:
             raise self._no(409, "read", "the patch has no two final readings yet: run the two readers first")
         name, repo = self._repo_ok(job_id)
-        full2, text, why = self.patch_text(job_id)
+        full2, text, why = self.patch_text(job_id, have)
         if text is None:
             raise self._no(409, "diff", why)
         if full2 != full:
             raise self._no(409, "sha", "the patch changed while the card was made: open the card again")
         if a.spawner.busy(job_id):
             raise self._no(409, "busy", "a run is going on for this job")
-        branch, head = self._git_state(repo)
+        branch, head, main = self._git_state(repo)
         files = [{"path": f.get("path"), "marks": f.get("marks")} for f in (card.get("files") or []) if isinstance(f, dict)]
-        out = {"action": "code_apply", "title": "Put the patch into the repository", "job": job_id, "sha12": seen, "repo": name, "repo_path": repo, "branch": branch, "head": head,
-               "target_branch": (f"argus/{job_id}" if branch in ("main", "master") else branch),
+        out = {"action": "code_apply", "title": "Put the patch into the repository", "job": job_id, "sha12": seen, "repo": name, "repo_realpath_sha256": hashlib.sha256(repo.encode()).hexdigest(), "branch": branch, "head": head,
+               "target_branch": (f"argus/{job_id}" if main else branch if branch else None), "detached_note": None if branch else "the repository is not on a branch (or git did not answer): the command refuses a detached HEAD",
+               "sid": card.get("sid"), "patch_sha256": full, "patch_read_kind": kind, "checks": [{"key": c.get("key"), "ok": c.get("ok")} for c in card.get("checks") or [] if isinstance(c, dict)],
                "files": files, "scope_marks": card.get("scope_marks"), "patch_read": pr_, "patch_read_label": card.get("patch_read_label"),
                "declaration": f"I have read the patch {seen}. This is a statement, not a proof that it was read",
                "note": "one commit in the repository on this machine; not pushed, not deployed. The command checks the rest (clean tree, protected files, HEAD, the readings) and says why when it refuses",
@@ -310,14 +342,15 @@ class ApplyReply:
     # ---- the button the install card offers, from the same builders (so the page never offers what prepare refuses) -------------
 
     def state(self, job_id):
-        """{action, why}: the button the install card offers now. Never raises."""
+        """{action, why}: the button the install card offers now. Never raises. The card is built once and handed to the builders."""
         try:
-            card, _r, _d = self._install(job_id)
+            have = self._install(job_id)
+            card = have[0]
             if not self.final_readings(card):
-                self.build_read({"job": job_id})
+                self.build_read({"job": job_id}, have)
                 return {"action": "patch_read_run", "why": None}
             k = card.get("patch_read_kind")
-            self.build_apply({"job": job_id, "sha": card["patch_sha12"], **({} if k in FINAL_KINDS else {"reason": "x" * 10})})
+            self.build_apply({"job": job_id, "sha": card["patch_sha12"], **({} if k in FINAL_KINDS else {"reason": "x" * 10})}, have)
             return {"action": "code_apply", "why": None, "needs_reason": k not in FINAL_KINDS}
         except self.Refusal as e:
             return {"action": None, "why": e.why if e.gate in ("cap", "limit", "key", "busy", "check", "read", "diff", "repo") else None}
@@ -360,11 +393,11 @@ class ApplyReply:
         total = 0.0
         for r in self._audit_lines():
             try:
-                if r.get("action") in ("prd_reply", "patch_read_run") and r.get("attempt") == "confirm" and parse_time(r["at"]) >= now - DAY:
-                    try:
+                if r.get("action") in ("prd_reply", "patch_read_run") and r.get("attempt") == "confirm":
+                    if parse_time(r["at"]) >= now - DAY:
                         total += finite_usd(r.get("usd") or 0)
-                    except ValueError:                           # a confirmed line whose money cannot be read must not be skipped: that undercounts
-                        raise self._no(503, "cap", "the daily exposure cannot be computed (a confirmed reply or reading line of the audit has no valid amount)") from None
             except (KeyError, TypeError, AttributeError):
                 continue
+            except ValueError:                                   # a confirmed line whose time or money cannot be read must not be skipped: that undercounts
+                raise self._no(503, "cap", "the daily exposure cannot be computed (a confirmed reply or reading line of the audit has no valid time or amount)") from None
         return total
