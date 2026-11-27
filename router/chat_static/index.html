@@ -41,10 +41,11 @@
     <div id="slot" role="status" aria-live="polite"></div>
     <div id="dock" hidden>
       <div id="plus-menu" role="menu" aria-label="Request type" hidden>
-        <button type="button" role="menuitem" data-mode="issue">New issue</button>
-        <button type="button" role="menuitem" data-mode="prd">PRD</button>
-        <button type="button" role="menuitem" data-mode="research">Research</button>
         <button type="button" role="menuitem" data-mode="manager">Foreman</button>
+        <button type="button" role="menuitem" data-mode="issue">New issue</button>
+        <button type="button" role="menuitem" id="plus-more" aria-expanded="false">More types…</button>
+        <button type="button" role="menuitem" data-mode="prd" class="more-type" hidden>PRD</button>
+        <button type="button" role="menuitem" data-mode="research" class="more-type" hidden>Research</button>
       </div>
       <div id="box">
         <button id="plus" class="round" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Choose the request type">+</button>
