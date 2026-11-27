@@ -52,3 +52,15 @@ def test_every_kind_the_code_writes_into_a_job_log_is_in_the_allowlist():
                 found |= set(re.findall(r'"([a-z_]+)"', arg))              # also the two kinds of `"a" if ok else "b"`
     assert scanned > 50 and {"created", "repro", "apply_started", "not_confirmed"} <= found, sorted(found)
     assert found <= sd.LOG_WHAT, sorted(found - sd.LOG_WHAT)
+
+
+def test_a_job_with_a_patch_read_run_note_is_projected_and_its_payload_is_not_published():
+    """`argus patch-read-run` writes one `patch_read_run` note (who started it, via, the sha and the cap); without its entry in LOG_WHAT every job whose
+    patch was read by the chat would drop out of the snapshot (SPEC_CHAT_APPLY_REPLY 12)."""
+    raw = json.loads(json.dumps(RAW))
+    raw["log"].insert(1, {"at": AT, "what": "patch_read_run", "sha12": "d" * 12, "cap_usd": 0.2, "actor": "ui", "via": "ui"})
+    out = sd.project_job(raw, "jx")
+    assert {"at": AT, "what": "patch_read_run"} in out["log"]
+    text = json.dumps(out)
+    for private in ("d" * 12, "actor", "via", "cap_usd", "0.2"):
+        assert private not in text, private
