@@ -162,18 +162,45 @@ def test_a_candidate_that_only_adds_registry_packages_has_no_block():
     ("version", lambda l: l["packages"]["node_modules/react"].update(version="18.3.2")),
     ("integrity", lambda l: l["packages"]["node_modules/react"].update(integrity="sha512-" + "B" * 86)),
     ("resolved", lambda l: l["packages"]["node_modules/react"].update(resolved=URL + "other.tgz")),
+    ("version and a flag", lambda l: l["packages"]["node_modules/react"].update(version="18.3.2", dev=True)),
+    ("integrity and a flag", lambda l: l["packages"]["node_modules/scheduler"].update(integrity="sha512-" + "B" * 86, optional=True)),
+])
+def test_an_existing_locked_entry_whose_version_download_or_hash_changes_is_a_block(what, mutate):
+    lock = cand(("node_modules/foo", entry()))
+    mutate(lock)
+    a = ep.analyse(OLD, lock, req())
+    assert any("existing locked package changes" in b for b in a["blocks"]), what
+    assert a["changed"] and a["flags"] == []
+
+
+@pytest.mark.parametrize("what, mutate", [
     ("dev flag set", lambda l: l["packages"]["node_modules/react"].update(dev=True)),
     ("dev flag dropped", lambda l: l["packages"]["node_modules/scheduler"].pop("dev")),
     ("optional flag", lambda l: l["packages"]["node_modules/react"].update(optional=True)),
     ("devOptional flag", lambda l: l["packages"]["node_modules/react"].update(devOptional=True)),
     ("peer flag", lambda l: l["packages"]["node_modules/react"].update(peer=True)),
 ])
-def test_an_existing_locked_entry_that_changes_is_a_block(what, mutate):
+def test_an_existing_entry_whose_only_change_is_a_flag_is_a_note_and_no_block(what, mutate):
     lock = cand(("node_modules/foo", entry()))
     mutate(lock)
     a = ep.analyse(OLD, lock, req())
-    assert any("existing locked package changes" in b for b in a["blocks"]), what
-    assert a["changed"]
+    assert a["blocks"] == [] and a["changed"] == [] and len(a["flags"]) == 1, what
+    r = ep.build_report(req("foo"), OLD, lock, {"foo@1.0.0": view("1.0.0")}, NOW)
+    assert r["status"] == "OK" and r["totals"]["flags"] == 1 and r["totals"]["changed"] == 0
+    assert r["notes"] == ["1 existing package(s) are now also needed at runtime or are no longer optional: a flag changed, no version or file did"]
+
+
+def test_several_flag_changes_are_counted_and_listed_in_order():
+    lock = cand(("node_modules/foo", entry()))
+    lock["packages"]["node_modules/react"]["dev"] = True
+    lock["packages"]["node_modules/scheduler"].pop("dev")
+    a = ep.analyse(OLD, lock, req())
+    assert a["flags"] == ["node_modules/react", "node_modules/scheduler"] and a["blocks"] == []
+
+
+def test_a_report_with_no_flag_change_has_no_note():
+    r = report()
+    assert r["notes"] == [] and r["totals"]["flags"] == 0
 
 
 def test_a_removed_existing_entry_is_a_block():
@@ -187,7 +214,28 @@ def test_a_new_copy_of_an_existing_name_at_another_version_is_a_block_and_at_the
     other = ep.analyse(OLD, cand(("node_modules/foo", entry()), ("node_modules/foo/node_modules/react", entry("19.0.0"))), req())
     assert any("second copy of react" in b for b in other["blocks"])
     same = ep.analyse(OLD, cand(("node_modules/foo", entry()), ("node_modules/foo/node_modules/react", entry("18.3.1"))), req())
-    assert not any("second copy" in b for b in same["blocks"])
+    assert not any("second copy" in b for b in same["blocks"]) and same["warns"] == []
+
+
+def test_a_second_copy_is_a_block_for_a_dependency_of_the_environment_and_a_warning_for_any_other_name():
+    two = cand(("node_modules/foo", entry()), ("node_modules/foo/node_modules/react", entry("19.0.0")), ("node_modules/foo/node_modules/scheduler", entry("0.30.0")))
+    # react is the environment's own dependency, scheduler is not
+    a = ep.analyse(OLD, two, req(), direct={"react"})
+    assert len(a["blocks"]) == 1 and "second copy of react, a dependency of the environment" in a["blocks"][0]
+    assert a["warns"] == ["a second copy of scheduler at another version would be added"]
+    only_other = cand(("node_modules/foo", entry()), ("node_modules/foo/node_modules/scheduler", entry("0.30.0")))
+    a = ep.analyse(OLD, only_other, req(), direct={"react"})
+    assert a["blocks"] == [] and a["warns"] == ["a second copy of scheduler at another version would be added"]
+    r = ep.build_report(req("foo"), OLD, only_other, {"foo@1.0.0": view("1.0.0"), "scheduler@0.30.0": view("0.30.0")}, NOW, direct={"react"})
+    assert r["status"] == "OK" and "a second copy of scheduler at another version would be added" in r["warns"]
+
+
+def test_an_unknown_set_of_direct_names_is_strict_and_an_empty_one_is_loose():
+    lock = cand(("node_modules/foo", entry()), ("node_modules/foo/node_modules/scheduler", entry("0.30.0")))
+    assert ep.analyse(OLD, lock, req())["blocks"]                                       # the default: every name counts as direct
+    assert ep.analyse(OLD, lock, req(), direct=None)["blocks"]
+    loose = ep.analyse(OLD, lock, req(), direct=set())
+    assert loose["blocks"] == [] and len(loose["warns"]) == 1
 
 
 def test_two_new_copies_of_a_new_name_are_not_a_block():
@@ -362,7 +410,7 @@ def test_a_clean_candidate_is_ok_with_its_facts():
     p = r["packages"][0]
     assert p["name"] == "foo" and p["version"] == "2.0.0" and p["direct"] is True and p["age_days"] == 57 and p["license"] == "MIT"
     assert p["maintainers"] == 2 and p["has_install_script"] is False
-    assert r["totals"] == {"new": 1, "direct": 1, "changed": 0, "removed": 0}
+    assert r["totals"] == {"new": 1, "direct": 1, "changed": 0, "flags": 0, "removed": 0}
 
 
 def test_the_age_gate_is_inclusive_at_the_limit_and_a_block_below_it():

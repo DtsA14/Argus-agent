@@ -385,7 +385,7 @@ def _read_log(path):
 
 
 def _refuse(job, deps, blocks, report=None):
-    job.data["report"] = report or {"status": "REFUSED", "blocks": list(blocks), "warns": [], "packages": [], "totals": {"new": 0, "direct": 0, "changed": 0, "removed": 0}}
+    job.data["report"] = report or {"status": "REFUSED", "blocks": list(blocks), "warns": [], "notes": [], "packages": [], "totals": {"new": 0, "direct": 0, "changed": 0, "flags": 0, "removed": 0}}
     job.save()
     job.move(REFUSED, deps, reason="a gate refused the request")
     return job.data["report"]
@@ -453,7 +453,8 @@ def resolve(job, cfg, deps, *, root=None, docker=None):
     if not isinstance(new, dict) or not isinstance(pkg, dict):
         return _refuse(job, deps, ["the candidate lock cannot be read"])
     lim = {**ep.limits({"env_packages": s})}
-    a = ep.analyse(old, new, items)
+    direct = _direct_names(definition)
+    a = ep.analyse(old, new, items, direct)
     views = {}
     shape_ok = isinstance(new, dict) and isinstance(new.get("packages"), dict) and all(ep.key_name(k) for k in new["packages"] if k != "")
     wanted = sorted({f"{ep.key_name(k)}@{e.get('version')}" for k, e in a["new"].items() if isinstance(e, dict) and isinstance(e.get("version"), str)
@@ -481,7 +482,7 @@ def resolve(job, cfg, deps, *, root=None, docker=None):
             r = got.get(spec)
             views[spec] = ep.parse_view(r.get("out")) if isinstance(r, dict) and r.get("rc") == 0 else None
     now = _now(deps)
-    report = ep.build_report(items, old, new, views, now, lim)
+    report = ep.build_report(items, old, new, views, now, lim, direct)
     cand = job.dir / "candidate"
     cand.mkdir(exist_ok=True)
     (cand / "package-lock.json").write_bytes(raw)
@@ -494,6 +495,24 @@ def resolve(job, cfg, deps, *, root=None, docker=None):
     else:
         job.move(AWAITING_HUMAN, deps)
     return report
+
+
+def _direct_names(definition):
+    """The set of names the environment's own package.json depends on, or None (every name counts as direct) when it cannot be read."""
+    try:
+        pkg, _ = _read_json(Path(definition) / "package.json", 1024 * 1024)
+        if not isinstance(pkg, dict):
+            return None
+        names = set()
+        for field in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+            v = pkg.get(field)
+            if isinstance(v, dict):
+                names |= {k for k in v if isinstance(k, str)}
+            elif v is not None:
+                return None
+        return names
+    except (OSError, rj.Refused, ValueError):
+        return None
 
 
 def _now(deps):
@@ -529,9 +548,10 @@ def status_lines(job):
     r = d.get("report")
     if isinstance(r, dict):
         t = r.get("totals") or {}
-        lines.append(f"report: {r.get('status')}, {t.get('new', 0)} new package(s), {t.get('changed', 0)} changed, {t.get('removed', 0)} removed")
+        lines.append(f"report: {r.get('status')}, {t.get('new', 0)} new package(s), {t.get('changed', 0)} changed, {t.get('flags', 0)} flag-only, {t.get('removed', 0)} removed")
         lines += [f"  BLOCK {b}" for b in r.get("blocks") or []]
         lines += [f"  WARN {w}" for w in r.get("warns") or []]
+        lines += [f"  NOTE {n}" for n in r.get("notes") or []]
         for p in r.get("packages") or []:
             lines.append(f"  {p['name']}@{p['version']} {'direct' if p.get('direct') else 'transitive'}, age {p.get('age_days')} days, license {p.get('license')}")
     c = d.get("candidate")

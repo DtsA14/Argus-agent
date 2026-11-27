@@ -707,3 +707,45 @@ def test_the_candidate_sha_is_the_sha_of_the_bytes_the_container_wrote(world):
     job, docker, c = run_one(world, FakeDocker(lock=lock))
     assert job.data["candidate"]["lock_sha256"] == ep.lock_sha(lock) != ep.lock_sha(json.dumps(json.loads(lock)).encode())
     assert (job.dir / "candidate" / "package-lock.json").read_bytes() == lock
+
+
+# ---- the looser rule: a flag-only change is a note, a second copy is judged by whether the name is the environment's own ----------------------------
+
+def test_a_candidate_whose_existing_entries_only_change_a_flag_waits_for_the_human_with_a_note(world):
+    lock = lock_with(("node_modules/foo", entry("2.0.0")))
+    lock["packages"]["node_modules/scheduler"].pop("dev")                      # a dev-only package that foo needs at runtime
+    job, docker, c = run_one(world, FakeDocker(lock=lock))
+    assert job.data["state"] == "AWAITING_HUMAN" and job.data["report"]["totals"]["flags"] == 1 and job.data["report"]["totals"]["changed"] == 0
+    text = rj.status(job.id, jobs_dir=world[1])
+    assert "1 flag-only" in text and "NOTE 1 existing package(s) are now also needed at runtime" in text
+
+
+def test_a_second_copy_of_one_of_the_environments_own_dependencies_refuses_and_of_another_name_only_warns(world):
+    # the environment's package.json depends on react (the fixture); scheduler is only a transitive of it
+    direct_copy = lock_with(("node_modules/foo", entry("2.0.0")), ("node_modules/foo/node_modules/react", entry("19.0.0")))
+    job, docker, c = run_one(world, FakeDocker(lock=direct_copy))
+    assert job.data["state"] == "REFUSED" and any("second copy of react, a dependency of the environment" in b for b in job.data["report"]["blocks"])
+    other_copy = lock_with(("node_modules/foo", entry("2.0.0")), ("node_modules/foo/node_modules/scheduler", entry("0.30.0")))
+    job, docker, c = run_one(world, FakeDocker(lock=other_copy), n=1, cfg=cfg_of(max_per_day=20))
+    assert job.data["state"] == "AWAITING_HUMAN"
+    assert "a second copy of scheduler at another version would be added" in job.data["report"]["warns"]
+
+
+def test_an_unreadable_package_json_makes_every_second_copy_a_block(world):
+    root, jobs = world
+    (root / "environments" / "bulking_node22" / "package.json").write_text("not json")
+    other_copy = lock_with(("node_modules/foo", entry("2.0.0")), ("node_modules/foo/node_modules/scheduler", entry("0.30.0")))
+    job, docker, c = run_one(world, FakeDocker(lock=other_copy))
+    assert job.data["state"] == "REFUSED" and any("second copy of scheduler" in b for b in job.data["report"]["blocks"])
+
+
+def test_the_direct_names_are_the_four_dependency_fields_of_the_environments_package_json(tmp_path):
+    def names(obj, raw=None):
+        (tmp_path / "package.json").write_text(raw if raw is not None else json.dumps(obj))
+        return ej._direct_names(tmp_path)
+    assert names({"dependencies": {"a": "1.0.0"}, "devDependencies": {"b": "1.0.0"}, "peerDependencies": {"c": "*"}, "optionalDependencies": {"d": "1.0.0"}}) == {"a", "b", "c", "d"}
+    assert names({"name": "x"}) == set()
+    assert names({"dependencies": []}) is None and names({"dependencies": "x"}) is None
+    assert names(None, raw="not json") is None and names(None, raw='{"dependencies": {}, "dependencies": {}}') is None and names(None, raw="[]") is None
+    (tmp_path / "package.json").unlink()
+    assert ej._direct_names(tmp_path) is None
