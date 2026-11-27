@@ -531,7 +531,7 @@ def test_the_diff_route_gives_the_whole_patch_as_text_or_why_it_cannot_and_chang
     assert status == 200 and out["text"] is None and "characters" in out["why"]
     assert svc.request("GET", "/api/diff/not-a-job")[0] == 404 and svc.spawner.calls == []
     for path in ("/api/diff", f"/api/diff/{CJOB}"):
-        assert svc.request("POST", path, {})[0] in (404, 405)                           # GET only: no POST route reaches the diff
+        assert svc.request("POST", path, {"action": "patch_read_run", "job": CJOB})[0] == 405          # GET only: a POST route list that named the diff would prepare an action here
 
 
 def test_a_busy_job_and_a_job_not_review_ready_are_refused(svc):
