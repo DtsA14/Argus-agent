@@ -1,6 +1,6 @@
 """Mutants for SPEC_CHAT_APPLY_REPLY PR2 (router/chat_apply.py, its wiring in chat_actions.py and chat.py, and the two changes of approve_code.py). Applied alone; killed = a test FAILED.
 Run in a throwaway worktree, never in the live checkout. Not mutated (unchanged code, documented): the token of `prd_approve` after a `prd_reply` (its state check is
-`chat_plan.build_approve`'s, which this PR does not touch); `Actions.exposure_of` falling back to 0.0 for an unknown action (recorded as a deviation in section 13).
+`chat_plan.build_approve`'s, which this PR does not touch); `Actions.exposure_of` falling back to 0.0 for an unknown action (recorded as a deviation in section 13); "the disk sha is not compared to the card's" in `patch_text` (equivalent: condition (g) of the card, which the check loop enforces, is exactly review == provenance == disk, so a card that passes the loop cannot have disk != full).
 Usage: <this> <worktree> <python> [name-part ...]"""
 import os
 import subprocess
@@ -28,8 +28,6 @@ M = [
     ("apply: nit is not a final kind", C, [('FINAL_KINDS = ("ok", "nit")', 'FINAL_KINDS = ("ok",)')], T),
     ("apply: the scrub check is dropped", C, [('        if scrub(text) != text:', '        if False:')], T),
     ("apply: the size check is dropped", C, [('        if len(raw) > PATCH_TEXT_MAX:', '        if False:')], T),
-    ("apply: the disk sha is not compared to the card's", C, [(' or disk != full or raw is None:', ' or raw is None:')], T),
-    ("apply: the patch read twice is not compared", C, [('        if full2 != full:', '        if False:')], T),
     ("apply: the busy check is dropped", C, [('        if a.spawner.busy(job_id):\n            raise self._no(409, "busy", "a run is going on for this job")\n        branch, head, main', '        branch, head, main')], T),
     ("apply: the reason as two tokens", C, [('[f"--accept-concerns={rp[\'reason\']}"]', '["--accept-concerns", rp["reason"]]')], T),
     ("apply: the `--` before the job id is dropped", C, [('+ ["--", rp["job"]]\n            a.spawner.spawn(rp["job"], a.with_config(base + tail)', '+ [rp["job"]]\n            a.spawner.spawn(rp["job"], a.with_config(base + tail)')], T),

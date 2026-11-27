@@ -530,7 +530,8 @@ def test_the_diff_route_gives_the_whole_patch_as_text_or_why_it_cannot_and_chang
     status, out = svc.request("GET", f"/api/diff/{CJOB}")
     assert status == 200 and out["text"] is None and "characters" in out["why"]
     assert svc.request("GET", "/api/diff/not-a-job")[0] == 404 and svc.spawner.calls == []
-    assert svc.request("POST", f"/api/diff/{CJOB}", {})[0] in (404, 405)
+    for path in ("/api/diff", f"/api/diff/{CJOB}"):
+        assert svc.request("POST", path, {})[0] in (404, 405)                           # GET only: no POST route reaches the diff
 
 
 def test_a_busy_job_and_a_job_not_review_ready_are_refused(svc):
@@ -664,3 +665,29 @@ def test_an_audit_line_with_a_bad_time_or_amount_is_a_503_at_prepare_never_a_500
         svc.actions.audit_path.write_text(json.dumps(bad) + "\n")
         s, out = svc.prepare(action="patch_read_run", job=CJOB)
         assert s == 503 and "cannot be computed" in json.dumps(out)
+
+
+def test_the_limit_counts_only_the_readings_of_the_job_not_its_applies_or_replies(svc):
+    code_job(svc, read=None)
+    svc.actions.audit_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [{"action": a, "attempt": "confirm", "at": t.iso(svc.clock()), "job": CJOB, "usd": 0.0} for a in ("code_apply", "code_apply", "prd_reply", "issue_reply")]
+    svc.actions.audit_path.write_text("".join(json.dumps(x) + "\n" for x in lines))
+    assert svc.prepare(action="patch_read_run", job=CJOB)[0] == 200
+
+
+def test_a_draft_sha_is_refused_by_the_http_layer_for_every_action_but_a_job_decision_and_code_apply(svc):
+    s, out = svc.prepare(action="issue_new", repo="argus-viewer", message="tambahkan tombol", sha="a" * 12)
+    assert s == 400 and "only a decision of a job takes a draft sha" in json.dumps(out)
+
+
+def test_the_card_the_apply_reads_holds_no_patch_text(svc):
+    code_job(svc)
+    card_, raw, disk = svc.actions.approve_code.code_with_patch(CJOB)
+    assert raw and b"diff --git" in raw and "diff --git" not in json.dumps(card_) and disk == card_["patch_sha256"]
+
+
+def test_the_button_state_says_why_a_reading_cannot_be_offered(svc):
+    code_job(svc, read=None)
+    svc.actions.environ = {ca.WRITER_KEY_ENV: t.WKEY}                                # no key for the readers
+    a = card(svc)["apply"]
+    assert a["action"] is None and "ARGUS_CHAT_READER_KEY_FILE" in a["why"]

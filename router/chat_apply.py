@@ -321,11 +321,9 @@ class ApplyReply:
         else:
             raise self._no(409, "read", "the patch has no two final readings yet: run the two readers first")
         name, repo = self._repo_ok(job_id)
-        full2, text, why = self.patch_text(job_id, have)
+        _full, text, why = self.patch_text(job_id, have)                    # the same bytes the card hashed: one read, so there is nothing to compare twice
         if text is None:
             raise self._no(409, "diff", why)
-        if full2 != full:
-            raise self._no(409, "sha", "the patch changed while the card was made: open the card again")
         if a.spawner.busy(job_id):
             raise self._no(409, "busy", "a run is going on for this job")
         branch, head, main = self._git_state(repo)
