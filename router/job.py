@@ -157,6 +157,8 @@ class Job:
             from router.prd_job import LEGAL as legal
         elif self.data.get("kind") == "manager":        # SPEC_CHAT_MANAGER_P1: a chat session (router/manager_job.py)
             from router.manager_job import LEGAL as legal
+        elif self.data.get("kind") == "env":            # SPEC_CHAT_PACKAGES: a request for new npm packages (router/env_job.py)
+            from router.env_job import LEGAL as legal
         else:
             legal = LEGAL
         if (old, new) not in legal:
@@ -1414,6 +1416,8 @@ def resume(job_id, *, cfg, deps, sandbox_cfg=None, jobs_dir=JOBS):
         if job.data.get("kind") == "prd":
             from router import prd_job
             return job, prd_job.resume(job, cfg, deps)
+        if job.data.get("kind") == "env":
+            raise Refused(f"job {job.id}: a package request is not resumed (a request whose process died is FAILED; make the request again)")
         if job.data.get("kind") == "manager":
             raise Refused(f"job {job.id}: a manager session is not resumed (a turn that was cut off is paid for in its ledger; send the message again or start a new session)")
         state = job.data["state"]
@@ -2038,6 +2042,10 @@ def status(job_id, *, jobs_dir=JOBS, cfg=None):
                 *[f"  {sid} {s['kind']}: {s.get('status', 'running')} cap ${s['cap_usd']:.4f}"
                   + (f" spent ${s['usd']:.4f}" if s.get("usd") is not None else "") for sid, s in d["stages"].items()]]
         return "\n".join(map(clean, head + issue.status_lines(job)))
+    if d.get("kind") == "env":
+        from router import env_job
+        head = [f"job {job.id}: {d['state']} (env)", "money: none (no model is called)"]
+        return "\n".join(map(clean, head + env_job.status_lines(job)))
     if d.get("kind") == "manager":
         from router import manager_job
         head = [f"job {job.id}: {d['state']} (manager)", f"money: cap ${d['max_usd']:.2f}, spent ${spent_nano(job) / 1e9:.4f}"]

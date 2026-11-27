@@ -248,6 +248,26 @@ issue_writer:
 # The chat (router/chat.py, SPEC_CHAT_APP 11.8, SPEC_CHAT_T4A 10 item 5): the exposure one phone may commit in 24 hours. Every job a UI action starts counts its
 # full cap from the confirm: a writer job (issue $0.50, PRD $1.50), a research job ($1.00) and a queue approved with `queue go` (up to $5.00). $7.00 (Atha
 # 2026-11-21, K3 A) so a PRD and its queue fit; it is a fence, not a spend: real code jobs cost about $0.04.
+# SPEC_CHAT_PACKAGES (rev 2, Atha 2026-11-27: Q1-Q5 accepted): the limits of the package request (`argus env add`, router/env_job.py).
+# min_age_days: a new package younger than this (its time[version] in the registry) refuses the request; max_new: new packages in a
+# candidate lock; new_package_days: a package first published more recently is a warning; max_per_day: env jobs created in one UTC day
+# (refused ones count); max_ready_images: unadopted READY environments before a new request is refused; report_ttl_hours: a report nobody
+# answered is abandoned after this; resolve_timeout_s and build_timeout_s: the container steps; the last four limit the resolve container.
+# No money: the request calls no model. Changing this block is a strict-lane PR.
+env_packages:
+  min_age_days: 14
+  max_new: 200
+  new_package_days: 90
+  max_per_day: 3
+  max_ready_images: 5
+  report_ttl_hours: 24
+  resolve_timeout_s: 300
+  build_timeout_s: 900
+  memory_mb: 1024
+  pids_limit: 256
+  cpus: 2
+  tmp_mb: 512
+
 chat:
   daily_cap_usd: 7.00
   # SPEC_CHAT_MANAGER_P1 (Atha 2026-11-26, K1 and K3): the foreman, one chat session = one job = one confirmation. session_cap_usd is the job's max_usd and counts as

@@ -154,6 +154,8 @@ def project_job(raw, job_id, published=False):
     """The published form of one job.json: only the allowlisted fields, every value checked (A1)."""
     if not isinstance(raw, dict):
         raise Excluded("job.json is not an object")
+    if raw.get("kind") == "env":
+        raise Excluded("a package request is not published (SPEC_CHAT_PACKAGES)")
     out = _pick(raw, JOB_FIELDS, "job")
     if out.get("job", job_id) != job_id:
         raise Excluded("job.job is not its directory")
@@ -619,7 +621,10 @@ def _one(source_fd, job_id, excluded, withheld):
     try:
         raw_job, raw_runs = read_job(source_fd, job_id)
         try:
-            job = project_job(json.loads(raw_job), job_id)
+            parsed = json.loads(raw_job)
+            if isinstance(parsed, dict) and parsed.get("kind") == "env":
+                return None                                # SPEC_CHAT_PACKAGES: a package request is never published, and is no exclusion that counts
+            job = project_job(parsed, job_id)
         except ValueError:
             raise Excluded("job.json is not JSON") from None
         runs, nano = {}, 0
