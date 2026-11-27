@@ -17,7 +17,7 @@
   var waitingRows = [];                                 // what waits for the person (/api/waiting); the Decisions tab and the badge count it with the open jobs
   var waitingMeta = { capped: false, unknown: false, stale: false };
   var decideSeq = 0;
-  var lastChat = "status";                              // the mode the Chat tab returns to
+  var lastChat = "manager";                             // the mode the Chat tab returns to
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -1299,8 +1299,13 @@
     else if (m === "cost") { capInfo = null; renderCost(); loadCap(); }
     else { renderOverview(); }
   }
-  Array.prototype.forEach.call(document.querySelectorAll("#plus-menu button"), function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll("#plus-menu button[data-mode]"), function (b) {
     b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+  });
+  document.getElementById("plus-more").addEventListener("click", function () {        // PRD and Research stay one tap away: the foreman proposes them, the menu keeps them for when it cannot
+    var open = this.getAttribute("aria-expanded") !== "true";
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+    Array.prototype.forEach.call(document.querySelectorAll("#plus-menu .more-type"), function (x) { x.hidden = !open; });
   });
   document.getElementById("more").addEventListener("click", function () {
     var menu = document.getElementById("more-menu"), now = menu.hidden;
@@ -1507,6 +1512,7 @@
   loadIssues();                                       // the repositories the box offers
   var deep = /^\/jobs\/(j[0-9]{8}_[0-9]{6}_[0-9a-f]{4})$/.exec(location.pathname);
   if (deep) { setMode("decide"); showDecision(deep[1]); }
+  else { setMode("manager"); }                        // the Chat tab opens on the foreman; tapping the Chat tab again shows the job overview
   load();
   setInterval(function () {
     if (document.hidden) { return; }

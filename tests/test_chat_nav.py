@@ -57,7 +57,7 @@ def test_the_repo_is_read_from_the_job_file_and_the_path_of_the_repo_is_never_li
 def test_the_bottom_bar_has_the_four_tabs_in_order_and_the_chips_only_the_chat_modes():
     tabs = re.findall(r'<button type="button" data-tab="(\w+)"[^>]*>([A-Za-z]+)<', HTML)
     assert tabs == [("chat", "Chat"), ("cards", "Queue"), ("decide", "Decisions"), ("cost", "Cost")]
-    assert re.findall(r'data-mode="(\w+)"', HTML) == ["issue", "prd", "research", "manager"]               # the "+" menu of the one box: no chips, no Status (the Chat tab is the overview)
+    assert re.findall(r'data-mode="(\w+)"', HTML) == ["manager", "issue", "prd", "research"]               # the "+" menu of the one box: the foreman first, then New issue; PRD and Research sit behind "More types" (hidden at first); no chips, no Status (tapping the Chat tab again is the overview)
     assert 'id="tabs"' in HTML and 'aria-label="Main navigation"' in HTML
 
 
@@ -167,3 +167,13 @@ def test_the_header_has_an_ellipsis_menu_with_refresh_and_the_viewer_and_no_plus
     assert 'id="more-menu" role="menu"' in head and 'id="refresh"' in head
     assert 'document.getElementById("refresh").addEventListener("click", function () { closeMenu(); load(); });' in JS
     assert 'document.getElementById("more-menu").hidden = true;' in JS.split("function closeMenu")[1].split("function openNew")[0]
+
+
+def test_the_chat_tab_opens_on_the_foreman_and_prd_and_research_start_folded():
+    assert 'var lastChat = "manager";' in JS
+    assert 'else { setMode("manager"); }' in JS and 'if (deep) { setMode("decide")' in JS      # a deep link to a job still opens that job
+    assert re.search(r'id="plus-more"[^>]*aria-expanded="false"', HTML)
+    for m in ("prd", "research"):
+        assert re.search(r'data-mode="%s" class="more-type" hidden' % m, HTML)
+    for m in ("manager", "issue"):
+        assert re.search(r'data-mode="%s"(?! class="more-type")(?![^>]*hidden)' % m, HTML)
