@@ -1477,7 +1477,7 @@
     if (!(d.conversation || []).length) { c.appendChild(el("p", "muted", "Say something below.")); }
     (d.conversation || []).forEach(function (e) {
       if (e.from === "human") { c.appendChild(el("p", "msg human mine", e.text)); return; }          // your turn: a bubble on the right; the foreman answers on the left, with its label
-      say(c, "model", "foreman (a model, not Argus)", e.say, "say foreman");
+      c.appendChild(el("p", "say foreman", String(e.say)));       // the card is titled "Foreman"; its text is still a text node. Proposals keep their own labels
       if (e.error) { c.appendChild(el("p", "note", "This turn failed: " + e.error)); }
       if (e.propose) { c.appendChild(proposalBox(e)); }
     });

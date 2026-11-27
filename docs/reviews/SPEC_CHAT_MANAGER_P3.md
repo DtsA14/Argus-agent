@@ -8,7 +8,7 @@ The "+" menu gets "Foreman". In that mode the Chat tab shows the one OPEN forema
 
 ## 2. The conversation
 
-One card: state, budget left (`max_usd - spent_usd`, "unknown" when either is not a number), time left (`expires_in_s`), then the turns as text: the human's as "You: ...", the foreman's as a `say` line labelled "foreman (a model, not Argus)" with a left rule; a failed turn shows "This turn failed". Every string is a text node (no HTML sink). The box sends a turn: `post("/api/manager/turn", {session, message})` (exact keys, nothing else), only into an OPEN, idle session with a non-empty message; the textarea is limited to 2000; a refused turn keeps what was typed; after a send the page reads the session every 2 s until the answer is in (at most 2 minutes), and on the 30 s poll otherwise.
+One card: state, budget left (`max_usd - spent_usd`, "unknown" when either is not a number), time left (`expires_in_s`), then the turns as text: the human's as "You: ...", the foreman's as a plain `say` line on the left under the card title "Foreman" (the label "foreman (a model, not Argus)" was dropped on 2026-11-27 at Atha's request; the proposals keep their labels); a failed turn shows "This turn failed". Every string is a text node (no HTML sink). The box sends a turn: `post("/api/manager/turn", {session, message})` (exact keys, nothing else), only into an OPEN, idle session with a non-empty message; the textarea is limited to 2000; a refused turn keeps what was typed; after a send the page reads the session every 2 s until the answer is in (at most 2 minutes), and on the 30 s poll otherwise.
 
 ## 3. Proposals
 
