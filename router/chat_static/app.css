@@ -183,3 +183,8 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 /* the foreman's text reads like a book page: the phone's serif (New York on iOS), 17 px, line height 1.6; your bubbles stay in the sans */
 .say.foreman{font-family:ui-serif,"New York",Georgia,serif;font-size:1.0625rem;line-height:1.6}
 .msg.mine{line-height:1.45}
+
+/* a darker page and side panel (the status bar's black), and no divider lines under the header, around the panel or above its foot */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#09080c;--panel:#09080c}}
+.bar,#panel header,#panel-foot{border:0}
+#panel{border-right:0}
