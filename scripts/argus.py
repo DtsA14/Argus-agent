@@ -235,6 +235,11 @@ def main(argv=None, deps=None):
     ea.add_argument("--packages-file", required=True, help="the package lines, one `name` or `name@x.y.z` per line, read from this file (at most 4 KB)")
     ea.add_argument("--via", choices=rj.VIA, required=True)
     ea.add_argument("--yes", action="store_true", required=True, help="the request was confirmed in chat")
+    ec = esub.add_parser("build", help="build and check the environment of an accepted package report, move its pins into the checkout and print the adoption bundle (no model, no money; docs/reviews/SPEC_CHAT_PACKAGES.md S3)")
+    ec.add_argument("job")
+    ec.add_argument("--sha", required=True, help="the 12 hex digits of the candidate lock's sha256 that the report showed")
+    ec.add_argument("--via", choices=rj.VIA, required=True)
+    ec.add_argument("--yes", action="store_true", required=True, help="the build was confirmed in chat")
     eb = esub.add_parser("abandon", help="end a package request that built nothing (NEW, RESOLVING or AWAITING_HUMAN)")
     eb.add_argument("job")
     eb.add_argument("--via", choices=rj.VIA, required=True)
@@ -527,11 +532,15 @@ def main(argv=None, deps=None):
             rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir, second=o.second)
             print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}; the note says who wrote it and what bundle it saw, not that the bundle was read")
             return 0
-        if o.cmd == "env" and o.env_cmd in ("add", "abandon"):
+        if o.cmd == "env" and o.env_cmd in ("add", "abandon", "build"):
             from router import env_job as ej
             cfg = load_config(o.config)
             cfg["sandbox"] = sandbox_cfg(o.config)
             try:
+                if o.env_cmd == "build":
+                    ej.build(o.job, sha=o.sha, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
+                    print(rj.status(o.job, jobs_dir=o.jobs_dir, cfg=cfg))
+                    return 0 if rj.open_job(o.job, o.jobs_dir).data["state"] == ej.READY else 1
                 if o.env_cmd == "abandon":
                     job = ej.abandon(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
                     print(f"package request {job.id} is {job.data['state']}")
