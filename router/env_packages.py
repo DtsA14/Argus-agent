@@ -13,14 +13,15 @@ from datetime import datetime, timezone
 DEFAULTS = {"min_age_days": 14, "max_new": 200, "new_package_days": 90}
 LINES_MAX = 5
 TEXT_MAX = 600
-LINE_MAX = 200
-NAME_PART = r"[a-z0-9][a-z0-9._-]{0,63}"
+LINE_MAX = 240                                         # a 214-character name, @ and a 12.12.12 version
+NAME_MAX = 214                                         # npm's own limit for a whole name, scope included (a real one is 69 characters: @babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression)
+NAME_PART = r"[a-z0-9][a-z0-9._-]*"
 NAME = rf"(?:@{NAME_PART}/)?{NAME_PART}"
-VERSION = r"[0-9]+\.[0-9]+\.[0-9]+"
+VERSION = r"[0-9]{1,12}\.[0-9]{1,12}\.[0-9]{1,12}"
 LINE = re.compile(rf"({NAME})(?:@({VERSION}))?", re.ASCII)
 NAME_RE = re.compile(NAME, re.ASCII)
 KEY = re.compile(rf"node_modules/{NAME}(?:/node_modules/{NAME})*", re.ASCII)
-LOCK_VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]{1,64})?(?:\+[0-9A-Za-z.-]{1,64})?", re.ASCII)
+LOCK_VERSION = re.compile(r"[0-9]{1,12}\.[0-9]{1,12}\.[0-9]{1,12}(?:-[0-9A-Za-z.-]{1,64})?(?:\+[0-9A-Za-z.-]{1,64})?", re.ASCII)
 TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z", re.ASCII)
 LICENSE = re.compile(r"[A-Za-z0-9.()+ -]{1,60}", re.ASCII)
 PERMISSIVE = {"MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD", "BlueOak-1.0.0", "CC0-1.0", "Unlicense", "Python-2.0"}
@@ -67,6 +68,8 @@ def parse_lines(text):
         if m is None:
             return None, f"line {n} is not a registry name with an optional exact version (x.y.z)"
         name, version = m.group(1), m.group(2)
+        if len(name) > NAME_MAX:
+            return None, f"line {n} is not a registry name with an optional exact version (x.y.z)"
         if name in seen:
             return None, f"{name} appears twice"
         seen.add(name)
@@ -78,8 +81,9 @@ def locked_names(lock):
     """The set of package names in a lock (every path), for the refusal of a name that is already locked."""
     names = set()
     for key in ((lock or {}).get("packages") or {}):
-        if isinstance(key, str) and KEY.fullmatch(key):
-            names.add(key.rsplit("node_modules/", 1)[1])
+        n = key_name(key)
+        if n:
+            names.add(n)
     return names
 
 
@@ -96,7 +100,11 @@ def refuse_locked(items, lock):
 
 def key_name(key):
     """The package name a lock key ends in, or None when the key has no valid shape."""
-    return key.rsplit("node_modules/", 1)[1] if isinstance(key, str) and KEY.fullmatch(key) else None
+    if not isinstance(key, str) or not KEY.fullmatch(key):
+        return None
+    if any(len(seg.rstrip("/")) > NAME_MAX for seg in key.split("node_modules/")[1:]):
+        return None
+    return key.rsplit("node_modules/", 1)[1]
 
 
 def _fetched(entry):

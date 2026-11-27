@@ -64,6 +64,7 @@ def test_the_arms_differ_from_config_yaml_only_in_attempt_tokens_and_the_run_cap
     del base["llm"]["prompt_cache"]
     for k in ("rate_limit_delay_s", "rate_limit_max_delay_s", "rate_limit_attempts"):   # SPEC_RATE_LIMIT_RETRY (after)
         del base["llm"][k]
+    del base["env_packages"]                                                         # SPEC_CHAT_PACKAGES (after): the package request's limits; no arm ran with them
     arm_prices = config("30k")["prices"]
     for model, p in base["prices"].items():
         rest = lambda q: {k: v for k, v in q.items() if not k.startswith("cache_") and k != "long_context_above"}  # noqa: E731

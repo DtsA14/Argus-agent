@@ -218,13 +218,27 @@ def main(argv=None, deps=None):
     p.add_argument("--note")
     p.add_argument("--allow-failed-examples", type=_ids, default=(), metavar="ID,ID", help="as for apply: the ids of the examples that failed on the patch")
     ei = sub.add_parser("env", help="a new project: `env init NAME --path DIR` makes a small Python scaffold with one commit and prints the config line that registers it (no model, no image, no push)")
-    ei.add_argument("env_cmd", choices=("init", "propose"))
-    ei.add_argument("name", help="init: the project name; propose: the request in one sentence")
-    ei.add_argument("--path", help="init: the new directory (absent or empty, outside this checkout)")
-    ei.add_argument("--register", action="store_true", help="init: also open a PR that adds the config line (never merges it)")
-    ei.add_argument("--cap-usd", type=float, default=0.02, help="propose: the cap of the one model call (at most 0.10)")
-    ei.add_argument("--description", default="A new project")
-    ei.add_argument("--environment", default="ledger_py312", help="an existing environment under environments/ (default: Python 3.12 with pytest; pwa_node22 gives a React + vitest scaffold with .argus/protected)")
+    esub = ei.add_subparsers(dest="env_cmd", required=True)
+    for _name in ("init", "propose"):
+        ei = esub.add_parser(_name)
+        ei.add_argument("name", help="init: the project name; propose: the request in one sentence")
+        ei.add_argument("--path", help="init: the new directory (absent or empty, outside this checkout)")
+        ei.add_argument("--register", action="store_true", help="init: also open a PR that adds the config line (never merges it)")
+        ei.add_argument("--cap-usd", type=float, default=0.02, help="propose: the cap of the one model call (at most 0.10)")
+        ei.add_argument("--description", default="A new project")
+        ei.add_argument("--key-file", action="append", help="read the API key from this 0600 file instead of typing it; for a stage that needs keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
+        ei.add_argument("--yes", action="store_true", help="only with --key-file: the run was approved in chat")
+        ei.add_argument("--environment", default="ledger_py312", help="an existing environment under environments/ (default: Python 3.12 with pytest; pwa_node22 gives a React + vitest scaffold with .argus/protected)")
+    ea = esub.add_parser("add", help="a request for new npm packages in the environment of a registered Node repository (docs/reviews/SPEC_CHAT_PACKAGES.md): resolves, vets and reports; no model, no money")
+    ea.add_argument("--repo", required=True)
+    ea.add_argument("--job-id", required=True, help="the new job's id (the exact shape of a harness id, now)")
+    ea.add_argument("--packages-file", required=True, help="the package lines, one `name` or `name@x.y.z` per line, read from this file (at most 4 KB)")
+    ea.add_argument("--via", choices=rj.VIA, required=True)
+    ea.add_argument("--yes", action="store_true", required=True, help="the request was confirmed in chat")
+    eb = esub.add_parser("abandon", help="end a package request that built nothing (NEW, RESOLVING or AWAITING_HUMAN)")
+    eb.add_argument("job")
+    eb.add_argument("--via", choices=rj.VIA, required=True)
+    eb.add_argument("--yes", action="store_true", required=True)
     g = sub.add_parser("stage", help="staging (docs/reviews/SPEC_STAGING_V0.md, SPEC_DEP_UPGRADE_V0.md, "
                                      "SPEC_PWA_VIEWER.md): deploy | rollback | status | check | viewer-* | proxy")
     gs = g.add_subparsers(dest="stage_cmd", required=True)
@@ -355,7 +369,7 @@ def main(argv=None, deps=None):
         r.add_argument("--sha", help="the draft the human saw (12+ hex): refused when the job's last draft is another")
         r.add_argument("--via", choices=rj.VIA, help="where the decision was made (SPEC_CONTROL_UI F4)")
     for name, p in sub.choices.items():
-        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run", "patch-trial", "patch-read-run", "route-eval", "env"):   # the live commands
+        if name in ("code", "approve", "redraft", "resume", "retry", "research-ok", "research", "judge", "t3b-run", "patch-trial", "patch-read-run", "route-eval"):   # the live commands (`env` keeps its two options on its own subcommands: argparse gives a subparser's default to a parent's value)
             p.add_argument("--key-file", action="append",
                            help="read the API key from this 0600 file instead of typing it; for a stage that needs "
                                 "keys of more than one provider, repeat it as --key-file PROVIDER=PATH")
@@ -450,6 +464,13 @@ def main(argv=None, deps=None):
                 cfg["sandbox"] = sandbox_cfg(o.config)
             except (ConfigError, OSError):
                 cfg = None                    # status still reads the job; the image comparison is left out
+            try:                                  # SPEC_CHAT_PACKAGES: an env job whose process died, or whose report is old, is brought up to date on a read
+                j = rj.open_job(o.job, o.jobs_dir)
+                if j.data.get("kind") == "env" and cfg is not None:
+                    from router import env_job as ej
+                    ej.settle(j, deps, cfg)
+            except (rj.Refused, OSError, KeyError, ValueError):
+                pass
             print(rj.status(o.job, jobs_dir=o.jobs_dir, cfg=cfg))
             return 0
         if o.cmd in ("reject", "abandon"):
@@ -506,6 +527,30 @@ def main(argv=None, deps=None):
             rec = ers.record(o.job, o.item, o.verdict, o.bundle_sha, o.reader_id, o.source, o.note, deps=deps, jobs_dir=o.jobs_dir, second=o.second)
             print(f"examples-read note for {o.job} item {o.item}: {rec['verdict']} by claude: {ers.LABEL}; the note says who wrote it and what bundle it saw, not that the bundle was read")
             return 0
+        if o.cmd == "env" and o.env_cmd in ("add", "abandon"):
+            from router import env_job as ej
+            cfg = load_config(o.config)
+            cfg["sandbox"] = sandbox_cfg(o.config)
+            try:
+                if o.env_cmd == "abandon":
+                    job = ej.abandon(o.job, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via)
+                    print(f"package request {job.id} is {job.data['state']}")
+                    return 0
+                try:
+                    with open(o.packages_file, "rb") as f:
+                        raw = f.read(ej.PACKAGES_FILE_MAX + 1)
+                    if len(raw) > ej.PACKAGES_FILE_MAX:
+                        raise rj.Refused("the packages file is larger than 4 KB; nothing was started")
+                    text = raw.decode("utf-8")
+                except (OSError, UnicodeDecodeError):
+                    raise rj.Refused("the packages file cannot be read as text; nothing was started") from None
+                with ej.start(repo=o.repo, job_id=o.job_id, text=text, cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, via=o.via) as job:
+                    ej.resolve(job, cfg, deps)
+                print(rj.status(job.id, jobs_dir=o.jobs_dir, cfg=cfg))
+                return 0 if job.data["state"] == ej.AWAITING_HUMAN else 1
+            except rj.Refused as e:
+                print(f"refused: {e}", file=sys.stderr)
+                return 2
         if o.cmd == "env":
             from router import env_init
             if o.env_cmd == "propose":

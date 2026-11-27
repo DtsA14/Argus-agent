@@ -67,11 +67,22 @@ def test_lines_that_are_a_name_with_an_optional_exact_version_parse(text, want):
     "https://example.com/foo.tgz", "git+https://github.com/a/b.git", "github:a/b", "file:../foo", "foo@file:../x", "foo@npm:bar@1.0.0",
     "npm:foo@1.0.0", "foo@git+ssh://x", "foo@http://x/y.tgz", "Foo", "FOO@1.0.0", "@Scope/foo", "@scope/Foo", "@scope", "@/foo", "@scope/",
     "_foo", ".foo", "-foo", "foo bar", "foo\tbar", "foo;rm -rf", "foo$(x)", "foo`x`", "foo|bar", "foo&bar", "foo\x00", "foo\x07",
-    "foo@١٨.٣.١", "foo@１.２.３", "fóó", "foo/bar", "@scope/foo/bar", "a" * 65, "@" + "a" * 65 + "/foo", "foo@" + "1" * 200 + ".0.0",
+    "foo@١٨.٣.١", "foo@１.２.３", "fóó", "foo/bar", "@scope/foo/bar", "a" * 215, "@" + "a" * 100 + "/" + "b" * 114, "foo@" + "1" * 200 + ".0.0",
 ])
 def test_a_line_that_is_not_a_registry_name_with_an_exact_stable_version_is_refused(line):
     items, problem = ep.parse_lines(line)
     assert items is None and problem
+
+
+def test_a_real_long_name_parses_and_the_limit_is_npms_214():
+    real = "@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression"
+    assert len(real) == 77
+    assert ep.parse_lines(real + "@7.25.9")[0] == [{"name": real, "version": "7.25.9"}]
+    assert ep.key_name("node_modules/" + real) == real
+    assert ep.parse_lines("a" * 214)[0] is not None and ep.parse_lines("a" * 215)[0] is None
+    assert ep.key_name("node_modules/" + "a" * 214) == "a" * 214 and ep.key_name("node_modules/" + "a" * 215) is None
+    assert ep.key_name("node_modules/ok/node_modules/" + "b" * 215) is None and ep.key_name("node_modules/" + "b" * 215 + "/node_modules/ok") is None
+    assert ep.locked_names({"packages": {"node_modules/" + real: {}}}) == {real}
 
 
 def test_a_trailing_newline_is_a_blank_line_and_an_inner_one_splits():

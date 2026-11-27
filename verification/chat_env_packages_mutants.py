@@ -10,8 +10,8 @@ ONLY = sys.argv[3:]
 F = "router/env_packages.py"
 T = ["-rfEs", "tests/test_env_packages.py"]
 M = [
-    ("the version may lose its patch part", F, [('VERSION = r"[0-9]+\\.[0-9]+\\.[0-9]+"', 'VERSION = r"[0-9]+\\.[0-9]+(?:\\.[0-9]+)?"')]),
-    ("the digits are any script's digits", F, [('VERSION = r"[0-9]+\\.[0-9]+\\.[0-9]+"', 'VERSION = r"\\d+\\.\\d+\\.\\d+"'), ('LINE = re.compile(rf"({NAME})(?:@({VERSION}))?", re.ASCII)', 'LINE = re.compile(rf"({NAME})(?:@({VERSION}))?")')]),
+    ("the version may lose its patch part", F, [('VERSION = r"[0-9]{1,12}\\.[0-9]{1,12}\\.[0-9]{1,12}"', 'VERSION = r"[0-9]{1,12}\\.[0-9]{1,12}(?:\\.[0-9]{1,12})?"')]),
+    ("the digits are any script's digits", F, [('VERSION = r"[0-9]{1,12}\\.[0-9]{1,12}\\.[0-9]{1,12}"', 'VERSION = r"\\d{1,12}\\.\\d{1,12}\\.\\d{1,12}"'), ('LINE = re.compile(rf"({NAME})(?:@({VERSION}))?", re.ASCII)', 'LINE = re.compile(rf"({NAME})(?:@({VERSION}))?")')]),
     ("a line is matched, not fully matched", F, [("LINE.fullmatch(line) if len(line) <= LINE_MAX else None", "LINE.match(line) if len(line) <= LINE_MAX else None")]),
     ("six lines are accepted", F, [("LINES_MAX = 5", "LINES_MAX = 6")]),
     ("the text length is not bounded", F, [("    if len(text) > TEXT_MAX:\n        return None, f\"the request is longer than {TEXT_MAX} characters\"\n", "")]),
