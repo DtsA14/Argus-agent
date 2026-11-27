@@ -2,6 +2,12 @@
 (docs/reviews/SPEC_ENV_FROM_PYTHON_IMAGE.md 2.3). Every check runs through Argus's own sandbox path, as validations do.
 
   python scripts/check_env_image.py NAME [--log FILE]
+  python scripts/check_env_image.py NAME --defs DIR --out DIR --like ENV [--log FILE]
+
+The second form (docs/reviews/SPEC_CHAT_PACKAGES.md, S0) checks an environment that is NOT adopted yet: its definition is DIR/NAME (the
+requirements or the lock), its pins are OUT/.sandbox_image_NAME and .json, the check record is written in OUT (never in the
+checkout), and its config block is a copy of the configured environment ENV with the image of the pin file. The three options go
+together, are refused for a name that is already configured, and an inherited ARGUS_SANDBOX_IMAGE_<NAME> is ignored.
 
 Checks: the isolation of fixtures/repos/pytest_demo (no network, read-only workspace, runs as nobody); the per-node
 classification of pytest_demo is the one the `argus` environment gives (Argus's parser was built on pytest 9 output); the
@@ -55,14 +61,19 @@ PROBE = ("import importlib.util, json, os, shutil, sys, pytest; print('ARGUS-PRO
          "is not None}))")
 
 
-def record_path(name, root=ROOT):
-    return Path(root) / f".sandbox_image_{name}.check.json"
+def record_path(name, root=None):
+    return Path(ROOT if root is None else root) / f".sandbox_image_{name}.check.json"      # the default is read at the call, so a test that points ROOT elsewhere cannot write in the checkout
 
 
-def pinned(name, root=ROOT):
+def definition(name, root=None, defs=None):
+    """The folder of the environment's definition: DEFS/NAME for a staged one, else ROOT/environments/NAME."""
+    return Path(defs) / name if defs is not None else Path(ROOT if root is None else root) / "environments" / name
+
+
+def pinned(name, root=None, defs=None):
     """{package: version} of the environment's requirements, and its Python version from the build metadata."""
     reqs = {}
-    for line in (Path(root) / "environments" / name / "requirements.txt").read_text().splitlines():
+    for line in (definition(name, root, defs) / "requirements.txt").read_text().splitlines():
         m = re.match(r"^([A-Za-z0-9._-]+)==(\S+)", line.strip())
         if m:
             reqs[m.group(1).lower()] = m.group(2)
@@ -74,8 +85,10 @@ def spec(*targets, must=(), environment, **extra):
             "min_tests": 1, "max_skipped": 10, "must_pass": list(must), "environment": environment, **extra}
 
 
-def checks(name, cfg, workdir):
-    """[(check, ok, detail)] for environment `name`, all through the sandbox. workdir: a copy of pytest_demo."""
+def checks(name, cfg, workdir, defs=None, out=None):
+    """[(check, ok, detail)] for environment `name`, all through the sandbox. workdir: a copy of pytest_demo. defs and out: a staged
+    definition folder and the directory of its pins (S0); both None is the checkout's own environment."""
+    pins = Path(ROOT if out is None else out)
     out = []
     v = va.run_validation(spec("tests/test_isolation.py", must=ISOLATION, min_tests=3, environment=name), workdir, cfg)
     out.append(("isolation", v["status"] == "pass", v["reason"] or "ok"))
@@ -100,11 +113,11 @@ def checks(name, cfg, workdir):
                        cfg={**cfg, "environment": name, "timeout_s": 60})
     line = next((l for l in (r.get("stdout") or "").splitlines() if l.startswith("ARGUS-PROBE:")), None)
     probe = json.loads(line[len("ARGUS-PROBE:"):]) if line else {}
-    want = pinned(name)
+    want = pinned(name) if defs is None else pinned(name, defs=defs)       # the old call is kept as it was (a test may stub `pinned(name)`)
     content_ok = bool(probe) and not probe["sh"] and not probe["bash"] and probe["git"] is None and not probe["pip"]
     out.append(("no shell, git or pip", content_ok, json.dumps(probe, sort_keys=True)))
-    meta = json.loads((ROOT / f".sandbox_image_{name}.json").read_text()) if (ROOT / f".sandbox_image_{name}.json"
-                                                                              ).exists() else {}
+    meta_path = pins / f".sandbox_image_{name}.json"
+    meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
     ver_ok = bool(probe) and probe["pytest"] == want.get("pytest") and \
         probe["python"].startswith(str(meta.get("python", "?")) + ".")
     out.append(("versions", ver_ok, f"python {probe.get('python')} (built {meta.get('python')}), pytest "
@@ -117,15 +130,16 @@ def vitest_spec(*files, must=(), environment, **extra):
             "max_skipped": 10, "must_pass": list(must), "environment": environment, **extra}
 
 
-def locked(name, root=ROOT):
+def locked(name, root=None, defs=None):
     """{package: version} of the environment's package-lock.json (top-level packages only)."""
-    lock = json.loads((Path(root) / "environments" / name / "package-lock.json").read_text())
+    lock = json.loads((definition(name, root, defs) / "package-lock.json").read_text())
     return {k[len("node_modules/"):]: v.get("version") for k, v in lock.get("packages", {}).items()
             if k.startswith("node_modules/") and "/node_modules/" not in k[len("node_modules/"):]}
 
 
-def vitest_checks(name, cfg, workdir):
-    """[(check, ok, detail)] for a vitest environment, all through the sandbox. workdir: a copy of vitest_demo."""
+def vitest_checks(name, cfg, workdir, defs=None, out=None):
+    """[(check, ok, detail)] for a vitest environment, all through the sandbox. workdir: a copy of vitest_demo. defs and out: as for `checks`."""
+    pins = Path(ROOT if out is None else out)
     out = []
     v = va.run_validation(vitest_spec("src/isolation.test.js", must=VITEST_ISOLATION, min_tests=4, environment=name),
                           workdir, cfg)
@@ -149,9 +163,9 @@ def vitest_checks(name, cfg, workdir):
     probe = json.loads(line[len("ARGUS-PROBE:"):]) if line else {}
     out.append(("no shell, git or npm", bool(probe) and not any(probe[k] for k in ("sh", "bash", "git", "npm")),
                 json.dumps(probe, sort_keys=True)))
-    meta_path = ROOT / f".sandbox_image_{name}.json"
+    meta_path = pins / f".sandbox_image_{name}.json"
     meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
-    want = locked(name)
+    want = locked(name) if defs is None else locked(name, defs=defs)       # the old call is kept as it was (a test stubs `locked(name)`)
     ver_ok = bool(probe) and probe["node"] == meta.get("node") and probe["vitest"] == want.get("vitest")
     out.append(("versions", ver_ok, f"node {probe.get('node')} (built {meta.get('node')}), vitest "
                                     f"{probe.get('vitest')} (locked {want.get('vitest')})"))
@@ -165,24 +179,72 @@ def checker(name, cfg):
     return DEMO, checks
 
 
+PIN_DIGEST = re.compile(r"(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}")
+
+
+def staged_pin(out, name):
+    """The image of a staged environment: the pin file `.sandbox_image_NAME` of OUT, a regular file holding one digest, else None."""
+    path = Path(out) / f".sandbox_image_{name}"
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 512:
+            return None
+        text = path.read_text().strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return text if PIN_DIGEST.fullmatch(text) else None
+
+
+def staged(o, cfg):
+    """(cfg with an overlay, image, defs, out, problem) for the options of S0. The overlay is a copy, for this run only: the block of the
+    environment named by --like with the image of the pin file; an inherited ARGUS_SANDBOX_IMAGE_<NAME> is dropped so it cannot win."""
+    envs = (cfg or {}).get("environments") or {}
+    if not (o.defs and o.out and o.like):
+        return None, None, None, None, "--defs, --out and --like go together"
+    if not sb.ENV_NAME.match(o.name):
+        return None, None, None, None, f"{o.name!r} is not an environment name"
+    if o.name in envs:
+        return None, None, None, None, f"{o.name!r} is already configured: check it without the options"
+    if not isinstance(envs.get(o.like), dict):
+        return None, None, None, None, f"--like {o.like!r} is not a configured environment"
+    defs, out = Path(o.defs).resolve(), Path(o.out).resolve()
+    if not (defs / o.name).is_dir() or not out.is_dir():
+        return None, None, None, None, f"no definition in {defs / o.name} or no directory {out}"
+    image = staged_pin(out, o.name)
+    if image is None:
+        return None, None, None, None, f"no pinned image: {out / ('.sandbox_image_' + o.name)} must be a regular file with one sha256 digest"
+    os.environ.pop(f"ARGUS_SANDBOX_IMAGE_{o.name.upper()}", None)
+    return {**cfg, "environments": {**envs, o.name: {**envs[o.like], "image": image}}}, image, defs, out, None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name")
     ap.add_argument("--log")
+    ap.add_argument("--defs", help="a staged definition folder: DEFS/NAME (S0; with --out and --like)")
+    ap.add_argument("--out", help="the directory of the staged environment's pins; the check record is written there (S0)")
+    ap.add_argument("--like", help="a configured environment whose block (runner, protected_required) the staged one copies (S0)")
     o = ap.parse_args(argv)
     from approve_draft import sandbox_cfg
     cfg = sandbox_cfg()
-    image, problem = sb.environment_image(cfg, o.name)
-    if problem or not image or not (ROOT / "environments" / o.name).is_dir():
-        print(f"cannot check {o.name!r}: {problem or 'no image' if not image else 'no definition in environments/'}",
-              file=sys.stderr)
-        return 2
-    record_path(o.name).unlink(missing_ok=True)
+    extra, where = {}, ROOT
+    if o.defs or o.out or o.like:
+        cfg, image, defs, out, problem = staged(o, cfg)
+        if problem:
+            print(f"cannot check {o.name!r}: {problem}", file=sys.stderr)
+            return 2
+        extra, where = {"defs": defs, "out": out}, out
+    else:
+        image, problem = sb.environment_image(cfg, o.name)
+        if problem or not image or not (ROOT / "environments" / o.name).is_dir():
+            print(f"cannot check {o.name!r}: {problem or 'no image' if not image else 'no definition in environments/'}",
+                  file=sys.stderr)
+            return 2
+    record_path(o.name, where).unlink(missing_ok=True)
     demo, run_checks = checker(o.name, cfg)
     with tempfile.TemporaryDirectory() as tmp:
         ws = Path(tmp) / "ws"
         shutil.copytree(demo, ws)
-        results = run_checks(o.name, cfg, str(ws))
+        results = run_checks(o.name, cfg, str(ws), **extra)
     lines = [f"environment {o.name}, image {image}"] + [f"{'PASS' if ok else 'FAIL'} {c}: {d}" for c, ok, d in results]
     ok = all(r[1] for r in results)
     lines.append(f"RESULT: {'PASS' if ok else 'FAIL'}")
@@ -191,7 +253,7 @@ def main(argv=None):
     if o.log:
         Path(o.log).write_text(text)
     if ok:
-        record_path(o.name).write_text(json.dumps({
+        record_path(o.name, where).write_text(json.dumps({
             "environment": o.name, "image": image, "result": "pass",
             "checked_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "log_sha256": hashlib.sha256(text.encode()).hexdigest()}) + "\n")
