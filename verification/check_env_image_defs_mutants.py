@@ -1,11 +1,15 @@
 """Mutants for SPEC_CHAT_PACKAGES S0 (scripts/check_env_image.py checks an environment that is not adopted yet). Applied alone; killed = a test FAILED.
 Run in a throwaway worktree, never in the live checkout: a mutant that writes a check record must not reach the real pins.
-Usage: <this> <worktree> <python>"""
+Equivalent in behaviour (documented, not mutated further): "a missing out directory is accepted" (the pin file lookup in that directory then
+fails the same way: no directory, no pin file); "the old form writes its record in the staged place" (the old form has no --out, so the place
+is the checkout either way).
+Usage: <this> <worktree> <python> [name-part ...]"""
 import subprocess
 import sys
 from pathlib import Path
 
 WT, PY = Path(sys.argv[1]), sys.argv[2]
+ONLY = sys.argv[3:]                                            # optional: run only the mutants whose name contains one of these (a re-run of survivors)
 F = "scripts/check_env_image.py"
 T = ["-rfEs", "tests/test_check_env_image_defs.py", "tests/test_env_node.py"]
 M = [
@@ -39,6 +43,8 @@ M = [
 ]
 killed = 0
 for name, f, edits in M:
+    if ONLY and not any(o in name for o in ONLY):
+        continue
     p = WT / f
     orig = p.read_text()
     text = orig
@@ -57,4 +63,4 @@ for name, f, edits in M:
     k = "FAILED tests/" in r.stdout or "FAILED" in last or "error" in last.lower()
     killed += k
     print("KILLED " if k else "SURVIVED", name, flush=True)
-print(f"RESULT: {killed}/{len(M)} killed")
+print(f"RESULT: {killed}/{len([n for n, _, _ in M if not ONLY or any(o in n for o in ONLY)])} killed")

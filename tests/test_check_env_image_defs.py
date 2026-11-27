@@ -130,6 +130,8 @@ def test_there_is_no_free_runner_option(world):
 @pytest.mark.parametrize("bad", ["Bad-Name", "x" * 33, "", "a b"])
 def test_a_name_outside_the_environment_shape_is_refused(world, bad):
     m, root, cfg, calls, verdict, defs, out = world
+    (defs / bad).mkdir(exist_ok=True)                              # a definition folder and a pin file exist for it: only the shape stops it
+    (out / f".sandbox_image_{bad}").write_text(IMAGE)
     assert run(m, defs, out, name=bad) == 2 and not calls
 
 
@@ -164,6 +166,12 @@ def test_an_inherited_image_variable_is_ignored(world, monkeypatch):
 def test_a_pin_file_that_is_not_a_digest_is_refused(world, content):
     m, root, cfg, calls, verdict, defs, out = world
     (out / f".sandbox_image_{NEW}").write_text(content)
+    assert run(m, defs, out) == 2 and not calls
+
+
+def test_a_pin_file_padded_beyond_the_size_limit_is_refused(world):
+    m, root, cfg, calls, verdict, defs, out = world
+    (out / f".sandbox_image_{NEW}").write_text(IMAGE + "\n" * 600)       # one digest, but 600 bytes of padding: not a pin file the build writes
     assert run(m, defs, out) == 2 and not calls
 
 
@@ -323,3 +331,10 @@ def test_a_python_environment_reads_the_staged_requirements_and_metadata(tmp_pat
     results = {c: ok for c, ok, _ in m.checks(NEW, {}, "/nowhere", defs=defs, out=out)}
     bad = [c for c, ok in results.items() if not ok]
     assert bad == ([] if flip is None else ["versions"])
+
+
+def test_the_default_root_of_the_record_is_read_at_the_call(tmp_path, monkeypatch):
+    m = load("check_env_defs_record")
+    monkeypatch.setattr(m, "ROOT", tmp_path)
+    assert m.record_path(NEW) == tmp_path / f".sandbox_image_{NEW}.check.json"
+    assert m.record_path(NEW, root=tmp_path / "x") == tmp_path / "x" / f".sandbox_image_{NEW}.check.json"
