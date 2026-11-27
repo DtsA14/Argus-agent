@@ -1,5 +1,7 @@
 """Mutants for SPEC_CHAT_PACKAGES S3 (the build in router/env_job.py, the lock hash in router/job.py check_problem, scripts/build_env_node.sh, `argus env build`). Applied alone;
-killed = a test FAILED. Run in a throwaway worktree. Usage: <this> <worktree> <python> [name-part ...]"""
+killed = a test FAILED. Equivalent in behaviour (documented, not mutated further): "the sha may be shorter", "the sha may be upper case", "the sha may be matched, not fully matched" (the compare with the
+candidate's own first 12 hex refuses every one of them anyway; the shape check only gives a clearer sentence).
+Run in a throwaway worktree. Usage: <this> <worktree> <python> [name-part ...]"""
 import subprocess
 import sys
 from pathlib import Path

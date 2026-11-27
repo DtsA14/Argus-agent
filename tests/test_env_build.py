@@ -31,11 +31,13 @@ class FakeBuilder:
     def __init__(self, free=10 * GB, **plan):
         self.free = free
         self.plan = {"build_rc": 0, "check_rc": 0, "image": IMAGE, "lock_sha": None, "meta_image": None, "check_result": "pass", "check_image": None, "write_pin": True,
-                     "write_meta": True, "write_check": True, "build_mode": None, "check_mode": None, "during": None, "node": "22.23.4"}
+                     "write_meta": True, "write_check": True, "build_mode": None, "check_mode": None, "during": None, "node": "22.23.4", "check_env": None, "free_hook": None}
         self.plan.update(plan)
         self.calls, self.removed = [], []
 
     def free_bytes(self):
+        if self.plan["free_hook"]:
+            self.plan["free_hook"]()
         return self.free
 
     def build(self, name, defs, out, container, timeout_s):
@@ -63,7 +65,7 @@ class FakeBuilder:
         if p["during"]:
             p["during"]()
         if p["write_check"]:
-            (Path(out) / f".sandbox_image_{name}.check.json").write_text(json.dumps({"environment": name, "image": p["check_image"] or p["image"], "result": p["check_result"]}))
+            (Path(out) / f".sandbox_image_{name}.check.json").write_text(json.dumps({"environment": p["check_env"] or name, "image": p["check_image"] or p["image"], "result": p["check_result"]}))
         return p["check_rc"], "check log"
 
     def remove_image(self, image):
@@ -285,7 +287,7 @@ def test_a_build_of_another_lock_or_image_than_the_candidate_fails_and_removes_i
 
 
 @pytest.mark.parametrize("plan, reason", [({"check_rc": 1}, "did not pass its check"), ({"check_result": "fail"}, "did not pass its check"),
-                                          ({"check_image": "sha256:" + "d" * 64}, "did not pass its check"), ({"write_check": False}, "did not pass its check"),
+                                          ({"check_image": "sha256:" + "d" * 64}, "did not pass its check"), ({"check_env": "other_env"}, "did not pass its check"), ({"write_check": False}, "did not pass its check"),
                                           ({"check_mode": "timeout"}, "check took too long"), ({"check_mode": "oserror"}, "could not be started")])
 def test_an_environment_that_does_not_pass_its_check_fails_and_its_image_is_removed(world, plan, reason):
     job, b, d = failed(world, plan, reason)
@@ -608,3 +610,80 @@ def test_a_report_that_expired_is_not_built(world):
     with pytest.raises(rj.Refused, match="not AWAITING_HUMAN"):
         ej.build(job.id, sha=sha, cfg=c, deps=deps("2026-11-28T12:00:01Z"), jobs_dir=jobs, via="ui", root=root, docker=FakeDocker(), builder=FakeBuilder())
     assert state(world, job) == "ABANDONED"
+
+
+def test_a_waiting_job_whose_report_is_not_ok_or_has_no_recorded_hash_is_not_built(world):
+    job, c, sha = ready_job(world)
+    with rj.open_job(job.id, world[1]).lock() as j:
+        j.data["report"]["status"] = "REFUSED"
+        j.save()
+    with pytest.raises(rj.Refused, match="no accepted report"):
+        do_build(world, job, c, sha)
+    with rj.open_job(job.id, world[1]).lock() as j:
+        j.data["report"]["status"] = "OK"
+        del j.data["candidate"]["lock_sha256"]
+        j.save()
+    with pytest.raises(rj.Refused, match="no recorded candidate hash"):
+        do_build(world, job, c, sha)
+    assert state(world, job) == "AWAITING_HUMAN"
+
+
+def test_a_dangling_link_in_the_place_of_a_pin_stops_the_build(world):
+    root, jobs = world
+    job, c, sha = ready_job(world)
+    (root / f".sandbox_image_{NAME}.json").symlink_to(root / "nowhere")
+    assert not (root / f".sandbox_image_{NAME}.json").exists()
+    with pytest.raises(rj.Refused, match="already exist"):
+        do_build(world, job, c, sha)
+
+
+def test_the_build_uses_the_bytes_that_were_verified_even_if_the_file_changes_afterwards(world):
+    job, c, sha = ready_job(world)
+    cand = job.dir / "candidate" / "package-lock.json"
+    original = cand.read_bytes()
+    b = FakeBuilder(free_hook=lambda: cand.write_bytes(original + b" "))          # the original changes after it was verified, before it is staged
+    built = do_build(world, job, c, sha, b)
+    assert state(world, job) == "READY" and built["lock_sha256"] == ep.lock_sha(original)
+    assert (job.dir / "build" / "defs" / NAME / "package-lock.json").read_bytes() == original
+
+
+def test_the_adoption_bundle_lists_only_the_requested_packages_as_dependencies(world):
+    lock = lock_with(("node_modules/foo", entry("2.0.0")), ("node_modules/dep", entry("1.1.1")))
+    job, docker, c = run_one(world, FakeDocker(lock=lock), text="foo")
+    assert [p["name"] for p in job.data["report"]["packages"]] == ["dep", "foo"]
+    do_build(world, job, c, job.data["candidate"]["lock_sha256"][:12])
+    text = (job.dir / "adoption" / "ADOPT.txt").read_text()
+    assert '    "foo": "2.0.0",' in text and '"dep"' not in text
+
+
+@pytest.mark.parametrize("tmp_free, docker_free, want", [(100, 5, 5), (5, 100, 5), (7, 7, 7)])
+def test_the_free_space_is_the_smaller_of_docker_root_and_tmp(tmp_path, monkeypatch, tmp_free, docker_free, want):
+    import types
+    sizes = {"/dockerroot": docker_free, tempfile_dir(): tmp_free}
+    monkeypatch.setattr(ej.os, "statvfs", lambda p: types.SimpleNamespace(f_bavail=sizes[str(p)], f_frsize=1))
+    monkeypatch.setattr(ej.subprocess, "run", lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="/dockerroot\n"))
+    assert ej.Builder(tmp_path).free_bytes() == want
+
+
+def tempfile_dir():
+    import tempfile
+    return tempfile.gettempdir()
+
+
+def test_the_free_space_without_docker_is_tmp_alone_and_without_any_path_is_zero(tmp_path, monkeypatch):
+    import types
+    monkeypatch.setattr(ej.os, "statvfs", lambda p: types.SimpleNamespace(f_bavail=9, f_frsize=1))
+    monkeypatch.setattr(ej.subprocess, "run", lambda *a, **k: types.SimpleNamespace(returncode=1, stdout=""))
+    assert ej.Builder(tmp_path).free_bytes() == 9
+    monkeypatch.setattr(ej.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("no docker")))
+    assert ej.Builder(tmp_path).free_bytes() == 9
+
+    def none(p):
+        raise OSError("gone")
+    monkeypatch.setattr(ej.os, "statvfs", none)
+    assert ej.Builder(tmp_path).free_bytes() == 0                                  # nothing could be measured: not enough
+
+
+def test_via_must_be_ui_for_a_build(world):
+    with pytest.raises(SystemExit):
+        argus.main(["--jobs-dir", str(world[1]), "env", "build", job_id(), "--sha", "0" * 12, "--via", "cli", "--yes"], deps=deps())
