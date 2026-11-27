@@ -226,3 +226,15 @@ bukan per job; (15) `prd_reply`: cek status dibuang, gerbang `WRITE_FAILED` diba
 (18) baris `attempt` ditulis sesudah spawn atau kegagalannya diabaikan; (19) apply dijalankan sinkron di `confirm` atau status dibaca dari keluaran proses;
 (20) `source_*` diterima untuk aksi baru, atau aksi baru masuk `ROUTE_ACTION`; (21) tombol terbuka walau diff terpotong atau berubah oleh `scrub`;
 (22) `_record_applied` mengabaikan `via`, atau prioritas `CLAUDECODE` dibalik; (23) token `prd_approve` tidak ditolak sesudah `prd_reply` jalan.
+
+## 13. Rev 2: apa yang PR2 membangun dan menyimpang dari rev 1 (2026-11-27)
+
+PR2 = `router/chat_apply.py` (kelas `ApplyReply`), kabelnya di `chat_actions.py` dan `chat.py`, dua tambahan kecil di `approve_code.py`, tes `tests/test_chat_apply_reply.py`. Sama dengan bagian 12 kecuali:
+
+- **Sisa uang pembaca (F13):** `prepare` hanya menolak bila batas total job sudah habis atau ledgernya tidak lengkap, dan menampilkan sisa `C - sudah ditagih`. Penolakan "tidak cukup untuk dua panggilan terburuk" **tidak** dibangun: itu menuntut menghitung ulang konteks dan tarif model di dalam permintaan HTTP (git dan tabel harga). Batas uangnya tetap utuh karena `patch-read-run` berhenti sendiri bila satu panggilan tidak muat dan tidak menulis apa pun; yang mungkin terjadi hanya satu bacaan tunggal (`one`) yang dilanjutkan pembaca kedua pada putaran berikutnya (kode `resume` yang ada). Eksposur yang dihitung = sisa itu.
+- **Kartu pasang (F5):** `approve_code` memuat catatan dengan `raw_pair=True` dan menambah `patch_sha256` (penuh) serta `patch_read_kind`; `code_with_patch` memberi satu bacaan yang sama untuk kartu, hash dan teks diff.
+- **Tombol (F8):** `GET /api/approve/code/<job>` menambah `apply` = `{action, why[, needs_reason]}` dari pembangun yang sama; `GET /api/diff/<job>` memberi teks patch utuh atau alasan ia tidak boleh ditampilkan (terlalu besar, bukan teks, karakter tersembunyi atau mirip kunci); tombol pasang tertutup bila diff tidak bisa ditampilkan utuh.
+- **Nama aksi (F4):** `code_apply`; satu-satunya aksi yang boleh membawa `sha` (pemeriksaan kesamaan).
+- **Kunci pembaca:** slot `ARGUS_CHAT_READER_KEY_FILE`, cadangannya `ARGUS_CHAT_KEY_FILE` (kunci OpenRouter yang sudah ada di unit layanan).
+- **Jaring uang (F3):** `audited()` menjumlah baris audit `attempt=confirm` 24 jam untuk `prd_reply` dan `patch_read_run` (field `usd`); `issue_reply` masih memakai daftar `pending` 10 menit: celah yang diketahui, dicatat di PENDING.
+- **Belum di PR2 (PR3, tampilan):** tombol dan kolom di halaman, rute diff di UI, teks `app.js` "apply is still done from the terminal" dan `tests/test_chat_t4b.py:570`.

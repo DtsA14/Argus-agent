@@ -498,9 +498,9 @@ def test_apply_retry_close_redraft_and_the_rest_are_not_actions_of_the_chat(svc,
     assert status == 404 and "token" not in out
 
 
-def test_the_action_list_has_exactly_the_two_new_approvals_and_no_apply():
+def test_the_action_list_has_the_two_t4b_approvals_and_the_only_apply_is_code_apply():
     assert set(ca.ACTIONS) >= {"queue_step", "draft_approve"}
-    assert not any("apply" in a or "retry" in a or "redraft" in a for a in ca.ACTIONS)
+    assert {a for a in ca.ACTIONS if "apply" in a or "retry" in a or "redraft" in a} == {"code_apply"}          # SPEC_CHAT_APPLY_REPLY opened the one apply; retry and redraft stay out
 
 
 

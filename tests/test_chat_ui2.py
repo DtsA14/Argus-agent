@@ -61,8 +61,8 @@ def test_the_excerpt_drops_format_characters_and_cuts_by_code_points():
     assert rb.excerpt("x" * 400, 400) == ("x" * 400, False)
 
 
-def test_a_reply_action_is_not_a_chat_action():
-    assert "prd_reply" not in ca.ACTIONS and [a for a in ca.ACTIONS if a.startswith("prd_")] == ["prd_new", "prd_approve"]
+def test_the_prd_actions_of_the_chat_are_new_approve_and_reply():
+    assert [a for a in ca.ACTIONS if a.startswith("prd_")] == ["prd_new", "prd_approve", "prd_reply"]          # prd_reply: SPEC_CHAT_APPLY_REPLY (F28)
 
 
 # ---- the bundle ----------------------------------------------------------------------------------------------------

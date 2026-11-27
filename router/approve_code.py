@@ -59,6 +59,15 @@ class Install:
         except Exception:
             return None
 
+    def code_with_patch(self, job_id):
+        """(card, patch bytes read from the disk, their sha256) for the apply and reader actions (SPEC_CHAT_APPLY_REPLY 5.3): the SAME read the card made, so what is
+        shown, hashed and applied is one file. (None, None, None) when the card cannot be made."""
+        try:
+            got = self._code(job_id, keep=True)
+        except Exception:
+            return None, None, None
+        return got if isinstance(got, tuple) else (None, None, None)       # `_code` answers None for a job that is not a code job or not there
+
     # ---- files ------------------------------------------------------------------------------------------------------------------
 
     @staticmethod
@@ -118,7 +127,7 @@ class Install:
 
     # ---- the card ---------------------------------------------------------------------------------------------------------------
 
-    def _code(self, job_id):
+    def _code(self, job_id, keep=False):
         c = self.cards
         d = c._job_dir(job_id)
         if d is None:
@@ -211,7 +220,7 @@ class Install:
                                                else "persetujuan itu untuk draf lain dari draf terakhir"))
 
             # (f) the patch reader's note, (g) one sha
-            pr_kind, pr_rec = pr.load(f"/proc/self/fd/{jfd}", sid, rsha) if sid and rsha else ("error", None)
+            pr_kind, pr_rec = pr.load(f"/proc/self/fd/{jfd}", sid, rsha, raw_pair=True) if sid and rsha else ("error", None)       # raw_pair: both readings as written (F5: the second no longer overwrites the first)
             checks["f"] = _chk("f", pr_kind in ("ok", "nit"), {
                 "ok": "dua pembaca patch sama-sama mencatat ok untuk patch ini", "nit": "dua pembaca patch membaca patch ini; hanya ada catatan kecil (nit), bukan keberatan",
                 "concerns": "pembaca patch mencatat ada yang meragukan",
@@ -245,7 +254,7 @@ class Install:
             repo = i.get("repo_name")
             cost = {"spent": c._spent(data), "cap": data.get("max_usd") if isinstance(data.get("max_usd"), (int, float)) and not isinstance(data.get("max_usd"), bool) else None,
                     "reference": self.approve._reference()}
-            card = {"kind": "install", "id": job_id, "state": state, "repo": repo, "sid": sid, "patch_sha12": rsha[:12] if rsha else None,
+            card = {"kind": "install", "id": job_id, "state": state, "repo": repo, "sid": sid, "patch_sha12": rsha[:12] if rsha else None, "patch_sha256": rsha, "patch_read_kind": pr_kind,
                     "purpose": {"title": c.s(issue.split("\n", 1)[0])[:200], "text": self.approve._cut(c.s(self.approve_text(issue)), ISSUE_MAX)[0],
                                 "by": "ditulis model (issue dari PRD, bukan permintaan Atha kata demi kata)" if res["applicable"] else
                                       "teks issue; pembuatnya tidak tercatat (bukan permintaan Atha kata demi kata)"},
@@ -266,7 +275,8 @@ class Install:
             dr = item.get("domain_read") if isinstance(item, dict) else None
             ids = [r.get("id") for r in (dr.get("reader"), dr.get("reader2")) if isinstance(r, dict)] if isinstance(dr, dict) else []
             card["patch_reader_tested"], card["domain_reader_tested"] = self._tested(repo, ids, pids)
-            return c.withhold_keys(self.approve._deep(card))
+            out = c.withhold_keys(self.approve._deep(card))
+            return (out, patch_bytes, disk_sha) if keep else out
         finally:
             os.close(jfd)
             os.close(sfd)

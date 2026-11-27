@@ -571,7 +571,9 @@ def test_one_patch_reading_is_not_an_ok_and_two_by_the_same_id_are_not_two(svc):
     rec["second"]["verdict"] = "concerns"
     f.write_text(json.dumps(rec))
     c = get(svc)[1]
-    assert checks(c)["f"]["ok"] is False and c["patch_read"]["verdict"] == "concerns"        # a concerns of the second closes it and is what is shown
+    assert checks(c)["f"]["ok"] is False and c["patch_read"]["second"]["verdict"] == "concerns"        # a concerns of the second closes it ...
+    assert c["patch_read"]["verdict"] == "ok" and c["patch_read"]["reader"]["id"] != c["patch_read"]["second"]["reader"]["id"]   # ... and the first reading is shown as written, not overwritten by the second (SPEC_CHAT_APPLY_REPLY 12 F5)
+    assert c["patch_read_kind"] == "concerns" and c["patch_sha256"] and c["patch_sha256"][:12] == c["patch_sha12"]
 
 
 def test_the_patch_reader_is_tested_only_for_the_pair_of_models_and_the_template_that_were_tested(svc, tmp_path, monkeypatch):
