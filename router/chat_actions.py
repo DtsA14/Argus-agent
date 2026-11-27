@@ -37,6 +37,7 @@ from router import manager_job as mj
 from router import manager_route as mr
 from router import prd_job as pj
 from router.chat_plan import Plan
+from router.chat_apply import ApplyReply
 from router.chat_t4b import Steps
 from router import research as rr
 from router import stage_data as sd
@@ -48,10 +49,13 @@ STATE = Path.home() / ".local" / "state" / "argus-chat"
 KEY_ENV = "ARGUS_CHAT_KEY_FILE"
 WRITER_KEY_ENV = "ARGUS_CHAT_WRITER_KEY_FILE"
 MANAGER_KEY_ENV = "ARGUS_CHAT_MANAGER_KEY_FILE"      # SPEC_CHAT_MANAGER_P1 10.7: the foreman's turns; falls back to the writer's slot, then the code key
+READER_KEY_ENV = "ARGUS_CHAT_READER_KEY_FILE"        # SPEC_CHAT_APPLY_REPLY 12 F1: the two patch readers (OpenRouter models); falls back to KEY_ENV
+ROOT_REAL = os.path.realpath(rj.ROOT)                 # the checkout of Argus: a patch for it is never applied from the chat
 RESEARCH_KEY_ENV = "ARGUS_CHAT_RESEARCH_KEY_FILE"   # research uses DeepSeek's own search and fetch API: its own key, when the code key is another provider's
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
-ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "manager_new", "prd_approve", "queue_go", "queue_step", "draft_approve", "job_reject", "job_abandon")   # no apply, no retry/redraft of a code job from here (job_reject and job_abandon are the control UI's); the only approvals are prd_approve and queue_go (SPEC_CHAT_T4A, amending 13.7 item 9) and, for a queue the chat itself approved, queue_step and draft_approve (SPEC_CHAT_T4B)
+ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "manager_new", "prd_approve", "queue_go", "queue_step", "draft_approve", "job_reject", "job_abandon",
+           "prd_reply", "patch_read_run", "code_apply")   # no retry/redraft of a code job from here (job_reject and job_abandon are the control UI's); approvals: prd_approve and queue_go (SPEC_CHAT_T4A), queue_step and draft_approve for a queue the chat itself approved (SPEC_CHAT_T4B), and prd_reply, patch_read_run and code_apply (SPEC_CHAT_APPLY_REPLY: no push, no PR, no merge, no deploy)
 SOURCE_KEYS = {"source_job", "source_turn"}   # SPEC_CHAT_MANAGER_P2B: the foreman's proposal a form was filled from, as two text fields
 SOURCE_NOTE = "the text was first written by the foreman (a model): read it before you confirm"
 ROUTE_ACTION = {"research": "research_new", "prd": "prd_new"}
@@ -185,6 +189,7 @@ class Actions:
         self.config_path = config_path
         self.plans = Plan(self, Refusal)                                                          # SPEC_CHAT_T4A: prd_approve and queue_go
         self.steps = Steps(self, Refusal)                                                         # SPEC_CHAT_T4B: queue_step and draft_approve
+        self.apply_reply = ApplyReply(self, Refusal)                                              # SPEC_CHAT_APPLY_REPLY: prd_reply, patch_read_run and code_apply
         self.state = Path(state)
         self.spawner = spawner or Spawner(self.state, clock)
         self.run = run or (lambda action, job_id, reason, sha="": control_cli(action, job_id, reason, sha, self.jobs_dir))
@@ -480,6 +485,12 @@ class Actions:
             return self.steps.build_step(params)
         if action == "draft_approve":
             return self.steps.build_approve(params)
+        if action == "prd_reply":
+            return self.apply_reply.build_prd_reply(params)
+        if action == "patch_read_run":
+            return self.apply_reply.build_read(params)
+        if action == "code_apply":
+            return self.apply_reply.build_apply(params)
         w = cfg.get("issue_writer") or {}
         if not w:
             raise Refusal(409, "config", "the config has no issue writer")
@@ -1016,6 +1027,7 @@ class Actions:
                 raise bad from None
         total += self.plans.exposure(now, seen)               # queues approved via the UI (SPEC_CHAT_T4A 4)
         total += self.steps.audited(now)                      # steps of a queue approved more than 24 hours ago: one job cap each (SPEC_CHAT_T4B 5, K4)
+        total += self.apply_reply.audited(now)                # replies of the PRD writer and runs of the patch readers: the audit's `attempt` lines of the last 24 hours (SPEC_CHAT_APPLY_REPLY 12 F3)
         for job_id, usd, at in self.plans.audited(now):       # the net under it: a `via` lost from the queue file
             if ("go", job_id) not in seen and os.path.lexists(self.cards.queues_dir / job_id):
                 total += usd
@@ -1198,6 +1210,8 @@ class Actions:
     def exposure_of(self, card):
         if card["action"] in ("issue_new", "issue_start", "research_new", "prd_new", "manager_new"):
             return float(card["job_cap_usd"])
+        if card["action"] in ("prd_reply", "patch_read_run", "code_apply"):
+            return self.apply_reply.exposure_of(card)         # counted from the audit net (a paid reply or reading), 0 for an apply
         if card["action"] in ("queue_step", "draft_approve"):
             return self.steps.exposure_of(card)              # 0 inside the 24 hours of its queue's approval (that money is counted), else one job cap
         if card["action"] == "queue_go":
@@ -1279,6 +1293,8 @@ class Actions:
             return self.plans.execute(a, card, rp)
         if a in ("queue_step", "draft_approve"):
             return self.steps.execute(a, card, rp)
+        if a in ("prd_reply", "patch_read_run", "code_apply"):
+            return self.apply_reply.execute(a, card, rp)
         key = self.key_file(a in ("issue_new", "issue_reply", "prd_new"), research=(a == "research_new"))
         c = self.jobs_dir
         if a == "research_new":

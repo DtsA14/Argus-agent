@@ -325,7 +325,16 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/approve/code/([^/?#%]+)", path)        # SPEC_KARTU_SETUJU 5b: the install card, read only, GET only
         if a is not None and m:
             got = a.approve_code.code(m.group(1))
+            if got is not None:
+                got["apply"] = a.apply_reply.state(m.group(1))                  # SPEC_CHAT_APPLY_REPLY: the button the same builders would let through
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
+        m = re.fullmatch(r"/api/diff/([^/?#%]+)", path)                         # SPEC_CHAT_APPLY_REPLY 12 F7: the whole patch as text, or why it cannot be shown whole; GET only
+        if a is not None and m:
+            try:
+                full, text, why = a.apply_reply.patch_text(m.group(1))
+            except Refusal as e:
+                return self._refuse(e.status, e.why)
+            return self._json(200, {"job": m.group(1), "sha": full, "sha12": (full or "")[:12], "text": text, "why": why})
         if a is not None and path == "/api/research":
             return self._json(200, a.research_list())
         m = re.fullmatch(r"/api/research/([^/?#%]+)", path)
@@ -423,7 +432,7 @@ class Handler(BaseHTTPRequestHandler):
         if action in ("queue_step", "draft_approve") and isinstance(params.get("queue"), str):
             rec["queue"] = params["queue"][:AUDIT_STR]
         if "sha" in params:
-            if action in ACTIONS and not action.startswith("job_"):
+            if action in ACTIONS and not action.startswith("job_") and action != "code_apply":       # code_apply: the sha12 the human was shown, an equality check (SPEC_CHAT_APPLY_REPLY 12 F4, F6)
                 raise Refusal(400, "form", "only a decision of a job takes a draft sha")
             rec["sha"] = params["sha"]
         if "source_job" in params:
@@ -448,6 +457,10 @@ class Handler(BaseHTTPRequestHandler):
             rec.update(queue=card["queue"], item=card["item"], usd=a.exposure_of(card))
             if card.get("draft_sha"):
                 rec["sha"] = card["draft_sha"][:12]
+        if action in ("prd_reply", "patch_read_run", "code_apply"):          # SPEC_CHAT_APPLY_REPLY 12 F3: the audit net of the daily cap reads usd of a reply or a reading; the reason only as a hash
+            rec.update(usd=a.exposure_of(card))
+            if card.get("reason"):
+                rec["reason_sha256"] = hashlib.sha256(card["reason"].encode()).hexdigest()
         if card.get("sha12"):
             rec["sha"] = card["sha12"]
         if card.get("source"):                                            # SPEC_CHAT_MANAGER 13.6: the audit tells a form from a proposal from one the human typed

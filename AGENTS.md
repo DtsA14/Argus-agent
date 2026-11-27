@@ -69,8 +69,14 @@ it is strict-lane. A hint that becomes a gate (refuses, fails or blocks somethin
   acknowledgement, the cost reason) are enforced on the server, not only in a page; the queue's money counts in the daily cap. For the items of a queue that the chat
   itself approved (`approved.via == "ui"`) there are two more, `queue_step` and `draft_approve` (SPEC_CHAT_T4B; the client sends only the queue id, the server derives
   the item, the job and the full draft sha, and the card's digest binds them). Flag any chat route that approves a draft or starts a drafter of a queue not approved via
-  the UI, applies a patch, retries or redrafts a code job (rejecting or abandoning one stays only `job_reject` and `job_abandon`, SPEC_CONTROL_UI), passes `--max-usd`, `--web`, `--reference-patch` or `--max-iterations`, or lets the client
+  the UI, applies a patch other than through `code_apply` (below), retries or redrafts a code job (rejecting or abandoning one stays only `job_reject` and `job_abandon`, SPEC_CONTROL_UI), passes `--max-usd`, `--web`, `--reference-patch` or `--max-iterations`, or lets the client
   pick a queue's item, a job, a sha or an amount. A step of a queue approved more than 24 hours ago counts one job cap in the daily cap (K4). A terminal `queue go` does not enforce them (known).
+- Three more actions, SPEC_CHAT_APPLY_REPLY (Atha 2026-11-27, K1-K5): `prd_reply` (`argus prd reply --via ui`, one writer turn), `patch_read_run` (`argus patch-read-run --via ui`, the two
+  readers, at most the job's cap and twice per job per 24 hours) and `code_apply` (`argus apply --via ui`, one commit in the registered repository on this machine). The client sends the job,
+  the message of a reply, the reason of an accepted concern and, for `code_apply`, the sha12 it was shown as an equality check only; the server reads the full sha, the repository, the caps and
+  every option, recomputes the install card at prepare and at confirm, and the card's digest binds them. Flag any of them that pushes, opens a pull request, merges or deploys, passes
+  `--allow-failed-examples`, `--note`, `--reader claude`, `--rebase` or `--cap-usd` from the client, applies a patch the page cannot show whole and clean, applies in Argus's own checkout, takes
+  a reason a model wrote, counts a paid reply or reading from the in-memory pending list instead of the audit, or can be started by the foreman.
 
 ### Proportional process and real use first (Atha, 2026-11-19)
 Atha spent a month building Argus without really using it; the goal is to reach **T6** (`argus env init`, environment node, new repos from a prompt) fast, and a

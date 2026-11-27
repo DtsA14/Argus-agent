@@ -10,7 +10,7 @@ Status: **rev 1** (rev 0 + tinjauan Opus 2026-11-24, GO dengan perbaikan; K4 dip
 1. `queue_step`: setara `argus queue step Q`. Memulai drafter untuk item berikutnya dari antrean yang **Atha setujui lewat chat** (`approved.via == "ui"`). Memakai uang yang sudah disetujui di `queue_go`: eksposur tambahan 0.
 2. `draft_approve`: setara `argus approve JOB --sha DRAFTSHA`. Menyetujui draf (kontrak tes dan batas) dan memulai agen kode. Memakai uang dalam batas job yang sudah dihitung di `queue_go`: eksposur tambahan 0.
 
-**Di luar cakupan (tetap terminal atau operator):** apply, `applied`, reject, abandon, `queue retry/close`, redraft, retry agen, `prd reply`, buka PR, merge. **Apply tidak dibuka di spek ini**: ia butuh catatan pembaca angka untuk item antrean PRD, dan pembaca angka belum teruji (T3b gagal tiga putaran); itu keputusan C6/C9 dan spek sendiri.
+**Di luar cakupan (tetap terminal atau operator; apply dibuka kemudian oleh SPEC_CHAT_APPLY_REPLY, 2026-11-27):** apply, `applied`, reject, abandon, `queue retry/close`, redraft, retry agen, `prd reply`, buka PR, merge. **Apply tidak dibuka di spek ini**: ia butuh catatan pembaca angka untuk item antrean PRD, dan pembaca angka belum teruji (T3b gagal tiga putaran); itu keputusan C6/C9 dan spek sendiri.
 
 ## 2. Aturan chat yang diamandemen (butuh kata Atha tertulis)
 
@@ -53,7 +53,7 @@ Klien tidak dapat memilih antrean di luar antrean via ui, item, sha, uang atau a
 | K1 | **Diputuskan Atha 2026-11-24: ketukan manusia dulu.** Pertanyaan: apakah ketukan "Setujui draf" memang harus dari kamu, atau draf yang semua tanda mesinnya hijau disetujui otomatis? | Ketukan manusia dulu. Kamu tidak menilai isi draf (tes dan kontrak), jadi ketukan itu mudah jadi stempel; alasannya tetap: persetujuan yang disengaja, dan kartu menaruh tanda merah di atas. Otomatis-bila-hijau adalah langkah berikutnya dan butuh data: berapa draf hijau yang akhirnya ditolak |
 | K2 | Antrean yang disetujui dari terminal boleh dijalankan dari chat? | Tidak (bagian 5), supaya uang tetap di batas harian |
 | K4 | **Diputuskan Atha 2026-11-25: A.** Antrean disetujui lebih dari 24 jam lalu | A: `queue_step` dihitung satu job penuh ke batas harian; B (ditolak): tolak dari chat |
-| K3 | Pembaca angka dan apply | Spek terpisah sesudah keputusan C6/C9; tidak dibuka di sini |
+| K3 | Pembaca angka dan apply | Spek terpisah sesudah keputusan C6/C9; tidak dibuka di sini. **2026-11-27:** apply, pembaca patch dan balas PRD dibuka oleh SPEC_CHAT_APPLY_REPLY (pembaca angka untuk item antrean PRD tetap gerbang CLI) |
 
 ## 10. Yang dicek Opus (rev 0, hasil dimasukkan di atas)
 

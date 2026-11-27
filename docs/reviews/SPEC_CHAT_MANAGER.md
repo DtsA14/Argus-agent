@@ -6,7 +6,7 @@ Status: **rev 1** (tinjau Opus 2026-11-21: GO WITH CHANGES; amandemennya di bagi
 
 Satu percakapan di chat (8711) tempat Atha: (a) **ngobrol** (brainstorming tentang fitur, ukuran, pilihan), (b) mendapat **usulan rute** berupa kartu ke salah satu pipa yang sudah ada, dan (c) sesudah sebuah job selesai, mendapat **kartu langkah berikutnya**. Atha tetap penjadwal: tiap kartu dikonfirmasi satu ketukan.
 
-Bukan tujuan (tiap butir spek sendiri, bila pernah): `queue go`/`approve`/`apply`/buka PR/merge dari chat (tetap terminal atau Claude; SPEC_CHAT_APP 13.7 butir 9 "never an approve" tidak berubah); planner berhirarki otomatis (M4; bukti belum ada, PENDING "Ditunda"); memori lintas sesi (M8; konteks di sini hanya ringkasan percakapan dan berkas tetap); aksi tanpa konfirmasi manusia; browser atau web bebas.
+Bukan tujuan (tiap butir spek sendiri, bila pernah): `queue go`/`approve`/buka PR/merge dari chat (tetap terminal atau Claude; `apply`, pembaca patch dan balas PRD dibuka lewat tombol kartu oleh SPEC_CHAT_APPLY_REPLY, 2026-11-27, foreman tetap tidak bisa memicunya; SPEC_CHAT_APP 13.7 butir 9 "never an approve" berubah hanya untuk aksi-aksi yang diamandemen SPEC_CHAT_T4A, SPEC_CHAT_T4B dan SPEC_CHAT_APPLY_REPLY); planner berhirarki otomatis (M4; bukti belum ada, PENDING "Ditunda"); memori lintas sesi (M8; konteks di sini hanya ringkasan percakapan dan berkas tetap); aksi tanpa konfirmasi manusia; browser atau web bebas.
 
 ## 2. Arsitektur: chat tetap tanpa model dan tanpa kunci
 
