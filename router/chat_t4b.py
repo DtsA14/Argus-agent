@@ -7,8 +7,12 @@ import hashlib
 import json
 import os
 import re
+import calendar
 import stat
+import time
+from types import SimpleNamespace
 
+from router import examples_read as er
 from router import issue as ri
 from router import job as rj
 from router import queue as rq
@@ -16,7 +20,7 @@ from router.cards import ISSUE_MAX, UI_ID, _read
 
 DAY = 24 * 3600
 AUDIT_NET_BYTES = 1 << 20
-ACTIONS = ("queue_step", "draft_approve")
+ACTIONS = ("queue_step", "draft_approve", "job_approve")
 
 
 class Steps:
@@ -148,6 +152,22 @@ class Steps:
         job_id = f["job"]
         if not UI_ID.fullmatch(job_id):
             raise self._no(409, "state", "the item's job is not one this button can read")
+        df = self.draft_facts(job_id)
+        st, path, seen, profile, want, cap, need, flags, valid, writable, extra = (df[k] for k in ("st", "path", "seen", "profile", "want", "cap", "need", "flags", "valid", "writable", "extra"))
+        card = {"action": "draft_approve", "title": "Approve the draft (the agent starts)", "queue": q["id"], "item": item["n"], "job": job_id, "repo": scrub(str(q["name"])),
+                "item_text": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
+                "agent_cap_usd": cap, "attempt_usd": float(need), "flags": flags, "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"],
+                "retry": bool(item.get("retries")) and bool(item.get("retry_note")), "agent_max_usd_config": want,
+                "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them. "
+                         "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not",
+                **extra}
+        return card, {"queue": q["id"], "job": job_id, "sha": seen, "item": item["n"]}
+
+    def draft_facts(self, job_id):
+        """What both draft approvals read about a job waiting in AWAITING_APPROVAL and refuse on (SPEC_CHAT_JOB_APPROVE rev 1 item 8: moved out of `build_approve`, same order and
+        same refusals): the last draft through descriptors-safe paths, whether it was approved, the conflict, the environment, the agent's money, what the card shows."""
+        from router.chat_actions import scrub
+        a = self.a
         root = os.path.realpath(a.jobs_dir)
         if os.path.realpath(os.path.join(root, job_id)) != os.path.join(root, job_id):
             raise self._no(409, "state", "the job directory is reached through a link")
@@ -194,14 +214,88 @@ class Steps:
         if profile in (None, "default"):
             flags.append("budget profile: default")
         extra = self._summary(draft, path, seen)
-        card = {"action": "draft_approve", "title": "Approve the draft (the agent starts)", "queue": q["id"], "item": item["n"], "job": job_id, "repo": scrub(str(q["name"])),
-                "item_text": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
-                "agent_cap_usd": cap, "attempt_usd": float(need), "flags": flags, "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"],
-                "retry": bool(item.get("retries")) and bool(item.get("retry_note")), "agent_max_usd_config": want,
-                "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them. "
-                         "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not",
-                **extra}
-        return card, {"queue": q["id"], "job": job_id, "sha": seen, "item": item["n"]}
+        return {"st": st, "path": path, "seen": seen, "profile": profile, "want": want, "cap": cap, "need": need, "flags": flags, "valid": valid, "writable": writable, "extra": extra}
+
+    # ---- job_approve (SPEC_CHAT_JOB_APPROVE rev 1): the draft approval of a standalone code job ---------------------------------------------------------
+
+    SHA12 = re.compile(r"[0-9a-f]{12}")
+
+    def _booked(self, job_id):
+        """Whether this code job's start is still inside the daily cap's booking: an issue job whose `handoff` names it, made via the UI, less than 24 hours ago (the test the cap's scan
+        uses, over the same names). Anything that cannot be read is "not booked": the card then counts the agent's cap itself."""
+        a = self.a
+        now = a.clock()
+        try:
+            names = sorted((n for n in os.listdir(a.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
+        except OSError:
+            return False
+        for n in names:
+            try:
+                named = calendar.timegm(time.strptime(n[1:16], "%Y%m%d_%H%M%S"))
+            except ValueError:
+                continue
+            if named < now - 2 * DAY:
+                break                                              # newest first: the rest are older than the scan looks
+            got = a._read_data(n, ledgers=False)
+            if got is None or got[0].get("kind") != "issue":
+                continue
+            h = got[0].get("handoff")
+            try:
+                if isinstance(h, dict) and h.get("job") == job_id and h.get("via") == "ui" and self.a_parse(h["at"]) >= now - DAY:
+                    return True
+            except (KeyError, TypeError, ValueError):
+                continue
+        return False
+
+    def build_job_approve(self, params):
+        from router.chat_actions import scrub
+        if set(params) != {"job", "sha"}:
+            raise self._no(400, "form", "this approval takes the job and the draft sha and nothing else")
+        job_id, sha = params["job"], params["sha"]
+        if not UI_ID.fullmatch(job_id or ""):
+            raise self._no(404, "path", "no such job")
+        if not self.SHA12.fullmatch(sha or ""):
+            raise self._no(400, "form", "the draft sha must be 12 hex characters")
+        a = self.a
+        got = a._read_data(job_id, ledgers=False)
+        if got is None:
+            raise self._no(404, "path", "no such job")
+        data = got[0]
+        if data.get("kind") != "code":
+            raise self._no(409, "kind", "only a code job's draft is approved here")
+        res = er.chain(SimpleNamespace(id=job_id, data=data), a.jobs_dir, a.cards.queues_dir)
+        if res.get("standalone") is not True:
+            raise self._no(409, "queue", "this job is an item of a queue, or its queue cannot be read: approve it from the queue card, or from the terminal")
+        if a.spawner.busy(job_id):
+            raise self._no(409, "busy", "a run of this service is still working on this job")
+        a._need_key(False)
+        df = self.draft_facts(job_id)
+        live = a._sha(job_id, data)
+        if sha != live or df["seen"][:12] != live:
+            raise self._no(409, "draft", "the draft changed since you read it: open the job again")
+        outside = not self._booked(job_id)
+        inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
+        text = inputs.get("issue") if isinstance(inputs.get("issue"), str) else ""
+        card = {"action": "job_approve", "title": "Approve the draft (the agent starts)", "job": job_id, "sha12": live, "repo": scrub(str(inputs.get("repo_name") or "")),
+                "item_text": scrub(text)[:ISSUE_MAX], "draft_sha": df["seen"], "draft_run": df["st"]["run_id"], "writable": df["writable"], "validations": df["valid"],
+                "profile": df["profile"], "agent_cap_usd": df["cap"], "attempt_usd": float(df["need"]), "flags": df["flags"], "agent_max_usd_config": df["want"],
+                "outside_window": outside,
+                "money": ("the agent runs inside the job's own cap, which its start already booked in the daily cap" if not outside else
+                          "the agent's cap is counted in the daily cap now: this job's start is not inside the 24 hours the cap books") +
+                         ". Tests and the contract are the drafter's (a model's), shown as it wrote them. The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not. "
+                         "Nothing is applied, pushed, merged or deployed",
+                **df["extra"]}
+        return card, {"job": job_id, "sha": df["seen"]}
+
+    def execute_job(self, card, rp):
+        import sys
+        from router.control import ARGUS
+        a = self.a
+        key = a.key_file(False)
+        base = [sys.executable, str(ARGUS), "--jobs-dir", str(a.jobs_dir), "--queues-dir", str(a.cards.queues_dir)]
+        tail = ["approve", rp["job"], "--sha", rp["sha"], "--via", "ui", "--key-file", str(key), "--yes"]
+        a.spawner.spawn(rp["job"], a.with_config(base + tail), None, action="job_approve")
+        return {"job": rp["job"], "started": True}
 
     SUMMARY_MAX = 1_000_000
 
@@ -354,6 +448,8 @@ class Steps:
     def exposure_of(self, card):
         if card["action"] == "queue_step" and card.get("outside_window"):
             return float(card["job_cap_usd"])
+        if card["action"] == "job_approve" and card.get("outside_window"):
+            return float(card["agent_cap_usd"])
         return 0.0
 
     def audited(self, now):
@@ -373,11 +469,11 @@ class Steps:
         for line in raw.decode("utf-8", "replace").splitlines():
             try:
                 r = json.loads(line)
-                if r.get("action") == "queue_step" and r.get("attempt") == "confirm" and parse_time(r["at"]) >= now - DAY:
+                if r.get("action") in ("queue_step", "job_approve") and r.get("attempt") == "confirm" and parse_time(r["at"]) >= now - DAY:
                     try:
                         total += finite_usd(r.get("usd") or 0)
                     except ValueError:                             # a confirmed step whose money cannot be read must not be skipped: that undercounts (F25)
-                        raise self._no(503, "cap", "the daily exposure cannot be computed (a confirmed queue_step line of the audit has no valid amount)") from None
+                        raise self._no(503, "cap", "the daily exposure cannot be computed (a confirmed queue_step or job_approve line of the audit has no valid amount)") from None
             except (ValueError, KeyError, TypeError, AttributeError):
                 continue
         return total

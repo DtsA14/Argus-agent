@@ -341,7 +341,7 @@
       say(c, card.request_by === "chat" ? "atha" : "tak", card.request_by === "chat" ? "first request, started from the chat (recorded via the UI)" : "first request, from the terminal (a person or a Claude session, not recorded)", card.request + (card.request_cut ? " … (cut)" : ""), "say");
       if (card.request_count > 1) { c.appendChild(el("p", "note", (card.request_count - 1) + " replies from the terminal are not shown on this card.")); }
     }
-    if (card.item_text) { say(c, "model", "issue text (written by a model, from the PRD writer)", card.item_text, "say"); }
+    if (card.item_text) { say(c, "model", card.action === "job_approve" ? "issue text (written by a model, from the issue writer)" : "issue text (written by a model, from the PRD writer)", card.item_text, "say"); }
     if (card.summary) {
       var sum = el("details", "more");
       sum.appendChild(el("summary", null, "Writer's summary (written by a model, not proof)"));
@@ -380,7 +380,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Started"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.action === "manager_new" ? "The session is being made; it appears in the Foreman view in a few seconds. Its turns are not confirmed again." : card.action === "queue_go" ? "Queue money is released up to the limit on the card. Nothing runs yet; start the first issue from the queue card in the Queue tab." : card.action === "prd_reply" ? "The writer is writing the plan again (one turn). It appears on the plan card; an approval of the old plan no longer counts." : card.action === "patch_read_run" ? "The two readers are running (a few minutes). Their notes appear on the install card." : card.action === "code_apply" ? "The command is running. It makes one commit in the repository on this machine: nothing is pushed or deployed. The job state shows on the install card." : card.draft_sha ? "The code agent is running (5 to 17 minutes). The result appears on the queue card; the install card then offers the readers and the install." : (card.queue && card.item) ? "The drafter is writing tests and the contract (a few minutes). The draft appears on the queue card; you still confirm it yourself." : card.action === "prd_new" ? "The PRD is being written (one turn). The result appears in the Queue tab. A refusal before the job is made (queue waiting, repo changed) shows only in the terminal. Running the queue is still done from the terminal." : card.action === "research_new" ? "The result is in the research list." : (card.action.indexOf("job_") === 0 ? "Decision recorded; the job state is in the Decisions tab." : "The result is in the issue list.")));
+        c.appendChild(el("p", "note", card.action === "manager_new" ? "The session is being made; it appears in the Foreman view in a few seconds. Its turns are not confirmed again." : card.action === "queue_go" ? "Queue money is released up to the limit on the card. Nothing runs yet; start the first issue from the queue card in the Queue tab." : card.action === "prd_reply" ? "The writer is writing the plan again (one turn). It appears on the plan card; an approval of the old plan no longer counts." : card.action === "patch_read_run" ? "The two readers are running (a few minutes). Their notes appear on the install card." : card.action === "code_apply" ? "The command is running. It makes one commit in the repository on this machine: nothing is pushed or deployed. The job state shows on the install card." : card.action === "job_approve" ? "The code agent is running (5 to 17 minutes). Nothing is applied. When it finishes, the job shows in Decisions with an Open install card button." : card.draft_sha ? "The code agent is running (5 to 17 minutes). The result appears on the queue card; the install card then offers the readers and the install." : (card.queue && card.item) ? "The drafter is writing tests and the contract (a few minutes). The draft appears on the queue card; you still confirm it yourself." : card.action === "prd_new" ? "The PRD is being written (one turn). The result appears in the Queue tab. A refusal before the job is made (queue waiting, repo changed) shows only in the terminal. Running the queue is still done from the terminal." : card.action === "research_new" ? "The result is in the research list." : (card.action.indexOf("job_") === 0 ? "Decision recorded; the job state is in the Decisions tab." : "The result is in the issue list.")));
         var close = el("button", null, "Close");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -672,6 +672,13 @@
         });
         acts.appendChild(b);
       };
+      if (r.allowed.indexOf("approve") !== -1) {         // SPEC_CHAT_JOB_APPROVE: the job and the draft sha the person was shown, nothing else
+        var ap = el("button", "go", "Approve draft");
+        ap.type = "button";
+        ap.disabled = !r.sha12;
+        ap.addEventListener("click", function () { hint.textContent = ""; prepare({ action: "job_approve", job: r.id, sha: r.sha12 }); });
+        acts.appendChild(ap);
+      }
       if (r.allowed.indexOf("reject") !== -1) { decide("Reject", "job_reject", true); }
       if (r.allowed.indexOf("abandon") !== -1) { decide("Abandon", "job_abandon", false); }
     }

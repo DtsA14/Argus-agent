@@ -42,7 +42,7 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
     "index.html": "c3bed137415b002ed2a3dbb7976b3fabf3f9b9c984b3db9f0ecf7d9bfcf1c9bf",
-    "app.js": "d4dd982cbfd6fd5db9dd690d72a9516ad90ee6fc084147966070808ce2842157",
+    "app.js": "d347a75d76e64acedf231053374bed7ac36422e66e724f21dfa09d521e5f3483",
     "app.css": "fd12c6876d5a3ea8191fcaf66a8b7855eb375b9d4a9ce369b1345896bda3da37",
 }
 
@@ -457,6 +457,8 @@ class Handler(BaseHTTPRequestHandler):
             rec.update(queue=card["queue"], item=card["item"], usd=a.exposure_of(card))
             if card.get("draft_sha"):
                 rec["sha"] = card["draft_sha"][:12]
+        if action == "job_approve":                                       # SPEC_CHAT_JOB_APPROVE rev 1: the audit net of the daily cap reads usd (non-zero only for a start the cap does not book)
+            rec.update(usd=a.exposure_of(card))
         if action in ("prd_reply", "patch_read_run", "code_apply"):          # SPEC_CHAT_APPLY_REPLY 12 F3: the audit net of the daily cap reads usd of a reply or a reading; the reason only as a hash
             rec.update(usd=a.exposure_of(card))
             if card.get("reason"):

@@ -21,6 +21,7 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
+from types import SimpleNamespace
 
 from router import example_gate as eg
 from router import issue as ri
@@ -54,7 +55,7 @@ ROOT_REAL = os.path.realpath(rj.ROOT)                 # the checkout of Argus: a
 RESEARCH_KEY_ENV = "ARGUS_CHAT_RESEARCH_KEY_FILE"   # research uses DeepSeek's own search and fetch API: its own key, when the code key is another provider's
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 SHA12 = re.compile(r"[0-9a-f]{12}")
-ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "manager_new", "prd_approve", "queue_go", "queue_step", "draft_approve", "job_reject", "job_abandon",
+ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research_new", "prd_new", "manager_new", "prd_approve", "queue_go", "queue_step", "draft_approve", "job_approve", "job_reject", "job_abandon",
            "prd_reply", "patch_read_run", "code_apply")   # no retry/redraft of a code job from here (job_reject and job_abandon are the control UI's); approvals: prd_approve and queue_go (SPEC_CHAT_T4A), queue_step and draft_approve for a queue the chat itself approved (SPEC_CHAT_T4B), and prd_reply, patch_read_run and code_apply (SPEC_CHAT_APPLY_REPLY: no push, no PR, no merge, no deploy)
 SOURCE_KEYS = {"source_job", "source_turn"}   # SPEC_CHAT_MANAGER_P2B: the foreman's proposal a form was filled from, as two text fields
 SOURCE_NOTE = "the text was first written by the foreman (a model): read it before you confirm"
@@ -485,6 +486,8 @@ class Actions:
             return self.steps.build_step(params)
         if action == "draft_approve":
             return self.steps.build_approve(params)
+        if action == "job_approve":                           # SPEC_CHAT_JOB_APPROVE: a standalone code job's draft; not through build_job (that path skips the config on purpose)
+            return self.steps.build_job_approve(params)
         if action == "prd_reply":
             return self.apply_reply.build_prd_reply(params)
         if action == "patch_read_run":
@@ -669,6 +672,18 @@ class Actions:
         except Exception:
             return None                                   # a title is a convenience: a malformed record must not break the list
 
+    def _can_approve(self, data, state, job_id):
+        """The Approve button of a Decisions row (SPEC_CHAT_JOB_APPROVE): a code job waiting for its draft's approval that is not an item of any queue. A cheap look only: prepare
+        makes every refusal and says why. Never raises (a row that cannot be judged has no button)."""
+        try:
+            if data.get("kind") != "code" or state != rj.AWAITING_APPROVAL or self.spawner.busy(job_id):
+                return False
+            from router import examples_read as er
+            res = er.chain(SimpleNamespace(id=job_id, data=data), self.jobs_dir, self.cards.queues_dir)
+            return res.get("standalone") is True
+        except Exception:
+            return False
+
     def decision_row(self, job_id, data, spent):
         state = data.get("state")
         try:
@@ -681,7 +696,7 @@ class Actions:
                 "title": scrub(title) if isinstance(title, str) else None, "sha12": sha or None, "draft_problem": why,
                 "spent_usd": spent, "busy": self.spawner.busy(job_id),
                 "cap_usd": cap if isinstance(cap, (int, float)) and not isinstance(cap, bool) else None,
-                "allowed": [] if why else allowed(state)}
+                "allowed": [] if why else allowed(state) + (["approve"] if self._can_approve(data, state, job_id) else [])}
 
     def decisions(self):
         """Jobs waiting for a decision (state in REJECTABLE, any kind): at most 200 directories looked at, 50 rows (13.7 item 9), no ledger
@@ -1212,7 +1227,7 @@ class Actions:
             return float(card["job_cap_usd"])
         if card["action"] in ("prd_reply", "patch_read_run", "code_apply"):
             return self.apply_reply.exposure_of(card)         # counted from the audit net (a paid reply or reading), 0 for an apply
-        if card["action"] in ("queue_step", "draft_approve"):
+        if card["action"] in ("queue_step", "draft_approve", "job_approve"):
             return self.steps.exposure_of(card)              # 0 inside the 24 hours of its queue's approval (that money is counted), else one job cap
         if card["action"] == "queue_go":
             return float(card["queue_usd"])                  # the money the queue is approved to spend; prd_approve spends none
@@ -1293,6 +1308,8 @@ class Actions:
             return self.plans.execute(a, card, rp)
         if a in ("queue_step", "draft_approve"):
             return self.steps.execute(a, card, rp)
+        if a == "job_approve":
+            return self.steps.execute_job(card, rp)
         if a in ("prd_reply", "patch_read_run", "code_apply"):
             return self.apply_reply.execute(a, card, rp)
         key = self.key_file(a in ("issue_new", "issue_reply", "prd_new"), research=(a == "research_new"))

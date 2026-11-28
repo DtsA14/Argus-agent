@@ -72,7 +72,7 @@ def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
     assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
-    assert JS.count("action:") == 18                                # (P3: + manager_new twice, the proposal buttons) (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
+    assert JS.count("action:") == 19                                # (P3: + manager_new twice, the proposal buttons) (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -262,6 +262,11 @@ def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_b
     assert step.count("Accept draft of issue") == 1 and step.count("Start issue") == 1
     js = js.replace(step, "")
     # SPEC_CHAT_T4A: exactly one live approval, the plan's, prepared with the job id and nothing else (the server reads the rest); never a draft approval
+    # SPEC_CHAT_JOB_APPROVE: the Decisions card's one other approval, cut out here and pinned: the job and the sha it showed, no reason, no queue, no amount
+    blk = 'if (r.allowed.indexOf("approve") !== -1) {' + js.split('if (r.allowed.indexOf("approve") !== -1) {')[1].split('if (r.allowed.indexOf("reject")')[0]
+    assert blk.count("prepare(") == 1 and 'prepare({ action: "job_approve", job: r.id, sha: r.sha12 })' in blk and "reason" not in blk and blk.count("Approve draft") == 1
+    js = js.replace(blk, "")
+    js = js.replace('"The code agent is running (5 to 17 minutes). Nothing is applied. When it finishes, the job shows in Decisions with an Open install card button."', '""').replace('card.action === "job_approve"', 'card.action === ""')       # its confirm card's text and label
     assert js.count('prepare({ action: "prd_approve", job: id })') == 1 and js.count("prd_approve") == 2          # the call, and the server's name for the button
     assert "job_approve" not in js and "Approve" not in js and "approve" not in js.replace("prd_approve", "")
     assert js.count("Accept plan") == 1 and 'el("button", "go", "Accept plan")' in js and "setujui" not in js
