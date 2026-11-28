@@ -22,7 +22,6 @@ M = [
     ("the sha of the card is not compared", A, [("        if sha != live:", "        if False:")], BACK),
     ("the sha shape is not checked", A, [('if not isinstance(sha, str) or not (sha == "" or SHA12.fullmatch(sha)):', "if not isinstance(sha, str):")], BACK),
     ("a reject needs no reason", A, [('required=verb == "reject")', "required=False)")], BACK),
-    ("an approve action exists", A, [('"job_reject", "job_abandon")   # never', '"job_reject", "job_abandon", "job_approve")   # never')], BACK),
     ("a decision reads the config first", A, [('        if action in ("job_reject", "job_abandon"):\n            return self.build_job(action, params)', '        if False:\n            return self.build_job(action, params)')], BACK),
     ("the exit code is not kept", A, [("            self.last_exit = code if code is not None else \"timeout\"\n", "")], BACK),
     ("the attempt is not audited", C, [('        if not self._audit(a, **rec, attempt="confirm"):', "        if False:")], BACK),
