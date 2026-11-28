@@ -256,6 +256,12 @@
         });
         c.appendChild(tb);
       }
+      if (d.job.kind === "issue" && (d.job.state === "AWAITING_HUMAN" || d.job.state === "WRITE_FAILED")) {     // navigation only: the issue page holds Reply and Prepare Start
+        var oi = el("button", "go", "Open issue to reply or start");
+        oi.type = "button";
+        oi.addEventListener("click", function () { setMode("issue"); showIssue(d.job.id); });
+        c.appendChild(oi);
+      }
       stream.appendChild(c);
       var back = el("button", null, "All jobs");
       back.type = "button";
