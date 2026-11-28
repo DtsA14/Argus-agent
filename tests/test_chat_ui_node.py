@@ -192,8 +192,10 @@ def test_the_job_summary_is_composed_from_card_fields_and_says_only_what_they_sa
     assert "Belum terpenuhi: ada contoh perilaku yang baru" in out["code_ready_closed"][3][1] and "terbuka" not in out["code_ready_closed"][3][1]
     assert "bukan bukti" not in out["code_concerns"][2][1] and "ragu" in out["code_concerns"][2][1]
     assert "tidak valid" in out["code_invalid"][1][1]
+    assert "tertutup" in out["code_open_missing"][3][1]                                                  # open only when the card says true
+    assert "first false" in out["code_two_false"] and "second false" not in out["code_two_false"]        # the first check that is false
     ap = text(out["code_applied"])
-    assert "push, merge atau deploy" in ap and "satu commit" in ap
+    assert "push, merge atau deploy" in ap and "satu commit" in ap and out["code_applied"][3][1].startswith("Tidak ada.")
     assert "Pembaca patch" not in labels(out["code_running"]) and "Belum ada patch" in text(out["code_running"])
     assert "Pembaca patch" not in labels(out["code_approval"]) and "Draf menunggu persetujuan" in text(out["code_approval"])
     assert out["code_cut"].startswith("2+ berkas")
