@@ -10,11 +10,11 @@ ONLY = sys.argv[3:]
 B, JS, C = "router/budget.py", "router/chat_static/app.js", "router/chat.py"
 T = ["tests/test_budget.py", "tests/test_chat_budget.py", "tests/test_chat_ui.py", "tests/test_chat.py"]
 M = [
-    ("a started call without its end counts nothing", B, [("                calls += [s for c, s in f.started.items() if c not in f.final]", "                calls += []")]),
-    ("a started call is counted again beside its end", B, [("                calls += [s for c, s in f.started.items() if c not in f.final]", "                calls += list(f.started.values())")]),
+    ("a started call without its end counts nothing", B, [("                calls = list(f.final.items()) + [(c, v) for c, v in f.started.items() if c not in f.final]", "                calls = list(f.final.items())")]),
+    ("a started call is counted again beside its end", B, [("                calls = list(f.final.items()) + [(c, v) for c, v in f.started.items() if c not in f.final]", "                calls = list(f.final.items()) + list(f.started.items())")]),
     ("a refused call is summed", B, [('e.get("status") != "refused":', "True:")]),
-    ("the patch reader ledger is left out", B, [('                out.append((os.path.join(p, "patch_read_ledger.jsonl"), n))', "                pass")]),
-    ("a fixture ledger inside a snapshot is read", B, [('                    out.append((os.path.join(p, "runs", r, "events.jsonl"), n))', '                    out.append((os.path.join(p, "runs", r, "events.jsonl"), n))\n                    out.append((os.path.join(p, "runs", r, "source", "fixtures", "audit", "events.jsonl"), n))')]),
+    ("the patch reader ledger is left out", B, [('                out.append((os.path.join(p, "patch_read_ledger.jsonl"), label, n))', "                pass")]),
+    ("a fixture ledger inside a snapshot is read", B, [('                    out.append((os.path.join(p, "runs", r, "events.jsonl"), label, n))', '                    out.append((os.path.join(p, "runs", r, "events.jsonl"), label, n))\n                    out.append((os.path.join(p, "runs", r, "source", "fixtures", "audit", "events.jsonl"), label, n))')]),
     ("reservation_restored is summed", B, [('elif kind == "llm_call" and isinstance(cid, str)', 'elif kind in ("llm_call", "reservation_restored") and isinstance(cid, str)')]),
     ("a partial last line is consumed", B, [("                f.offset += cut + 1", "                f.offset += len(chunk)")]),
     ("a broken mid-file line makes the window unknown", B, [("        except (ValueError, UnicodeDecodeError):\n            return ", '        except (ValueError, UnicodeDecodeError):\n            f.final["__broken__"] = (None, None)\n            return ')]),
@@ -23,7 +23,7 @@ M = [
     ("an append is not re-read", B, [("            if f.ino == st.st_ino and f.size == st.st_size and f.mtime_ns == st.st_mtime_ns:", "            if f.ino == st.st_ino:")]),
     ("a shrunk ledger is not re-read", B, [("            if f.ino != st.st_ino or st.st_size < f.offset:", "            if f.ino != st.st_ino:")]),
     ("only chat made jobs are listed", B, [('            elif n.startswith("j"):', '            elif n.startswith("j2026"):')]),
-    ("the month meter sums the day", B, [("                    if in_month:\n                        month += nano", "                    if in_day:\n                        month += nano")]),
+    ("the month meter sums the day", B, [("                            tot[w] += nano\n", "                            tot[\"day\"] += nano\n")]),
     ("the warning starts one nano late", B, [("spent_nano * 1_000_000 >= int(", "spent_nano * 1_000_000 > int(")]),
     ("a symlinked ledger is followed", B, [("os.O_RDONLY | os.O_NOFOLLOW", "os.O_RDONLY")]),
     ("the snapshot is never cached", B, [("t - self._cache[0] < BUDGET_TTL_S and", "False and")]),
