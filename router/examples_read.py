@@ -579,7 +579,14 @@ def _chain(job, jobs_dir, queues_dir):
     c = Cards(jobs_dir, queues_dir if queues_dir else rq.QUEUES, lambda t: t)
     qfd = c._queues_fd()
     if qfd is None:
-        return _chain_result(False, True, "tidak_berlaku", "there is no queues directory: the job is not an item of a PRD queue")
+        try:
+            os.lstat(str(c.queues_dir))
+            missing = False                                     # it is there but cannot be opened: not "no queues" (F36)
+        except FileNotFoundError:
+            missing = True
+        except OSError:
+            missing = False
+        return _chain_result(False, True, "tidak_berlaku", "there is no queues directory: the job is not an item of a PRD queue", **({"standalone": True} if missing else {}))
     matches, unusable = [], []
     me = job.id.encode("utf-8")
     try:
@@ -607,7 +614,7 @@ def _chain(job, jobs_dir, queues_dir):
     if unusable:
         return bad(f"queue {unusable[0]} names this job but cannot be used (damaged, too large, or of another jobs directory)")
     if not matches:
-        return _chain_result(False, True, "tidak_berlaku", "the job is not an item of a queue of this jobs directory")
+        return _chain_result(False, True, "tidak_berlaku", "the job is not an item of a queue of this jobs directory", standalone=True)
     if len(matches) > 1:
         return bad("the job is an item of more than one queue")
     _, q, it = matches[0]

@@ -233,16 +233,19 @@ class Install:
                                "patch kosong atau tanpa daftar file; `argus apply` menolaknya" if same_sha else
                                "sha patch tidak sama di review (job.json), provenance dan berkas patch, atau salah satunya tidak terbaca")
 
+            res = er.chain(SimpleNamespace(id=job_id, data=data), c.jobs_dir, c.queues_dir)
             # (h) at least one example of the new behaviour (a stated "no numbers checked by the machine" is not recorded anywhere yet)
             if item.get("unreadable") or item.get("defects"):
                 checks["h"] = _chk("h", False, "ada contoh yang tidak bisa ditampilkan sebagai angka: kartu cacat")
             elif counts["after"] + counts["whatif"] >= 1:
                 checks["h"] = _chk("h", True, "ada contoh perilaku baru")
+            elif res.get("standalone") is True:
+                checks["h"] = _chk("h", None, "tidak berlaku: job ini bukan item antrean PRD, tidak ada kartu rencana yang bisa memuat contoh; "
+                                              "yang menjaga: dua pembaca patch dan Anda membaca seluruh patch")
             else:
                 checks["h"] = _chk("h", False, "tidak ada contoh untuk perilaku yang baru; pernyataan 'tanpa angka yang diperiksa mesin' belum tercatat di kartu rencana")
 
             # (i) the domain reader, through the queue
-            res = er.chain(SimpleNamespace(id=job_id, data=data), c.jobs_dir, c.queues_dir)
             if not res["applicable"]:
                 checks["i"] = _chk("i", None, f"tidak berlaku: {res['why']}")
                 item["domain_read"] = {"kind": "tidak_berlaku", "fresh": False, "why": f"tidak berlaku: {res['why']}"}

@@ -124,8 +124,6 @@ def test_a_complete_job_opens_c_with_every_condition_true_and_says_who_read(svc)
     ("f", {"read_sha": "8" * 64}),
     ("f", {"by_reader": "human"}),
     ("g", {"prov_sha": "8" * 64}),
-    ("h", {"examples": (SAME,)}),
-    ("h", {"examples": ()}),
 ])
 def test_each_condition_closes_c_alone_and_says_what_is_missing(svc, key, kw):
     c = good(svc, **kw)
@@ -635,3 +633,80 @@ def test_a_protected_file_that_is_not_a_new_approved_test_still_blocks_the_card(
     make(svc, jid="j20261117_100300_dddd", files=("src/shop.py", "config/secret.js"), protected=("config/*",), new_tests=("config/secret.js",))   # new and declared, but not a test by its name
     status, c2 = get(svc, "j20261117_100300_dddd")
     assert status == 200 and checks(c2)["c"]["ok"] is False
+
+
+# ---- (h) for a job that is not an item of any queue (F36) ----------------------------------------------------------------------
+
+def _queue_without_prd(s, jid=CJOB):
+    q = s.queues / QID
+    q.mkdir(exist_ok=True)
+    (q / "queue.json").write_text(json.dumps({
+        "id": QID, "repo": "/secret/path", "name": "athena", "base_commit": "c" * 40, "jobs_dir": str(s.jobs), "max_usd": 2.0, "job_cap_usd": 0.5,
+        "environment": "athena_py312", "items": [{"n": 1, "issue_sha256": "e" * 64, "job": jid}]}))
+
+
+@pytest.mark.parametrize("ex", [(), (SAME,)])
+def test_a_standalone_job_without_examples_has_h_not_applicable_and_c_open(svc, ex):
+    c = good(svc, examples=ex)
+    k = checks(c)
+    assert k["h"]["ok"] is None and k["h"]["why"] and "bukan item antrean PRD" in k["h"]["why"]
+    assert k["i"]["ok"] is None and c["open"] is True
+
+
+def test_a_standalone_job_with_a_defective_example_still_closes_h(svc):
+    odd = {"id": "e4", "tier": "after", "says": "odd", "setup": "x = 1", "run": "x", "expect": 1}
+    c = good(svc, examples=(SAME, odd))
+    assert checks(c)["h"]["ok"] is False and c["open"] is False
+
+
+@pytest.mark.parametrize("ex", [(), (SAME,)])
+def test_a_queue_item_without_examples_of_new_behaviour_keeps_h_closed(svc, ex):
+    make(svc, examples=ex)
+    _queue_without_prd(svc)
+    c = get(svc)[1]
+    k = checks(c)
+    assert k["h"]["ok"] is False and "tidak ada contoh" in k["h"]["why"] and c["open"] is False
+
+
+def test_a_queues_directory_that_cannot_be_opened_does_not_make_the_job_standalone(svc, monkeypatch):
+    make(svc, examples=())
+    monkeypatch.setattr(er.Cards, "_queues_fd", lambda self: None)                 # as EACCES / ELOOP / EMFILE on the open
+    svc.queues.mkdir(exist_ok=True)
+    c = get(svc)[1]
+    assert checks(c)["h"]["ok"] is False and c["open"] is False
+
+
+def test_only_the_two_not_a_queue_item_results_carry_standalone(svc):
+    make(svc, examples=())
+    job = SimpleNamespace(id=CJOB, data=json.loads((svc.jobs / CJOB / "job.json").read_text()))
+    assert er.chain(job, svc.jobs, svc.queues).get("standalone") is True                       # queues dir exists, job in none
+    assert er.chain(job, svc.jobs, svc.queues / "nope").get("standalone") is True              # no queues directory at all
+    _queue_without_prd(svc)
+    r = er.chain(job, svc.jobs, svc.queues)
+    assert r["applicable"] is False and "standalone" not in r                                   # in a queue not made from a PRD folder
+
+
+def test_a_queue_item_whose_issue_has_no_examples_block_is_not_standalone(svc):
+    make(svc, examples=())
+    text = json.loads((svc.jobs / CJOB / "job.json").read_text())["inputs"]["issue"]
+    q = svc.queues / QID
+    q.mkdir(exist_ok=True)
+    (q / "queue.json").write_text(json.dumps({
+        "id": QID, "repo": "/secret/path", "name": "athena", "base_commit": "c" * 40, "jobs_dir": str(svc.jobs), "max_usd": 2.0, "job_cap_usd": 0.5,
+        "environment": "athena_py312", "items": [{"n": 1, "issue_sha256": hashlib.sha256(text.encode()).hexdigest(), "job": CJOB}],
+        "prd": {"sha": "f" * 64, "dir": "/x"}}))
+    job = SimpleNamespace(id=CJOB, data=json.loads((svc.jobs / CJOB / "job.json").read_text()))
+    r = er.chain(job, svc.jobs, svc.queues)
+    assert r["applicable"] is False and "no examples block" in r["why"] and "standalone" not in r
+    assert checks(get(svc)[1])["h"]["ok"] is False
+
+
+def test_an_error_other_than_missing_on_the_queues_directory_is_not_standalone(svc, monkeypatch):
+    make(svc, examples=())
+    job = SimpleNamespace(id=CJOB, data=json.loads((svc.jobs / CJOB / "job.json").read_text()))
+    monkeypatch.setattr(er.Cards, "_queues_fd", lambda self: None)
+
+    def deny(p, *a, **k):
+        raise PermissionError(13, "denied")
+    monkeypatch.setattr(er.os, "lstat", deny)
+    assert "standalone" not in er.chain(job, svc.jobs, svc.queues)
