@@ -172,3 +172,11 @@ def test_the_issue_proposal_code_is_text_only_saves_the_session_before_the_mode_
     show = JS.split("function showIssue")[1].split("get(")[0]
     assert "if (!keep) { fromProposal = null; }" in show
     assert "openIssue = null; fromProposal = null; formState(); renderIssues();" in JS
+
+
+def test_a_confirmed_issue_card_from_the_foreman_goes_to_the_writing_and_keeps_the_started_card():       # F46
+    cb = JS.split('var c = renderCard(prep, function (r) {')[1].split("pending = c;")[0]
+    man = cb.split('if (mode === "manager") {')[1].split("return;")[0]
+    assert 'body.action === "issue_new" && r.job' in man and 'showIssue(r.job, true)' in man and 'setMode("issue")' in man
+    assert man.index("var keepCard = pending; pending = null;") < man.index('setMode("issue")') < man.index("pending = keepCard;") < man.index("showIssue(r.job, true)")
+    assert 'body.action === "manager_new"' in man and "research_new" not in man and "prd_new" not in man          # research and PRD stay where they are

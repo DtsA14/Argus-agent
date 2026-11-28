@@ -448,7 +448,11 @@
         message.value = "";
         grow();
         fromProposal = null;                            // the source belongs to the one form it filled: a later form is the person's own
-        if (mode === "manager") { if (body.action === "manager_new") { mgr.expect = 12; loadManager(); } return; }       // a job from a proposal: the Started card says where it went
+        if (mode === "manager") {
+          if (body.action === "manager_new") { mgr.expect = 12; loadManager(); }
+          else if (body.action === "issue_new" && r.job) { var keepCard = pending; pending = null; setMode("issue"); pending = keepCard; loadIssues(); showIssue(r.job, true); }       // the writer is working on it: go and watch it; the Started card stays on screen (setMode would drop it)
+          return;                                         // research and PRD: the Started card says where it went
+        }
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
         if (mode === "prd") { return; }
         if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "install") { showInstall(openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }
