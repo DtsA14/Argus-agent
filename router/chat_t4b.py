@@ -148,6 +148,22 @@ class Steps:
         job_id = f["job"]
         if not UI_ID.fullmatch(job_id):
             raise self._no(409, "state", "the item's job is not one this button can read")
+        df = self.draft_facts(job_id)
+        st, path, seen, profile, want, cap, need, flags, valid, writable, extra = (df[k] for k in ("st", "path", "seen", "profile", "want", "cap", "need", "flags", "valid", "writable", "extra"))
+        card = {"action": "draft_approve", "title": "Approve the draft (the agent starts)", "queue": q["id"], "item": item["n"], "job": job_id, "repo": scrub(str(q["name"])),
+                "item_text": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
+                "agent_cap_usd": cap, "attempt_usd": float(need), "flags": flags, "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"],
+                "retry": bool(item.get("retries")) and bool(item.get("retry_note")), "agent_max_usd_config": want,
+                "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them. "
+                         "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not",
+                **extra}
+        return card, {"queue": q["id"], "job": job_id, "sha": seen, "item": item["n"]}
+
+    def draft_facts(self, job_id):
+        """What both draft approvals read about a job waiting in AWAITING_APPROVAL and refuse on (SPEC_CHAT_JOB_APPROVE rev 1 item 8: moved out of `build_approve`, same order and
+        same refusals): the last draft through descriptors-safe paths, whether it was approved, the conflict, the environment, the agent's money, what the card shows."""
+        from router.chat_actions import scrub
+        a = self.a
         root = os.path.realpath(a.jobs_dir)
         if os.path.realpath(os.path.join(root, job_id)) != os.path.join(root, job_id):
             raise self._no(409, "state", "the job directory is reached through a link")
@@ -194,14 +210,7 @@ class Steps:
         if profile in (None, "default"):
             flags.append("budget profile: default")
         extra = self._summary(draft, path, seen)
-        card = {"action": "draft_approve", "title": "Approve the draft (the agent starts)", "queue": q["id"], "item": item["n"], "job": job_id, "repo": scrub(str(q["name"])),
-                "item_text": scrub(f["text"]), "draft_sha": seen, "draft_run": st["run_id"], "writable": writable, "validations": valid, "profile": profile,
-                "agent_cap_usd": cap, "attempt_usd": float(need), "flags": flags, "list_sha": rq.list_sha(q), "approved_sha": q["approved"]["sha"],
-                "retry": bool(item.get("retries")) and bool(item.get("retry_note")), "agent_max_usd_config": want,
-                "money": "the agent runs inside the job cap the queue already holds; no new money. Tests and the contract are the drafter's (a model's), shown as it wrote them. "
-                         "The command re-checks the draft in the sandbox (`dr.check`) and the repository's HEAD; this card does not",
-                **extra}
-        return card, {"queue": q["id"], "job": job_id, "sha": seen, "item": item["n"]}
+        return {"st": st, "path": path, "seen": seen, "profile": profile, "want": want, "cap": cap, "need": need, "flags": flags, "valid": valid, "writable": writable, "extra": extra}
 
     SUMMARY_MAX = 1_000_000
 
