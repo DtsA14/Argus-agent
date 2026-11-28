@@ -4,6 +4,7 @@ refusals, the money the audit counts, and what the foreman cannot do."""
 import copy
 import hashlib
 import json
+import re
 import os
 import shutil
 import sys
@@ -546,11 +547,11 @@ def test_a_busy_job_and_a_job_not_review_ready_are_refused(svc):
 
 def test_the_install_card_tells_the_page_which_button_to_offer(svc):
     code_job(svc, read=None)
-    assert card(svc)["apply"] == {"action": "patch_read_run", "why": None}
+    assert card(svc)["apply"] == {"action": "patch_read_run", "why": None, "started": None}
     d = code_job(svc)
-    assert card(svc)["apply"] == {"action": "code_apply", "why": None, "needs_reason": False}
+    assert card(svc)["apply"] == {"action": "code_apply", "why": None, "needs_reason": False, "started": None}
     two_readings(d)
-    assert card(svc)["apply"] == {"action": "code_apply", "why": None, "needs_reason": True}
+    assert card(svc)["apply"] == {"action": "code_apply", "why": None, "needs_reason": True, "started": None}
     code_job(svc, audit="fail")
     a = card(svc)["apply"]
     assert a["action"] is None and a["why"]
@@ -691,3 +692,52 @@ def test_the_button_state_says_why_a_reading_cannot_be_offered(svc):
     svc.actions.environ = {ca.WRITER_KEY_ENV: t.WKEY}                                # no key for the readers
     a = card(svc)["apply"]
     assert a["action"] is None and "ARGUS_CHAT_READER_KEY_FILE" in a["why"]
+
+
+# ---- PR3: the install card's "started and never recorded" mark, and what the page may send -----------------------------------------------
+
+def test_an_apply_started_entry_without_an_applied_job_shows_on_the_card(svc):
+    d = code_job(svc)
+    assert card(svc)["apply"]["started"] is None
+    tac.edit_job(d, lambda j: j.setdefault("log", []).append({"at": "2026-11-28T01:02:03Z", "what": "apply_started", "head_before": "x"}))
+    assert card(svc)["apply"]["started"] == "2026-11-28T01:02:03Z"
+    tac.edit_job(d, lambda j: j["log"].append({"at": "2026-11-28T05:00:00Z", "what": "apply_started"}))
+    assert card(svc)["apply"]["started"] == "2026-11-28T05:00:00Z"                  # the last entry, not the first
+
+
+def test_the_started_mark_is_not_shown_for_an_applied_job_and_a_bad_log_says_nothing(svc):
+    d = code_job(svc)
+    tac.edit_job(d, lambda j: j.setdefault("log", []).append({"at": "2026-11-28T01:02:03Z", "what": "apply_started"}))
+    tac.edit_job(d, lambda j: j.update(state="APPLIED"))
+    assert svc.actions.apply_reply._started(CJOB) is None
+    tac.edit_job(d, lambda j: j.update(state="REVIEW_READY", log="not a list"))
+    assert svc.actions.apply_reply._started(CJOB) is None
+    tac.edit_job(d, lambda j: j.update(log=[{"what": "apply_started", "at": "x" * 500}]))
+    assert svc.actions.apply_reply._started(CJOB) == "time not recorded"
+
+
+JS = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
+
+
+def test_the_page_sends_only_the_job_the_sha_it_showed_and_what_the_person_typed_or_ticked():
+    assert 'prepare({ action: "prd_reply", job: id, message: ta.value })' in JS
+    assert 'prepare({ action: "patch_read_run", job: id })' in JS
+    assert 'var body = { action: "code_apply", job: id, sha: d.patch_sha12 };' in JS
+    assert "body.reason = why.value.trim();" in JS
+
+
+def test_the_page_never_fills_the_reply_or_the_reason_from_model_or_foreman_text():
+    for name in ("ta", "why"):
+        assert re.search(rf"\b{name}\.value\s*=[^=]", JS) is None, name       # nothing assigns a value to the typed fields
+    assert ".defaultValue" not in JS and "setAttribute(\"value\"" not in JS
+    assert "ta.placeholder" in JS and "ta.textContent" not in JS and "ta.appendChild" not in JS
+
+
+def test_the_install_button_stays_closed_until_the_whole_patch_is_shown_and_the_box_is_ticked():
+    assert "var ready = function () { p.disabled = !shown || !tick.checked ||" in JS
+    assert "x.sha12 === d.patch_sha12" in JS and "shown = true;" in JS
+    assert "tick.disabled = true;" in JS
+
+
+def test_the_install_card_remembers_it_is_on_screen_so_a_confirmed_action_redraws_it():
+    assert JS.split("function showInstall(id) {")[1].split("get(")[0].count('openKind = "install";') == 1

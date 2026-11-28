@@ -70,9 +70,10 @@ def test_no_colour_or_class_comes_from_a_number_or_from_the_cost_ratio():
 def test_the_cards_still_have_no_button_that_decides_anything():
     # SPEC_CHAT_T4A: the plan card has one live button ("Accept plan", prepared with the job id only) and one disabled placeholder; nothing else decides
     # (Atha 2026-11-25: the second button, the money, is live: prepared with the job id, the ack and the typed reason only; see test_chat_ui.py)
-    assert re.findall(r'el\("button", null, "([^"]+)"', BLOCK) == ["All cards"] and re.findall(r'\{ text: "([^"]+)", fn:', BLOCK) == ["Technical card"]
-    assert re.findall(r'el\("button", "go", "([^"]+)"', BLOCK) == ["Accept plan", "Run queue (money is spent)"]
-    assert not re.search(r'method:\s*"POST"|\.post\(', BLOCK) and BLOCK.count("prepare(") == 2 and 'prepare({ action: "prd_approve", job: id })' in BLOCK and "prepare(body)" in BLOCK
+    assert re.findall(r'el\("button", null, "([^"]+)"', BLOCK) == ["All cards", "Prepare reply"] and re.findall(r'\{ text: "([^"]+)", fn:', BLOCK) == ["Technical card"]
+    assert re.findall(r'el\("button", "go", "([^"]+)"', BLOCK) == ["Accept plan", "Run queue (money is spent)", "Run the two patch readers (money is spent)", "Prepare install into the repository"]
+    assert not re.search(r'method:\s*"POST"|\.post\(', BLOCK) and BLOCK.count("prepare(") == 5 and 'prepare({ action: "prd_approve", job: id })' in BLOCK and "prepare(body)" in BLOCK
+    assert BLOCK.count("prepare({ action: \"") == 3 and "prepare(body)" in BLOCK    # SPEC_CHAT_APPLY_REPLY PR3: prd_approve, prd_reply, patch_read_run; the others go through `body`
 
 
 def test_the_request_is_labelled_atha_only_when_the_server_says_it_came_through_the_chat():

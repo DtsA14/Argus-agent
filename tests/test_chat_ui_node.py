@@ -142,3 +142,28 @@ def test_the_draft_page_marks_every_diff_line_by_its_first_character_shows_notes
     assert out["leftTab"] == "<section></section>"                                            # an answer that arrives after the person left the Queue tab draws nothing
     assert out["stale"] == "<section></section>" and out["fresh"] is True                      # an older answer draws nothing; the newest does
     assert "The list of changed tests cannot be read." in out["unreadable"] and "None: the draft only adds new tests." not in out["unreadable"]
+
+
+# ---- SPEC_CHAT_APPLY_REPLY PR3: the real installActions and replyBox on a tiny DOM -----------------------------------------------------------
+
+def test_the_reply_box_and_the_install_buttons_open_only_when_the_rules_say_and_send_only_the_allowed_fields():
+    out = json.loads(node(HERE / "chat_ui_smoke_apply.js", APP))
+    assert out["reply_buttons"] == [["", "Prepare reply", True]] and out["reply_value_empty"] == "" and out["reply_click_while_empty"] == "[]"
+    assert json.loads(out["reply_sent"]) == [{"action": "prd_reply", "job": "j1", "message": "use two decimals"}]
+    assert all(h == "<div.nav></div>" for h in out["reply_other_states"])                       # no box on a plan that is approved, being written or accepted
+    assert out["reader_buttons"] == [["go", "Run the two patch readers (money is spent)", False]]
+    assert json.loads(out["reader_sent"]) == [{"action": "patch_read_run", "job": "j1"}]
+    for k in ("install_fine", "install_concern"):
+        x = out[k]
+        assert x["before_diff"]["go_off"] is True and x["before_diff"]["tick_off"] is True      # nothing opens before the whole patch is on the page
+        assert x["ticked_but_no_diff_click"] == "[]" and x["after_diff"]["html_has_diff"] is True and x["after_diff"]["tick_off"] is False
+        assert x["unticked_go_off"] is True                                                    # unticking closes it again
+    assert out["install_fine"]["before_diff"]["has_reason_field"] is False and out["install_fine"]["after_diff"]["go_off"] is False
+    assert json.loads(out["install_fine"]["sent"]) == [{"action": "code_apply", "job": "j1", "sha": "a1b2c3d4e5f6"}]
+    c = out["install_concern"]
+    assert c["before_diff"]["has_reason_field"] is True and c["after_diff"]["go_off"] is True and c["no_reason_click"] == "[]" and c["reason_typed_go_off"] is False
+    assert json.loads(c["sent"]) == [{"action": "code_apply", "job": "j1", "sha": "a1b2c3d4e5f6", "reason": "because it is only a nit"}]
+    for k in ("install_cut", "install_changed"):                                                # a patch that is cut or not the one on the card never opens the button
+        assert out[k]["go_off"] is True and out[k]["tick_off"] is True and out[k]["prepared"] == "[]"
+    assert "the cap of this job is spent" in out["refused"] and "<button" not in out["refused"]
+    assert "never marked applied" in out["started_warning"] and "2026-11-28T01:02:03Z" in out["started_warning"]

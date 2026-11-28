@@ -339,8 +339,29 @@ class ApplyReply:
 
     # ---- the button the install card offers, from the same builders (so the page never offers what prepare refuses) -------------
 
+    def _started(self, job_id):
+        """The time of the last `apply_started` entry of a job that is not applied, else None (SPEC_CHAT_APPLY_REPLY 12 F14): an earlier install that began and was never recorded.
+        Never raises: a log that cannot be read says nothing."""
+        try:
+            got = self.a._read_data(job_id, ledgers=False)
+            d = got[0] if got else {}
+            if d.get("state") == "APPLIED":
+                return None
+            for e in reversed(d.get("log") or []):
+                if isinstance(e, dict) and e.get("what") == "apply_started":
+                    at = e.get("at")
+                    return at if isinstance(at, str) and len(at) <= 40 else "time not recorded"
+        except Exception:
+            return None
+        return None
+
     def state(self, job_id):
-        """{action, why}: the button the install card offers now. Never raises. The card is built once and handed to the builders."""
+        """{action, why, started}: the button the install card offers now. Never raises. The card is built once and handed to the builders."""
+        out = self._state(job_id)
+        out["started"] = self._started(job_id)
+        return out
+
+    def _state(self, job_id):
         try:
             have = self._install(job_id)
             card = have[0]
