@@ -270,6 +270,7 @@
     }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Cannot read this job.")); });
   }
   function load() {
+    loadBudget();
     get("/api/threads").then(function (d) {
       threads = d.threads || [];
       skipped.textContent = d.skipped ? d.skipped + " jobs cannot be shown" : "";
@@ -1433,6 +1434,60 @@
     updateSummary();
     b.setAttribute("aria-label", n + (n === 1 ? " item" : " items") + " waiting for you");
   }
+  // SPEC_BUDGET_V2 part 1: the meters of ACTUAL spend (daily and monthly, WIB), read only; they gate nothing. Unknown is never shown as zero; every word is a text node.
+  var budgetInfo = null, budgetSeq = 0;
+  function budgetChipText(b) {
+    if (!b || b.off || !b.day) { return ""; }
+    if (b.day.unknown || typeof b.day.spent_usd !== "number") { return "Today ?"; }
+    return "Today " + usd2(b.day.spent_usd) + " of " + usd2(b.day.limit_usd);
+  }
+  function drawBudgetChip() {
+    var chip = document.getElementById("budget-chip"), t = budgetChipText(budgetInfo);
+    chip.textContent = t;
+    chip.hidden = t === "";
+    chip.className = "muted" + (budgetInfo && budgetInfo.day && budgetInfo.day.warn ? " warn" : "");
+  }
+  function loadBudget() {
+    var seq = ++budgetSeq;
+    get("/api/budget").then(function (d) { if (seq === budgetSeq) { budgetInfo = d; drawBudgetChip(); if (mode === "cost") { renderCost(); } } })
+      .catch(function () { if (seq === budgetSeq) { budgetInfo = { off: true }; drawBudgetChip(); } });
+  }
+  function budgetWindow(card, title, w) {
+    if (!w) { return; }
+    if (w.unknown || typeof w.spent_usd !== "number") {
+      fact(card, title, "unknown");
+      card.appendChild(el("p", "note", "The spend of this " + (title === "Today" ? "day" : "month") + " cannot be computed (" + String(w.unknown && w.unknown.reason) + (w.unknown && w.unknown.job ? ", " + String(w.unknown.job) : "") + "). It is not zero."));
+      return;
+    }
+    fact(card, title, usd2(w.spent_usd) + " of " + usd2(w.limit_usd));
+    var bar = el("progress", "pbar" + (w.warn ? " warn" : ""));
+    bar.max = w.limit_usd;
+    bar.value = Math.min(w.spent_usd, w.limit_usd);
+    bar.setAttribute("aria-label", title + ": " + usd2(w.spent_usd) + " of " + usd2(w.limit_usd));
+    card.appendChild(bar);
+    groupLine(card, "By platform", w.by_platform);
+    groupLine(card, "By source", w.by_source);
+  }
+  function groupLine(card, label, groups) {            // "By platform: OpenRouter $0.15 · DeepSeek $0.07": text only; under half a cent is "under $0.01"
+    if (!groups || typeof groups !== "object") { return; }
+    var parts = Object.keys(groups).map(function (k) {
+      var n = groups[k];
+      return String(k) + " " + (typeof n !== "number" ? "?" : (n < 5000000 ? "under $0.01" : usd2(n / 1e9)));
+    });
+    if (parts.length) { card.appendChild(el("p", "small", label + ": " + parts.join(" · "))); }
+  }
+  function budgetCard() {
+    var c = el("article", "card");
+    c.appendChild(el("h2", null, "Spent (daily and monthly budget)"));
+    if (budgetInfo === null) { c.appendChild(el("p", "muted", "Loading…")); return c; }
+    if (budgetInfo.off) { c.appendChild(el("p", "note", "The budget meters are off.")); return c; }
+    budgetWindow(c, "Today", budgetInfo.day);
+    budgetWindow(c, "This month", budgetInfo.month);
+    var gone = (budgetInfo.sources || []).filter(function (x) { return x && x.missing; }).map(function (x) { return String(x.label); });
+    if (gone.length) { c.appendChild(el("p", "small", "Not found: " + gone.join(", "))); }
+    c.appendChild(el("p", "note", "Counts " + String(budgetInfo.note || "") + ". It shows what the ledgers recorded; it does not stop anything yet."));
+    return c;
+  }
   var capInfo = null;                                    // {cap_usd, booked_usd, unknown} from /api/cap; null until read; {failed: true} when it could not be read
   var DAY_MS = 24 * 3600 * 1000;
   function usd2(n) { return "$" + n.toFixed(2); }
@@ -1470,6 +1525,7 @@
     }
     booked.appendChild(el("p", "note", "The cap counts the full limit of every job, start, reply and queue started from this chat in the last 24 hours, not what they spent. A request whose own limit is more than Left is refused."));
     stream.appendChild(booked);
+    stream.appendChild(budgetCard());
     var day = threads.filter(recentJob), dayTotal = 0, dayBy = Object.create(null), dayUnknown = 0;
     day.forEach(function (t) {
       if (t.stages_unknown) { dayUnknown++; }

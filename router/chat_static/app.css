@@ -196,3 +196,5 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 .jsum .jl{display:block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;opacity:.65}
 .jsum .jv{display:block}
 .jsum~details .jfull{white-space:pre-wrap;overflow-wrap:anywhere}
+#budget-chip{font-size:.8rem}#budget-chip.warn{color:var(--warn);font-weight:600}
+progress.pbar.warn::-webkit-progress-value{background:var(--warn)}progress.pbar.warn::-moz-progress-bar{background:var(--warn)}
