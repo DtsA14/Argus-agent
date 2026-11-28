@@ -272,7 +272,7 @@ chat:
   daily_cap_usd: 7.00
   # SPEC_CHAT_MANAGER_P1 (Atha 2026-11-26, K1 and K3): the foreman, one chat session = one job = one confirmation. session_cap_usd is the job's max_usd and counts as
   # exposure from the confirm; a turn is one model call (a second only to repair an unusable reply), each reserved at its worst case against turn_cap_usd and what the
-  # session has left. ttl_hours stays below the 24 h exposure window. readable_repos: no repository content reaches the model until Atha names one (K2).
+  # session has left (SPEC_FOREMAN_MEMORY: older turns are summarized by the code near context_chars, not cut at 4 KB). ttl_hours stays below the 24 h exposure window. readable_repos: no repository content reaches the model until Atha names one (K2).
   manager:
     role: manager
     session_cap_usd: 0.20
@@ -280,8 +280,10 @@ chat:
     max_output_tokens: 3000
     ttl_hours: 12
     message_max: 2000
-    summary_bytes: 4096
-    max_turns: 40
+    context_chars: 80000       # SPEC_FOREMAN_MEMORY: earlier turns (a summary included) up to this many characters go to the model; above it the code compacts first
+    keep_recent_turns: 6       # the newest human turns (with the foreman's replies) that stay verbatim after a compaction
+    summary_chars: 3000        # the cap of one summary (at most max_output_tokens)
+    max_turns: 200
     readable_repos: []
 
 # SPEC_PRD_WRITER 5: the PRD writer (job kind prd, `argus prd new|reply`). It reads the same repos (issue_writer.repos, K2) and

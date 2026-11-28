@@ -9,6 +9,7 @@ confirmation. The session's money is its stage `m1`: every call writes the ledge
 read; the job's `max_usd` is fixed at creation and never topped up. There is no resume: a crash after the call leaves the money in the ledger.
 """
 import calendar
+import hashlib
 import json
 import math
 import time
@@ -19,8 +20,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from harness.errors import LLMCallFailed, ReservationExhausted
 from harness.events import EventLog
-from harness.llm import LLMCaller, is_truncated, reconcile_ledger
-from models.registry import ModelRef
+from harness.llm import LLMCaller, Reservation, is_truncated, reconcile_ledger
+from models.registry import ModelRef, price_for
 from router import job as rj
 from router import manager_route as mr
 from router import t3b_run as tr
@@ -30,14 +31,38 @@ NEW, OPEN, BLOCKED, ABANDONED = rj.NEW, "OPEN", rj.BLOCKED, rj.ABANDONED
 LEGAL = {(NEW, OPEN), (NEW, BLOCKED), (NEW, ABANDONED), (OPEN, BLOCKED), (OPEN, ABANDONED), (BLOCKED, ABANDONED)}
 SID = "m1"
 FIXED_SAY = "I could not form a usable proposal; please rephrase."
-KEYS = ("role", "session_cap_usd", "turn_cap_usd", "max_output_tokens", "ttl_hours", "message_max", "summary_bytes", "max_turns", "readable_repos")
+KEYS = ("role", "session_cap_usd", "turn_cap_usd", "max_output_tokens", "ttl_hours", "message_max", "context_chars", "keep_recent_turns", "summary_chars", "max_turns", "readable_repos")
 CALLS_PER_TURN = 2
+SYSTEM_MAX = 20000                   # the bound the settings enforce on the system prompt (the real one is about 7,500 characters)
+FILE_MAX = 3 * 1024 * 1024           # a session file above this is not extended: the chat reads a job.json up to 4 MB (SPEC_FOREMAN_MEMORY rev 1.3)
+RETRY_AFTER = 3                      # no new compaction while one of the last 3 foreman entries carries compaction_failed
 
 
 def _finite(v, name, *, integer=False, hi=None):
     if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0 or (integer and int(v) != v) or (hi is not None and v > hi):
         raise rj.Refused(f"config chat.manager.{name} must be a positive number{' (integer)' if integer else ''}{f' of at most {hi}' if hi else ''}")
     return int(v) if integer else float(v)
+
+
+def _bounds_problem(out, cfg, role):
+    """Why the checked numbers cannot work together, or None (a seam the tests of the runtime refusals switch off): the verbatim tail and a summary fit in half of the context, the
+    system prompt is bounded, and a reply or a compaction at full context fits the turn cap with the caller's own token count."""
+    if out["keep_recent_turns"] * (2 * mr.SAY_MAX + 40) + out["summary_chars"] > out["context_chars"] / 2:
+        return "config chat.manager: keep_recent_turns turns of at most 4,040 characters plus summary_chars must stay within half of context_chars"
+    try:
+        sysmax = len(mr.system_prompt(_repos(cfg)))
+    except OSError as e:
+        return f"the capability sheet cannot be read: {e}"
+    if sysmax > SYSTEM_MAX:
+        return f"the foreman's system prompt is {sysmax} characters, above {SYSTEM_MAX}"
+    scfg = rj.stage_config(cfg, out["session_cap_usd"])
+    ref = ModelRef.parse(role["model"])
+    reply_chars = out["context_chars"] + sysmax + out["message_max"] + 4096                  # the context, the system prompt, a message, and room for the steps block and a repair text
+    for what, chars in (("a reply call", reply_chars), ("a compaction call", out["context_chars"] + sysmax + 1024)):
+        worst = worst_usd(scfg, ref, chars, out["max_output_tokens"])
+        if worst > out["turn_cap_usd"]:
+            return f"config chat.manager: {what} at full context costs up to ${worst:.4f}, above turn_cap_usd"
+    return None
 
 
 def settings(cfg):
@@ -56,7 +81,9 @@ def settings(cfg):
            "session_cap_usd": _finite(m["session_cap_usd"], "session_cap_usd"), "turn_cap_usd": _finite(m["turn_cap_usd"], "turn_cap_usd"),
            "max_output_tokens": _finite(m["max_output_tokens"], "max_output_tokens", integer=True, hi=8000),
            "ttl_hours": _finite(m["ttl_hours"], "ttl_hours", hi=23), "message_max": _finite(m["message_max"], "message_max", integer=True, hi=mr.SAY_MAX),
-           "summary_bytes": _finite(m["summary_bytes"], "summary_bytes", integer=True, hi=16384), "max_turns": _finite(m["max_turns"], "max_turns", integer=True, hi=200)}
+           "context_chars": _finite(m["context_chars"], "context_chars", integer=True, hi=400000),
+           "keep_recent_turns": _finite(m["keep_recent_turns"], "keep_recent_turns", integer=True, hi=40),
+           "summary_chars": _finite(m["summary_chars"], "summary_chars", integer=True, hi=8000), "max_turns": _finite(m["max_turns"], "max_turns", integer=True, hi=200)}
     if not isinstance(out["role"], str) or out["role"] not in (cfg.get("roles") or {}):
         raise rj.Refused("config chat.manager.role must name a role in roles")
     r = cfg["roles"][out["role"]]
@@ -64,6 +91,11 @@ def settings(cfg):
         raise rj.Refused("config roles.<chat.manager.role> must have a model and the same max_output_tokens as chat.manager")
     if out["turn_cap_usd"] > out["session_cap_usd"]:
         raise rj.Refused("config chat.manager.turn_cap_usd is above session_cap_usd")
+    if out["summary_chars"] > out["max_output_tokens"]:
+        raise rj.Refused("config chat.manager.summary_chars is above max_output_tokens")
+    why = _bounds_problem(out, cfg, r)
+    if why:
+        raise rj.Refused(why)
     if m["readable_repos"] != []:
         raise rj.Refused("config chat.manager.readable_repos must be empty (P1 sends no repository content to the model)")
     out["readable_repos"] = []
@@ -121,25 +153,101 @@ def _created_via_ui(job):
     return any(e.get("what") == "created" and e.get("via") == "ui" for e in job.data.get("log") or [] if isinstance(e, dict))
 
 
+def _margin(scfg, ref):
+    llm = scfg.get("llm") or {}
+    return float((llm.get("input_margin_by_model") or {}).get(str(ref), llm.get("input_margin", 1.2)))
+
+
+def est_tokens(chars, scfg, ref, messages=2):
+    """The count `LLMCaller` makes of a prompt (harness.llm.heuristic_counter): (chars / 3 + 8 per message) x the model's margin; the foreman's reservation is made with the same count."""
+    return int((chars / 3 + 8 * messages) * _margin(scfg, ref)) + 1
+
+
+def worst_usd(scfg, ref, chars, max_output):
+    p = price_for(scfg, ref)
+    return est_tokens(chars, scfg, ref) * p["input"] / 1e6 + max_output * p["output"] / 1e6
+
+
+def reservation(scfg, ref, chars, max_output, usd):
+    return Reservation(tokens=est_tokens(chars, scfg, ref) + max_output + 2000, usd=usd)
+
+
+def _last_summary(conversation):
+    """(index, entry) of the newest summary entry, or (-1, None)."""
+    for i in range(len(conversation) - 1, -1, -1):
+        e = conversation[i]
+        if isinstance(e, dict) and e.get("from") == "summary" and isinstance(e.get("text"), str):
+            return i, e
+    return -1, None
+
+
+def _line(e):
+    who = "user" if e.get("from") == "human" else "foreman"
+    return json.dumps({who: str(e.get("say") if who == "foreman" else e.get("text"))[:mr.SAY_MAX]}, ensure_ascii=False)     # one JSON object a line: a newline in a text cannot forge the next line
+
+
+def _covers_end(entry):
+    c = entry.get("covers") if isinstance(entry, dict) else None
+    return c[1] if isinstance(c, list) and len(c) == 2 and isinstance(c[1], int) and c[1] >= 0 else 0
+
+
 def _context(conversation, limit):
-    """Earlier turns as data, newest kept, cut by code to `limit` bytes; the model's own earlier words are data too."""
-    lines = []
-    for e in conversation:
-        who = "user" if e.get("from") == "human" else "foreman"
-        lines.append(json.dumps({who: str(e.get("say") if who == "foreman" else e.get("text"))[:mr.SAY_MAX]}, ensure_ascii=False))     # one JSON object a line: a newline in a text cannot forge the other side's label
+    """Earlier turns as data, cut by code so that the text (a summary included) is at most `limit` characters, the newest lines kept: the newest summary (if any), then every
+    entry after the range it replaces, as JSON lines. A summary entry is never a line; a proposal is not in a line; the model's own earlier words are data too."""
+    si, summary = _last_summary(conversation)
+    head = (mr.SUMMARY_LABEL + "\n" + summary["text"]) if summary else ""
+    lines = [_line(e) for e in conversation[_covers_end(summary) if summary else 0:] if isinstance(e, dict) and e.get("from") in ("human", "manager")]
+    budget = limit - len(head)
     out, size = [], 0
     for ln in reversed(lines):
         b = len(ln.encode("utf-8")) + 1
-        if size + b > limit:
+        if size + b > budget:
             break
         out.append(ln)
         size += b
-    return "\n".join(reversed(out)) or None
+    body = "\n".join(reversed(out))
+    if head and body:
+        return head + "\nEarlier turns:\n" + body
+    return head or body or None
+
+
+def _needs_compaction(conversation, m):
+    """True when the (uncut) context is above `context_chars` and more than `keep_recent_turns` human turns follow the newest summary entry."""
+    si, _ = _last_summary(conversation)
+    humans = sum(1 for e in conversation[si + 1:] if isinstance(e, dict) and e.get("from") == "human")
+    return humans > m["keep_recent_turns"] and len(_context(conversation, 10 ** 9) or "") > m["context_chars"]
+
+
+def _split_index(conversation, keep):
+    """k: the conversation index of the `keep`th human entry from the newest; everything from k on stays verbatim."""
+    seen = 0
+    for i in range(len(conversation) - 1, -1, -1):
+        if isinstance(conversation[i], dict) and conversation[i].get("from") == "human":
+            seen += 1
+            if seen == keep:
+                return i
+    return 0
+
+
+def _compaction_blocked(conversation):
+    """True while one of the last RETRY_AFTER foreman entries carries compaction_failed: a failing compaction costs at most one extra call per RETRY_AFTER + 1 turns."""
+    last = [e for e in conversation if isinstance(e, dict) and e.get("from") == "manager"][-RETRY_AFTER:]
+    return any(e.get("compaction_failed") for e in last)
+
+
+def _compact_inputs(conversation, k):
+    """(old summary text or None, lines) to fold into the next summary: the lines of the entries from the old summary's range end up to k, the old summary entry itself skipped."""
+    si, summary = _last_summary(conversation)
+    start = _covers_end(summary) if summary else 0
+    lines = [_line(e) for e in conversation[start:k] if isinstance(e, dict) and e.get("from") in ("human", "manager")]
+    return (summary["text"] if summary else None), lines
 
 
 def turn(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, steps=None):
     """One human message and the foreman's answer, under the job's lock. Returns the manager entry. Every refusal is a `Refused` with a sentence and nothing is called.
-    `steps`: the jobs this session started, as parse_steps returns them (SPEC_CHAT_MANAGER_P4B): they join the context as facts from the harness; they are not kept in the job."""
+    `steps`: the jobs this session started, as parse_steps returns them (SPEC_CHAT_MANAGER_P4B): they join the context as facts from the harness; they are not kept in the job.
+    SPEC_FOREMAN_MEMORY: when the earlier turns are longer than `context_chars` the code first folds the older ones into a summary entry (one extra call, its own charge); a failed
+    compaction never blocks the turn: the context is then cut by code to `context_chars`."""
     m = settings(cfg)
     job = rj.open_job(job_id, jobs_dir)
     with job.lock():
@@ -159,6 +267,8 @@ def turn(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, steps=None):
             raise rj.Refused(f"{why}; no turn was run")
         if sum(1 for e in d["conversation"] if e.get("from") == "human") >= m["max_turns"]:
             raise rj.Refused(f"the session has reached its {m['max_turns']} turns; start a new one")
+        if len(json.dumps(d, indent=2, ensure_ascii=False).encode("utf-8")) > FILE_MAX:           # as Job.save writes it
+            raise rj.Refused("the session file is too large; start a new one; no turn was run")
         if not mr.sheet_ok():
             raise rj.Refused("the capability sheet is not the pinned one; no turn was run")
         repos = _repos(cfg)
@@ -172,25 +282,69 @@ def turn(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, steps=None):
         def left():
             return (rj.to_nano(d["max_usd"]) - rj.spent_nano(job)) / 1e9
 
-        def fits(user):
-            worst = tr.worst_usd(scfg, ref, len(system) + len(user), m["max_output_tokens"])
+        def fits(user, sysp=None):
+            worst = worst_usd(scfg, ref, len(sysp if sysp is not None else system) + len(user), m["max_output_tokens"])
             return worst, worst <= m["turn_cap_usd"] + 1e-12 and worst <= left() + 1e-12
 
-        context = _context(d["conversation"], m["summary_bytes"])
-        if steps:
-            context = "Jobs this conversation started (facts from the harness):\n" + mr.steps_context(steps) + ("\nEarlier turns:\n" + context if context else "")
-        user = mr.user_prompt(message, context)
+        def prompt():
+            context = _context(d["conversation"], m["context_chars"])
+            if steps:
+                context = "Jobs this conversation started (facts from the harness):\n" + mr.steps_context(steps) + ("\nEarlier turns:\n" + context if context else "")
+            return mr.user_prompt(message, context)
+
+        user = prompt()
         worst, ok = fits(user)
         if not ok:
             raise rj.Refused(f"the session budget cannot fund another turn (worst case ${worst:.4f}, turn cap ${m['turn_cap_usd']:.2f}, left ${left():.4f}); no turn was run")
+        want = _needs_compaction(d["conversation"], m) and not _compaction_blocked(d["conversation"])
+        k = _split_index(d["conversation"], m["keep_recent_turns"]) if want else 0
+        old_summary, fold = _compact_inputs(d["conversation"], k) if want else (None, [])
+        cprompt = mr.compact_user_prompt(old_summary, fold, m["summary_chars"]) if want else ""
+        cworst, cok = fits(cprompt, mr.COMPACT_INSTRUCTION) if want else (0.0, False)
         text = (f"manager turn on {ref}: one call (a second only if the reply is unusable), worst case ${worst:.4f} each, session cap ${d['max_usd']:.2f}; "
                 "your message and the earlier turns go to the model provider; no repository content is sent")
+        if want:
+            text += f"; the earlier turns are first summarized by one more call (worst case ${cworst:.4f}) and the summary replaces them in the prompt"
         entry = {"from": "manager", "say": "", "propose": None, "usd": 0.0, "calls": 0}
         with rj.live(deps, scfg, [m["role"]], text, job=job):                                       # the key is taken first: a refusal here records no message
+            caller = LLMCaller(scfg, m["role"], log, model=(deps.models or {}).get(m["role"]))
+            if want:
+                why_not = None
+                if not cok:
+                    why_not = "budget"
+                elif not reconcile_ledger(log.read())[1]["usd_complete"]:
+                    why_not = "ledger incomplete"
+                elif cworst + worst > left() + 1e-12:
+                    why_not = "budget"
+                if why_not is None:
+                    job.note(deps, "compaction_started", covers=[0, k])
+                    b0 = reconcile_ledger(log.read())[1]["usd_nano"]
+                    got_text, why_not = None, None
+                    try:
+                        creply = caller.call([SystemMessage(mr.COMPACT_INSTRUCTION), HumanMessage(cprompt)],
+                                             reservation(scfg, ref, len(mr.COMPACT_INSTRUCTION) + len(cprompt), m["max_output_tokens"], cworst),
+                                             meta={"node": "manager_compact", "task": SID, "iteration": len(d["conversation"]), "step": 0})
+                        if is_truncated(creply):
+                            why_not = "truncated"
+                        else:
+                            got_text = tr.text_of(creply).strip()
+                            why_not = mr.summary_problem(got_text, m["summary_chars"]) and "unusable"
+                    except (LLMCallFailed, ReservationExhausted) as e:
+                        why_not = type(e).__name__
+                    spent_c = round((reconcile_ledger(log.read())[1]["usd_nano"] - b0) / 1e9, 9)
+                    if why_not is None:
+                        d["conversation"].append({"from": "summary", "at": deps.clock(), "text": got_text, "covers": [0, k], "usd": spent_c, "calls": 1,
+                                                  "sha256": hashlib.sha256(got_text.encode("utf-8")).hexdigest()})
+                        job.note(deps, "compacted", covers=[0, k], chars=len(got_text))
+                    else:
+                        entry["compaction_usd"] = spent_c
+                if why_not is not None:
+                    entry["compaction_failed"] = why_not
+                    job.note(deps, "compaction_failed", reason=why_not)
+                user = prompt()                                                                         # the context after the compaction, or cut by code after a failure
             before = reconcile_ledger(log.read())[1]["usd_nano"]
             d["conversation"].append({"from": "human", "at": deps.clock(), "text": message})      # recorded BEFORE the call
             job.note(deps, "turn_started", turn=len([e for e in d["conversation"] if e.get("from") == "human"]))
-            caller = LLMCaller(scfg, m["role"], log, model=(deps.models or {}).get(m["role"]))
             problem = None
             for attempt in range(CALLS_PER_TURN):
                 if not reconcile_ledger(log.read())[1]["usd_complete"]:
@@ -202,7 +356,7 @@ def turn(job_id, message, *, cfg, deps, jobs_dir=rj.JOBS, steps=None):
                     entry["error"] = "the budget does not fund another call"
                     break
                 try:
-                    reply = caller.call([SystemMessage(system), HumanMessage(u)], tr.reservation(len(system) + len(u), m["max_output_tokens"], worst),
+                    reply = caller.call([SystemMessage(system), HumanMessage(u)], reservation(scfg, ref, len(system) + len(u), m["max_output_tokens"], worst),
                                         meta={"node": "manager", "task": SID, "iteration": len(d["conversation"]), "step": attempt})
                 except (LLMCallFailed, ReservationExhausted) as e:
                     entry["calls"] += 1

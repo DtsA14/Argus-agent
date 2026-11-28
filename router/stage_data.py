@@ -49,7 +49,8 @@ MODEL = re.compile(r"^[a-z0-9_.-]{1,30}:[a-z0-9][a-z0-9_.-]{0,59}(/[a-z0-9][a-z0
 # payload field), and a kind missing from this set excludes the whole job (2026-11-17: 45 of 66 jobs of a CLI jobs directory).
 LOG_WHAT = {"created", "intaken", "state", "approved", "limits_shown", "confirmed", "confirmed_by_flag", "key_typed",
             "key_from_file", "retry", "redraft", "staged", "research_ok", "applied", "stage_started",
-            "repro", "repro_patched", "apply_started", "not_confirmed", "turn_started", "turn_done", "patch_read_run"}
+            "repro", "repro_patched", "apply_started", "not_confirmed", "turn_started", "turn_done", "patch_read_run",
+            "compaction_started", "compacted", "compaction_failed"}                      # the foreman session's compaction notes (SPEC_FOREMAN_MEMORY): a missing kind would drop the whole job
 # A second layer over the projection (A1): nothing like a key may be in what is published.
 KEY = re.compile(rb"sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|(?i:api[_-]?key|secret|password|token)\"?\s*[:=]\s*\"")
 

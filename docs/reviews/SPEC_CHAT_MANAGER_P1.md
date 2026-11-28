@@ -26,6 +26,7 @@ chat:
     ttl_hours: 12              # below the 24 h exposure window (13.1)
     message_max: 2000
     summary_bytes: 4096        # earlier turns carried into a turn, cut by code
+                               # (replaced 2026-11-28 by context_chars / keep_recent_turns / summary_chars: SPEC_FOREMAN_MEMORY; the 4 KB cut is gone)
     readable_repos: []         # K2: no repo content reaches the model
 roles:
   manager: {model: "openrouter:deepseek/deepseek-v4.1-flash-1017", max_output_tokens: 1500, timeout_s: 120, ...same other keys as roles.issue_writer}

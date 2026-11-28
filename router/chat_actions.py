@@ -885,7 +885,7 @@ class Actions:
             raise Refusal(409, "config", "the foreman's configuration is not complete") from None
         self._need_key(False, manager=True)
         card = {"action": "manager_new", "title": "Start a chat session with the foreman", "model": model, "job_cap_usd": m["session_cap_usd"],
-                "turn_cap_usd": m["turn_cap_usd"], "turn_note": "one turn is one model call; a second call only when the first reply is unusable, so a turn can cost up to two turn caps",
+                "turn_cap_usd": m["turn_cap_usd"], "turn_note": "one turn is one model call; a second call only when the first reply is unusable; and when the earlier turns grow long, one more call first summarizes them (shown in the chat): so a turn can cost up to three calls, each within the turn cap",
                 "ttl_hours": m["ttl_hours"], "max_turns": m["max_turns"],
                 "confirms": "this one confirmation covers the whole session: its turns are not confirmed again, and the foreman can propose but cannot approve, apply, merge or start anything",
                 "data_sent": "your messages and the earlier turns of the session go to the model provider (OpenRouter, then DeepSeek) and may be kept by it; no repository content is sent; do not put secrets in a message"}
@@ -1141,6 +1141,10 @@ class Actions:
                 continue
             if e.get("from") == "human":
                 out.append({"from": "human", "n": n, "at": e.get("at"), "text": scrub(str(e.get("text") or ""))})
+            elif e.get("from") == "summary":                 # SPEC_FOREMAN_MEMORY: the model's summary of older turns: text on the page in a fold, never a foreman entry
+                c = e.get("covers")
+                out.append({"from": "summary", "n": n, "at": e.get("at"), "text": scrub(str(e.get("text") or "")),
+                            "covers": [x for x in c if isinstance(x, int) and not isinstance(x, bool)][:2] if isinstance(c, list) else None})
             else:
                 p = e.get("propose")
                 out.append({"from": "manager", "n": n, "source": "manager", "at": e.get("at"), "say": scrub(str(e.get("say") or "")), "calls": e.get("calls"), "usd": e.get("usd"),

@@ -311,3 +311,10 @@ def test_the_run_params_of_an_issue_form_from_a_proposal_are_the_forms_own_and_n
 def test_a_source_that_is_no_proposal_says_so_in_the_issue_wording(isvc):
     s, out = iprep(isvc, source_turn="3")                      # a turn of talk only
     assert s == 404 and "the foreman proposed no research, PRD or issue job in that turn" in json.dumps(out)
+
+
+def test_a_summary_entry_is_never_the_source_of_a_form(svc):                                    # F47-A: only a `manager` entry that proposed something is a source
+    m.make_session(svc.jobs, job_id="j20261115_220300_abcd", conversation=[HUMAN, {"from": "summary", "at": "x", "text": TEXT, "covers": [0, 1], "usd": 0, "calls": 1, "sha256": "0",
+                                                                                   "propose": {"route": "prd", "repo": REPO, "text": TEXT, "why": WHY}}])
+    s, out = svc.prepare(action="prd_new", repo=REPO, message=TEXT, source_job="j20261115_220300_abcd", source_turn="1")
+    assert s == 404 and "token" not in json.dumps(out)
