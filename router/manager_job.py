@@ -117,16 +117,12 @@ def _repos(cfg):
     return sorted(((cfg.get("issue_writer") or {}).get("repos") or {}))
 
 
-def new(*, cfg, deps, jobs_dir=rj.JOBS, job_id=None, via=None):
-    """A new session job, OPEN. Only `via ui` (the chat's confirm is its one confirmation); the id must be the exact shape of a harness id (SPEC_CHAT_APP 12.10 item 9)."""
-    if via != "ui":
-        raise rj.Refused("a manager session is started from the chat (--via ui); nothing was started")
-    from . import research as rr
-    why = rr.ui_job_id_problem(job_id, deps.clock())
-    if why:
-        raise rj.Refused(f"{why}; nothing was started")
-    m = settings(cfg)
-    role = cfg["roles"][m["role"]]
+def _ui_id_shape(job_id):
+    return isinstance(job_id, str) and rj.JOB_ID.fullmatch(job_id) is not None
+
+
+def _create(job_id, deps, m, role, jobs_dir, via, extra_inputs, conversation, created_note):
+    """The one place a session job is made (the stage directory exists from the start: the chat reads a missing runs directory as an unknown cost)."""
     job = rj.Job(Path(jobs_dir) / job_id)
     if job.file.exists():
         raise rj.Refused(f"job {job_id} already exists")
@@ -134,12 +130,142 @@ def new(*, cfg, deps, jobs_dir=rj.JOBS, job_id=None, via=None):
         if job.data is not None:
             raise rj.Refused(f"job {job_id} already exists")
         job.data = {"job": job_id, "kind": KIND, "state": NEW, "created_at": deps.clock(), "max_usd": m["session_cap_usd"],
-                    "inputs": {"role": m["role"], "model": role["model"], "readable_repos": []}, "conversation": [], "stages": {}, "log": []}
-        job.note(deps, "created", via=via)
+                    "inputs": {"role": m["role"], "model": role["model"], "readable_repos": [], **extra_inputs}, "conversation": conversation, "stages": {}, "log": []}
+        job.note(deps, "created", via=via, **created_note)
         job.data["stages"][SID] = {"kind": "manager", "run_id": f"{job.id}-{SID}", "cap_usd": m["session_cap_usd"], "started_at": deps.clock()}
-        (job.runs / f"{job.id}-{SID}").mkdir(parents=True, exist_ok=True)         # the chat reads a missing runs directory as an unknown cost: the stage's directory exists from the start
+        (job.runs / f"{job.id}-{SID}").mkdir(parents=True, exist_ok=True)
         job.move(OPEN, deps)
     return job
+
+
+def new(*, cfg, deps, jobs_dir=rj.JOBS, job_id=None, via=None, title=None, continue_from=None):
+    """A new session job, OPEN. Only `via ui` (the chat's confirm is its one confirmation); the id must be the exact shape of a harness id (SPEC_CHAT_APP 12.10 item 9).
+    SPEC_FOREMAN_TOPICS: `title` names a new topic (the session is its first); `continue_from` continues the topic of that previous session, whose newest turns and summary are carried
+    into the new one as data (the head is built by this code, no model is called); the two are exclusive."""
+    if via != "ui":
+        raise rj.Refused("a manager session is started from the chat (--via ui); nothing was started")
+    from . import research as rr
+    why = rr.ui_job_id_problem(job_id, deps.clock())
+    if why:
+        raise rj.Refused(f"{why}; nothing was started")
+    if title is not None and continue_from is not None:
+        raise rj.Refused("a session names a new topic or continues one, not both; nothing was started")
+    m = settings(cfg)
+    role = cfg["roles"][m["role"]]
+    if title is not None:
+        bad = mr.title_problem(title)
+        if bad:
+            raise rj.Refused(f"{bad}; nothing was started")
+        t = title.strip()
+        return _create(job_id, deps, m, role, jobs_dir, via, {"topic": {"id": job_id, "title": t}}, [], {})
+    if continue_from is None:
+        return _create(job_id, deps, m, role, jobs_dir, via, {}, [], {})
+    if not _ui_id_shape(continue_from):
+        raise rj.Refused("the session to continue is not a job id; nothing was started")
+    prev = rj.open_job(continue_from, jobs_dir)                      # refuses a missing job before any lock makes a directory
+    with prev.lock():                                                 # every check happens under the previous session's lock, BEFORE the new job exists (a refusal leaves nothing behind)
+        pd = prev.data
+        if not isinstance(pd, dict) or pd.get("kind") != KIND or not _created_via_ui(prev):
+            raise rj.Refused(f"job {continue_from} is not a foreman session started from the chat; nothing was started")
+        pin = pd.get("inputs") if isinstance(pd.get("inputs"), dict) else {}
+        if pin.get("continued_by"):
+            raise rj.Refused(f"the topic was already continued ({pin['continued_by']}); nothing was started")
+        try:
+            spent = rj.spent_nano(prev)
+        except (OSError, KeyError, TypeError, ValueError, rj.Refused):
+            spent = None
+        size = len(json.dumps(pd, indent=2, ensure_ascii=False).encode("utf-8"))
+        verdict = can_take_turn(pd, spent, m, _epoch(deps.clock()), size)
+        if verdict == "unknown":
+            raise rj.Refused(f"session {continue_from}: its state or spend cannot be computed; nothing was started")
+        if verdict == "yes":
+            raise rj.Refused(f"session {continue_from} can still take a turn: write in it; nothing was started")
+        topic = topic_of(pd, continue_from)
+        text = carried_head(pd, m)
+        head = {"from": "summary", "at": deps.clock(), "text": text, "covers": [0, 1], "usd": 0.0, "calls": 0, "carried": True,
+                "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
+        job = _create(job_id, deps, m, role, jobs_dir, via, {"topic": {"id": topic["id"], "title": topic["title"]}, "continues": continue_from}, [head], {"continues": continue_from})
+        pd.setdefault("inputs", {})["continued_by"] = job.id
+        prev.data = pd
+        prev.note(deps, "continued", to=job.id)
+    return job
+
+
+def _epoch(stamp):
+    try:
+        return calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
+    except (ValueError, TypeError):
+        return None
+
+
+def can_take_turn(data, spent_nano, m, now_s, size=None):
+    """"yes", "no" or "unknown": whether a turn can be sent to this session now (one answer for the chat's reads, the page and the continuation). `no`: not a foreman session via the
+    UI, not OPEN, older than ttl_hours (an expired session is still OPEN until a turn moves it to BLOCKED), less left than a turn's cap, the human turns used up, or a file above
+    FILE_MAX (every turn would be refused). `unknown`: the age or the spend cannot be computed."""
+    if not isinstance(data, dict) or data.get("kind") != KIND:
+        return "no"
+    if not any(isinstance(e, dict) and e.get("what") == "created" and e.get("via") == "ui" for e in data.get("log") or []):
+        return "no"
+    if data.get("state") != OPEN:
+        return "no"
+    created = _epoch(data.get("created_at"))
+    if created is None or now_s is None:
+        return "unknown"
+    if now_s - created > m["ttl_hours"] * 3600:
+        return "no"
+    if spent_nano is None:
+        return "unknown"
+    try:
+        left = (rj.to_nano(data["max_usd"]) - spent_nano) / 1e9
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return "unknown"
+    if left < m["turn_cap_usd"] - 1e-12:
+        return "no"
+    if sum(1 for e in data.get("conversation") or [] if isinstance(e, dict) and e.get("from") == "human") >= m["max_turns"]:
+        return "no"
+    if size is not None and size > FILE_MAX:
+        return "no"
+    return "yes"
+
+
+def derived_title(data):
+    """The title of a session that has none: the first 40 characters of the person's first message, cleaned, else "Foreman chat of <date>"."""
+    for e in data.get("conversation") or []:
+        if isinstance(e, dict) and e.get("from") == "human" and isinstance(e.get("text"), str):
+            t = "".join(c for c in e["text"] if unicodedata.category(c)[0] != "C" and unicodedata.category(c) not in ("Zl", "Zp")).strip()
+            if t:
+                return t[:40]
+    return "Foreman chat of " + str(data.get("created_at") or "")[:10]
+
+
+def topic_of(data, job_id):
+    """{id, title, legacy} of a session: its `inputs.topic`, or (a session from before topics) its own id and a title derived from its first message."""
+    t = (data.get("inputs") or {}).get("topic") if isinstance(data.get("inputs"), dict) else None
+    if isinstance(t, dict) and isinstance(t.get("id"), str) and isinstance(t.get("title"), str) and t["title"].strip():
+        return {"id": t["id"], "title": t["title"], "legacy": False}
+    return {"id": job_id, "title": derived_title(data), "legacy": True}
+
+
+def carried_head(prev, m):
+    """The text a continuation carries over (SPEC_FOREMAN_TOPICS rev 1 E8): the previous session's newest summary (a carried one only to its first `summary_chars`), then the last
+    `keep_recent_turns` human turns with the replies as the context's own JSON lines; whole OLDEST lines are dropped until it fits `context_chars // 2`, never a cut inside a line."""
+    conv = prev.get("conversation") or []
+    _si, summary = _last_summary(conv)
+    prior = ""
+    if summary:
+        prior = summary["text"][:m["summary_chars"]] if summary.get("carried") else summary["text"]
+    k = _split_index(conv, m["keep_recent_turns"])
+    lines = [_line(e) for e in conv[k:] if isinstance(e, dict) and e.get("from") in ("human", "manager")]
+    head = (prior + "\n" if prior else "") + "Recent turns:\n"
+    budget = m["context_chars"] // 2 - len(head)
+    kept, size = [], 0
+    for ln in reversed(lines):
+        b = len(ln) + 1
+        if size + b > budget:
+            break
+        kept.append(ln)
+        size += b
+    return head + "\n".join(reversed(kept))
 
 
 def _age_s(job, now):
@@ -195,7 +321,10 @@ def _context(conversation, limit):
     """Earlier turns as data, cut by code so that the text (a summary included) is at most `limit` characters, the newest lines kept: the newest summary (if any), then every
     entry after the range it replaces, as JSON lines. A summary entry is never a line; a proposal is not in a line; the model's own earlier words are data too."""
     si, summary = _last_summary(conversation)
-    head = (mr.SUMMARY_LABEL + "\n" + summary["text"]) if summary else ""
+    head = ""
+    if summary:                                                     # a carried head (a continuation's) has its own label and is capped defensively at half of the limit
+        text = summary["text"][:limit // 2] if summary.get("carried") else summary["text"]
+        head = (mr.CARRIED_LABEL if summary.get("carried") else mr.SUMMARY_LABEL) + "\n" + text
     lines = [_line(e) for e in conversation[_covers_end(summary) if summary else 0:] if isinstance(e, dict) and e.get("from") in ("human", "manager")]
     budget = limit - len(head)
     out, size = [], 0
