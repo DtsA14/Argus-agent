@@ -741,3 +741,12 @@ def test_the_install_button_stays_closed_until_the_whole_patch_is_shown_and_the_
 
 def test_the_install_card_remembers_it_is_on_screen_so_a_confirmed_action_redraws_it():
     assert JS.split("function showInstall(id) {")[1].split("get(")[0].count('openKind = "install";') == 1
+
+
+def test_the_page_draws_the_reply_box_and_the_install_buttons_and_never_makes_a_textarea_with_text():
+    assert "stream.appendChild(replyBox(id, d));" in JS and "stream.appendChild(installActions(id, d, seq));" in JS
+    assert re.findall(r'el\("textarea"[^)]*\)', JS) and all(re.fullmatch(r'el\("textarea", "[a-z]+"\)', m) for m in re.findall(r'el\("textarea"[^)]*\)', JS))      # no third argument: no text inside
+    assert "argus/<job>" in JS.split("function installActions")[1].split("function showPlan")[0]                  # F15: said before the person confirms
+    for text in ("The writer is writing the plan again", "The two readers are running", "It makes one commit in the repository on this machine"):
+        assert text in JS
+    assert JS.count("if (applies) {") == 2 and "if (card.detached_note)" in JS and "card.declaration" in JS

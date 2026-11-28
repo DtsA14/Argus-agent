@@ -862,7 +862,7 @@
         prepare(body);
       });
       box.appendChild(p);
-      box.appendChild(el("p", "small", "One commit in the repository on this machine. Not pushed, not deployed. The next card shows the branch and the files."));
+      box.appendChild(el("p", "small", "One commit in the repository on this machine. Not pushed, not deployed. If the repository is on its main branch, the commit goes to a new branch argus/<job> and the checkout stays on that branch afterwards. The next card shows the branch and the files."));
       get("/api/diff/" + encodeURIComponent(id)).then(function (x) {
         if (seq !== cardSeq || mode !== "cards") { return; }
         clear(slot_);

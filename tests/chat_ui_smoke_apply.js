@@ -40,6 +40,7 @@ run("rb.listeners.click()");
 out.reply_click_while_empty = run("JSON.stringify(prepared)");
 run("ta.value = 'use two decimals'; ta.listeners.input(); rb.listeners.click();");
 out.reply_sent = run("JSON.stringify(prepared)");
+out.reply_write_failed = run("html(replyBox('j1', { state: 'WRITE_FAILED' }))");
 out.reply_other_states = ["APPROVED", "WRITING", "ACCEPTED"].map((s) => run("html(replyBox('j1', { state: '" + s + "' }))"));
 // 2. the readers button
 run("prepared = []; var box = installActions('j1', { patch_sha12: '" + SHA + "', apply: { action: 'patch_read_run', why: null, started: null } }, 1);");
@@ -61,6 +62,11 @@ function install(needs, diff) {
     st.no_reason_click = run("JSON.stringify(prepared)");
     run("why.value = '  because it is only a nit  '; why.listeners.input();");
     st.reason_typed_go_off = run("go.disabled");
+    run("why.value = '123456789'; why.listeners.input();");
+    st.reason_nine_go_off = run("go.disabled");
+    run("why.value = '          x '; why.listeners.input();");
+    st.reason_spaces_go_off = run("go.disabled");
+    run("why.value = '  because it is only a nit  '; why.listeners.input();");
   }
   run("tick.checked = false; tick.listeners.change();");
   st.unticked_go_off = run("go.disabled");

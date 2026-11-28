@@ -150,6 +150,7 @@ def test_the_reply_box_and_the_install_buttons_open_only_when_the_rules_say_and_
     out = json.loads(node(HERE / "chat_ui_smoke_apply.js", APP))
     assert out["reply_buttons"] == [["", "Prepare reply", True]] and out["reply_value_empty"] == "" and out["reply_click_while_empty"] == "[]"
     assert json.loads(out["reply_sent"]) == [{"action": "prd_reply", "job": "j1", "message": "use two decimals"}]
+    assert "<textarea" in out["reply_write_failed"] and "Prepare reply" in out["reply_write_failed"]       # a failed write can be answered too
     assert all(h == "<div.nav></div>" for h in out["reply_other_states"])                       # no box on a plan that is approved, being written or accepted
     assert out["reader_buttons"] == [["go", "Run the two patch readers (money is spent)", False]]
     assert json.loads(out["reader_sent"]) == [{"action": "patch_read_run", "job": "j1"}]
