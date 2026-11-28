@@ -103,6 +103,9 @@ const over = (o) => { run("mgr.stuck = false; mgr.job = 'j20261126_023857_708b';
 out.over = { healthy: over({ turn_cap_usd: 0.03, max_turns: 40 }), expired: over({ expires_in_s: 0 }), poor: over({ turn_cap_usd: 0.03, spent_usd: 0.19 }), fine: over({ turn_cap_usd: 0.03, spent_usd: 0.1 }),
   turns: over({ max_turns: 1, conversation: [{ from: "human", n: 0, text: "a" }] }), busy: over({ expires_in_s: 0, busy: true }) };
 run("mgr.stuck = true;"); out.over.stuck = run("mgr.data = " + JSON.stringify(D()) + "; renderManager(); html(stream)").includes("Prepare a new session"); run("mgr.stuck = false;");
+// F47-A: a summary entry is a closed fold of text with its label, never a foreman entry and never a proposal
+run("mgr.stuck = false; mgr.job = 'j20261126_023857_708b'; mgr.data = " + JSON.stringify(D({ conversation: [{ from: "human", n: 0, text: "halo" }, { from: "summary", n: 1, text: "Fakta: repo <b>ledger-cli</b>", covers: [0, 1] }, { from: "manager", n: 2, say: "oke", propose: null }] })) + "; renderManager();");
+out.summaryHtml = run("html(stream)");
 // sendTurn
 run("posted.length = 0; notes.length = 0; mgr.job = null; mgr.data = null; message.value = 'halo'; sendTurn();"); out.sendNoSession = run("JSON.stringify([posted, notes])");
 run("posted.length = 0; notes.length = 0; mgr.job = 'j20261126_023857_708b'; mgr.data = " + JSON.stringify(D({ busy: true })) + "; sendTurn();"); out.sendBusy = run("JSON.stringify([posted, notes])");
@@ -120,10 +123,15 @@ setTimeout(() => {
     setTimeout(() => {
       out.leave = run("JSON.stringify([message.value, mgr.timer, timers.length, mgr.sending])");
       // the poll stops at its bound, and when the answer is in; the session search is bounded
-      run("mode = 'manager'; mgr.job = 'j'; mgr.data = " + JSON.stringify(D({ conversation: [{}, {}] })) + "; mgr.before = 0; mgr.left = 5; gets = 0; pollManager();"); out.pollDone = run("[gets, mgr.timer].join('|')");
-      run("mgr.data = " + JSON.stringify(D({ conversation: [{}] })) + "; mgr.before = 0; mgr.left = 3; gets = 0; queued.length = 0; pollManager();");
+      run("mode = 'manager'; mgr.job = 'j'; mgr.data = " + JSON.stringify(D({ conversation: [{ from: "human", n: 0 }, { from: "manager", n: 1 }] })) + "; mgr.before = 0; mgr.left = 5; gets = 0; pollManager();"); out.pollDone = run("[gets, mgr.timer].join('|')");
+      run("mgr.data = " + JSON.stringify(D({ conversation: [{ from: "human", n: 0 }] })) + "; mgr.before = 0; mgr.left = 3; gets = 0; queued.length = 0; pollManager();");
       for (let i = 0; i < 10 && run("queued.length"); i++) { run("queued.shift()")(); }
       out.pollBound = run("[gets, mgr.timer].join('|')");
+      // after a compaction a turn adds THREE entries (summary, human, foreman): the poll waits for the foreman's own entry, not for a count
+      run("mgr.data = " + JSON.stringify(D({ conversation: [{ from: "human", n: 0 }, { from: "manager", n: 1 }, { from: "summary", n: 2 }, { from: "human", n: 3 }] })) + "; mgr.before = 2; mgr.left = 5; gets = 0; queued.length = 0; mgr.timer = null; pollManager();");
+      out.pollSummaryWaits = run("[gets, mgr.timer !== null].join('|')");
+      run("mgr.data = " + JSON.stringify(D({ conversation: [{ from: "human", n: 0 }, { from: "manager", n: 1 }, { from: "summary", n: 2 }, { from: "human", n: 3 }, { from: "manager", n: 4 }] })) + "; mgr.before = 2; mgr.left = 5; gets = 0; queued.length = 0; mgr.timer = null; pollManager();");
+      out.pollSummaryDone = run("[gets, mgr.timer].join('|')");
 run("mode = 'manager'; mgr.job = 'j20261126_023857_708b'; notes.length = 0; posted.length = 0; mgr.sending = false; mgr.timer = null; mgr.epoch++; mgr.data = " + JSON.stringify(D()) + "; message.value = 'satu'; sendTurn(); sendTurn(); mgr.epoch++;"); out.double = run("JSON.stringify([posted.length, notes[notes.length - 1]])");
       run("mgr.left = 0; mgr.expect = 12; mgr.retry = null; mgr.seq = 0; gets = 0; queued.length = 0; loadManager();");
       let rounds = 0;

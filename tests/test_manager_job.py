@@ -228,7 +228,8 @@ def test_the_turn_limit_holds(tmp_path):
     assert "2 turns" in refused(tmp_path, j, cfg=cfg)
 
 
-def test_a_turn_whose_worst_case_does_not_fit_is_not_started(tmp_path):
+def test_a_turn_whose_worst_case_does_not_fit_is_not_started(tmp_path, monkeypatch):
+    monkeypatch.setattr(mj, "_bounds_problem", lambda *a, **k: None)          # the config bound is tested on its own below; this tests the runtime refusal
     cfg = load_config()
     cfg["chat"]["manager"]["turn_cap_usd"] = 1e-9
     j = session(tmp_path, cfg)
@@ -237,12 +238,13 @@ def test_a_turn_whose_worst_case_does_not_fit_is_not_started(tmp_path):
     assert data(tmp_path, j)["conversation"] == []
 
 
-def test_a_session_that_has_spent_its_budget_cannot_take_another_turn(tmp_path):
+def test_a_session_that_has_spent_its_budget_cannot_take_another_turn(tmp_path, monkeypatch):
+    monkeypatch.setattr(mj, "_bounds_problem", lambda *a, **k: None)
     cfg = load_config()
-    cfg["chat"]["manager"]["session_cap_usd"] = 0.0023
-    cfg["chat"]["manager"]["turn_cap_usd"] = 0.0023
+    cfg["chat"]["manager"]["session_cap_usd"] = 0.00245
+    cfg["chat"]["manager"]["turn_cap_usd"] = 0.00245
     j = session(tmp_path, cfg)
-    run_turn(tmp_path, j, "Halo", lambda m: reply(say(), cost=0.0025), cfg=cfg)
+    run_turn(tmp_path, j, "Halo", lambda m: reply(say(), cost=0.0026), cfg=cfg)
     assert "cannot fund" in refused(tmp_path, j, cfg=cfg)
 
 
@@ -271,9 +273,10 @@ def test_a_frame_tag_in_the_message_or_in_an_earlier_answer_cannot_close_its_fra
     assert "&lt; / Context >" in u.split("</context>")[1] or "&lt;" in u.split("</context>")[1].split("</user_message>")[0]
 
 
-def test_no_repository_or_research_text_is_in_any_prompt_and_the_context_is_cut(tmp_path):
+def test_no_repository_or_research_text_is_in_any_prompt_and_the_context_is_cut(tmp_path, monkeypatch):
+    monkeypatch.setattr(mj, "_bounds_problem", lambda *a, **k: None)
     cfg = load_config()
-    cfg["chat"]["manager"]["summary_bytes"] = 300
+    cfg["chat"]["manager"].update(context_chars=300, keep_recent_turns=40, summary_chars=100)             # the cut by code, with a compaction that can never trigger (40 turns kept)
     j = session(tmp_path, cfg)
     for i in range(6):
         run_turn(tmp_path, j, f"pesan nomor {i} " + "z" * 100, lambda m: reply(say("jawaban " + "y" * 100)), cfg=cfg)

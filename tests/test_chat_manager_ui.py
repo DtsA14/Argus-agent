@@ -180,3 +180,20 @@ def test_a_confirmed_issue_card_from_the_foreman_goes_to_the_writing_and_keeps_t
     assert 'body.action === "issue_new" && r.job' in man and 'showIssue(r.job, true)' in man and 'setMode("issue")' in man
     assert man.index("var keepCard = pending; pending = null;") < man.index('setMode("issue")') < man.index("pending = keepCard;") < man.index("showIssue(r.job, true)")
     assert 'body.action === "manager_new"' in man and "research_new" not in man and "prd_new" not in man          # research and PRD stay where they are
+
+
+@needs_node
+def test_a_summary_is_a_closed_fold_of_text_never_a_foreman_turn_or_a_proposal(out):                   # F47-A
+    h = out["summaryHtml"]
+    assert "<details.fold><summary>Summary so far (written by a model, used as data)</summary><p.note>Fakta: repo <b>ledger-cli</b></p.note></details>" in h or \
+        "<details.fold><summary>Summary so far (written by a model, used as data)</summary><p.note>Fakta: repo <b>ledger-cli</b></p></details>" in h
+    assert h.count("say foreman") == 1 and "Prepare" not in h and "Edit first" not in h and "<b>ledger-cli</b>" in h          # the <b> is text in the fake DOM: textContent only
+    assert "<details" not in JS and 'el("details", "fold")' in JS.split("function renderManager(")[1].split("function pollManager(")[0] and "innerHTML" not in JS
+
+
+@needs_node
+def test_the_poll_waits_for_the_foremans_own_entry_not_for_a_count(out):
+    assert out["pollDone"].startswith("0|") and out["pollBound"].startswith("2|")                # an answer in: stops at once; none: reads, waits
+    assert out["pollSummaryWaits"] == "1|true" and out["pollSummaryDone"].startswith("0|")       # after a compaction a turn adds three entries: the human entry alone does not stop it
+    poll = JS.split("function pollManager")[1].split("function sendTurn")[0]
+    assert 'e.from === "manager" && e.n >= mgr.before' in poll and "mgr.before + 2" not in poll

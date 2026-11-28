@@ -1737,6 +1737,13 @@
     if (!(d.conversation || []).length) { c.appendChild(el("p", "muted", "Say something below.")); }
     (d.conversation || []).forEach(function (e) {
       if (e.from === "human") { c.appendChild(el("p", "msg human mine", e.text)); return; }          // your turn: a bubble on the right; the foreman answers on the left, with its label
+      if (e.from === "summary") {                       // SPEC_FOREMAN_MEMORY: older turns folded by the code into a summary the model wrote: text in a closed fold, never a foreman turn, never a proposal
+        var fold = el("details", "fold");
+        fold.appendChild(el("summary", null, "Summary so far (written by a model, used as data)"));
+        fold.appendChild(el("p", "note", String(e.text)));
+        c.appendChild(fold);
+        return;
+      }
       c.appendChild(el("p", "say foreman", String(e.say)));       // the card is titled "Foreman"; its text is still a text node. Proposals keep their own labels
       if (e.error) { c.appendChild(el("p", "note", "This turn failed: " + e.error)); }
       if (e.propose) { c.appendChild(proposalBox(e)); }
@@ -1748,9 +1755,9 @@
     stream.appendChild(c);
   }
   function pollManager() {                              // after a turn is sent: read the session every 2 s until the answer is in, or 2 minutes
-    var n = mgr.data && mgr.data.conversation ? mgr.data.conversation.length : 0;
+    var answered = (mgr.data && mgr.data.conversation ? mgr.data.conversation : []).some(function (e) { return e.from === "manager" && e.n >= mgr.before; });       // a turn adds two entries, or three after a summary: wait for the foreman's own
     mgr.left--;
-    if (mgr.left <= 0 || (mgr.data && !mgr.data.busy && n >= mgr.before + 2)) { mgr.timer = null; return; }
+    if (mgr.left <= 0 || (mgr.data && !mgr.data.busy && answered)) { mgr.timer = null; return; }
     loadManager();
     mgr.timer = setTimeout(pollManager, 2000);
   }

@@ -60,7 +60,7 @@ def test_prepare_shows_the_numbers_of_the_config_and_runs_nothing(svc):
     assert status == 200 and svc.spawner.calls == []
     c, m = out["card"], mj.settings(svc.actions.cfg)
     assert c["action"] == "manager_new" and c["model"] == BASE["roles"]["manager"]["model"] and c["job_cap_usd"] == m["session_cap_usd"] == 0.20
-    assert c["turn_cap_usd"] == 0.03 and c["ttl_hours"] == 12 and c["max_turns"] == 40 and "two turn caps" in c["turn_note"]
+    assert c["turn_cap_usd"] == 0.03 and c["ttl_hours"] == 12 and c["max_turns"] == 200 and "three calls" in c["turn_note"] and "summar" in c["turn_note"]
     assert "no repository content" in c["data_sent"] and "cannot approve" in c["confirms"]
     assert out["exposure_usd"] == 0.20
 
@@ -176,7 +176,7 @@ def test_the_manager_key_slot_comes_first_then_the_writer_then_the_code_key(tmp_
 @pytest.mark.parametrize("what, make, status", [
     ("not via ui", dict(via=None), 409), ("closed", dict(state="ABANDONED"), 409), ("blocked", dict(state="BLOCKED"), 409),
     ("expired", dict(created=t.NOW - 13 * 3600), 409), ("another kind", dict(kind="issue"), 404),
-    ("budget spent", dict(spent_nano=199_000_000), 409), ("turn limit", dict(conversation=[{"from": "human", "text": "x", "at": "x"}] * 40), 409),
+    ("budget spent", dict(spent_nano=199_000_000), 409), ("turn limit", dict(conversation=[{"from": "human", "text": "x", "at": "x"}] * 200), 409),
 ])
 def test_a_turn_that_may_not_start_is_refused_and_nothing_runs(svc, what, make, status):
     make_session(svc.jobs, **make)
@@ -238,7 +238,7 @@ def test_the_read_route_shows_the_conversation_as_data(svc):
     h, m = out["conversation"]
     assert h == {"from": "human", "n": 0, "at": h["at"], "text": "bikin sesuatu"} and m["n"] == 1
     assert m["source"] == "manager" and "\x07" not in m["say"] and m["propose"]["route"] == "research"
-    assert out["turn_cap_usd"] == 0.03 and out["max_turns"] == 40                      # P3: what the page needs to offer a new session
+    assert out["turn_cap_usd"] == 0.03 and out["max_turns"] == 200                      # P3: what the page needs to offer a new session
     assert svc.request("GET", "/api/manager/turn")[0] == 404 and svc.request("GET", "/api/manager/j20260101_000000_ffff")[0] == 404
 
 
@@ -257,6 +257,7 @@ def test_the_snapshot_keeps_a_session_and_never_its_words(svc):
     raw = {"job": JOB, "kind": "manager", "state": "OPEN", "created_at": t.iso(t.NOW), "max_usd": 0.2,
            "stages": {"m1": {"kind": "manager", "run_id": f"{JOB}-m1", "started_at": t.iso(t.NOW)}},
            "log": [{"at": t.iso(t.NOW), "what": "created", "via": "ui"}, {"at": t.iso(t.NOW), "what": "turn_started"}, {"at": t.iso(t.NOW), "what": "turn_done"},
+                   {"at": t.iso(t.NOW), "what": "compaction_started", "covers": "SECRET"}, {"at": t.iso(t.NOW), "what": "compacted", "chars": 1}, {"at": t.iso(t.NOW), "what": "compaction_failed", "reason": "SECRET"},
                    {"at": t.iso(t.NOW), "what": "limits_shown", "screen": "SECRET"}],
            "conversation": [{"from": "human", "text": "PRIVATE WORDS"}], "inputs": {"model": "openrouter:deepseek/deepseek-v4.1-flash-1017"}}
     out = sd.project_job(raw, JOB)
@@ -271,3 +272,17 @@ def test_a_session_made_by_the_cli_has_a_known_cost_and_takes_its_first_turn(svc
     mj.new(cfg=svc.actions.cfg, deps=rj2.Deps(clock=lambda: t.iso(svc.clock.t)), jobs_dir=svc.jobs, job_id=jid, via="ui")
     assert svc.actions.read_manager(jid)["spent_usd"] == 0.0
     assert turn(svc, session=jid)[0] == 200
+
+
+def test_the_read_route_shows_a_summary_as_a_summary_never_as_a_foreman_entry(svc):             # F47-A: SPEC_FOREMAN_MEMORY
+    conv = [{"from": "human", "at": t.iso(t.NOW), "text": "a"}, {"from": "manager", "at": t.iso(t.NOW), "say": "b", "usd": 0.0, "calls": 1, "propose": None},
+            {"from": "summary", "at": t.iso(t.NOW), "text": "Fakta\x07 penting <b>x</b>", "covers": [0, 2], "usd": 0.0003, "calls": 1, "sha256": "0" * 64,
+             "propose": {"route": "issue", "repo": "ledger-cli", "text": "tidak boleh tampil", "why": "x"}, "say": "tidak boleh tampil"},
+            {"from": "human", "at": t.iso(t.NOW), "text": "c"}]
+    make_session(svc.jobs, conversation=conv)
+    status, out = svc.request("GET", f"/api/manager/{JOB}")
+    assert status == 200
+    s = out["conversation"][2]
+    assert s == {"from": "summary", "n": 2, "at": s["at"], "text": s["text"], "covers": [0, 2]} and "\x07" not in s["text"] and "<b>x</b>" in s["text"]       # text only: no say, no proposal, no source
+    assert [e["from"] for e in out["conversation"]] == ["human", "manager", "summary", "human"]
+    assert out["conversation"][3]["n"] == 3
