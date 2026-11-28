@@ -104,12 +104,12 @@ def test_a_job_that_is_not_a_session_is_no_source(svc):
 
 
 @pytest.mark.parametrize("body", [
-    {"action": "issue_new", "repo": REPO, "message": TEXT}, {"action": "issue_reply", "job": m.JOB, "message": TEXT}, {"action": "issue_start", "job": m.JOB},
+    {"action": "issue_reply", "job": m.JOB, "message": TEXT}, {"action": "issue_start", "job": m.JOB},
     {"action": "issue_abandon", "job": m.JOB}, {"action": "queue_go", "queue": "q"}, {"action": "prd_approve", "job": m.JOB}, {"action": "manager_new"},
     {"action": "job_reject", "job": m.JOB}])
 def test_no_other_action_takes_a_source(svc, body):
     s, out = svc.prepare(**body, source_job=m.JOB, source_turn="2")
-    assert s == 400 and "token" not in json.dumps(out) and "only a research or PRD job" in json.dumps(out)
+    assert s == 400 and "token" not in json.dumps(out) and "only a research, PRD or issue form" in json.dumps(out)
 
 
 def test_the_proposal_text_is_not_trusted_the_form_goes_through_the_actions_own_checks(svc):
@@ -218,14 +218,96 @@ def test_the_run_params_hold_the_form_and_nothing_of_the_source(svc):
     assert rp == {"repo": REPO, "message": TEXT}
 
 
-def test_an_issue_proposal_is_no_source_for_any_form(tmp_path):                                  # F31: ROUTE_ACTION is not extended
-    assert set(ca.ROUTE_ACTION) == {"research", "prd"}
+ISSUE_TURN = 5            # the turn of the issue proposal in the session made by `isvc`
+
+
+@pytest.fixture
+def isvc(tmp_path):
     s = t.Service(tmp_path, cfg=m.config())
-    try:
-        m.make_session(s.jobs, conversation=[HUMAN, turn_of(route="issue", repo=REPO, text=TEXT)])
-        for action, extra in (("prd_new", {"repo": REPO}), ("research_new", {"message": Q}), ("issue_new", {"repo": REPO})):
-            body = {"action": action, "message": TEXT, "source_job": m.JOB, "source_turn": "1", **extra}
-            status, out = s.prepare(**body)
-            assert status in (400, 404) and "token" not in json.dumps(out)
-    finally:
-        s.stop()
+    m.make_session(s.jobs, conversation=[HUMAN, "junk", turn_of(), {"from": "manager", "say": "hanya ngobrol", "propose": None, "usd": 0, "calls": 1},
+                                         {"from": "manager", "say": "x", "propose": {"route": "ask", "repo": None, "text": "t", "why": "w"}},
+                                         turn_of(route="issue", repo=REPO, text=TEXT)])
+    yield s
+    s.stop()
+
+
+def iprep(svc, **kw):
+    body = {"action": "issue_new", "repo": REPO, "message": TEXT, "source_job": m.JOB, "source_turn": str(ISSUE_TURN), **kw}
+    return svc.prepare(**body)
+
+
+def test_an_issue_form_filled_from_a_proposal_gets_the_card_of_a_typed_one_plus_the_source(isvc):             # F44: SPEC_FOREMAN_ISSUE_PREPARE
+    s, out = iprep(isvc)
+    s2, typed = isvc.prepare(action="issue_new", repo=REPO, message=TEXT)
+    assert s == s2 == 200
+    c, c2 = out["card"], typed["card"]
+    assert c["source"] == {"from": "manager", "job": m.JOB, "turn": ISSUE_TURN, "edited": False} and c["source_note"] == ca.SOURCE_NOTE
+    assert {k: v for k, v in c.items() if k not in ("source", "source_note")} == c2
+    assert out["exposure_usd"] == typed["exposure_usd"] and WHY not in json.dumps(out)
+
+
+def test_the_issue_source_is_edited_when_the_text_or_the_repo_changed_or_the_proposal_was_another_route(isvc):
+    assert iprep(isvc, message=TEXT + " Dan grafik.")[1]["card"]["source"]["edited"] is True
+    assert iprep(isvc, repo=OTHER)[1]["card"]["source"]["edited"] is True
+    s, out = iprep(isvc, source_turn="2")                                # a prd proposal filling issue_new
+    assert s == 200 and out["card"]["source"]["edited"] is True
+    s, out = isvc.prepare(action="prd_new", repo=REPO, message=TEXT, source_job=m.JOB, source_turn=str(ISSUE_TURN))      # an issue proposal filling prd_new
+    assert s == 200 and out["card"]["source"]["edited"] is True
+    s, out = isvc.prepare(action="research_new", message=Q, source_job=m.JOB, source_turn=str(ISSUE_TURN))
+    assert s == 200 and out["card"]["source"]["edited"] is True
+
+
+@pytest.mark.parametrize("kw,codes", [({"source_turn": "3"}, (404,)), ({"source_turn": "4"}, (404,)), ({"source_turn": "1"}, (404,)), ({"source_turn": "99"}, (404,)),
+                                      ({"source_turn": "x"}, (400,)), ({"source_turn": "05"}, (400,)), ({"source_job": "j20261115_220200_abcf"}, (404,)), ({"source_job": "nope"}, (400, 404))])
+def test_a_bad_issue_source_is_refused_without_a_token(isvc, kw, codes):
+    s, out = iprep(isvc, **kw)
+    assert s in codes and "token" not in json.dumps(out)
+
+
+def test_a_source_does_not_excuse_the_forms_own_checks(isvc):
+    for kw in ({"message": "x" * 4001}, {"message": ""}, {"repo": "elsewhere"}, {"message": "a\u202eb"}):
+        s, out = iprep(isvc, **kw)
+        assert s == 400 and "token" not in json.dumps(out)
+
+
+def test_the_confirm_runs_the_typed_params_and_the_audit_names_the_issue_source(isvc):
+    s, out = iprep(isvc, message=TEXT + " Dan grafik.")
+    assert s == 200
+    s, done = isvc.confirm(out["token"])
+    assert s == 200 and done["started"] is True
+    lines = isvc.audit()
+    prepare_line = next(x for x in lines if x.get("ok") == "prepare")
+    confirm_line = [x for x in lines if x.get("attempt") == "confirm"][0]
+    assert prepare_line["source_job"] == m.JOB and prepare_line["source_turn"] == ISSUE_TURN
+    assert confirm_line["action"] == "issue_new" and confirm_line["source"] == "manager" and confirm_line["source_job"] == m.JOB \
+        and confirm_line["source_turn"] == ISSUE_TURN and confirm_line["edited"] is True
+    assert WHY not in json.dumps(lines)
+    call = json.dumps(isvc.spawner.calls[-1], default=str)
+    assert "source" not in call and WHY not in call and "--message-file" in call
+
+
+def test_a_typed_issue_form_has_no_source_in_audit_or_card(isvc):
+    s, out = isvc.prepare(action="issue_new", repo=REPO, message=TEXT)
+    assert s == 200 and "source" not in out["card"] and "source_note" not in out["card"]
+    s, done = isvc.confirm(out["token"])
+    assert s == 200
+    assert all("source_job" not in x for x in isvc.audit())
+
+
+def test_a_job_that_is_not_a_session_is_no_source_of_an_issue_form(isvc):
+    j = "j20261115_220200_abcf"
+    m.make_session(isvc.jobs, job_id=j, kind="prd", conversation=[HUMAN, turn_of(route="issue", repo=REPO, text=TEXT)])
+    s, out = iprep(isvc, source_job=j, source_turn="1")
+    assert s == 404 and "token" not in json.dumps(out)
+
+
+def test_the_run_params_of_an_issue_form_from_a_proposal_are_the_forms_own_and_nothing_else(isvc):
+    card, rp = isvc.actions.build("issue_new", {"repo": REPO, "message": TEXT, "source_job": m.JOB, "source_turn": str(ISSUE_TURN)})
+    assert rp == {"repo": REPO, "message": TEXT} and card["source"]["job"] == m.JOB
+    card2, rp2 = isvc.actions.build("issue_new", {"repo": REPO, "message": TEXT})
+    assert rp2 == rp and "source" not in card2
+
+
+def test_a_source_that_is_no_proposal_says_so_in_the_issue_wording(isvc):
+    s, out = iprep(isvc, source_turn="3")                      # a turn of talk only
+    assert s == 404 and "the foreman proposed no research, PRD or issue job in that turn" in json.dumps(out)

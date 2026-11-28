@@ -178,3 +178,9 @@ def test_a_line_that_names_the_session_in_another_field_is_no_step_and_a_broken_
     with open(svc.actions.audit_path, "a") as f:
         f.write('{"ok": "confirm", "source_job": "' + m.JOB + '" broken\n')
     assert steps(svc) == []
+
+
+def test_an_issue_job_started_from_a_proposal_of_the_session_is_no_step_and_no_error(svc):             # F44: SPEC_FOREMAN_ISSUE_PREPARE rev 1.1
+    job(svc, R1, "issue", "AWAITING_HUMAN")
+    link(svc, R1, action="issue_new")
+    assert steps(svc) == []

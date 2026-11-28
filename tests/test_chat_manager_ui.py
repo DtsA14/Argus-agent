@@ -37,15 +37,16 @@ def test_the_turn_is_posted_with_the_session_and_the_message_and_nothing_else():
 def test_nothing_of_a_proposal_goes_to_confirm_and_the_proposal_text_is_only_ever_a_text_node():
     box = JS.split("function proposalBox")[1].split("function renderManager")[0]
     assert "/api/confirm" not in box and "token" not in box and "innerHTML" not in JS
-    assert box.count("prepare(body)") == 1 and 'el("button", "go", "Prepare")' in box
-    assert re.findall(r'\{ action: "(\w+)"', box) == ["prd_new", "research_new"]
+    assert box.count("prepare(body)") == 1 and box.count('prepare({ action: "issue_new"') == 1 and box.count("prepare(") == 2
+    assert re.findall(r'\{ action: "(\w+)"', box) == ["issue_new", "prd_new", "research_new"]
     assert "body.source_job = mgr.job" in box and "body.source_turn = String(e.n)" in box
 
 
 def test_the_source_is_added_to_a_form_only_from_a_proposal_and_every_move_clears_it():
     assert JS.count("fromProposal = null;") >= 2 and "fromProposal = { job: job, turn: e.n }" in JS
     prep = JS.split("function prepare(body)")[1].split("var ctx")[0]
-    assert 'body.action === "research_new" || body.action === "prd_new"' in prep and "body.source_job === undefined" in prep
+    assert 'body.action === "research_new" || body.action === "prd_new" || body.action === "issue_new"' in prep and "body.source_job === undefined" in prep
+    assert "issue_reply" not in prep and "issue_*" not in prep and 'indexOf("issue' not in prep
     setmode = JS.split("function setMode(m)")[1].split("issueForm.hidden")[0]
     assert "fromProposal = null;" in setmode and "mgrStop();" in setmode
 
@@ -149,19 +150,25 @@ def test_a_next_steps_value_that_is_not_a_list_draws_no_box():
 
 
 @needs_node
-def test_an_issue_proposal_is_a_fill_in_with_one_button_no_prepare_and_no_source(out):                  # F31: SPEC_FOREMAN_ISSUE_ROUTE
-    assert out["issueButtons"] == ["Edit first"] and out["issuePrepared"] == 0
+def test_an_issue_proposal_has_prepare_with_its_source_and_edit_first_that_keeps_it(out):                 # F44: SPEC_FOREMAN_ISSUE_PREPARE
+    assert out["issueButtons"] == ["Prepare", "Edit first"] and out["issuePrepared"] == 0
     assert "The foreman proposes: an issue" in out["issueHtml"] and "Repo: ledger-cli" in out["issueHtml"] and "Nothing is started." in out["issueHtml"]
-    modes, text, repo, src, notes = json.loads(out["issueEdit"])
-    assert modes == ["issue"] and text == "Tambah opsi --month <b>x</b>" and repo == "ledger-cli" and src is None and notes == []        # no fromProposal: the form's submit carries no source
-    modes, text, repo, notes = json.loads(out["issueUnlisted"])
-    assert modes == ["issue"] and repo == "" and notes == ["The proposed repository bulking-app is not in the list: choose one."]       # a repository the form does not list is not guessed
-    assert "Repo: none named: use Edit first" in out["issueNoRepoHtml"]
+    assert [json.loads(x) for x in out["issueBodies"]] == [{"action": "issue_new", "repo": "ledger-cli", "message": "Tambah opsi --month <b>x</b>",
+                                                             "source_job": "j20261126_023857_708b", "source_turn": "1"}]
+    modes, text, repo, src, notes, prepared = json.loads(out["issueEdit"])
+    assert modes == ["issue"] and text == "Tambah opsi --month <b>x</b>" and repo == "ledger-cli" and src == {"job": "j20261126_023857_708b", "turn": 1} and notes == [] and prepared == 0
+    modes, text, repo, notes, src = json.loads(out["issueUnlisted"])
+    assert modes == ["issue"] and repo == "" and notes == ["The proposed repository bulking-app is not in the list: choose one."] and src == {"job": "j20261126_023857_708b", "turn": 1}
+    assert out["issueNoRepo"] == ["Prepare[off]", "Edit first"] and "Repo: none named: use Edit first" in out["issueNoRepoHtml"]
 
 
-def test_the_issue_proposal_code_never_prepares_never_sets_the_source_and_is_text_only():
+def test_the_issue_proposal_code_is_text_only_saves_the_session_before_the_mode_move_and_never_sends_a_reply_with_a_source():
     box = JS.split("function proposalBox")[1].split("function nextStepsBox")[0]
     issue = box.split('if (p.route === "issue") {')[1].split("return b;")[0]
-    assert "prepare(" not in issue and "fromProposal" not in issue and "source_" not in issue and "innerHTML" not in issue
-    assert issue.count('el("button"') == 1 and '"Edit first"' in issue and 'setMode("issue")' in issue and "repoSel.options" in issue
-    assert re.findall(r'\{ action: "(\w+)"', box) == ["prd_new", "research_new"]
+    assert "innerHTML" not in issue and issue.count('el("button"') == 2 and 'igo.disabled = !p.repo' in issue
+    assert issue.index("var job = mgr.job;") < issue.index('setMode("issue");') < issue.index("fromProposal = { job: job, turn: e.n };")
+    assert 'repoSel.options' in issue and "repoSel.value" in issue
+    assert 'prepare({ action: "issue_new", repo: p.repo, message: p.text, source_job: mgr.job, source_turn: String(e.n) })' in issue
+    show = JS.split("function showIssue")[1].split("get(")[0]
+    assert "if (!keep) { fromProposal = null; }" in show
+    assert "openIssue = null; fromProposal = null; formState(); renderIssues();" in JS
