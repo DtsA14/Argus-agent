@@ -102,12 +102,20 @@ def test_the_compaction_input_is_the_older_lines_only_framed_as_data(tmp_path):
     assert "capability_sheet" not in c[0].content
 
 
-def test_no_compaction_when_only_keep_recent_turns_follow(tmp_path):
-    j = session(tmp_path)
-    fill(tmp_path, j, turns(M["keep_recent_turns"], 4000 // 2 + 1500))                  # long turns but not more than keep_recent_turns of them
+def test_no_compaction_when_only_keep_recent_turns_follow(tmp_path, monkeypatch):
+    monkeypatch.setattr(mj, "_bounds_problem", lambda *a, **k: None)          # the config bound makes this unreachable with the real numbers; a small context tests the rule itself
+    cfg = load_config()
+    cfg["chat"]["manager"].update(context_chars=1000, keep_recent_turns=6, summary_chars=200)
+    j = session(tmp_path, cfg)
+    fill(tmp_path, j, turns(M["keep_recent_turns"], 300))                    # 3,600 characters (over 1,000) but only keep_recent_turns human turns
     seen = []
-    run(tmp_path, j, "lanjut", answerer(log=seen))
-    assert len(seen) == 1
+    ms = model(answerer(log=seen))
+    mj.turn(j.id, "lanjut", cfg=cfg, deps=deps(ms), jobs_dir=tmp_path)
+    assert len(seen) == 1 and not is_compaction(seen[0])
+    fill(tmp_path, j, turns(M["keep_recent_turns"] + 1, 300))                # one more human turn: now it compacts
+    seen.clear()
+    mj.turn(j.id, "lanjut", cfg=cfg, deps=deps(model(answerer(log=seen))), jobs_dir=tmp_path)
+    assert len(seen) == 2 and is_compaction(seen[0])
 
 
 def test_a_compaction_is_not_repeated_on_the_next_turn(tmp_path):
