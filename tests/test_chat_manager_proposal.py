@@ -299,3 +299,15 @@ def test_a_job_that_is_not_a_session_is_no_source_of_an_issue_form(isvc):
     m.make_session(isvc.jobs, job_id=j, kind="prd", conversation=[HUMAN, turn_of(route="issue", repo=REPO, text=TEXT)])
     s, out = iprep(isvc, source_job=j, source_turn="1")
     assert s == 404 and "token" not in json.dumps(out)
+
+
+def test_the_run_params_of_an_issue_form_from_a_proposal_are_the_forms_own_and_nothing_else(isvc):
+    card, rp = isvc.actions.build("issue_new", {"repo": REPO, "message": TEXT, "source_job": m.JOB, "source_turn": str(ISSUE_TURN)})
+    assert rp == {"repo": REPO, "message": TEXT} and card["source"]["job"] == m.JOB
+    card2, rp2 = isvc.actions.build("issue_new", {"repo": REPO, "message": TEXT})
+    assert rp2 == rp and "source" not in card2
+
+
+def test_a_source_that_is_no_proposal_says_so_in_the_issue_wording(isvc):
+    s, out = iprep(isvc, source_turn="3")                      # a turn of talk only
+    assert s == 404 and "the foreman proposed no research, PRD or issue job in that turn" in json.dumps(out)
