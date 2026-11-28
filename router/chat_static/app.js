@@ -496,8 +496,9 @@
     document.getElementById("type-label").textContent = f ? "Foreman" : r ? "Research" : (p ? "PRD" : (openIssue !== null ? "Reply to this issue" : "New issue"));
     message.placeholder = f ? "Message the foreman" : r ? "Write the research question (20 to 2000 characters)" : (p ? "Write the PRD request: what changes and why" : "Write a message");
   }
-  function showIssue(id, keep) {                        // keep: the card on screen is this issue's own result or status
+  function showIssue(id, keep, tries) {                 // keep: the card on screen is this issue's own result or status; tries: reads left
     if (!keep && id !== openIssue) { dropPending(); }
+    var left = tries === undefined ? (keep ? 3 : 0) : tries;     // a job just started may not be readable yet: read again a few times
     get("/api/issues/" + encodeURIComponent(id)).then(function (d) {
       if (mode === "prd") { return; }                   // the user moved to the PRD form while this was read: draw nothing
       openIssue = id;
@@ -532,7 +533,10 @@
       back.type = "button";
       back.addEventListener("click", function () { dropPending(); openIssue = null; formState(); renderIssues(); });
       stream.appendChild(back);
-    }).catch(function () { clear(stream); stream.appendChild(el("p", "muted", "Cannot read this issue.")); });
+    }).catch(function () {
+      if (left > 0) { setTimeout(function () { if (openIssue === id || mode === "issue") { showIssue(id, keep, left - 1); } }, 1500); return; }
+      clear(stream); stream.appendChild(el("p", "muted", "Cannot read this issue."));
+    });
   }
   function loadIssues() {
     get("/api/issues").then(function (d) {
