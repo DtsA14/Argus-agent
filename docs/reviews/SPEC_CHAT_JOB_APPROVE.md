@@ -51,3 +51,18 @@ Prepare refusals one by one (kind, state, queue item, unopenable queues dir, sta
 card has no queue keys; execute argv exactly; exposure inside and outside 24 h; audit line fields; the page: button only for a standalone AWAITING_APPROVAL code row; click sends job and sha only.
 Mutants on each refusal, on `standalone is True`, on the sha equality, on the exposure window, on the argv, on the page conditions.
 Strict lane: Opus review, mutants once, precheck, one `verify_at`. Restart of `argus-chat` after merge. Live proof: a New issue job approved from the phone.
+
+## Rev 1 (after the Opus review, NO-GO as written, GO with these; this section wins over the text above)
+1. **Money window.** Not "job id younger than 24 h". The job is *inside the booking* only when an issue job exists with `handoff.job == this job`,
+   `handoff.via == "ui"` and `handoff.at >= now - DAY` (the test `_exposure_scan` uses). Then `exposure_of = 0`. Otherwise (born in the terminal, or older) it is the card's
+   `agent_cap_usd`. The card carries `outside_window` (bool), so a boundary crossed between prepare and confirm changes the digest and the confirm is refused.
+2. **The net.** `Steps.audited()` also reads `job_approve` `attempt=confirm` lines (same F25 rule: an invalid `usd` is a 503 refusal). The confirm audit record of
+   `job_approve` carries `usd = exposure_of(card)` and `sha` (12).
+3. **Execute is its own branch** in `Actions.execute` (not `Steps.execute`: it needs `rp["queue"]`). argv = `[python, ARGUS, --jobs-dir D, --queues-dir Q, approve, JOB, --sha FULLSHA, --via ui, --key-file K, --yes]`
+   passed through `a.with_config(...)` (so the caps and profiles are the card's), spawn key = the job id, return `{job, started: True}`.
+4. **Build routing.** `job_approve` has its own branch after `cfg = self.cfg` (it needs the config); it is NOT in the `("job_reject","job_abandon")` early return; params other than `{job, sha}` are refused (400, form). It is NOT added to `control.ACTIONS` or `allowed()` (those feed the 8711 `cli()` path with a reason); `"approve"` is added only in `decision_row`.
+5. **`chain(...)` is called with `queues_dir=a.cards.queues_dir`** (its default may be another directory); a wrong directory would give a false `standalone`.
+6. **Two draft reads agree:** require `seen[:12] == sha12 read by _sha` as its own check (refusal gate `draft`).
+7. **Page:** the approve button has its own `prepare({action: "job_approve", job: r.id, sha: r.sha12})` (not `decide()`, which always sends `reason`); in `renderCard` the `job_approve` Started text is tested before the `card.draft_sha` branch; the issue text label says it is the issue writer's text; `item_text` is the job's frozen issue read through descriptors, scrubbed and cut.
+8. **Refactor:** `build_approve`'s draft facts move into one helper (keeps `except self.Refusal: raise` before the broad except, the order of refusals, and returns `st, path, draft, seen, profile, want, cap, need, advisories, valid, writable`). A snapshot test of `build_approve`'s card is written BEFORE the move.
+9. **Forgotten places:** `tests/test_chat_decide.py` "an approve is not an action at all" keeps `approve`, `job_redraft`, `job_start` as 404 (the action is `job_approve`); `tests/test_chat_ui.py` pins for `Approve`/`approve` in the JS, waiting labels, decide pins; the ACTIONS comment; `verification/chat_c4_mutants.py` "an approve action exists" mutant retired. Optional, not now: the waiting list does not show a standalone approve (Decisions does).
