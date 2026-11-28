@@ -684,3 +684,29 @@ def test_only_the_two_not_a_queue_item_results_carry_standalone(svc):
     _queue_without_prd(svc)
     r = er.chain(job, svc.jobs, svc.queues)
     assert r["applicable"] is False and "standalone" not in r                                   # in a queue not made from a PRD folder
+
+
+def test_a_queue_item_whose_issue_has_no_examples_block_is_not_standalone(svc):
+    make(svc, examples=())
+    text = json.loads((svc.jobs / CJOB / "job.json").read_text())["inputs"]["issue"]
+    q = svc.queues / QID
+    q.mkdir(exist_ok=True)
+    (q / "queue.json").write_text(json.dumps({
+        "id": QID, "repo": "/secret/path", "name": "athena", "base_commit": "c" * 40, "jobs_dir": str(svc.jobs), "max_usd": 2.0, "job_cap_usd": 0.5,
+        "environment": "athena_py312", "items": [{"n": 1, "issue_sha256": hashlib.sha256(text.encode()).hexdigest(), "job": CJOB}],
+        "prd": {"sha": "f" * 64, "dir": "/x"}}))
+    job = SimpleNamespace(id=CJOB, data=json.loads((svc.jobs / CJOB / "job.json").read_text()))
+    r = er.chain(job, svc.jobs, svc.queues)
+    assert r["applicable"] is False and "no examples block" in r["why"] and "standalone" not in r
+    assert checks(get(svc)[1])["h"]["ok"] is False
+
+
+def test_an_error_other_than_missing_on_the_queues_directory_is_not_standalone(svc, monkeypatch):
+    make(svc, examples=())
+    job = SimpleNamespace(id=CJOB, data=json.loads((svc.jobs / CJOB / "job.json").read_text()))
+    monkeypatch.setattr(er.Cards, "_queues_fd", lambda self: None)
+
+    def deny(p, *a, **k):
+        raise PermissionError(13, "denied")
+    monkeypatch.setattr(er.os, "lstat", deny)
+    assert "standalone" not in er.chain(job, svc.jobs, svc.queues)
