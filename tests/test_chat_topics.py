@@ -143,6 +143,8 @@ def test_the_card_binds_the_resolved_session_a_newer_one_between_prepare_and_con
     p.write_text(json.dumps(d))
     s2, done = svc.confirm(out["token"])
     assert s2 in (404, 409, 403) and svc.spawner.calls == []
+    s3, again = prep(svc, topic=S1)                                                                  # read fresh: the card now names the newer session, not a cached chain's end
+    assert s3 == 200 and again["card"]["continues"] == S2
 
 
 def test_a_planted_link_does_not_join_a_topic_and_only_a_reciprocal_link_counts(svc):
