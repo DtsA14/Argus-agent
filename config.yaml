@@ -582,7 +582,11 @@ gateway_models:
   # it, as for V4.1 Flash). Each pinned to one maker's own endpoint; max_price keeps OpenAI's fast tier out.
   "openrouter:anthropic/claude-haiku-5.5":             {upstream: [anthropic]}
   "openrouter:openai/gpt-6-luna":                      {upstream: [openai]}
-  "openrouter:deepseek/deepseek-v4.1-flash-1017":      {upstream: [deepinfra/fp8, morph/fp8]}
+  # Atha 2026-11-28: Morph fp8 FIRST for V4.1 Flash 1017 (coder, drafter, the foreman, the second patch reader), DeepInfra behind it as the backup.
+  # Measured (pilots/provider_speed_v0/RESULT.md): the same ledger-cli issue took 15m48s on DeepInfra and 6m18s on Morph, $0.194 vs $0.047, both
+  # passing each other's tests; 6 routing calls 18.5 s vs 2.5 s each at the same price. One issue, one sample. The research evaluator and checker
+  # (V4.1 Flash above, no 1017) keep DeepInfra first: Morph read mostly lenient as a checker (e1).
+  "openrouter:deepseek/deepseek-v4.1-flash-1017":      {upstream: [morph/fp8, deepinfra/fp8]}
 gateway:
   free_roles: [free_planner, free_worker, free_checker]   # Atha 2026-11-04 (research_free, split per stage)
   cost_drift_warn: 0.10         # price_drift when the gateway's cost and ours differ by more than this share

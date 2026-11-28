@@ -389,7 +389,7 @@ NEW_MODELS = {"openrouter:anthropic/claude-haiku-5.5": (["anthropic"], {"input":
                                                                         "long_context_above": 100000}),
               "openrouter:openai/gpt-6-luna": (["openai"], {"input": 0.10, "output": 0.50, "cache_read": 0.01,
                                                             "long_context_above": 272000}),
-              "openrouter:deepseek/deepseek-v4.1-flash-1017": (["deepinfra/fp8", "morph/fp8"],
+              "openrouter:deepseek/deepseek-v4.1-flash-1017": (["morph/fp8", "deepinfra/fp8"],
                                                                {"input": 0.20, "output": 0.60, "cache_read": 0.006})}
 
 
