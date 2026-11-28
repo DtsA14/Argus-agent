@@ -321,3 +321,18 @@ def test_a_row_that_is_busy_or_whose_draft_cannot_be_read_has_no_approve_choice(
     standalone(svc)
     svc.spawner.busy_ids.add(J1)
     assert "approve" not in rows(svc)[J1]["allowed"]
+
+
+def test_a_draft_read_by_the_helper_that_is_not_the_one_the_page_showed_is_refused(svc, monkeypatch):
+    standalone(svc)
+    monkeypatch.setattr(svc.actions, "_sha", lambda job_id, data=None: "0" * 12)             # the descriptor reader and the helper disagree about the draft
+    status, out = svc.prepare(action="job_approve", job=J1, sha="0" * 12)
+    assert status == 409 and "changed since you read it" in out["refused"]
+
+
+def test_a_job_that_is_not_code_never_has_the_approve_choice_in_the_list(svc):
+    standalone(svc)
+    other = "j20261117_110300_aaa4"
+    tc.write_job(svc.jobs, other, kind="research", state="AWAITING_APPROVAL", max_usd=1.0, inputs={"question": "q"}, stages={})
+    r = rows(svc)
+    assert other not in r or "approve" not in r[other]["allowed"]

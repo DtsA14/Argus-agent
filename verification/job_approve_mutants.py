@@ -11,7 +11,7 @@ B, A, C, J = "router/chat_t4b.py", "router/chat_actions.py", "router/chat.py", "
 T = ["tests/test_chat_job_approve.py", "tests/test_chat_t4b.py", "tests/test_chat_decide.py"]
 TJ = ["tests/test_chat_ui_node.py", "tests/test_chat_ui.py", "-k", "approve"]
 M = [
-    ("standalone: truthy instead of is True", B, [('        if res.get("standalone") is not True:\n            raise self._no(409, "queue"', '        if not res.get("standalone"):\n            raise self._no(409, "queue"')], T),
+    # equivalent, not listed: "truthy instead of is True" (the key is only ever True or absent) and "the helper's link check removed" (`_read_data` already refuses a linked job directory first; the check stays for draft_approve).
     ("standalone: not required", B, [('        if res.get("standalone") is not True:\n            raise self._no(409, "queue"', '        if False:\n            raise self._no(409, "queue"')], T),
     ("standalone: chain without the chat queues dir", B, [('er.chain(SimpleNamespace(id=job_id, data=data), a.jobs_dir, a.cards.queues_dir)\n        if res.get("standalone") is not True', 'er.chain(SimpleNamespace(id=job_id, data=data), a.jobs_dir)\n        if res.get("standalone") is not True')], T),
     ("kind: not checked", B, [('        if data.get("kind") != "code":\n            raise self._no(409, "kind"', '        if False:\n            raise self._no(409, "kind"')], T),
@@ -24,7 +24,6 @@ M = [
     ("helper: state check removed", B, [('        if job.data.get("state") != rj.AWAITING_APPROVAL:                # stricter than the CLI, which also takes DRAFT_FAILED\n            raise self._no(409, "state", f"job {job_id} is {job.data.get(\'state\')}, not AWAITING_APPROVAL")', '        pass')], T),
     ("helper: the already-approved check removed", B, [('            if (job.data.get("approval") or {}).get("draft_sha256") == seen:\n                raise self._no(409, "state", "this draft was already approved and its agent has run")', '            pass')], T),
     ("helper: the money check removed", B, [('            if cap < need:\n                raise self._no(409, "money", f"${cap:.4f} of the job cap is left for the agent, one attempt needs ${need:.2f}: approving would block the job")\n            advisories', '            advisories')], T),
-    ("helper: the link check removed", B, [('            raise self._no(409, "state", "the job directory is reached through a link")\n        try:\n            job = rj.open_job(job_id, a.jobs_dir)', '            pass\n        try:\n            job = rj.open_job(job_id, a.jobs_dir)')], T),
     ("window: the via check removed", B, [('h.get("job") == job_id and h.get("via") == "ui" and', 'h.get("job") == job_id and')], T),
     ("window: the job match removed", B, [('h.get("job") == job_id and h.get("via") == "ui" and', 'h.get("via") == "ui" and')], T),
     ("window: the 24 hours not checked", B, [('and self.a_parse(h["at"]) >= now - DAY:', ':')], T),
@@ -36,7 +35,7 @@ M = [
     ("net: the audit record has no usd", C, [('        if action == "job_approve":                                       # SPEC_CHAT_JOB_APPROVE rev 1: the audit net of the daily cap reads usd (non-zero only for a start the cap does not book)\n            rec.update(usd=a.exposure_of(card))\n', '')], T),
     ("exec: the config is not passed", B, [('a.spawner.spawn(rp["job"], a.with_config(base + tail), None, action="job_approve")', 'a.spawner.spawn(rp["job"], base + tail, None, action="job_approve")')], T),
     ("exec: spawned under the queue id", B, [('a.spawner.spawn(rp["job"], a.with_config(base + tail), None, action="job_approve")', 'a.spawner.spawn(str(a.cards.queues_dir), a.with_config(base + tail), None, action="job_approve")')], T),
-    ("exec: the short sha is passed", B, [('tail = ["approve", rp["job"], "--sha", rp["sha"], "--via", "ui"', 'tail = ["approve", rp["job"], "--sha", rp["sha"][:12], "--via", "ui"')], T),
+    ("exec: the short sha is passed", B, [('tail = ["approve", rp["job"], "--sha", rp["sha"], "--via", "ui", "--key-file", str(key), "--yes"]\n        a.spawner.spawn(rp["job"], a.with_config', 'tail = ["approve", rp["job"], "--sha", rp["sha"][:12], "--via", "ui", "--key-file", str(key), "--yes"]\n        a.spawner.spawn(rp["job"], a.with_config')], T),
     ("exec: no --yes", B, [('"--key-file", str(key), "--yes"]\n        a.spawner.spawn(rp["job"]', '"--key-file", str(key)]\n        a.spawner.spawn(rp["job"]')], T),
     ("route: job_approve goes through build_job", A, [('        if action in ("job_reject", "job_abandon"):\n            return self.build_job(action, params)', '        if action in ("job_reject", "job_abandon", "job_approve"):\n            return self.build_job(action, params)')], T),
     ("route: not dispatched", A, [('        if action == "job_approve":                           # SPEC_CHAT_JOB_APPROVE: a standalone code job\'s draft; not through build_job (that path skips the config on purpose)\n            return self.steps.build_job_approve(params)\n', '')], T),
