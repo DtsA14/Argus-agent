@@ -218,7 +218,7 @@ def test_a_job_that_does_not_exist_or_is_not_a_ui_id_is_404(svc):
 
 def test_an_approve_is_not_an_action_at_all(svc):
     mk(svc)
-    for action in ("job_approve", "approve", "job_redraft", "job_start"):
+    for action in ("approve", "job_redraft", "job_start"):                    # job_approve is a real action since SPEC_CHAT_JOB_APPROVE (tests/test_chat_job_approve.py)
         s, body = svc.prepare(action=action, job=JOB, sha=sha(svc))
         assert s == 404 and body["refused"] == "no such action"
 
@@ -332,7 +332,7 @@ def test_the_decisions_list_has_the_jobs_that_wait_for_a_decision_of_any_kind_ne
     d = svc.request("GET", "/api/decisions")[1]
     assert [r["id"] for r in d["decisions"]] == ["j20261109_130000_bbbb", "j20261109_120000_aaaa"] and d["capped"] is False
     row = d["decisions"][1]
-    assert row["sha12"] == tc.sha12(svc.jobs, "j20261109_120000_aaaa") and row["allowed"] == ["reject", "abandon"]
+    assert row["sha12"] == tc.sha12(svc.jobs, "j20261109_120000_aaaa") and row["allowed"] == ["reject", "abandon", "approve"]
     assert d["decisions"][0]["sha12"] is None and d["decisions"][0]["allowed"] == ["reject", "abandon"]
 
 

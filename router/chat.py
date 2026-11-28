@@ -457,6 +457,8 @@ class Handler(BaseHTTPRequestHandler):
             rec.update(queue=card["queue"], item=card["item"], usd=a.exposure_of(card))
             if card.get("draft_sha"):
                 rec["sha"] = card["draft_sha"][:12]
+        if action == "job_approve":                                       # SPEC_CHAT_JOB_APPROVE rev 1: the audit net of the daily cap reads usd (non-zero only for a start the cap does not book)
+            rec.update(usd=a.exposure_of(card))
         if action in ("prd_reply", "patch_read_run", "code_apply"):          # SPEC_CHAT_APPLY_REPLY 12 F3: the audit net of the daily cap reads usd of a reply or a reading; the reason only as a hash
             rec.update(usd=a.exposure_of(card))
             if card.get("reason"):
