@@ -218,3 +218,11 @@ def test_the_job_detail_asks_for_the_summary_and_the_only_button_is_the_install_
     assert body.count("prepare(") == 0 and body.count("post(") == 0 and body.count("addEventListener") == 1
     assert 'job.kind === "code" && job.state === "REVIEW_READY"' in body and "if (current !== job.id) { return; }" in body
     assert "innerHTML" not in js[js.index("function summaryRows("):js.index("  function open(id)")]
+
+
+def test_the_approve_button_of_a_standalone_job_prepares_job_approve_with_the_job_and_the_sha_only():
+    out = json.loads(node(HERE / "chat_ui_smoke_apply.js", APP))
+    assert "Approve draft" in out["decide_approve"] and "Reject" in out["decide_approve"] and "Abandon" in out["decide_approve"]
+    assert json.loads(out["approve_sent"]) == [{"action": "job_approve", "job": "j3", "sha": "61e2d8a4e71f"}]      # no reason, nothing else
+    assert out["approve_off_without_sha"] is True
+    assert "Approve draft" not in out["decide_no_approve"]

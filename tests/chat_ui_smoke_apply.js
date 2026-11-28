@@ -96,4 +96,10 @@ run("all(c6).filter(function (n) { return n.tag === 'button' && n.text === 'Open
 out.decide_ready_calls = run("JSON.stringify(calls)");
 out.decide_waiting = decide({ id: "j1", kind: "code", state: "AWAITING_APPROVAL", sha12: "61e2d8a4e71f", allowed: ["reject", "abandon"], busy: false, spent_usd: 0.03, cap_usd: 1 });
 out.decide_issue = decide({ id: "j2", kind: "issue", state: "REVIEW_READY", sha12: null, allowed: [], busy: false, spent_usd: 0, cap_usd: 1 });
+// 7. the Approve button of a standalone job waiting for its draft's approval: its own prepare with the job and the sha, no reason; nothing for the other rows
+out.decide_approve = decide({ id: "j3", kind: "code", state: "AWAITING_APPROVAL", sha12: "61e2d8a4e71f", allowed: ["reject", "abandon", "approve"], busy: false, spent_usd: 0.03, cap_usd: 1 });
+run("prepared = []; var apb = all(c6).filter(function (n) { return n.tag === 'button' && n.text === 'Approve draft'; })[0]; apb.listeners.click();");
+out.approve_sent = run("JSON.stringify(prepared)");
+out.approve_off_without_sha = run("(function () { decideCard({ id: 'j4', kind: 'code', state: 'AWAITING_APPROVAL', sha12: null, allowed: ['approve'], busy: false }); var c = decideCard({ id: 'j4', kind: 'code', state: 'AWAITING_APPROVAL', sha12: null, allowed: ['approve'], busy: false }); return all(c).filter(function (n) { return n.tag === 'button' && n.text === 'Approve draft'; })[0].disabled; })()");
+out.decide_no_approve = decide({ id: "j5", kind: "code", state: "AWAITING_APPROVAL", sha12: "61e2d8a4e71f", allowed: ["reject", "abandon"], busy: false, spent_usd: 0.03, cap_usd: 1 });
 console.log(JSON.stringify(out, null, 1));
