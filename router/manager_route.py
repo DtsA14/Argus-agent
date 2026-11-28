@@ -16,7 +16,7 @@ from codetask import issue_writer as iw
 
 ROOT = Path(__file__).resolve().parent.parent
 SHEET = ROOT / "docs" / "CHAT_CAPABILITIES.md"
-SHEET_SHA256 = "6fed41997cc768d8239e59b80aea3d71a678d421c397af5045fb612dc8a454ae"
+SHEET_SHA256 = "9a607cea998a3a7eb480d5512c8daff6c2dd0ada5f2398136318cf824a99e33d"
 ROUTES = ("research", "prd", "issue", "ask", "none")
 SAY_MAX = 2000
 RESEARCH_TEXT = (20, 2000)

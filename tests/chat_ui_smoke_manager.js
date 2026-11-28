@@ -69,20 +69,23 @@ out.edit = run("JSON.stringify([modes, message.value, repoSel.value, fromProposa
 run("mgr.data = " + JSON.stringify(D({ conversation: [{ from: "manager", n: 1, say: "x", propose: Object.assign({}, P, { repo: null }) }] })) + "; renderManager();");
 const f2 = []; (function walk(n) { if (n.tag === "button") f2.push(n); n.children.forEach(walk); })(run("stream"));
 out.norepo = f2.map((b) => b.text + (b.disabled ? "[off]" : ""));
-// F31 (SPEC_FOREMAN_ISSUE_ROUTE): an issue proposal is a fill-in: one button, no Prepare, no source
+// F44 (SPEC_FOREMAN_ISSUE_PREPARE): an issue proposal has Prepare (with its source) and Edit first (the form filled, the source kept)
 const ISSUE = { route: "issue", repo: "ledger-cli", text: "Tambah opsi --month <b>x</b>", why: "alasan <i>y</i>" };
 const issueView = (pr) => { run("mgr.data = " + JSON.stringify(D({ conversation: [{ from: "manager", n: 1, say: "x", propose: pr }] })) + "; renderManager();"); const bs = []; (function walk(n) { if (n.tag === "button") bs.push(n); n.children.forEach(walk); })(run("stream")); return bs; };
 const prepBefore = run("prepared.length");
 run("modes.length = 0; notes.length = 0; message.value = ''; repoSel.value = ''; fromProposal = null;");
 let ib = issueView(ISSUE);
-out.issueButtons = ib.map((b) => b.text); out.issueHtml = run("html(stream)");
-ib[0].listeners.click();
-out.issueEdit = run("JSON.stringify([modes, message.value, repoSel.value, fromProposal, notes])");
-run("modes.length = 0; notes.length = 0; message.value = ''; repoSel.value = '';");
-ib = issueView(Object.assign({}, ISSUE, { repo: "bulking-app" })); ib[0].listeners.click();
-out.issueUnlisted = run("JSON.stringify([modes, message.value, repoSel.value, notes])");
-run("modes.length = 0; notes.length = 0; message.value = ''; repoSel.value = '';");
-ib = issueView(Object.assign({}, ISSUE, { repo: null })); out.issueNoRepoHtml = run("html(stream)");
+out.issueButtons = ib.map((b) => b.text + (b.disabled ? "[off]" : "")); out.issueHtml = run("html(stream)");
+ib.filter((b) => b.text === "Prepare")[0].listeners.click();
+out.issueBodies = run("prepared.slice(" + prepBefore + ")");
+run("prepared.length = " + prepBefore + ";");
+ib.filter((b) => b.text === "Edit first")[0].listeners.click();
+out.issueEdit = run("JSON.stringify([modes, message.value, repoSel.value, fromProposal, notes, prepared.length - " + prepBefore + "])");
+run("modes.length = 0; notes.length = 0; message.value = ''; repoSel.value = ''; fromProposal = null;");
+ib = issueView(Object.assign({}, ISSUE, { repo: "bulking-app" })); ib.filter((b) => b.text === "Edit first")[0].listeners.click();
+out.issueUnlisted = run("JSON.stringify([modes, message.value, repoSel.value, notes, fromProposal])");
+run("modes.length = 0; notes.length = 0; message.value = ''; repoSel.value = ''; fromProposal = null;");
+ib = issueView(Object.assign({}, ISSUE, { repo: null })); out.issueNoRepo = ib.map((b) => b.text + (b.disabled ? "[off]" : "")); out.issueNoRepoHtml = run("html(stream)");
 out.issuePrepared = run("prepared.length") - prepBefore;
 // P4: the next steps are the harness's sentences, as text, with a button that only moves the person
 const NS = [{ job: "j20261126_052522_fcc7", kind: "research", state: "REPORT_READY", usd: 0.105, hint: "research", text: "The research is done. Read the report in the Research view. <b>x</b>" },

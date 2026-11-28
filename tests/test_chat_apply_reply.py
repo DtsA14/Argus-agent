@@ -202,7 +202,7 @@ def test_a_reply_card_changes_when_the_job_changes_before_the_confirm(svc):
 
 
 def test_the_foreman_cannot_start_a_reply_a_reading_or_an_apply():
-    assert set(ca.ROUTE_ACTION) == {"research", "prd"} and not set(cap.ACTIONS) & set(ca.ROUTE_ACTION.values())
+    assert set(ca.ROUTE_ACTION) == {"research", "prd", "issue"} and not set(cap.ACTIONS) & set(ca.ROUTE_ACTION.values())
 
 
 @pytest.mark.parametrize("action, extra", [("prd_reply", {"job": PJOB, "message": "ubah rencananya"}), ("patch_read_run", {"job": CJOB}), ("code_apply", {"job": CJOB, "sha": "a" * 12})])

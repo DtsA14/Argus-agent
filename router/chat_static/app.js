@@ -437,7 +437,7 @@
   function prepare(body) {
     if (busy || (pending && pending.sent)) { return; }
     busy = true;
-    if (fromProposal && (body.action === "research_new" || body.action === "prd_new") && body.source_job === undefined) { body.source_job = fromProposal.job; body.source_turn = String(fromProposal.turn); }
+    if (fromProposal && (body.action === "research_new" || body.action === "prd_new" || body.action === "issue_new") && body.source_job === undefined) { body.source_job = fromProposal.job; body.source_turn = String(fromProposal.turn); }
     var ctx = { mode: mode, open: openIssue };
     post("/api/prepare", body).then(function (prep) {
       busy = false;
@@ -504,6 +504,7 @@
   }
   function showIssue(id, keep, tries) {                 // keep: the card on screen is this issue's own result or status; tries: reads left
     if (!keep && id !== openIssue) { dropPending(); }
+    if (!keep) { fromProposal = null; }                // the person opened an issue: a form typed later is their own
     var left = tries === undefined ? (keep ? 3 : 0) : tries;     // a job just started may not be readable yet: read again a few times
     get("/api/issues/" + encodeURIComponent(id)).then(function (d) {
       if (mode === "prd") { return; }                   // the user moved to the PRD form while this was read: draw nothing
@@ -537,7 +538,7 @@
       stream.appendChild(c);
       var back = el("button", null, "All issues");
       back.type = "button";
-      back.addEventListener("click", function () { dropPending(); openIssue = null; formState(); renderIssues(); });
+      back.addEventListener("click", function () { dropPending(); openIssue = null; fromProposal = null; formState(); renderIssues(); });
       stream.appendChild(back);
     }).catch(function () {
       if (left > 0) { setTimeout(function () { if (openIssue === id || mode === "issue") { showIssue(id, keep, left - 1); } }, 1500); return; }
@@ -1633,18 +1634,25 @@
     if (p.route === "prd" || p.route === "issue") { fact(b, "Repo", p.repo || "none named: use Edit first"); }
     b.appendChild(el("p", "msg", p.text));
     say(b, "model", "reason (written by the model)", p.why, "say");
-    if (p.route === "issue") {                          // SPEC_FOREMAN_ISSUE_ROUTE: a fill-in only. No Prepare here and no source: the form's own Prepare and confirm do the rest
-      b.appendChild(el("p", "note", "Nothing is started. Edit first fills the New issue form with this text and repository; you tap its Prepare, read the card and confirm it yourself."));
+    if (p.route === "issue") {                          // SPEC_FOREMAN_ISSUE_PREPARE: Prepare asks for the card of issue_new, with the source; the person reads it and confirms it
+      b.appendChild(el("p", "note", "Nothing is started. Prepare shows a card; you read it and confirm it yourself. Edit first fills the New issue form so you can change the text."));
       var irow = el("div", "actions");
+      var igo = el("button", "go", "Prepare");
+      igo.type = "button";
+      igo.disabled = !p.repo;
+      igo.addEventListener("click", function () { prepare({ action: "issue_new", repo: p.repo, message: p.text, source_job: mgr.job, source_turn: String(e.n) }); });
       var fill = el("button", null, "Edit first");
       fill.type = "button";
       fill.addEventListener("click", function () {
-        setMode("issue");
+        var job = mgr.job;
+        setMode("issue");                                // clears fromProposal; the form is then filled, and its submit carries the source
         message.value = p.text;
         grow();
         var listed = Array.prototype.some.call(repoSel.options, function (o) { return o.value === p.repo; });
         if (listed) { repoSel.value = p.repo; } else { showNote("The proposed repository " + String(p.repo) + " is not in the list: choose one."); }
+        fromProposal = { job: job, turn: e.n };
       });
+      irow.appendChild(igo);
       irow.appendChild(fill);
       b.appendChild(irow);
       return b;

@@ -72,7 +72,7 @@ def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
     assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
-    assert JS.count("action:") == 19                                # (P3: + manager_new twice, the proposal buttons) (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
+    assert JS.count("action:") == 20                                # (P3: + manager_new twice, the proposal buttons; F44: + the issue proposal's Prepare) (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():

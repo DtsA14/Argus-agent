@@ -59,7 +59,7 @@ ACTIONS = ("issue_new", "issue_reply", "issue_start", "issue_abandon", "research
            "prd_reply", "patch_read_run", "code_apply")   # no retry/redraft of a code job from here (job_reject and job_abandon are the control UI's); approvals: prd_approve and queue_go (SPEC_CHAT_T4A), queue_step and draft_approve for a queue the chat itself approved (SPEC_CHAT_T4B), and prd_reply, patch_read_run and code_apply (SPEC_CHAT_APPLY_REPLY: no push, no PR, no merge, no deploy)
 SOURCE_KEYS = {"source_job", "source_turn"}   # SPEC_CHAT_MANAGER_P2B: the foreman's proposal a form was filled from, as two text fields
 SOURCE_NOTE = "the text was first written by the foreman (a model): read it before you confirm"
-ROUTE_ACTION = {"research": "research_new", "prd": "prd_new"}
+ROUTE_ACTION = {"research": "research_new", "prd": "prd_new", "issue": "issue_new"}
 NEXT_MAX = mr.STEPS_MAX             # P4: the jobs a session started that the page lists (and, P4b, the foreman is told about)
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
@@ -467,8 +467,8 @@ class Actions:
         """(card, argv builder inputs) for an action, from live data; Refusal when it cannot be run."""
         if action not in ACTIONS:
             raise Refusal(404, "path", "no such action")
-        if SOURCE_KEYS & set(params) and action not in ("research_new", "prd_new"):
-            raise Refusal(400, "form", "only a research or PRD job can start from the foreman's proposal")
+        if SOURCE_KEYS & set(params) and action not in ("research_new", "prd_new", "issue_new"):
+            raise Refusal(400, "form", "only a research, PRD or issue form can start from the foreman's proposal")
         if action in ("job_reject", "job_abandon"):
             return self.build_job(action, params)                # no config, no exposure: a broken config.yaml must not stop a reject (13.7 item 5)
         cfg = self.cfg
@@ -507,10 +507,13 @@ class Actions:
             if why:
                 raise Refusal(400, "form", why)
             self._need_key(True)
+            src, _rest = self.manager_source(action, params)           # SPEC_FOREMAN_ISSUE_PREPARE: after the form's own checks; None for a form the person typed
             card = {"action": action, "title": "Ask the writer", "repo": repo,
                     "environment": repos[repo].get("environment"), "message": text,
                     "turn_cap_usd": turn_cap, "job_cap_usd": float(w.get("max_usd") or 0),
                     **self.runs_code(cfg, repos[repo].get("environment"))}
+            if src:
+                card = {**card, "source": src, "source_note": SOURCE_NOTE}
             return card, {"repo": repo, "message": text}
         v = self.read_issue(params.get("job"))
         if v is None:
@@ -862,10 +865,10 @@ class Actions:
         e = conv[i] if isinstance(conv, list) and i < len(conv) else None
         p = e.get("propose") if isinstance(e, dict) and e.get("from") == "manager" else None
         if not isinstance(p, dict) or p.get("route") not in ROUTE_ACTION:
-            raise Refusal(404, "source", "the foreman proposed no research or PRD job in that turn")
+            raise Refusal(404, "source", "the foreman proposed no research, PRD or issue job in that turn")
         same_route = ROUTE_ACTION.get(p.get("route")) == action
         edited = (not same_route or normalize(scrub(str(p.get("text") or ""))) != normalize(rest.get("message") or "")
-                  or (action == "prd_new" and p.get("repo") != rest.get("repo")))
+                  or (action in ("prd_new", "issue_new") and p.get("repo") != rest.get("repo")))
         return {"from": "manager", "job": job, "turn": i, "edited": edited}, rest
 
     def build_manager(self, cfg, params):
@@ -1162,7 +1165,7 @@ class Actions:
                 if session not in line:                       # cheap: most lines are another session's or none
                     continue
                 r = json.loads(line)
-                if not (r.get("ok") == "confirm" and r.get("source_job") == session and r.get("action") in ROUTE_ACTION.values()):
+                if not (r.get("ok") == "confirm" and r.get("source_job") == session and r.get("action") in ("research_new", "prd_new")):                   # an issue job is no step the foreman is told about (SPEC_FOREMAN_ISSUE_PREPARE rev 1.1)
                     continue
                 job = r.get("job")
                 if not isinstance(job, str) or not UI_ID.fullmatch(job) or job in seen:
