@@ -188,3 +188,5 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#09080c;--panel:#09080c}}
 .bar,#panel header,#panel-foot{border:0}
 #panel{border-right:0}
+.nav textarea.reply{display:block;width:100%;box-sizing:border-box;padding:.5rem .9rem;border-radius:1rem;border:1px solid var(--line);background:var(--card);color:inherit;font:inherit;margin:.4rem 0}
+.diffslot .diff{max-height:60vh;overflow:auto}

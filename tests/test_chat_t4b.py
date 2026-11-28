@@ -3,6 +3,7 @@ spawner is a recorder (no process starts), the real config supplies the code tas
 import copy
 import hashlib
 import json
+import re
 import os
 import sys
 from pathlib import Path
@@ -567,7 +568,10 @@ def test_the_page_sends_only_the_queue_id_and_has_no_apply_button():
     js = (Path(__file__).resolve().parent.parent / "router" / "chat_static" / "app.js").read_text()
     assert "prepare({ action: t4b.action, queue: id })" in js
     assert "Start issue" in js and "Accept draft of issue" in js
-    assert "apply" not in js.lower().replace("apply is still done from the terminal", "").replace("nothing is applied yet", "").replace("apply (belum", "")
+    # SPEC_CHAT_APPLY_REPLY PR3: the word is allowed only as the action name `code_apply`, the table of the three actions and its comment; the install button is built in installActions only
+    rest = js.lower().replace("code_apply", "").replace("d.apply", "").replace("spec_chat_apply_reply", "").replace("nothing is applied yet", "").replace("apply (belum", "")
+    assert [m.start() for m in re.finditer("apply", rest)] == [], [rest[m.start() - 40:m.start() + 40] for m in re.finditer("apply", rest)]
+    assert js.count('action: "code_apply"') == 1 and js.split("function installActions")[1].count('action: "code_apply"') == 1
 
 
 # ---- SPEC_CHAT_UI1 F17: the draft card shows the plan, the writer's notes and the tests the draft changes -------------------------

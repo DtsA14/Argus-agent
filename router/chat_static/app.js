@@ -191,8 +191,9 @@
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Environment"], ["commit", "Commit"],
     ["turn", "Turn"], ["turn_cap_usd", "Turn limit"], ["job_cap_usd", "Job limit"], ["reason", "Reason"],
     ["profile", "Profile"], ["model", "Model"], ["stage_models", "Model"], ["stage_caps", "Stage limits"], ["web", "Web"], ["data_sent", "Data sent"],
-    ["free_models", "Free models"], ["runs_code", "Example code"], ["kind", "Kind"], ["job_title", "Title"], ["sha12", "Draft"], ["spent_usd", "Cost"], ["cap_usd", "Limit"], ["queue_usd", "Queue money"], ["queue", "Queue"], ["item", "Issue no."], ["drafter_cap_usd", "Drafter limit"], ["agent_cap_usd", "Agent limit"], ["attempt_usd", "One agent attempt"], ["money", "Money note"], ["ttl_hours", "Session lasts (hours)"], ["max_turns", "Turns at most"], ["turn_note", "One turn"], ["confirms", "This confirmation covers"], ["source_note", "Where the text comes from"]];
-  var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1, queue_usd: 1, drafter_cap_usd: 1, agent_cap_usd: 1, attempt_usd: 1 };
+    ["free_models", "Free models"], ["runs_code", "Example code"], ["kind", "Kind"], ["job_title", "Title"], ["sha12", "Draft"], ["spent_usd", "Cost"], ["cap_usd", "Limit"], ["queue_usd", "Queue money"], ["queue", "Queue"], ["item", "Issue no."], ["drafter_cap_usd", "Drafter limit"], ["agent_cap_usd", "Agent limit"], ["attempt_usd", "One agent attempt"], ["money", "Money note"], ["ttl_hours", "Session lasts (hours)"], ["max_turns", "Turns at most"], ["turn_note", "One turn"], ["confirms", "This confirmation covers"], ["source_note", "Where the text comes from"],
+    ["billed_usd", "Already spent on readings"], ["remaining_usd", "Left for readings"], ["left_usd", "Job money left"], ["readers", "Readers"], ["patch_read_kind", "Readings said"], ["branch", "Branch now"], ["head", "HEAD now"], ["target_branch", "The commit goes to branch"]];
+  var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1, queue_usd: 1, drafter_cap_usd: 1, agent_cap_usd: 1, attempt_usd: 1, billed_usd: 1, remaining_usd: 1, left_usd: 1 };
   function fact(parent, label, value) {
     var p = el("p", "fact");
     p.appendChild(el("b", null, label + ": "));
@@ -201,6 +202,7 @@
   }
   function renderCard(prep, done) {
     var card = prep.card;
+    var applies = card.action === "prd_reply" || card.action === "patch_read_run" || card.action === "code_apply";      // SPEC_CHAT_APPLY_REPLY: the plan page's reply and the install card's two buttons
     var c = el("article", "card");
     c.appendChild(el("h2", null, card.title));
     (card.flags || []).forEach(function (f) { say(c, "mesin", "machine flag", f, "say warn"); });      // the machine's marks come first, above every green line (T3 light)
@@ -240,6 +242,12 @@
       c.appendChild(sum);
     }
     (card.issues || []).forEach(function (i) { fact(c, "Issue " + i.n, i.title + (i.warning ? " (no example of new behaviour)" : "")); });
+    if (applies) {
+      (card.files || []).forEach(function (f) { fact(c, "File", f.path + ((f.marks || []).length ? " (machine flag: " + f.marks.join("; ") + ")" : "")); });
+      if (card.detached_note) { say(c, "mesin", "machine flag", card.detached_note, "say warn"); }
+      if (card.note) { c.appendChild(el("p", "note", card.note)); }
+      if (card.declaration) { c.appendChild(el("p", "note", card.declaration + ".")); }
+    }
     if (card.message) { c.appendChild(el("p", "msg human", card.message)); }
     if (card.issue_text) { c.appendChild(el("p", "msg", card.issue_text)); }
     c.appendChild(el("p", "note", "Cost exposure counted: " + usd(prep.exposure_usd) + ". Nothing runs before Confirm."));
@@ -265,7 +273,7 @@
         clear(c);
         c.appendChild(el("h2", null, "Started"));
         if (r.job) { fact(c, "Job", r.job); }
-        c.appendChild(el("p", "note", card.action === "manager_new" ? "The session is being made; it appears in the Foreman view in a few seconds. Its turns are not confirmed again." : card.action === "queue_go" ? "Queue money is released up to the limit on the card. Nothing runs yet; start the first issue from the queue card in the Queue tab." : card.draft_sha ? "The code agent is running (5 to 17 minutes). The result appears on the queue card; apply is still done from the terminal." : (card.queue && card.item) ? "The drafter is writing tests and the contract (a few minutes). The draft appears on the queue card; you still confirm it yourself." : card.action === "prd_new" ? "The PRD is being written (one turn). The result appears in the Queue tab. A refusal before the job is made (queue waiting, repo changed) shows only in the terminal. Running the queue is still done from the terminal." : card.action === "research_new" ? "The result is in the research list." : (card.action.indexOf("job_") === 0 ? "Decision recorded; the job state is in the Decisions tab." : "The result is in the issue list.")));
+        c.appendChild(el("p", "note", card.action === "manager_new" ? "The session is being made; it appears in the Foreman view in a few seconds. Its turns are not confirmed again." : card.action === "queue_go" ? "Queue money is released up to the limit on the card. Nothing runs yet; start the first issue from the queue card in the Queue tab." : card.action === "prd_reply" ? "The writer is writing the plan again (one turn). It appears on the plan card; an approval of the old plan no longer counts." : card.action === "patch_read_run" ? "The two readers are running (a few minutes). Their notes appear on the install card." : card.action === "code_apply" ? "The command is running. It makes one commit in the repository on this machine: nothing is pushed or deployed. The job state shows on the install card." : card.draft_sha ? "The code agent is running (5 to 17 minutes). The result appears on the queue card; the install card then offers the readers and the install." : (card.queue && card.item) ? "The drafter is writing tests and the contract (a few minutes). The draft appears on the queue card; you still confirm it yourself." : card.action === "prd_new" ? "The PRD is being written (one turn). The result appears in the Queue tab. A refusal before the job is made (queue waiting, repo changed) shows only in the terminal. Running the queue is still done from the terminal." : card.action === "research_new" ? "The result is in the research list." : (card.action.indexOf("job_") === 0 ? "Decision recorded; the job state is in the Decisions tab." : "The result is in the issue list.")));
         var close = el("button", null, "Close");
         close.type = "button";
         close.addEventListener("click", function () { removeCard(c); });
@@ -278,9 +286,10 @@
           c.appendChild(el("p", "note", "Refused: " + e.message));
           no.disabled = false;
         } else {                                        // no answer: the server may have run it; do not prepare the same thing again blind
-          c.appendChild(el("p", "note", "Status unknown, it may already be running. Check the " + (card.action === "prd_new" ? "Queue tab" : card.action === "manager_new" ? "Foreman view" : card.action === "research_new" ? "research list" : (card.action.indexOf("job_") === 0 ? "Decisions tab" : "issue list")) + " before trying again."));
+          c.appendChild(el("p", "note", "Status unknown, it may already be running. Check the " + (applies ? "card" : card.action === "prd_new" ? "Queue tab" : card.action === "manager_new" ? "Foreman view" : card.action === "research_new" ? "research list" : (card.action.indexOf("job_") === 0 ? "Decisions tab" : "issue list")) + " before trying again."));
           no.disabled = false;
-          if (card.action === "research_new") { loadResearch(); }
+          if (applies) { if (mode === "cards" && openCard !== null) { if (openKind === "install") { showInstall(openCard); } else if (openKind === "plan") { showPlan(openCard); } } }
+          else if (card.action === "research_new") { loadResearch(); }
           else if (card.action === "manager_new") { mgr.expect = 12; if (mode === "manager") { loadManager(); } }
           else if (card.action.indexOf("job_") === 0) { loadDecisions(); }
           else {
@@ -329,7 +338,7 @@
         if (mode === "manager") { if (body.action === "manager_new") { mgr.expect = 12; loadManager(); } return; }       // a job from a proposal: the Started card says where it went
         if (mode === "research") { loadResearch(); if (r.job) { showResearch(r.job); } return; }
         if (mode === "prd") { return; }
-        if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }
+        if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "install") { showInstall(openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }
         if (mode === "decide") { if (openDecision !== null) { showDecision(openDecision); } else { loadDecisions(); } return; }
         loadIssues();
         if (r.job && mode === "issue") { showIssue(r.job, true); }
@@ -786,6 +795,95 @@
     }
     return box;
   }
+  // SPEC_CHAT_APPLY_REPLY PR3. The page sends the job id and what the person typed or ticked, nothing else; no field is ever filled from the card, the writer, a reader or the foreman.
+  function replyBox(id, d) {
+    var box = el("div", "nav");
+    if (d.state !== "AWAITING_HUMAN" && d.state !== "WRITE_FAILED") { return box; }
+    var ta = el("textarea", "reply");
+    ta.rows = 3;
+    ta.placeholder = "Reply to the plan writer (a model)";
+    ta.setAttribute("aria-label", "Reply to the plan writer");
+    var b = el("button", null, "Prepare reply");
+    b.type = "button";
+    b.disabled = true;
+    ta.addEventListener("input", function () { b.disabled = ta.value.trim().length === 0; });
+    b.addEventListener("click", function () { if (!b.disabled) { prepare({ action: "prd_reply", job: id, message: ta.value }); } });
+    box.appendChild(ta);
+    box.appendChild(b);
+    box.appendChild(el("p", "small", "The writer writes the plan again (one turn, a small cost). An approval of the old plan stops counting."));
+    return box;
+  }
+  function installActions(id, d, seq) {
+    var box = el("div", "nav");
+    var a = d.apply || {};
+    if (a.started) { say(box, "mesin", "machine flag", "An install of this patch was started (" + a.started + ") and the job was never marked applied. Look at the repository before pressing again: the command checks it and records the commit if it is already there.", "say warn"); }
+    if (a.action === "patch_read_run") {
+      var r = el("button", "go", "Run the two patch readers (money is spent)");
+      r.type = "button";
+      r.addEventListener("click", function () { prepare({ action: "patch_read_run", job: id }); });
+      box.appendChild(r);
+      box.appendChild(el("p", "small", "Two different models read the patch. What they say is not proof. The next card shows the limit."));
+    } else if (a.action === "code_apply") {
+      var det = el("details", "more");
+      det.open = true;
+      det.appendChild(el("summary", null, "The whole patch (text; read it before you install)"));
+      var slot_ = el("div", "diffslot");
+      slot_.appendChild(el("p", "note", "Loading the patch…"));
+      det.appendChild(slot_);
+      box.appendChild(det);
+      var lab = el("label", "small");
+      var tick = el("input");
+      tick.type = "checkbox";
+      tick.disabled = true;
+      lab.appendChild(tick);
+      lab.appendChild(document.createTextNode(" I have read the patch " + d.patch_sha12 + ". This is my statement, not a proof."));
+      box.appendChild(lab);
+      var why = null;
+      if (a.needs_reason) {
+        why = el("input", "reason");
+        why.type = "text";
+        why.maxLength = 500;
+        why.autocomplete = "off";
+        why.placeholder = "A reader said concerns. Why do you accept it? (10 to 500 characters)";
+        why.setAttribute("aria-label", "Reason");
+        box.appendChild(why);
+      }
+      var p = el("button", "go", "Prepare install into the repository");
+      p.type = "button";
+      var shown = false;
+      var ready = function () { p.disabled = !shown || !tick.checked || (why !== null && why.value.trim().length < 10); };
+      tick.addEventListener("change", ready);
+      if (why) { why.addEventListener("input", ready); }
+      ready();
+      p.addEventListener("click", function () {
+        if (p.disabled) { return; }
+        var body = { action: "code_apply", job: id, sha: d.patch_sha12 };
+        if (why) { body.reason = why.value.trim(); }
+        prepare(body);
+      });
+      box.appendChild(p);
+      box.appendChild(el("p", "small", "One commit in the repository on this machine. Not pushed, not deployed. If the repository is on its main branch, the commit goes to a new branch argus/<job> and the checkout stays on that branch afterwards. The next card shows the branch and the files."));
+      get("/api/diff/" + encodeURIComponent(id)).then(function (x) {
+        if (seq !== cardSeq || mode !== "cards") { return; }
+        clear(slot_);
+        if (typeof x.text === "string" && x.sha12 === d.patch_sha12) {
+          slot_.appendChild(diffBlock(x.text));
+          shown = true;
+          tick.disabled = false;
+          ready();
+        } else {
+          slot_.appendChild(el("p", "note", x.text === null || x.text === undefined ? (x.why || "The patch cannot be shown whole here.") : "The patch changed since the card was read: open the card again."));
+        }
+      }).catch(function () {
+        if (seq !== cardSeq || mode !== "cards") { return; }
+        clear(slot_);
+        slot_.appendChild(el("p", "note", "The patch cannot be read now."));
+      });
+    } else if (a.why) {
+      box.appendChild(el("p", "note", a.why));
+    }
+    return box;
+  }
   function showPlan(id) {
     var seq = ++cardSeq;
     openCard = id;
@@ -822,6 +920,7 @@
       s5.appendChild(el("p", "say", d.fixed_line));
       stream.appendChild(card);
       stream.appendChild(planActions(id, d.t4));
+      stream.appendChild(replyBox(id, d));
       stream.appendChild(cardButtons([{ text: "Technical card", fn: function () { showCard("prd", id); } }]));
     }).catch(function () {
       if (seq !== cardSeq || mode !== "cards") { return; }
@@ -910,6 +1009,7 @@
   function showInstall(id) {
     var seq = ++cardSeq;
     openCard = id;
+    openKind = "install";
     get("/api/approve/code/" + encodeURIComponent(id)).then(function (d) {
       if (seq !== cardSeq || mode !== "cards") { return; }
       clear(stream);
@@ -955,6 +1055,7 @@
       var s7 = sec(card, "7. What has nobody checked?");
       s7.appendChild(el("p", "say", d.fixed_line));
       stream.appendChild(card);
+      stream.appendChild(installActions(id, d, seq));
       stream.appendChild(cardButtons());
     }).catch(function () {
       if (seq !== cardSeq || mode !== "cards") { return; }
@@ -1087,7 +1188,7 @@
       b.type = "button";
       b.addEventListener("click", function () { prepare({ action: t4b.action, queue: id }); });
       box.appendChild(b);
-      box.appendChild(el("p", "small", t4b.action === "queue_step" ? "The drafter writes tests and the contract. Nothing is applied yet; you still confirm the draft yourself." : "The next card shows the draft; its tests and contract are model text. Apply is still done from the terminal."));
+      box.appendChild(el("p", "small", t4b.action === "queue_step" ? "The drafter writes tests and the contract. Nothing is applied yet; you still confirm the draft yourself." : "The next card shows the draft; its tests and contract are model text. The install card offers the readers and the install."));
     } else if (t4b.why) {
       box.appendChild(el("p", "note", t4b.why));
     }

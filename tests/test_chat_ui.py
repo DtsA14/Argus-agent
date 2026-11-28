@@ -72,7 +72,7 @@ def test_a_reply_or_discard_is_prepared_from_a_button_not_from_the_card():
     for a in ("issue_reply", "issue_start", "issue_abandon", "issue_new"):
         assert f'action: "{a}"' in JS
     assert 'action: "prd_new"' in JS                                # the PRD chip prepares prd_new from the composer, with the repo and the message only
-    assert JS.count("action:") == 15                                # (P3: + manager_new twice, the proposal buttons) (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
+    assert JS.count("action:") == 18                                # (P3: + manager_new twice, the proposal buttons) (SPEC_CHAT_T4B: + the queue card's one prepare, `action: t4b.action`) the reply is prepared from a button and from the composer; research_new and prd_new from the composer; prd_approve from the plan card
 
 
 def test_the_one_viewer_link_is_still_the_only_link_and_the_handoff_goes_through_its_guard():
@@ -285,7 +285,7 @@ def test_the_machine_flags_come_before_every_fact_of_a_confirmation_card():
 
 def test_the_page_offers_the_button_the_server_names_and_refreshes_the_plan_after_it():
     assert "stream.appendChild(planActions(id, d.t4));" in JS and 'if (t4.action === "prd_approve") {' in JS
-    assert 'if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }' in JS
+    assert 'if (mode === "cards" && openCard !== null) { if (openKind === "queue") { showCard("queue", openCard); } else if (openKind === "install") { showInstall(openCard); } else if (openKind === "draft") { showDraft(openCard); } else { showPlan(openCard); } return; }' in JS
 
 
 def test_a_decision_is_prepared_from_a_button_with_the_sha_the_card_showed_and_the_reason_of_its_own_card():
