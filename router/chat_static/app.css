@@ -190,3 +190,9 @@ progress.pbar::-moz-progress-bar{background:var(--ok);border-radius:.25rem}
 #panel{border-right:0}
 .nav textarea.reply{display:block;width:100%;box-sizing:border-box;padding:.5rem .9rem;border-radius:1rem;border:1px solid var(--line);background:var(--card);color:inherit;font:inherit;margin:.4rem 0}
 .diffslot .diff{max-height:60vh;overflow:auto}
+
+.jsum{margin:.6rem 0}
+.jsum .jrow{display:block;margin:.35rem 0}
+.jsum .jl{display:block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;opacity:.65}
+.jsum .jv{display:block}
+.jsum~details .jfull{white-space:pre-wrap;overflow-wrap:anywhere}

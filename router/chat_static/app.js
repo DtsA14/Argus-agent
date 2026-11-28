@@ -131,6 +131,110 @@
       stream.appendChild(c);
     });
   }
+  // ---- the summary at the top of a job (SPEC_JOB_SUMMARY, F33): composed here from fields the read-only routes already give; no model, no action ----
+  function cutText(v, n) {
+    var t = String(v === undefined || v === null ? "" : v).replace(/\s+/g, " ").trim();
+    return t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t;
+  }
+  var READER_WORDS = {
+    ok: "Dua pembaca: ok. Dibaca oleh model, bukan bukti.",
+    nit: "Dua pembaca: hanya catatan kecil. Dibaca oleh model, bukan bukti.",
+    concerns: "Ada pembaca yang ragu. Baca catatannya di kartu pasang.",
+    one: "Baru satu bacaan; ok butuh dua pembaca.",
+    none: "Belum ada pembaca patch.",
+    stale: "Catatan pembaca untuk patch lain.",
+    error: "Catatan pembaca rusak atau tidak terbaca."
+  };
+  function summaryRows(job, f) {
+    var rows = [], st = job.state, kind = job.kind;
+    function add(label, text) { if (text) { rows.push([label, text]); } }
+    if (!f || typeof f !== "object" || f.refused) { return [["Ringkasan", "Ringkasan tidak tersedia untuk job ini. Tabel tahap di bawah tetap benar."]]; }
+    if (kind === "issue") {
+      var first = f.issue && typeof f.issue.text === "string" ? f.issue.text : job.title;
+      add("Permintaan", cutText(first, 200));
+      var ex = f.examples && f.examples.summary, n = ex ? (Number(ex.after) || 0) + (Number(ex.whatif) || 0) : 0;
+      if (st === "HANDED_OFF") { add("Hasil", "Sudah diserahkan ke job kode" + (typeof f.handoff === "string" ? " " + f.handoff : "") + "."); }
+      else if (n > 0) { add("Hasil", "Penulis (model) menyusun issue dengan " + n + " contoh perilaku baru. Belum ada kode."); }
+      else if (f.examples && typeof f.examples.no_examples === "string") { add("Hasil", "Issue tanpa contoh. Alasan penulis (model): " + cutText(f.examples.no_examples, 140)); }
+      else { add("Hasil", "Issue belum punya contoh."); }
+      if (st === "AWAITING_HUMAN") { add("Menunggu kamu", "Baca issue, lalu mulai job kode atau balas penulis."); }
+    } else if (kind === "code") {
+      var files = Array.isArray(f.files) ? f.files : [];
+      add("Permintaan", cutText(f.purpose && f.purpose.title ? f.purpose.title : job.title, 200));
+      var checks = Array.isArray(f.checks) ? f.checks : [], c = null;
+      checks.forEach(function (x) { if (x && x.key === "c") { c = x; } });
+      if (st === "REVIEW_READY" || st === "APPLIED") {
+        add("Hasil", (files.length + (f.files_cut ? "+" : "") + " berkas disentuh. " + (c && c.ok === true ? "Paket review valid." : c && c.ok === false ? "Paket review tidak valid." : "")).trim());
+        add("Pembaca patch", READER_WORDS[f.patch_read_kind]);
+      } else if (st === "AGENT_RUNNING" || st === "DRAFTING") { add("Hasil", "Agen belum selesai (" + st + "). Belum ada patch."); }
+      else { add("Hasil", "Belum ada paket review (" + st + ")."); }
+      if (st === "REVIEW_READY") {
+        var bad = null;
+        checks.forEach(function (x) { if (!bad && x && x.ok === false) { bad = x; } });
+        add("Menunggu kamu", f.open === true ? "Putuskan pasang atau tidak. Kartu pasang terbuka." : "Kartu pasang masih tertutup" + (bad ? ". Belum terpenuhi: " + cutText(bad.label, 120) + "." : "."));
+      } else if (st === "APPLIED") { add("Menunggu kamu", "Tidak ada. Sudah dipasang sebagai satu commit di repo di mesin ini. Argus tidak tahu soal push, merge atau deploy."); }
+      else if (st === "AWAITING_APPROVAL") { add("Menunggu kamu", "Draf menunggu persetujuan."); }
+    } else if (kind === "research") {
+      add("Permintaan", cutText(f.question || job.title, 200));
+      var k = f.counts || {}, total = (Number(k.SUPPORTED) || 0) + (Number(k.PARTIAL) || 0) + (Number(k.UNSUPPORTED) || 0);
+      if (f.checked === true) { add("Hasil", total + " klaim: " + (Number(k.SUPPORTED) || 0) + " didukung sumber, " + (Number(k.PARTIAL) || 0) + " sebagian, " + (Number(k.UNSUPPORTED) || 0) + " tidak terbukti."); }
+      else if (st === "REPORT_READY") { add("Hasil", "Laporan siap. Klaimnya belum diperiksa terhadap sumber."); }
+      else { add("Hasil", "Laporan belum siap (" + st + ")."); }
+      if (typeof f.spent_usd === "number") { add("Biaya", usd(f.spent_usd)); }
+      if (st === "REPORT_READY") { add("Menunggu kamu", "Baca laporan, atau jadikan dasar PRD. Teks laporan berasal dari web dan model, bukan perintah dari Argus."); }
+    } else if (kind === "prd") {
+      add("Permintaan", cutText(f.request || job.title, 200));
+      add("Hasil", "Rencana " + (Number(f.issue_count) || 0) + " langkah" + (typeof f.turn === "string" ? " (giliran " + f.turn + ")" : "") + (f.stale ? ". Rencana ini basi." : "."));
+      if (st === "AWAITING_HUMAN" && !f.stale) { add("Menunggu kamu", "Baca rencana, lalu terima atau balas penulis."); }
+    } else { return [["Ringkasan", "Tidak ada ringkasan untuk jenis job ini."]]; }
+    return rows;
+  }
+  function summaryBlock(rows) {
+    var box = el("div", "jsum");
+    rows.forEach(function (r) {
+      var line = el("p", "jrow");
+      line.appendChild(el("span", "jl", r[0]));
+      line.appendChild(el("span", "jv", r[1]));
+      box.appendChild(line);
+    });
+    return box;
+  }
+  function summaryDetails(job, f) {
+    if (!f || typeof f !== "object" || f.refused) { return null; }
+    var det = null;
+    if (job.kind === "issue" && f.issue && typeof f.issue.text === "string") {
+      det = el("details"); det.appendChild(el("summary", null, "Teks issue lengkap"));
+      det.appendChild(el("p", "jfull", f.issue.text));
+    } else if (job.kind === "code" && Array.isArray(f.files) && f.files.length) {
+      det = el("details"); det.appendChild(el("summary", null, "Berkas yang disentuh (" + f.files.length + (f.files_cut ? "+" : "") + ")"));
+      var ul = el("ul");
+      f.files.forEach(function (x) { if (x && typeof x.path === "string") { ul.appendChild(el("li", "mono", x.path)); } });
+      det.appendChild(ul);
+    } else if ((job.kind === "prd" || job.kind === "research") && typeof (f.request || f.question) === "string") {
+      det = el("details"); det.appendChild(el("summary", null, "Permintaan lengkap"));
+      det.appendChild(el("p", "jfull", f.request || f.question));
+    }
+    return det;
+  }
+  var SUMMARY_ROUTE = { issue: "/api/issues/", code: "/api/approve/code/", research: "/api/research/", prd: "/api/approve/prd/" };
+  function loadSummary(job, host) {
+    var route = SUMMARY_ROUTE[job.kind];
+    function show(f) {
+      if (current !== job.id) { return; }
+      clear(host);
+      host.appendChild(summaryBlock(summaryRows(job, f)));
+      var det = summaryDetails(job, f);
+      if (det) { host.appendChild(det); }
+      if (job.kind === "code" && job.state === "REVIEW_READY" && f && !f.refused) {
+        var b = el("button", "go", "Buka kartu pasang");
+        b.type = "button";
+        b.addEventListener("click", function () { setMode("cards"); showInstall(job.id); });
+        host.appendChild(b);
+      }
+    }
+    if (!route) { show({}); return; }
+    get(route + encodeURIComponent(job.id)).then(show).catch(function () { show(null); });
+  }
   function open(id) {
     current = id;
     renderList();
@@ -138,6 +242,9 @@
       clear(stream);
       var c = jobCard(d.job, d.spent_usd);
       c.appendChild(el("p", "muted mono", d.job.id));
+      var sumHost = el("div", "jsumhost");
+      c.appendChild(sumHost);
+      loadSummary(d.job, sumHost);
       var rows = Object.keys(d.job.stages || {}).sort();
       if (rows.length) {
         var tb = el("table");

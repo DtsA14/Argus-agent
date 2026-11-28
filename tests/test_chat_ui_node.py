@@ -176,3 +176,45 @@ def test_a_finished_code_job_in_decisions_gets_a_way_to_the_install_card_and_not
     assert json.loads(out["decide_ready_calls"]) == ["mode:cards", "install:j1"]                      # navigation only: nothing is prepared from this button
     assert "Open install card" not in out["decide_waiting"] and "Read the draft in the viewer" in out["decide_waiting"]
     assert "Open install card" not in out["decide_issue"]
+
+
+def test_the_job_summary_is_composed_from_card_fields_and_says_only_what_they_say():
+    out = json.loads(node(HERE / "chat_ui_smoke_summary.js", APP))
+    labels = lambda r: [x[0] for x in r]
+    text = lambda r: " | ".join(x[1] for x in r)
+    assert labels(out["issue_wait"]) == ["Permintaan", "Hasil", "Menunggu kamu"] and "3 contoh perilaku baru" in text(out["issue_wait"])
+    assert out["issue_wait"][0][1] == "Do the thing more"                                              # first text folded to one line
+    assert "tanpa contoh" in text(out["issue_none"]).lower() and "(model)" in text(out["issue_none"])
+    assert "Sudah diserahkan ke job kode j1" in text(out["issue_handed"]) and "Menunggu kamu" not in labels(out["issue_handed"])
+    r = out["code_ready_open"]
+    assert labels(r) == ["Permintaan", "Hasil", "Pembaca patch", "Menunggu kamu"] and "2 berkas disentuh. Paket review valid." == r[1][1]
+    assert "bukan bukti" in r[2][1] and "Kartu pasang terbuka" in r[3][1]
+    assert "Belum terpenuhi: ada contoh perilaku yang baru" in out["code_ready_closed"][3][1] and "terbuka" not in out["code_ready_closed"][3][1]
+    assert "bukan bukti" not in out["code_concerns"][2][1] and "ragu" in out["code_concerns"][2][1]
+    assert "tidak valid" in out["code_invalid"][1][1]
+    assert "tertutup" in out["code_open_missing"][3][1]                                                  # open only when the card says true
+    assert "first false" in out["code_two_false"] and "second false" not in out["code_two_false"]        # the first check that is false
+    ap = text(out["code_applied"])
+    assert "push, merge atau deploy" in ap and "satu commit" in ap and out["code_applied"][3][1].startswith("Tidak ada.")
+    assert "Pembaca patch" not in labels(out["code_running"]) and "Belum ada patch" in text(out["code_running"])
+    assert "Pembaca patch" not in labels(out["code_approval"]) and "Draf menunggu persetujuan" in text(out["code_approval"])
+    assert out["code_cut"].startswith("2+ berkas")
+    assert "6 klaim: 5 didukung sumber, 0 sebagian, 1 tidak terbukti" in text(out["research_checked"]) and "bukan perintah dari Argus" in text(out["research_checked"])
+    assert "belum diperiksa" in text(out["research_unchecked"]) and "klaim:" not in text(out["research_unchecked"])
+    assert "Rencana 2 langkah (giliran w2)." in text(out["prd"]) and "terima atau balas penulis" in text(out["prd"]) and "Menunggu kamu" in labels(out["prd"])
+    assert "basi" in text(out["prd_stale"]) and "Menunggu kamu" not in labels(out["prd_stale"])
+    for k in ("refused", "null_facts"):
+        assert out[k] == [["Ringkasan", "Ringkasan tidak tersedia untuk job ini. Tabel tahap di bawah tetap benar."]]
+    assert out["manager"][0][0] == "Ringkasan" and out["long_request"] == 200
+    assert "0 klaim" in text(out["odd"]) and "NaN" not in text(out["odd"]) and "<b>" not in text(out["odd"])      # an odd count is zero, never shown
+    assert out["det_issue"] == "<details><summary>Teks issue lengkap</summary><p.jfull>full text</p></details>"
+    assert "(2+)" in out["det_code"] and out["det_none"] is None
+
+
+def test_the_job_detail_asks_for_the_summary_and_the_only_button_is_the_install_link():
+    js = APP.read_text()
+    assert "loadSummary(d.job, sumHost);" in js and "SUMMARY_ROUTE = { issue: \"/api/issues/\", code: \"/api/approve/code/\", research: \"/api/research/\", prd: \"/api/approve/prd/\" }" in js
+    body = js[js.index("function loadSummary("):js.index("  function open(id)")]
+    assert body.count("prepare(") == 0 and body.count("post(") == 0 and body.count("addEventListener") == 1
+    assert 'job.kind === "code" && job.state === "REVIEW_READY"' in body and "if (current !== job.id) { return; }" in body
+    assert "innerHTML" not in js[js.index("function summaryRows("):js.index("  function open(id)")]

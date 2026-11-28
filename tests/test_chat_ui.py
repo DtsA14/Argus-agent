@@ -248,10 +248,11 @@ def decide_part():
 def test_the_decisions_chip_is_on_and_the_only_approve_in_the_page_is_the_plan_button():
     assert re.search(r'data-tab="decide"[^>]*>Decisions<', HTML)             # UI-3a: the chip became a tab of the bottom bar
     assert not re.search(r'data-tab="decide"[^>]*disabled', HTML)
-    # the addresses of the READ-ONLY plan and install cards (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else
-    assert JS.count("/api/approve/") == 2 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
+    # the addresses of the READ-ONLY plan and install cards (SPEC_KARTU_SETUJU 6), fetched with get() and nothing else   # the two more are the summary routes (SPEC_JOB_SUMMARY), read by get() in loadSummary
+    assert JS.count("/api/approve/") == 4 and 'get("/api/approve/prd/" + encodeURIComponent(id))' in JS
     assert 'get("/api/approve/code/" + encodeURIComponent(id))' in JS
     js = JS.replace('get("/api/approve/prd/" + encodeURIComponent(id))', "").replace('get("/api/approve/code/" + encodeURIComponent(id))', "")
+    js = js.replace('code: "/api/approve/code/", research: "/api/research/", prd: "/api/approve/prd/" }', 'code: "", research: "/api/research/", prd: "" }')       # SPEC_JOB_SUMMARY: read-only routes for the summary, fetched by get() in loadSummary
     waiting = "function waitLabel" + js.split("function waitLabel")[1].split("function waitingCard")[0]            # SPEC_CHAT_UI3B: the fixed labels of the waiting list, pinned below; nothing in them prepares
     assert "prepare(" not in waiting and "approve" not in waiting.replace("prd_approve", "").replace("draft_approve", "") and "Approve" not in waiting and "Setujui" not in waiting
     js = js.replace(waiting, "")
