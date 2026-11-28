@@ -24,7 +24,11 @@ function get() { return { then: function (f) { diffThen = f; return { catch: fun
 function who() { return el("span"); }
 function say(parent, w, label, text, cls) { parent.appendChild(el("p", cls, label + ": " + text)); }
 `;
-const code = helpers + grab("diffBlock") + "\n" + grab("replyBox") + "\n" + grab("installActions");
+const code = helpers + `
+var calls = [], VIEWER = "http://v/";
+function setMode(m) { calls.push("mode:" + m); } function showInstall(id) { calls.push("install:" + id); }
+function stateClass() { return ""; } function usd(n) { return "$" + n; } function viewerLink() { return null; } function reasonTyped() { return false; }
+` + grab("decideCard") + "\n" + grab("diffBlock") + "\n" + grab("replyBox") + "\n" + grab("installActions");
 const ctx = vm.createContext({ Math, String, Array, JSON, encodeURIComponent });
 vm.runInContext(code, ctx);
 const run = (s) => vm.runInContext(s, ctx);
@@ -85,4 +89,11 @@ for (const [name, diff] of [["cut", { text: null, sha12: SHA, why: "the patch is
 // 5. no button: the server's reason, and the started-but-never-recorded warning
 out.refused = run("html(installActions('j1', { patch_sha12: '" + SHA + "', apply: { action: null, why: 'the cap of this job is spent', started: null } }, 1))");
 out.started_warning = run("html(installActions('j1', { patch_sha12: '" + SHA + "', apply: { action: null, why: null, started: '2026-11-28T01:02:03Z' } }, 1))");
+// 6. the Decisions card: a finished code job gets a way to the install card; nothing else does
+function decide(r) { run("calls = []; var c6 = decideCard(" + JSON.stringify(r) + ");"); return run("html(c6)"); }
+out.decide_ready = decide({ id: "j1", kind: "code", state: "REVIEW_READY", sha12: "61e2d8a4e71f", allowed: ["reject"], busy: false, spent_usd: 0.03, cap_usd: 1 });
+run("all(c6).filter(function (n) { return n.tag === 'button' && n.text === 'Open install card'; })[0].listeners.click()");
+out.decide_ready_calls = run("JSON.stringify(calls)");
+out.decide_waiting = decide({ id: "j1", kind: "code", state: "AWAITING_APPROVAL", sha12: "61e2d8a4e71f", allowed: ["reject", "abandon"], busy: false, spent_usd: 0.03, cap_usd: 1 });
+out.decide_issue = decide({ id: "j2", kind: "issue", state: "REVIEW_READY", sha12: null, allowed: [], busy: false, spent_usd: 0, cap_usd: 1 });
 console.log(JSON.stringify(out, null, 1));

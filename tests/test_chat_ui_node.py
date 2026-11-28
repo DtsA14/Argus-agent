@@ -168,3 +168,11 @@ def test_the_reply_box_and_the_install_buttons_open_only_when_the_rules_say_and_
         assert out[k]["go_off"] is True and out[k]["tick_off"] is True and out[k]["prepared"] == "[]"
     assert "the cap of this job is spent" in out["refused"] and "<button" not in out["refused"]
     assert "never marked applied" in out["started_warning"] and "2026-11-28T01:02:03Z" in out["started_warning"]
+
+
+def test_a_finished_code_job_in_decisions_gets_a_way_to_the_install_card_and_nothing_else_does():
+    out = json.loads(node(HERE / "chat_ui_smoke_apply.js", APP))
+    assert "Open install card" in out["decide_ready"] and "Read the patch on the install card" in out["decide_ready"] and "Reject" in out["decide_ready"]
+    assert json.loads(out["decide_ready_calls"]) == ["mode:cards", "install:j1"]                      # navigation only: nothing is prepared from this button
+    assert "Open install card" not in out["decide_waiting"] and "Read the draft in the viewer" in out["decide_waiting"]
+    assert "Open install card" not in out["decide_issue"]

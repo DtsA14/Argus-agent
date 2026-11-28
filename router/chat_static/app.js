@@ -531,12 +531,19 @@
     if (typeof r.spent_usd === "number") { row.appendChild(el("span", null, usd(r.spent_usd) + " of " + usd(r.cap_usd))); }
     c.appendChild(row);
     c.appendChild(el("p", "muted mono", r.id));
-    c.appendChild(el("p", "note", r.sha12 ? "Draft " + r.sha12 + ". Read the draft in the viewer before deciding." : "No draft yet."));
+    var ready = r.state === "REVIEW_READY" && r.kind === "code";      // the agent is done: what waits for the person is the patch, not the draft
+    c.appendChild(el("p", "note", ready ? "The agent has finished. Read the patch on the install card before deciding." : r.sha12 ? "Draft " + r.sha12 + ". Read the draft in the viewer before deciding." : "No draft yet."));
     if (r.draft_problem) { c.appendChild(el("p", "note", "The draft cannot be read: " + r.draft_problem)); }
     if (r.busy) { c.appendChild(el("p", "note", "This chat is still running something on this job.")); }
     var link = viewerLink(VIEWER + r.id);
     if (link) { c.appendChild(link); }
     var acts = el("div", "actions");
+    if (ready) {                                          // navigation only: the install card is read first, its own buttons prepare and confirm
+      var open = el("button", "go", "Open install card");
+      open.type = "button";
+      open.addEventListener("click", function () { setMode("cards"); showInstall(r.id); });
+      acts.appendChild(open);
+    }
     if (!r.busy && r.allowed && r.allowed.length) {
       var why = el("input", "reason");                  // the reason is in the card, above its buttons, never in a shared box
       why.type = "text";
