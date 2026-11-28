@@ -157,14 +157,17 @@ def test_a_write_in_progress_is_not_unknown_and_not_counted_until_its_line_is_wh
     p = ledger(jobs, "j1", [started("a", NOW - 6, 5), done("a", NOW - 5, 10)])
     L = bg.Ledgers(jobs)
     assert L.snapshot(LIM, now=NOW)["day"]["spent_nano"] == 10
-    half = json.dumps(started("b", NOW - 4, 3) | {"x": "y"})
     with open(p, "a") as f:
-        f.write(half[:20])                                                     # a cut line, no newline yet
+        f.write(json.dumps(started("b", NOW - 4, 50)) + "\n")                    # the call b has started: its worst case counts
+    assert L.snapshot(LIM, now=NOW)["day"]["spent_nano"] == 60
+    end = json.dumps(done("b", NOW - 3, 4))
+    with open(p, "a") as f:
+        f.write(end[:25])                                                          # the end of b is being written: a cut line, no newline yet
     m = L.snapshot(LIM, now=NOW)
-    assert m["day"]["spent_nano"] == 10 and m["unknown"] is None
+    assert m["day"]["spent_nano"] == 60 and m["unknown"] is None
     with open(p, "a") as f:
-        f.write(half[20:] + "\n" + json.dumps(done("b", NOW - 3, 4)) + "\n")
-    assert L.snapshot(LIM, now=NOW)["day"]["spent_nano"] == 14
+        f.write(end[25:] + "\n")
+    assert L.snapshot(LIM, now=NOW)["day"]["spent_nano"] == 14                     # the cut line was not consumed: the whole line is read and replaces the worst case
 
 
 def test_a_broken_line_in_the_middle_is_skipped_not_unknown(jobs):
