@@ -48,3 +48,8 @@ F32 attachments, F34 issue_reply money, F42 more samples for provider and model 
 - Compaction quality is unproven until phase A's recall test runs; a summary can drop a detail (the newest turns and the whole history stay stored, only the summary replaces older text in the prompt).
 - Per turn exposure booking (B) is the hardest part to get exactly right; it gets the longest review.
 - The foreman model (DeepSeek Flash 1017) still refuses in plain chat now and then where `none` is expected (F45); not a safety issue, but visible.
+
+
+## Decision 2026-11-28 (Atha): the draft approval stays a human step (D2 cancelled)
+
+An automatic approval of a clean draft (checked by code: no existing test changed, no warning, no protected file, only pytest validations, `min_tests` not lower than the existing count) was proposed to bring the whole flow to 5 taps. Atha's case against it: in bulking-app the drafter wanted to add a new tab to the navigation bar although he wanted five buttons only. That happened inside the files the draft may change, with clean tests, and passes every check a program can make: the draft approval is where the person compares the plan with the intent. So **Approve draft stays a confirmation**; the target is 6 taps (1 message + 5 confirmations) once D (the steps as cards in the topic, prepared in advance) lands. Possible help, not built: the draft card in plain words ("will change / will not change", from the drafter's plan) and an advisory draft reader (two models compare the plan with the issue and flag additions that were not asked; a model's note, not proof).
