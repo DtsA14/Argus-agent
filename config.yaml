@@ -270,6 +270,9 @@ env_packages:
 
 chat:
   daily_cap_usd: 7.00
+  # SPEC_BUDGET_V2 part 1 (Atha 2026-11-28): meters of ACTUAL spend read from the stage ledgers (the jobs directory only), calendar days and months in WIB. They gate nothing yet:
+  # the gate is `daily_cap_usd` above. warn_at: the share of a limit from which the page shows the warning colour.
+  budget: {daily_usd: 1.00, monthly_usd: 30.00, warn_at: 0.8}
   # SPEC_CHAT_MANAGER_P1 (Atha 2026-11-26, K1 and K3): the foreman, one chat session = one job = one confirmation. session_cap_usd is the job's max_usd and counts as
   # exposure from the confirm; a turn is one model call (a second only to repair an unusable reply), each reserved at its worst case against turn_cap_usd and what the
   # session has left (SPEC_FOREMAN_MEMORY: older turns are summarized by the code near context_chars, not cut at 4 KB). ttl_hours stays below the 24 h exposure window. readable_repos: no repository content reaches the model until Atha names one (K2).

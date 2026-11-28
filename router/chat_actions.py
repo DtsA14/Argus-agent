@@ -23,6 +23,7 @@ import unicodedata
 from pathlib import Path
 from types import SimpleNamespace
 
+from router import budget as bg
 from router import example_gate as eg
 from router import issue as ri
 from router import queue as rq
@@ -184,6 +185,7 @@ class Actions:
         """cfg: the config as a dict, or a function that loads it. A function is called for every prepare and confirm, so the
         card shows what the CLI will read (it reads config.yaml on every run); config_path is passed to the CLI as --config."""
         self.jobs_dir, self._cfg, self.clock, self.environ = Path(jobs_dir), cfg, clock, environ
+        self.budget = bg.Ledgers(self.jobs_dir, clock)                                              # SPEC_BUDGET_V2 part 1: the meters of actual spend, read only
         self.cards = Cards(self.jobs_dir, Path(queues_dir) if queues_dir else rq.QUEUES, scrub)     # SPEC_CHAT_CARDS: read only
         self.approve = Approve(self.cards)                                                       # SPEC_KARTU_SETUJU: the plan card, read only
         self.approve_code = Install(self.approve)                                                # 5b: the install card, read only
@@ -722,6 +724,18 @@ class Actions:
         return {"decisions": rows, "capped": False, "skipped": skipped}
 
     # ---- the daily cap, for the Cost tab (SPEC_CHAT_UI3C) -----------------------------------------------------------------------------
+
+    def budget_status(self):
+        """The daily and monthly meters of actual spend (SPEC_BUDGET_V2 part 1): {"off": true} when chat.budget is absent or unusable, else the snapshot. Gates nothing."""
+        try:
+            lim = bg.settings(self.cfg)
+        except bg.BudgetConfigError as e:
+            return {"off": True, "problem": str(e)}
+        except (KeyError, TypeError, AttributeError, ConfigError):
+            return {"off": True, "problem": "the configuration cannot be read"}
+        if lim is None:
+            return {"off": True}
+        return self.budget.snapshot(lim)
 
     def cap_status(self):
         """{cap_usd, booked_usd, unknown}: the daily cap and the exposure the cap counts (the full limit of every job a UI action started in the last 24 hours, not what

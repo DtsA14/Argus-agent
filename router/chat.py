@@ -43,9 +43,9 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
                 "app.css": "text/css; charset=utf-8"}
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
-    "index.html": "c3bed137415b002ed2a3dbb7976b3fabf3f9b9c984b3db9f0ecf7d9bfcf1c9bf",
-    "app.js": "6d6fac5340921bde25f845a8bd998ac4c3c49e692bf8ec8afb2dba22fddf74d2",
-    "app.css": "fd12c6876d5a3ea8191fcaf66a8b7855eb375b9d4a9ce369b1345896bda3da37",
+    "index.html": "5a4a9f763988f5a1515536d57d3e6b8075e42c015ee0384456f772b0d2acda50",
+    "app.js": "0106d6a61d8cf2a16b2a66203333586d972a5b41acda2b18df43b374ca558ad1",
+    "app.css": "b0ee921163a387857a8a000ea68aa6521c8d912e3c579fc47b6f0def40bdb30c",
 }
 
 
@@ -319,6 +319,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if a is not None and path == "/api/cap":                    # SPEC_CHAT_UI3C: the daily cap and the booked exposure, read only
             return self._json(200, a.cap_status())
+        if a is not None and path == "/api/budget":                 # SPEC_BUDGET_V2 part 1: the daily and monthly meters of actual spend, read only
+            return self._json(200, a.budget_status())
         if a is not None and path == "/api/waiting":                # SPEC_CHAT_UI3B: what waits for the person, read only
             return self._json(200, a.waiting())
         if a is not None and path == "/api/decisions":
@@ -529,6 +531,10 @@ def serve(jobs_dir, cfg=None, config_path=None, load=None, port=PORT, queues_dir
     from router.chat_actions import Actions
     actions = Actions(jobs_dir, load or (lambda: cfg), config_path=config_path, queues_dir=queues_dir)   # always (13.7 item 5): reject and abandon need no config
     chat = Chat(jobs_dir, actions=actions)
+    try:
+        actions.budget.warm()                                       # the first read of every ledger happens here, not inside the first request
+    except Exception as e:                                          # the meters are read only: a failure here must not stop the chat
+        print(f"budget meters not warmed: {type(e).__name__}", flush=True)
     srv = server(chat, port=port, public=port)
     print(f"argus chat on http://{BIND}:{port} (jobs {jobs_dir})", flush=True)
     srv.serve_forever()
