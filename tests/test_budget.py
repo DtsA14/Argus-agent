@@ -157,12 +157,9 @@ def test_a_write_in_progress_is_not_unknown_and_not_counted_until_its_line_is_wh
     p = ledger(jobs, "j1", [started("a", NOW - 6, 5), done("a", NOW - 5, 10)])
     L = bg.Ledgers(jobs)
     assert L.snapshot(LIM, now=NOW)["day"]["spent_nano"] == 10
-    with open(p, "a") as f:
-        f.write(json.dumps(started("b", NOW - 4, 50)) + "\n")                    # the call b has started: its worst case counts
-    assert L.snapshot(LIM, now=NOW)["day"]["spent_nano"] == 60
     end = json.dumps(done("b", NOW - 3, 4))
     with open(p, "a") as f:
-        f.write(end[:25])                                                          # the end of b is being written: a cut line, no newline yet
+        f.write(json.dumps(started("b", NOW - 4, 50)) + "\n" + end[:25])        # b has started (its worst case counts) and its end is being written: whole lines, then a cut one
     m = L.snapshot(LIM, now=NOW)
     assert m["day"]["spent_nano"] == 60 and m["unknown"] is None
     with open(p, "a") as f:
