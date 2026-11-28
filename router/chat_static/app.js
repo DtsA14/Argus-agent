@@ -1465,6 +1465,16 @@
     bar.value = Math.min(w.spent_usd, w.limit_usd);
     bar.setAttribute("aria-label", title + ": " + usd2(w.spent_usd) + " of " + usd2(w.limit_usd));
     card.appendChild(bar);
+    groupLine(card, "By platform", w.by_platform);
+    groupLine(card, "By source", w.by_source);
+  }
+  function groupLine(card, label, groups) {            // "By platform: OpenRouter $0.15 · DeepSeek $0.07": text only; under half a cent is "under $0.01"
+    if (!groups || typeof groups !== "object") { return; }
+    var parts = Object.keys(groups).map(function (k) {
+      var n = groups[k];
+      return String(k) + " " + (typeof n !== "number" ? "?" : (n < 5000000 ? "under $0.01" : usd2(n / 1e9)));
+    });
+    if (parts.length) { card.appendChild(el("p", "small", label + ": " + parts.join(" · "))); }
   }
   function budgetCard() {
     var c = el("article", "card");
@@ -1473,7 +1483,9 @@
     if (budgetInfo.off) { c.appendChild(el("p", "note", "The budget meters are off.")); return c; }
     budgetWindow(c, "Today", budgetInfo.day);
     budgetWindow(c, "This month", budgetInfo.month);
-    c.appendChild(el("p", "note", String(budgetInfo.note || "") + ". It shows what the ledgers recorded; it does not stop anything yet."));
+    var gone = (budgetInfo.sources || []).filter(function (x) { return x && x.missing; }).map(function (x) { return String(x.label); });
+    if (gone.length) { c.appendChild(el("p", "small", "Not found: " + gone.join(", "))); }
+    c.appendChild(el("p", "note", "Counts " + String(budgetInfo.note || "") + ". It shows what the ledgers recorded; it does not stop anything yet."));
     return c;
   }
   var capInfo = null;                                    // {cap_usd, booked_usd, unknown} from /api/cap; null until read; {failed: true} when it could not be read

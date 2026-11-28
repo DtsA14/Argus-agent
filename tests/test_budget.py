@@ -54,7 +54,7 @@ def meter(jobs, now, **kw):
 
 def test_the_section_is_optional_and_validated():
     assert bg.settings({"chat": {}}) is None and bg.settings({}) is None
-    assert bg.settings({"chat": {"budget": {"daily_usd": 1.0, "monthly_usd": 30.0, "warn_at": 0.8}}}) == {"daily_nano": 10 ** 9, "monthly_nano": 30 * 10 ** 9, "warn_at": 0.8}
+    assert bg.settings({"chat": {"budget": {"daily_usd": 1.0, "monthly_usd": 30.0, "warn_at": 0.8}}}) == {"daily_nano": 10 ** 9, "monthly_nano": 30 * 10 ** 9, "warn_at": 0.8, "sources": []}
 
 
 @pytest.mark.parametrize("bad", [{"daily_usd": 0, "monthly_usd": 30, "warn_at": 0.8}, {"daily_usd": -1, "monthly_usd": 30, "warn_at": 0.8}, {"daily_usd": float("nan"), "monthly_usd": 30, "warn_at": 0.8},
@@ -69,7 +69,10 @@ def test_a_bad_section_is_refused(bad):
 def test_the_real_config_has_the_budget_atha_chose():
     from runner import load_config
     s = bg.settings(load_config())
-    assert s == {"daily_nano": 10 ** 9, "monthly_nano": 30 * 10 ** 9, "warn_at": 0.8}
+    assert (s["daily_nano"], s["monthly_nano"], s["warn_at"]) == (10 ** 9, 30 * 10 ** 9, 0.8)
+    labels = [x[0] for x in s["sources"]]
+    assert 0 < len(labels) <= bg.SOURCES_MAX and len(set(labels)) == len(labels) and bg.OWN not in labels and all(os.path.isabs(x[1]) and x[2] in ("jobs", "flat") for x in s["sources"])
+    assert not any("staging" in x[1] or os.path.basename(x[1]).startswith("wt-") for x in s["sources"])            # staging and a worktree itself hold copies: not sources
 
 
 # ---- the windows --------------------------------------------------------------------------------------------------
@@ -182,7 +185,7 @@ def test_an_unpriced_call_makes_only_its_own_windows_unknown(jobs):
     assert m["day"]["spent_nano"] == 10 and m["month"]["spent_nano"] == 10 and m["unknown"] is None          # October's unpriced call is not November's problem
     ledger(jobs, "j2", [started("c", NOW - 4, None)])
     m = meter(jobs, NOW)
-    assert m["day"]["unknown"] == {"reason": "unpriced call", "job": "j2"} and m["day"]["spent_usd"] is None and m["month"]["unknown"]["job"] == "j2" and m["unknown"]["job"] == "j2"
+    assert m["day"]["unknown"] == {"reason": "unpriced call", "job": "j2", "source": "Argus jobs"} and m["day"]["spent_usd"] is None and m["month"]["unknown"]["job"] == "j2" and m["unknown"]["job"] == "j2"
 
 
 @pytest.mark.parametrize("amount", [-5, 1.5, "7", True])
@@ -199,7 +202,7 @@ def test_an_unreadable_ledger_is_unknown_only_when_it_is_from_this_month(jobs):
     old.chmod(0)
     try:
         m = meter(jobs, NOW)
-        assert m["month"]["unknown"] == {"reason": "unreadable", "job": "j1"} and m["day"]["unknown"]["job"] == "j1" and m["month"]["spent_usd"] is None
+        assert m["month"]["unknown"] == {"reason": "unreadable", "job": "j1", "source": "Argus jobs"} and m["day"]["unknown"]["job"] == "j1" and m["month"]["spent_usd"] is None
         new.chmod(0o644)
         m = meter(jobs, NOW)
         assert m["unknown"] is None and m["ignored"] == 0 or m["unknown"] is None                          # the old one, unreadable and from September, is no problem now
@@ -241,7 +244,7 @@ def test_the_month_meter_is_not_the_day_meter(jobs):
     ledger(jobs, "j1", [started("a", at(2026, 11, 3, 5), 5), done("a", at(2026, 11, 3, 5), 40), started("b", NOW - 3, 5), done("b", NOW - 2, 2)])
     m = meter(jobs, NOW)
     assert m["day"]["spent_nano"] == 2 and m["month"]["spent_nano"] == 42 and m["day"]["limit_usd"] == 1.0 and m["month"]["limit_usd"] == 30.0
-    assert "WIB" in m["note"] and "jobs directory" in m["note"]
+    assert "WIB" in m["note"] and "listed sources" in m["note"]
 
 
 def test_nothing_is_zero_when_there_are_no_ledgers(jobs):
@@ -264,7 +267,7 @@ def test_the_snapshot_is_kept_for_a_few_seconds(jobs):
 
 def test_a_cold_scan_of_600_ledgers_and_a_warm_one_are_fast(jobs):
     for i in range(600):
-        ledger(jobs, f"j{i:04d}", [e for k in range(20) for e in (started(f"c{k}", NOW - 100 + k, 50), done(f"c{k}", NOW - 100 + k, 10))])
+        ledger(jobs, f"j{i:04d}", [e for k in range(20) for e in (started(f"c{i}_{k}", NOW - 100 + k, 50), done(f"c{i}_{k}", NOW - 100 + k, 10))])
     L = bg.Ledgers(jobs)
     t = time.perf_counter()
     L.warm()
@@ -274,3 +277,114 @@ def test_a_cold_scan_of_600_ledgers_and_a_warm_one_are_fast(jobs):
     warm = time.perf_counter() - t
     assert m["scanned"] == 600 and m["day"]["spent_nano"] == 600 * 20 * 10
     assert cold < 5.0 and warm < 1.0, (cold, warm)                         # the spec's 2 s and 50 ms, with room for a loaded host
+
+
+# ---- B1.1 (rev 2): the bill, platforms, sources, copies ------------------------------------------------------------
+
+def call(cid, ts, usd_nano, reported="absent", model="openrouter:deepseek/deepseek-v4.1-flash-1017", status="ok"):
+    e = {"event": "llm_call", "call_id": cid, "ts": ts, "status": status, "usd_nano": usd_nano, "model": model}
+    if reported != "absent":
+        e["usd_reported_nano"] = reported
+    return e
+
+
+def start(cid, ts, worst, model="openrouter:deepseek/deepseek-v4.1-flash-1017"):
+    return {**started(cid, ts, worst), "model": model}
+
+
+def test_a_call_costs_what_its_bill_says_the_reported_cost_when_there_is_one(jobs):
+    ledger(jobs, "j1", [start("a", NOW - 9, 5), call("a", NOW - 8, 1000, reported=400),          # the harness's upper bound 1000, the gateway billed 400
+                        start("b", NOW - 7, 5), call("b", NOW - 6, 300),                          # a direct API: no reported cost, the harness's count
+                        start("c", NOW - 5, 5), call("c", NOW - 4, 900, reported=1.5),             # a reported value that is not an integer is not used
+                        start("d", NOW - 3, 5), call("d", NOW - 2, 700, reported=-1)])
+    assert meter(jobs, NOW)["day"]["spent_nano"] == 400 + 300 + 900 + 700
+
+
+def test_a_started_call_still_counts_its_worst_case_and_its_platform(jobs):
+    ledger(jobs, "j1", [start("a", NOW - 9, 777, model="deepseek:deepseek-flash")])
+    m = meter(jobs, NOW)
+    assert m["day"]["spent_nano"] == 777 and m["day"]["by_platform"] == {"DeepSeek": 777}
+
+
+@pytest.mark.parametrize("model,name", [("openrouter:deepseek/x", "OpenRouter"), ("deepseek:deepseek-flash", "DeepSeek"), ("anthropic:claude-haiku-5-5", "Anthropic"),
+                                        ("together:llama", "Together"), (None, "Other"), ("nocolon", "Other"), (":x", "Other"), (5, "Other")])
+def test_the_platform_is_the_prefix_of_the_model(model, name):
+    assert bg.platform_of(model) == name
+
+
+def test_the_platforms_and_the_sources_each_add_up_to_the_total(jobs, tmp_path):
+    other = tmp_path / "exp"
+    ledger(jobs, "j1", [start("a", NOW - 9, 5, model="openrouter:m"), call("a", NOW - 8, 100, model="openrouter:m"), start("b", NOW - 7, 5, model="deepseek:m"), call("b", NOW - 6, 50, model="deepseek:m")])
+    ledger(other, "j2", [start("c", NOW - 5, 5, model="deepseek:m"), call("c", NOW - 4, 25, model="deepseek:m")])
+    lim = {**LIM, "sources": [("Experiments", str(other), "jobs")]}
+    m = bg.Ledgers(jobs).snapshot(lim, now=NOW)
+    assert m["day"]["spent_nano"] == 175 and m["day"]["by_platform"] == {"OpenRouter": 100, "DeepSeek": 75} and m["day"]["by_source"] == {"Argus jobs": 150, "Experiments": 25}
+    assert sum(m["month"]["by_platform"].values()) == sum(m["month"]["by_source"].values()) == m["month"]["spent_nano"] == 175
+    assert [x["label"] for x in m["sources"]] == ["Argus jobs", "Experiments"]
+
+
+def test_a_call_held_by_several_sources_counts_once_for_the_first(jobs, tmp_path):
+    copy = tmp_path / "copy"
+    ev = [start("a", NOW - 9, 5), call("a", NOW - 8, 100)]
+    ledger(jobs, "j1", ev)
+    ledger(copy, "j1", ev)                                                    # a snapshot copy of the same ledger
+    ledger(copy, "j9", [start("z", NOW - 3, 5), call("z", NOW - 2, 40)])
+    m = bg.Ledgers(jobs).snapshot({**LIM, "sources": [("Copy", str(copy), "jobs")]}, now=NOW)
+    assert m["day"]["spent_nano"] == 140 and m["day"]["by_source"] == {"Argus jobs": 100, "Copy": 40}
+    first = bg.Ledgers(jobs).snapshot({**LIM, "sources": [("A", str(copy), "jobs")]}, now=NOW)
+    assert first["day"]["by_source"]["Argus jobs"] == 100                      # the chat's own directory is first whatever the config says
+
+
+def test_the_config_order_decides_which_source_holds_a_shared_call(jobs, tmp_path):
+    a, b = tmp_path / "a", tmp_path / "b"
+    ev = [start("a", NOW - 9, 5), call("a", NOW - 8, 100)]
+    ledger(a, "j1", ev)
+    ledger(b, "j1", ev)
+    m = bg.Ledgers(jobs).snapshot({**LIM, "sources": [("B", str(b), "jobs"), ("A", str(a), "jobs")]}, now=NOW)
+    assert m["day"]["by_source"] == {"B": 100}
+
+
+def test_a_flat_source_reads_ledgers_three_deep_not_four_and_skips_checkout_directories(jobs, tmp_path):
+    root = tmp_path / "flat"
+    write(root / "route_eval_ledger.jsonl", [start("a", NOW - 9, 5), call("a", NOW - 8, 1)])
+    write(root / "x" / "y" / "z" / "events.jsonl", [start("b", NOW - 9, 5), call("b", NOW - 8, 10)])                # three directories deep: read
+    write(root / "x" / "y" / "z" / "w" / "events.jsonl", [start("c", NOW - 9, 5), call("c", NOW - 8, 100)])         # four: not read
+    for skip in ("fixtures", "source", "workspace", "root", ".git", "node_modules"):
+        write(root / skip / "events.jsonl", [start("s" + skip, NOW - 9, 5), call("s" + skip, NOW - 8, 1000)])
+    outside = write(tmp_path / "elsewhere" / "events.jsonl", [start("o", NOW - 9, 5), call("o", NOW - 8, 99999)])
+    os.symlink(outside, root / "linked_ledger.jsonl")
+    m = bg.Ledgers(jobs).snapshot({**LIM, "sources": [("Flat", str(root), "flat")]}, now=NOW)
+    assert m["day"]["spent_nano"] == 1 + 10 and m["ignored"] == 1
+
+
+def test_a_missing_source_is_listed_as_missing_and_is_not_unknown(jobs, tmp_path):
+    m = bg.Ledgers(jobs).snapshot({**LIM, "sources": [("Gone", str(tmp_path / "nowhere"), "jobs"), ("Gone flat", str(tmp_path / "nowhere2"), "flat")]}, now=NOW)
+    assert m["unknown"] is None and [x["missing"] for x in m["sources"]] == [False, True, True]
+
+
+def test_a_plain_file_named_like_a_job_beside_the_jobs_is_not_unknown(jobs):
+    (jobs / "j20261122_120632_4c0a.out").write_text("output of a run")
+    ledger(jobs, "j1", [start("a", NOW - 9, 5), call("a", NOW - 8, 10)])
+    m = meter(jobs, NOW)
+    assert m["unknown"] is None and m["day"]["spent_nano"] == 10
+
+
+def test_an_unknown_window_names_the_source(jobs, tmp_path):
+    exp = tmp_path / "exp"
+    ledger(exp, "j2", [start("c", NOW - 4, None)])
+    m = bg.Ledgers(jobs).snapshot({**LIM, "sources": [("Experiments", str(exp), "jobs")]}, now=NOW)
+    assert m["day"]["unknown"] == {"reason": "unpriced call", "job": "j2", "source": "Experiments"} and m["day"]["by_platform"] is None and m["day"]["by_source"] is None
+
+
+@pytest.mark.parametrize("sources", [[{"label": "A", "path": "/x", "layout": "jobs"}, {"label": "A", "path": "/y", "layout": "jobs"}], [{"label": "Argus jobs", "path": "/x", "layout": "jobs"}],
+                                     [{"label": "A", "path": "relative/x", "layout": "jobs"}], [{"label": "A", "path": "/x", "layout": "deep"}], [{"label": "", "path": "/x", "layout": "jobs"}],
+                                     [{"label": 5, "path": "/x", "layout": "jobs"}], [{"label": "A" * 41, "path": "/x", "layout": "jobs"}], [{"label": "A", "path": "/x"}],
+                                     [{"label": str(i), "path": "/x", "layout": "jobs"} for i in range(41)], "x", [{"label": "A", "path": "/x", "layout": "jobs", "extra": 1}]])
+def test_bad_sources_are_refused(sources):
+    with pytest.raises(bg.BudgetConfigError):
+        bg.settings({"chat": {"budget": {"daily_usd": 1, "monthly_usd": 30, "warn_at": 0.8, "sources": sources}}})
+
+
+def test_a_good_source_list_is_expanded_and_ordered():
+    s = bg.settings({"chat": {"budget": {"daily_usd": 1, "monthly_usd": 30, "warn_at": 0.8, "sources": [{"label": "H", "path": "~/x", "layout": "flat"}, {"label": "J", "path": "/abs/j", "layout": "jobs"}]}}})
+    assert s["sources"] == [("H", os.path.expanduser("~/x"), "flat"), ("J", "/abs/j", "jobs")]

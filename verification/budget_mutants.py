@@ -31,6 +31,18 @@ M = [
                                           'var np = el("p", "note"); np.innerHTML = "cannot be computed (" + String(w.unknown && w.unknown.reason) + (w.unknown && w.unknown.job ? ", " + String(w.unknown.job) : "") + "). It is not zero."; card.appendChild(np);')]),
     ("the chip shows a non-number as a number", JS, [('if (b.day.unknown || typeof b.day.spent_usd !== "number") { return "Today ?"; }', 'if (b.day.unknown) { return "Today ?"; }')]),
     ("serve does not warm the ledgers", C, [("        actions.budget.warm()   ", "        pass   ")]),
+    # B1.1 (rev 2 section 9)
+    ("the reported cost is ignored", B, [('            f.final[cid] = (e.get("ts"), rep if _is_nano(rep) else e.get("usd_nano"), platform_of(e.get("model")))', '            f.final[cid] = (e.get("ts"), e.get("usd_nano"), platform_of(e.get("model")))')]),
+    ("a reported value that is not an integer is used", B, [('rep if _is_nano(rep) else e.get("usd_nano")', 'rep if rep is not None else e.get("usd_nano")')]),
+    ("a started-only call has no platform", B, [('f.started[cid] = (e.get("ts"), e.get("worst_usd_nano"), platform_of(e.get("model")))', 'f.started[cid] = (e.get("ts"), e.get("worst_usd_nano"), "Other")')]),
+    ("a shared call is counted once per source", B, [("                    if key in counted:\n                        continue", "                    if False:\n                        continue")]),
+    ("the last source holds a shared call", B, [("key=lambda f: rank.get(f.source, 10 ** 6))", "key=lambda f: -rank.get(f.source, 10 ** 6))")]),
+    ("a flat source reads four directories deep", B, [("SOURCES_MAX, LABEL_MAX, FLAT_DEPTH = 40, 40, 3", "SOURCES_MAX, LABEL_MAX, FLAT_DEPTH = 40, 40, 4")]),
+    ("a flat source reads fixture directories", B, [('{".git", "node_modules", "fixtures", "source", "workspace", "root"}', '{".git", "node_modules", "source", "workspace", "root"}')]),
+    ("a missing jobs source is not reported missing", B, [("        try:\n            names = os.listdir(root)\n        except OSError:\n            return False", "        try:\n            names = os.listdir(root)\n        except OSError:\n            return True")]),
+    ("the platform amounts do not add up", B, [("plat[w][platform] = plat[w].get(platform, 0) + nano", "plat[w][platform] = plat[w].get(platform, 0) + nano // 2")]),
+    ("a plain file named like a job makes the month unknown", B, [("        except (FileNotFoundError, NotADirectoryError):", "        except FileNotFoundError:")]),
+    ("the group line is drawn as HTML", JS, [('if (parts.length) { card.appendChild(el("p", "small", label + ": " + parts.join(" \u00b7 "))); }', 'if (parts.length) { var gp = el("p", "small"); gp.innerHTML = label + ": " + parts.join(" \u00b7 "); card.appendChild(gp); }')]),
 ]
 killed = ran = 0
 for name, f, edits in M:

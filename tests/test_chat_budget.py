@@ -38,7 +38,7 @@ def test_the_route_answers_off_without_the_section_and_with_the_numbers_with_it(
         tb.ledger(s.jobs, "j20261128_090000_aaaa", [tb.started("a", now - 5, 5), tb.done("a", now - 4, 250_000_000)])
         status, out = s.request("GET", "/api/budget")
         assert status == 200 and out["day"]["limit_usd"] == 1.0 and out["month"]["limit_usd"] == 30.0 and out["unknown"] is None
-        assert out["day"]["spent_usd"] == pytest.approx(0.25) and out["month"]["spent_usd"] == pytest.approx(0.25) and "jobs directory only" in out["note"]
+        assert out["day"]["spent_usd"] == pytest.approx(0.25) and out["month"]["spent_usd"] == pytest.approx(0.25) and "listed sources" in out["note"]
     finally:
         s.stop()
 
@@ -86,6 +86,7 @@ def test_the_cost_tab_shows_both_meters_and_never_draws_unknown_as_zero():
     assert "The budget meters are off." in out["budgetOff"]
     ok = out["budgetOk"]
     assert "Today: $0.35 of $1.00" in ok and "This month: $7.55 of $30.00" in ok and "does not stop anything yet" in ok and "<progress.pbar>" in ok
+    assert "By platform: OpenRouter $0.15 · DeepSeek under $0.01" in ok and "By source: Argus jobs $0.15 · Experiments $0.20" in ok and "Not found: Gone" in ok
     assert "pbar warn" in out["budgetWarn"] and "Today: $0.90 of $1.00" in out["budgetWarn"] and out["budgetWarn"].count("pbar warn") == 1
     u = out["budgetUnknown"]
     assert "Today: unknown" in u and "This month: unknown" in u and "It is not zero." in u and "unpriced call, j<b>1</b>" in u and "$0.00" not in u.split("Spent (daily")[1].split("Recorded")[0]

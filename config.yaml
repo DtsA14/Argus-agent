@@ -272,7 +272,34 @@ chat:
   daily_cap_usd: 7.00
   # SPEC_BUDGET_V2 part 1 (Atha 2026-11-28): meters of ACTUAL spend read from the stage ledgers (the jobs directory only), calendar days and months in WIB. They gate nothing yet:
   # the gate is `daily_cap_usd` above. warn_at: the share of a limit from which the page shows the warning colour.
-  budget: {daily_usd: 1.00, monthly_usd: 30.00, warn_at: 0.8}
+  budget:
+    daily_usd: 1.00
+    monthly_usd: 30.00
+    warn_at: 0.8
+    # B1.1 (Atha 2026-11-28): the limits are for ALL platforms together, shown grouped by platform and by source. The chat's own jobs directory ("Argus jobs") is always counted first;
+    # these are the other places on this machine that spend from the same wallets. `jobs`: a jobs directory; `flat`: ledger files at most 3 directories deep. A call held by several
+    # sources counts once (the first). `argus-staging` and the `wt-*` worktrees hold copies and are NOT sources. New experiments run under ~/argus-experiments.
+    sources:
+      - {label: "Argus-agent jobs", path: "~/Argus-agent/jobs", layout: jobs}
+      - {label: "Worktree experiments", path: "~/wt-exp/jobs-exp", layout: jobs}
+      - {label: "Judge replay", path: "~/judge_replay/jobs", layout: jobs}
+      - {label: "Judge replay 2b", path: "~/judge_replay2b/jobs", layout: jobs}
+      - {label: "Judge plant", path: "~/judge_plant/jobs", layout: jobs}
+      - {label: "NEXUS effort jobs", path: "~/nexus_pilot/effort_jobs", layout: jobs}
+      - {label: "NEXUS replay run 1", path: "~/nexus_pilot/replay_061847/run1", layout: jobs}
+      - {label: "NEXUS replay run 2", path: "~/nexus_pilot/replay_061847/run2", layout: jobs}
+      - {label: "e1 jobs", path: "~/e1_jobs", layout: jobs}
+      - {label: "Morph jobs", path: "~/morph_jobs", layout: jobs}
+      - {label: "PI jobs", path: "~/pi_jobs", layout: jobs}
+      - {label: "SR jobs", path: "~/sr_jobs", layout: jobs}
+      - {label: "Scratch jobs", path: "~/scratch_jobs", layout: jobs}
+      - {label: "Route eval 1", path: "~/route_eval_run1", layout: flat}
+      - {label: "Route eval 2", path: "~/route_eval_run2", layout: flat}
+      - {label: "Route eval 3", path: "~/route_eval_run3", layout: flat}
+      - {label: "T3b GLM", path: "~/t3b_glm.key", layout: flat}
+      - {label: "T3b round 3", path: "~/t3b_r3.key", layout: flat}
+      - {label: "Patch probe", path: "~/patch_probe", layout: flat}
+      - {label: "Experiments", path: "~/argus-experiments", layout: flat}
   # SPEC_CHAT_MANAGER_P1 (Atha 2026-11-26, K1 and K3): the foreman, one chat session = one job = one confirmation. session_cap_usd is the job's max_usd and counts as
   # exposure from the confirm; a turn is one model call (a second only to repair an unusable reply), each reserved at its worst case against turn_cap_usd and what the
   # session has left (SPEC_FOREMAN_MEMORY: older turns are summarized by the code near context_chars, not cut at 4 KB). ttl_hours stays below the 24 h exposure window. readable_repos: no repository content reaches the model until Atha names one (K2).
