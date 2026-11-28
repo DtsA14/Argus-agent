@@ -14,7 +14,7 @@ from pathlib import Path
 READERS = {"router/chat_static/": ("chat_static", "STATIC_DIR")}
 
 FIXED = ("tests/test_acceptance_sandbox.py", "tests/test_verification_names.py", "tests/test_verify_at.py",
-         "tests/test_verify_provenance.py", "tests/test_xdist_groups.py")
+         "tests/test_verify_provenance.py", "tests/test_xdist_groups.py", "tests/test_repin.py")   # test_repin: a stale chat pin fails the precheck by name
 
 
 def reads(test, markers):
