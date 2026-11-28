@@ -65,6 +65,7 @@ NEXT_MAX = mr.STEPS_MAX             # P4: the jobs a session started that the pa
 TOKEN_TTL = 300                    # 11.3: five minutes, not thirty
 MIN_DELAY = 1.0                    # 11.3/11.6: a confirm this soon after its prepare is a script, not a thumb
 DAY = 24 * 3600
+TOPIC_TTL_S, TOPIC_WALK, TOPICS_MAX, TOPIC_SESSIONS_MAX = 5.0, 20, 50, 400
 WAIT_SCAN_MAX, WAIT_BUDGET_S, WAIT_TTL_S = 12, 2.0, 20.0     # SPEC_CHAT_UI3B: candidates looked at, seconds spent, seconds an answer is kept
 WAITING_ACTIONS = ("prd_approve", "queue_go", "queue_step", "draft_approve")
 AWAITING_HUMAN = pj.AWAITING_HUMAN
@@ -185,6 +186,7 @@ class Actions:
         """cfg: the config as a dict, or a function that loads it. A function is called for every prepare and confirm, so the
         card shows what the CLI will read (it reads config.yaml on every run); config_path is passed to the CLI as --config."""
         self.jobs_dir, self._cfg, self.clock, self.environ = Path(jobs_dir), cfg, clock, environ
+        self._chain_cache, self._topics_cache = {}, None                                            # SPEC_FOREMAN_TOPICS: read, never stored; dropped on a manager_new confirm
         self.budget = bg.Ledgers(self.jobs_dir, clock)                                              # SPEC_BUDGET_V2 part 1: the meters of actual spend, read only
         self.cards = Cards(self.jobs_dir, Path(queues_dir) if queues_dir else rq.QUEUES, scrub)     # SPEC_CHAT_CARDS: read only
         self.approve = Approve(self.cards)                                                       # SPEC_KARTU_SETUJU: the plan card, read only
@@ -469,6 +471,8 @@ class Actions:
         """(card, argv builder inputs) for an action, from live data; Refusal when it cannot be run."""
         if action not in ACTIONS:
             raise Refusal(404, "path", "no such action")
+        if {"title", "topic"} & set(params) and action != "manager_new":
+            raise Refusal(400, "form", "only a foreman session takes a title or a topic")
         if SOURCE_KEYS & set(params) and action not in ("research_new", "prd_new", "issue_new"):
             raise Refusal(400, "form", "only a research, PRD or issue form can start from the foreman's proposal")
         if action in ("job_reject", "job_abandon"):
@@ -886,10 +890,11 @@ class Actions:
         return {"from": "manager", "job": job, "turn": i, "edited": edited}, rest
 
     def build_manager(self, cfg, params):
-        """(card, run params) of a new foreman session (SPEC_CHAT_MANAGER_P1 5): no parameters; every number from the one function the CLI reads (manager_job.settings). The one
-        confirmation of the session: the turns that follow are inside its budget and are not confirmed again."""
-        if params:
-            raise Refusal(400, "form", "a foreman session takes no fields")
+        """(card, run params) of a new foreman session (SPEC_CHAT_MANAGER_P1 5): every number from the one function the CLI reads (manager_job.settings). The one
+        confirmation of the session: the turns that follow are inside its budget and are not confirmed again. SPEC_FOREMAN_TOPICS: `{}` as before, `{title}` a new topic (the
+        person's own words), `{topic}` the continuation of a topic whose newest session can take no more turns (the card holds the resolved session and the topic's title)."""
+        if set(params) - {"title", "topic"} or ("title" in params and "topic" in params):
+            raise Refusal(400, "form", "a foreman session takes a title (a new topic), a topic (to continue it) or nothing")
         try:
             m = mj.settings(cfg)
             model = cfg["roles"][m["role"]]["model"]
@@ -897,13 +902,202 @@ class Actions:
             raise Refusal(409, "config", strip_refused(str(e))) from None
         except (KeyError, TypeError, AttributeError, ConfigError):
             raise Refusal(409, "config", "the foreman's configuration is not complete") from None
+        title, continues, rp = None, None, {}
+        if "title" in params:
+            t = normalize(params["title"]) if isinstance(params["title"], str) else None
+            bad = mr.title_problem(t) if t is not None else "the title is not a text"
+            if bad or scrub(t) != t:
+                raise Refusal(400, "form", bad or "the title holds text the harness cleans away")
+            title, rp = t.strip(), {"title": t.strip()}
+        if "topic" in params:
+            tid = params["topic"]
+            if not isinstance(tid, str) or not UI_ID.fullmatch(tid):
+                raise Refusal(400, "form", "a topic is named by the id of one of its sessions")
+            title, continues = self._continuation(tid, m)
+            rp = {"continues": continues}
         self._need_key(False, manager=True)
         card = {"action": "manager_new", "title": "Start a chat session with the foreman", "model": model, "job_cap_usd": m["session_cap_usd"],
                 "turn_cap_usd": m["turn_cap_usd"], "turn_note": "one turn is one model call; a second call only when the first reply is unusable; and when the earlier turns grow long, one more call first summarizes them (shown in the chat): so a turn can cost up to three calls, each within the turn cap",
                 "ttl_hours": m["ttl_hours"], "max_turns": m["max_turns"],
                 "confirms": "this one confirmation covers the whole session: its turns are not confirmed again, and the foreman can propose but cannot approve, apply, merge or start anything",
                 "data_sent": "your messages and the earlier turns of the session go to the model provider (OpenRouter, then DeepSeek) and may be kept by it; no repository content is sent; do not put secrets in a message"}
-        return card, {}
+        if "title" in params or "topic" in params:
+            card["topic_title"] = title
+        if continues:
+            card["continues"] = continues
+            card["carried_note"] = ("a new session of the same topic starts with the summary and the last turns of the earlier session, as data written by you and the foreman; "
+                                    "nothing from it is started or approved by itself")
+        return card, rp
+
+    # ---- SPEC_FOREMAN_TOPICS: a topic is read from the links of its sessions, never stored ----------------------------------------------------------------------
+
+    def _session_info(self, job_id, ledgers=False):
+        """{id, data, spent, continues, continued_by} of a foreman session made via the UI, or None (unreadable, another kind, not via the UI)."""
+        got = self._read_data(job_id, ledgers=ledgers)
+        if got is None:
+            return None
+        d, spent = got
+        if d.get("kind") != "manager" or not any(isinstance(e, dict) and e.get("what") == "created" and e.get("via") == "ui" for e in d.get("log") or []):
+            return None
+        inp = d.get("inputs") if isinstance(d.get("inputs"), dict) else {}
+
+        def link(k):
+            v = inp.get(k)
+            return v if isinstance(v, str) and UI_ID.fullmatch(v) else None
+        return {"id": job_id, "data": d, "spent": spent, "continues": link("continues"), "continued_by": link("continued_by")}
+
+    def topic_sessions(self, job_id, fresh=False):
+        """The sessions of the topic job_id belongs to, oldest first, as {id, state, created_at}: back along `continues`, forward along `continued_by`, each link only when the other end
+        links back (a planted link cannot join a topic), at most TOPIC_WALK each way; [] when job_id is no foreman session made via the UI. Kept TOPIC_TTL_S."""
+        now = self.mono()
+        c = self._chain_cache.get(job_id)
+        if c is not None and not fresh and now - c[0] < TOPIC_TTL_S:
+            return c[1]
+        info = self._session_info(job_id)
+        if info is None:
+            return []
+
+        def brief(i):
+            return {"id": i["id"], "state": i["data"].get("state"), "created_at": i["data"].get("created_at")}
+        back, cur, seen = [], info, {job_id}
+        for _ in range(TOPIC_WALK):
+            prev = cur["continues"]
+            if not prev or prev in seen:
+                break
+            pi = self._session_info(prev)
+            if pi is None or pi["continued_by"] != cur["id"]:
+                break
+            back.append(brief(pi))
+            seen.add(prev)
+            cur = pi
+        fwd, cur = [], info
+        for _ in range(TOPIC_WALK):
+            nxt = cur["continued_by"]
+            if not nxt or nxt in seen:
+                break
+            ni = self._session_info(nxt)
+            if ni is None or ni["continues"] != cur["id"]:
+                break
+            fwd.append(brief(ni))
+            seen.add(nxt)
+            cur = ni
+        chain = list(reversed(back)) + [brief(info)] + fwd
+        self._chain_cache[job_id] = (now, chain)
+        return chain
+
+    def _can_take(self, info, m):
+        """"yes", "no" or "unknown" for a session read by _session_info(ledgers=True), by the one predicate the CLI's continuation and the page's offer share."""
+        spent = info["spent"]
+        spent_nano = int(round(spent * 1e9)) if isinstance(spent, (int, float)) and math.isfinite(spent) and spent >= 0 else None
+        size = len(json.dumps(info["data"], indent=2, ensure_ascii=False).encode("utf-8"))
+        return mj.can_take_turn(info["data"], spent_nano, m, self.clock(), size)
+
+    def _continuation(self, topic_id, m):
+        """(title, newest session id) of the topic to continue, read fresh, or a Refusal: no such topic, a session that is busy, one that can still take a turn, one whose spend or state
+        cannot be computed, or a session already continued."""
+        chain = self.topic_sessions(topic_id, fresh=True)
+        if not chain:
+            raise Refusal(409, "topic", "no such topic")
+        newest = chain[-1]["id"]
+        info = self._session_info(newest, ledgers=True)
+        if info is None:
+            raise Refusal(409, "topic", "the topic's newest session cannot be read")
+        if info["continued_by"]:
+            raise Refusal(409, "topic", "the topic was already continued")
+        if self.spawner.busy(newest):
+            raise Refusal(409, "topic", "the session is busy: wait for its turn to end")
+        verdict = self._can_take(info, m)
+        if verdict == "unknown":
+            raise Refusal(503, "topic", "the session's state or spend cannot be computed")
+        if verdict == "yes":
+            raise Refusal(409, "topic", "the session is still open: write in it")
+        return mj.topic_of(info["data"], newest)["title"], newest
+
+    def topics(self):
+        """The topics, newest first (SPEC_FOREMAN_TOPICS 4): a scan of the job directories that reads the first bytes of each job.json to find a foreman session, then those in full. A session that
+        cannot be read is counted, never a reason to refuse. Kept TOPIC_TTL_S and dropped on a manager_new confirm."""
+        now = self.mono()
+        c = self._topics_cache
+        if c is not None and now - c[0] < TOPIC_TTL_S:
+            return c[1]
+        sess, unreadable = {}, 0
+        try:
+            names = sorted((n for n in os.listdir(self.jobs_dir) if UI_ID.fullmatch(n)), reverse=True)
+        except OSError:
+            names = []
+        try:
+            sfd = os.open(self.jobs_dir, os.O_RDONLY | os.O_DIRECTORY)
+        except OSError:
+            sfd = None
+        if sfd is not None:
+            try:
+                for n in names:
+                    if len(sess) >= TOPIC_SESSIONS_MAX:
+                        break
+                    try:
+                        jfd = sd._open_dir(n, sfd)
+                        try:
+                            fd = os.open("job.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=jfd)
+                            try:
+                                head = os.read(fd, 300)
+                            finally:
+                                os.close(fd)
+                            if b'"kind": "manager"' not in head:
+                                continue
+                            d = json.loads(sd._read_at(jfd, "job.json", limit=JOB_JSON_MAX))
+                        finally:
+                            os.close(jfd)
+                    except FileNotFoundError:
+                        continue
+                    except (OSError, ValueError):
+                        unreadable += 1
+                        continue
+                    if not isinstance(d, dict) or d.get("kind") != "manager" or not any(isinstance(e, dict) and e.get("what") == "created" and e.get("via") == "ui" for e in d.get("log") or []):
+                        continue
+                    inp = d.get("inputs") if isinstance(d.get("inputs"), dict) else {}
+                    sess[n] = {"data": d, "continues": inp.get("continues") if isinstance(inp.get("continues"), str) else None,
+                               "continued_by": inp.get("continued_by") if isinstance(inp.get("continued_by"), str) else None}
+            finally:
+                os.close(sfd)
+        roots = [n for n, v in sess.items() if not (v["continues"] in sess and sess[v["continues"]]["continued_by"] == n)]
+        try:
+            m = mj.settings(self.cfg)
+        except (rj.Refused, KeyError, TypeError, AttributeError, ConfigError):
+            m = None
+        rows = []
+        for root in roots:
+            chain, cur = [root], root
+            for _ in range(TOPIC_WALK):
+                nxt = sess[cur]["continued_by"]
+                if not nxt or nxt not in sess or sess[nxt]["continues"] != cur or nxt in chain:
+                    break
+                chain.append(nxt)
+                cur = nxt
+            latest = chain[-1]
+            ld = sess[latest]["data"]
+            stamps = [e.get("at") for e in ld.get("conversation") or [] if isinstance(e, dict) and isinstance(e.get("at"), str)] + [ld.get("created_at")]
+            times = []
+            for st in stamps:
+                try:
+                    times.append(parse_time(st))
+                except (TypeError, ValueError, KeyError):
+                    pass
+            rows.append((max(times) if times else 0.0, root, chain))
+        rows.sort(key=lambda r: (-r[0], r[1]), reverse=False)
+        out = []
+        for upd, root, chain in rows[:TOPICS_MAX]:
+            latest = chain[-1]
+            info = self._session_info(latest, ledgers=True)
+            verdict = self._can_take(info, m) if info is not None and m is not None else "unknown"
+            spent = info["spent"] if info is not None else None
+            top = mj.topic_of(sess[root]["data"], root)
+            out.append({"id": root, "title": top["title"], "legacy": top["legacy"], "sessions": len(chain), "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(upd)) if upd else None,
+                        "latest": {"id": latest, "state": sess[latest]["data"].get("state"), "created_at": sess[latest]["data"].get("created_at"),
+                                   "can_take_turn": {"yes": True, "no": False}.get(verdict), "spent_usd": spent if isinstance(spent, (int, float)) and math.isfinite(spent) else None,
+                                   "max_usd": sess[latest]["data"].get("max_usd")}})
+        res = {"topics": out, "capped": len(rows) > TOPICS_MAX, "unreadable": unreadable}
+        self._topics_cache = (now, res)
+        return res
 
     def build_research(self, cfg, params):
         """(card, run params) of a new research job (12.2, 12.10 items 2, 7, 8, 12): everything the CLI's own go-live screen shows,
@@ -1157,14 +1351,21 @@ class Actions:
                 out.append({"from": "human", "n": n, "at": e.get("at"), "text": scrub(str(e.get("text") or ""))})
             elif e.get("from") == "summary":                 # SPEC_FOREMAN_MEMORY: the model's summary of older turns: text on the page in a fold, never a foreman entry
                 c = e.get("covers")
-                out.append({"from": "summary", "n": n, "at": e.get("at"), "text": scrub(str(e.get("text") or "")),
+                out.append({"from": "summary", "n": n, "at": e.get("at"), "text": scrub(str(e.get("text") or "")), "carried": e.get("carried") is True,
                             "covers": [x for x in c if isinstance(x, int) and not isinstance(x, bool)][:2] if isinstance(c, list) else None})
             else:
                 p = e.get("propose")
                 out.append({"from": "manager", "n": n, "source": "manager", "at": e.get("at"), "say": scrub(str(e.get("say") or "")), "calls": e.get("calls"), "usd": e.get("usd"),
                             "error": e.get("error"), "propose": ({k: scrub(str(p.get(k) or "")) if k != "repo" else p.get(k) for k in ("route", "repo", "text", "why")} if isinstance(p, dict) else None)})
+        sessions = self.topic_sessions(job_id)                                  # SPEC_FOREMAN_TOPICS: the topic this session belongs to, and the server's own answer to "can a turn be sent"
+        top = mj.topic_of(d, job_id)
+        try:
+            verdict = self._can_take({"data": d, "spent": spent}, mj.settings(self.cfg))
+        except (rj.Refused, KeyError, TypeError, AttributeError, ConfigError):
+            verdict = "unknown"
+        topic = {"id": top["id"], "title": scrub(top["title"]), "legacy": top["legacy"], "sessions": sessions[-TOPIC_WALK:], "newest": sessions[-1]["id"] if sessions else job_id}
         return {"job": job_id, "state": d.get("state"), "max_usd": d.get("max_usd"), "spent_usd": spent, "expires_in_s": left_s, "turn_cap_usd": turn_cap, "max_turns": max_turns, "next_steps": self.next_steps(job_id),
-                "busy": self.spawner.busy(job_id), "conversation": out}
+                "busy": self.spawner.busy(job_id), "topic": topic, "can_take_turn": {"yes": True, "no": False}.get(verdict), "conversation": out}
 
     def next_steps(self, session):
         """P4 (SPEC_CHAT_MANAGER_P4): what the jobs this session started are doing and where the person goes next, from the harness only: the jobs are those the chat's own
@@ -1177,13 +1378,14 @@ class Actions:
                 raw = f.read()
         except OSError:
             return []
+        sessions = [x["id"] for x in self.topic_sessions(session)] or [session]       # SPEC_FOREMAN_TOPICS: the jobs a topic started stay in its steps after a continuation
         seen, out = set(), []
         for line in reversed(raw.decode("utf-8", "replace").splitlines()):
             try:
-                if session not in line:                       # cheap: most lines are another session's or none
+                if not any(x in line for x in sessions):      # cheap: most lines are another session's or none
                     continue
                 r = json.loads(line)
-                if not (r.get("ok") == "confirm" and r.get("source_job") == session and r.get("action") in ("research_new", "prd_new")):                   # an issue job is no step the foreman is told about (SPEC_FOREMAN_ISSUE_PREPARE rev 1.1)
+                if not (r.get("ok") == "confirm" and r.get("source_job") in sessions and r.get("action") in ("research_new", "prd_new")):                   # an issue job is no step the foreman is told about (SPEC_FOREMAN_ISSUE_PREPARE rev 1.1)
                     continue
                 job = r.get("job")
                 if not isinstance(job, str) or not UI_ID.fullmatch(job) or job in seen:
@@ -1344,9 +1546,17 @@ class Actions:
             return {"job": new_id, "started": True}
         if a == "manager_new":                                # no key: the CLI makes the job, no model is called; the turns take the key
             new_id = rj.new_job_id()
-            argv = self.with_config(manager_cli(c, "new", "--job-id", new_id))
-            self.spawner.spawn(new_id, argv, None, action="manager")
+            args, tfile = ["new", "--job-id", new_id], None
+            if rp.get("title"):                                 # the person's text goes by a 0600 file, like every other text of theirs
+                tfile = self.spawner.message_file(rp["title"])
+                args += ["--title-file", str(tfile)]
+            if rp.get("continues"):
+                args.append(f"--continue-from={rp['continues']}")
+            argv = self.with_config(manager_cli(c, *args))
+            self.spawner.spawn(new_id, argv, tfile, action="manager")
             self.pending.append((self.clock(), ("new", new_id), self.exposure_of(card)))
+            self._chain_cache.clear()
+            self._topics_cache = None
             return {"job": new_id, "started": True}
         if a == "prd_new":
             new_id = rj.new_job_id()

@@ -346,6 +346,8 @@ def main(argv=None, deps=None):
     mn.add_argument("--job-id", required=True, help="the new job's id (the exact shape of a harness id, now)")
     mn.add_argument("--via", choices=rj.VIA, required=True)
     mn.add_argument("--yes", action="store_true", required=True, help="the session was confirmed in chat")
+    mn.add_argument("--title-file", default=None, help="a new topic: its title is read from this file (the person's own words), never from an argument")
+    mn.add_argument("--continue-from", default=None, help="continue the topic of this earlier session (its newest turns and summary are carried over as data); not with --title-file")
     mt = msub.add_parser("turn", help="one message and the foreman's answer (one model call; a second only to repair an unusable reply)")
     mt.add_argument("job")
     mt.add_argument("--message-file", required=True, help="the message is read from this file, never from an argument")
@@ -671,7 +673,13 @@ def main(argv=None, deps=None):
                 print(rj.status(o.job, jobs_dir=o.jobs_dir, cfg=cfg))
                 return 0
             if o.manager_cmd == "new":
-                job = mj.new(cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, job_id=o.job_id, via=o.via)
+                title = None
+                if o.title_file:
+                    try:
+                        title = Path(o.title_file).read_text(encoding="utf-8")
+                    except (OSError, ValueError):
+                        raise rj.Refused("the title file cannot be read; nothing was started") from None
+                job = mj.new(cfg=cfg, deps=deps, jobs_dir=o.jobs_dir, job_id=o.job_id, via=o.via, title=title, continue_from=o.continue_from)
                 print(f"manager session {job.id} is open (cap ${job.data['max_usd']:.2f})")
                 return 0
             steps = None

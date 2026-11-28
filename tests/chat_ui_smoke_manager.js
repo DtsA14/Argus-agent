@@ -33,14 +33,15 @@ var shown = [];
 function showResearch(id) { shown.push(id); }
 var postAnswer = null;
 function post(path, body) { posted.push(path + " " + JSON.stringify(body)); return postAnswer || Promise.resolve({ job: "x", started: true }); }
-var gets = 0, threadsAnswer = { threads: [] };
-function get(path) { gets++; return Promise.resolve(threadsAnswer); }
+var gets = 0, threadsAnswer = { threads: [] }, topicsAnswer = { topics: [] }, managerAnswer = null, topicsInfo = null;
+function get(path) { gets++; return Promise.resolve(path.indexOf("/api/topics") === 0 ? topicsAnswer : path.indexOf("/api/manager/") === 0 ? managerAnswer : threadsAnswer); }
+function drawTopics() {}
 var queued = [];
 function setTimeout(f, ms) { timers.push(ms); queued.push(f); return queued.length; }
 function clearTimeout() {}
-var mgr = { job: null, data: null, seq: 0, epoch: 0, sending: false, stuck: false, timer: null, left: 0, before: 0, expect: 0, retry: null };
+var mgr = { job: null, data: null, seq: 0, epoch: 0, sending: false, stuck: false, timer: null, left: 0, before: 0, expect: 0, retry: null, topic: null, want: null, newTopic: false };
 `;
-const code = helpers + ["timeLeft", "proposalBox", "nextStepsBox", "renderManager", "sendTurn", "pollManager", "loadManager"].map(grab).join("\n");
+const code = helpers + ["timeLeft", "proposalBox", "nextStepsBox", "continueCard", "newTopicCard", "renderManager", "sendTurn", "pollManager", "loadManager"].map(grab).join("\n");
 const ctx = vm.createContext({ Math, String, Array, JSON, Object, Promise });
 vm.runInContext(code, ctx);
 const run = (s) => vm.runInContext(s, ctx);
@@ -98,11 +99,27 @@ out.nextButtons = nb.map((b) => b.text);
 nb.filter((b) => b.text === "Open the report")[0].listeners.click(); nb.filter((b) => b.text === "Open the Queue tab")[0].listeners.click();
 out.nextClicks = run("JSON.stringify([modes, shown, prepared.length, posted.length])");
 run("mgr.data = " + JSON.stringify(D({ next_steps: [] })) + "; renderManager();"); out.nextNone = run("html(stream)").includes("Next steps");
-// an expired, used-up or refused session offers a new one; a healthy one does not
-const over = (o) => { run("mgr.stuck = false; mgr.job = 'j20261126_023857_708b'; mgr.data = " + JSON.stringify(D(o)) + "; renderManager();"); return run("html(stream)").includes("Prepare a new session"); };
-out.over = { healthy: over({ turn_cap_usd: 0.03, max_turns: 40 }), expired: over({ expires_in_s: 0 }), poor: over({ turn_cap_usd: 0.03, spent_usd: 0.19 }), fine: over({ turn_cap_usd: 0.03, spent_usd: 0.1 }),
-  turns: over({ max_turns: 1, conversation: [{ from: "human", n: 0, text: "a" }] }), busy: over({ expires_in_s: 0, busy: true }) };
-run("mgr.stuck = true;"); out.over.stuck = run("mgr.data = " + JSON.stringify(D()) + "; renderManager(); html(stream)").includes("Prepare a new session"); run("mgr.stuck = false;");
+// F47-C2: the offer to continue the topic is the server's own answer (can_take_turn), not the page's derivation; a refused turn is only a note
+const over = (o) => { run("mgr.stuck = false; mgr.job = 'j20261126_023857_708b'; mgr.data = " + JSON.stringify(D(o)) + "; renderManager();"); return run("html(stream)").includes("Continue this topic?"); };
+out.over = { healthy: over({ can_take_turn: true }), ended: over({ can_take_turn: false }), unknown: over({ can_take_turn: null }), missing: over({}), busy: over({ can_take_turn: false, busy: true }),
+  expiredButTrue: over({ expires_in_s: 0, can_take_turn: true }), poorButTrue: over({ spent_usd: 0.199, can_take_turn: true }) };
+run("mgr.stuck = true;"); out.over.stuck = run("mgr.data = " + JSON.stringify(D({ can_take_turn: true })) + "; renderManager(); html(stream)").includes("Continue this topic?");
+out.stuckNote = run("html(stream)").includes("The last turn was refused"); out.unknownNote = over({ can_take_turn: null }) === false && run("html(stream)").includes("cannot tell whether this session");
+run("mgr.stuck = false;");
+// the topic: its title, its sessions, the carried head's fold and the two cards' exact bodies
+const TOPIC = { id: "jT1", title: "Ekspor <b>CSV</b>", legacy: false, sessions: [{ id: "jT1", state: "BLOCKED" }, { id: "jT2", state: "OPEN" }], newest: "jT2" };
+run("mgr.stuck = false; mgr.job = 'jT2'; mgr.data = " + JSON.stringify(D({ topic: TOPIC, can_take_turn: false, conversation: [{ from: "summary", n: 0, text: "kepala", carried: true, covers: [0, 1] }, { from: "human", n: 1, text: "halo" }] })) + "; renderManager();");
+out.topicHtml = run("html(stream)");
+const bs0 = []; (function walk(n) { if (n.tag === "button") bs0.push(n); n.children.forEach(walk); })(run("stream"));
+const prepBefore2 = run("prepared.length");
+bs0.filter((b) => b.text === "Continue topic")[0].listeners.click();
+out.continueBody = run("prepared.slice(" + prepBefore2 + ")"); run("prepared.length = " + prepBefore2 + ";");
+run("mgr.job = null; mgr.data = null; mgr.expect = 0; renderManager();");
+const walkAll = (root, tag) => { const a = []; (function w(n) { if (n.tag === tag) a.push(n); n.children.forEach(w); })(root); return a; };
+const nt = walkAll(run("stream"), "input")[0], ntb = walkAll(run("stream"), "button").filter((b) => b.text === "Prepare")[0];
+out.newTopicInput = [nt.maxLength, nt.attrs && nt.attrs["aria-label"]];
+nt.value = "  Judul topik  "; ntb.listeners.click(); nt.value = "   "; ntb.listeners.click();
+out.newTopicBodies = run("prepared.slice(" + prepBefore2 + ")"); run("prepared.length = " + prepBefore2 + ";");
 // F47-A: a summary entry is a closed fold of text with its label, never a foreman entry and never a proposal
 run("mgr.stuck = false; mgr.job = 'j20261126_023857_708b'; mgr.data = " + JSON.stringify(D({ conversation: [{ from: "human", n: 0, text: "halo" }, { from: "summary", n: 1, text: "Fakta: repo <b>ledger-cli</b>", covers: [0, 1] }, { from: "manager", n: 2, say: "oke", propose: null }] })) + "; renderManager();");
 out.summaryHtml = run("html(stream)");
@@ -135,7 +152,26 @@ setTimeout(() => {
 run("mode = 'manager'; mgr.job = 'j20261126_023857_708b'; notes.length = 0; posted.length = 0; mgr.sending = false; mgr.timer = null; mgr.epoch++; mgr.data = " + JSON.stringify(D()) + "; message.value = 'satu'; sendTurn(); sendTurn(); mgr.epoch++;"); out.double = run("JSON.stringify([posted.length, notes[notes.length - 1]])");
       run("mgr.left = 0; mgr.expect = 12; mgr.retry = null; mgr.seq = 0; gets = 0; queued.length = 0; loadManager();");
       let rounds = 0;
-      (function step() { setTimeout2(() => { if (run("queued.length") && rounds < 40) { rounds++; run("queued.shift()")(); step(); } else { out.search = run("[gets, mgr.expect].join('|')"); console.log(JSON.stringify(out)); } }, 5); })();
+      (function step() { setTimeout2(() => { if (run("queued.length") && rounds < 40) { rounds++; run("queued.shift()")(); step(); } else { out.search = run("[gets, mgr.expect].join('|')"); scenarios(); } }, 5); })();
     }, 20);
   }, 20);
 }, 20);
+
+function scenarios() {                                  // which topic and session loadManager shows (the server's list, the person's choice, a session just confirmed)
+  const topics = [{ id: "jT1", title: "Lama", sessions: 1, latest: { id: "jT1", state: "BLOCKED", can_take_turn: false } }, { id: "jT2", title: "Baru", sessions: 2, latest: { id: "jT3", state: "OPEN", can_take_turn: true } },
+                  { id: "jT4", title: "Terbaru tapi habis", sessions: 1, latest: { id: "jT4", state: "BLOCKED", can_take_turn: false } }];
+  const pick = (setup) => new Promise((resolve) => { run("mode = 'manager'; mgr.job = null; mgr.data = null; mgr.topic = null; mgr.want = null; mgr.newTopic = false; mgr.expect = 0; mgr.seq = 0; mgr.stuck = false; " + setup + "; loadManager();"); setTimeout2(() => resolve(run("JSON.stringify([mgr.topic, mgr.job, mgr.want, mgr.newTopic, mgr.expect])")), 15); });
+  run("topicsAnswer = " + JSON.stringify({ topics }) + "; managerAnswer = " + JSON.stringify(D({ can_take_turn: true })));
+  (async () => {
+    out.pickDefault = await pick("");                                                   // no choice: the newest topic that can take a turn, not the newest
+    out.pickChosen = await pick("mgr.topic = 'jT1'");                                  // the person chose one
+    out.pickGone = await pick("mgr.topic = 'jNOPE'");                                  // a chosen topic that is no longer listed: the default again
+    out.pickWant = await pick("mgr.want = 'jT3'; mgr.expect = 5");                      // a session just confirmed: the topic whose newest session it is
+    out.pickWantLate = await pick("mgr.want = 'jLATER'; mgr.expect = 5");              // not listed yet: nothing is picked, it is waited for
+    out.pickNew = await pick("mgr.newTopic = true");                                    // New topic: nothing is picked, the card shows
+    out.newCard = run("html(stream)").includes("New topic");
+    run("topicsAnswer = { topics: [] };");
+    out.pickEmpty = await pick("");
+    console.log(JSON.stringify(out));
+  })();
+}

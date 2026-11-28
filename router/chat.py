@@ -32,7 +32,7 @@ PORTS = (8711, 8712)                              # SPEC_CHAT_APP 13.4: 8712 whi
 HOSTS = (f"{BIND}:{PORT}",)
 ORIGINS = (f"http://{BIND}:{PORT}",)                  # the one origin a POST may come from (11.2)
 POST_ROUTES = {"/api/prepare": "prepare", "/api/confirm": "confirm", "/api/manager/turn": "manager_turn"}   # the only POST routes; any other POST is a 405 (the turn route: SPEC_CHAT_MANAGER_P1 5)
-PARAMS = {"repo", "message", "job", "reason", "sha", "ack", "queue", "source_job", "source_turn"}
+PARAMS = {"repo", "message", "job", "reason", "sha", "ack", "queue", "source_job", "source_turn", "title", "topic"}
 BODY_MAX = 16 * 1024                        # never "localhost": the viewer is localhost:8710 and shares its cookie jar
 UI_ID = re.compile(r"j[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")
 TOTAL_S = 10                                       # a whole request, not one read: a client dripping a byte per 8 s is cut at this
@@ -43,9 +43,9 @@ STATIC_TYPES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javasc
                 "app.css": "text/css; charset=utf-8"}
 # The shipped files are pinned (like the viewer's sw.js): changing one means changing this line in the same change.
 STATIC_SHA256 = {
-    "index.html": "5a4a9f763988f5a1515536d57d3e6b8075e42c015ee0384456f772b0d2acda50",
-    "app.js": "245d2f87b13559b7c8a2c8c521b6f051522aea768e77b5fa024c250fa04f12b2",
-    "app.css": "b0ee921163a387857a8a000ea68aa6521c8d912e3c579fc47b6f0def40bdb30c",
+    "index.html": "9f3bbac5cd1afcd3a3833dc77642aa4a304b3e216c007ffd13b895b3d75d5894",
+    "app.js": "0ae6c987c51e644cef6b89575a426f338b23cf36f9a3cc0e31dfbfc2cf425147",
+    "app.css": "f0b1191cf88933484ee57fd61ac2b8e7ad07a3b7a0389047ede0bf35f11d3744",
 }
 
 
@@ -319,6 +319,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         if a is not None and path == "/api/cap":                    # SPEC_CHAT_UI3C: the daily cap and the booked exposure, read only
             return self._json(200, a.cap_status())
+        if a is not None and path == "/api/topics":                 # SPEC_FOREMAN_TOPICS: the topics, read from the links of the foreman sessions, read only
+            return self._json(200, a.topics())
         if a is not None and path == "/api/budget":                 # SPEC_BUDGET_V2 part 1: the daily and monthly meters of actual spend, read only
             return self._json(200, a.budget_status())
         if a is not None and path == "/api/waiting":                # SPEC_CHAT_UI3B: what waits for the person, read only
@@ -464,6 +466,8 @@ class Handler(BaseHTTPRequestHandler):
         if "source_job" in params:
             rec["source_job"] = params["source_job"] if UI_ID.fullmatch(params["source_job"]) else "bad"     # a new free-text channel: only an id is written
             rec["source_turn"] = int(params["source_turn"]) if params.get("source_turn", "").isascii() and params.get("source_turn", "").isdigit() and len(params["source_turn"]) <= 3 else -1
+        if "topic" in params:                                                       # SPEC_FOREMAN_TOPICS: only a validated id is written; the title stays in the card and its digest
+            rec["topic"] = params["topic"] if UI_ID.fullmatch(params["topic"]) else "bad"
         out, digest = a.prepare(action, params)
         if not self._audit(a, **rec, ok="prepare", digest=digest):
             a.prepared.pop(out["token"], None)             # a token that was never given out is not kept either
@@ -491,6 +495,8 @@ class Handler(BaseHTTPRequestHandler):
                 rec["reason_sha256"] = hashlib.sha256(card["reason"].encode()).hexdigest()
         if card.get("sha12"):
             rec["sha"] = card["sha12"]
+        if card.get("continues"):                                         # SPEC_FOREMAN_TOPICS: the session the new one continues (an id)
+            rec["continues"] = card["continues"]
         if card.get("source"):                                            # SPEC_CHAT_MANAGER 13.6: the audit tells a form from a proposal from one the human typed
             rec.update(source="manager", source_job=card["source"]["job"], source_turn=card["source"]["turn"], edited=card["source"]["edited"])
         if not self._audit(a, **rec, attempt="confirm"):

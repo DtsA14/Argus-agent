@@ -283,6 +283,6 @@ def test_the_read_route_shows_a_summary_as_a_summary_never_as_a_foreman_entry(sv
     status, out = svc.request("GET", f"/api/manager/{JOB}")
     assert status == 200
     s = out["conversation"][2]
-    assert s == {"from": "summary", "n": 2, "at": s["at"], "text": s["text"], "covers": [0, 2]} and "\x07" not in s["text"] and "<b>x</b>" in s["text"]       # text only: no say, no proposal, no source
+    assert s == {"from": "summary", "n": 2, "at": s["at"], "text": s["text"], "carried": False, "covers": [0, 2]} and "\x07" not in s["text"] and "<b>x</b>" in s["text"]       # text only: no say, no proposal, no source
     assert [e["from"] for e in out["conversation"]] == ["human", "manager", "summary", "human"]
     assert out["conversation"][3]["n"] == 3
