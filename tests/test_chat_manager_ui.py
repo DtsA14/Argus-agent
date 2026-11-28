@@ -35,7 +35,7 @@ def test_the_turn_is_posted_with_the_session_and_the_message_and_nothing_else():
 
 
 def test_nothing_of_a_proposal_goes_to_confirm_and_the_proposal_text_is_only_ever_a_text_node():
-    box = JS.split("function proposalBox")[1].split("function renderManager")[0]
+    box = JS.split("function proposalBox")[1].split("function continueCard")[0]
     assert "/api/confirm" not in box and "token" not in box and "innerHTML" not in JS
     assert box.count("prepare(body)") == 1 and box.count('prepare({ action: "issue_new"') == 1 and box.count("prepare(") == 2
     assert re.findall(r'\{ action: "(\w+)"', box) == ["issue_new", "prd_new", "research_new"]
@@ -66,7 +66,7 @@ def test_the_foreman_view_is_text_with_its_speaker_and_the_budget_and_time_left(
     assert "The foreman is waiting for your answer." in h and "The foreman sees no route for this in Argus." in h
     assert "This turn failed: unusable" in h and "Nothing is started." in h
     assert "The foreman is answering." in out["busy"] and "left unknown" in out["blocked"]
-    assert "Prepare a session" in out["none"] and "Prepare a session" not in out["starting"] and "The session is starting." in out["starting"]
+    assert "New topic" in out["none"] and "Topic title (optional)" not in out["none"] and "New topic" not in out["starting"] and "The session is starting." in out["starting"]
 
 
 @needs_node
@@ -97,10 +97,43 @@ def test_a_turn_is_sent_only_into_an_open_idle_session_with_a_message(out):
 
 
 @needs_node
-def test_a_session_that_cannot_take_a_turn_offers_a_new_one(out):
+def test_the_offer_to_continue_the_topic_is_the_servers_answer_and_a_refused_turn_is_only_a_note(out):         # F47-C2
     o = out["over"]
-    assert o["healthy"] is False and o["fine"] is False and o["busy"] is False
-    assert o["expired"] is True and o["poor"] is True and o["turns"] is True and o["stuck"] is True
+    assert o["ended"] is True and o["healthy"] is False and o["busy"] is False
+    assert o["unknown"] is False and o["missing"] is False                                                        # no answer, no offer
+    assert o["expiredButTrue"] is False and o["poorButTrue"] is False                                            # the page no longer derives it from the time or the money
+    assert o["stuck"] is False and out["stuckNote"] is True and out["unknownNote"] is True
+
+
+@needs_node
+def test_the_topic_shows_its_title_its_sessions_the_carried_head_and_the_two_cards_send_exact_bodies(out):    # F47-C2
+    h = out["topicHtml"]
+    assert "<h2>Ekspor <b>CSV</b></h2>" in h and "<span>2 sessions</span>" in h                                  # the title is a text node (the fake DOM prints it raw)
+    assert "<summary>Carried over from the earlier session (by a model and by you)</summary><p.note>kepala</p.note>" in h or "<summary>Carried over from the earlier session (by a model and by you)</summary><p.note>kepala</p>" in h
+    assert "Summary so far" not in h and "Continue this topic?" in h and h.count("say foreman") == 0
+    assert [json.loads(x) for x in out["continueBody"]] == [{"action": "manager_new", "topic": "jT1"}]
+    assert out["newTopicInput"] == [60, "Topic title"]
+    assert [json.loads(x) for x in out["newTopicBodies"]] == [{"action": "manager_new", "title": "Judul topik"}, {"action": "manager_new"}]          # a blank title is no title
+
+
+@needs_node
+def test_load_manager_shows_the_chosen_topic_else_the_newest_open_one_and_waits_for_a_session_just_confirmed(out):   # F47-C2
+    assert json.loads(out["pickDefault"]) == ["jT2", "jT3", None, False, 0]                                                   # not the newest topic: the newest that can take a turn
+    assert json.loads(out["pickChosen"]) == ["jT1", "jT1", None, False, 0]
+    assert json.loads(out["pickGone"]) == ["jT2", "jT3", None, False, 0]
+    assert json.loads(out["pickWant"]) == ["jT2", "jT3", None, False, 0]                                                      # the confirmed session is picked when it appears
+    assert json.loads(out["pickWantLate"]) == [None, None, "jLATER", False, 4]                                                # not listed yet: nothing picked, waiting
+    assert json.loads(out["pickNew"]) == [None, None, None, True, 0] and out["newCard"] is True and json.loads(out["pickEmpty"]) == [None, None, None, False, 0]
+    assert out["search"] == "13|0"
+
+
+def test_the_topic_code_posts_only_title_or_topic_builds_nothing_and_never_derives_the_offer():
+    cards = JS.split("function continueCard")[1].split("function continueCard")[0]
+    assert cards.count('prepare(') == 1 and 'topic: d.topic.id' in cards and "innerHTML" not in cards and "title: v" in cards
+    panel = JS.split("function loadTopics")[1].split("function loadManager")[0]
+    assert "prepare(" not in panel and "post(" not in panel and "innerHTML" not in panel and "textContent" not in panel
+    render = JS.split("function renderManager(")[1].split("function pollManager(")[0]
+    assert "var over = d.can_take_turn === false;" in render and "expires_in_s" not in render.split("var over")[1].split("\n")[0] and "continueCard(d)" in render
 
 
 @needs_node
@@ -140,7 +173,7 @@ def test_next_steps_are_the_harness_sentences_as_text_and_their_buttons_only_mov
 
 
 def test_the_next_steps_box_posts_and_prepares_nothing():
-    box = JS.split("function nextStepsBox")[1].split("function renderManager")[0]
+    box = JS.split("function nextStepsBox")[1].split("function continueCard")[0]
     assert "post(" not in box and "prepare(" not in box and "/api/" not in box and "innerHTML" not in box
     assert 'setMode("research"); showResearch(n.job);' in box and 'setMode("cards");' in box
 

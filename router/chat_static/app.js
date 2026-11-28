@@ -271,6 +271,7 @@
   }
   function load() {
     loadBudget();
+    loadTopics();
     get("/api/threads").then(function (d) {
       threads = d.threads || [];
       skipped.textContent = d.skipped ? d.skipped + " jobs cannot be shown" : "";
@@ -305,7 +306,7 @@
   var LABELS = [["repo", "Repo"], ["job", "Job"], ["state", "State"], ["environment", "Environment"], ["commit", "Commit"],
     ["turn", "Turn"], ["turn_cap_usd", "Turn limit"], ["job_cap_usd", "Job limit"], ["reason", "Reason"],
     ["profile", "Profile"], ["model", "Model"], ["stage_models", "Model"], ["stage_caps", "Stage limits"], ["web", "Web"], ["data_sent", "Data sent"],
-    ["free_models", "Free models"], ["runs_code", "Example code"], ["kind", "Kind"], ["job_title", "Title"], ["sha12", "Draft"], ["spent_usd", "Cost"], ["cap_usd", "Limit"], ["queue_usd", "Queue money"], ["queue", "Queue"], ["item", "Issue no."], ["drafter_cap_usd", "Drafter limit"], ["agent_cap_usd", "Agent limit"], ["attempt_usd", "One agent attempt"], ["money", "Money note"], ["ttl_hours", "Session lasts (hours)"], ["max_turns", "Turns at most"], ["turn_note", "One turn"], ["confirms", "This confirmation covers"], ["source_note", "Where the text comes from"],
+    ["free_models", "Free models"], ["runs_code", "Example code"], ["kind", "Kind"], ["job_title", "Title"], ["sha12", "Draft"], ["spent_usd", "Cost"], ["cap_usd", "Limit"], ["queue_usd", "Queue money"], ["queue", "Queue"], ["item", "Issue no."], ["drafter_cap_usd", "Drafter limit"], ["agent_cap_usd", "Agent limit"], ["attempt_usd", "One agent attempt"], ["money", "Money note"], ["ttl_hours", "Session lasts (hours)"], ["max_turns", "Turns at most"], ["turn_note", "One turn"], ["confirms", "This confirmation covers"], ["source_note", "Where the text comes from"], ["topic_title", "Topic"], ["continues", "Continues session"], ["carried_note", "What is carried over"],
     ["billed_usd", "Already spent on readings"], ["remaining_usd", "Left for readings"], ["left_usd", "Job money left"], ["readers", "Readers"], ["patch_read_kind", "Readings said"], ["branch", "Branch now"], ["head", "HEAD now"], ["target_branch", "The commit goes to branch"]];
   var USD_KEYS = { turn_cap_usd: 1, job_cap_usd: 1, spent_usd: 1, cap_usd: 1, queue_usd: 1, drafter_cap_usd: 1, agent_cap_usd: 1, attempt_usd: 1, billed_usd: 1, remaining_usd: 1, left_usd: 1 };
   function fact(parent, label, value) {
@@ -450,7 +451,7 @@
         grow();
         fromProposal = null;                            // the source belongs to the one form it filled: a later form is the person's own
         if (mode === "manager") {
-          if (body.action === "manager_new") { mgr.expect = 12; loadManager(); }
+          if (body.action === "manager_new") { mgr.expect = 12; mgr.want = r.job || null; mgr.newTopic = false; loadManager(); }
           else if (body.action === "issue_new" && r.job) { var keepCard = pending; pending = null; setMode("issue"); pending = keepCard; loadIssues(); showIssue(r.job, true); }       // the writer is working on it: go and watch it; the Started card stays on screen (setMode would drop it)
           return;                                         // research and PRD: the Started card says where it went
         }
@@ -1645,10 +1646,11 @@
   document.getElementById("close-panel").addEventListener("click", closePanel);
   document.getElementById("scrim").addEventListener("click", closePanel);
   document.getElementById("new-request-panel").addEventListener("click", openNew);
+  document.getElementById("new-topic").addEventListener("click", openNewTopic);
   // ---- P3: the foreman (SPEC_CHAT_MANAGER_P1, P2b). A session is one confirmation; its turns are POST /api/manager/turn with the session and the message, nothing else.
   // The foreman's words and its proposals are text from a model: put on the page as text, labelled, never as a card. A proposal is not a start: its button only
   // PREPARES (the same card, the same Confirm as a typed form), and says where the text came from.
-  var mgr = { job: null, data: null, seq: 0, epoch: 0, sending: false, stuck: false, timer: null, left: 0, before: 0, expect: 0, retry: null };
+  var mgr = { job: null, data: null, seq: 0, epoch: 0, sending: false, stuck: false, timer: null, left: 0, before: 0, expect: 0, retry: null, topic: null, want: null, newTopic: false };      // topic: the topic shown; want: the session just confirmed, to pick when it appears
   var fromProposal = null;                              // {job, turn}: the form was filled from a proposal; every move of the mode clears it
   function mgrStop() {
     mgr.seq++;
@@ -1663,22 +1665,78 @@
     var m = Math.floor(s / 60);
     return Math.floor(m / 60) + " h " + (m % 60) + " min";
   }
+  // SPEC_FOREMAN_TOPICS C2: the topics come from the server (a name and a chain of sessions); the page shows the chosen one, else the newest with an open session, else the newest.
+  var topicsInfo = null;
+  function loadTopics() {
+    get("/api/topics").then(function (t) { topicsInfo = t; drawTopics(); }).catch(function () { });
+  }
+  function topicState(t) {
+    var c = t && t.latest ? t.latest.can_take_turn : null;
+    return c === true ? ["Open", "ok"] : c === false ? ["Ended: continue", "warn"] : ["State unknown", ""];
+  }
+  function openTopic(id) {
+    closePanel();
+    mgr.topic = id;
+    mgr.want = null;
+    mgr.newTopic = false;
+    if (mode === "manager") { loadManager(); } else { setMode("manager"); }
+  }
+  function openNewTopic() {
+    closePanel();
+    mgr.newTopic = true;
+    mgr.topic = null;
+    mgr.want = null;
+    mgr.job = null;
+    mgr.data = null;
+    if (mode === "manager") { renderManager(); } else { setMode("manager"); }
+  }
+  function drawTopics() {
+    var ul = document.getElementById("topics"), blk = document.getElementById("topics-block");
+    clear(ul);
+    blk.hidden = !topicsInfo;
+    ((topicsInfo && topicsInfo.topics) || []).slice(0, 12).forEach(function (t) {
+      var li = el("li"), b = el("button", "job");
+      b.type = "button";
+      b.appendChild(el("span", "jt", String(t.title)));
+      var sub = el("span", "js"), st = topicState(t);
+      sub.appendChild(el("span", "state " + st[1], st[0]));
+      if (typeof t.sessions === "number" && t.sessions > 1) { sub.appendChild(el("span", null, " · " + t.sessions + " sessions")); }
+      b.appendChild(sub);
+      if (mode === "manager" && mgr.topic === t.id) { b.setAttribute("aria-current", "true"); }
+      b.addEventListener("click", function () { openTopic(t.id); });
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+  }
   function loadManager() {
     var my = ++mgr.seq;
-    get("/api/threads").then(function (d) {
+    get("/api/topics").then(function (t) {
       if (mode !== "manager" || my !== mgr.seq) { return; }
-      var open = (d.threads || []).filter(function (t) { return t.kind === "manager" && t.state === "OPEN"; })[0];
-      if (!open) {
+      topicsInfo = t;
+      drawTopics();
+      var rows = t.topics || [], pick = null;
+      if (mgr.want) {                                   // a session was just confirmed: show the topic whose newest session it is, when it appears
+        pick = rows.filter(function (x) { return x.latest && x.latest.id === mgr.want; })[0] || null;
+        if (pick) { mgr.want = null; }
+      } else if (mgr.topic) {
+        pick = rows.filter(function (x) { return x.id === mgr.topic; })[0] || null;
+      }
+      if (!pick && !mgr.want && !mgr.newTopic) {
+        pick = rows.filter(function (x) { return x.latest && x.latest.can_take_turn === true; })[0] || rows[0] || null;
+      }
+      if (!pick) {
         mgr.job = null;
         mgr.data = null;
         renderManager();
-        if (mgr.expect > 0) { mgr.expect--; if (mgr.retry) { clearTimeout(mgr.retry); } mgr.retry = setTimeout(loadManager, 2000); }
+        if (mgr.expect > 0) { mgr.expect--; if (mgr.retry) { clearTimeout(mgr.retry); } mgr.retry = setTimeout(loadManager, 2000); if (mgr.expect === 0) { mgr.want = null; } }
         return;
       }
       mgr.expect = 0;
-      if (mgr.job !== open.id) { mgr.stuck = false; }
-      mgr.job = open.id;
-      return get("/api/manager/" + encodeURIComponent(open.id)).then(function (m) {
+      mgr.newTopic = false;
+      if (mgr.topic !== pick.id || mgr.job !== pick.latest.id) { mgr.stuck = false; }
+      mgr.topic = pick.id;
+      mgr.job = pick.latest.id;
+      return get("/api/manager/" + encodeURIComponent(pick.latest.id)).then(function (m) {
         if (mode !== "manager" || my !== mgr.seq) { return; }
         mgr.data = m;
         renderManager();
@@ -1770,14 +1828,37 @@
     });
     return b;
   }
+  function continueCard(d) {                          // SPEC_FOREMAN_TOPICS C2: the card of mockup screen 3; Prepare asks the server for the card, it builds nothing itself
+    var card = el("div", "proposal");
+    card.appendChild(el("h3", null, "Continue this topic?"));
+    card.appendChild(el("p", "note", "The last session has ended. Your messages and the steps of this topic are kept. Confirming opens a new foreman session in the same topic, with the summary and the last turns of this one carried over as data."));
+    card.appendChild(act("Continue topic", function () { return { action: "manager_new", topic: d.topic.id }; }, "go"));
+    return card;
+  }
+  function newTopicCard() {                           // a new topic: a title of your own (optional); one confirmation opens its first session
+    var card = el("div", "proposal");
+    card.appendChild(el("h3", null, "New topic"));
+    var t = el("input", "reason");
+    t.type = "text";
+    t.maxLength = 60;
+    t.autocomplete = "off";
+    t.placeholder = "Topic title (optional)";
+    t.setAttribute("aria-label", "Topic title");
+    card.appendChild(t);
+    var b = el("button", "go", "Prepare");
+    b.type = "button";
+    b.addEventListener("click", function () { var v = t.value.trim(); prepare(v ? { action: "manager_new", title: v } : { action: "manager_new" }); });
+    card.appendChild(b);
+    return card;
+  }
   function renderManager() {
     clear(stream);
     var d = mgr.data;
     var c = el("article", "card flat");                 // no card around the talk: text on the page, so the chat is longer
-    c.appendChild(el("h2", null, "Foreman"));
+    c.appendChild(el("h2", null, d && d.topic && d.topic.title ? String(d.topic.title) : "Foreman"));
     if (!mgr.job || !d) {
       c.appendChild(el("p", "note", mgr.expect > 0 ? "The session is starting." : "Think an idea through with the foreman, a model. It can propose research or a PRD, but it starts nothing: you prepare, read and confirm. One confirmation covers the whole session, up to its limit."));
-      if (mgr.expect <= 0) { c.appendChild(act("Prepare a session", function () { return { action: "manager_new" }; }, "go")); }
+      if (mgr.expect <= 0) { c.appendChild(newTopicCard()); }
       stream.appendChild(c);
       return;
     }
@@ -1785,17 +1866,18 @@
     row.appendChild(el("span", "state " + stateClass(d.state), d.state));
     row.appendChild(el("span", null, "left " + (typeof d.max_usd === "number" && typeof d.spent_usd === "number" ? usd(Math.max(0, d.max_usd - d.spent_usd)) + " of " + usd(d.max_usd) : "unknown")));
     row.appendChild(el("span", null, "time left " + timeLeft(d.expires_in_s)));
+    if (d.topic && Array.isArray(d.topic.sessions) && d.topic.sessions.length > 1) { row.appendChild(el("span", null, d.topic.sessions.length + " sessions")); }
     c.appendChild(row);
     if (d.busy) { c.appendChild(el("p", "note", "The foreman is answering.")); }
     if (Array.isArray(d.next_steps) && d.next_steps.length) { c.appendChild(nextStepsBox(d.next_steps)); }
     var turns = (d.conversation || []).filter(function (e) { return e.from === "human"; }).length;
-    var over = mgr.stuck || d.expires_in_s === 0 || (typeof d.turn_cap_usd === "number" && typeof d.max_usd === "number" && typeof d.spent_usd === "number" && d.max_usd - d.spent_usd < d.turn_cap_usd) || (typeof d.max_turns === "number" && turns >= d.max_turns);
+    var over = d.can_take_turn === false;               // the server's own answer (one rule for the chat, the CLI and this page): a refused turn (mgr.stuck) is only a note, a new session would be refused for the same cause
     if (!(d.conversation || []).length) { c.appendChild(el("p", "muted", "Say something below.")); }
     (d.conversation || []).forEach(function (e) {
       if (e.from === "human") { c.appendChild(el("p", "msg human mine", e.text)); return; }          // your turn: a bubble on the right; the foreman answers on the left, with its label
       if (e.from === "summary") {                       // SPEC_FOREMAN_MEMORY: older turns folded by the code into a summary the model wrote: text in a closed fold, never a foreman turn, never a proposal
         var fold = el("details", "fold");
-        fold.appendChild(el("summary", null, "Summary so far (written by a model, used as data)"));
+        fold.appendChild(el("summary", null, e.carried ? "Carried over from the earlier session (by a model and by you)" : "Summary so far (written by a model, used as data)"));
         fold.appendChild(el("p", "note", String(e.text)));
         c.appendChild(fold);
         return;
@@ -1804,10 +1886,9 @@
       if (e.error) { c.appendChild(el("p", "note", "This turn failed: " + e.error)); }
       if (e.propose) { c.appendChild(proposalBox(e)); }
     });
-    if (over && !d.busy) {                              // the server leaves an expired or used-up session OPEN and refuses its turns: the way on is a new session (a new confirmation)
-      c.appendChild(el("p", "note", "This session cannot take another turn (time, budget or turns used up, or refused). Start a new one: the old one stays as it is."));
-      c.appendChild(act("Prepare a new session", function () { return { action: "manager_new" }; }, "go"));
-    }
+    if (mgr.stuck && !over) { c.appendChild(el("p", "note", "The last turn was refused (the capability sheet, the key or the configuration). Starting another session would be refused for the same cause.")); }
+    if (d.can_take_turn === null || d.can_take_turn === undefined) { c.appendChild(el("p", "note", "The page cannot tell whether this session can take another turn.")); }
+    if (over && !d.busy) { c.appendChild(continueCard(d)); }                          // the topic stays: one confirmation opens a new session in it, with the earlier one carried over
     stream.appendChild(c);
   }
   function pollManager() {                              // after a turn is sent: read the session every 2 s until the answer is in, or 2 minutes
