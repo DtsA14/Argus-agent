@@ -18,8 +18,10 @@ import io
 import json
 import os
 import re
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 from pathlib import Path
 
 from router import stage_data as sd
@@ -210,6 +212,26 @@ class _DeadlineRaw(io.RawIOBase):
         return self.sock.recv_into(b)
 
 
+_SERIAL = threading.Lock()
+
+
+def _serial(fn):
+    """What a request does (its routes, its actions, the state they share) runs one request at a time, as it did when the
+    server took one connection at a time: only the waiting for a client to send its request is no longer in the line."""
+    def run(self):
+        with _SERIAL:
+            return fn(self)
+    run.__name__ = fn.__name__
+    run.serial = True
+    return run
+
+
+class _Server(ThreadingMixIn, HTTPServer):
+    """A connection that has sent nothing (a browser's spare one) waits in its own thread, so it does not hold up the
+    page (F39). The work itself stays serial: see _serial."""
+    daemon_threads = True
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "argus-chat"
     timeout = 10
@@ -262,6 +284,7 @@ class Handler(BaseHTTPRequestHandler):
         hosts = self.headers.get_all("Host") or []
         return len(hosts) == 1 and hosts[0] in self.hosts
 
+    @_serial
     def do_GET(self):
         if not self._host_ok():                              # every method, every route (11.1): reads are private too
             return self._refuse(421, "wrong host")
@@ -351,6 +374,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, got) if got is not None else self._refuse(404, "not found")
         return self._refuse(404, "not found")
 
+    @_serial
     def do_POST(self):
         a = self.chat.actions
         if a is None or self.path not in POST_ROUTES:
@@ -495,7 +519,7 @@ def server(chat, port=PORT, public=PORT):
     hosts = tuple(f"{n}:{public}" for n in names_for(public))
     handler = type("Bound", (Handler,), {"chat": chat, "hosts": hosts, "origins": tuple(f"http://{h}" for h in hosts),
                                          "hdrs": headers_for(public)})
-    return HTTPServer((BIND, port), handler)
+    return _Server((BIND, port), handler)
 
 
 def serve(jobs_dir, cfg=None, config_path=None, load=None, port=PORT, queues_dir=None):
