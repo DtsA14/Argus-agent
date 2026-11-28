@@ -20,7 +20,7 @@ M = [
     ("chain: default key in _chain_result", E, [('return {"applicable": applicable, "ok": ok, "kind": kind, "why": why, "rec": None, "prd_job": None, "item": None, **more}', 'return {"applicable": applicable, "ok": ok, "kind": kind, "why": why, "rec": None, "prd_job": None, "item": None, "standalone": True, **more}')], T),
     ("chain: an unopenable queues dir counts as missing", E, [('            missing = False                                     # it is there but cannot be opened: not "no queues" (F36)', '            missing = True')], T),
     ("chain: any OSError counts as missing", E, [('        except OSError:\n            missing = False', '        except OSError:\n            missing = True')], T),
-    ("h: truthy instead of is True", A, [(H, 'elif res.get("standalone"):')], T),
+    # "truthy instead of is True" is equivalent: the key is only ever True or absent, so it is not listed.
     ("h: null for any non-applicable result", A, [(H, 'elif not res["applicable"]:')], T),
     ("h: null before the defects check", A, [('            if item.get("unreadable") or item.get("defects"):\n                checks["h"]', '            if res.get("standalone") is True:\n                checks["h"] = _chk("h", None, "tidak berlaku: bukan item antrean PRD")\n            elif item.get("unreadable") or item.get("defects"):\n                checks["h"]')], T),
     ("h: null replaces the true branch", A, [('            elif counts["after"] + counts["whatif"] >= 1:\n                checks["h"] = _chk("h", True, "ada contoh perilaku baru")\n', '')], T),
