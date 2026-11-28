@@ -154,6 +154,7 @@ Induk: **tahapan "tanpa pusing Atha"** (perbaikan arah, bukan perubahan arah, At
 | F43 | Morph fp8 pertama untuk V4.1 Flash 1017 | Atha 2026-11-28 (#791): pin `[morph/fp8, deepinfra/fp8]` untuk coder, drafter, foreman, pembaca patch kedua; riset tetap DeepInfra dulu. Satu sampel (F42). Foreman di Morph: `route_eval` 59 sampai 63 dari 63, sama dengan DeepInfra (RESULT.md rev 2) | ketat (config) | ya | [x] |
 | F44 | Satu ketukan Prepare dari usulan `issue` foreman | #792, 2026-11-28; usulan memberi Prepare (dengan sumber) dan Edit first; `issue_new` boleh membawa sumber foreman. Bukti ponsel belum | ketat | ya | [x] |
 | F45 | Foreman kadang menolak lewat chat biasa padahal kasus menuntut `none` | `route_eval` rev 2: 0 sampai 4 dari 63 per putaran (c12, c14), tidak tergantung lembar atau penyedia. Opsi: kalimat instruksi "untuk permintaan yang tidak bisa dikerjakan Argus, usulkan `none`"; perlu ukur ulang | ketat | tidak | [ ] |
+| F47 | Satu chat per topik, foreman yang ingat (konteks dikompak, jatah uang bukan waktu) | Atha 2026-11-28; rencana lengkap di `docs/PLAN_FOREMAN_TOPICS.md`, mockup https://claude.ai/artifact/TqzGfNGUa2bCsUDt7A6fPL. Fase A konteks dan kompaksi, B uang bukan waktu (top up, pembukuan per giliran), C topik dan panel, D langkah job di chat (F41 banner), E Pasang di chat. Temuan: foreman hanya menerima 4 KB percakapan terakhir; ttl 12 jam adalah pembukuan, bukan keamanan | ketat | ya | [ ] belum dimulai |
 
 ### G. Permukaan: kemampuan lain (satu per satu, hanya dengan gerbang)
 
