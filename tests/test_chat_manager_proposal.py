@@ -216,3 +216,16 @@ def test_the_run_params_hold_the_form_and_nothing_of_the_source(svc):
     svc.clock.t += ca.MIN_DELAY + 0.1
     action, card, rp, digest = svc.actions.confirm(out["token"])
     assert rp == {"repo": REPO, "message": TEXT}
+
+
+def test_an_issue_proposal_is_no_source_for_any_form(tmp_path):                                  # F31: ROUTE_ACTION is not extended
+    assert set(ca.ROUTE_ACTION) == {"research", "prd"}
+    s = t.Service(tmp_path, cfg=m.config())
+    try:
+        m.make_session(s.jobs, conversation=[HUMAN, turn_of(route="issue", repo=REPO, text=TEXT)])
+        for action, extra in (("prd_new", {"repo": REPO}), ("research_new", {"message": Q}), ("issue_new", {"repo": REPO})):
+            body = {"action": action, "message": TEXT, "source_job": m.JOB, "source_turn": "1", **extra}
+            status, out = s.prepare(**body)
+            assert status in (400, 404) and "token" not in json.dumps(out)
+    finally:
+        s.stop()

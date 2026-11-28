@@ -146,3 +146,22 @@ def test_the_next_steps_box_posts_and_prepares_nothing():
 
 def test_a_next_steps_value_that_is_not_a_list_draws_no_box():
     assert "Array.isArray(d.next_steps) && d.next_steps.length" in JS
+
+
+@needs_node
+def test_an_issue_proposal_is_a_fill_in_with_one_button_no_prepare_and_no_source(out):                  # F31: SPEC_FOREMAN_ISSUE_ROUTE
+    assert out["issueButtons"] == ["Edit first"] and out["issuePrepared"] == 0
+    assert "The foreman proposes: an issue" in out["issueHtml"] and "Repo: ledger-cli" in out["issueHtml"] and "Nothing is started." in out["issueHtml"]
+    modes, text, repo, src, notes = json.loads(out["issueEdit"])
+    assert modes == ["issue"] and text == "Tambah opsi --month <b>x</b>" and repo == "ledger-cli" and src is None and notes == []        # no fromProposal: the form's submit carries no source
+    modes, text, repo, notes = json.loads(out["issueUnlisted"])
+    assert modes == ["issue"] and repo == "" and notes == ["The proposed repository bulking-app is not in the list: choose one."]       # a repository the form does not list is not guessed
+    assert "Repo: none named: use Edit first" in out["issueNoRepoHtml"]
+
+
+def test_the_issue_proposal_code_never_prepares_never_sets_the_source_and_is_text_only():
+    box = JS.split("function proposalBox")[1].split("function nextStepsBox")[0]
+    issue = box.split('if (p.route === "issue") {')[1].split("return b;")[0]
+    assert "prepare(" not in issue and "fromProposal" not in issue and "source_" not in issue and "innerHTML" not in issue
+    assert issue.count('el("button"') == 1 and '"Edit first"' in issue and 'setMode("issue")' in issue and "repoSel.options" in issue
+    assert re.findall(r'\{ action: "(\w+)"', box) == ["prd_new", "research_new"]

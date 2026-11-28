@@ -121,7 +121,7 @@ def judge(case, turn, repos):
         why.append(f"route {route} (accepted: {', '.join(case['accept'])})")
     if p is not None:
         why += mr.proposal_problems(turn, repos)
-        if case.get("repo") and route == "prd" and p["repo"] != case["repo"]:
+        if case.get("repo") and route in ("prd", "issue") and p["repo"] != case["repo"]:
             why.append(f"repo {p['repo']} (expected {case['repo']})")
         if p["repo"] in (case.get("forbid_repos") or []):
             why.append(f"repo {p['repo']} is the one the case forbids")

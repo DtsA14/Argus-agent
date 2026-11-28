@@ -452,3 +452,20 @@ def test_an_incomplete_ledger_stops_the_turn_before_any_call(tmp_path):
     led.write_text(json.dumps({"event": "llm_call_started", "call_id": "c0", "model": "m", "node": "manager", "role": "manager", "ts": 1, "worst_usd_nano": None, "worst_tokens": 1}) + "\n")
     entry, m = run_turn(tmp_path, j, "Halo", lambda msgs: reply(say()))
     assert entry.get("error") == "ledger incomplete" and m.calls == []
+
+
+ISSUE_P = {"route": "issue", "repo": REPOS[0], "text": "Tambah opsi --month YYYY-MM di laporan: tampilkan total per kategori bulan itu, terbesar dulu.", "why": "satu perubahan"}
+
+
+def test_an_issue_proposal_is_kept_as_data(tmp_path):                                        # F31: SPEC_FOREMAN_ISSUE_ROUTE
+    j = session(tmp_path)
+    entry, _ = run_turn(tmp_path, j, "tambahin opsi bulan", lambda m: reply(say("Saya usulkan satu issue.", ISSUE_P)))
+    assert entry["propose"] == ISSUE_P and data(tmp_path, j)["conversation"][-1]["propose"] == ISSUE_P
+
+
+@pytest.mark.parametrize("bad", [dict(ISSUE_P, repo="not-a-repo"), dict(ISSUE_P, repo=None), dict(ISSUE_P, text="pendek"), dict(ISSUE_P, text="x" * 4001),
+                                 dict(ISSUE_P, text=ISSUE_P["text"] + "\u2028 baris"), dict(ISSUE_P, route="Issue"), dict(ISSUE_P, route="issue ")])
+def test_a_bad_issue_proposal_ends_in_the_fixed_text_and_no_proposal(tmp_path, bad):          # two paid calls, as for a bad prd
+    j = session(tmp_path)
+    entry, m = run_turn(tmp_path, j, "Halo", lambda msgs: reply(say("x", bad)))
+    assert entry["say"] == mj.FIXED_SAY and entry["propose"] is None and entry["calls"] == 2 == len(m.calls)

@@ -1628,11 +1628,27 @@
     var p = e.propose;
     var b = el("div", "proposal");
     if (p.route === "ask") { b.appendChild(el("p", "note", "The foreman is waiting for your answer.")); return b; }
-    if (p.route !== "research" && p.route !== "prd") { b.appendChild(el("p", "note", "The foreman sees no route for this in Argus.")); return b; }
-    b.appendChild(el("h3", null, "The foreman proposes: " + (p.route === "prd" ? "a PRD" : "research")));
-    if (p.route === "prd") { fact(b, "Repo", p.repo || "none named: use Edit first"); }
+    if (p.route !== "research" && p.route !== "prd" && p.route !== "issue") { b.appendChild(el("p", "note", "The foreman sees no route for this in Argus.")); return b; }
+    b.appendChild(el("h3", null, "The foreman proposes: " + (p.route === "prd" ? "a PRD" : p.route === "issue" ? "an issue" : "research")));
+    if (p.route === "prd" || p.route === "issue") { fact(b, "Repo", p.repo || "none named: use Edit first"); }
     b.appendChild(el("p", "msg", p.text));
     say(b, "model", "reason (written by the model)", p.why, "say");
+    if (p.route === "issue") {                          // SPEC_FOREMAN_ISSUE_ROUTE: a fill-in only. No Prepare here and no source: the form's own Prepare and confirm do the rest
+      b.appendChild(el("p", "note", "Nothing is started. Edit first fills the New issue form with this text and repository; you tap its Prepare, read the card and confirm it yourself."));
+      var irow = el("div", "actions");
+      var fill = el("button", null, "Edit first");
+      fill.type = "button";
+      fill.addEventListener("click", function () {
+        setMode("issue");
+        message.value = p.text;
+        grow();
+        var listed = Array.prototype.some.call(repoSel.options, function (o) { return o.value === p.repo; });
+        if (listed) { repoSel.value = p.repo; } else { showNote("The proposed repository " + String(p.repo) + " is not in the list: choose one."); }
+      });
+      irow.appendChild(fill);
+      b.appendChild(irow);
+      return b;
+    }
     b.appendChild(el("p", "note", "Nothing is started. Prepare shows a card; you read it and confirm it yourself."));
     var row = el("div", "actions");
     var ready = p.route === "research" || !!p.repo;
