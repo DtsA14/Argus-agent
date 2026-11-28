@@ -441,7 +441,7 @@ def test_the_page_makes_exactly_one_link_and_guards_its_target():
     guard = 'if (typeof url !== "string" || url.indexOf(VIEWER) !== 0 || !/^[a-z0-9_]+$/.test(url.slice(VIEWER.length))) { return null; }'
     assert js.index(guard) < js.index(LINK_LINE)
     assert 'a.rel = "noopener noreferrer";' in js and js.index('a.rel = "noopener noreferrer";') < js.index(LINK_LINE)
-    assert "target" not in js and "window.open" not in js
+    assert "target" not in js.replace("target_branch", "") and "window.open" not in js    # the card key `target_branch` (SPEC_CHAT_APPLY_REPLY PR3) is the only use of the word
 
 
 def test_the_viewer_link_uses_the_directory_name_not_a_field_of_job_json(svc):
